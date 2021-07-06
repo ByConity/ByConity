@@ -314,6 +314,23 @@ void MergeTreeDataPartWriterWide::writeColumn(
     const auto & [name, type] = name_and_type;
     auto [it, inserted] = serialization_states.emplace(name, nullptr);
 
+    // in case of low cardinality column fallback
+    if (column.lowCardinality())
+    {
+        if (auto const *low_col = checkAndGetColumn<ColumnLowCardinality>(column))
+        {
+            if (low_col->isFullState())
+            {
+                auto const *data_type = typeid_cast<const DataTypeLowCardinality *>(name_and_type.type.get());
+                if (data_type)
+                {
+                    (const_cast<NameAndTypePair &>(name_and_type)).type = data_type->getFullLowCardinalityTypePtr();
+                    serializations[name] = name_and_type.type->getDefaultSerialization();
+                }
+            }
+        }
+    }
+
     if (inserted)
     {
         ISerialization::SerializeBinaryBulkSettings serialize_settings;
@@ -949,5 +966,33 @@ void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
             LOG_WARNING(&Poco::Logger::get("MergedBlockOutputStream"), "{}", getCurrentExceptionMessage(false));
         }
     }
+}
+
+void MergeTreeDataPartWriterWide::updateWriterStream(const NameAndTypePair &pair)
+{
+    serializations[pair.name] = pair.type->getDefaultSerialization();
+    const auto & columns = metadata_snapshot->getColumns();
+    auto effective_codec_desc = columns.getCodecDescOrDefault(pair.name, default_codec);
+
+    IDataType::StreamCallbackWithType callback = [&] (const ISerialization::SubstreamPath & substream_path, const IDataType & substream_type)
+    {
+        String stream_name = ISerialization::getFileNameForStream(pair.getNameInStorage(), substream_path);
+        CompressionCodecPtr compression_codec;
+        /// If we can use special codec then just get it
+        if (ISerialization::isSpecialCompressionAllowed(substream_path))
+            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, &substream_type, default_codec);
+        else /// otherwise return only generic codecs and don't use info about the` data_type
+            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
+
+        column_streams[stream_name] = std::make_unique<Stream>(
+            stream_name,
+            data_part->volume->getDisk(),
+            part_path + stream_name, DATA_FILE_EXTENSION,
+            part_path + stream_name, marks_file_extension,
+            compression_codec,
+            settings.max_compress_block_size);
+    };
+
+    pair.type->enumerateStreams(serializations[pair.name], callback);
 }
 }

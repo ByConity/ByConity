@@ -36,6 +36,8 @@ public:
     void writeImplicitColumnForBitEngine(Block & block);
 
     virtual void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) = 0;
+    virtual void updateWriterStream(const NameAndTypePair &pair);
+
 
     Columns releaseIndexColumns();
     const MergeTreeIndexGranularity & getIndexGranularity() const { return index_granularity; }

@@ -23,6 +23,8 @@ public:
         return writer->getIndexGranularity();
     }
 
+    virtual void updateWriterStream(const NameAndTypePair &pair);
+
 protected:
     // using SerializationState = ISerialization::SerializeBinaryBulkStatePtr;
 

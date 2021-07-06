@@ -1,5 +1,6 @@
 #pragma once
 #include <optional>
+#include <unordered_map>
 #include <Columns/IColumn.h>
 
 namespace DB
@@ -33,6 +34,8 @@ public:
 
     size_t size() const override { return getNestedNotNullableColumn()->size(); }
 
+    virtual bool isEmpty() const = 0;
+
     /// Appends new value at the end of column (column's size is increased by 1).
     /// Is used to transform raw strings to Blocks (for example, inside input format parsers)
     virtual size_t uniqueInsert(const Field & x) = 0;
@@ -41,6 +44,7 @@ public:
     /// Appends range of elements from other column.
     /// Could be used to concatenate columns.
     virtual MutableColumnPtr uniqueInsertRangeFrom(const IColumn & src, size_t start, size_t length) = 0;
+    virtual void insertWithDiffIndex(const IColumn & src, size_t start, size_t length, std::unordered_map<UInt64, UInt64>& diff) = 0;
 
     struct IndexesWithOverflow
     {

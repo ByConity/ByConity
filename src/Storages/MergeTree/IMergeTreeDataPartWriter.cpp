@@ -152,6 +152,12 @@ void IMergeTreeDataPartWriter::writeImplicitColumnForBitEngine(Block & block)
     }
 }
 
+void IMergeTreeDataPartWriter::updateWriterStream(const NameAndTypePair &pair)
+{
+    throw Exception("Should implemented in it's sub-class", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+
 
 IMergeTreeDataPartWriter::~IMergeTreeDataPartWriter() = default;
 

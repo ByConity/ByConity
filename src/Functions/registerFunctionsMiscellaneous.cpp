@@ -53,6 +53,7 @@ void registerFunctionFinalizeAggregation(FunctionFactory &);
 void registerFunctionToLowCardinality(FunctionFactory &);
 void registerFunctionLowCardinalityIndices(FunctionFactory &);
 void registerFunctionLowCardinalityKeys(FunctionFactory &);
+void registerFunctionLowCardinalityIsNoneEncoded(FunctionFactory &);
 void registerFunctionsIn(FunctionFactory &);
 void registerFunctionJoinGet(FunctionFactory &);
 void registerFunctionFilesystem(FunctionFactory &);
@@ -127,7 +128,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionFinalizeAggregation(factory);
     registerFunctionToLowCardinality(factory);
     registerFunctionLowCardinalityIndices(factory);
-    registerFunctionLowCardinalityKeys(factory);
+    registerFunctionLowCardinalityIsNoneEncoded(factory);
     registerFunctionsIn(factory);
     registerFunctionJoinGet(factory);
     registerFunctionFilesystem(factory);

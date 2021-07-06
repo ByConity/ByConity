@@ -70,6 +70,12 @@ ColumnPtr replaceLowCardinalityColumnsByNestedAndGetDictionaryIndexes(
                     "Incompatible type for low cardinality column: {}",
                     column.type->getName());
 
+            if (low_cardinality_column->isFullState())
+            {
+                column.column = low_cardinality_column->getNestedColumnPtr();
+                return nullptr;
+            }
+
             if (can_be_executed_on_default_arguments)
             {
                 /// Normal case, when function can be executed on values's default.
@@ -237,6 +243,12 @@ ColumnPtr IExecutableFunction::execute(const ColumnsWithTypeAndName & arguments,
             const auto & dictionary_type = res_low_cardinality_type->getDictionaryType();
             ColumnPtr indexes = replaceLowCardinalityColumnsByNestedAndGetDictionaryIndexes(
                     columns_without_low_cardinality, can_be_executed_on_default_arguments, input_rows_count);
+
+            if (!indexes) // for full state lc column
+            {
+                convertLowCardinalityColumnsToFull(columns_without_low_cardinality);
+                return executeWithoutLowCardinalityColumns(columns_without_low_cardinality, result_type, input_rows_count, dry_run);
+            }
 
             size_t new_input_rows_count = columns_without_low_cardinality.empty()
                                         ? input_rows_count

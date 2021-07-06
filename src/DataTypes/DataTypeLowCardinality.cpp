@@ -134,11 +134,26 @@ Field DataTypeLowCardinality::getDefault() const
 
 bool DataTypeLowCardinality::equals(const IDataType & rhs) const
 {
-    if (typeid(rhs) != typeid(*this))
-        return false;
+    auto const *type_lc = typeid_cast<const DataTypeLowCardinality *>(&rhs);
+    if (type_lc)
+        return dictionary_type->equals(*type_lc->getDictionaryType());
+    auto const *type_full_lc = typeid_cast<const DataTypeFullLowCardinality *>(&rhs);
+    if (type_full_lc)
+        return dictionary_type->equals(*type_full_lc->getDictionaryType());
 
-    const auto & low_cardinality_rhs= static_cast<const DataTypeLowCardinality &>(rhs);
-    return dictionary_type->equals(*low_cardinality_rhs.dictionary_type);
+    return false;
+    // const auto & low_cardinality_rhs= static_cast<const DataTypeLowCardinality &>(rhs);
+    // return dictionary_type->equals(*low_cardinality_rhs.dictionary_type);
+}
+
+DataTypePtr DataTypeLowCardinality::getFullLowCardinalityTypePtr() const
+{
+    return std::make_shared<DataTypeFullLowCardinality>(getDictionaryType());
+}
+
+DataTypeFullLowCardinality::DataTypeFullLowCardinality(DataTypePtr dictionary_type_)
+        : DataTypeLowCardinality(dictionary_type_)
+{
 }
 
 SerializationPtr DataTypeLowCardinality::doGetDefaultSerialization() const
@@ -146,6 +161,10 @@ SerializationPtr DataTypeLowCardinality::doGetDefaultSerialization() const
     return std::make_shared<SerializationLowCardinality>(dictionary_type);
 }
 
+SerializationPtr DataTypeFullLowCardinality::doGetDefaultSerialization() const
+{
+    return std::make_shared<SerializationFullLowCardinality>(dictionary_type);
+}
 
 static DataTypePtr create(const ASTPtr & arguments)
 {

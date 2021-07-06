@@ -88,4 +88,9 @@ NameSet IMergedBlockOutputStream::removeEmptyColumnsFromPart(
     return remove_files;
 }
 
+void IMergedBlockOutputStream::updateWriterStream(const NameAndTypePair &)
+{
+    throw Exception("Should implemented in it's sub-class", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 }

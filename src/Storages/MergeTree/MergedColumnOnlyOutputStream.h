@@ -39,6 +39,8 @@ public:
     void writeSuffix() override;
     MergeTreeData::DataPart::Checksums
     writeSuffixAndGetChecksums(MergeTreeData::MutableDataPartPtr & new_part, MergeTreeData::DataPart::Checksums & all_checksums, bool sync = false);
+    void updateWriterStream(const NameAndTypePair &pair) override;
+
 
 private:
     Block header;

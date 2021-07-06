@@ -38,6 +38,8 @@ public:
 
     void setEnableDiskBasedKeyIndex(bool enable_disk_based_key_index_) { enable_disk_based_key_index = enable_disk_based_key_index_; }
 
+    void updateWriterStream(const NameAndTypePair &pair) override;
+
 private:
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
@@ -72,7 +74,7 @@ private:
     /// Also useful to have exact amount of rows in last (non-final) mark.
     void adjustLastMarkIfNeedAndFlushToDisk(size_t new_rows_in_last_mark);
 
-    Poco::Logger * getLogger() override { return log; } 
+    Poco::Logger * getLogger() override { return log; }
 
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
