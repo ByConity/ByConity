@@ -79,6 +79,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class ZooKeeperLog;
 
 
 class ISystemLog
@@ -122,6 +123,8 @@ struct SystemLogs
     std::shared_ptr<KafkaLog> kafka_log;
 
     std::shared_ptr<MutationLog> mutation_log;
+    /// Used to log all actions of ZooKeeper client
+    std::shared_ptr<ZooKeeperLog> zookeeper_log;
 
     std::vector<ISystemLog *> logs;
 };

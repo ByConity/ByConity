@@ -3,10 +3,8 @@
 #include <Common/setThreadName.h>
 #include <Common/hex.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <common/logger_useful.h>
 #include <Common/SipHash.h>
 #include <Common/ZooKeeper/ZooKeeperConstants.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Coordination/pathUtils.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
@@ -18,13 +16,6 @@
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
-#include <Common/SipHash.h>
-#include <Common/ZooKeeper/ZooKeeperConstants.h>
-#include <Common/StringUtils/StringUtils.h>
-#include <Common/ZooKeeper/IKeeper.h>
-#include <Common/hex.h>
-#include <Common/setThreadName.h>
-#include <Coordination/pathUtils.h>
 
 #include <sstream>
 #include <iomanip>
@@ -135,7 +126,7 @@ KeeperStorage::ResponsesForSessions processWatchesImpl(const String & path, Keep
         watches.erase(watch_it);
     }
 
-    auto parent_path = parentPath(path);
+    auto parent_path = parentPath(StringRef{path});
 
     Strings paths_to_check_for_list_watches;
     if (event_type == Coordination::Event::CREATED)
@@ -550,7 +541,7 @@ bool KeeperStorage::createNode(
     bool is_sequental,
     Coordination::ACLs node_acls)
 {
-    auto parent_path = parentPath(path);
+    auto parent_path = parentPath(StringRef{path});
     auto node_it = container.find(parent_path);
 
     if (node_it == container.end())
@@ -603,7 +594,7 @@ bool KeeperStorage::removeNode(const std::string & path, int32_t version)
     acl_map.removeUsage(prev_node.acl_id);
 
     container.updateValue(
-        parentPath(path),
+        parentPath(StringRef{path}),
         [child_basename = getBaseName(node_it->key)](KeeperStorage::Node & parent)
         {
             parent.removeChild(child_basename);
@@ -1099,7 +1090,7 @@ struct KeeperStorageSetRequestProcessor final : public KeeperStorageRequestProce
                 request.version});
 
         new_deltas.emplace_back(
-                parentPath(request.path).toString(),
+                parentPath(StringRef{request.path}).toString(),
                 zxid,
                 KeeperStorage::UpdateNodeDelta
                 {
@@ -1858,7 +1849,7 @@ void KeeperStorage::preprocessRequest(
             {
                 new_deltas.emplace_back
                 (
-                    parentPath(ephemeral_path).toString(),
+                    parentPath(StringRef{ephemeral_path}).toString(),
                     new_last_zxid,
                     UpdateNodeDelta
                     {

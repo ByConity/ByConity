@@ -1,12 +1,11 @@
 #pragma once
 
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
+#include <libnuraft/nuraft.hxx>
 #include <city.h>
 #include <optional>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/HashingWriteBuffer.h>
 #include <IO/CompressionMethod.h>
-#include <Disks/IDisk.h>
 
 namespace DB
 {

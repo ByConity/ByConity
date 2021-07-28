@@ -1,5 +1,6 @@
 #include <Coordination/Changelog.h>
 #include <IO/WriteHelpers.h>
+#include <IO/WriteSettings.h>
 #include <IO/ReadHelpers.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ZstdDeflatingAppendableWriteBuffer.h>
