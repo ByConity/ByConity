@@ -303,6 +303,7 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
     /// We must start to read from this log index
     uint64_t start_to_read_from = last_commited_log_index;
 
+    /// If we need to have some reserved log read additional `logs_to_keep` logs
     if (start_to_read_from > logs_to_keep)
         start_to_read_from -= logs_to_keep;
     else
@@ -311,12 +312,14 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
     /// Got through changelog files in order of start_index
     for (const auto & [changelog_start_index, changelog_description] : existing_changelogs)
     {
-
         /// [from_log_index.>=.......start_to_read_from.....<=.to_log_index]
         if (changelog_description.to_log_index >= start_to_read_from)
         {
             if (!last_log_read_result) /// still nothing was read
             {
+                /// Our first log starts from the more fresh log_id than we required to read and this changelog is not empty log.
+                /// So we are missing something in our logs, but it's not dataloss, we will receive snapshot and required
+                /// entries from leader.
                 if (changelog_description.from_log_index > last_commited_log_index && (changelog_description.from_log_index - last_commited_log_index) > 1)
                 {
                     LOG_ERROR(log, "Some records was lost, last committed log index {}, smallest available log index on disk {}. Hopefully will receive missing records from leader.", last_commited_log_index, changelog_description.from_log_index);
@@ -328,7 +331,10 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
                     return;
                 }
                 else if (changelog_description.from_log_index > start_to_read_from)
+                {
+                    /// We don't have required amount of reserved logs, but nothing was lost.
                     LOG_WARNING(log, "Don't have required amount of reserved log records. Need to read from {}, smallest available log index on disk {}.", start_to_read_from, changelog_description.from_log_index);
+                }
             }
 
             ChangelogReader reader(changelog_description.path);
@@ -363,6 +369,15 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
 
         min_log_id = last_commited_log_index;
         max_log_id = last_commited_log_index == 0 ? 0 : last_commited_log_index - 1;
+    }
+    /// TODO: e64efbb
+    else if (last_commited_log_index != 0 && max_log_id < last_commited_log_index - 1) /// If we have more fresh snapshot than our logs
+    {
+        LOG_WARNING(log, "Our most fresh log_id {} is smaller than stored data in snapshot {}. It can indicate data loss. Removing outdated logs.", max_log_id, last_commited_log_index - 1);
+
+        removeAllLogs();
+        min_log_id = last_commited_log_index;
+        max_log_id = last_commited_log_index - 1;
     }
     else if (last_log_is_not_complete) /// if it's complete just start new one
     {
@@ -472,10 +487,13 @@ void Changelog::appendEntry(uint64_t index, const LogEntryPtr & log_entry)
     if (logs.empty())
         min_log_id = index;
 
-    if (current_writer->getEntriesWritten() == rotate_interval)
+    const auto & current_changelog_description = existing_changelogs[current_writer->getStartIndex()];
+    const bool log_is_complete = current_writer->getEntriesWritten() == current_changelog_description.expectedEntriesCountInLog();
+
+    if (log_is_complete)
         rotate(index);
 
-    auto offset = current_writer->appendRecord(buildRecord(index, log_entry));
+    const auto offset = current_writer->appendRecord(buildRecord(index, log_entry));
     if (!index_to_start_pos.try_emplace(index, offset).second)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Record with index {} already exists", index);
 
@@ -488,28 +506,31 @@ void Changelog::writeAt(uint64_t index, const LogEntryPtr & log_entry)
     if (index_to_start_pos.count(index) == 0)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot write at index {} because changelog doesn't contain it", index);
 
-    /// Complex case when we need to override data from already rotated log
-    bool go_to_previous_file = index < current_writer->getStartIndex();
+    /// This write_at require to overwrite everything in this file and also in previous file(s)
+    const bool go_to_previous_file = index < current_writer->getStartIndex();
 
     if (go_to_previous_file)
     {
         auto index_changelog = existing_changelogs.lower_bound(index);
+
         ChangelogFileDescription description;
-        if (index_changelog->first == index)
+
+        if (index_changelog->first == index) /// exactly this file starts from index
             description = index_changelog->second;
         else
             description = std::prev(index_changelog)->second;
 
+        /// Initialize writer from this log file
         current_writer = std::make_unique<ChangelogWriter>(description.path, WriteMode::Append, index_changelog->first);
         current_writer->setEntriesWritten(description.to_log_index - description.from_log_index + 1);
     }
 
-    auto entries_written = current_writer->getEntriesWritten();
+    /// Truncate current file
     current_writer->truncateToLength(index_to_start_pos[index]);
 
     if (go_to_previous_file)
     {
-        /// Remove all subsequent files
+        /// Remove all subsequent files if overwritten something in previous one
         auto to_remove_itr = existing_changelogs.upper_bound(index);
         for (auto itr = to_remove_itr; itr != existing_changelogs.end();)
         {
@@ -518,7 +539,9 @@ void Changelog::writeAt(uint64_t index, const LogEntryPtr & log_entry)
         }
     }
 
+    auto entries_written = current_writer->getEntriesWritten();
     /// Remove redundant logs from memory
+    /// Everything >= index must be removed
     for (uint64_t i = index; ; ++i)
     {
         auto log_itr = logs.find(i);
@@ -529,9 +552,9 @@ void Changelog::writeAt(uint64_t index, const LogEntryPtr & log_entry)
         index_to_start_pos.erase(i);
         entries_written--;
     }
-
     current_writer->setEntriesWritten(entries_written);
 
+    /// Now we can actually override entry at index
     appendEntry(index, log_entry);
 }
 
