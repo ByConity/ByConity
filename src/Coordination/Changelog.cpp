@@ -260,8 +260,6 @@ public:
         }
         LOG_TRACE(log, "Totally read from changelog {} {} entries", filepath, result.total_entries_read_from_log);
 
-        // LOG_TRACE(log, "Totally read from changelog {} {} entries", filepath, result.entries_read);
-
         return result;
     }
 
@@ -310,11 +308,11 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
     else
         start_to_read_from = 1;
 
-    // /// At least we read something
-    // bool started = false;
-
+    /// Got through changelog files in order of start_index
     for (const auto & [changelog_start_index, changelog_description] : existing_changelogs)
     {
+
+        /// [from_log_index.>=.......start_to_read_from.....<=.to_log_index]
         if (changelog_description.to_log_index >= start_to_read_from)
         {
             if (!last_log_read_result) /// still nothing was read
@@ -352,7 +350,6 @@ void Changelog::readChangelogAndInitWriter(uint64_t last_commited_log_index, uin
             if (last_log_read_result->total_entries_read_from_log < expected_entries_in_log)
             {
                 last_log_is_not_complete = true;
-                // first_incomplete_log_start_index = changelog_start_index;
                 break;
             }
         }
