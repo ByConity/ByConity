@@ -43,6 +43,8 @@ public:
     void sync() override;
 
     off_t seek(off_t offset, int whence);
+    off_t getPosition();
+
     void truncate(off_t length);
 
     off_t size();

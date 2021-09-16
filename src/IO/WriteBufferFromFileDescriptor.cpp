@@ -125,6 +125,16 @@ off_t WriteBufferFromFileDescriptor::seek(off_t offset, int whence)
 }
 
 
+off_t WriteBufferFromFileDescriptor::getPosition()
+{
+    off_t res = lseek(fd, 0, SEEK_CUR);
+    if (-1 == res)
+        throwFromErrnoWithPath("Cannot seek through file " + getFileName() + " while get position", getFileName(),
+                               ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+    return res;
+}
+
+
 void WriteBufferFromFileDescriptor::truncate(off_t length)
 {
     int res = ftruncate(fd, length);

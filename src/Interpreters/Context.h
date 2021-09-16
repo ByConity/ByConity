@@ -55,6 +55,7 @@ class ExternalModelsLoader;
 class InterserverCredentials;
 using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
+class HaReplicaHandler;
 class BackgroundSchedulePool;
 class MergeList;
 class ReplicatedFetchList;
@@ -536,6 +537,8 @@ public:
 
     InterserverIOHandler & getInterserverIOHandler();
 
+    HaReplicaHandler & getHaReplicaHandler();
+
     /// How other servers can access this for downloading replicated data.
     void setInterserverIOAddress(const String & host, UInt16 port);
     std::pair<String, UInt16> getInterserverIOAddress() const;
@@ -556,6 +559,9 @@ public:
     UInt16 getTCPPort() const;
 
     std::optional<UInt16> getTCPPortSecure() const;
+
+    /// The port that the server exchange ha log
+    UInt16 getHaTCPPort() const;
 
     /// Allow to use named sessions. The thread will be run to cleanup sessions after timeout has expired.
     /// The method must be called at the server startup.
