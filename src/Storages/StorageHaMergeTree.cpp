@@ -1,5 +1,9 @@
 #include <Storages/StorageHaMergeTree.h>
 
+#include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-parameter"
 
 namespace DB
 {
@@ -162,6 +166,7 @@ StorageHaMergeTree::StorageHaMergeTree(
     , writer(*this)
     , merger_mutator(*this, global_context.getSettingsRef().background_pool_size)
     /// , merge_strategy_picker(*this)
+    , log_exchanger(*this)
     , queue(*this)
     , fetcher(*this)
     , background_executor(*this, global_context)
@@ -357,6 +362,14 @@ StorageHaMergeTree::StorageHaMergeTree(
     createNewZooKeeperNodes();
 }
 
+bool StorageHaMergeTree::checkFixedGranualrityInZookeeper()
+{
+    auto zookeeper = getZooKeeper();
+    String metadata_str = zookeeper->get(zookeeper_path + "/metadata");
+    auto metadata_from_zk = HaMergeTreeTableMetadata::parse(metadata_str);
+    return metadata_from_zk.index_granularity_bytes == 0;
+}
+
 bool StorageHaMergeTree::createTableIfNotExists(const StorageMetadataPtr & metadata_snapshot)
 {
     auto zookeeper = getZooKeeper();
@@ -413,32 +426,27 @@ bool StorageHaMergeTree::createTableIfNotExists(const StorageMetadataPtr & metad
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/columns", metadata_snapshot->getColumns().toString(),
             zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/log", "",
-            zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/blocks", "",
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/block_numbers", "",
             zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/nonincrement_block_numbers", "",
-            zkutil::CreateMode::Persistent)); /// /nonincrement_block_numbers dir is unused, but is created nonetheless for backwards compatibility.
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/leader_election", "",
             zkutil::CreateMode::Persistent));
+        /// TODO: do we need it ?
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/temp", "",
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(zookeeper_path + "/replicas", "last added replica: " + replica_name,
             zkutil::CreateMode::Persistent));
+
+        ops.emplace_back(zkutil::makeCreateRequest(getZKLatestLSNPath(), "0", zkutil::CreateMode::Persistent));
+        ops.emplace_back(zkutil::makeCreateRequest(getZKLatestLSNPath() + "/lsn-", "", zkutil::CreateMode::EphemeralSequential));
+        ops.emplace_back(zkutil::makeCreateRequest(getZKCommittedLSNPath(), "0", zkutil::CreateMode::Persistent));
 
         /// And create first replica atomically. See also "createReplica" method that is used to create not the first replicas.
 
         ops.emplace_back(zkutil::makeCreateRequest(replica_path, "",
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/host", "",
-            zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/log_pointer", "",
-            zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/queue", "",
-            zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/parts", "",
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/flags", "",
             zkutil::CreateMode::Persistent));
@@ -450,6 +458,8 @@ bool StorageHaMergeTree::createTableIfNotExists(const StorageMetadataPtr & metad
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/metadata_version", std::to_string(metadata_version),
             zkutil::CreateMode::Persistent));
+
+        ops.emplace_back(zkutil::makeCreateRequest(getZKReplicaUpdatedLSNPath(), "0", zkutil::CreateMode::Persistent));
 
         Coordination::Responses responses;
         auto code = zookeeper->tryMulti(ops, responses);
@@ -498,12 +508,6 @@ void StorageHaMergeTree::createReplica(const StorageMetadataPtr & metadata_snaps
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/host", "",
             zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/log_pointer", "",
-            zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/queue", "",
-            zkutil::CreateMode::Persistent));
-        ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/parts", "",
-            zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/flags", "",
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/is_lost", is_lost_value,
@@ -514,6 +518,8 @@ void StorageHaMergeTree::createReplica(const StorageMetadataPtr & metadata_snaps
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(replica_path + "/metadata_version", std::to_string(metadata_version),
             zkutil::CreateMode::Persistent));
+
+        ops.emplace_back(zkutil::makeCreateRequest(getZKReplicaUpdatedLSNPath(), "0", zkutil::CreateMode::Persistent));
 
         /// Check version of /replicas to see if there are any replicas created at the same moment of time.
         ops.emplace_back(zkutil::makeSetRequest(zookeeper_path + "/replicas", "last added replica: " + replica_name, replicas_stat.version));
@@ -537,6 +543,48 @@ void StorageHaMergeTree::createReplica(const StorageMetadataPtr & metadata_snaps
             zkutil::KeeperMultiException::check(code, ops, responses);
         }
     } while (code == Coordination::Error::ZBADVERSION);
+}
+
+void StorageHaMergeTree::createNewZooKeeperNodes()
+{
+    auto zookeeper = getZooKeeper();
+
+    /// Working with quorum.
+    zookeeper->createIfNotExists(zookeeper_path + "/quorum", String());
+    zookeeper->createIfNotExists(zookeeper_path + "/quorum/parallel", String());
+    zookeeper->createIfNotExists(zookeeper_path + "/quorum/last_part", String());
+    zookeeper->createIfNotExists(zookeeper_path + "/quorum/failed_parts", String());
+
+    /// Mutations
+    zookeeper->createIfNotExists(zookeeper_path + "/mutations", String());
+    zookeeper->createIfNotExists(replica_path + "/mutation_pointer", String());
+
+    /// For ALTER PARTITION with multi-leaders
+    /// TODO: zookeeper->createIfNotExists(zookeeper_path + "/alter_partition_version", String());
+}
+
+/** Verify that list of columns and table storage_settings_ptr match those specified in ZK (/metadata).
+  * If not, throw an exception.
+  */
+void StorageHaMergeTree::checkTableStructure(const String & zookeeper_prefix, const StorageMetadataPtr & metadata_snapshot)
+{
+    auto zookeeper = getZooKeeper();
+
+    HaMergeTreeTableMetadata old_metadata(*this, metadata_snapshot);
+
+    Coordination::Stat metadata_stat;
+    String metadata_str = zookeeper->get(zookeeper_prefix + "/metadata", &metadata_stat);
+    auto metadata_from_zk = HaMergeTreeTableMetadata::parse(metadata_str);
+    old_metadata.checkEquals(metadata_from_zk, metadata_snapshot->getColumns(), global_context);
+
+    Coordination::Stat columns_stat;
+    auto columns_from_zk = ColumnsDescription::parse(zookeeper->get(zookeeper_prefix + "/columns", &columns_stat));
+
+    const ColumnsDescription & old_columns = metadata_snapshot->getColumns();
+    if (columns_from_zk != old_columns)
+    {
+        throw Exception("Table columns structure in ZooKeeper is different from local table structure", ErrorCodes::INCOMPATIBLE_COLUMNS);
+    }
 }
 
 void StorageHaMergeTree::drop()
@@ -633,6 +681,56 @@ void StorageHaMergeTree::dropReplica(zkutil::ZooKeeperPtr zookeeper, const Strin
         LOG_INFO(logger, "Removing table {} (this might take several minutes)", zookeeper_path);
         removeTableNodesFromZooKeeper(zookeeper, zookeeper_path, metadata_drop_lock, logger);
     }
+}
+
+bool StorageHaMergeTree::removeTableNodesFromZooKeeper(zkutil::ZooKeeperPtr zookeeper,
+        const String & zookeeper_path, const zkutil::EphemeralNodeHolder::Ptr & metadata_drop_lock, Poco::Logger * logger)
+{
+    bool completely_removed = false;
+    Strings children;
+    Coordination::Error code = zookeeper->tryGetChildren(zookeeper_path, children);
+    if (code == Coordination::Error::ZNONODE)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "There is a race condition between creation and removal of replicated table. It's a bug");
+
+
+    for (const auto & child : children)
+        if (child != "dropped")
+            zookeeper->tryRemoveRecursive(zookeeper_path + "/" + child);
+
+    Coordination::Requests ops;
+    Coordination::Responses responses;
+    ops.emplace_back(zkutil::makeRemoveRequest(metadata_drop_lock->getPath(), -1));
+    ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path + "/dropped", -1));
+    ops.emplace_back(zkutil::makeRemoveRequest(zookeeper_path, -1));
+    code = zookeeper->tryMulti(ops, responses);
+
+    if (code == Coordination::Error::ZNONODE)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "There is a race condition between creation and removal of replicated table. It's a bug");
+    }
+    else if (code == Coordination::Error::ZNOTEMPTY)
+    {
+        LOG_ERROR(logger, "Table was not completely removed from ZooKeeper, {} still exists and may contain some garbage,"
+                          "but someone is removing it right now.", zookeeper_path);
+    }
+    else if (code != Coordination::Error::ZOK)
+    {
+        /// It is still possible that ZooKeeper session is expired or server is killed in the middle of the delete operation.
+        zkutil::KeeperMultiException::check(code, ops, responses);
+    }
+    else
+    {
+        metadata_drop_lock->setAlreadyRemoved();
+        completely_removed = true;
+        LOG_INFO(logger, "Table {} was successfully removed from ZooKeeper", zookeeper_path);
+    }
+
+    return completely_removed;
+}
+
+void StorageHaMergeTree::checkParts(bool)
+{
+    /// TODO:
 }
 
 void StorageHaMergeTree::truncate(
@@ -881,15 +979,7 @@ BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe
     [[maybe_unused]] bool deduplicate = storage_settings_ptr->replicated_deduplication_window != 0 && query_settings.insert_deduplicate;
 
     // TODO: should we also somehow pass list of columns to deduplicate on to the HaMergeTreeBlockOutputStream ?
-    return {};
-    /// TODO
-    /// return std::make_shared<HaMergeTreeBlockOutputStream>(
-    ///     *this, metadata_snapshot, query_settings.insert_quorum,
-    ///     query_settings.insert_quorum_timeout.totalMilliseconds(),
-    ///     query_settings.max_partitions_per_insert_block,
-    ///     query_settings.insert_quorum_parallel,
-    ///     deduplicate,
-    ///     context.getSettingsRef().optimize_on_insert);
+    return std::make_shared<HaMergeTreeBlockOutputStream>(*this, metadata_snapshot, context);
 }
 
 bool StorageHaMergeTree::optimize(
@@ -1037,6 +1127,14 @@ CheckResults StorageHaMergeTree::checkData([[maybe_unused]]const ASTPtr & query,
     return {};
 }
 
+bool StorageHaMergeTree::canUseAdaptiveGranularity() const
+{
+    const auto storage_settings_ptr = getSettings();
+    return storage_settings_ptr->index_granularity_bytes != 0 &&
+        (storage_settings_ptr->enable_mixed_granularity_parts ||
+            (!has_non_adaptive_index_granularity_parts && !other_replicas_fixed_granularity));
+}
+
 std::optional<JobAndPool> StorageHaMergeTree::getDataProcessingJob()
 {
     /// If replication queue is stopped exit immediately as we successfully executed the task
@@ -1137,6 +1235,32 @@ void StorageHaMergeTree::mutationsFinalizingTask()
 {
 }
 
+    // Partition helpers
+void StorageHaMergeTree::dropPartition(
+    const ASTPtr & partition, bool detach, bool drop_part, const Context & query_context, bool throw_if_noop)
+{
+}
+
+PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
+    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, const Context & query_context)
+{
+    return {};
+}
+
+void StorageHaMergeTree::replacePartitionFrom(
+    const StoragePtr & source_table, const ASTPtr & partition, bool replace, const Context & query_context)
+{
+}
+
+void StorageHaMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, const Context & query_context)
+{
+}
+
+void StorageHaMergeTree::fetchPartition(
+    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, const Context & query_context)
+{
+}
+
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const
 {
     return {};
@@ -1149,4 +1273,29 @@ void StorageHaMergeTree::startBackgroundMovesIfNeeded()
         background_moves_executor.start();
 }
 
+/// allocLSNAndSet() need two separated ZK operations which cannot be packed.
+/// And it is ok to postpone the latter one, so that leave it as a request.
+std::pair<UInt64, Coordination::RequestPtr> StorageHaMergeTree::allocLSNAndMakeSetRequest()
+{
+    auto node_prefix = getZKLatestLSNPath() + "/lsn-";
+    auto created_path = getZooKeeper()->create(node_prefix, "", zkutil::CreateMode::EphemeralSequential);
+    auto num = parse<UInt64>(created_path.substr(node_prefix.length()));
+    LOG_TRACE(log, "Allocate new LSN-{}, and make a request", num);
+    return {num, zkutil::makeSetRequest(getZKLatestLSNPath(), toString(num), -1)};
 }
+
+// Get unique block number from Zk
+UInt64 StorageHaMergeTree::allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zookeeper, const String &)
+{
+    // TBD: whether support deduplicate logic
+    String block_numbers_path = zookeeper_path + "/block_numbers";
+    String block_numbers_path_prefix = block_numbers_path + "/block-";
+
+    auto block_path = zookeeper->create(block_numbers_path_prefix, "", zkutil::CreateMode::EphemeralSequential);
+
+    auto block_number = parse<UInt64>(block_path.substr(block_numbers_path_prefix.length()));
+    return block_number;
+}
+}
+
+#pragma clang diagnostic push

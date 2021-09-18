@@ -214,6 +214,7 @@ struct HaMergeTreeLogEntry : public HaMergeTreeLogEntryData, std::enable_shared_
 };
 
 using HaMergeTreeLogEntryPtr = std::shared_ptr<HaMergeTreeLogEntry>;
+using HaMergeTreeLogEntryVec = std::vector<HaMergeTreeLogEntryPtr>;
 
 ///  useful functions
 template <class T, class U>

@@ -313,6 +313,7 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Unique              = 102,
         };
 
         Mode mode;

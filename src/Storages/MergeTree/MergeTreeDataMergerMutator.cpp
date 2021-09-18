@@ -929,6 +929,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 header, pipes.size(), sort_description, merging_params.sign_column,
                 merge_block_size, rows_sources_write_buf.get(), blocks_are_granules_size);
             break;
+
+        case MergeTreeData::MergingParams::Unique:
+            throw Exception("NOT_IMPLEMENTED", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     QueryPipeline pipeline;

@@ -230,6 +230,8 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
             case MergeTreeData::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedAlgorithm>(
                     block, 1, sort_description, block_size + 1, data.merging_params.graphite_params, time(nullptr));
+            case MergeTreeData::MergingParams::Unique:
+                return nullptr; /// TODO::
         }
 
         __builtin_unreachable();

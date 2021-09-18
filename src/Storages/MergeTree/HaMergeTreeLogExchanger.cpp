@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/HaMergeTreeReplicaClient.h>
 #include <Storages/StorageHaMergeTree.h>
+#include <IO/ConnectionTimeoutsContext.h>
 
 namespace DB
 {

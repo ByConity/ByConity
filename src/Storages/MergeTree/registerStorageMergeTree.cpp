@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/Macros.h>
@@ -297,9 +298,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
 
+    if (args.engine_name == "UniqueMergeTree")
+    {
+        /// A fake unique merge tree used for unique table migration, changed it to MergeTree here
+        name_part = "";
+    }
+
     bool replicated = startsWith(name_part, "Replicated");
     if (replicated)
         name_part = name_part.substr(strlen("Replicated"));
+
+    bool is_ha = startsWith(name_part, "Ha");
+    if (is_ha)
+        name_part = name_part.substr(strlen("Ha"));
 
     MergeTreeData::MergingParams merging_params;
     merging_params.mode = MergeTreeData::MergingParams::Ordinary;
@@ -316,6 +327,8 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         merging_params.mode = MergeTreeData::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
         merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+    else if (name_part == "Unique")
+        merging_params.mode = MergeTreeData::MergingParams::Unique;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -341,7 +354,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         needed_params += "]";
     };
 
-    if (replicated)
+    if (replicated || is_ha)
     {
         if (is_extended_storage_def)
         {
@@ -353,6 +366,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_mandatory_param("path in ZooKeeper");
             add_mandatory_param("replica name");
         }
+
+        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+            add_optional_param("version");
     }
 
     if (!is_extended_storage_def)
@@ -448,7 +464,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     String replica_name;
     bool allow_renaming = true;
 
-    if (replicated)
+    if (replicated || is_ha)
     {
         bool has_arguments = arg_num + 2 <= arg_cnt;
         bool has_valid_arguments = has_arguments && engine_args[arg_num]->as<ASTLiteral>() && engine_args[arg_num + 1]->as<ASTLiteral>();
@@ -624,6 +640,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// sorting key.
         merging_param_key_arg = merging_params.version_column;
     }
+    else if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// TODO:
+    }
 
     String date_column_name;
 
@@ -632,7 +652,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     metadata.setComment(args.comment);
 
     std::unique_ptr<MergeTreeSettings> storage_settings;
-    if (replicated)
+    if (replicated || is_ha) /// TODO: fix me
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getReplicatedMergeTreeSettings());
     else
         storage_settings = std::make_unique<MergeTreeSettings>(args.getContext()->getMergeTreeSettings());
@@ -781,6 +801,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
 
     if (replicated)
+    {
         return StorageReplicatedMergeTree::create(
             zookeeper_path,
             replica_name,
@@ -794,7 +815,33 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             std::move(storage_settings),
             args.has_force_restore_data_flag,
             allow_renaming);
+    }
+    else if (is_ha)
+    {
+        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+        {
+            /// TODO:
+            throw Exception("NOT_IMPLEMENTED", ErrorCodes::NOT_IMPLEMENTED);
+        }
+        else
+        {
+            return StorageHaMergeTree::create(
+                zookeeper_path,
+                replica_name,
+                args.attach,
+                args.table_id,
+                args.relative_data_path,
+                metadata,
+                args.context,
+                date_column_name,
+                merging_params,
+                std::move(storage_settings),
+                args.has_force_restore_data_flag,
+                allow_renaming);
+        }
+    }
     else
+    {
         return StorageMergeTree::create(
             args.table_id,
             args.relative_data_path,
@@ -805,6 +852,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             merging_params,
             std::move(storage_settings),
             args.has_force_restore_data_flag);
+    }
 }
 
 
@@ -837,6 +885,14 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedSummingMergeTree", create, features);
     factory.registerStorage("ReplicatedGraphiteMergeTree", create, features);
     factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("HaMergeTree", create, features);
+    factory.registerStorage("HaCollapsingMergeTree", create, features);
+    factory.registerStorage("HaReplacingMergeTree", create, features);
+    factory.registerStorage("HaAggregatingMergeTree", create, features);
+    factory.registerStorage("HaSummingMergeTree", create, features);
+    factory.registerStorage("HaGraphiteMergeTree", create, features);
+    factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
 }
 
 }

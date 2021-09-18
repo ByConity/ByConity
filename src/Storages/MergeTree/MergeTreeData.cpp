@@ -810,6 +810,7 @@ String MergeTreeData::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
+        case Unique:        return "Unique";
     }
 
     __builtin_unreachable();

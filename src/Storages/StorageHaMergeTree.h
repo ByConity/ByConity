@@ -6,6 +6,7 @@
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
+#include <Storages/MergeTree/HaMergeTreeLogExchanger.h>
 #include <Storages/MergeTree/HaMergeTreeQueue.h>
 #include <Storages/MergeTree/HaMergeTreeRestartingThread.h>
 #include <Storages/MergeTree/LeaderElection.h>
@@ -26,8 +27,7 @@ namespace DB
 using HaMergeTreeQuorumAddedParts = ReplicatedMergeTreeQuorumAddedParts;
 using HaMergeTreeTableMetadata = ReplicatedMergeTreeTableMetadata;
 
-    /// TODO: add final
-class StorageHaMergeTree : public ext::shared_ptr_helper<StorageHaMergeTree>, public MergeTreeData
+class StorageHaMergeTree final : public ext::shared_ptr_helper<StorageHaMergeTree>, public MergeTreeData
 {
     friend struct ext::shared_ptr_helper<StorageHaMergeTree>;
 
@@ -226,6 +226,7 @@ private:
     // MergeStrategyPicker merge_strategy_picker;
 
     std::unique_ptr<HaMergeTreeLogManager> log_manager;
+    HaMergeTreeLogExchanger log_exchanger;
 
     /** The queue of what needs to be done on this replica to catch up with everyone. It is taken from ZooKeeper (/replicas/me/queue/).
      * In ZK entries in chronological order. Here it is not necessary.
@@ -354,6 +355,14 @@ private:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
 
     void startBackgroundMovesIfNeeded() override;
+
+
+    std::pair<UInt64, Coordination::RequestPtr> allocLSNAndMakeSetRequest();
+    UInt64 allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zookeeper, const String & zookeeper_block_id_path = "");
+
+    String getZKLatestLSNPath() const { return zookeeper_path + "/latest_lsn"; }
+    String getZKCommittedLSNPath() const { return zookeeper_path + "/committed_lsn"; }
+    String getZKReplicaUpdatedLSNPath() const { return replica_path + "/updated_lsn"; }
 
 protected:
     /** If not 'attach', either creates a new table in ZK, or adds a replica to an existing table.
