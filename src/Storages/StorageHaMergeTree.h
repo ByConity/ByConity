@@ -1,12 +1,14 @@
 #pragma once
 #include <Storages/MergeTree/MergeTreeData.h>
 
+#include <Interpreters/MutationLog.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
+#include <Storages/MergeTree/HaMergeTreeAddress.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
-#include <Storages/MergeTree/HaMergeTreeLogManager.h>
 #include <Storages/MergeTree/HaMergeTreeLogExchanger.h>
+#include <Storages/MergeTree/HaMergeTreeLogManager.h>
 #include <Storages/MergeTree/HaMergeTreeQueue.h>
 #include <Storages/MergeTree/HaMergeTreeRestartingThread.h>
 #include <Storages/MergeTree/LeaderElection.h>
@@ -14,11 +16,9 @@
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
-#include <Storages/MergeTree/HaMergeTreeAddress.h>
 
 /// XXX
 #include <Storages/MergeTree/ReplicatedMergeTreeQuorumAddedParts.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeMergeStrategyPicker.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
 
 namespace DB
@@ -30,6 +30,10 @@ using HaMergeTreeTableMetadata = ReplicatedMergeTreeTableMetadata;
 class StorageHaMergeTree final : public ext::shared_ptr_helper<StorageHaMergeTree>, public MergeTreeData
 {
     friend struct ext::shared_ptr_helper<StorageHaMergeTree>;
+
+    using LogEntry = HaMergeTreeLogEntry;
+    using LogEntryPtr = LogEntry::Ptr;
+    using MutationEntry = HaMergeTreeMutationEntry;
 
 public:
     void startup() override;
@@ -114,19 +118,20 @@ public:
         bool can_become_leader;
         bool is_readonly;
         bool is_session_expired;
-        HaMergeTreeQueue::Status queue;
-        UInt32 parts_to_check;
+
         String zookeeper_path;
         String replica_name;
         String replica_path;
-        Int32 columns_version;
-        UInt64 log_max_index;
-        UInt64 log_pointer;
+
+        HaMergeTreeQueue::Status queue;
+
+        UInt64 committed_lsn;
+        UInt64 updated_lsn;
+        UInt64 latest_lsn;
+
         UInt64 absolute_delay;
         UInt8 total_replicas;
         UInt8 active_replicas;
-        /// If the error has happened fetching the info from ZooKeeper, this field will be set.
-        String zookeeper_exception;
     };
 
     /// Get the status of the table. If with_zk_fields = false - do not fill in the fields that require queries to ZK.
@@ -170,6 +175,8 @@ public:
     /// Get job to execute in background pool (merge, mutate, drop range and so on)
     std::optional<JobAndPool> getDataProcessingJob() override;
 
+    void writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry);
+
 private:
     /// Get a sequential consistent view of current parts.
     ReplicatedMergeTreeQuorumAddedParts::PartitionIdToMaxBlock getMaxAddedBlocks() const;
@@ -183,9 +190,6 @@ private:
     friend class HaMergeTreeLogExchangerBase;
     friend class HaMergeTreeLogExchanger;
     friend class MergeTreeData;
-
-    using LogEntry = HaMergeTreeLogEntry;
-    using LogEntryPtr = LogEntry::Ptr;
 
     /// using MergeStrategyPicker = ReplicatedMergeTreeMergeStrategyPicker;
 

@@ -181,7 +181,7 @@ StorageHaMergeTree::StorageHaMergeTree(
 
     /// TODO: check data_paths
     log_manager = std::make_unique<HaMergeTreeLogManager>(
-        data_paths.front(), getStorageID().getFullTableName() + " (HaLogManager)", !attach, *this);
+        data_paths.front() + "/log", getStorageID().getFullTableName() + " (HaLogManager)", !attach, *this);
 
     queue_updating_task = global_context.getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::queueUpdatingTask)", [this] { queueUpdatingTask(); });
@@ -1098,6 +1098,78 @@ void StorageHaMergeTree::onActionLockRemove(StorageActionBlockType action_type)
         background_moves_executor.triggerTask();
 }
 
+void StorageHaMergeTree::getStatus(Status & res, bool with_zk_fields)
+{
+    auto zookeeper = getZooKeeper();
+
+    res.is_leader = is_leader;
+    res.can_become_leader = getSettings()->replicated_can_become_leader;
+    res.is_readonly = is_readonly;
+    res.is_session_expired = !zookeeper || zookeeper->expired();
+
+    res.zookeeper_path = zookeeper_path;
+    res.replica_name = replica_name;
+    res.replica_path = replica_path;
+
+    res.queue = queue.getStatus();
+
+    res.absolute_delay = queue.getAbsoluteDelay().first;
+
+    auto lsn_status = log_manager->getLSNStatus(true);
+    res.committed_lsn = lsn_status.committed_lsn;
+    res.updated_lsn = lsn_status.updated_lsn;
+
+    if (res.is_session_expired || !with_zk_fields)
+    {
+        res.latest_lsn = 0;
+        res.total_replicas = 0;
+        res.active_replicas = 0;
+    }
+    else
+    {
+        auto all_replicas = zookeeper->getChildren(zookeeper_path + "/replicas");
+        res.total_replicas = all_replicas.size();
+
+        res.active_replicas = 0;
+        for (const String & replica : all_replicas)
+        {
+            if (zookeeper->exists(zookeeper_path + "/replicas/" + replica + "/is_active"))
+                ++res.active_replicas;
+        }
+        res.latest_lsn = parse<UInt64>(zookeeper->get(getZKLatestLSNPath()));
+    }
+}
+
+void StorageHaMergeTree::getQueue(LogEntriesData & res, String & out_replica_name)
+{
+    out_replica_name = replica_name;
+    queue.getUnprocessedEntries(res);
+}
+
+time_t StorageHaMergeTree::getAbsoluteDelay() const
+{
+    return queue.getAbsoluteDelay().first;
+}
+
+void StorageHaMergeTree::getReplicaDelays(time_t & out_absolute_delay, time_t & out_relative_delay)
+{
+    assertNotReadonly();
+
+    out_absolute_delay = getAbsoluteDelay();
+    out_relative_delay = 0;
+
+    if (out_absolute_delay < static_cast<time_t>(getSettings()->min_relative_delay_to_yield_leadership))
+        return;
+
+    auto peer_delays = log_exchanger.getDelays();
+    for (auto peer_delay : peer_delays)
+    {
+        if (peer_delay.second < out_absolute_delay)
+            out_relative_delay = std::max(static_cast<Int64>(out_relative_delay),
+                                          static_cast<Int64>(out_absolute_delay - peer_delay.second));
+    }
+}
+
 CheckResults StorageHaMergeTree::checkData([[maybe_unused]]const ASTPtr & query, [[maybe_unused]]const Context & context)
 {
     /*
@@ -1296,6 +1368,39 @@ UInt64 StorageHaMergeTree::allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zook
     auto block_number = parse<UInt64>(block_path.substr(block_numbers_path_prefix.length()));
     return block_number;
 }
+
+void StorageHaMergeTree::writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry)
+try
+{
+    /* TODO:
+    auto log = global_context.getMutationLog();
+    if (!log)
+        return;
+
+    MutationLogElement elem;
+    elem.event_type = type;
+    elem.event_time = time(nullptr);
+    elem.database_name = database_name;
+    elem.table_name = table_name;
+    elem.mutation_id = mutation_entry.znode_name;
+    elem.query_id = mutation_entry.query_id;
+    elem.create_time = mutation_entry.create_time;
+    elem.block_number = mutation_entry.block_number;
+    for (const MutationCommand & command : mutation_entry.commands)
+    {
+        std::stringstream ss;
+        formatAST(*command.ast, ss, false, true);
+        elem.commands.push_back(ss.str());
+    }
+
+    log->add(elem);
+    */
+}
+catch (...)
+{
+    tryLogCurrentException(log, __PRETTY_FUNCTION__);
+}
+
 }
 
 #pragma clang diagnostic push

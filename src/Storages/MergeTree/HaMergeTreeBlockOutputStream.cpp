@@ -154,6 +154,7 @@ void HaMergeTreeBlockOutputStream::writeExistingParts(MergeTreeData::MutableData
         entry.new_parts.push_back(part->name);
         entry.block_id = toString(block_number);
         entry.quorum = quorum;
+        entry.is_executed = true;
     }
 
     commitParts(zookeeper, parts, entries);
