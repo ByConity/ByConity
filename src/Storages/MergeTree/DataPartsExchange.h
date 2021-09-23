@@ -29,13 +29,17 @@ namespace DataPartsExchange
 class Service final : public InterserverIOEndpoint
 {
 public:
-    explicit Service(StorageReplicatedMergeTree & data_);
+    explicit Service(MergeTreeData & data_, const StoragePtr & storage_) : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
 
     Service(const Service &) = delete;
     Service & operator=(const Service &) = delete;
 
     std::string getId(const std::string & node_id) const override;
     void processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response) override;
+
+    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally);
+    void processQueryPartList(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
+    void processQueryExist(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
 
 private:
     MergeTreeData::DataPartPtr findPart(const String & name);
@@ -54,7 +58,8 @@ private:
 
     /// StorageReplicatedMergeTree::shutdown() waits for all parts exchange handlers to finish,
     /// so Service will never access dangling reference to storage
-    StorageReplicatedMergeTree & data;
+    MergeTreeData & data;
+    std::weak_ptr<IStorage> storage;
     Poco::Logger * log;
 };
 
@@ -83,6 +88,17 @@ public:
         std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr = nullptr,
         bool try_use_s3_copy = true,
         const DiskPtr disk_s3 = nullptr);
+
+    Strings fetchPartList(
+        const String & partition_id,
+        const String & filter,
+        const String & endpoint_str,
+        const String & host,
+        int port,
+        const ConnectionTimeouts & timeouts,
+        const String & user,
+        const String & password,
+        const String & interserver_scheme);
 
     /// You need to stop the data transfer.
     ActionBlocker blocker;

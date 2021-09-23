@@ -60,7 +60,8 @@ void HaMergeTreeReplicaEndpoint::processPacket(UInt64 packet_type, ReadBuffer & 
             return;
 
         case Protocol::HaClient::GetMutationStatus:
-            onGetMutationStatus(in, out);
+            /// TODO:
+            /// onGetMutationStatus(in, out);
             return;
 
         default:

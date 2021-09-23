@@ -76,7 +76,7 @@ void HaConnection::connect()
             disconnect();
 
         LOG_TRACE(
-            log_wrapper.get(), "{} connecting {}. Replica: {}. Endpoint: {}. User: {}.", getName(), remote_replica, remote_endpoint, user);
+            log_wrapper.get(), "{} connecting. Replica: {}. Endpoint: {}. User: {}.", getName(), remote_replica, remote_endpoint, user);
 
         socket = std::make_unique<Poco::Net::StreamSocket>();
 

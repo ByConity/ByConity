@@ -1,6 +1,8 @@
 #include <Storages/StorageHaMergeTree.h>
 
+#include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
+#include <IO/ConnectionTimeoutsContext.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -766,7 +768,10 @@ void StorageHaMergeTree::startup()
     {
         queue.initialize(getDataParts());
 
-        InterserverIOEndpointPtr data_parts_exchange_ptr = std::make_shared<DataPartsExchange::Service>(*this);
+        replica_endpoint_holder = std::make_unique<HaReplicaEndpointHolder>(
+            replica_path, std::make_shared<HaMergeTreeReplicaEndpoint>(*this), global_context.getHaReplicaHandler());
+
+        InterserverIOEndpointPtr data_parts_exchange_ptr = std::make_shared<DataPartsExchange::Service>(*this, shared_from_this());
         [[maybe_unused]] auto prev_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, data_parts_exchange_ptr);
         assert(prev_ptr == nullptr);
         global_context.getInterserverIOHandler().addEndpoint(data_parts_exchange_ptr->getId(replica_path), data_parts_exchange_ptr);
@@ -831,6 +836,9 @@ void StorageHaMergeTree::shutdown()
         /// Wait for all of them
         std::unique_lock lock(data_parts_exchange_ptr->rwlock);
     }
+
+    if (replica_endpoint_holder)
+        replica_endpoint_holder = nullptr;
 }
 
 StorageHaMergeTree::~StorageHaMergeTree()
@@ -964,10 +972,17 @@ HaMergeTreeAddress StorageHaMergeTree::getHaMergeTreeAddress() const
     res.host = host_port.first;
     res.replication_port = host_port.second;
     res.queries_port = global_context.getTCPPort();
+    res.ha_port = global_context.getHaTCPPort();
     res.database = table_id.database_name;
     res.table = table_id.table_name;
     res.scheme = global_context.getInterserverScheme();
     return res;
+}
+
+HaMergeTreeAddress StorageHaMergeTree::getReplicaAddress(const String & replica_name_)
+{
+    String replica_host_path = zookeeper_path + "/replicas/" + replica_name_ + "/host";
+    return HaMergeTreeAddress(getZooKeeper()->get(replica_host_path));
 }
 
 BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, const Context & context)
@@ -1249,6 +1264,325 @@ void StorageHaMergeTree::mutationsUpdatingTask()
 {
 }
 
+void StorageHaMergeTree::forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper)
+{
+    auto lock = lockExclusively(RWLockImpl::NO_QUERY, global_context.getSettingsRef().lock_acquire_timeout);
+
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    HaMergeTreeTableMetadata old_metadata(*this, metadata_snapshot);
+    Coordination::Stat metadata_stat;
+    auto zk_metadata_str = zookeeper->get(zookeeper_path + "/metadata", &metadata_stat);
+    auto zk_metadata = HaMergeTreeTableMetadata::parse(zk_metadata_str);
+    auto metadata_diff = old_metadata.checkAndFindDiff(zk_metadata);
+
+    ColumnsDescription old_columns = metadata_snapshot->getColumns();
+    auto zk_columns_str = zookeeper->get(zookeeper_path + "/columns");
+    auto zk_columns = ColumnsDescription::parse(zk_columns_str);
+
+    if (zk_columns != old_columns || !metadata_diff.empty())
+    {
+        LOG_WARNING(log, "Table structure in ZooKeeper is different from local table structure. Will ALTER.");
+
+        Coordination::Requests ops;
+        ops.emplace_back(zkutil::makeSetRequest(replica_path + "/metadata", zk_metadata_str, -1));
+        ops.emplace_back(zkutil::makeSetRequest(replica_path + "/columns", zk_columns_str, -1));
+        zookeeper->multi(ops);
+
+        setTableStructure(std::move(zk_columns), metadata_diff);
+
+        zookeeper->createOrUpdate(replica_path + "/metadata_version", std::to_string(metadata_stat.version), zkutil::CreateMode::Persistent);
+        metadata_version = metadata_stat.version;
+        LOG_DEBUG(log, "Set metadata version to: {} ", metadata_version);
+    }
+}
+
+void StorageHaMergeTree::setTableStructure(
+    ColumnsDescription new_columns, const HaMergeTreeTableMetadata::Diff & metadata_diff)
+{
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+
+    new_metadata.columns = new_columns;
+
+    if (!metadata_diff.empty())
+    {
+        auto parse_key_expr = [] (const String & key_expr)
+        {
+            ParserNotEmptyExpressionList parser(false);
+            auto new_sorting_key_expr_list = parseQuery(parser, key_expr, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+            ASTPtr order_by_ast;
+            if (new_sorting_key_expr_list->children.size() == 1)
+                order_by_ast = new_sorting_key_expr_list->children[0];
+            else
+            {
+                auto tuple = makeASTFunction("tuple");
+                tuple->arguments->children = new_sorting_key_expr_list->children;
+                order_by_ast = tuple;
+            }
+            return order_by_ast;
+        };
+
+        if (metadata_diff.sorting_key_changed)
+        {
+            auto order_by_ast = parse_key_expr(metadata_diff.new_sorting_key);
+            auto & sorting_key = new_metadata.sorting_key;
+            auto & primary_key = new_metadata.primary_key;
+
+            sorting_key.recalculateWithNewAST(order_by_ast, new_metadata.columns, global_context);
+
+            if (primary_key.definition_ast == nullptr)
+            {
+                /// Primary and sorting key become independent after this ALTER so we have to
+                /// save the old ORDER BY expression as the new primary key.
+                auto old_sorting_key_ast = old_metadata.getSortingKey().definition_ast;
+                primary_key = KeyDescription::getKeyFromAST(
+                    old_sorting_key_ast, new_metadata.columns, global_context);
+            }
+        }
+
+        if (metadata_diff.sampling_expression_changed)
+        {
+            auto sample_by_ast = parse_key_expr(metadata_diff.new_sampling_expression);
+            new_metadata.sampling_key.recalculateWithNewAST(sample_by_ast, new_metadata.columns, global_context);
+        }
+
+        if (metadata_diff.skip_indices_changed)
+            new_metadata.secondary_indices = IndicesDescription::parse(metadata_diff.new_skip_indices, new_columns, global_context);
+
+        if (metadata_diff.constraints_changed)
+            new_metadata.constraints = ConstraintsDescription::parse(metadata_diff.new_constraints);
+
+        if (metadata_diff.ttl_table_changed)
+        {
+            if (!metadata_diff.new_ttl_table.empty())
+            {
+                ParserTTLExpressionList parser;
+                auto ttl_for_table_ast = parseQuery(parser, metadata_diff.new_ttl_table, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+                new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
+                    ttl_for_table_ast, new_metadata.columns, global_context, new_metadata.primary_key);
+            }
+            else /// TTL was removed
+            {
+                new_metadata.table_ttl = TTLTableDescription{};
+            }
+        }
+    }
+
+    /// Changes in columns may affect following metadata fields
+    new_metadata.column_ttls_by_name.clear();
+    for (const auto & [name, ast] : new_metadata.columns.getColumnTTLs())
+    {
+        auto new_ttl_entry = TTLDescription::getTTLFromAST(ast, new_metadata.columns, global_context, new_metadata.primary_key);
+        new_metadata.column_ttls_by_name[name] = new_ttl_entry;
+    }
+
+    if (new_metadata.partition_key.definition_ast != nullptr)
+        new_metadata.partition_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+
+    if (!metadata_diff.sorting_key_changed) /// otherwise already updated
+        new_metadata.sorting_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+
+    /// Primary key is special, it exists even if not defined
+    if (new_metadata.primary_key.definition_ast != nullptr)
+    {
+        new_metadata.primary_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+    }
+    else
+    {
+        new_metadata.primary_key = KeyDescription::getKeyFromAST(new_metadata.sorting_key.definition_ast, new_metadata.columns, global_context);
+        new_metadata.primary_key.definition_ast = nullptr;
+    }
+
+    if (!metadata_diff.sampling_expression_changed && new_metadata.sampling_key.definition_ast != nullptr)
+        new_metadata.sampling_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+
+    if (!metadata_diff.skip_indices_changed) /// otherwise already updated
+    {
+        for (auto & index : new_metadata.secondary_indices)
+            index.recalculateWithNewColumns(new_metadata.columns, global_context);
+    }
+
+    if (!metadata_diff.ttl_table_changed && new_metadata.table_ttl.definition_ast != nullptr)
+        new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
+            new_metadata.table_ttl.definition_ast, new_metadata.columns, global_context, new_metadata.primary_key);
+
+    /// Even if the primary/sorting/partition keys didn't change we must reinitialize it
+    /// because primary/partition key column types might have changed.
+    checkTTLExpressions(new_metadata, old_metadata);
+    setProperties(new_metadata, old_metadata);
+
+    auto table_id = getStorageID();
+    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(global_context, table_id, new_metadata);
+}
+
+void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unused]]Coordination::Stat source_is_lost_stat, zkutil::ZooKeeperPtr & zookeeper)
+{
+    Stopwatch stopwatch;
+
+    LOG_INFO(log, "Will mimic {}", cloned_replica);
+
+    /// Before clone, force to set the table structure
+    forceSetTableStructure(zookeeper);
+
+    String source_path = zookeeper_path + "/replicas/" + cloned_replica;
+
+    auto queue_task_lock = getActionLock(ActionLocks::ReplicationQueue);
+
+    auto peer_updated_lsn = log_exchanger.getLSNStatus(cloned_replica).updated_lsn;
+    auto self_committed_lsn = log_manager->getLSNStatus().committed_lsn;
+
+    LogEntry::Vec prepared_entries;
+
+    if (self_committed_lsn != 0 || peer_updated_lsn != 0)
+    {
+        log_manager->resetTo(peer_updated_lsn);
+        queue.clear();
+        prepared_entries = queue.pullLogs(zookeeper);
+    }
+
+    /// -----------------------------------------------------------------------
+    /// Fetch all part
+    String partition_id {}; /// empty partition id
+    String filter {"1"}; /// 1 means always true
+
+    /// Get the part list, i.e. source replica_path
+    auto source_endpoint = zookeeper_path + "/replicas/" + cloned_replica;
+    auto replica_address = getReplicaAddress(cloned_replica);
+
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(global_context.getSettingsRef());
+    auto [user, password] = global_context.getInterserverCredentials();
+
+    auto part_names = fetcher.fetchPartList(partition_id, filter,
+            source_path, replica_address.host, replica_address.replication_port, timeouts,
+            user, password, global_context.getInterserverScheme());
+
+
+    // Generate GET log entries
+    ActiveDataPartSet active_parts_set(format_version, part_names);
+
+    // If local replica was lost and try to mimic others, we prefer to reuse those parts that
+    // already exist in this replica.
+    {
+        clearOldTemporaryDirectories();
+
+        auto localDataParts = getDataParts();
+        MergeTreeData:: DataPartsVector parts_to_remove;
+        for (auto & localPart : localDataParts)
+        {
+            auto cover_name = active_parts_set.getContainingPart(localPart->info);
+            // part considered lost or changed because of other operation(e.g. merge),
+            // ignore those op happened locally.
+            if (cover_name != localPart->info.getPartName())
+            {
+                // TBD: remove local data might be dangerous, maybe need a knob to control if we
+                // prefer to remove local part
+                parts_to_remove.push_back(localPart);
+            }
+            else // duplicate, not need to fetch it from remote replica
+            {
+                active_parts_set.remove(localPart->info);
+            }
+        }
+
+        if (!parts_to_remove.empty())
+            removePartsFromWorkingSet(parts_to_remove, true);
+        //clearOldPartsFromFilesystem();
+    }
+
+    auto active_parts = active_parts_set.getParts();
+
+    size_t entries_size = prepared_entries.size() + active_parts.size();
+    prepared_entries.reserve(entries_size);
+
+    auto create_time = time(nullptr);
+    for (auto & part_name : active_parts)
+    {
+        auto entry = std::make_shared<LogEntry>();
+        entry->lsn = allocateLSN();
+        entry->type = LogEntry::CLONE_PART;
+        /// entry->storage_type = type;
+        entry->source_replica = replica_name;
+        entry->from_replica = cloned_replica;
+        entry->new_parts.push_back(part_name);
+        entry->create_time = create_time;
+        prepared_entries.push_back(std::move(entry));
+    }
+
+    size_t marked_count = queue.markRedundantEntries(prepared_entries);
+    if (marked_count)
+        LOG_DEBUG(log, "Marked {} redundant entries while cloning replica.", marked_count);
+
+    queue.write(std::move(prepared_entries));
+
+    LOG_DEBUG(log, "Finished clone cost {} ms. Prepared {} parts to be fetched", stopwatch.elapsedMilliseconds(), active_parts.size());
+}
+
+void StorageHaMergeTree::getReplicaToClone(zkutil::ZooKeeperPtr & zookeeper, String & source_replica, Coordination::Stat & source_is_lost_stat)
+{
+    /// Only get delays of active replicas
+    auto peer_delays = log_exchanger.getDelays();
+    if (peer_delays.empty())
+        throw Exception("No active replica to clone", ErrorCodes::ALL_REPLICAS_LOST);
+
+    Int64 min_delay = std::numeric_limits<Int64>::max();
+    /// TODO: String mimic_replica = global_context.getMimicReplica(this->database_name, this->table_name);
+    String mimic_replica = "";
+
+    for (auto && [replica, delay] : peer_delays)
+    {
+        /// Skip active but lost replica
+        if (delay >= VERY_LARGE_DELAY)
+            continue;
+
+        /// config has assigned some replica to clone
+        if (mimic_replica == replica)
+        {
+            source_replica = mimic_replica;
+            break;
+        }
+
+        /// try to get a replica with min delay
+        if (delay < min_delay)
+        {
+            min_delay = delay;
+            source_replica = replica;
+        }
+    }
+
+    if (source_replica.empty())
+        throw Exception("All active replicas are lost", ErrorCodes::ALL_REPLICAS_LOST);
+
+    if ("1" == zookeeper->get(zookeeper_path + "/replicas/" + source_replica + "/is_lost", &source_is_lost_stat))
+        throw Exception("Selected a lost replica to clone. This is a bug", ErrorCodes::LOGICAL_ERROR);
+}
+
+void StorageHaMergeTree::cloneReplicaIfNeeded(zkutil::ZooKeeperPtr zookeeper)
+{
+    /// TODO:
+    if (is_offline)
+        return;
+
+    String res = zookeeper->get(replica_path + "/is_lost");
+    if (res == "0")
+        return;
+
+    String source_replica;
+
+    Coordination::Stat source_is_lost_stat;
+
+    getReplicaToClone(zookeeper, source_replica, source_is_lost_stat);
+    /// Do not need to check whether source replica is active here.
+
+    /// Will do repair from the selected replica.
+    cloneReplica(source_replica, source_is_lost_stat, zookeeper);
+    /// If repair fails to whatever reason, the exception is thrown, is_lost will remain "1" and the replica will be repaired later.
+
+    /// If replica is repaired successfully, we remove is_lost flag.
+    zookeeper->set(replica_path + "/is_lost", "0");
+}
+
 void StorageHaMergeTree::enterLeaderElection()
 {
     auto callback = [this]()
@@ -1399,6 +1733,20 @@ try
 catch (...)
 {
     tryLogCurrentException(log, __PRETTY_FUNCTION__);
+}
+
+UInt64 StorageHaMergeTree::allocLSNAndSet(const zkutil::ZooKeeperPtr & zookeeper)
+{
+    if (!zookeeper)
+        throw Exception("No ZooKeeper session.", ErrorCodes::NO_ZOOKEEPER);
+
+    auto node_prefix = getZKLatestLSNPath() + "/lsn-";
+    auto created_path = zookeeper->create(node_prefix, "", zkutil::CreateMode::EphemeralSequential);
+    auto lsn_str = created_path.substr(node_prefix.length());
+    /// FIXME: we should check znode version here
+    zookeeper->set(getZKLatestLSNPath(), lsn_str);
+    LOG_TRACE(log, "Allocate and set new LSN-{}", lsn_str);
+    return parse<UInt64>(lsn_str);
 }
 
 }

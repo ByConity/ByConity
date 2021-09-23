@@ -24,6 +24,8 @@
 namespace DB
 {
 
+class HaReplicaEndpointHolder;
+
 using HaMergeTreeQuorumAddedParts = ReplicatedMergeTreeQuorumAddedParts;
 using HaMergeTreeTableMetadata = ReplicatedMergeTreeTableMetadata;
 
@@ -231,6 +233,7 @@ private:
 
     std::unique_ptr<HaMergeTreeLogManager> log_manager;
     HaMergeTreeLogExchanger log_exchanger;
+    std::shared_ptr<HaReplicaEndpointHolder> replica_endpoint_holder;
 
     /** The queue of what needs to be done on this replica to catch up with everyone. It is taken from ZooKeeper (/replicas/me/queue/).
      * In ZK entries in chronological order. Here it is not necessary.
@@ -285,6 +288,8 @@ private:
 
     const size_t replicated_fetches_pool_size;
 
+    bool is_offline = false;
+
     template <class Func>
     void foreachCommittedParts(Func && func, bool select_sequential_consistency) const;
 
@@ -322,6 +327,18 @@ private:
 
     void mutationsUpdatingTask();
 
+    void forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper);
+
+    /** Clone data from another replica.
+      * If replica can not be cloned throw Exception.
+      */
+    void cloneReplica(const String & source_replica, Coordination::Stat source_is_lost_stat, zkutil::ZooKeeperPtr & zookeeper);
+
+    void getReplicaToClone(zkutil::ZooKeeperPtr & zookeeper, String & source_replica, Coordination::Stat & source_is_lost_stat);
+
+    /// Clone replica if it is lost.
+    void cloneReplicaIfNeeded(zkutil::ZooKeeperPtr zookeeper);
+
     /// Postcondition:
     /// either leader_election is fully initialized (node in ZK is created and the watching thread is launched)
     /// or an exception is thrown and leader_election is destroyed.
@@ -344,6 +361,7 @@ private:
 
     /// Info about how other replicas can access this one.
     HaMergeTreeAddress getHaMergeTreeAddress() const;
+    HaMergeTreeAddress getReplicaAddress(const String & replica_name_);
 
     // Partition helpers
     void dropPartition(const ASTPtr & partition, bool detach, bool drop_part, const Context & query_context, bool throw_if_noop) override;
@@ -363,6 +381,10 @@ private:
 
     std::pair<UInt64, Coordination::RequestPtr> allocLSNAndMakeSetRequest();
     UInt64 allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zookeeper, const String & zookeeper_block_id_path = "");
+
+    UInt64 allocateLSN() { return allocLSNAndSet(); }
+    UInt64 allocLSNAndSet() { return allocLSNAndSet(getZooKeeper()); }
+    UInt64 allocLSNAndSet(const zkutil::ZooKeeperPtr & zookeeper);
 
     String getZKLatestLSNPath() const { return zookeeper_path + "/latest_lsn"; }
     String getZKCommittedLSNPath() const { return zookeeper_path + "/committed_lsn"; }

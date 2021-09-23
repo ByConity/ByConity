@@ -265,9 +265,10 @@ void HaMergeTreeLogExchangerBase::requestReplicaUnlocked(
         auto connection = connectUnlocked(replica_name, client_lock);
         action(*connection);
     }
-    catch (const Exception & e)
+    catch (const Exception & )
     {
-        LOG_ERROR(log, e.displayText());
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        /// LOG_ERROR(log, e.displayText());
         /// Packet may not have been fully send/received to/from the socket,
         /// therefore we must erase the connection in order to get a clean connection next time.
         connections.erase(replica_name);

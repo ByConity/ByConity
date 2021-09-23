@@ -5,7 +5,6 @@
 
 namespace DB
 {
-const time_t VERY_LARGE_DELAY = 60 * 60 * 24 * 10; // 10 days
 
 HaMergeTreeQueue::HaMergeTreeQueue(StorageHaMergeTree & storage_)
     : storage(storage_)
