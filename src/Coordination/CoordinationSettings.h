@@ -12,6 +12,7 @@ namespace DB
 
 struct Settings;
 
+
 /** These settings represent fine tunes for internal details of Coordination storages
   * and should not be changed by the user without a reason.
   */

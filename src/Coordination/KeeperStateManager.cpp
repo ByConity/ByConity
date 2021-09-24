@@ -61,7 +61,7 @@ KeeperStateManager::parseServersConfiguration(const Poco::Util::AbstractConfigur
 KeeperStateManager::KeeperStateManager(int server_id_, const std::string & host, int port, const std::string & logs_path)
     : my_server_id(server_id_)
     , secure(false)
-    , log_store(nuraft::cs_new<KeeperLogStore>(logs_path, 5000, false))
+    , log_store(nuraft::cs_new<KeeperLogStore>(logs_path, 5000, false, false))
 {
     auto peer_config = nuraft::cs_new<nuraft::srv_config>(my_server_id, host + ":" + std::to_string(port));
     configuration_wrapper.cluster_config = nuraft::cs_new<nuraft::cluster_config>();
@@ -83,8 +83,8 @@ KeeperStateManager::KeeperStateManager(
     , log_store(nuraft::cs_new<KeeperLogStore>(
         log_storage_path,
         coordination_settings->rotate_log_storage_interval,
-        coordination_settings->force_sync/*,
-        coordination_settings->compress_logs*/))
+        coordination_settings->force_sync,
+        coordination_settings->compress_logs))
 {
 }
 
