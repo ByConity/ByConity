@@ -306,8 +306,8 @@ target_link_libraries(clickhouse_common_io
             pcg_random
             Poco::Foundation
             roaring
+            ${CPPKMS_LIBRARIES}
 )
-
 
 
 if (USE_RDKAFKA)

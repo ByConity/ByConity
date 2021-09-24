@@ -336,6 +336,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     if (context->getSettingsRef().optimize_on_insert)
         block = mergeBlock(block, sort_description, partition_key_columns, perm_ptr);
 
+    if (metadata_snapshot->hasEncryptColumn())
+    {
+        auto encrypt_columns = metadata_snapshot->getEncryptColumns();
+        ExpressionActions(ActionsDAG::makeEncryptColumnsActions(encrypt_columns)).execute(block);
+    }
+
     /// Size of part would not be greater than block.bytes() + epsilon
     size_t expected_size = block.bytes();
 

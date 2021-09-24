@@ -1,5 +1,6 @@
 #include <Core/Settings.h>
 #include <Core/NamesAndTypes.h>
+#include <Common/KMSClient.h>
 
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/LogicalExpressionsOptimizer.h>
@@ -648,6 +649,27 @@ TreeRewriterResult::TreeRewriterResult(
     is_remote_storage = storage && storage->isRemote();
 }
 
+void TreeRewriterResult::checkSecurityColumns(const ContextPtr & context)
+{
+    for (auto & column: source_columns)
+    {
+        if (!column.type->isSecurity())
+            continue;
+
+        auto security_config_name = storage->getStorageID().getFullNameNotQuoted();
+        auto security_key = context->getSettingsRef().encrypt_key.value;
+
+        if (security_key.empty())
+            throw Exception("Permission Denied. security_key is missed when query security column: " + column.name, ErrorCodes::UNKNOWN_IDENTIFIER);
+
+        if (!KMSClient::instance().auth(security_config_name, security_key, context))
+            throw Exception("Permission Denied. Mismatched key when query security column: " + column.name, ErrorCodes::UNKNOWN_IDENTIFIER);
+
+        /// just check any security column is OK.
+        break;
+    }
+}
+
 /// Add columns from storage to source_columns list. Deduplicate resulted list.
 /// Special columns are non physical columns, for example ALIAS
 void TreeRewriterResult::collectSourceColumns(bool add_special)
@@ -1023,6 +1045,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
     result.aggregates = getAggregates(query, *select_query);
     result.window_function_asts = getWindowFunctions(query, *select_query);
     result.collectUsedColumns(query, true);
+    result.checkSecurityColumns(context.lock());
     result.required_source_columns_before_expanding_alias_columns = result.required_source_columns.getNames();
 
     /// rewrite filters for select query, must go after getArrayJoinedColumns

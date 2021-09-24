@@ -123,6 +123,12 @@ Names IDataType::getSubcolumnNames() const
     return Names(std::make_move_iterator(res.begin()), std::make_move_iterator(res.end()));
 }
 
+void IDataType::checkFlags(UInt8 flag) const
+{
+    if (flag & TYPE_ENCRYPT_FLAG)
+        throw Exception("DataType " + getName() + " doesn't support ENCRYPT property.", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 void IDataType::insertDefaultInto(IColumn & column) const
 {
     column.insertDefault();

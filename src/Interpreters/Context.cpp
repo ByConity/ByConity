@@ -461,6 +461,9 @@ struct ContextSharedPart
     mutable DiskUniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
     mutable DiskUniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
+    using KMSKeyCache = std::unordered_map<String, String>;
+    mutable KMSKeyCache kms_cache;
+
     bool shutdown_called = false;
 
     Stopwatch uptime_watch;
@@ -2135,7 +2138,7 @@ std::optional<UInt16> Context::getTCPPortSecure() const
 UInt16 Context::getHaTCPPort() const
 {
     auto lock = getLock();
-    auto & config = getConfigRef();
+    const auto & config = getConfigRef();
     return config.getInt("ha_tcp_port");
 }
 
@@ -3036,4 +3039,23 @@ std::shared_ptr<DiskUniqueKeyIndexCache> Context::getDiskUniqueKeyIndexCache() c
     auto lock = getLock();
     return shared->unique_key_index_cache;
 }
+
+String Context::getKMSKeyCache(const String & config_name) const
+{
+    auto lock = getLock();
+
+    auto it = shared->kms_cache.find(config_name);
+
+    if (it != shared->kms_cache.end())
+        return it->second;
+    else
+        return {};
+}
+
+void Context::addKMSKeyCache(const String & config_name, const String & key) const
+{
+    auto lock = getLock();
+    shared->kms_cache[config_name] = key;
+}
+
 }

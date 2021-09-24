@@ -16,10 +16,10 @@ public:
     std::optional<bool> null_modifier;
     String default_specifier;
     ASTPtr default_expression;
-    UInt8 flags;
     ASTPtr comment;
     ASTPtr codec;
     ASTPtr ttl;
+    UInt8 flags;
 
     String getID(char delim) const override { return "ColumnDeclaration" + (delim + name); }
 

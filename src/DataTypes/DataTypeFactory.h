@@ -31,9 +31,9 @@ private:
 public:
     static DataTypeFactory & instance();
 
-    DataTypePtr get(const String & full_name) const;
-    DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
-    DataTypePtr get(const ASTPtr & ast) const;
+    DataTypePtr get(const String & full_name, UInt8 flags = 0) const;
+    DataTypePtr get(const String & family_name, const ASTPtr & parameters, UInt8 flags = 0) const;
+    DataTypePtr get(const ASTPtr & ast, UInt8 flags = 0) const;
     DataTypePtr getCustom(DataTypeCustomDescPtr customization) const;
 
     /// Register a type family by its name.

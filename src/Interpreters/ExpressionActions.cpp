@@ -1,4 +1,5 @@
 #include <Interpreters/Set.h>
+#include <Common/KMSClient.h>
 #include <Common/ProfileEvents.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <Interpreters/ExpressionActions.h>
@@ -252,6 +253,12 @@ std::string ExpressionActions::Action::toString() const
         case ActionsDAG::ActionType::INPUT:
             out << "INPUT " << arguments.front();
             break;
+        case ActionsDAG::ActionType::ENCRYPT:
+            out << "ENCRYPT " << arguments.front();
+            break;
+        case ActionsDAG::ActionType::DECRYPT:
+            out << "DECRYPT " << arguments.front();
+            break;
     }
 
     out << " -> " << node->result_name
@@ -440,6 +447,24 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             else
                 columns[action.result_position] = std::move(inputs[pos]);
 
+            break;
+        }
+
+        case ActionsDAG::ActionType::ENCRYPT:
+        {
+            auto & res_column = columns[action.result_position];
+            res_column.type = action.node->result_type;
+            res_column.name = action.node->result_name;
+            res_column.column = KMSClient::encryptColumn(columns[action.arguments.front().pos], dry_run);
+            break;
+        }
+
+        case ActionsDAG::ActionType::DECRYPT:
+        {
+            auto & res_column = columns[action.result_position];
+            res_column.type = action.node->result_type;
+            res_column.name = action.node->result_name;
+            res_column.column = KMSClient::decryptColumn(columns[action.arguments.front().pos], dry_run);
             break;
         }
     }
