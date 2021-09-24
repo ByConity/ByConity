@@ -47,6 +47,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_POLICY;
     extern const int NO_SUCH_DATA_PART;
     extern const int INTERSERVER_SCHEME_DOESNT_MATCH;
+    extern const int PART_IS_LOST_FOREVER;
 }
 
 namespace ActionLocks
@@ -1225,29 +1226,349 @@ bool StorageHaMergeTree::canUseAdaptiveGranularity() const
 std::optional<JobAndPool> StorageHaMergeTree::getDataProcessingJob()
 {
     /// If replication queue is stopped exit immediately as we successfully executed the task
-    /// if (queue.actions_blocker.isCancelled())
-    ///     return {};
+    if (queue.actions_blocker.isCancelled())
+        return {};
 
     /// This object will mark the element of the queue as running.
-    /// ReplicatedMergeTreeQueue::SelectedEntryPtr selected_entry = selectQueueEntry();
+    size_t num_avail_fetches = 0;
+    auto selected_entry = queue.selectEntryToProcess(num_avail_fetches);
 
-    /// if (!selected_entry)
-    ///     return {};
+    if (!selected_entry->valid())
+        return {};
 
-    /// PoolType pool_type;
+    PoolType pool_type;
 
-    /// /// Depending on entry type execute in fetches (small) pool or big merge_mutate pool
-    /// if (selected_entry->log_entry->type == LogEntry::GET_PART)
-    ///     pool_type = PoolType::FETCH;
-    /// else
-    ///     pool_type = PoolType::MERGE_MUTATE;
+    /// Depending on entry type execute in fetches (small) pool or big merge_mutate pool
+    if (selected_entry->getExecuting()->type == LogEntry::GET_PART)
+        pool_type = PoolType::FETCH;
+    else
+        pool_type = PoolType::MERGE_MUTATE;
 
-    /// return JobAndPool{[this, selected_entry] () mutable
-    /// {
-    ///     return processQueueEntry(selected_entry);
-    /// }, pool_type};
-    return {};
+    return JobAndPool{[this, selected_entry] () mutable
+    {
+        return processQueueEntry(selected_entry);
+    }, pool_type};
 }
+
+bool StorageHaMergeTree::processQueueEntry(HaQueueExecutingEntrySetPtr executing_set)
+{
+    bool success = false;
+    bool remove_bad_entry = false;
+
+    SCOPE_EXIT(
+        try {
+            if (success)
+                queue.removeProcessedEntries(executing_set->collect());
+            else if (remove_bad_entry && executing_set)
+                queue.removeProcessedEntry(executing_set->getExecuting());
+        } catch (...) {
+            // make clang-format happy
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        });
+
+    auto now = time(nullptr);
+    auto settings = getSettings();
+    auto entry = executing_set->getExecuting();
+
+    try
+    {
+        LOG_DEBUG(log, "Executing entry {} ", entry->toString());
+
+        success = executeLogEntry(executing_set);
+
+        /// executing entry has been moved to other
+        if (!executing_set->valid())
+            return true;
+
+        if (!success && entry->first_attempt_time + Int64(settings->ha_mark_lost_replica_timeout) < now
+            && entry->num_tries > settings->ha_max_log_try_times)
+        {
+            remove_bad_entry = true;
+            LOG_ERROR(log, "Marked log {} done of which execution may not be successful anymore.", entry->toString());
+        }
+    }
+    catch (const Exception & e)
+    {
+        queue.onLogExecutionError(entry, std::current_exception());
+
+        if (e.code() == ErrorCodes::PART_IS_LOST_FOREVER && (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART)
+            && entry->first_attempt_time + time_t(settings->ha_update_replica_stats_period * 3) < now && entry->num_tries > 3)
+        {
+            remove_bad_entry = true;
+            LOG_ERROR(log, "Marked log {} done because {}", entry->toString(), e.displayText());
+        }
+        if (e.code() == ErrorCodes::PART_IS_LOST_FOREVER && (entry->type == LogEntry::MERGE_PARTS || entry->type == LogEntry::MUTATE_PART)
+            && entry->num_tries > settings->ha_max_log_try_times)
+        {
+            remove_bad_entry = true;
+            LOG_ERROR(log, "Marked log {} done because {}", entry->toString(), e.displayText());
+        }
+        if (e.code() == ErrorCodes::NO_REPLICA_HAS_PART)
+        {
+            /// If no one has the right part, probably not all replicas work; We will not write to log with Error level.
+            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+        }
+        else if (e.code() == ErrorCodes::ABORTED)
+        {
+            /// Interrupted merge or downloading a part is not an error.
+            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.message());
+        }
+        else if (e.code() == ErrorCodes::PART_IS_TEMPORARILY_LOCKED)
+        {
+            /// Part cannot be added temporarily
+            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+        }
+        else
+            LOG_ERROR(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+    }
+    catch (...)
+    {
+        queue.onLogExecutionError(entry, std::current_exception());
+
+        LOG_ERROR(log, "Failed to execute {} : {}", entry->toString(), getCurrentExceptionMessage(true));
+    }
+
+    if (success || remove_bad_entry)
+        return true;
+
+    return false;
+}
+
+bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = executing_set->getExecuting();
+
+    switch (entry->type)
+    {
+        case LogEntry::GET_PART:
+            return executeFetch(executing_set);
+
+        default:
+            throw Exception("Log Type is not support", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = executing_set->getExecuting();
+    auto new_part_name = entry->new_parts.front();
+
+    /// Some part has already covered this one, DO NOT fetch it.
+    if (auto covered_part = getActiveContainingPart(new_part_name))
+    {
+        LOG_TRACE(log, "Cancel fetching part {} covered by {}", new_part_name, covered_part->name);
+
+        /// If part already covered by local partition update quorum success
+        /// if (entry->quorum)
+        /// {
+        ///     updateQuorum(new_part_name);
+        /// }
+        return true;
+    }
+
+    /// TODO: fix later
+    if (entry->type == LogEntry::GET_PART && entry->source_replica == replica_name)
+    {
+        LOG_WARNING(log, "Try to fetch a part where source replica of GET_PART is self: {} ", entry->toString());
+        return true;
+    }
+
+    return fetchPartHeuristically(
+        executing_set,
+        new_part_name,
+        (LogEntry::CLONE_PART == entry->type) ? entry->from_replica : entry->source_replica,
+        false,
+        entry->quorum);
+}
+
+bool StorageHaMergeTree::fetchPartHeuristically(
+    const HaQueueExecutingEntrySetPtr & executing_set,
+    const String & part_name,
+    const String & backup_replica,
+    bool to_detached,
+    size_t quorum,
+    bool incrementally)
+{
+    bool all_success = false;
+    auto candidate_replicas = log_exchanger.findActiveContainingPart(part_name, all_success);
+
+    if (candidate_replicas.empty())
+    {
+        if (log_exchanger.isLostReplica(backup_replica))
+            throw Exception(
+                "Part " + part_name + " is lost forever because no active replica has it and source replica is lost",
+                ErrorCodes::PART_IS_LOST_FOREVER);
+        else if (all_success && executing_set && executing_set->getExecuting()->create_time + 1800 < time(nullptr))
+            throw Exception(
+                "Part " + part_name + " is lost forever because no active or failed replica has it", ErrorCodes::PART_IS_LOST_FOREVER);
+        else
+            throw Exception("No active replica has part " + part_name, ErrorCodes::NO_REPLICA_HAS_PART);
+    }
+
+    /// Remove this
+    if (log->trace())
+    {
+        std::ostringstream oss;
+        oss << "Candidate replica for part " << part_name << ": ";
+        for (auto & p : candidate_replicas)
+            oss << p.replica << " " << p.payload << " " << p.containing_part << "; ";
+        LOG_TRACE(log, oss.str());
+    }
+
+    /// the "payload" field measures the load of the replica
+    std::sort(candidate_replicas.begin(), candidate_replicas.end(), [](auto & lhs, auto & rhs) { return lhs.payload < rhs.payload; });
+    String replica_to_fetch = candidate_replicas[0].replica;
+    String part_to_fetch = part_name;
+
+    for (auto & candidate : candidate_replicas)
+    {
+        if (candidate.containing_part.empty())
+            continue;
+        /// TODO:
+        replica_to_fetch = candidate.replica;
+        part_to_fetch = candidate.containing_part;
+        break;
+    }
+
+    return fetchPart(
+        executing_set,
+        part_to_fetch,
+        zookeeper_path + "/replicas/" + replica_to_fetch,
+        to_detached,
+        quorum,
+        false, // to_repair
+        incrementally);
+}
+
+bool StorageHaMergeTree::fetchPart(
+    const HaQueueExecutingEntrySetPtr & executing_set,
+    const String & part_name,
+    const String & source_replica_path,
+    bool to_detached,
+    size_t quorum,
+    bool,
+    bool incrementally)
+{
+    std::unique_ptr<FetchingPartToExecutingEntrySet::Handle> handle;
+    if (executing_set)
+    {
+        handle = current_fetching_parts_with_entries.insertOrMerge(part_name, executing_set);
+        if (!handle)
+            return false; /// assume fail to execute
+    }
+    else
+    {
+        /// TODO: optimize for this case
+    }
+
+    auto zookeeper = getZooKeeper();
+
+    LOG_DEBUG(log, "Fetching part {} from  {}", part_name, source_replica_path);
+
+    TableLockHolder table_lock_holder;
+    if (!to_detached)
+        table_lock_holder = lockForShare(RWLockImpl::NO_QUERY, getSettings()->lock_acquire_timeout_for_background_operations);
+
+    /// Logging
+    Stopwatch stopwatch;
+    MutableDataPartPtr part;
+    DataPartsVector replaced_parts;
+
+    auto write_part_log = [&](const ExecutionStatus & execution_status) {
+        writePartLog(PartLogElement::DOWNLOAD_PART, execution_status, stopwatch.elapsed(), part_name, part, replaced_parts, nullptr);
+    };
+
+    auto timeouts = ConnectionTimeouts::getHTTPTimeouts(global_context);
+    auto [user, password] = global_context.getInterserverCredentials();
+    String interserver_scheme = global_context.getInterserverScheme();
+
+    try
+    {
+        HaMergeTreeAddress address(zookeeper->get(source_replica_path + "/host"));
+        if (interserver_scheme != address.scheme)
+            throw Exception(
+                "Interserver schemes are different '" + interserver_scheme + "' != '" + address.scheme + "', can't fetch part from "
+                    + address.host,
+                ErrorCodes::LOGICAL_ERROR);
+
+        part = fetcher.fetchPart(
+            getInMemoryMetadataPtr(),
+            part_name,
+            source_replica_path,
+            address.host,
+            address.replication_port,
+            timeouts,
+            user,
+            password,
+            interserver_scheme,
+            to_detached,
+            "");
+
+        if (!to_detached)
+        {
+            /* TODO:
+            /// Lock until part have been added
+            auto min_block_lock = getMinBlockMapLock();
+
+            auto min_block = getMinBlockUnlocked(part->info.partition_id);
+            if (part->info.max_block < min_block)
+            {
+                LOG_WARNING(log, "Try to commit fetched part " << part->name << " which should be dropped, min_block " << min_block);
+                return true;
+            }
+            */
+
+
+            MergeTreeData::Transaction transaction(*this);
+            renameTempPartAndReplace(part, nullptr, &transaction);
+
+            /// TODO check check sums
+            /// if (!quorum || updateQuorum(part_name))
+            {
+                transaction.commit();
+                if (handle && part->getState() == DataPartState::Committed)
+                    handle->getExecutingLog()->actual_committed_part = part->name;
+            }
+            /// else
+            /// {
+            ///     transaction.rollback();
+            ///     fetch_success = false;
+            ///     LOG_WARNING(
+            ///         log,
+            ///         "Update quorum status of local " << part_name << " failed. "
+            ///                                          << "Not fetch this partition.");
+            /// }
+
+            write_part_log({});
+        }
+        else
+        {
+            // The fetched part is valuable and should not be cleaned like a temp part.
+            part->is_temp = false;
+            part->renameTo("detached/" + part_name, true);
+        }
+    }
+    catch (const Exception & e)
+    {
+        /// The same part is being written right now (but probably it's not committed yet).
+        /// We will check the need for fetch later.
+        if (e.code() == ErrorCodes::DIRECTORY_ALREADY_EXISTS)
+            return false;
+
+        throw;
+    }
+    catch (...)
+    {
+        if (!to_detached)
+            write_part_log(ExecutionStatus::fromCurrentException());
+
+        throw;
+    }
+
+    LOG_DEBUG(log, "Fetched part {} from {}", source_replica_path, (to_detached ? " (to 'detach' directory)" : ""));
+    return true;
+}
+
 
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
 {

@@ -11,6 +11,7 @@
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
 #include <Storages/MergeTree/HaMergeTreeQueue.h>
 #include <Storages/MergeTree/HaMergeTreeRestartingThread.h>
+#include <Storages/MergeTree/HaQueueExecutingEntrySet.h>
 #include <Storages/MergeTree/LeaderElection.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
@@ -288,6 +289,8 @@ private:
 
     const size_t replicated_fetches_pool_size;
 
+    FetchingPartToExecutingEntrySet current_fetching_parts_with_entries;
+
     bool is_offline = false;
 
     template <class Func>
@@ -321,6 +324,30 @@ private:
 
     bool partIsAssignedToBackgroundOperation(const DataPartPtr & part) const override;
 
+    /** Execute the action from the queue. Throws an exception if something is wrong.
+      * Returns whether or not it succeeds. If it did not work, write it to the end of the queue.
+      */
+    bool executeLogEntry(HaQueueExecutingEntrySetPtr & executing_set);
+
+    bool executeFetch(HaQueueExecutingEntrySetPtr & executing_set);
+
+    bool fetchPartHeuristically(
+        const HaQueueExecutingEntrySetPtr & executing_set,
+        const String & part_name,
+        const String & backup_replica,
+        bool to_detached,
+        size_t quorum = 0,
+        bool incrementally = false);
+
+    bool fetchPart(
+        const HaQueueExecutingEntrySetPtr & executing_set,
+        const String & part_name,
+        const String & replica_path,
+        bool to_detached,
+        size_t quorum = 0,
+        bool to_repair = false,
+        bool incrementally = false);
+
     /** Updates the queue.
       */
     void queueUpdatingTask();
@@ -338,6 +365,8 @@ private:
 
     /// Clone replica if it is lost.
     void cloneReplicaIfNeeded(zkutil::ZooKeeperPtr zookeeper);
+
+    bool processQueueEntry(HaQueueExecutingEntrySetPtr executing_entry);
 
     /// Postcondition:
     /// either leader_election is fully initialized (node in ZK is created and the watching thread is launched)
