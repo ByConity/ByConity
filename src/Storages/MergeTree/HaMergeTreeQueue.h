@@ -342,14 +342,14 @@ public:
     bool operator()
         (const MergeTreeData::DataPartPtr & left,
          const MergeTreeData::DataPartPtr & right,
-         bool enable_logging = false) const;
+         String * output = nullptr) const;
 
-    /// For consistency
-    std::function< bool(
-            const MergeTreeData::DataPartPtr &,
-            const MergeTreeData::DataPartPtr &,
-            bool enable_logging)>
-        getMergeChecker() const { return *this; }
+    /// /// For consistency
+    /// std::function< bool(
+    ///         const MergeTreeData::DataPartPtr &,
+    ///         const MergeTreeData::DataPartPtr &,
+    ///         bool enable_logging)>
+    ///     getMergeChecker() const { return *this; }
 
     std::function<bool(const MergeTreeData::DataPartPtr &)> getAssignmentChecker() const;
 

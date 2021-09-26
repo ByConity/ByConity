@@ -174,7 +174,7 @@ StorageHaMergeTree::StorageHaMergeTree(
     , fetcher(*this)
     , background_executor(*this, global_context)
     , background_moves_executor(*this, global_context)
-    // , cleanup_thread(*this)
+    , cleanup_thread(*this)
     // , part_check_thread(*this)
     , restarting_thread(*this)
     , allow_renaming(allow_renaming_)
@@ -1343,11 +1343,22 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
         case LogEntry::GET_PART:
             return executeFetch(executing_set);
 
+        case LogEntry::CLONE_PART:
+            return (entry->source_replica == replica_name) ? executeFetch(executing_set) : true;
+
+        case LogEntry::MERGE_PARTS:
+            return executeMerge(executing_set);
+
+        case LogEntry::BAD_LOG:
+            /// TODO: handle some corner case
+            return true;
+
         default:
             throw Exception("Log Type is not support", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
+/// TODO: update it according to community
 bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_set)
 {
     auto & entry = executing_set->getExecuting();
@@ -1381,6 +1392,7 @@ bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_se
         entry->quorum);
 }
 
+/// TODO: refactor this function to findReplicaHavingCoveringPart
 bool StorageHaMergeTree::fetchPartHeuristically(
     const HaQueueExecutingEntrySetPtr & executing_set,
     const String & part_name,
@@ -1424,7 +1436,7 @@ bool StorageHaMergeTree::fetchPartHeuristically(
     {
         if (candidate.containing_part.empty())
             continue;
-        /// TODO:
+        /// TODO: checkPartNameAddable
         replica_to_fetch = candidate.replica;
         part_to_fetch = candidate.containing_part;
         break;
@@ -1569,6 +1581,179 @@ bool StorageHaMergeTree::fetchPart(
     return true;
 }
 
+bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = *executing_set->getExecuting();
+
+    auto new_part_name = entry.new_parts.front();
+
+    const auto storage_settings_ptr = getSettings();
+
+    /// TODO: min block
+
+    if (getActiveContainingPart(entry.new_parts.front()))
+    {
+        LOG_DEBUG(log, "Cancel merging part {} by covered part(s)", new_part_name);
+        merge_selecting_task->schedule();
+        return true;
+    }
+
+
+    /// TODO: check addable
+
+    MergeTreeData::DataPartsVector parts;
+
+    // handle the case that source part not exist and cannot merge
+    bool have_all_parts = true;
+    for (const String & name : entry.source_parts)
+    {
+        MergeTreeData::DataPartPtr part = getActiveContainingPart(name);
+        if (!part)
+        {
+            have_all_parts = false;
+            break;
+        }
+
+        if (part->name != name)
+        {
+            LOG_WARNING(
+                log, "Part {} is covered by {} but should be merged into {}. This shoudn't happen often.", name, part->name, new_part_name);
+            have_all_parts = false;
+            break;
+        }
+
+        parts.push_back(part);
+    }
+
+    if (!have_all_parts)
+    {
+        if (entry.source_replica == replica_name)
+        {
+            LOG_ERROR(
+                log,
+                "Lgical error: generate merge log by self but don't have all parts for merge {} Will mark {} executed",
+                new_part_name,
+                entry.toString());
+            return true;
+        }
+
+        LOG_DEBUG(log, "Don't have all parts for merge {}; will try to fetch it instead");
+
+        try
+        {
+            fetchPartHeuristically(executing_set, new_part_name, entry.source_replica, false);
+            return true;
+        }
+        catch (Exception & e)
+        {
+            e.addMessage("(while fetching part because of don't have all parts for merge " + new_part_name + ")");
+            throw e;
+        }
+        catch (...)
+        {
+            throw;
+        }
+    }
+
+    {
+        std::lock_guard current_merging_parts_lock(current_merging_parts_mutex);
+        for (auto & part_name : entry.new_parts)
+        {
+            if (current_merging_parts.count(part_name))
+                throw Exception("Duplicate merging part " + part_name, ErrorCodes::LOGICAL_ERROR);
+        }
+        for (auto & part_name : entry.new_parts)
+            current_merging_parts.emplace(part_name);
+    }
+
+    SCOPE_EXIT({
+        std::lock_guard current_merging_parts_lock(current_merging_parts_mutex);
+        for (auto & part_name : entry.new_parts)
+            current_merging_parts.erase(part_name);
+    });
+
+    // start to make the main merge work
+    size_t estimated_space_for_merge = MergeTreeDataMergerMutator::estimateNeededDiskSpace(parts);
+
+    auto reserved_space = reserveSpace(estimated_space_for_merge);
+
+    FutureMergedMutatedPart future_merged_part(parts);
+    if (future_merged_part.name != new_part_name)
+    {
+        throw Exception(
+            "Future merged part name `" + future_merged_part.name + "` differs from part name in log entry: `"
+                + new_part_name + "`",
+            ErrorCodes::BAD_DATA_PART_NAME);
+    }
+
+    auto table_id = getStorageID();
+    MergeList::EntryPtr merge_entry = global_context.getMergeList().insert(table_id.database_name, table_id.table_name, future_merged_part);
+
+    // Without fetch firstly strategy deployed in product, we find out merge in replica(1:N) settings are
+    // quite costly, and too many OOMs. we try fetch if possible
+    if (!storage_settings_ptr->prefer_merge_than_fetch && replica_name != entry.source_replica)
+    {
+        try
+        {
+            fetchPartHeuristically(executing_set, new_part_name, entry.source_replica, false);
+            return true;
+        }
+        catch (Exception & e)
+        {
+            if (e.code() != ErrorCodes::NO_REPLICA_HAS_PART)
+                LOG_DEBUG(log, "{}, {} ", __func__, e.displayText());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    MergeTreeData::MutableDataPartPtr part;
+    Stopwatch stopwatch;
+
+    auto write_part_log = [&] (const ExecutionStatus & status)
+    {
+        writePartLog(PartLogElement::MERGE_PARTS, status, stopwatch.elapsed(), entry.new_parts.front(), part, parts, merge_entry.get());
+    };
+
+    try
+    {
+        auto table_lock = lockForShare(RWLockImpl::NO_QUERY, storage_settings_ptr->lock_acquire_timeout_for_background_operations);
+
+        auto metadata_snapshot = getInMemoryMetadataPtr();
+
+        part = merger_mutator.mergePartsToTemporaryPart(
+            future_merged_part,
+            metadata_snapshot,
+            *merge_entry,
+            table_lock,
+            entry.create_time,
+            global_context,
+            reserved_space,
+            false, // entry.duduplicate
+            {});
+
+        /// TODO: min block
+
+        MergeTreeData::Transaction transaction(*this);
+        merger_mutator.renameMergedTemporaryPart(part, parts, &transaction);
+        /// checkPartChecksumsAndCommit(transaction, part);
+        transaction.commit();
+        if (part->getState() == DataPartState::Committed)
+            entry.actual_committed_part = part->name;
+
+        merge_selecting_task->schedule();
+
+        write_part_log({});
+        return true;
+    }
+    catch (...)
+    {
+        write_part_log(ExecutionStatus::fromCurrentException());
+        throw;
+    }
+}
 
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
 {
@@ -1579,10 +1764,93 @@ bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr &
 
 void StorageHaMergeTree::queueUpdatingTask()
 {
+    try
+    {
+        queue.pullLogsToQueue(getZooKeeper(), queue_updating_task->getWatchCallback());
+        queue_updating_task->scheduleAfter(getSettings()->ha_queue_update_sleep_ms);
+
+        /// TODO: It's simple that put commitLogTask() here
+        commitLogTask();
+    }
+    catch (const zkutil::KeeperException & e)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+
+        if (e.code == Coordination::Error::ZSESSIONEXPIRED)
+        {
+            restarting_thread.wakeup();
+            return;
+        }
+
+        queue_updating_task->scheduleAfter(QUEUE_UPDATE_ERROR_SLEEP_MS);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        queue_updating_task->scheduleAfter(QUEUE_UPDATE_ERROR_SLEEP_MS);
+    }
+
 }
 
 void StorageHaMergeTree::mutationsUpdatingTask()
 {
+}
+
+void StorageHaMergeTree::commitLogTask()
+{
+    {
+        /// Avoid frequent ZK ops
+        auto curr_time = time(nullptr);
+        if (static_cast<UInt64>(curr_time - last_commit_log_time) < getSettings()->ha_commit_log_period)
+            return;
+        last_commit_log_time = curr_time;
+    }
+
+    auto self_lsn_status = log_manager->getLSNStatus(true);
+    if (self_lsn_status.committed_lsn == self_lsn_status.updated_lsn)
+        return;
+
+    bool all_success{false};
+    auto lsn_status_list = log_exchanger.getLSNStatusList(&all_success);
+    if (!all_success)
+    {
+        LOG_DEBUG(log, "Here are some failed replica, cannot commit LSN");
+        return;
+    }
+
+    auto min_updated_lsn = self_lsn_status.updated_lsn;
+    auto max_committed_lsn = self_lsn_status.committed_lsn;
+    for (auto & lsn_status : lsn_status_list)
+    {
+        min_updated_lsn = std::min(min_updated_lsn, lsn_status.second.updated_lsn);
+        max_committed_lsn = std::max(max_committed_lsn, lsn_status.second.committed_lsn);
+    }
+    if (max_committed_lsn > self_lsn_status.updated_lsn)
+    {
+        LOG_WARNING(log, "Self replica is oudated: updated_lsn {}, max_committed_lsn {} ", self_lsn_status.updated_lsn, max_committed_lsn);
+    }
+
+
+    /** Commit executed logs:
+     *  Once some replica commit a LSN: we assume all replicas reach an agreement
+     *  which the commited logs are executed by all replicas.
+     *  Or there is someone lost which must be recovered by other mechanism instead of sync logs.
+     *  Because the logs may be discards already
+     */
+    auto new_committed_lsn = std::max(min_updated_lsn, max_committed_lsn);
+    if (self_lsn_status.committed_lsn < new_committed_lsn)
+    {
+        /// Forward compatibility, outdated commited_lsn/updated_lsn is tolerated.
+        auto zookeeper = getZooKeeper();
+        Coordination::Requests ops;
+        ops.push_back(zkutil::makeSetRequest(getZKReplicaUpdatedLSNPath(), toString(self_lsn_status.updated_lsn), -1));
+        ops.push_back(zkutil::makeSetRequest(getZKCommittedLSNPath(), toString(new_committed_lsn), -1));
+        Coordination::Responses resps;
+        zookeeper->tryMulti(ops, resps);
+
+        log_manager->commitTo(new_committed_lsn);
+        LOG_DEBUG(log, "Commit log on disk to LSN-{}", new_committed_lsn);
+    }
 }
 
 void StorageHaMergeTree::forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper)
@@ -1809,7 +2077,6 @@ void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unu
 
         if (!parts_to_remove.empty())
             removePartsFromWorkingSet(parts_to_remove, true);
-        //clearOldPartsFromFilesystem();
     }
 
     auto active_parts = active_parts_set.getParts();
@@ -1922,7 +2189,8 @@ void StorageHaMergeTree::enterLeaderElection()
             *current_zookeeper,    /// current_zookeeper lives for the lifetime of leader_election,
                                    ///  since before changing `current_zookeeper`, `leader_election` object is destroyed in `partialShutdown` method.
             callback,
-            replica_name);
+            replica_name,
+            false);
     }
     catch (...)
     {
@@ -1953,9 +2221,134 @@ void StorageHaMergeTree::exitLeaderElection()
     leader_election = nullptr;
 }
 
+void StorageHaMergeTree::TTLWorker()
+{
+
+}
 
 void StorageHaMergeTree::mergeSelectingTask()
 {
+    // Only the lead can merge parts in HA setting
+    if (!is_leader)
+        return;
+
+    LOG_TRACE(log, "{}", __PRETTY_FUNCTION__);
+
+    const auto storage_settings = getSettings();
+
+    /// TODO:
+    /// auto & pattern = global_context.getSettingsRef().blacklist_for_merge_task_regex.value;
+    /// if (std::regex_search(table_name, std::regex(pattern)))
+    /// {
+    ///     LOG_TRACE(log, "Cancel merge task by settings blacklist_for_merge_task_regex: " << pattern);
+    ///     return;
+    /// }
+
+
+    bool success = false;
+    try
+    {
+        /// Try to remove TTL expired partitions before selecting parts to merge
+        TTLWorker();
+
+        std::lock_guard merge_selecting_lock(merge_selecting_mutex);
+        auto zookeeper = getZooKeeper();
+
+        // The selection seems a bit complex here according to some facts:
+        // - block_number is assigned sequentially per table (not per partition)
+        // - snapshot in leader might not up to date.
+        // To address this problem, the algorithm need to check its log queue and committed part list
+        //
+
+        // - decide which partition will be merged in this task
+        // - decide candidate commited parts(not covered by other parts locally)  in this partition
+        // we should prefer to choose continuous parts. if not
+        // The closest parts's gap should be checked based on logs.
+        //
+        //
+        // To check if two part [min_1, max_1], [min_2, max_2] in partition p could merge, we need to
+        // guarantee the block_number(gap) between max_1 and min_2 has not been assigned to p, and not
+        // ready in leader yet. How to address without race condition is quite complex.
+        //
+        // Look through the log queue + delay selection strategy should be applicable in practice.
+        auto merge_pred = queue.getMergePredicate(zookeeper);
+        auto merges_and_mutations_queued = queue.countMergesAndPartMutations();
+
+
+        /// select parts to merge
+        do
+        {
+            /// if leader A generates some merge logs and then crash, the new leader B may not be able to execute those merges.
+            /// In order to let B continue to make progress on merges, use `merges_of_self` in concurrency check below
+            size_t num_queued_merges = merges_and_mutations_queued.merges_of_self;
+            size_t max_queued_merges = storage_settings->max_replicated_merges_in_queue;
+
+            if (num_queued_merges >= max_queued_merges)
+            {
+                LOG_TRACE(
+                    log,
+                    "Number of queued self merges ({}) is greater than max_replicated_merges_in_queue ({}), so won't select new parts to "
+                    "merge",
+                    toString(num_queued_merges),
+                    toString(max_queued_merges));
+                break;
+            }
+
+            size_t max_source_parts_size = merger_mutator.getMaxSourcePartsSizeForMerge(max_queued_merges, num_queued_merges);
+            if (max_source_parts_size == 0)
+            {
+                LOG_DEBUG(log, "max_source_parts_size is 0, won't select new parts to merge");
+                break;
+            }
+
+            Stopwatch watch;
+
+            /// auto future_merge_parts = merger_mutator.selectPartsToMerge();
+            FutureMergedMutatedPart future_merge_part;
+            if (SelectPartsDecision::SELECTED
+                != merger_mutator.selectPartsToMerge(future_merge_part, false, max_source_parts_size, merge_pred, false, nullptr))
+                break;
+
+            if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)
+                LOG_DEBUG(log, "selectPartsToMergeMulti elapsed {} ms.", elapsed);
+
+            success = createLogEntriesToMergeParts({future_merge_part});
+        } while (false);
+
+
+        /// TODO: mutate
+    }
+    catch (...)
+    {
+        throw;
+    }
+
+    if (!success)
+        merge_selecting_task->scheduleAfter(MERGE_SELECTING_SLEEP_MS);
+    else
+        merge_selecting_task->schedule();
+}
+
+bool StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts)
+{
+    LogEntry::Vec entries;
+
+    for (auto & future_part : future_parts)
+    {
+        auto entry = std::make_shared<LogEntry>();
+        entry->type = LogEntry::MERGE_PARTS;
+        entry->source_replica = replica_name;
+        for (auto & part : future_part.parts)
+            entry->source_parts.push_back(part->name);
+        entry->new_parts.push_back(future_part.name);
+        entry->lsn = allocateLSN();
+        entry->create_time = time(nullptr);
+        entries.push_back(std::move(entry));
+    }
+
+    queue.write(entries);
+
+    return true;
 }
 
 void StorageHaMergeTree::mutationsFinalizingTask()

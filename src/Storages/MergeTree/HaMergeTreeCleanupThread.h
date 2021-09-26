@@ -41,7 +41,7 @@ public:
 private:
     StorageHaMergeTree & storage;
     String log_name;
-    Logger * log;
+    Poco::Logger * log;
     BackgroundSchedulePool::TaskHolder task;
     BackgroundSchedulePool::TaskHolder local_task;
     pcg64 rng;

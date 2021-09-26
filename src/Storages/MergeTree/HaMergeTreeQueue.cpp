@@ -1530,4 +1530,271 @@ size_t HaMergeTreeQueue::getQueueSize() const
     return time_intervals;
 }
 
+HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperPtr & zookeeper)
+{
+    return HaMergeTreeMergePredicate(*this, zookeeper);
+}
+
+static bool hasNewParts(const HaMergeTreeLogEntry & entry)
+{
+    return entry.type == HaMergeTreeLogEntry::MERGE_PARTS || entry.type == HaMergeTreeLogEntry::MUTATE_PART
+        || entry.type == HaMergeTreeLogEntry::GET_PART || entry.type == HaMergeTreeLogEntry::CLONE_PART
+        || entry.type == HaMergeTreeLogEntry::REPLACE_PARTITION;
+}
+
+HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, zkutil::ZooKeeperPtr & zookeeper)
+    : queue(queue_)
+      , future_merge_parts(queue.storage.format_version)
+      , future_parts(queue.storage.format_version)
+      , snapshot_time(time(nullptr))
+      , log(&Poco::Logger::get(queue.storage.getStorageID().getNameForLogs() + " (MergePredicate)"))
+{
+    Stopwatch watch;
+    // actively sync up-to-date logs
+    queue.pullLogsToQueue(zookeeper);
+
+    auto pull_logs_millis = watch.elapsedMilliseconds();
+
+
+    /// The main idea is that take a snapshot of log entries and calc the `interval`
+    /// for committed parts according the log snapshot. And two parts can merge only
+    /// if they belongs to same `interval`.
+    ///
+    /// Because every part is associated with a log: the log not executed marks some
+    /// future parts; a unknown log indicates some unknown parts; and an executed log
+    /// marks some committed parts. So the lsn gap between executed logs could divide
+    /// committed parts into `intervals`, and the future/unknown parts would be marked
+    /// as `INTERVAL_GAP`.
+    ///
+    /// But there are still some parts of which logs may be too old to cleared or not
+    /// sync-ed in time. To distinguish them, we compare snapshot time (ST) of merge predicate
+    /// and modification time (MT) of part.
+    ///
+    /// For a part not belongs to any interval:
+    /// 1. If MT < ST, the log associated with this part is written before the snapshot,
+    ///    so must be already cleared. Mark it as `interval-0` for convenience.
+    /// 2. If MT >= ST, the log is written after snapshot, i.e. the part is unknown for
+    ///    this snapshot and mark it as `INTERVAL_GAP`.
+
+    auto & log_manager = queue.getLogManager();
+    auto log_lock = log_manager.lockMe();
+
+    auto last_lsn = log_manager.getLSNStatusUnsafe(true).updated_lsn;
+    UInt32 interval = 0;
+
+    log_manager.applyToEntriesFromUpdatedLSNUnsafe([&](const HaMergeTreeLogEntryPtr & entry) {
+        if (!entry->is_executed)
+        {
+            if (hasNewParts(*entry))
+            {
+                for (auto & part : entry->new_parts)
+                    part_to_interval.try_emplace(part, INTERVAL_GAP);
+                for (auto & part : entry->new_parts)
+                    future_parts.add(part);
+            }
+
+            if (entry->type == HaMergeTreeLogEntry::MERGE_PARTS)
+            {
+                for (auto & part : entry->new_parts)
+                    future_merge_parts.add(part);
+            }
+        }
+        else
+        {
+            /// Update interval index first if here is a gap
+            if (entry->lsn - last_lsn > 1)
+                interval += 1;
+
+            /// Put new_parts into current interval
+            /// Do not care parts in `interval-0`
+            if (interval > 0 && hasNewParts(*entry))
+            {
+                for (auto & part : entry->new_parts)
+                    part_to_interval.try_emplace(part, interval);
+            }
+        }
+
+        /// Move ahead
+        last_lsn = entry->lsn;
+    });
+
+    if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)
+    {
+        LOG_DEBUG(queue.log, "Create MergePredicate took {} ms ({} ms in pull logs to queue)", elapsed, pull_logs_millis);
+    }
+}
+
+Int32 HaMergeTreeMergePredicate::findMergeInterval(const MergeTreeData::DataPartPtr & part) const
+{
+    if (auto iter = part_to_interval.find(part->name); iter == part_to_interval.end())
+    {
+        if (part->modification_time >= snapshot_time)
+            return INTERVAL_GAP;
+        else
+            return 0;
+    }
+    else
+    {
+        return iter->second;
+    }
+}
+
+bool HaMergeTreeMergePredicate::operator()(
+    const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String *) const
+{
+    if (!left)
+        return true; /// TODO:
+
+    bool enable_logging = true;
+
+    if (left->info.partition_id != right->info.partition_id)
+    {
+        if (enable_logging)
+            LOG_TRACE(log, "{} & {}: Parts belong to different partitions", left->name, right->name);
+        return false;
+    }
+
+    Int64 left_max_block = left->info.max_block;
+    Int64 right_min_block = right->info.min_block;
+
+    if (left_max_block > right_min_block)
+    {
+        if (enable_logging)
+            LOG_TRACE(log, "{} & {}: Left part's block id is greater than right part's block id", left->name, right->name);
+        return false;
+    }
+
+    {
+        std::lock_guard lock(queue.state_mutex);
+        /// check whether we have created any log to merge/mutate/delete the part
+        for (auto & part : {left, right})
+        {
+            String containing_part;
+            if (queue.merge_mutate_future_parts.hasContainingPart(part->info, &containing_part))
+            {
+                if (enable_logging)
+                    LOG_TRACE(log, "{} is covered by future parts ", part->name, containing_part);
+                return false;
+            }
+        }
+
+        /// we can't merge parts of different mutation version, otherwise the merged part will lost some mutation forever
+        auto lhs_mutation_ver = queue.getCurrentMutationVersionImpl(left->info.partition_id, left->info.getDataVersion(), lock);
+        auto rhs_mutation_ver = queue.getCurrentMutationVersionImpl(right->info.partition_id, right->info.getDataVersion(), lock);
+        if (lhs_mutation_ver != rhs_mutation_ver)
+        {
+            if (enable_logging)
+                LOG_TRACE(
+                    log,
+                    "Current mutation version of parts {} and {} differs: {} and {} respectively",
+                    left->name,
+                    right->name,
+                    toString(lhs_mutation_ver),
+                    toString(rhs_mutation_ver));
+            return false;
+        }
+    }
+
+    // NOTE: Assume input left, right are closest parts in this partition, and this function
+    // doesn't need to iterator local parts to bypass overlap one.
+    if (left_max_block + 1 < right_min_block)
+    {
+        /// XXX: Is it necessary to check future_parts ? Could these cases be covered by
+        /// `zero level & non-zero interval` checking ?
+        MergeTreePartInfo gap_part_info(
+            left->info.partition_id,
+            left_max_block + 1,
+            right_min_block - 1,
+            MergeTreePartInfo::MAX_LEVEL,
+            MergeTreePartInfo::MAX_BLOCK_NUMBER);
+        auto covered = future_parts.getPartsCoveredBy(gap_part_info);
+        if (!covered.empty())
+        {
+            if (enable_logging)
+                LOG_DEBUG(log, "{} & {} : There are gap parts not fetched", left->name, right->name);
+            return false;
+        }
+
+        auto left_interval = findMergeInterval(left);
+        auto right_interval = findMergeInterval(right);
+
+        if (left_interval == INTERVAL_GAP)
+        {
+            if (enable_logging)
+                LOG_DEBUG(log, "left part {} interval can not be determined", left->name);
+            return false;
+        }
+        if (right_interval == INTERVAL_GAP)
+        {
+            if (enable_logging)
+                LOG_DEBUG(log, "right part {} interval can not be determined", right->name);
+            return false;
+        }
+
+        if (left_interval != right_interval)
+        {
+            if (enable_logging)
+                LOG_DEBUG(
+                    log,
+                    "{} & {}: Left part and right part are not belong to same merge interval: {}",
+                    left->name,
+                    right->name,
+                    right_interval);
+            return false;
+        }
+
+        /// TODO:
+        /// if (queue.storage.global_context.getSettingsRef().conservative_merge_predicate)
+        /// {
+        ///     /// `left_interval == right_interval` now
+        ///     /// XXX: This may block high level merge for a long time until the LSN gap is filled.
+        ///     if (left_interval > 0 && (left->info.level > 0 || right->info.level > 0))
+        ///     {
+        ///         if (enable_logging)
+        ///             LOG_WARNING(
+        ///                 log, "{} & {}: only level-0 parts in non-zero interval can merge; Please check log hole.", left->name, right->name);
+        ///         return false;
+        ///     }
+        /// }
+    }
+
+    return true;
+}
+
+std::optional<std::pair<Int64, int>> HaMergeTreeMergePredicate::getDesiredMutationVersion(const MergeTreeData::DataPartPtr & part) const
+{
+    std::lock_guard lock(queue.state_mutex);
+
+    if (queue.mutations_by_version.empty())
+        return {};
+
+    if (queue.merge_mutate_future_parts.hasContainingPart(part->info))
+        return {};
+
+    Int64 current_version = queue.getCurrentMutationVersionImpl(part->info.partition_id, part->info.getDataVersion(), lock);
+    Int64 max_version = current_version;
+
+    int alter_version = -1;
+    for (auto [mutation_version, mutation_status] : queue.mutations_by_version)
+    {
+        /// Skip unnecessary mutation entries according filtering partition ids.
+        if (mutation_status->is_done || !mutation_status->entry->coverPartitionId(part->info.partition_id))
+            continue;
+
+        /// Mutate part to the first unfinished mutation whose version > part's current version.
+        /// In addition, it doesn't make sense to assign more fresh alter mutation if previous alter
+        /// is still running because alters execute one by one in strict order.
+        if (mutation_version > current_version || mutation_status->entry->isAlterMutation())
+        {
+            max_version = mutation_version;
+            alter_version = mutation_status->entry->alter_version;
+            break;
+        }
+    }
+
+    if (current_version >= max_version)
+        return {};
+
+    return std::make_pair(max_version, alter_version);
+}
 }

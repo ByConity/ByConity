@@ -6,6 +6,7 @@
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/HaMergeTreeAddress.h>
+#include <Storages/MergeTree/HaMergeTreeCleanupThread.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/HaMergeTreeLogExchanger.h>
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
@@ -278,6 +279,9 @@ private:
     /// A task that marks finished mutations as done.
     BackgroundSchedulePool::TaskHolder mutations_finalizing_task;
 
+    /// A thread that removes old parts, log entries, and blocks.
+    HaMergeTreeCleanupThread cleanup_thread;
+
     /// A thread that processes reconnection to ZooKeeper when the session expires.
     HaMergeTreeRestartingThread restarting_thread;
 
@@ -290,6 +294,11 @@ private:
     const size_t replicated_fetches_pool_size;
 
     FetchingPartToExecutingEntrySet current_fetching_parts_with_entries;
+
+    std::mutex current_merging_parts_mutex;
+    NameSet current_merging_parts;
+
+    time_t last_commit_log_time {0};
 
     bool is_offline = false;
 
@@ -330,6 +339,7 @@ private:
     bool executeLogEntry(HaQueueExecutingEntrySetPtr & executing_set);
 
     bool executeFetch(HaQueueExecutingEntrySetPtr & executing_set);
+    bool executeMerge(HaQueueExecutingEntrySetPtr & executing_set);
 
     bool fetchPartHeuristically(
         const HaQueueExecutingEntrySetPtr & executing_set,
@@ -353,6 +363,8 @@ private:
     void queueUpdatingTask();
 
     void mutationsUpdatingTask();
+
+    void commitLogTask();
 
     void forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper);
 
@@ -378,9 +390,13 @@ private:
     /// leader_election node in ZK is either deleted, or the session is marked expired.
     void exitLeaderElection();
 
+    void TTLWorker();
+
     /** Selects the parts to merge and writes to the log.
       */
     void mergeSelectingTask();
+
+    bool createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts);
 
     /// Checks if some mutations are done and marks them as done.
     void mutationsFinalizingTask();

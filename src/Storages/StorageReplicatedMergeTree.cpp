@@ -3634,7 +3634,8 @@ void StorageReplicatedMergeTree::enterLeaderElection()
             *current_zookeeper,    /// current_zookeeper lives for the lifetime of leader_election,
                                    ///  since before changing `current_zookeeper`, `leader_election` object is destroyed in `partialShutdown` method.
             callback,
-            replica_name);
+            replica_name,
+            true);
     }
     catch (...)
     {
