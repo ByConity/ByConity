@@ -10,8 +10,6 @@
 *.logrt
 
 /build
-/build_*
-/build-*
 /tests/venv
 
 # logs
