@@ -1,0 +1,18 @@
+name: CI
+trigger:
+  change:
+    types: ["create", "push"]
+jobs:
+  scm_build:
+    name: SCM Build for clang11 ch_vanilla_debian_dev
+    image: hub.byted.org/data-ci-debian:latest
+    steps:
+      - uses: actions/scm
+        id: scm_build
+        inputs:
+          scm_repo: dp/clickhouse/ch_vanilla_clang_dev
+          version_type: test
+          sync_bvc: false
+          sync_aws: false
+          sync_oss: false
+          envs: {CUSTOM_CMAKE_BUILD_TYPE: "Release"}
