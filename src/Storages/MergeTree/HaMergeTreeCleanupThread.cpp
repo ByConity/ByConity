@@ -28,8 +28,7 @@ HaMergeTreeCleanupThread::HaMergeTreeCleanupThread(StorageHaMergeTree & storage_
     , log(&Poco::Logger::get(log_name))
 {
     task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { run(); });
-    local_task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { localRun(); });
-    /// TODO: local_task = storage.getContext()->getLocalSchedulePool().createTask(log_name, [this] { localRun(); });
+    local_task = storage.getContext()->getLocalSchedulePool().createTask(log_name, [this] { localRun(); });
 }
 
 void HaMergeTreeCleanupThread::run()
@@ -125,7 +124,7 @@ void HaMergeTreeCleanupThread::checkQuorumTimeOut()
         quorum_entry.fromString(value);
 
         time_t current_time = time(nullptr);
-        size_t quorum_timeout = storage.getContext().getSettings().insert_quorum_timeout.totalMilliseconds() / 1000;
+        size_t quorum_timeout = storage.getContext()->getSettings().insert_quorum_timeout.totalMilliseconds() / 1000;
         if (quorum_entry.replicas.size() < quorum_entry.required_number_of_replicas
             && current_time - quorum_entry.create_time > static_cast<Int64>(quorum_timeout))
         {

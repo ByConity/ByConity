@@ -394,28 +394,37 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (!parser_partition.parse(pos, command->partition, expected))
                 return false;
 
-            command->type = ASTAlterCommand::MOVE_PARTITION;
-
-            if (s_to_disk.ignore(pos))
-                command->move_destination_type = DataDestinationType::DISK;
-            else if (s_to_volume.ignore(pos))
-                command->move_destination_type = DataDestinationType::VOLUME;
-            else if (s_to_table.ignore(pos))
+            if (s_from.ignore(pos, expected))
             {
-                if (!parseDatabaseAndTableName(pos, expected, command->to_database, command->to_table))
+                if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
                     return false;
-                command->move_destination_type = DataDestinationType::TABLE;
+                command->type = ASTAlterCommand::MOVE_PARTITION_FROM;
             }
             else
-                return false;
-
-            if (command->move_destination_type != DataDestinationType::TABLE)
             {
-                ASTPtr ast_space_name;
-                if (!parser_string_literal.parse(pos, ast_space_name, expected))
+                command->type = ASTAlterCommand::MOVE_PARTITION;
+
+                if (s_to_disk.ignore(pos))
+                    command->move_destination_type = DataDestinationType::DISK;
+                else if (s_to_volume.ignore(pos))
+                    command->move_destination_type = DataDestinationType::VOLUME;
+                else if (s_to_table.ignore(pos))
+                {
+                    if (!parseDatabaseAndTableName(pos, expected, command->to_database, command->to_table))
+                        return false;
+                    command->move_destination_type = DataDestinationType::TABLE;
+                }
+                else
                     return false;
 
-                command->move_destination_name = ast_space_name->as<ASTLiteral &>().value.get<const String &>();
+                if (command->move_destination_type != DataDestinationType::TABLE)
+                {
+                    ASTPtr ast_space_name;
+                    if (!parser_string_literal.parse(pos, ast_space_name, expected))
+                        return false;
+
+                    command->move_destination_name = ast_space_name->as<ASTLiteral &>().value.get<const String &>();
+                }
             }
         }
         else if (s_add_constraint.ignore(pos, expected))

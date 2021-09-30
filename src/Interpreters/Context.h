@@ -329,6 +329,9 @@ public:
 
     VolumePtr setTemporaryStorage(const String & path, const String & policy_name = "");
 
+    void setReadyForQuery();
+    bool isReadyForQuery() const;
+
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
     /// Global application configuration settings.
@@ -675,6 +678,14 @@ public:
     BackgroundSchedulePool & getSchedulePool() const;
     BackgroundSchedulePool & getMessageBrokerSchedulePool() const;
     BackgroundSchedulePool & getDistributedSchedulePool() const;
+
+    BackgroundSchedulePool & getConsumeSchedulePool() const;
+    BackgroundSchedulePool & getRestartSchedulePool() const;
+    BackgroundSchedulePool & getHaLogSchedulePool() const;
+    BackgroundSchedulePool & getMutationSchedulePool() const;
+    BackgroundSchedulePool & getLocalSchedulePool() const;
+    BackgroundSchedulePool & getMergeSelectSchedulePool() const;
+    BackgroundSchedulePool & getUniqueTableSchedulePool() const;
 
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;

@@ -1026,6 +1026,8 @@ protected:
 
     virtual void movePartitionToShard(const ASTPtr & partition, bool move_part, const String & to, ContextPtr query_context);
 
+    virtual void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr context);
+
     void writePartLog(
         PartLogElement::Type type,
         const ExecutionStatus & execution_status,

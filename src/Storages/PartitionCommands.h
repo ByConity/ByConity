@@ -24,6 +24,7 @@ struct PartitionCommand
 
         ATTACH_PARTITION,
         MOVE_PARTITION,
+        MOVE_PARTITION_FROM,
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
         FETCH_PARTITION,

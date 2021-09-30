@@ -96,11 +96,33 @@ namespace CurrentMetrics
     extern const Metric BackgroundBufferFlushSchedulePoolTask;
     extern const Metric BackgroundDistributedSchedulePoolTask;
     extern const Metric BackgroundMessageBrokerSchedulePoolTask;
+    extern const Metric BackgroundConsumeSchedulePoolTask;
+    extern const Metric BackgroundRestartSchedulePoolTask;
+    extern const Metric BackgroundHaLogSchedulePoolTask;
+    extern const Metric BackgroundMutationSchedulePoolTask;
+    extern const Metric BackgroundLocalSchedulePoolTask;
+    extern const Metric BackgroundMergeSelectSchedulePoolTask;
+    extern const Metric BackgroundUniqueTableSchedulePoolTask;
 }
 
 
 namespace DB
 {
+
+namespace SchedulePool
+{
+    enum Type
+    {
+        Consume,
+        Restart,
+        HaLog,
+        Mutation,
+        Local,
+        MergeSelect,
+        UniqueTable,
+        Size,
+    };
+}
 
 namespace ErrorCodes
 {
@@ -368,6 +390,8 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
+    mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
+
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
 
@@ -410,6 +434,9 @@ struct ContextSharedPart
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
 
     Context::ConfigReloadCallback config_reload_callback;
+
+    /// @ByteDance
+    bool ready_for_query = false;                           /// Server is ready for incoming queries
 
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
@@ -490,6 +517,8 @@ struct ContextSharedPart
             schedule_pool.reset();
             distributed_schedule_pool.reset();
             message_broker_schedule_pool.reset();
+            for (auto & p : extra_schedule_pools)
+                p.reset();
             ddl_worker.reset();
 
             /// Stop trace collector if any
@@ -1642,6 +1671,69 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
     return *shared->message_broker_schedule_pool;
 }
 
+BackgroundSchedulePool & Context::getConsumeSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::Consume])
+        shared->extra_schedule_pools[SchedulePool::Consume].emplace(
+            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool");
+    return *shared->extra_schedule_pools[SchedulePool::Consume];
+}
+
+BackgroundSchedulePool & Context::getRestartSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::Restart])
+        shared->extra_schedule_pools[SchedulePool::Restart].emplace(
+            settings.background_schedule_pool_size, CurrentMetrics::BackgroundRestartSchedulePoolTask, "BgRestartPool");
+    return *shared->extra_schedule_pools[SchedulePool::Restart];
+}
+
+BackgroundSchedulePool & Context::getHaLogSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::HaLog])
+        shared->extra_schedule_pools[SchedulePool::HaLog].emplace(
+            settings.background_schedule_pool_size, CurrentMetrics::BackgroundHaLogSchedulePoolTask, "BgHaLogPool");
+    return *shared->extra_schedule_pools[SchedulePool::HaLog];
+}
+
+BackgroundSchedulePool & Context::getMutationSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::Mutation])
+        shared->extra_schedule_pools[SchedulePool::Mutation].emplace(
+            settings.background_schedule_pool_size, CurrentMetrics::BackgroundMutationSchedulePoolTask, "BgMutatePool");
+    return *shared->extra_schedule_pools[SchedulePool::Mutation];
+}
+
+BackgroundSchedulePool & Context::getLocalSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::Local])
+        shared->extra_schedule_pools[SchedulePool::Local].emplace(
+            settings.background_local_schedule_pool_size, CurrentMetrics::BackgroundLocalSchedulePoolTask, "BgLocalPool");
+    return *shared->extra_schedule_pools[SchedulePool::Local];
+}
+
+BackgroundSchedulePool & Context::getMergeSelectSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::MergeSelect])
+        shared->extra_schedule_pools[SchedulePool::MergeSelect].emplace(
+            settings.background_schedule_pool_size, CurrentMetrics::BackgroundMergeSelectSchedulePoolTask, "BgMSelectPool");
+    return *shared->extra_schedule_pools[SchedulePool::MergeSelect];
+}
+
+BackgroundSchedulePool & Context::getUniqueTableSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::UniqueTable])
+        shared->extra_schedule_pools[SchedulePool::UniqueTable].emplace(
+            settings.background_unique_table_schedule_pool_size, CurrentMetrics::BackgroundUniqueTableSchedulePoolTask, "BgUniqPool");
+    return *shared->extra_schedule_pools[SchedulePool::UniqueTable];
+}
+
 ThrottlerPtr Context::getReplicatedFetchesThrottler() const
 {
     auto lock = getLock();
@@ -2712,6 +2804,16 @@ PartUUIDsPtr Context::getIgnoredPartUUIDs() const
         const_cast<PartUUIDsPtr &>(ignored_part_uuids) = std::make_shared<PartUUIDs>();
 
     return ignored_part_uuids;
+}
+
+void Context::setReadyForQuery()
+{
+    shared->ready_for_query = true;
+}
+
+bool Context::isReadyForQuery() const
+{
+    return shared->ready_for_query;
 }
 
 }

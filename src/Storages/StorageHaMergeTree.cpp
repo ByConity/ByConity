@@ -192,16 +192,16 @@ StorageHaMergeTree::StorageHaMergeTree(
     queue_updating_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::queueUpdatingTask)", [this] { queueUpdatingTask(); });
 
-    mutations_updating_task = getContext()->getSchedulePool().createTask(
-        getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsUpdatingTask)", [this] { mutationsUpdatingTask(); });
+    /// TODO: mutations_updating_task = global_context.getSchedulePool().createTask(
+    /// TODO:     getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsUpdatingTask)", [this] { mutationsUpdatingTask(); });
 
-    merge_selecting_task = getContext()->getSchedulePool().createTask(
+    merge_selecting_task = getContext()->getMergeSelectSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mergeSelectingTask)", [this] { mergeSelectingTask(); });
 
     /// Will be activated if we win leader election.
     merge_selecting_task->deactivate();
 
-    mutations_finalizing_task = getContext()->getSchedulePool().createTask(
+    mutations_finalizing_task = getContext()->getMutationSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsFinalizingTask)", [this] { mutationsFinalizingTask(); });
 
     if (getContext()->hasZooKeeper() || getContext()->hasAuxiliaryZooKeeper(zookeeper_name))
@@ -1346,6 +1346,9 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
         case LogEntry::MERGE_PARTS:
             return executeMerge(executing_set);
 
+        case LogEntry::DROP_RANGE:
+            return executeDropRange(executing_set);
+
         case LogEntry::BAD_LOG:
             /// TODO: handle some corner case
             return true;
@@ -1753,6 +1756,47 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
         write_part_log(ExecutionStatus::fromCurrentException());
         throw;
     }
+}
+
+bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = *executing_set->getExecuting();
+    auto drop_range_info = MergeTreePartInfo::fromPartName(entry.new_parts.front(), format_version);
+    drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// REMOVE ME
+
+    LOG_DEBUG(log, "{} parts in {}", (entry.detach ? "Detaching" : "Removing"), drop_range_info.partition_id);
+
+    getContext()->getMergeList().cancelInPartition(getStorageID(), drop_range_info.partition_id, drop_range_info.max_block);
+
+    DataPartsVector parts_to_remove;
+    {
+        auto data_parts_lock = lockParts();
+        parts_to_remove = removePartsInRangeFromWorkingSet(drop_range_info, true, data_parts_lock);
+
+    }
+
+    if (entry.detach)
+    {
+        auto metadata_snapshot = getInMemoryMetadataPtr();
+        /// If DETACH clone parts to detached/ directory
+        for (auto & part : parts_to_remove)
+        {
+            LOG_INFO(log, "Detaching {}", part->relative_path);
+            part->makeCloneInDetached("", metadata_snapshot);
+        }
+    }
+
+    if (entry.detach)
+        LOG_DEBUG(log, "Detached {} parts inside {}.", parts_to_remove.size(), entry.new_parts.front());
+    else
+        LOG_DEBUG(log, "Removed {} parts inside {}.", parts_to_remove.size(), entry.new_parts.front());
+
+    /// We want to remove dropped parts from disk as soon as possible
+    /// To be removed a partition should have zero refcount, therefore call the cleanup thread at exit
+    parts_to_remove.clear();
+    cleanup_thread.wakeup();
+
+    return true;
 }
 
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
@@ -2230,7 +2274,78 @@ void StorageHaMergeTree::exitLeaderElection()
 
 void StorageHaMergeTree::TTLWorker()
 {
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (!metadata_snapshot->hasRowsTTL())
+        return;
 
+    auto & partition_key_description = metadata_snapshot->partition_key;
+    auto & rows_ttl = metadata_snapshot->table_ttl.rows_ttl;
+
+    time_t now = time(nullptr);
+    NameOrderedSet partitions_to_clean;
+
+    const String * curr_partition = nullptr;
+    auto data_parts =  getDataPartsVector();
+    for (auto & part : data_parts)
+    {
+        if (curr_partition && *curr_partition == part->info.partition_id)
+            continue;
+        curr_partition = &part->info.partition_id;
+
+        auto ttl = calcTTLForPartition(part->partition, partition_key_description, rows_ttl);
+        if (ttl < now)
+            partitions_to_clean.insert(*curr_partition);
+    }
+
+    if (partitions_to_clean.empty())
+        return;
+
+    std::ostringstream oss;
+    oss << "Partitions have been expired:";
+    for (auto & partition : partitions_to_clean)
+        oss << " " << partition;
+    LOG_DEBUG(log, oss.str());
+
+    try
+    {
+        auto zookeeper = getZooKeeper();
+        dropAllPartsInPartitions(
+            zookeeper, partitions_to_clean, false, getContext()->getSettingsRef().replication_alter_partitions_sync > 0);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+}
+
+time_t StorageHaMergeTree::calcTTLForPartition(
+    const MergeTreePartition & partition, const KeyDescription & partition_key_description, const TTLDescription & ttl_description) const
+{
+    auto columns = partition_key_description.sample_block.cloneEmptyColumns();
+    for (size_t i = 0; i < partition.value.size(); ++i)
+        columns[i]->insert(partition.value[i]);
+
+    auto block = partition_key_description.sample_block.cloneWithColumns(std::move(columns));
+    ttl_description.expression->execute(block);
+
+    auto & result_column_with_tn = block.getByName(ttl_description.result_column);
+    auto & result_column = result_column_with_tn.column;
+    auto & result_type = result_column_with_tn.type;
+
+    if (isDate(result_type))
+    {
+        auto value = UInt16(result_column->getUInt(0));
+        const auto & date_lut = DateLUT::instance();
+        return date_lut.fromDayNum(DayNum(value));
+    }
+    else if (isDateTime(result_type))
+    {
+        return UInt32(result_column->getUInt(0));
+    }
+    else
+    {
+        throw Exception("Logical error in calcuate TTL value: unexpected TTL result column type", ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 void StorageHaMergeTree::mergeSelectingTask()
@@ -2362,23 +2477,111 @@ void StorageHaMergeTree::mutationsFinalizingTask()
 {
 }
 
+void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeeper, const NameOrderedSet & partitions, bool detach, bool sync)
+{
+    /// It's OK to use same block id
+    auto block_id = allocateBlockNumberDirect(zookeeper);
+
+    LogEntry::Vec entries;
+    entries.reserve(partitions.size());
+
+    for (auto & partition : partitions)
+    {
+        entries.push_back(std::make_shared<LogEntry>());
+        auto & entry = entries.back();
+
+        MergeTreePartInfo drop_range_info(partition, 0, block_id, MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
+        entry->type = LogEntry::DROP_RANGE;
+        entry->source_replica = replica_name;
+        entry->new_parts.push_back(drop_range_info.getPartName());
+        entry->detach = detach;
+        entry->lsn = allocateLSN();
+        entry->create_time = time(nullptr);
+    }
+
+    queue.write(entries);
+
+    if (sync)
+    {
+        /// It's important to acquire CurrentlyExecuting before executing them right now.
+        /// Or queueTask() might select and execute concurrently.
+        /// NEED NOT lock here, creating CurrentlyExecuting do not change queue state
+        std::vector<HaQueueExecutingEntrySetPtr> executing_set_list;
+        executing_set_list.reserve(entries.size());
+        for (auto & entry : entries)
+            executing_set_list.push_back(queue.tryCreateExecutingSet(entry));
+
+        LogEntry::Vec entries_to_remove;
+
+        /// If a exception thrown here, CurreentlyExecuting would reset entries so that queueTask() would retry later.
+        for (auto & executing_set : executing_set_list)
+        {
+            if (executing_set)
+            {
+                executeDropRange(executing_set);
+                entries_to_remove.push_back(executing_set->getExecuting());
+            }
+        }
+
+        queue.removeProcessedEntries(entries_to_remove);
+    }
+}
+
 void StorageHaMergeTree::dropPartNoWaitNoThrow(const String & part_name)
 {
 }
 
 void StorageHaMergeTree::dropPart(const String & part_name, bool detach, ContextPtr query_context)
 {
+    /// TODO: new impl
 }
 
 // Partition helpers
 void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
 {
+    assertNotReadonly();
+    if (!is_leader)
+        throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+
+    String partition_id = getPartitionIDFromQuery(partition, query_context);
+
+    zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
+    dropAllPartsInPartitions(zookeeper, {partition_id}, detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
+
+    /// TODO:
 }
 
 PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
-    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context)
+    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool attach_part, ContextPtr query_context)
 {
-    return {};
+    assertNotReadonly();
+
+    PartitionCommandsResultInfo results;
+    PartsTemporaryRename renamed_parts(*this, "detached/");
+    MutableDataPartsVector loaded_parts = tryLoadPartsToAttach(partition, attach_part, query_context, renamed_parts);
+
+    /// TODO Allow to use quorum here.
+    HaMergeTreeBlockOutputStream output(*this, metadata_snapshot, query_context);
+
+    Names old_names;
+    for (auto & part : loaded_parts)
+        old_names.push_back(part->name);
+
+    output.writeExistingParts(loaded_parts);
+
+    LOG_DEBUG(log, "Attached {} parts", loaded_parts.size());
+    for (size_t i = 0; i < loaded_parts.size(); ++i)
+    {
+        LOG_TRACE(log, "Attached part {} as {}", old_names[i], loaded_parts[i]->name);
+
+        results.push_back(PartitionCommandResultInfo{
+            .partition_id = loaded_parts[i]->info.partition_id,
+            .part_name = loaded_parts[i]->name,
+            .old_part_name = old_names[i],
+        });
+    }
+
+    return results;
 }
 
 void StorageHaMergeTree::replacePartitionFrom(
@@ -2390,9 +2593,139 @@ void StorageHaMergeTree::movePartitionToTable(const StoragePtr & dest_table, con
 {
 }
 
+bool StorageHaMergeTree::checkIfDetachedPartitionExists(const String & partition_name)
+{
+    fs::directory_iterator dir_end;
+    for (const std::string & path : getDataPaths())
+    {
+        for (fs::directory_iterator dir_it{fs::path(path) / "detached/"}; dir_it != dir_end; ++dir_it)
+        {
+            MergeTreePartInfo part_info;
+            if (MergeTreePartInfo::tryParsePartName(dir_it->path().filename(), &part_info, format_version) && part_info.partition_id == partition_name)
+                return true;
+        }
+    }
+    return false;
+}
+
 void StorageHaMergeTree::fetchPartition(
     const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context)
 {
+    /// Macros::MacroExpansionInfo info;
+    /// info.expand_special_macros_only = false; //-V1048
+    /// info.table_id = getStorageID();
+    /// info.table_id.uuid = UUIDHelpers::Nil;
+    /// auto expand_from = query_context->getMacros()->expand(from_, info);
+    /// String auxiliary_zookeeper_name = extractZooKeeperName(expand_from);
+    /// String from = extractZooKeeperPath(expand_from);
+    /// if (from.empty())
+    ///     throw Exception("ZooKeeper path should not be empty", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    /// zkutil::ZooKeeperPtr zookeeper;
+    /// if (auxiliary_zookeeper_name != default_zookeeper_name)
+    ///     zookeeper = getContext()->getAuxiliaryZooKeeper(auxiliary_zookeeper_name);
+    /// else
+    ///     zookeeper = getZooKeeper();
+
+    /// if (from.back() == '/')
+    ///     from.resize(from.size() - 1);
+
+    if (fetch_part)
+    {
+        throw Exception("NOT IMPL", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    String partition_id = getPartitionIDFromQuery(partition, query_context);
+    /// LOG_INFO(log, "Will fetch partition {} from shard {} (zookeeper '{}')", partition_id, from_, auxiliary_zookeeper_name);
+
+    /** Let's check that there is no such partition in the `detached` directory (where we will write the downloaded parts).
+      * Unreliable (there is a race condition) - such a partition may appear a little later.
+      */
+    if (checkIfDetachedPartitionExists(partition_id))
+        throw Exception("Detached partition " + partition_id + " already exists.", ErrorCodes::PARTITION_ALREADY_EXISTS);
+
+    String from_replica_path = zookeeper_path + "/replicas/" + from;
+    auto from_replica_address = getReplicaAddress(from);
+
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(getContext()->getSettingsRef());
+    auto credentials = getContext()->getInterserverCredentials();
+
+    auto part_names = fetcher.fetchPartList(
+        partition_id,
+        {}, /// filter
+        from_replica_path,
+        from_replica_address.host,
+        from_replica_address.replication_port,
+        timeouts,
+        credentials->getUser(),
+        credentials->getPassword(),
+        getContext()->getInterserverScheme());
+
+    for (auto & part_name : part_names)
+    {
+        try
+        {
+            bool fetched = fetchPart(nullptr, part_name, from_replica_path, false);
+            if (!fetched)
+                LOG_ERROR(log, "Failed to fetch part {} from {}", part_name, from_replica_path);
+        }
+        catch (const Exception & e)
+        {
+            LOG_WARNING(log, e.displayText());
+        }
+    }
+}
+
+
+void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context)
+{
+    LOG_DEBUG(log, "GYZ TMP DEBUG");
+
+    auto * merge_tree_table = dynamic_cast<MergeTreeData *>(source_table.get());
+    if (!merge_tree_table)
+        throw Exception("Target table must be MergeTree family for Move Partition.", ErrorCodes::LOGICAL_ERROR);
+
+    if(source_table->getStoragePolicy()->getName() != getStoragePolicy()->getName())
+        throw Exception("Table must have same storage_policy for Move partition", ErrorCodes::LOGICAL_ERROR);
+
+    String partition_id = getPartitionIDFromQuery(partition, query_context);
+
+    std::vector<std::pair<String, String>> parts_to_move;
+
+    /// copy all the list in fromtbl's detached directory to table's detached directory
+    for (const auto & disk : merge_tree_table->getStoragePolicy()->getDisks())
+    {
+        for (auto it = disk->iterateDirectory(fs::path(relative_data_path) / "detached/"); it->isValid(); it->next())
+        {
+            MergeTreePartInfo part_info;
+            if (!MergeTreePartInfo::tryParsePartName(it->name(), &part_info, format_version) || part_info.partition_id != partition_id)
+                continue;
+
+            LOG_DEBUG(log, "GYZ DEBUG: {} {} ", it->path(), it->name());
+
+            /*
+            /// check whether partition already exist in table's detached directory, raise error to avoid data overwrite
+            for (const auto & to_path_: getDataPaths())
+            {
+                if (Poco::File(to_path_ + "detached/" + name).exists())
+                {
+                    throw Exception("Partition " + partition_id + " already exist in table " + table_name +
+                                    " detached directory, please check!", ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+            */
+
+            /// parts_to_move.emplace_back(from_path + name, to_path + name);
+        }
+    }
+
+    /// LOG_DEBUG(log, "Found {} parts of partition {} in table ", parts_to_move.size(), partition_id, source_table->getTableName());
+
+    /// for (auto & [from_path, to_path] : parts_to_move)
+    /// {
+    ///     /// Poco::File(from_path).renameTo(to_path);
+    ///     LOG_DEBUG(log, "Move part from {} to {}", from_path, to_path);
+    /// }
 }
 
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const
@@ -2484,4 +2817,4 @@ UInt64 StorageHaMergeTree::allocLSNAndSet(const zkutil::ZooKeeperPtr & zookeeper
 
 }
 
-#pragma clang diagnostic push
+#pragma clang diagnostic pop

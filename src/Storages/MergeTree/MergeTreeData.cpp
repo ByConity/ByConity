@@ -3120,6 +3120,14 @@ Pipe MergeTreeData::alterPartition(
             }
             break;
 
+            case PartitionCommand::MOVE_PARTITION_FROM:
+            {
+                String from_database = query_context->resolveDatabase(command.from_database);
+                auto from_storage = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+                movePartitionFrom(from_storage, command.partition, query_context);
+            }
+            break;
+
             case PartitionCommand::REPLACE_PARTITION:
             {
                 checkPartitionCanBeDropped(command.partition);
@@ -3174,6 +3182,11 @@ Pipe MergeTreeData::alterPartition(
         return convertCommandsResultToSource(result);
 
     return {};
+}
+
+void MergeTreeData::movePartitionFrom(const StoragePtr &, const ASTPtr &, ContextPtr)
+{
+    throw Exception("movePartitionFrom is not supported by " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr local_context) const

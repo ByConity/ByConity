@@ -49,8 +49,7 @@ HaMergeTreeRestartingThread::HaMergeTreeRestartingThread(StorageHaMergeTree & st
     const auto storage_settings = storage.getSettings();
     check_period_ms = storage_settings->zookeeper_session_expiration_check_period.totalSeconds() * 1000;
 
-    /// TODO: RestartSchedulePool
-    task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { run(); });
+    task = storage.getContext()->getRestartSchedulePool().createTask(log_name, [this] { run(); });
 }
 
 void HaMergeTreeRestartingThread::run()

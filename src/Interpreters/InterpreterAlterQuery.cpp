@@ -309,6 +309,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             }
             break;
         }
+        case ASTAlterCommand::MOVE_PARTITION_FROM:
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::ALTER_DELETE, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::REPLACE_PARTITION:
         {
             required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);

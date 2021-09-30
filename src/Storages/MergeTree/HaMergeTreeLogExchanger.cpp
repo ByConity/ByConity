@@ -25,8 +25,7 @@ HaMergeTreeLogExchangerBase::HaMergeTreeLogExchangerBase(StorageHaMergeTree & st
 HaMergeTreeLogExchanger::HaMergeTreeLogExchanger(StorageHaMergeTree & storage_)
     : HaMergeTreeLogExchangerBase(storage_, " (HaMergeTreeLogExchanger)"), queue(storage_.getSettings()->ha_log_exchanger_queue_max_size)
 {
-    task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { requestTask(); });
-    /// TODO: task = storage.getContext()->getHaLogSchedulePool().createTask(log_name, [this] { requestTask(); });
+    task = storage.getContext()->getHaLogSchedulePool().createTask(log_name, [this] { requestTask(); });
     task->schedule();
 }
 

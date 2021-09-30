@@ -74,6 +74,15 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
             res.move_destination_name = command_ast->move_destination_name;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::MOVE_PARTITION_FROM)
+    {
+        PartitionCommand res;
+        res.type = MOVE_PARTITION_FROM;
+        res.partition = command_ast->partition;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::REPLACE_PARTITION)
     {
         PartitionCommand res;
@@ -138,6 +147,8 @@ std::string PartitionCommand::typeToString() const
             return "ATTACH PARTITION";
     case PartitionCommand::Type::MOVE_PARTITION:
         return "MOVE PARTITION";
+    case PartitionCommand::Type::MOVE_PARTITION_FROM:
+        return "MOVE PARTITION FROM";
     case PartitionCommand::Type::DROP_PARTITION:
         if (detach)
             return "DETACH PARTITION";

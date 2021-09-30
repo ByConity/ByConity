@@ -340,6 +340,7 @@ private:
 
     bool executeFetch(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeMerge(HaQueueExecutingEntrySetPtr & executing_set);
+    bool executeDropRange(HaQueueExecutingEntrySetPtr & executing_set);
 
     bool fetchPartHeuristically(
         const HaQueueExecutingEntrySetPtr & executing_set,
@@ -391,6 +392,8 @@ private:
     void exitLeaderElection();
 
     void TTLWorker();
+    time_t calcTTLForPartition(
+        const MergeTreePartition & partition, const KeyDescription & partition_key, const TTLDescription & ttl_description) const;
 
     /** Selects the parts to merge and writes to the log.
       */
@@ -408,6 +411,8 @@ private:
     HaMergeTreeAddress getHaMergeTreeAddress() const;
     HaMergeTreeAddress getReplicaAddress(const String & replica_name_);
 
+    void dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeeper, const NameOrderedSet & partitions, bool detach, bool sync);
+
     void dropPartNoWaitNoThrow(const String & part_name) override;
     void dropPart(const String & part_name, bool detach, ContextPtr query_context) override;
 
@@ -417,6 +422,10 @@ private:
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context) override;
     void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context) override;
+
+    void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context) override;
+
+    bool checkIfDetachedPartitionExists(const String & partition_name);
 
     /// Check granularity of already existing replicated table in zookeeper if it exists
     /// return true if it's fixed
