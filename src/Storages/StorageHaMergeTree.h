@@ -31,9 +31,9 @@ class HaReplicaEndpointHolder;
 using HaMergeTreeQuorumAddedParts = ReplicatedMergeTreeQuorumAddedParts;
 using HaMergeTreeTableMetadata = ReplicatedMergeTreeTableMetadata;
 
-class StorageHaMergeTree final : public ext::shared_ptr_helper<StorageHaMergeTree>, public MergeTreeData
+class StorageHaMergeTree final : public shared_ptr_helper<StorageHaMergeTree>, public MergeTreeData
 {
-    friend struct ext::shared_ptr_helper<StorageHaMergeTree>;
+    friend struct shared_ptr_helper<StorageHaMergeTree>;
 
     using LogEntry = HaMergeTreeLogEntry;
     using LogEntryPtr = LogEntry::Ptr;
@@ -55,7 +55,7 @@ public:
         const Names & column_names,
         const StorageMetadataPtr & /*metadata_snapshot*/,
         SelectQueryInfo & query_info,
-        const Context & context,
+        ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
@@ -64,16 +64,16 @@ public:
         const Names & column_names,
         const StorageMetadataPtr & /*metadata_snapshot*/,
         SelectQueryInfo & query_info,
-        const Context & context,
+        ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;
 
     std::optional<UInt64> totalRows(const Settings & settings) const override;
-    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, const Context & context) const override;
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr context) const override;
     std::optional<UInt64> totalBytes(const Settings & settings) const override;
 
-    BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, const Context & context) override;
+    BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
     bool optimize(
         const ASTPtr & query,
@@ -82,11 +82,11 @@ public:
         bool final,
         bool deduplicate,
         const Names & deduplicate_by_columns,
-        const Context & query_context) override;
+        ContextPtr query_context) override;
 
-    void alter(const AlterCommands & commands, const Context & query_context, TableLockHolder & table_lock_holder) override;
+    void alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & table_lock_holder) override;
 
-    void mutate(const MutationCommands & commands, const Context & context) override;
+    void mutate(const MutationCommands & commands, ContextPtr context) override;
     void waitMutation(const String & znode_name, size_t mutations_sync) const;
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override;
     CancellationCode killMutation(const String & mutation_id) override;
@@ -97,7 +97,7 @@ public:
 
     void dropLogEntries();
 
-    void truncate(const ASTPtr &, const StorageMetadataPtr &, const Context & query_context, TableExclusiveLockHolder &) override;
+    void truncate(const ASTPtr &, const StorageMetadataPtr &, ContextPtr query_context, TableExclusiveLockHolder &) override;
 
     void checkTableCanBeRenamed() const override;
 
@@ -158,7 +158,7 @@ public:
         /// TODO:
     }
 
-    CheckResults checkData(const ASTPtr & query, const Context & context) override;
+    CheckResults checkData(const ASTPtr & query, ContextPtr context) override;
 
     /// Checks ability to use granularity
     bool canUseAdaptiveGranularity() const override;
@@ -177,7 +177,7 @@ public:
         Poco::Logger * logger);
 
     /// Get job to execute in background pool (merge, mutate, drop range and so on)
-    std::optional<JobAndPool> getDataProcessingJob() override;
+    bool scheduleDataProcessingJob(IBackgroundJobExecutor & executor) override;
 
     void writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry);
 
@@ -408,12 +408,15 @@ private:
     HaMergeTreeAddress getHaMergeTreeAddress() const;
     HaMergeTreeAddress getReplicaAddress(const String & replica_name_);
 
+    void dropPartNoWaitNoThrow(const String & part_name) override;
+    void dropPart(const String & part_name, bool detach, ContextPtr query_context) override;
+
     // Partition helpers
-    void dropPartition(const ASTPtr & partition, bool detach, bool drop_part, const Context & query_context, bool throw_if_noop) override;
-    PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, const Context & query_context) override;
-    void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, const Context & query_context) override;
-    void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, const Context & query_context) override;
-    void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, const Context & query_context) override;
+    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;
+    PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context) override;
+    void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context) override;
+    void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context) override;
+    void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context) override;
 
     /// Check granularity of already existing replicated table in zookeeper if it exists
     /// return true if it's fixed
@@ -423,6 +426,7 @@ private:
 
     void startBackgroundMovesIfNeeded() override;
 
+    std::unique_ptr<MergeTreeSettings> getDefaultSettings() const override;
 
     std::pair<UInt64, Coordination::RequestPtr> allocLSNAndMakeSetRequest();
     UInt64 allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zookeeper, const String & zookeeper_block_id_path = "");
@@ -445,7 +449,7 @@ protected:
         const StorageID & table_id_,
         const String & relative_data_path_,
         const StorageInMemoryMetadata & metadata_,
-        Context & context_,
+        ContextMutablePtr context_,
         const String & date_column_name,
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_,

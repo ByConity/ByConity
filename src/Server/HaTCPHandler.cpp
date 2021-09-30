@@ -55,10 +55,10 @@ void HaTCPHandler::runImpl()
     setThreadName("HaTCPHandler");
     ThreadStatus thread_status;
 
-    connection_context = server.context();
-    connection_context.setSessionContext(connection_context);
+    connection_context = Context::createCopy(server.context());
+    connection_context->makeSessionContext();
 
-    Settings global_settings = connection_context.getSettings();
+    Settings global_settings = connection_context->getSettings();
 
     socket().setReceiveTimeout(global_settings.receive_timeout);
     socket().setSendTimeout(global_settings.send_timeout);
@@ -78,7 +78,7 @@ void HaTCPHandler::runImpl()
     {
         receiveHello();
 
-        endpoint = connection_context.getHaReplicaHandler().getEndpoint(endpoint_name);
+        endpoint = connection_context->getHaReplicaHandler().getEndpoint(endpoint_name);
     }
     catch (const Exception & e) /// Typical for an incorrect username, password, or address.
     {

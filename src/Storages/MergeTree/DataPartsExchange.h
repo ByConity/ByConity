@@ -29,7 +29,7 @@ namespace DataPartsExchange
 class Service final : public InterserverIOEndpoint
 {
 public:
-    explicit Service(MergeTreeData & data_, const StoragePtr & storage_) : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
+    explicit Service(MergeTreeData & data_, const StoragePtr & storage_);
 
     Service(const Service &) = delete;
     Service & operator=(const Service &) = delete;

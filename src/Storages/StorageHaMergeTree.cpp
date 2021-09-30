@@ -1,8 +1,11 @@
 #include <Storages/StorageHaMergeTree.h>
 
-#include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
-#include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <Interpreters/InterserverCredentials.h>
+#include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
+#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -76,11 +79,11 @@ void StorageHaMergeTree::setZooKeeper()
     std::lock_guard lock(current_zookeeper_mutex);
     if (zookeeper_name == default_zookeeper_name)
     {
-        current_zookeeper = global_context.getZooKeeper();
+        current_zookeeper = getContext()->getZooKeeper();
     }
     else
     {
-        current_zookeeper = global_context.getAuxiliaryZooKeeper(zookeeper_name);
+        current_zookeeper = getContext()->getAuxiliaryZooKeeper(zookeeper_name);
     }
 }
 
@@ -144,7 +147,7 @@ StorageHaMergeTree::StorageHaMergeTree(
     const StorageID & table_id_,
     const String & relative_data_path_,
     const StorageInMemoryMetadata & metadata_,
-    Context & context_,
+    ContextMutablePtr context_,
     const String & date_column_name,
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> settings_,
@@ -167,18 +170,18 @@ StorageHaMergeTree::StorageHaMergeTree(
     , replica_path(zookeeper_path + "/replicas/" + replica_name_)
     , reader(*this)
     , writer(*this)
-    , merger_mutator(*this, global_context.getSettingsRef().background_pool_size)
+    , merger_mutator(*this, getContext()->getSettingsRef().background_pool_size)
     /// , merge_strategy_picker(*this)
     , log_exchanger(*this)
     , queue(*this)
     , fetcher(*this)
-    , background_executor(*this, global_context)
-    , background_moves_executor(*this, global_context)
+    , background_executor(*this, getContext())
+    , background_moves_executor(*this, getContext())
     , cleanup_thread(*this)
     // , part_check_thread(*this)
     , restarting_thread(*this)
     , allow_renaming(allow_renaming_)
-    , replicated_fetches_pool_size(global_context.getSettingsRef().background_fetches_pool_size)
+    , replicated_fetches_pool_size(getContext()->getSettingsRef().background_fetches_pool_size)
 {
     auto data_paths = getDataPaths();
 
@@ -186,22 +189,22 @@ StorageHaMergeTree::StorageHaMergeTree(
     log_manager = std::make_unique<HaMergeTreeLogManager>(
         data_paths.front() + "/log", getStorageID().getFullTableName() + " (HaLogManager)", !attach, *this);
 
-    queue_updating_task = global_context.getSchedulePool().createTask(
+    queue_updating_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::queueUpdatingTask)", [this] { queueUpdatingTask(); });
 
-    mutations_updating_task = global_context.getSchedulePool().createTask(
+    mutations_updating_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsUpdatingTask)", [this] { mutationsUpdatingTask(); });
 
-    merge_selecting_task = global_context.getSchedulePool().createTask(
+    merge_selecting_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mergeSelectingTask)", [this] { mergeSelectingTask(); });
 
     /// Will be activated if we win leader election.
     merge_selecting_task->deactivate();
 
-    mutations_finalizing_task = global_context.getSchedulePool().createTask(
+    mutations_finalizing_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsFinalizingTask)", [this] { mutationsFinalizingTask(); });
 
-    if (global_context.hasZooKeeper() || global_context.hasAuxiliaryZooKeeper(zookeeper_name))
+    if (getContext()->hasZooKeeper() || getContext()->hasAuxiliaryZooKeeper(zookeeper_name))
     {
         /// It's possible for getZooKeeper() to timeout if  zookeeper host(s) can't
         /// be reached. In such cases Poco::Exception is thrown after a connection
@@ -220,11 +223,11 @@ StorageHaMergeTree::StorageHaMergeTree(
         {
             if (zookeeper_name == default_zookeeper_name)
             {
-                current_zookeeper = global_context.getZooKeeper();
+                current_zookeeper = getContext()->getZooKeeper();
             }
             else
             {
-                current_zookeeper = global_context.getAuxiliaryZooKeeper(zookeeper_name);
+                current_zookeeper = getContext()->getAuxiliaryZooKeeper(zookeeper_name);
             }
         }
         catch (...)
@@ -578,7 +581,7 @@ void StorageHaMergeTree::checkTableStructure(const String & zookeeper_prefix, co
     Coordination::Stat metadata_stat;
     String metadata_str = zookeeper->get(zookeeper_prefix + "/metadata", &metadata_stat);
     auto metadata_from_zk = HaMergeTreeTableMetadata::parse(metadata_str);
-    old_metadata.checkEquals(metadata_from_zk, metadata_snapshot->getColumns(), global_context);
+    old_metadata.checkEquals(metadata_from_zk, metadata_snapshot->getColumns(), getContext());
 
     Coordination::Stat columns_stat;
     auto columns_from_zk = ColumnsDescription::parse(zookeeper->get(zookeeper_prefix + "/columns", &columns_stat));
@@ -602,9 +605,9 @@ void StorageHaMergeTree::drop()
         /// and calling StorageHaMergeTree::getZooKeeper()/getAuxiliaryZooKeeper() won't suffice.
         zkutil::ZooKeeperPtr zookeeper;
         if (zookeeper_name == default_zookeeper_name)
-            zookeeper = global_context.getZooKeeper();
+            zookeeper = getContext()->getZooKeeper();
         else
-            zookeeper = global_context.getAuxiliaryZooKeeper(zookeeper_name);
+            zookeeper = getContext()->getAuxiliaryZooKeeper(zookeeper_name);
 
         /// If probably there is metadata in ZooKeeper, we don't allow to drop the table.
         if (!zookeeper)
@@ -737,7 +740,7 @@ void StorageHaMergeTree::checkParts(bool)
 }
 
 void StorageHaMergeTree::truncate(
-    const ASTPtr &, const StorageMetadataPtr &, const Context & , TableExclusiveLockHolder & table_lock)
+    const ASTPtr &, const StorageMetadataPtr &, ContextPtr , TableExclusiveLockHolder & table_lock)
 {
     table_lock.release();   /// Truncate is done asynchronously.
 
@@ -770,12 +773,12 @@ void StorageHaMergeTree::startup()
         queue.initialize(getDataParts());
 
         replica_endpoint_holder = std::make_unique<HaReplicaEndpointHolder>(
-            replica_path, std::make_shared<HaMergeTreeReplicaEndpoint>(*this), global_context.getHaReplicaHandler());
+            replica_path, std::make_shared<HaMergeTreeReplicaEndpoint>(*this), getContext()->getHaReplicaHandler());
 
         InterserverIOEndpointPtr data_parts_exchange_ptr = std::make_shared<DataPartsExchange::Service>(*this, shared_from_this());
         [[maybe_unused]] auto prev_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, data_parts_exchange_ptr);
         assert(prev_ptr == nullptr);
-        global_context.getInterserverIOHandler().addEndpoint(data_parts_exchange_ptr->getId(replica_path), data_parts_exchange_ptr);
+        getContext()->getInterserverIOHandler().addEndpoint(data_parts_exchange_ptr->getId(replica_path), data_parts_exchange_ptr);
 
         /// In this thread replica will be activated.
         restarting_thread.start();
@@ -831,7 +834,7 @@ void StorageHaMergeTree::shutdown()
     auto data_parts_exchange_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, InterserverIOEndpointPtr{});
     if (data_parts_exchange_ptr)
     {
-        global_context.getInterserverIOHandler().removeEndpointIfExists(data_parts_exchange_ptr->getId(replica_path));
+        getContext()->getInterserverIOHandler().removeEndpointIfExists(data_parts_exchange_ptr->getId(replica_path));
         /// Ask all parts exchange handlers to finish asap. New ones will fail to start
         data_parts_exchange_ptr->blocker.cancelForever();
         /// Wait for all of them
@@ -864,8 +867,8 @@ void StorageHaMergeTree::read(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
-    const Context & context,
-    QueryProcessingStage::Enum /*processed_stage*/,
+    ContextPtr query_context,
+    QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
     const unsigned num_streams)
 {
@@ -874,15 +877,16 @@ void StorageHaMergeTree::read(
     * 2. Do not read parts that have not yet been written to the quorum of the replicas.
     * For this you have to synchronously go to ZooKeeper.
     */
-    if (context.getSettingsRef().select_sequential_consistency)
+    if (query_context->getSettingsRef().select_sequential_consistency)
     {
-        auto max_added_blocks = getMaxAddedBlocks();
-        if (auto plan = reader.read(column_names, metadata_snapshot, query_info, context, max_block_size, num_streams, &max_added_blocks))
+        auto max_added_blocks = std::make_shared<HaMergeTreeQuorumAddedParts::PartitionIdToMaxBlock>(getMaxAddedBlocks());
+        if (auto plan = reader.read(
+                column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage, std::move(max_added_blocks)))
             query_plan = std::move(*plan);
         return;
     }
 
-    if (auto plan = reader.read(column_names, metadata_snapshot, query_info, context, max_block_size, num_streams))
+    if (auto plan = reader.read(column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage))
         query_plan = std::move(*plan);
 }
 
@@ -890,14 +894,16 @@ Pipe StorageHaMergeTree::read(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
-    const Context & context,
+    ContextPtr query_context,
     QueryProcessingStage::Enum processed_stage,
     const size_t max_block_size,
     const unsigned num_streams)
 {
     QueryPlan plan;
-    read(plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
-    return plan.convertToPipe(QueryPlanOptimizationSettings(context.getSettingsRef()));
+    read(plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+    return plan.convertToPipe(
+        QueryPlanOptimizationSettings::fromContext(query_context),
+        BuildQueryPipelineSettings::fromContext(query_context));
 }
 
 
@@ -936,19 +942,11 @@ std::optional<UInt64> StorageHaMergeTree::totalRows(const Settings & settings) c
     return res;
 }
 
-std::optional<UInt64> StorageHaMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, const Context & context) const
+std::optional<UInt64> StorageHaMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr query_context) const
 {
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    PartitionPruner partition_pruner(metadata_snapshot->getPartitionKey(), query_info, context, true /* strict */);
-    if (partition_pruner.isUseless())
-        return {};
-    size_t res = 0;
-    foreachCommittedParts([&](auto & part)
-    {
-        if (!partition_pruner.canBePruned(part))
-            res += part->rows_count;
-    }, context.getSettingsRef().select_sequential_consistency);
-    return res;
+    DataPartsVector parts;
+    foreachCommittedParts([&](auto & part) { parts.push_back(part); }, query_context->getSettingsRef().select_sequential_consistency);
+    return totalRowsByPartitionPredicateImpl(query_info, query_context, parts);
 }
 
 std::optional<UInt64> StorageHaMergeTree::totalBytes(const Settings & settings) const
@@ -966,17 +964,17 @@ void StorageHaMergeTree::assertNotReadonly() const
 
 HaMergeTreeAddress StorageHaMergeTree::getHaMergeTreeAddress() const
 {
-    auto host_port = global_context.getInterserverIOAddress();
+    auto host_port = getContext()->getInterserverIOAddress();
     auto table_id = getStorageID();
 
     HaMergeTreeAddress res;
     res.host = host_port.first;
     res.replication_port = host_port.second;
-    res.queries_port = global_context.getTCPPort();
-    res.ha_port = global_context.getHaTCPPort();
+    res.queries_port = getContext()->getTCPPort();
+    res.ha_port = getContext()->getHaTCPPort();
     res.database = table_id.database_name;
     res.table = table_id.table_name;
-    res.scheme = global_context.getInterserverScheme();
+    res.scheme = getContext()->getInterserverScheme();
     return res;
 }
 
@@ -986,16 +984,16 @@ HaMergeTreeAddress StorageHaMergeTree::getReplicaAddress(const String & replica_
     return HaMergeTreeAddress(getZooKeeper()->get(replica_host_path));
 }
 
-BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, const Context & context)
+BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
     const auto storage_settings_ptr = getSettings();
     assertNotReadonly();
 
-    const Settings & query_settings = context.getSettingsRef();
+    const Settings & query_settings = query_context->getSettingsRef();
     [[maybe_unused]] bool deduplicate = storage_settings_ptr->replicated_deduplication_window != 0 && query_settings.insert_deduplicate;
 
     // TODO: should we also somehow pass list of columns to deduplicate on to the HaMergeTreeBlockOutputStream ?
-    return std::make_shared<HaMergeTreeBlockOutputStream>(*this, metadata_snapshot, context);
+    return std::make_shared<HaMergeTreeBlockOutputStream>(*this, metadata_snapshot, query_context);
 }
 
 bool StorageHaMergeTree::optimize(
@@ -1005,7 +1003,7 @@ bool StorageHaMergeTree::optimize(
     [[maybe_unused]]bool final,
     [[maybe_unused]]bool deduplicate,
     [[maybe_unused]]const Names & deduplicate_by_columns,
-    [[maybe_unused]]const Context & query_context)
+    [[maybe_unused]]ContextPtr query_context)
 {
     /// TODO:
     throw Exception("Not supported", ErrorCodes::SUPPORT_IS_DISABLED);
@@ -1013,14 +1011,14 @@ bool StorageHaMergeTree::optimize(
 
 void StorageHaMergeTree::alter(
     [[maybe_unused]] const AlterCommands & commands,
-    [[maybe_unused]] const Context & query_context,
+    [[maybe_unused]] ContextPtr query_context,
     [[maybe_unused]] TableLockHolder & table_lock_holder)
 {
     assertNotReadonly();
     throw Exception("Not supported", ErrorCodes::SUPPORT_IS_DISABLED);
 }
 
-void StorageHaMergeTree::mutate([[maybe_unused]] const MutationCommands & commands, [[maybe_unused]] const Context & query_context)
+void StorageHaMergeTree::mutate([[maybe_unused]] const MutationCommands & commands, [[maybe_unused]] ContextPtr query_context)
 {
 }
 
@@ -1042,7 +1040,7 @@ CancellationCode StorageHaMergeTree::killMutation([[maybe_unused]]const String &
 void StorageHaMergeTree::checkTableCanBeDropped() const
 {
     auto table_id = getStorageID();
-    global_context.checkTableCanBeDropped(table_id.database_name, table_id.table_name, getTotalActiveSizeInBytes());
+    getContext()->checkTableCanBeDropped(table_id.database_name, table_id.table_name, getTotalActiveSizeInBytes());
 }
 
 void StorageHaMergeTree::checkTableCanBeRenamed() const
@@ -1186,7 +1184,7 @@ void StorageHaMergeTree::getReplicaDelays(time_t & out_absolute_delay, time_t & 
     }
 }
 
-CheckResults StorageHaMergeTree::checkData([[maybe_unused]]const ASTPtr & query, [[maybe_unused]]const Context & context)
+CheckResults StorageHaMergeTree::checkData([[maybe_unused]]const ASTPtr & query, [[maybe_unused]]ContextPtr query_context)
 {
     /*
     CheckResults results;
@@ -1223,31 +1221,30 @@ bool StorageHaMergeTree::canUseAdaptiveGranularity() const
             (!has_non_adaptive_index_granularity_parts && !other_replicas_fixed_granularity));
 }
 
-std::optional<JobAndPool> StorageHaMergeTree::getDataProcessingJob()
+
+bool StorageHaMergeTree::scheduleDataProcessingJob(IBackgroundJobExecutor & executor)
 {
     /// If replication queue is stopped exit immediately as we successfully executed the task
     if (queue.actions_blocker.isCancelled())
-        return {};
+        return false;
 
     /// This object will mark the element of the queue as running.
     size_t num_avail_fetches = 0;
     auto selected_entry = queue.selectEntryToProcess(num_avail_fetches);
 
     if (!selected_entry->valid())
-        return {};
+        return false;
 
-    PoolType pool_type;
-
-    /// Depending on entry type execute in fetches (small) pool or big merge_mutate pool
     if (selected_entry->getExecuting()->type == LogEntry::GET_PART)
-        pool_type = PoolType::FETCH;
-    else
-        pool_type = PoolType::MERGE_MUTATE;
-
-    return JobAndPool{[this, selected_entry] () mutable
     {
-        return processQueueEntry(selected_entry);
-    }, pool_type};
+        executor.execute({[this, selected_entry]() mutable { return processQueueEntry(selected_entry); }, PoolType::FETCH});
+        return true;
+    }
+    else
+    {
+        executor.execute({[this, selected_entry]() mutable { return processQueueEntry(selected_entry); }, PoolType::MERGE_MUTATE});
+        return true;
+    }
 }
 
 bool StorageHaMergeTree::processQueueEntry(HaQueueExecutingEntrySetPtr executing_set)
@@ -1490,9 +1487,9 @@ bool StorageHaMergeTree::fetchPart(
         writePartLog(PartLogElement::DOWNLOAD_PART, execution_status, stopwatch.elapsed(), part_name, part, replaced_parts, nullptr);
     };
 
-    auto timeouts = ConnectionTimeouts::getHTTPTimeouts(global_context);
-    auto [user, password] = global_context.getInterserverCredentials();
-    String interserver_scheme = global_context.getInterserverScheme();
+    auto timeouts = ConnectionTimeouts::getHTTPTimeouts(getContext());
+    auto credentials = getContext()->getInterserverCredentials();
+    String interserver_scheme = getContext()->getInterserverScheme();
 
     try
     {
@@ -1505,14 +1502,16 @@ bool StorageHaMergeTree::fetchPart(
 
         part = fetcher.fetchPart(
             getInMemoryMetadataPtr(),
+            getContext(),
             part_name,
             source_replica_path,
             address.host,
             address.replication_port,
             timeouts,
-            user,
-            password,
+            credentials->getUser(),
+            credentials->getPassword(),
             interserver_scheme,
+            replicated_fetches_throttler,
             to_detached,
             "");
 
@@ -1687,7 +1686,7 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
     }
 
     auto table_id = getStorageID();
-    MergeList::EntryPtr merge_entry = global_context.getMergeList().insert(table_id.database_name, table_id.table_name, future_merged_part);
+    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_merged_part);
 
     // Without fetch firstly strategy deployed in product, we find out merge in replica(1:N) settings are
     // quite costly, and too many OOMs. we try fetch if possible
@@ -1729,10 +1728,11 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
             *merge_entry,
             table_lock,
             entry.create_time,
-            global_context,
+            getContext(),
             reserved_space,
             false, // entry.duduplicate
-            {});
+            {}, /// entry.duduplicate_by_columns
+            merging_params);
 
         /// TODO: min block
 
@@ -1855,7 +1855,7 @@ void StorageHaMergeTree::commitLogTask()
 
 void StorageHaMergeTree::forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper)
 {
-    auto lock = lockExclusively(RWLockImpl::NO_QUERY, global_context.getSettingsRef().lock_acquire_timeout);
+    auto lock = lockExclusively(RWLockImpl::NO_QUERY, getContext()->getSettingsRef().lock_acquire_timeout);
 
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
@@ -1919,7 +1919,7 @@ void StorageHaMergeTree::setTableStructure(
             auto & sorting_key = new_metadata.sorting_key;
             auto & primary_key = new_metadata.primary_key;
 
-            sorting_key.recalculateWithNewAST(order_by_ast, new_metadata.columns, global_context);
+            sorting_key.recalculateWithNewAST(order_by_ast, new_metadata.columns, getContext());
 
             if (primary_key.definition_ast == nullptr)
             {
@@ -1927,18 +1927,18 @@ void StorageHaMergeTree::setTableStructure(
                 /// save the old ORDER BY expression as the new primary key.
                 auto old_sorting_key_ast = old_metadata.getSortingKey().definition_ast;
                 primary_key = KeyDescription::getKeyFromAST(
-                    old_sorting_key_ast, new_metadata.columns, global_context);
+                    old_sorting_key_ast, new_metadata.columns, getContext());
             }
         }
 
         if (metadata_diff.sampling_expression_changed)
         {
             auto sample_by_ast = parse_key_expr(metadata_diff.new_sampling_expression);
-            new_metadata.sampling_key.recalculateWithNewAST(sample_by_ast, new_metadata.columns, global_context);
+            new_metadata.sampling_key.recalculateWithNewAST(sample_by_ast, new_metadata.columns, getContext());
         }
 
         if (metadata_diff.skip_indices_changed)
-            new_metadata.secondary_indices = IndicesDescription::parse(metadata_diff.new_skip_indices, new_columns, global_context);
+            new_metadata.secondary_indices = IndicesDescription::parse(metadata_diff.new_skip_indices, new_columns, getContext());
 
         if (metadata_diff.constraints_changed)
             new_metadata.constraints = ConstraintsDescription::parse(metadata_diff.new_constraints);
@@ -1950,7 +1950,7 @@ void StorageHaMergeTree::setTableStructure(
                 ParserTTLExpressionList parser;
                 auto ttl_for_table_ast = parseQuery(parser, metadata_diff.new_ttl_table, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
                 new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
-                    ttl_for_table_ast, new_metadata.columns, global_context, new_metadata.primary_key);
+                    ttl_for_table_ast, new_metadata.columns, getContext(), new_metadata.primary_key);
             }
             else /// TTL was removed
             {
@@ -1963,39 +1963,39 @@ void StorageHaMergeTree::setTableStructure(
     new_metadata.column_ttls_by_name.clear();
     for (const auto & [name, ast] : new_metadata.columns.getColumnTTLs())
     {
-        auto new_ttl_entry = TTLDescription::getTTLFromAST(ast, new_metadata.columns, global_context, new_metadata.primary_key);
+        auto new_ttl_entry = TTLDescription::getTTLFromAST(ast, new_metadata.columns, getContext(), new_metadata.primary_key);
         new_metadata.column_ttls_by_name[name] = new_ttl_entry;
     }
 
     if (new_metadata.partition_key.definition_ast != nullptr)
-        new_metadata.partition_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+        new_metadata.partition_key.recalculateWithNewColumns(new_metadata.columns, getContext());
 
     if (!metadata_diff.sorting_key_changed) /// otherwise already updated
-        new_metadata.sorting_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+        new_metadata.sorting_key.recalculateWithNewColumns(new_metadata.columns, getContext());
 
     /// Primary key is special, it exists even if not defined
     if (new_metadata.primary_key.definition_ast != nullptr)
     {
-        new_metadata.primary_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+        new_metadata.primary_key.recalculateWithNewColumns(new_metadata.columns, getContext());
     }
     else
     {
-        new_metadata.primary_key = KeyDescription::getKeyFromAST(new_metadata.sorting_key.definition_ast, new_metadata.columns, global_context);
+        new_metadata.primary_key = KeyDescription::getKeyFromAST(new_metadata.sorting_key.definition_ast, new_metadata.columns, getContext());
         new_metadata.primary_key.definition_ast = nullptr;
     }
 
     if (!metadata_diff.sampling_expression_changed && new_metadata.sampling_key.definition_ast != nullptr)
-        new_metadata.sampling_key.recalculateWithNewColumns(new_metadata.columns, global_context);
+        new_metadata.sampling_key.recalculateWithNewColumns(new_metadata.columns, getContext());
 
     if (!metadata_diff.skip_indices_changed) /// otherwise already updated
     {
         for (auto & index : new_metadata.secondary_indices)
-            index.recalculateWithNewColumns(new_metadata.columns, global_context);
+            index.recalculateWithNewColumns(new_metadata.columns, getContext());
     }
 
     if (!metadata_diff.ttl_table_changed && new_metadata.table_ttl.definition_ast != nullptr)
         new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
-            new_metadata.table_ttl.definition_ast, new_metadata.columns, global_context, new_metadata.primary_key);
+            new_metadata.table_ttl.definition_ast, new_metadata.columns, getContext(), new_metadata.primary_key);
 
     /// Even if the primary/sorting/partition keys didn't change we must reinitialize it
     /// because primary/partition key column types might have changed.
@@ -2003,7 +2003,7 @@ void StorageHaMergeTree::setTableStructure(
     setProperties(new_metadata, old_metadata);
 
     auto table_id = getStorageID();
-    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(global_context, table_id, new_metadata);
+    DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(getContext(), table_id, new_metadata);
 }
 
 void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unused]]Coordination::Stat source_is_lost_stat, zkutil::ZooKeeperPtr & zookeeper)
@@ -2040,12 +2040,19 @@ void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unu
     auto source_endpoint = zookeeper_path + "/replicas/" + cloned_replica;
     auto replica_address = getReplicaAddress(cloned_replica);
 
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(global_context.getSettingsRef());
-    auto [user, password] = global_context.getInterserverCredentials();
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(getContext()->getSettingsRef());
+    auto credentials = getContext()->getInterserverCredentials();
 
-    auto part_names = fetcher.fetchPartList(partition_id, filter,
-            source_path, replica_address.host, replica_address.replication_port, timeouts,
-            user, password, global_context.getInterserverScheme());
+    auto part_names = fetcher.fetchPartList(
+        partition_id,
+        filter,
+        source_path,
+        replica_address.host,
+        replica_address.replication_port,
+        timeouts,
+        credentials->getUser(),
+        credentials->getPassword(),
+        getContext()->getInterserverScheme());
 
 
     // Generate GET log entries
@@ -2115,7 +2122,7 @@ void StorageHaMergeTree::getReplicaToClone(zkutil::ZooKeeperPtr & zookeeper, Str
         throw Exception("No active replica to clone", ErrorCodes::ALL_REPLICAS_LOST);
 
     Int64 min_delay = std::numeric_limits<Int64>::max();
-    /// TODO: String mimic_replica = global_context.getMimicReplica(this->database_name, this->table_name);
+    /// TODO: String mimic_replica = getContext()->getMimicReplica(this->database_name, this->table_name);
     String mimic_replica = "";
 
     for (auto && [replica, delay] : peer_delays)
@@ -2184,7 +2191,7 @@ void StorageHaMergeTree::enterLeaderElection()
     try
     {
         leader_election = std::make_shared<zkutil::LeaderElection>(
-            global_context.getSchedulePool(),
+            getContext()->getSchedulePool(),
             zookeeper_path + "/leader_election",
             *current_zookeeper,    /// current_zookeeper lives for the lifetime of leader_election,
                                    ///  since before changing `current_zookeeper`, `leader_election` object is destroyed in `partialShutdown` method.
@@ -2237,7 +2244,7 @@ void StorageHaMergeTree::mergeSelectingTask()
     const auto storage_settings = getSettings();
 
     /// TODO:
-    /// auto & pattern = global_context.getSettingsRef().blacklist_for_merge_task_regex.value;
+    /// auto & pattern = getContext()->getSettingsRef().blacklist_for_merge_task_regex.value;
     /// if (std::regex_search(table_name, std::regex(pattern)))
     /// {
     ///     LOG_TRACE(log, "Cancel merge task by settings blacklist_for_merge_task_regex: " << pattern);
@@ -2355,29 +2362,36 @@ void StorageHaMergeTree::mutationsFinalizingTask()
 {
 }
 
-    // Partition helpers
-void StorageHaMergeTree::dropPartition(
-    const ASTPtr & partition, bool detach, bool drop_part, const Context & query_context, bool throw_if_noop)
+void StorageHaMergeTree::dropPartNoWaitNoThrow(const String & part_name)
+{
+}
+
+void StorageHaMergeTree::dropPart(const String & part_name, bool detach, ContextPtr query_context)
+{
+}
+
+// Partition helpers
+void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
 {
 }
 
 PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
-    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, const Context & query_context)
+    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context)
 {
     return {};
 }
 
 void StorageHaMergeTree::replacePartitionFrom(
-    const StoragePtr & source_table, const ASTPtr & partition, bool replace, const Context & query_context)
+    const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context)
 {
 }
 
-void StorageHaMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, const Context & query_context)
+void StorageHaMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context)
 {
 }
 
 void StorageHaMergeTree::fetchPartition(
-    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, const Context & query_context)
+    const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context)
 {
 }
 
@@ -2391,6 +2405,11 @@ void StorageHaMergeTree::startBackgroundMovesIfNeeded()
 {
     if (areBackgroundMovesNeeded())
         background_moves_executor.start();
+}
+
+std::unique_ptr<MergeTreeSettings> StorageHaMergeTree::getDefaultSettings() const
+{
+    return std::make_unique<MergeTreeSettings>(getContext()->getReplicatedMergeTreeSettings());
 }
 
 /// allocLSNAndSet() need two separated ZK operations which cannot be packed.
@@ -2421,7 +2440,7 @@ void StorageHaMergeTree::writeMutationLog(MutationLogElement::Type type, const M
 try
 {
     /* TODO:
-    auto log = global_context.getMutationLog();
+    auto log = getContext()->getMutationLog();
     if (!log)
         return;
 

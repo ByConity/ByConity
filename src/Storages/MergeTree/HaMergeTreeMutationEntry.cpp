@@ -6,6 +6,8 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 
+#include <common/LocalDateTime.h>
+
 namespace DB
 {
 
@@ -31,7 +33,7 @@ bool HaMergeTreeMutationEntry::duplicateWith(const HaMergeTreeMutationEntry & rh
     throw Exception("Found mutation " + rhs.znode_name + " with the same query id but different commands", ErrorCodes::BAD_ARGUMENTS);
 }
 
-bool HaMergeTreeMutationEntry::extractPartitionIds(MergeTreeData & storage, const Context & context)
+bool HaMergeTreeMutationEntry::extractPartitionIds(MergeTreeData & storage, ContextPtr context)
 {
     if (commands.size() == 1)
     {
@@ -133,7 +135,13 @@ void HaMergeTreeMutationEntry::readText(ReadBuffer & in)
 
     LocalDateTime create_time_dt;
     in >> "create time: " >> create_time_dt >> "\n";
-    create_time = create_time_dt;
+    create_time = DateLUT::instance().makeDateTime(
+        create_time_dt.year(),
+        create_time_dt.month(),
+        create_time_dt.day(),
+        create_time_dt.hour(),
+        create_time_dt.minute(),
+        create_time_dt.second());
 
     in >> "source replica: " >> source_replica >> "\n";
     in >> "block number: " >> block_number >> "\n";

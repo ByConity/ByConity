@@ -2,6 +2,7 @@
 
 #include <Core/Types.h>
 #include <Storages/MutationCommands.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -31,7 +32,7 @@ struct HaMergeTreeMutationEntry
     /// extract partition id set for commands: FASTDELETE, CLEAR_COLUMN.
     /// make sure that "commands" must be set before using this function.
     /// return false if no part will apply this mutation.
-    bool extractPartitionIds(MergeTreeData & storage, const Context & context);
+    bool extractPartitionIds(MergeTreeData & storage, ContextPtr context);
 
     /// return true if partition_id is covered in partition_id set.
     bool coverPartitionId(const String & partition_id) const;

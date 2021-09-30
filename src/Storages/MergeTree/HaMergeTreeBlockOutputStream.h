@@ -24,7 +24,7 @@ class HaMergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:
     HaMergeTreeBlockOutputStream(
-        StorageHaMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, const Context & context_);
+        StorageHaMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, ContextPtr context_);
 
     Block getHeader() const override;
     void writePrefix() override;
@@ -52,7 +52,7 @@ private:
 
     StorageHaMergeTree & storage;
     StorageMetadataPtr metadata_snapshot;
-    const Context & context;
+    ContextPtr context;
 
     size_t quorum;
     size_t quorum_timeout_ms;

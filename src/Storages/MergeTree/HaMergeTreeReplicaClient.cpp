@@ -1,10 +1,10 @@
 #include <Storages/MergeTree/HaMergeTreeReplicaClient.h>
 
-#include <Client/TimeoutSetter.h>
-#include <Common/Exception.h>
 #include <Core/Protocol.h>
 #include <IO/ReadHelpers.h>
+#include <IO/TimeoutSetter.h>
 #include <IO/WriteHelpers.h>
+#include <Common/Exception.h>
 
 namespace DB
 {

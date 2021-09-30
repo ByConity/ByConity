@@ -1,15 +1,15 @@
 #include <Client/HaConnection.h>
 
 #include <Core/Protocol.h>
+#include <IO/ReadBufferFromPocoSocket.h>
+#include <IO/ReadHelpers.h>
+#include <IO/TimeoutSetter.h>
+#include <IO/WriteBufferFromPocoSocket.h>
+#include <IO/WriteHelpers.h>
+#include <Common/ClickHouseRevision.h>
 #include <Common/DNSResolver.h>
 #include <Common/NetException.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/config_version.h>
-#include <Client/TimeoutSetter.h>
-#include <IO/ReadBufferFromPocoSocket.h>
-#include <IO/WriteBufferFromPocoSocket.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 
 #include <Poco/Net/NetException.h>
 

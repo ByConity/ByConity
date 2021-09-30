@@ -27,15 +27,15 @@ HaMergeTreeCleanupThread::HaMergeTreeCleanupThread(StorageHaMergeTree & storage_
     , log_name(storage.getStorageID().getNameForLogs() + " (HaMergeTreeCleanupThread)")
     , log(&Poco::Logger::get(log_name))
 {
-    task = storage.global_context.getSchedulePool().createTask(log_name, [this] { run(); });
-    local_task = storage.global_context.getSchedulePool().createTask(log_name, [this] { localRun(); });
-    /// TODO: local_task = storage.global_context.getLocalSchedulePool().createTask(log_name, [this] { localRun(); });
+    task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { run(); });
+    local_task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { localRun(); });
+    /// TODO: local_task = storage.getContext()->getLocalSchedulePool().createTask(log_name, [this] { localRun(); });
 }
 
 void HaMergeTreeCleanupThread::run()
 {
     //@fix aeolus slow startup, Storage::context is global_context in startup
-    /// if (!storage.global_context.isListenPortsReady())
+    /// if (!storage.getContext()->isListenPortsReady())
     /// {
     ///     task->scheduleAfter(30000);
     ///     return;

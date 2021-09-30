@@ -25,8 +25,8 @@ HaMergeTreeLogExchangerBase::HaMergeTreeLogExchangerBase(StorageHaMergeTree & st
 HaMergeTreeLogExchanger::HaMergeTreeLogExchanger(StorageHaMergeTree & storage_)
     : HaMergeTreeLogExchangerBase(storage_, " (HaMergeTreeLogExchanger)"), queue(storage_.getSettings()->ha_log_exchanger_queue_max_size)
 {
-    task = storage.global_context.getSchedulePool().createTask(log_name, [this] { requestTask(); });
-    /// TODO: task = storage.global_context.getHaLogSchedulePool().createTask(log_name, [this] { requestTask(); });
+    task = storage.getContext()->getSchedulePool().createTask(log_name, [this] { requestTask(); });
+    /// TODO: task = storage.getContext()->getHaLogSchedulePool().createTask(log_name, [this] { requestTask(); });
     task->schedule();
 }
 
@@ -225,7 +225,7 @@ HaMergeTreeReplicaClientPtr & HaMergeTreeLogExchangerBase::connectUnlocked(const
     auto target_replica_path = storage.zookeeper_path + "/replicas/" + replica;
     HaMergeTreeAddress address(storage.getZooKeeper()->get(target_replica_path + "/host"));
 
-    auto & settings = storage.global_context.getSettingsRef();
+    auto & settings = storage.getContext()->getSettingsRef();
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(settings);
     // ConnectionTimeouts timeouts(
     //     settings.connect_timeout, /// default 10s

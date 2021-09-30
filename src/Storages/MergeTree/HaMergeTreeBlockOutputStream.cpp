@@ -28,14 +28,14 @@ namespace ErrorCodes
 }
 
 HaMergeTreeBlockOutputStream::HaMergeTreeBlockOutputStream(
-    StorageHaMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, const Context & context_)
+    StorageHaMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, ContextPtr context_)
     : storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , context(context_)
-    , quorum(context.getSettingsRef().insert_quorum)
-    , quorum_timeout_ms(context.getSettingsRef().insert_quorum_timeout.totalMilliseconds())
-    , max_parts_per_block(context.getSettingsRef().max_partitions_per_insert_block)
-    , optimize_on_insert(context.getSettingsRef().optimize_on_insert)
+    , quorum(context->getSettingsRef().insert_quorum)
+    , quorum_timeout_ms(context->getSettingsRef().insert_quorum_timeout.totalMilliseconds())
+    , max_parts_per_block(context->getSettingsRef().max_partitions_per_insert_block)
+    , optimize_on_insert(context->getSettingsRef().optimize_on_insert)
     , log(&Poco::Logger::get(storage.getStorageID().getFullTableName() + " (HaMergeTreeBlockOutputStream)"))
 {
     quorum = 0; /// TODO
@@ -72,11 +72,11 @@ void HaMergeTreeBlockOutputStream::write(const Block & block)
 
     Stopwatch watch;
     MergeTreeData::MutableDataPartsVector parts;
-    auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot);
+    auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
     for (auto & current_block : part_blocks)
     {
-        parts.push_back(storage.writer.writeTempPart(current_block, metadata_snapshot, optimize_on_insert));
+        parts.push_back(storage.writer.writeTempPart(current_block, metadata_snapshot, context));
 
         LOG_DEBUG(log, "Wrote block with {} rows", current_block.block.rows());
     }
@@ -86,11 +86,11 @@ void HaMergeTreeBlockOutputStream::write(const Block & block)
         writeExistingParts(parts);
 
         LOG_DEBUG(log, "Commit {} parts", parts.size());
-        PartLog::addNewParts(storage.global_context, parts, watch.elapsed(), ExecutionStatus(0));
+        PartLog::addNewParts(storage.getContext(), parts, watch.elapsed(), ExecutionStatus(0));
     }
     catch (...)
     {
-        PartLog::addNewParts(storage.global_context, parts, watch.elapsed(), ExecutionStatus::fromCurrentException(__PRETTY_FUNCTION__));
+        PartLog::addNewParts(storage.getContext(), parts, watch.elapsed(), ExecutionStatus::fromCurrentException(__PRETTY_FUNCTION__));
         throw;
     }
 }

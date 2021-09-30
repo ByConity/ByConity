@@ -140,7 +140,7 @@ void HaMergeTreeReplicaEndpoint::onCheckPartsExist(ReadBuffer & in, WriteBuffer 
     results.reserve(num_parts);
 
     {
-        auto storage_lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage.global_context.getSettingsRef().lock_acquire_timeout);
+        auto storage_lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage.getContext()->getSettingsRef().lock_acquire_timeout);
         for (auto & name : names)
         {
             auto part = storage.getPartIfExists(
@@ -175,7 +175,7 @@ void HaMergeTreeReplicaEndpoint::onFindActiveContainingPart(ReadBuffer & in, Wri
     /// calculate the result before writing the response
     /// so that any exception raised would be written as an exception packet
     {
-        auto storage_lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage.global_context.getSettingsRef().lock_acquire_timeout);
+        auto storage_lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage.getContext()->getSettingsRef().lock_acquire_timeout);
         for (auto & name : names)
         {
             if (auto part = storage.getActiveContainingPart(name))

@@ -15,7 +15,6 @@
 #include <IO/createReadBufferFromFileBase.h>
 #include <common/scope_guard.h>
 #include <Parsers/parseQuery.h>
-#include <ext/scope_guard.h>
 
 #include <Poco/File.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -93,8 +92,10 @@ struct ReplicatedFetchReadCallback
 }
 
 
-Service::Service(StorageReplicatedMergeTree & data_) :
-    data(data_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
+Service::Service(MergeTreeData & data_, const StoragePtr & storage_)
+    : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)"))
+{
+}
 
 std::string Service::getId(const std::string & node_id) const
 {
@@ -703,9 +704,9 @@ Strings Fetcher::fetchPartList(
     const String & host,
     int port,
     const ConnectionTimeouts & timeouts,
-    const String& user,
-    const String& password,
-    const String& interserver_scheme)
+    const String & user,
+    const String & password,
+    const String & interserver_scheme)
 {
     Strings res;
 

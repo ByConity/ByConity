@@ -536,6 +536,9 @@ static void addMergingFinal(
 
             case MergeTreeData::MergingParams::Graphite:
                 throw Exception("GraphiteMergeTree doesn't support FINAL", ErrorCodes::LOGICAL_ERROR);
+
+            case MergeTreeData::MergingParams::Unique:
+                throw Exception("NOT IMPL", ErrorCodes::LOGICAL_ERROR);
         }
 
         __builtin_unreachable();

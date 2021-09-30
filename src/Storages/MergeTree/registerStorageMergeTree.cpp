@@ -832,7 +832,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 args.table_id,
                 args.relative_data_path,
                 metadata,
-                args.context,
+                args.getContext(),
                 date_column_name,
                 merging_params,
                 std::move(storage_settings),

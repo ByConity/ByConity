@@ -1,6 +1,6 @@
 #pragma once
 
-#include <ext/shared_ptr_helper.h>
+#include <common/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
 
 
@@ -12,9 +12,9 @@ class Context;
 
 /** Implements `ha_replicas` system table, which provides information about the status of the ha tables.
   */
-class StorageSystemHaReplicas : public ext::shared_ptr_helper<StorageSystemHaReplicas>, public IStorage
+class StorageSystemHaReplicas : public shared_ptr_helper<StorageSystemHaReplicas>, public IStorage
 {
-    friend struct ext::shared_ptr_helper<StorageSystemHaReplicas>;
+    friend struct shared_ptr_helper<StorageSystemHaReplicas>;
 public:
     std::string getName() const override { return "SystemHaReplicas"; }
 
@@ -22,7 +22,7 @@ public:
         const Names & column_names,
         const StorageMetadataPtr & /*metadata_snapshot*/,
         SelectQueryInfo & query_info,
-        const Context & context,
+        ContextPtr context,
         QueryProcessingStage::Enum processed_stage,
         size_t max_block_size,
         unsigned num_streams) override;

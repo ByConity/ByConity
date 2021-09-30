@@ -36,7 +36,7 @@ private:
     UInt64 client_version_patch = 0;
     UInt64 client_tcp_protocol_version = 0;
 
-    Context connection_context;
+    ContextMutablePtr connection_context;
 
     std::shared_ptr<ReadBuffer> in;
     std::shared_ptr<WriteBuffer> out;
