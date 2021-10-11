@@ -2765,42 +2765,41 @@ void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, cons
 
     String partition_id = getPartitionIDFromQuery(partition, query_context);
 
-    std::vector<std::pair<String, String>> parts_to_move;
-
     /// copy all the list in fromtbl's detached directory to table's detached directory
     for (const auto & disk : merge_tree_table->getStoragePolicy()->getDisks())
     {
-        for (auto it = disk->iterateDirectory(fs::path(relative_data_path) / "detached/"); it->isValid(); it->next())
+        bool found_corresponding_disk = false;
+        for (auto & target_disk : getStoragePolicy()->getDisks())
+        {
+            if (target_disk->getName() == disk->getName())
+            {
+                found_corresponding_disk = true;
+                break;
+            }
+        }
+        if (!found_corresponding_disk)
+            throw Exception(
+                "Cannot move partition from " + source_table->getStorageID().getNameForLogs() + " because cannot found corresponding disk",
+                ErrorCodes::BAD_ARGUMENTS);
+
+        auto source_detached_path = fs::path(merge_tree_table->getRelativeDataPath()) / "detached/";
+        auto target_detached_path = fs::path(getRelativeDataPath()) / "detached/";
+
+        for (auto it = disk->iterateDirectory(source_detached_path); it->isValid(); it->next())
         {
             MergeTreePartInfo part_info;
             if (!MergeTreePartInfo::tryParsePartName(it->name(), &part_info, format_version) || part_info.partition_id != partition_id)
                 continue;
 
-            LOG_DEBUG(log, "GYZ DEBUG: {} {} ", it->path(), it->name());
+            auto source_part_path = source_detached_path / it->name();
+            auto target_part_path = target_detached_path / it->name();
+            disk->moveFile(source_part_path, target_part_path);
 
-            /*
-            /// check whether partition already exist in table's detached directory, raise error to avoid data overwrite
-            for (const auto & to_path_: getDataPaths())
-            {
-                if (Poco::File(to_path_ + "detached/" + name).exists())
-                {
-                    throw Exception("Partition " + partition_id + " already exist in table " + table_name +
-                                    " detached directory, please check!", ErrorCodes::LOGICAL_ERROR);
-                }
-            }
-            */
-
-            /// parts_to_move.emplace_back(from_path + name, to_path + name);
+            LOG_DEBUG(log, "Moved part from {} to {} in disk [{}] {}", source_part_path.string(), target_part_path.string(), disk->getName(), disk->getPath());
         }
     }
 
-    /// LOG_DEBUG(log, "Found {} parts of partition {} in table ", parts_to_move.size(), partition_id, source_table->getTableName());
-
-    /// for (auto & [from_path, to_path] : parts_to_move)
-    /// {
-    ///     /// Poco::File(from_path).renameTo(to_path);
-    ///     LOG_DEBUG(log, "Move part from {} to {}", from_path, to_path);
-    /// }
+    /// TODO: should we detach conflicts ahead ?
 }
 
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const
