@@ -1772,7 +1772,12 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
     {
         auto data_parts_lock = lockParts();
         parts_to_remove = removePartsInRangeFromWorkingSet(drop_range_info, true, data_parts_lock);
-
+        if (parts_to_remove.empty())
+        {
+            if (!drop_range_info.isFakeDropRangePart())
+                LOG_INFO(log, "Log entry {} tried to drop single part {}, but part does not exist", entry.lsn, entry.new_parts.front());
+            return false;
+        }
     }
 
     if (entry.detach)
@@ -2529,12 +2534,82 @@ void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeep
 
 void StorageHaMergeTree::dropPartNoWaitNoThrow(const String & part_name)
 {
+    assertNotReadonly();
+    if (!is_leader)
+        throw Exception("DROP PART cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+
+    auto zookeeper = getZooKeeper();
+    auto entry = std::make_shared<LogEntry>();
+    constexpr bool detach = false;
+    constexpr bool throw_if_noop = true;
+
+    dropPartImpl(zookeeper, part_name, *entry, detach, throw_if_noop);
 }
 
 void StorageHaMergeTree::dropPart(const String & part_name, bool detach, ContextPtr query_context)
 {
-    /// TODO: new impl
+    assertNotReadonly();
+    if (!is_leader)
+        throw Exception("DROP PART cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+
+    auto zookeeper = getZooKeeper();
+    auto entry = std::make_shared<LogEntry>();
+    constexpr bool throw_if_noop = true;
+
+    dropPartImpl(zookeeper, part_name, *entry, detach, throw_if_noop);
+
+    if (query_context->getSettingsRef().replication_alter_partitions_sync > 0)
+    {
+        if (auto executing_set = queue.tryCreateExecutingSet(entry))
+        {
+            executeDropRange(executing_set);
+            queue.removeProcessedEntry(entry);
+        }
+    }
 }
+
+bool StorageHaMergeTree::dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const String & part_name, LogEntry & entry, bool detach, bool throw_if_noop)
+{
+    LOG_TRACE(log, "Will try to insert a log entry to DROP_RANGE for part: " + part_name);
+
+    auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
+
+    auto part = getPartIfExists(part_info, {MergeTreeDataPartState::Committed});
+
+    if (!part)
+    {
+        if (throw_if_noop)
+            throw Exception("Part " + part_name + " not found locally, won't try to drop it.", ErrorCodes::NO_SUCH_DATA_PART);
+        return false;
+    }
+
+    /// impl hasDropRange
+    /// TODO:
+
+    /// There isn't a lot we can do otherwise. Can't cancel merges because it is possible that a replica already
+    /// finished the merge.
+    if (partIsAssignedToBackgroundOperation(part))
+    {
+        if (throw_if_noop)
+            throw Exception("Part " + part_name
+                            + " is currently participating in a background operation (mutation/merge)"
+                            + ", try again later", ErrorCodes::PART_IS_TEMPORARILY_LOCKED);
+        return false;
+    }
+
+    entry.type = LogEntry::DROP_RANGE;
+    entry.source_replica = replica_name;
+    entry.new_parts.push_back(part_name);
+    entry.create_time = time(nullptr);
+    entry.block_id = allocateBlockNumberDirect(zookeeper);
+    entry.lsn = allocateLSN();
+    entry.detach = detach;
+
+    queue.write(entry);
+
+    return true;
+}
+
 
 // Partition helpers
 void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
