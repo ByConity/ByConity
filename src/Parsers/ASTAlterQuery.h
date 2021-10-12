@@ -63,6 +63,9 @@ public:
         UNFREEZE_PARTITION,
         UNFREEZE_ALL,
 
+        DROP_PARTITION_WHERE,
+        FETCH_PARTITION_WHERE,
+
         DELETE,
         UPDATE,
 

@@ -438,10 +438,14 @@ private:
 
     // Partition helpers
     void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;
+    void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context) override;
     PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context) override;
     void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context) override;
+    void fetchPartitionWhere(
+        const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context) override;
+    void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context);
 
     void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context) override;
 

@@ -2835,6 +2835,55 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const String & part_na
     return getPartIfExists(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
 }
 
+MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
+{
+    DataPartsVector parts = getDataPartsVector();
+
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasPartitionKey())
+        return parts;
+
+    auto & partition_key = metadata_snapshot->getPartitionKey();
+
+    MutableColumns mutable_columns = partition_key.sample_block.cloneEmptyColumns();
+
+    for (auto & part : parts)
+    {
+        auto & partition_value = part->partition.value;
+        for (size_t c = 0; c < mutable_columns.size(); ++c)
+        {
+            if (c < partition_value.size())
+                mutable_columns[c]->insert(partition_value[c]);
+            else
+                /// When partitions have different partition key insert default value
+                /// TODO: insert default value may cause delete partition with default value
+                mutable_columns[c]->insertDefault();
+        }
+    }
+
+    auto block = partition_key.sample_block.cloneWithColumns(std::move(mutable_columns));
+
+    auto predicate = predicate_->clone();
+    auto syntax_result = TreeRewriter(getContext()).analyze(predicate, block.getNamesAndTypesList());
+    auto actions = ExpressionAnalyzer(predicate, syntax_result, getContext()).getActions(true);
+    actions->execute(block);
+
+    /// Check the result
+    if (1 != block.columns())
+        throw Exception("Wrong column number of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+    else if (block.getNamesAndTypesList().front().type->getName() != "UInt8")
+        throw Exception("Wrong column type of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+
+    DataPartsVector res;
+    const auto & flag_column = block.getColumnsWithTypeAndName().front().column;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        if (flag_column->getInt(i))
+            res.push_back(parts[i]);
+    }
+
+    return res;
+}
 
 static void loadPartAndFixMetadataImpl(MergeTreeData::MutableDataPartPtr part)
 {
@@ -2897,7 +2946,8 @@ void MergeTreeData::checkAlterPartitionIsPossible(
             throw DB::Exception("Cannot execute query: DROP DETACHED PART is disabled "
                                 "(see allow_drop_detached setting)", ErrorCodes::SUPPORT_IS_DISABLED);
 
-        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION)
+        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION
+            && command.type != PartitionCommand::DROP_PARTITION_WHERE && command.type != PartitionCommand::FETCH_PARTITION_WHERE)
         {
             if (command.part)
             {
@@ -3042,6 +3092,11 @@ void MergeTreeData::movePartitionToShard(const ASTPtr & /*partition*/, bool /*mo
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MOVE PARTITION TO SHARD is not supported by storage {}", getName());
 }
 
+void MergeTreeData::dropPartitionWhere(const ASTPtr &, bool, ContextPtr)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DROP PARTITION WHERE is not supported by storage {}", getName());
+}
+
 void MergeTreeData::fetchPartition(
     const ASTPtr & /*partition*/,
     const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -3050,6 +3105,11 @@ void MergeTreeData::fetchPartition(
     ContextPtr /*query_context*/)
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION is not supported by storage {}", getName());
+}
+
+void MergeTreeData::fetchPartitionWhere(const ASTPtr &, const StorageMetadataPtr &, const String &, ContextPtr)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION WHERE is not supported by storage {}", getName());
 }
 
 Pipe MergeTreeData::alterPartition(
@@ -3078,6 +3138,10 @@ Pipe MergeTreeData::alterPartition(
                 }
             }
             break;
+
+            case PartitionCommand::DROP_PARTITION_WHERE:
+                dropPartitionWhere(command.partition, command.detach, query_context);
+                break;
 
             case PartitionCommand::DROP_DETACHED_PARTITION:
                 dropDetached(command.partition, command.part, query_context);
@@ -3139,6 +3203,10 @@ Pipe MergeTreeData::alterPartition(
 
             case PartitionCommand::FETCH_PARTITION:
                 fetchPartition(command.partition, metadata_snapshot, command.from_zookeeper_path, command.part, query_context);
+                break;
+
+            case PartitionCommand::FETCH_PARTITION_WHERE:
+                fetchPartitionWhere(command.partition, metadata_snapshot, command.from_zookeeper_path, query_context);
                 break;
 
             case PartitionCommand::FREEZE_PARTITION:

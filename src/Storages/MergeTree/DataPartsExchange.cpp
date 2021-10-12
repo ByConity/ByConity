@@ -278,10 +278,9 @@ void Service::processQueryPartList(const HTMLForm & params, [[maybe_unused]]Read
         ParserExpression p_expr;
         auto predicate = parseQuery(p_expr, filter, 0, 0);
         if (!predicate)
-            throw Exception("Failed to parse filter of fetch list, may be a logic error", ErrorCodes::SYNTAX_ERROR);
+            throw Exception("Failed to parse filter of fetch list, may be a logic error: " + filter, ErrorCodes::SYNTAX_ERROR);
 
-        throw Exception("NOT_IMPLEMENTED", ErrorCodes::NOT_IMPLEMENTED);
-        /// data_parts = data.getPartsByPredicate(predicate);
+        data_parts = data.getPartsByPredicate(predicate);
     }
     else
     {

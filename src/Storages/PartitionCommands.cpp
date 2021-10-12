@@ -37,6 +37,14 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.part = command_ast->part;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::DROP_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = DROP_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.detach = command_ast->detach;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::ATTACH_PARTITION)
     {
         PartitionCommand res;
@@ -102,6 +110,14 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.part = command_ast->part;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::FETCH_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = FETCH_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::FREEZE_PARTITION)
     {
         PartitionCommand res;
@@ -154,6 +170,11 @@ std::string PartitionCommand::typeToString() const
             return "DETACH PARTITION";
         else
             return "DROP PARTITION";
+    case PartitionCommand::Type::DROP_PARTITION_WHERE:
+        if (detach)
+            return "DETACH PARTITION WHERE";
+        else
+            return "DROP PARTITION WHERE";
     case PartitionCommand::Type::DROP_DETACHED_PARTITION:
         if (part)
             return "DROP DETACHED PART";
@@ -164,6 +185,8 @@ std::string PartitionCommand::typeToString() const
             return "FETCH PART";
         else
             return "FETCH PARTITION";
+    case PartitionCommand::Type::FETCH_PARTITION_WHERE:
+        return "FETCH PARTITION WHERE";
     case PartitionCommand::Type::FREEZE_ALL_PARTITIONS:
         return "FREEZE ALL";
     case PartitionCommand::Type::FREEZE_PARTITION:

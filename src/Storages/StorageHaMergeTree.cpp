@@ -2626,6 +2626,21 @@ void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, Co
     /// TODO:
 }
 
+void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context)
+{
+    assertNotReadonly();
+    if (!is_leader)
+        throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+
+    NameOrderedSet partitions;
+    auto parts = getPartsByPredicate(predicate);
+    for (auto & part : parts)
+        partitions.emplace(part->info.partition_id);
+
+    zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
+    dropAllPartsInPartitions(zookeeper, partitions, detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
+}
+
 PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
     const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool attach_part, ContextPtr query_context)
 {
@@ -2707,18 +2722,28 @@ void StorageHaMergeTree::fetchPartition(
 
     if (fetch_part)
     {
-        throw Exception("NOT IMPL", ErrorCodes::NOT_IMPLEMENTED);
+        String part_name = partition->as<ASTLiteral &>().value.safeGet<String>();
+        /// TODO handle exception
+        fetchPart(nullptr, part_name, zookeeper_path + "/replicas/" + from, false);
+        return;
     }
 
     String partition_id = getPartitionIDFromQuery(partition, query_context);
     /// LOG_INFO(log, "Will fetch partition {} from shard {} (zookeeper '{}')", partition_id, from_, auxiliary_zookeeper_name);
 
-    /** Let's check that there is no such partition in the `detached` directory (where we will write the downloaded parts).
-      * Unreliable (there is a race condition) - such a partition may appear a little later.
-      */
-    if (checkIfDetachedPartitionExists(partition_id))
-        throw Exception("Detached partition " + partition_id + " already exists.", ErrorCodes::PARTITION_ALREADY_EXISTS);
+    fetchPartitionImpl(partition_id, {}, from, query_context);
+}
 
+void StorageHaMergeTree::fetchPartitionWhere(
+    const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context)
+{
+    String filter = serializeAST(*predicate, true);
+    fetchPartitionImpl({}, filter, from, query_context);
+}
+
+void StorageHaMergeTree::fetchPartitionImpl(
+    const String & partition_id, const String & filter, const String & from, ContextPtr query_context)
+{
     String from_replica_path = zookeeper_path + "/replicas/" + from;
     auto from_replica_address = getReplicaAddress(from);
 
@@ -2727,7 +2752,7 @@ void StorageHaMergeTree::fetchPartition(
 
     auto part_names = fetcher.fetchPartList(
         partition_id,
-        {}, /// filter
+        filter,
         from_replica_path,
         from_replica_address.host,
         from_replica_address.replication_port,
@@ -2750,7 +2775,6 @@ void StorageHaMergeTree::fetchPartition(
         }
     }
 }
-
 
 void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context)
 {
