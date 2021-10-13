@@ -95,12 +95,12 @@ void HaMergeTreeBlockOutputStream::write(const Block & block)
     }
 }
 
-void HaMergeTreeBlockOutputStream::writeExistingParts(MergeTreeData::MutableDataPartsVector & parts)
+HaMergeTreeLogEntryVec
+HaMergeTreeBlockOutputStream::generateLogEntriesForParts(zkutil::ZooKeeperPtr & zookeeper, MergeTreeData::MutableDataPartsVector & parts)
 {
     if (parts.empty())
-        return;
+        return {};
 
-    auto zookeeper = storage.getZooKeeper(); /// check may be duplicated, but it is OK
     assertSessionIsNotExpired(zookeeper);
 
     /// Part 1: allocate block numbers and LSNs in a request
@@ -157,6 +157,13 @@ void HaMergeTreeBlockOutputStream::writeExistingParts(MergeTreeData::MutableData
         entry.is_executed = true;
     }
 
+    return entries;
+}
+
+void HaMergeTreeBlockOutputStream::writeExistingParts(MergeTreeData::MutableDataPartsVector & parts)
+{
+    auto zookeeper = storage.getZooKeeper(); /// check may be duplicated, but it is OK
+    auto entries = generateLogEntriesForParts(zookeeper, parts);
     commitParts(zookeeper, parts, entries);
 }
 

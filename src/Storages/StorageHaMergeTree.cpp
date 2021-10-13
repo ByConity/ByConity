@@ -566,7 +566,7 @@ void StorageHaMergeTree::createNewZooKeeperNodes()
     zookeeper->createIfNotExists(replica_path + "/mutation_pointer", String());
 
     /// For ALTER PARTITION with multi-leaders
-    /// TODO: zookeeper->createIfNotExists(zookeeper_path + "/alter_partition_version", String());
+    zookeeper->createIfNotExists(zookeeper_path + "/alter_partition_version", String());
 }
 
 /** Verify that list of columns and table storage_settings_ptr match those specified in ZK (/metadata).
@@ -757,7 +757,7 @@ void StorageHaMergeTree::truncate(
     {
         LogEntry entry;
 
-        if (dropAllPartsInPartition(*zookeeper, partition_id, entry, query_context, false))
+        if (dropAllPartsInPartitions(*zookeeper, partition_id, entry, query_context, false))
             waitForAllReplicasToProcessLogEntry(entry);
     }
     */
@@ -2677,10 +2677,103 @@ PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
 void StorageHaMergeTree::replacePartitionFrom(
     const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context)
 {
+    /// First argument is true, because we possibly will add new data to current table.
+    auto lock1 = lockForShare(query_context->getCurrentQueryId(), query_context->getSettingsRef().lock_acquire_timeout);
+    auto lock2 = source_table->lockForShare(query_context->getCurrentQueryId(), query_context->getSettingsRef().lock_acquire_timeout);
+
+    auto source_metadata_snapshot = source_table->getInMemoryMetadataPtr();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    Stopwatch watch;
+    MergeTreeData & src_data = checkStructureAndGetMergeTreeData(source_table, source_metadata_snapshot, metadata_snapshot);
+    String partition_id = getPartitionIDFromQuery(partition, query_context);
+
+    /// NOTE: Some covered parts may be missing in src_all_parts if corresponding log entries are not executed yet.
+    DataPartsVector src_all_parts = src_data.getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
+    DataPartsVector src_parts;
+    MutableDataPartsVector dst_parts;
+
+    LOG_DEBUG(log, "Cloning {} parts", src_all_parts.size());
+
+    static const String TMP_PREFIX = "tmp_replace_from_";
+    auto zookeeper = getZooKeeper();
+
+    /// TODO:
+    /// String alter_partition_version_path = zookeeper_path + "/alter_partition_version";
+    /// Coordination::Stat alter_partition_version_stat;
+    /// zookeeper->get(alter_partition_version_path, &alter_partition_version_stat);
+
+    for (const auto & src_part : src_all_parts)
+    {
+        /// We also make some kind of deduplication to avoid duplicated parts in case of ATTACH PARTITION
+        /// Assume that merges in the partition are quite rare
+        /// Save deduplication block ids with special prefix replace_partition
+
+        if (!canReplacePartition(src_part))
+            throw Exception(
+                "Cannot replace partition '" + partition_id + "' because part '" + src_part->name
+                    + "' has inconsistent granularity with table",
+                ErrorCodes::LOGICAL_ERROR);
+
+        /// This will generate unique name in scope of current server process.
+        Int64 temp_index = insert_increment.get();
+        MergeTreePartInfo dst_part_info(partition_id, temp_index, temp_index, src_part->info.level);
+        auto dst_part = cloneAndLoadDataPartOnSameDisk(src_part, TMP_PREFIX, dst_part_info, metadata_snapshot);
+
+        src_parts.emplace_back(src_part);
+        dst_parts.emplace_back(dst_part);
+    }
+
+    try
+    {
+        /// Step 1: generate DROP RANGE info
+        MergeTreePartInfo drop_range_info(
+            partition_id, 0, allocateBlockNumberDirect(zookeeper), MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
+
+        /// Step 2: generate GET_PART logs
+        auto get_parts = HaMergeTreeBlockOutputStream(*this, metadata_snapshot, query_context).generateLogEntriesForParts(zookeeper, dst_parts);
+        queue.write(get_parts);
+
+        Transaction transaction(*this);
+        {
+            auto data_parts_lock = lockParts();
+            for (auto & part : dst_parts)
+                renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
+        }
+
+        /// Step 3: generate RANGE_DROP log
+        auto drop_range = std::make_shared<LogEntry>();
+        drop_range->type = LogEntry::DROP_RANGE;
+        drop_range->source_replica = replica_name;
+        drop_range->new_parts.push_back(drop_range_info.getPartName());
+        drop_range->lsn = allocateLSN();
+        drop_range->create_time = time(nullptr);
+
+        queue.write(drop_range);
+
+        DataPartsVector parts_to_remove;
+        {
+            auto data_parts_lock = lockParts();
+
+            transaction.commit(&data_parts_lock);
+            parts_to_remove = removePartsInRangeFromWorkingSet(drop_range_info, true, data_parts_lock);
+        }
+
+        PartLog::addNewParts(getContext(), dst_parts, watch.elapsed());
+
+        parts_to_remove.clear();
+        cleanup_thread.wakeup();
+    }
+    catch (...)
+    {
+        PartLog::addNewParts(getContext(), dst_parts, watch.elapsed(), ExecutionStatus::fromCurrentException());
+        throw;
+    }
 }
 
 void StorageHaMergeTree::movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context)
 {
+    throw Exception("not supported", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 bool StorageHaMergeTree::checkIfDetachedPartitionExists(const String & partition_name)

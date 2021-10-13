@@ -30,6 +30,8 @@ public:
     void writePrefix() override;
     void write(const Block & block) override;
 
+    HaMergeTreeLogEntryVec generateLogEntriesForParts(zkutil::ZooKeeperPtr & zookeeper, MergeTreeData::MutableDataPartsVector & parts);
+
     /// For ATTACHing existing data on filesystem.
     void writeExistingParts(MergeTreeData::MutableDataPartsVector & parts);
 
