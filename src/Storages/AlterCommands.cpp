@@ -1301,12 +1301,21 @@ static MutationCommand createMaterializeTTLCommand()
     return command;
 }
 
-MutationCommands AlterCommands::getMutationCommands(StorageInMemoryMetadata metadata, bool materialize_ttl, ContextPtr context) const
+MutationCommands AlterCommands::getMutationCommands(StorageInMemoryMetadata metadata, bool materialize_ttl, ContextPtr context, bool include_add_column) const
 {
     MutationCommands result;
     for (const auto & alter_cmd : *this)
+    {
         if (auto mutation_cmd = alter_cmd.tryConvertToMutationCommand(metadata, context); mutation_cmd)
             result.push_back(*mutation_cmd);
+        else if (include_add_column && alter_cmd.type == AlterCommand::ADD_COLUMN) /// for HaMergeTree::alter()
+        {
+            result.emplace_back();
+            result.back().type = MutationCommand::Type::ADD_COLUMN;
+            result.back().column_name = alter_cmd.column_name;
+            result.back().data_type = alter_cmd.data_type;
+        }
+    }
 
     if (materialize_ttl)
     {

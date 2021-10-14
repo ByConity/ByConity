@@ -14,6 +14,7 @@ namespace DB
 struct MergeTreeMutationStatus
 {
     String id;
+    String query_id; /// Currently only supported by HaMergeTree
     String command;
     time_t create_time = 0;
     std::map<String, Int64> block_numbers;
@@ -23,6 +24,8 @@ struct MergeTreeMutationStatus
 
     /// If the mutation is done. Note that in case of ReplicatedMergeTree parts_to_do == 0 doesn't imply is_done == true.
     bool is_done = false;
+    /// time when is_done is set to true
+    time_t finish_time = 0;
 
     String latest_failed_part;
     time_t latest_fail_time = 0;

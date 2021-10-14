@@ -1,5 +1,7 @@
 #include <Storages/StorageHaMergeTree.h>
 
+#include <Parsers/queryToString.h>
+#include <Storages/AlterCommands.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
@@ -9,6 +11,7 @@
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
+#pragma clang diagnostic ignored "-Wunused-variable"
 
 namespace DB
 {
@@ -180,6 +183,7 @@ StorageHaMergeTree::StorageHaMergeTree(
     , cleanup_thread(*this)
     // , part_check_thread(*this)
     , restarting_thread(*this)
+    , alter_thread(*this)
     , allow_renaming(allow_renaming_)
     , replicated_fetches_pool_size(getContext()->getSettingsRef().background_fetches_pool_size)
 {
@@ -1009,31 +1013,418 @@ bool StorageHaMergeTree::optimize(
     throw Exception("Not supported", ErrorCodes::SUPPORT_IS_DISABLED);
 }
 
+static String ast_to_str(ASTPtr query)
+{
+    if (!query)
+        return "";
+    return queryToString(query);
+}
+
+static void
+compareAndUpdateMetadata(const StorageInMemoryMetadata & current_metadata, StorageInMemoryMetadata & future_metadata, HaMergeTreeTableMetadata & future_metadata_in_zk)
+{
+
+    if (ast_to_str(future_metadata.sorting_key.definition_ast) != ast_to_str(current_metadata.sorting_key.definition_ast))
+    {
+        /// We serialize definition_ast as list, because code which apply ALTER (setTableStructure) expect serialized non empty expression
+        /// list here and we cannot change this representation for compatibility. Also we have preparsed AST `sorting_key.expression_list_ast`
+        /// in KeyDescription, but it contain version column for VersionedCollapsingMergeTree, which shouldn't be defined as a part of key definition AST.
+        /// So the best compatible way is just to convert definition_ast to list and serialize it. In all other places key.expression_list_ast should be used.
+        future_metadata_in_zk.sorting_key = serializeAST(*extractKeyExpressionList(future_metadata.sorting_key.definition_ast));
+    }
+
+    if (ast_to_str(future_metadata.sampling_key.definition_ast) != ast_to_str(current_metadata.sampling_key.definition_ast))
+        future_metadata_in_zk.sampling_expression = serializeAST(*extractKeyExpressionList(future_metadata.sampling_key.definition_ast));
+
+    if (ast_to_str(future_metadata.partition_key.definition_ast) != ast_to_str(current_metadata.partition_key.definition_ast))
+        future_metadata_in_zk.partition_key = serializeAST(*extractKeyExpressionList(future_metadata.partition_key.definition_ast));
+
+    if (ast_to_str(future_metadata.table_ttl.definition_ast) != ast_to_str(current_metadata.table_ttl.definition_ast))
+    {
+        if (future_metadata.table_ttl.definition_ast)
+            future_metadata_in_zk.ttl_table = serializeAST(*future_metadata.table_ttl.definition_ast);
+        else /// TTL was removed
+            future_metadata_in_zk.ttl_table = "";
+    }
+
+    String new_indices_str = future_metadata.secondary_indices.toString();
+    if (new_indices_str != current_metadata.secondary_indices.toString())
+        future_metadata_in_zk.skip_indices = new_indices_str;
+
+    String new_projections_str = future_metadata.projections.toString();
+    if (new_projections_str != current_metadata.projections.toString())
+        future_metadata_in_zk.projections = new_projections_str;
+
+    String new_constraints_str = future_metadata.constraints.toString();
+    if (new_constraints_str != current_metadata.constraints.toString())
+        future_metadata_in_zk.constraints = new_constraints_str;
+}
+
+/// TODO: P0, prune this function
 void StorageHaMergeTree::alter(
     [[maybe_unused]] const AlterCommands & commands,
     [[maybe_unused]] ContextPtr query_context,
     [[maybe_unused]] TableLockHolder & table_lock_holder)
 {
     assertNotReadonly();
-    throw Exception("Not supported", ErrorCodes::SUPPORT_IS_DISABLED);
+
+    LOG_DEBUG(log, "Doing ALTER");
+
+    auto table_id = getStorageID();
+
+    if (commands.isSettingsAlter())
+    {
+        /// We don't replicate storage_settings_ptr ALTER. It's local operation.
+        /// Also we don't upgrade alter lock to table structure lock.
+        StorageInMemoryMetadata future_metadata = getInMemoryMetadata();
+        commands.apply(future_metadata, query_context);
+
+        /// merge_strategy_picker.refreshState();
+
+        changeSettings(future_metadata.settings_changes, table_lock_holder);
+
+        DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(query_context, table_id, future_metadata);
+        return;
+    }
+
+    auto & settings = query_context->getSettingsRef();
+    UInt64 alter_skip_check = settings.alter_skip_check;
+
+    auto zookeeper = getZooKeeper();
+
+    auto current_metadata = getInMemoryMetadataPtr();
+    auto mutation_commands
+        = commands.getMutationCommands(*current_metadata, query_context->getSettingsRef().materialize_ttl_after_modify, query_context);
+
+    queue.pullLogs(zookeeper);
+    queue.checkAddMetadataAlter(mutation_commands);
+
+    Coordination::Stat metadata_stat{};
+    auto zk_metadata_str = zookeeper->get(zookeeper_path + "/metadata", &metadata_stat); /// XXX: is it unnecessary ?
+
+    StorageInMemoryMetadata future_metadata = *current_metadata;
+    commands.apply(future_metadata, query_context);
+
+    HaMergeTreeTableMetadata future_metadata_in_zk(*this, current_metadata);
+    compareAndUpdateMetadata(*current_metadata, future_metadata, future_metadata_in_zk);
+
+    String new_metadata_str = future_metadata_in_zk.toString();
+    String new_columns_str = future_metadata.columns.toString();
+
+    /// Will try to set zk data
+
+    auto zk_mutation_path = zookeeper_path + "/mutations";
+
+    Coordination::Stat mutations_stat;
+    zookeeper->get(zk_mutation_path, &mutations_stat);
+
+    Coordination::Requests ops;
+    ops.emplace_back(zkutil::makeSetRequest(zookeeper_path + "/metadata", new_metadata_str, alter_skip_check < 2 ? metadata_version : -1));
+    ops.emplace_back(zkutil::makeSetRequest(zookeeper_path + "/columns", new_columns_str, -1));
+
+    if (ast_to_str(current_metadata->settings_changes) != ast_to_str(future_metadata.settings_changes))
+    {
+        /// Just change settings
+        StorageInMemoryMetadata metadata_copy = *current_metadata;
+        metadata_copy.settings_changes = future_metadata.settings_changes;
+        changeSettings(metadata_copy.settings_changes, table_lock_holder);
+        DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(query_context, table_id, metadata_copy);
+    }
+
+    /// We can be sure, that in case of successful commit in zookeeper our
+    /// version will increments by 1. Because we update with version check.
+    int new_metadata_version = metadata_version + 1;
+    if (alter_skip_check >= 2)
+    {
+        new_metadata_version = metadata_stat.version + 1;
+    }
+
+    auto create_time = time(nullptr);
+
+    size_t alter_metadata_index = 0;
+    std::optional<size_t> alter_data_index;
+
+    /// Create mutation entry for altering metadata
+    HaMergeTreeMutationEntry alter_entry;
+    alter_entry.query_id = query_context->getInitialQueryId();
+    alter_entry.create_time = create_time;
+    alter_entry.source_replica = replica_name;
+    alter_entry.alter_version = new_metadata_version;
+    alter_entry.commands = mutation_commands;
+    /// ADD_COLUMN don't need mutations
+    mutation_commands.erase(
+        std::remove_if(mutation_commands.begin(), mutation_commands.end(), [](auto & c) { return c.type == MutationCommand::ADD_COLUMN; }),
+        mutation_commands.end());
+
+    alter_entry.makeAlterMetadata();
+    alter_entry.alter_info->have_mutation = !mutation_commands.empty();
+    alter_entry.alter_info->columns_str = new_columns_str;
+    alter_entry.alter_info->metadata_str = new_metadata_str;
+
+    ops.emplace_back(zkutil::makeSetRequest(zk_mutation_path, String(), mutations_stat.version));
+    alter_metadata_index = ops.size();
+    ops.emplace_back(zkutil::makeCreateRequest(zk_mutation_path + "/", alter_entry.toString(), zkutil::CreateMode::PersistentSequential));
+
+    if (!mutation_commands.empty())
+    {
+        /// Create mutation entry for mutation commands
+        HaMergeTreeMutationEntry mutation_entry;
+        mutation_entry.query_id = query_context->getInitialQueryId();
+        mutation_entry.create_time = create_time;
+        mutation_entry.source_replica = replica_name;
+        mutation_entry.block_number = allocateBlockNumberDirect(zookeeper);
+        mutation_entry.commands = mutation_commands;
+        mutation_entry.alter_version = new_metadata_version;
+
+        alter_data_index = ops.size();
+        ops.emplace_back(
+            zkutil::makeCreateRequest(zk_mutation_path + "/", mutation_entry.toString(), zkutil::CreateMode::PersistentSequential));
+    }
+
+    Coordination::Responses results;
+    auto code = zookeeper->tryMulti(ops, results);
+
+    if (code == Coordination::Error::ZBADVERSION)
+    {
+        if (results[0]->error != Coordination::Error::ZOK)
+            throw Exception(
+                "Metadata on replica is not up to date with common metadata in Zookeeper. Cannot alter", ErrorCodes::CANNOT_ASSIGN_ALTER);
+
+        /// TODO: any other cases ?
+
+        LOG_INFO(log, "Another replica altered columns/metadata to expeceted values. Skip this query.");
+        return; /// Let queue schedule the mutation logs from other replica
+    }
+
+    /// Must throw excpetion here if failed
+    zkutil::KeeperMultiException::check(code, ops, results);
+    LOG_INFO(log, "Updated shared metadata nodes in ZooKeeper.");
+
+    table_lock_holder.reset();
+
+    /// auto wait_timeout = settings.mutations_wait_timeout;
+    UInt64 alter_data_sync = settings.ha_alter_data_sync;
+    /// Waiting alter data means that must wait alter metadata, so override later
+    UInt64 alter_metadata_sync = std::max(UInt64(settings.ha_alter_metadata_sync), alter_data_sync);
+
+    /// TODO: wait
 }
 
-void StorageHaMergeTree::mutate([[maybe_unused]] const MutationCommands & commands, [[maybe_unused]] ContextPtr query_context)
+void StorageHaMergeTree::mutate(const MutationCommands & commands, ContextPtr query_context)
 {
+    HaMergeTreeMutationEntry mutation_entry;
+    mutation_entry.query_id = query_context->getInitialQueryId();
+    mutation_entry.source_replica = replica_name;
+    mutation_entry.commands = commands;
+
+    if (String query_id = query_context->getSettingsRef().mutation_query_id; !query_id.empty())
+        mutation_entry.query_id = query_id;
+
+    if (!mutation_entry.extractPartitionIds(*this, query_context))
+        return;
+
+    const String mutations_path = zookeeper_path + "/mutations";
+    auto zookeeper = getZooKeeper();
+
+    String max_znode_checked_for_dup;
+    /// Update the mutations_path node when creating the mutation and check its version to ensure that
+    /// nodes for mutations are created in the same order as the corresponding block numbers.
+    /// Should work well if the number of concurrent mutation requests is small.
+    while (true)
+    {
+        Coordination::Stat mutations_stat;
+        zookeeper->get(mutations_path, &mutations_stat);
+
+        /// deduplicate requests based on query id
+        if (auto dup = queue.findDuplicateMutationByQueryId(zookeeper, mutation_entry, max_znode_checked_for_dup); dup)
+        {
+            mutation_entry.znode_name = dup->znode_name;
+            break;
+        }
+
+        /// all committed parts whose min_block < mutation's block number are candidates for this mutation
+        mutation_entry.block_number = allocateBlockNumberDirect(zookeeper);
+        mutation_entry.create_time = time(nullptr);
+
+        /// The following version check guarantees the linearizability property for any pair of mutations:
+        /// mutation with higher sequence number is guaranteed to have higher block numbers in every partition
+        /// (and thus will be applied strictly according to sequence numbers of mutations)
+        Coordination::Requests requests;
+        /// Use SetRequest instead of CheckRequest here because CAS checks znode's data version
+        /// which is only changed by "set"
+        requests.emplace_back(zkutil::makeSetRequest(mutations_path, String(), mutations_stat.version));
+        requests.emplace_back(zkutil::makeCreateRequest(
+            mutations_path + "/", mutation_entry.toString(), zkutil::CreateMode::PersistentSequential));
+
+        Coordination::Responses responses;
+        auto rc = zookeeper->tryMulti(requests, responses);
+        if (rc == Coordination::Error::ZOK)
+        {
+            const String & path_created =
+                dynamic_cast<const Coordination::CreateResponse *>(responses[1].get())->path_created;
+            mutation_entry.znode_name = path_created.substr(path_created.find_last_of('/') + 1);
+            LOG_INFO(log, "Created mutation with ID {}" , mutation_entry.znode_name);
+            writeMutationLog(MutationLogElement::MUTATION_START, mutation_entry);
+            break;
+        }
+        else if (rc == Coordination::Error::ZBADVERSION)
+        {
+            LOG_WARNING(log, "Version conflict when trying to create a mutation node, retrying...");
+            continue;
+        }
+        else
+            throw Coordination::Exception("Unable to create a mutation znode", rc);
+    }
+
+    waitMutation(
+        mutation_entry.znode_name,
+        /*is_alter_metadata=*/false,
+        query_context->getSettingsRef().mutations_sync,
+        query_context->getSettingsRef().mutations_wait_timeout);
 }
 
-void StorageHaMergeTree::waitMutation(const String & , size_t ) const
+void StorageHaMergeTree::waitMutation(const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const
 {
+    if (mutations_sync == 0)
+        return;
+
+    /// we have to wait
+    auto zookeeper = getZooKeeper();
+    Strings replicas;
+    if (mutations_sync == 2) /// wait for all non-lost replicas
+    {
+        Strings all_replicas = zookeeper->getChildren(zookeeper_path + "/replicas");
+        for (auto & replica : all_replicas)
+        {
+            // TODO:
+            // if (replicaIsLostOrOffline(zookeeper, replica))
+            //     continue;
+
+            replicas.push_back(replica);
+        }
+    }
+    else if (mutations_sync == 1) /// just wait for ourself
+    {
+        replicas.push_back(replica_name);
+    }
+
+    waitMutationToFinishOnReplicas(replicas, znode_name, is_alter_metadata, timeout_seconds);
+}
+
+void StorageHaMergeTree::waitMutationToFinishOnReplicas(
+    const Strings & replicas, const String & mutation_id, bool is_alter_metadata, UInt64 timeout_seconds) const
+{
+    if (replicas.empty())
+        return;
+
+    Stopwatch timer;
+    NameSet inactive_replicas;
+    for (auto & replica : replicas)
+    {
+        LOG_DEBUG(log, "Waiting for {} to apply mutation {}", replica, mutation_id);
+        zkutil::EventPtr wait_event = std::make_shared<Poco::Event>();
+
+        while (!partial_shutdown_called)
+        {
+            auto zookeeper = getZooKeeper();
+            /// Mutation maybe killed or whole replica was deleted.
+            /// Wait event will unblock at this moment.
+            Coordination::Stat exists_stat;
+            if (!zookeeper->exists(zookeeper_path + "/mutations/" + mutation_id, &exists_stat, wait_event))
+            {
+                throw Exception("Mutation " + mutation_id + " was killed, manually removed or table was dropped", ErrorCodes::UNFINISHED);
+            }
+
+            /// Replica could be inactive.
+            if (!zookeeper->exists(zookeeper_path + "/replicas/" + replica + "/is_active"))
+            {
+                LOG_WARNING(log, "Replica {} is not active during mutation. Mutation will be done asynchronously when replica becomes active.", replica);
+                inactive_replicas.emplace(replica);
+                break;
+            }
+
+            String mutation_pointer = zookeeper_path + "/replicas/" + replica + "/mutation_pointer";
+            std::string mutation_pointer_value;
+            /// Replica could be removed
+            if (!zookeeper->tryGet(mutation_pointer, mutation_pointer_value, nullptr, wait_event))
+            {
+                LOG_WARNING(log, "Replica {} was removed", replica);
+                break;
+            }
+            else if (mutation_pointer_value >= mutation_id) /// Maybe we already processed more fresh mutation
+                break;                                      /// (numbers like 0000000000 and 0000000001)
+
+            if (timeout_seconds && timer.elapsedSeconds() > timeout_seconds)
+                throw Exception("Timeout when waiting for replica " + replica + " to finish mutation " + mutation_id +
+                                ", operation will be done asynchronously", ErrorCodes::UNFINISHED);
+
+            /// Replica can become inactive, so wait with timeout and recheck it
+            if (wait_event->tryWait(1000))
+                continue;
+
+            auto status = queue.getPartialMutationsStatus(mutation_id, is_alter_metadata);
+            if (status && !status->is_done && !status->latest_fail_reason.empty())
+                throw Exception("Exception happened during executing of mutation " + mutation_id +
+                                " with part " + status->latest_failed_part + " reason: " + status->latest_fail_reason,
+                                ErrorCodes::UNFINISHED);
+        }
+
+        if (partial_shutdown_called)
+            throw Exception("Mutation is not finished because table shutdown was called. It will be done after table restart.",
+                            ErrorCodes::UNFINISHED);
+    }
+
+    if (!inactive_replicas.empty())
+    {
+        throw Exception(toString(inactive_replicas.size()) + " replicas are inactive right now, mutation will be done asynchronously",
+                        ErrorCodes::UNFINISHED);
+    }
+}
+
+void StorageHaMergeTree::waitAllMutations(UInt64 max_wait_milliseconds)
+{
+    Stopwatch watch;
+    /// Let's fetch new log entries firstly
+    log_exchanger.resetReplicaStatusAndConnection(); /// make sure replica status is up-to-date
+    queue.pullLogsToQueue(getZooKeeper(), {}, /*ignore_backoff=*/true);
+
+    while (queue.countUnfinishedMutations(/*include_alter_metadata=*/true))
+    {
+        if (partial_shutdown_called)
+            throw Exception("Shutdown is called for table", ErrorCodes::ABORTED);
+
+        if (max_wait_milliseconds && watch.elapsedMilliseconds() > max_wait_milliseconds)
+            throw Exception("Timeout when wait for mutations to finish", ErrorCodes::UNFINISHED);
+
+        background_executor.triggerTask();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
 }
 
 std::vector<MergeTreeMutationStatus> StorageHaMergeTree::getMutationsStatus() const
 {
-    return {};
+    return queue.getMutationsStatus();
 }
 
 CancellationCode StorageHaMergeTree::killMutation([[maybe_unused]]const String & mutation_id)
 {
-    return {};
+    assertNotReadonly();
+
+    zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
+
+    LOG_TRACE(log, "Killing mutation {}", mutation_id);
+
+    auto mutation_entry = queue.removeMutation(zookeeper, mutation_id);
+    if (!mutation_entry)
+        return CancellationCode::NotFound;
+
+    /// After this point no new part mutations will start and part mutations that still exist
+    /// in the queue will be skipped.
+
+    /// Cancel already running part mutations.
+    getContext()->getMergeList().cancelHaPartMutations(getStorageID(), *mutation_entry);
+    return CancellationCode::CancelSent;
 }
 
 
@@ -1269,20 +1660,25 @@ bool StorageHaMergeTree::processQueueEntry(HaQueueExecutingEntrySetPtr executing
 
     try
     {
-        LOG_DEBUG(log, "Executing entry {} ", entry->toString());
+        LOG_DEBUG(log, "Executing entry {} ", entry->toDebugString());
 
         success = executeLogEntry(executing_set);
 
         /// executing entry has been moved to other
         if (!executing_set->valid())
+        {
+            LOG_TRACE(log, "entry {} became invalid, result: {}", entry->toDebugString(), success);
             return true;
+        }
 
         if (!success && entry->first_attempt_time + Int64(settings->ha_mark_lost_replica_timeout) < now
             && entry->num_tries > settings->ha_max_log_try_times)
         {
             remove_bad_entry = true;
-            LOG_ERROR(log, "Marked log {} done of which execution may not be successful anymore.", entry->toString());
+            LOG_ERROR(log, "Marked log {} done of which execution may not be successful anymore.", entry->toDebugString());
         }
+
+        LOG_TRACE(log, "{} to execute entry {} ", (success ? "Succeed" : "Failed"), entry->toDebugString());
     }
     catch (const Exception & e)
     {
@@ -1292,37 +1688,39 @@ bool StorageHaMergeTree::processQueueEntry(HaQueueExecutingEntrySetPtr executing
             && entry->first_attempt_time + time_t(settings->ha_update_replica_stats_period * 3) < now && entry->num_tries > 3)
         {
             remove_bad_entry = true;
-            LOG_ERROR(log, "Marked log {} done because {}", entry->toString(), e.displayText());
+            LOG_ERROR(log, "Marked log {} done because {}", entry->toDebugString(), e.displayText());
         }
         if (e.code() == ErrorCodes::PART_IS_LOST_FOREVER && (entry->type == LogEntry::MERGE_PARTS || entry->type == LogEntry::MUTATE_PART)
             && entry->num_tries > settings->ha_max_log_try_times)
         {
             remove_bad_entry = true;
-            LOG_ERROR(log, "Marked log {} done because {}", entry->toString(), e.displayText());
+            LOG_ERROR(log, "Marked log {} done because {}", entry->toDebugString(), e.displayText());
         }
         if (e.code() == ErrorCodes::NO_REPLICA_HAS_PART)
         {
             /// If no one has the right part, probably not all replicas work; We will not write to log with Error level.
-            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+            LOG_INFO(log, "{} {} {}", __func__, entry->toDebugString(), e.displayText());
         }
         else if (e.code() == ErrorCodes::ABORTED)
         {
             /// Interrupted merge or downloading a part is not an error.
-            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.message());
+            LOG_INFO(log, "{} {} {}", __func__, entry->toDebugString(), e.message());
         }
         else if (e.code() == ErrorCodes::PART_IS_TEMPORARILY_LOCKED)
         {
             /// Part cannot be added temporarily
-            LOG_INFO(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+            LOG_INFO(log, "{} {} {}", __func__, entry->toDebugString(), e.displayText());
         }
         else
-            LOG_ERROR(log, "{} {} {}", __func__, entry->toString(), e.displayText());
+        {
+            LOG_ERROR(log, "Failed to execute {} : {}", entry->toDebugString(), getCurrentExceptionMessage(true));
+        }
     }
     catch (...)
     {
         queue.onLogExecutionError(entry, std::current_exception());
 
-        LOG_ERROR(log, "Failed to execute {} : {}", entry->toString(), getCurrentExceptionMessage(true));
+        LOG_ERROR(log, "Failed to execute {} : {}", entry->toDebugString(), getCurrentExceptionMessage(true));
     }
 
     if (success || remove_bad_entry)
@@ -1345,6 +1743,9 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
 
         case LogEntry::MERGE_PARTS:
             return executeMerge(executing_set);
+
+        case LogEntry::MUTATE_PART:
+            return executeMutate(executing_set);
 
         case LogEntry::DROP_RANGE:
             return executeDropRange(executing_set);
@@ -1380,7 +1781,7 @@ bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_se
     /// TODO: fix later
     if (entry->type == LogEntry::GET_PART && entry->source_replica == replica_name)
     {
-        LOG_WARNING(log, "Try to fetch a part where source replica of GET_PART is self: {} ", entry->toString());
+        LOG_WARNING(log, "Try to fetch a part where source replica of GET_PART is self: {} ", entry->toDebugString());
         return true;
     }
 
@@ -1635,7 +2036,7 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
                 log,
                 "Lgical error: generate merge log by self but don't have all parts for merge {} Will mark {} executed",
                 new_part_name,
-                entry.toString());
+                entry.toDebugString());
             return true;
         }
 
@@ -1758,6 +2159,150 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
     }
 }
 
+bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = *executing_set->getExecuting();
+
+    auto & src_part_name = entry.source_parts.front();
+    auto & new_part_name = entry.new_parts.front();
+    auto new_part_info = MergeTreePartInfo::fromPartName(new_part_name, format_version);
+
+    auto storage_settings_ptr = getSettings();
+
+    /// TODO: min block
+
+    /// if new part is covered by committed parts, skip the log
+    if (auto containing_part = getActiveContainingPart(new_part_name))
+    {
+        LOG_DEBUG(log, "Cancel mutating part to {}: covered by part {}", new_part_name, containing_part->name);
+        merge_selecting_task->schedule();
+        return true;
+    }
+
+    /// TODO: check addable ?
+
+    /// get the corresponding mutation commands, skip the log if not found (mutation is killed)
+    MutationCommands commands = queue.getMutationCommands(new_part_info.mutation);
+    if (commands.empty())
+    {
+        LOG_WARNING(
+            log,
+            "Cancel mutating {} to {}: can't find mutation with version {}, maybe it was killed",
+            src_part_name,
+            new_part_name,
+            new_part_info.mutation);
+        merge_selecting_task->schedule();
+        return true;
+    }
+
+    bool have_src_part = false;
+    auto source_part = getActiveContainingPart(src_part_name);
+    if (source_part && source_part->name == src_part_name)
+        have_src_part = true;
+    else if (source_part)
+        LOG_WARNING(log, "Trying to mutate {} but it's covered by {}. Fetch mutated part instead", src_part_name, source_part->name);
+
+    /// if source part is not present, try to fetch mutated part from other replicas
+    if (!have_src_part)
+    {
+        if (entry.source_replica == replica_name)
+        {
+            LOG_ERROR(log, "Current replica generates a log to mutate {} but source part is not found, skip the log", src_part_name);
+            return true;
+        }
+        LOG_DEBUG(log, "Don't have {} to mutate, will try to fetch mutated part instead", src_part_name);
+        try
+        {
+            fetchPartHeuristically(
+                executing_set,
+                new_part_name,
+                entry.source_replica,
+                false, /// detached
+                0, /// quorum
+                0);
+                /// TODO: getContext()->getSettingsRef().enable_fetch_part_incrementally);
+            return true;
+        }
+        catch (Exception & e)
+        {
+            e.addMessage("(while fetching part because of don't have part " + src_part_name + " to mutate)");
+            throw e;
+        }
+        catch (...)
+        {
+            throw;
+        }
+    }
+
+    /// TODO shall we maintain current_mutating_parts?
+
+    size_t estimated_space_for_result = MergeTreeDataMergerMutator::estimateNeededDiskSpace({source_part});
+
+    /// Once we mutate part, we must reserve space on the same disk, because mutations can possibly create hardlinks.
+    /// Can throw an exception.
+    ReservationPtr reserved_space = reserveSpace(estimated_space_for_result, source_part->volume);
+
+    /// if fetch failed, mutate part locally
+    FutureMergedMutatedPart future_part;
+    future_part.name = new_part_name;
+    /// TODO: future_part.uuid = entry.new_part_uuid;
+    future_part.parts.push_back(source_part);
+    future_part.part_info = new_part_info;
+    future_part.updatePath(*this, reserved_space);
+    future_part.type = source_part->getType();
+
+    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_part);
+
+    MergeTreeData::MutableDataPartPtr part;
+    Stopwatch stopwatch;
+
+    auto write_part_log = [&] (const ExecutionStatus & status)
+    {
+        writePartLog(
+            PartLogElement::MUTATE_PART, status, stopwatch.elapsed(),
+            new_part_name, part, future_part.parts, merge_entry.get());
+    };
+
+    try
+    {
+        auto table_lock = lockForShare(
+                RWLockImpl::NO_QUERY, storage_settings_ptr->lock_acquire_timeout_for_background_operations);
+        StorageMetadataPtr metadata_snapshot = getInMemoryMetadataPtr();
+
+        part = merger_mutator.mutatePartToTemporaryPart(
+            future_part, metadata_snapshot, commands, *merge_entry, entry.create_time, getContext(), reserved_space, table_lock);
+
+        /// {
+        ///     /// Lock until part have been added
+        ///     auto min_block_lock = getMinBlockMapLock();
+        ///     auto min_block = getMinBlockUnlocked(part->info.partition_id);
+        ///     if (part->info.max_block < min_block)
+        ///     {
+        ///         LOG_WARNING(log, "Try to commit mutated part {}  which should be dropped, min_block {}", part->name, min_block);
+        ///         return true;
+        ///     }
+
+        ///     renameTempPartAndReplace(part);
+        /// }
+
+        renameTempPartAndReplace(part);
+
+        if (part->getState() == DataPartState::Committed)
+            entry.actual_committed_part = part->name;
+
+        merge_selecting_task->schedule();
+
+        /// dropQueryCache();
+        write_part_log({});
+        return true;
+    }
+    catch (...)
+    {
+        write_part_log(ExecutionStatus::fromCurrentException());
+        throw;
+    }
+}
+
 bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executing_set)
 {
     auto & entry = *executing_set->getExecuting();
@@ -1776,7 +2321,7 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
         {
             if (!drop_range_info.isFakeDropRangePart())
                 LOG_INFO(log, "Log entry {} tried to drop single part {}, but part does not exist", entry.lsn, entry.new_parts.front());
-            return false;
+            return true; /// XXX: cannot be false
         }
     }
 
@@ -1802,6 +2347,43 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
     cleanup_thread.wakeup();
 
     return true;
+}
+
+void StorageHaMergeTree::executeMetadataAlter(const MutationEntry & entry)
+{
+    if (entry.alter_version <= metadata_version)
+    {
+        LOG_DEBUG(
+            log, "Skip stalled mutation entry: {} with version {}, current: {}", entry.toString(), entry.alter_version, metadata_version);
+        return;
+    }
+
+    LOG_DEBUG(log, "Execute : {} with version {}", entry.getNameForLogs(), entry.alter_version);
+
+    auto columns_from_entry = ColumnsDescription::parse(entry.alter_info->columns_str);
+    auto metadata_from_entry = HaMergeTreeTableMetadata::parse(entry.alter_info->metadata_str);
+
+    auto zookeeper = getZooKeeper();
+
+    Coordination::Requests requests;
+    requests.emplace_back(zkutil::makeSetRequest(replica_path + "/columns", entry.alter_info->columns_str, -1));
+    requests.emplace_back(zkutil::makeSetRequest(replica_path + "/metadata", entry.alter_info->metadata_str, -1));
+    zookeeper->multi(requests);
+
+    {
+        auto lock = lockForAlter(RWLockImpl::NO_QUERY, getSettings()->lock_acquire_timeout_for_background_operations);
+
+        LOG_INFO(log, "Metadata changed in ZooKeeper. Applying changes locally.");
+
+        auto metadata_diff = ReplicatedMergeTreeTableMetadata(*this, getInMemoryMetadataPtr()).checkAndFindDiff(metadata_from_entry);
+        setTableStructure(std::move(columns_from_entry), metadata_diff);
+        LOG_INFO(log, "Applied changes to the metadata of the table");
+
+        metadata_version = entry.alter_version;
+        /// This transaction may not happen, but it's OK, because on the next retry we will eventually create/update this node
+        zookeeper->createOrUpdate(replica_path + "/metadata_version", std::to_string(entry.alter_version), zkutil::CreateMode::Persistent);
+        LOG_DEBUG(log, "Set metadata version to: {} ", metadata_version);
+    }
 }
 
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
@@ -2416,8 +2998,8 @@ void StorageHaMergeTree::mergeSelectingTask()
                     log,
                     "Number of queued self merges ({}) is greater than max_replicated_merges_in_queue ({}), so won't select new parts to "
                     "merge",
-                    toString(num_queued_merges),
-                    toString(max_queued_merges));
+                    num_queued_merges,
+                    max_queued_merges);
                 break;
             }
 
@@ -2442,8 +3024,49 @@ void StorageHaMergeTree::mergeSelectingTask()
             success = createLogEntriesToMergeParts({future_merge_part});
         } while (false);
 
+        /// select parts to mutate
+        do
+        {
+            if (queue.countUnfinishedMutations(/*include_alter_metadata=*/false) == 0)
+                break;
 
-        /// TODO: mutate
+            size_t num_queued_mutates = merges_and_mutations_queued.mutations_of_self;
+            size_t max_queued_mutates = getSettings()->max_replicated_mutations_in_queue;
+
+            if (num_queued_mutates >= max_queued_mutates)
+            {
+                LOG_TRACE(
+                    log,
+                    "Number of queued self mutates ({}) is greater than max_replicated_mutations_in_queue ({}), so won't select new parts "
+                    "to merge",
+                    num_queued_mutates,
+                    max_queued_mutates);
+                break;
+            }
+            size_t max_parts_to_mutate = max_queued_mutates - num_queued_mutates;
+
+            /// Choose parts to mutate.
+            LogEntry::Vec log_entries;
+            DataPartsVector data_parts = getDataPartsVector();
+            for (const auto & part : data_parts)
+            {
+                auto desired_mutation_version = merge_pred.getDesiredMutationVersion(part);
+                if (!desired_mutation_version)
+                    continue;
+
+                auto entry = createLogEntryToMutatePart(part->info, desired_mutation_version->first, desired_mutation_version->second);
+                log_entries.push_back(std::move(entry));
+                if (log_entries.size() >= max_parts_to_mutate)
+                    break;
+            }
+
+            if (!log_entries.empty())
+            {
+                queue.write(log_entries, /*broadcast=*/false);
+                success = true;
+            }
+
+        } while (false);
     }
     catch (...)
     {
@@ -2454,6 +3077,185 @@ void StorageHaMergeTree::mergeSelectingTask()
         merge_selecting_task->scheduleAfter(MERGE_SELECTING_SLEEP_MS);
     else
         merge_selecting_task->schedule();
+}
+
+void StorageHaMergeTree::mutationsFinalizingTask()
+{
+    bool needs_reschedule = false;
+
+    auto settings = getSettings();
+
+    try
+    {
+        needs_reschedule = queue.tryFinalizeMutations(getZooKeeper());
+
+        time_t now = time(nullptr);
+        if (last_check_hang_mutation_time + settings->ha_check_hang_mutations_interval < UInt64(now))
+        {
+            last_check_hang_mutation_time = now;
+            checkAndFixHangMutation();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        needs_reschedule = true;
+    }
+
+    if (needs_reschedule)
+    {
+        mutations_finalizing_task->scheduleAfter(MUTATIONS_FINALIZING_SLEEP_MS);
+    }
+    else
+    {
+        /// Even if no mutations seems to be done or appeared we are trying to
+        /// finalize them in background because manual control the launch of
+        /// this function is error prone. This can lead to mutations that
+        /// processed all the parts but have is_done=0 state for a long time. Or
+        /// killed mutations, which are also considered as undone.
+        mutations_finalizing_task->scheduleAfter(MUTATIONS_FINALIZING_IDLE_SLEEP_MS);
+    }
+}
+
+/// Under some rare situations, replicas may contain conflict part lists. e.g.,
+///   replica 1: all_1_1_0 all_2_3_1
+///   replica 2: all_1_2_1 all_3_3_0
+/// In this case, mutate logs generated from the leader's parts may not cover parts on the other replica.
+/// As a result, mutation on the non-leader replica may hang forever.
+/// This function tries to detect such anomaly and fix it by creating logs that will mutate local parts.
+void StorageHaMergeTree::checkAndFixHangMutation()
+{
+    /// only non-leader replica needs to check for hang mutation
+    /// because leader replica will create mutate logs based on the parts it have
+    if (is_leader)
+        return;
+
+    auto settings = getSettings();
+
+    /// block merge select task during the execution of this task
+    /// because we may add part mutate log
+    std::lock_guard merge_selecting_lock(merge_selecting_mutex);
+
+    size_t num_queued_mutates = queue.countMergesAndPartMutations().mutations_of_self;
+    size_t max_queued_mutates = settings->max_replicated_mutations_in_queue;
+    if (num_queued_mutates >= max_queued_mutates)
+    {
+        LOG_TRACE(log, "Skip hang mutation check because reached max_replicated_mutations_in_queue");
+        return;
+    }
+    size_t max_parts_to_fix = max_queued_mutates - num_queued_mutates;
+
+    HaMergeTreeMutationEntryPtr mutation = queue.getMutationForHangCheck();
+    if (!mutation)
+        return;
+
+    /// check whether any replica has finished the mutation
+    String finished_replica;
+    std::map<String, GetMutationStatusResponse> responses = log_exchanger.getMutationStatus(mutation->znode_name);
+    for (auto & [replica, response] : responses)
+    {
+        if (replica == replica_name)
+            continue;
+        if (response.is_done || response.mutation_pointer >= mutation->znode_name)
+        {
+            finished_replica = replica;
+            break;
+        }
+    }
+
+    if (finished_replica.empty())
+        return; /// can't hang because no replica has finished the execution
+
+    auto & finished_replica_status = responses[finished_replica];
+    time_t now = time(nullptr);
+    if (finished_replica_status.finish_time + settings->ha_check_hang_mutations_wait_period > UInt64(now))
+        return; /// still in the wait period
+
+    auto zookeeper = getZooKeeper();
+    /// Check whether the mutation was killed. If so, the queue will remove it later
+    if (!finished_replica_status.is_found && !zookeeper->exists(zookeeper_path + "/mutations/" + mutation->znode_name))
+    {
+        LOG_DEBUG(log, "The mutation {} was killed, skip the hang check", mutation->znode_name);
+        return;
+    }
+
+    LOG_DEBUG(log, "Checking whether mutation {} might hang or not", mutation->getNameForLogs());
+
+    queue.pullLogsToQueue(zookeeper, {}, /*ignore_backoff=*/true);
+
+    Strings parts_to_check = queue.getPartsToMutateWithoutLogs(mutation->znode_name);
+    if (parts_to_check.empty())
+        return;
+
+    LOG_DEBUG(
+        log,
+        "{} has already finished mutation {}, but current replica still has {} parts to mutate without logs. Check whether the mutation is "
+        "hang.",
+        finished_replica,
+        mutation->getNameForLogs(),
+        parts_to_check.size());
+
+    Strings parts_to_fix;
+
+    /// Check whether the part needs fix or not
+    Strings request;
+    size_t request_batch_size = 10;
+    for (size_t i = 0; i < parts_to_check.size(); ++i)
+    {
+        request.push_back(parts_to_check[i]);
+        if (request.size() == request_batch_size || i == parts_to_check.size() - 1)
+        {
+            auto containing_parts = log_exchanger.findActiveContainingParts(finished_replica, request);
+            for (size_t j = 0; j < containing_parts.size(); ++j)
+            {
+                auto & part = request[j];
+                auto & containing_part = containing_parts[j];
+
+                /// if the finished replica has an addable containing part, no need to fix because
+                /// the part can be processed by replaying logs
+                /// TODO:
+                /// if (!containing_part.empty())
+                /// {
+                ///     auto lock = lockParts();
+                ///     if (metastore->checkPartNameAddable(containing_part, lock))
+                ///         continue;
+                /// }
+                /// otherwise the mutation may hang due to conflict part list, and we must fix the part
+                String reason;
+                if (containing_part.empty())
+                    reason = "no containing part on replica " + finished_replica;
+                else
+                    reason = "containing part " + containing_part + " is not addable";
+                LOG_INFO(log, "need to fix part {} : {}", part, reason);
+
+                parts_to_fix.push_back(part);
+                if (parts_to_fix.size() >= max_parts_to_fix)
+                    break;
+            }
+            request.clear();
+        }
+
+        if (parts_to_fix.size() >= max_parts_to_fix)
+            break;
+    }
+
+    if (parts_to_fix.empty())
+    {
+        LOG_DEBUG(log, "all parts have an addable containing part, no need to fix mutation");
+        return;
+    }
+
+    LogEntry::Vec log_entries;
+    for (String & part : parts_to_fix)
+    {
+        auto info = MergeTreePartInfo::fromPartName(part, format_version);
+        auto log_entry = createLogEntryToMutatePart(info, mutation->block_number, mutation->alter_version, /*current_replica_only=*/true);
+        log_entries.push_back(log_entry);
+    }
+    queue.write(log_entries, /*broadcast=*/false);
+    LOG_INFO(log, "Wrote {} logs to fix hang mutation {}", log_entries.size(), mutation->getNameForLogs());
+
+    background_executor.triggerTask();
 }
 
 bool StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts)
@@ -2478,8 +3280,23 @@ bool StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMe
     return true;
 }
 
-void StorageHaMergeTree::mutationsFinalizingTask()
+HaMergeTreeLogEntryPtr StorageHaMergeTree::createLogEntryToMutatePart(
+    const MergeTreePartInfo & part_info, Int64 mutation_version, int alter_version, bool current_replica_only)
 {
+    MergeTreePartInfo new_part_info = part_info;
+    new_part_info.mutation = mutation_version;
+
+    auto entry = std::make_shared<LogEntry>();
+    entry->type = LogEntry::MUTATE_PART;
+    entry->source_replica = replica_name;
+    entry->source_parts.push_back(part_info.getPartName());
+    entry->new_parts.push_back(new_part_info.getPartName());
+    entry->lsn = allocLSNAndSet();
+    entry->create_time = time(nullptr);
+    entry->alter_version = alter_version;
+    if (current_replica_only)
+        entry->from_replica = replica_name;
+    return entry;
 }
 
 void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeeper, const NameOrderedSet & partitions, bool detach, bool sync)
@@ -2963,7 +3780,7 @@ UInt64 StorageHaMergeTree::allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zook
 void StorageHaMergeTree::writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry)
 try
 {
-    /* TODO:
+    /* TODO
     auto log = getContext()->getMutationLog();
     if (!log)
         return;

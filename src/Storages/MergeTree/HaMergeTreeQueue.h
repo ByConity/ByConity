@@ -8,7 +8,7 @@
 #include <Storages/MergeTree/HaMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/HaQueueExecutingEntrySet.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/HaMergeTreeMutationStatus.h>
+#include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Common/ActionBlocker.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 
@@ -312,12 +312,12 @@ public:
 
     Status getStatus() const;
 
-    std::vector<HaMergeTreeMutationStatus> getMutationsStatus() const;
+    std::vector<MergeTreeMutationStatus> getMutationsStatus() const;
 
     /// Return empty optional if mutation was killed. Otherwise return partially
     /// filled mutation status with information about error (latest_fail*) and is_done.
     /// If out_mutation_pointer is not nullptr, set *out_mutation_pointer to current mutation pointer.
-    std::optional<HaMergeTreeMutationStatus> getPartialMutationsStatus(
+    std::optional<MergeTreeMutationStatus> getPartialMutationsStatus(
         const String & znode_name, bool is_alter_metadata, String * out_mutation_pointer = nullptr) const;
 
     std::pair<time_t, time_t> getAbsoluteDelay() const;

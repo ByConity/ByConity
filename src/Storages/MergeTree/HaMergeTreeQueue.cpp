@@ -5,6 +5,10 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int CANNOT_ASSIGN_ALTER;
+}
 
 HaMergeTreeQueue::HaMergeTreeQueue(StorageHaMergeTree & storage_)
     : storage(storage_)
@@ -495,8 +499,8 @@ void HaMergeTreeQueue::updateMutations(
 
         if (new_data_mutations)
             storage.merge_selecting_task->schedule();
-        /// TODO: if (new_alter_metadata)
-        /// TODO:     storage.alter_thread.start();
+        if (new_alter_metadata)
+            storage.alter_thread.start();
     }
 
     if (some_mutations_are_probably_done)
@@ -1312,8 +1316,8 @@ bool HaMergeTreeQueue::tryFinalizeMutations(zkutil::ZooKeeperPtr zookeeper)
         }
     }
 
-    /// TODO: if (may_execute_alter_metadata)
-    /// TODO:     storage.alter_thread.start();
+    if (may_execute_alter_metadata)
+        storage.alter_thread.start();
 
     storage.writeMutationLog(MutationLogElement::MUTATION_FINISH, *candidate);
     return true;
@@ -1403,11 +1407,11 @@ std::pair<time_t, time_t> HaMergeTreeQueue::getAbsoluteDelay() const
     }
 }
 
-std::vector<HaMergeTreeMutationStatus> HaMergeTreeQueue::getMutationsStatus() const
+std::vector<MergeTreeMutationStatus> HaMergeTreeQueue::getMutationsStatus() const
 {
     std::lock_guard lock(state_mutex);
 
-    std::vector<HaMergeTreeMutationStatus> result;
+    std::vector<MergeTreeMutationStatus> result;
     for (const auto & pair : mutations_by_znode)
     {
         const MutationStatus & status = pair.second;
@@ -1419,14 +1423,13 @@ std::vector<HaMergeTreeMutationStatus> HaMergeTreeQueue::getMutationsStatus() co
         {
             WriteBufferFromOwnString buf;
             formatAST(*command.ast, buf, false, true);
-            result.push_back(HaMergeTreeMutationStatus
+            result.push_back(MergeTreeMutationStatus
             {
                 entry.znode_name,
                 entry.query_id,
                 buf.str(),
                 entry.create_time,
                 block_numbers_map,
-                static_cast<Int64>(parts_to_mutate.size()),
                 parts_to_mutate,
                 status.is_done,
                 status.finish_time,
@@ -1440,7 +1443,7 @@ std::vector<HaMergeTreeMutationStatus> HaMergeTreeQueue::getMutationsStatus() co
     return result;
 }
 
-std::optional<HaMergeTreeMutationStatus> HaMergeTreeQueue::getPartialMutationsStatus(
+std::optional<MergeTreeMutationStatus> HaMergeTreeQueue::getPartialMutationsStatus(
     const String & znode_name, bool is_alter_metadata, String * out_mutation_pointer) const
 {
     const MutationStatus * status = nullptr;
@@ -1464,7 +1467,7 @@ std::optional<HaMergeTreeMutationStatus> HaMergeTreeQueue::getPartialMutationsSt
 
     if (!status)
         return {}; /// killed
-    return HaMergeTreeMutationStatus
+    return MergeTreeMutationStatus
         {
             .is_done = status->is_done,
             .finish_time = status->finish_time,
@@ -1528,6 +1531,18 @@ size_t HaMergeTreeQueue::getQueueSize() const
     }
 
     return time_intervals;
+}
+
+void HaMergeTreeQueue::checkAddMetadataAlter(const MutationCommands & commands) const
+{
+    std::lock_guard state_lock(state_mutex);
+    if (auto column = alter_sequence.canAddMetadataAlter(commands, state_lock))
+        throw Exception(
+            "There are unfinished async ALTERs which might confict on column `" + *column + "`, please wait...",
+            ErrorCodes::CANNOT_ASSIGN_ALTER);
+
+    if (commands.willMutateData() && alter_sequence.hasUnfinishedDataAlter(state_lock))
+        throw Exception("There are unfinished async ALTERs with data mutation, please wait...", ErrorCodes::CANNOT_ASSIGN_ALTER);
 }
 
 HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperPtr & zookeeper)

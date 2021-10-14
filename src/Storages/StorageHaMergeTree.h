@@ -6,6 +6,7 @@
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/HaMergeTreeAddress.h>
+#include <Storages/MergeTree/HaMergeTreeAlterMetadataThread.h>
 #include <Storages/MergeTree/HaMergeTreeCleanupThread.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/HaMergeTreeLogExchanger.h>
@@ -87,9 +88,16 @@ public:
     void alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & table_lock_holder) override;
 
     void mutate(const MutationCommands & commands, ContextPtr context) override;
-    void waitMutation(const String & znode_name, size_t mutations_sync) const;
+    void waitMutation(const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const;
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override;
     CancellationCode killMutation(const String & mutation_id) override;
+
+    void waitMutationToFinishOnReplicas(
+        const Strings & replicas, const String & mutation_id, bool is_alter_metadata, UInt64 timeout_seconds) const;
+
+    /// Wait for all mutations to be finished on this replica.
+    /// If timeout is exceeded throws exception
+    void waitAllMutations(UInt64 max_wait_milliseconds = 0);
 
     /** Removes a replica from ZooKeeper. If there are no other replicas, it deletes the entire table from ZooKeeper.
       */
@@ -190,6 +198,7 @@ private:
     friend class HaMergeTreeBlockOutputStream;
     friend class HaMergeTreePartCheckThread;
     friend class HaMergeTreeCleanupThread;
+    friend class HaMergeTreeAlterMetadataThread;
     friend class HaMergeTreeReplicaEndpoint;
     friend class HaMergeTreeLogExchangerBase;
     friend class HaMergeTreeLogExchanger;
@@ -285,6 +294,8 @@ private:
     /// A thread that processes reconnection to ZooKeeper when the session expires.
     HaMergeTreeRestartingThread restarting_thread;
 
+    HaMergeTreeAlterMetadataThread alter_thread;
+
     /// True if replica was created for existing table with fixed granularity
     bool other_replicas_fixed_granularity = false;
 
@@ -299,6 +310,8 @@ private:
     NameSet current_merging_parts;
 
     time_t last_commit_log_time {0};
+
+    time_t last_check_hang_mutation_time {0};
 
     bool is_offline = false;
 
@@ -340,7 +353,10 @@ private:
 
     bool executeFetch(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeMerge(HaQueueExecutingEntrySetPtr & executing_set);
+    bool executeMutate(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeDropRange(HaQueueExecutingEntrySetPtr & executing_set);
+
+    void executeMetadataAlter(const MutationEntry & entry);
 
     bool fetchPartHeuristically(
         const HaQueueExecutingEntrySetPtr & executing_set,
@@ -400,9 +416,14 @@ private:
     void mergeSelectingTask();
 
     bool createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts);
+    HaMergeTreeLogEntryPtr createLogEntryToMutatePart(
+        const MergeTreePartInfo & part_info, Int64 mutation_version, int alter_version, bool current_replica_only = false);
 
     /// Checks if some mutations are done and marks them as done.
     void mutationsFinalizingTask();
+
+    /// Checks if there is any hang mutation and fix it if found
+    void checkAndFixHangMutation();
 
     /// Throw an exception if the table is readonly.
     void assertNotReadonly() const;

@@ -406,6 +406,8 @@ class IColumn;
     M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
     M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
+    M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
+    M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
     M(Bool, optimize_normalize_count_variants, true, "Rewrite aggregate functions that semantically equals to count() as count().", 0) \
     M(Bool, optimize_injective_functions_inside_uniq, true, "Delete injective functions of one argument inside uniq*() functions.", 0) \
@@ -574,6 +576,9 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
     \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
+    M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \
+    M(UInt64, ha_alter_metadata_sync, 1, "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

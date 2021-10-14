@@ -412,6 +412,32 @@ String HaMergeTreeLogEntryData::toString() const
     return out.str();
 }
 
+String HaMergeTreeLogEntryData::toDebugString() const
+{
+    std::ostringstream oss;
+    oss << "{Log-" << lsn << " " << typeToString(type) << ", src " << source_replica << ", ";
+    switch (type)
+    {
+        case GET_PART:
+        case CLONE_PART:
+        case DROP_RANGE:
+            oss << new_parts.front();
+            break;
+        case MERGE_PARTS:
+        case MUTATE_PART:
+        case REPLACE_PARTITION:
+            for (auto & old_part : source_parts)
+                oss << old_part << ' ';
+            oss << "-> " << new_parts.front();
+            break;
+        default:
+            oss << "N/A";
+            break;
+    }
+    oss << '}';
+    return oss.str();
+}
+
 /// Compacted information in one line, for debugging
 std::ostream & operator<<(std::ostream & os, const HaMergeTreeLogEntry & entry)
 {

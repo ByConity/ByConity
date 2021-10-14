@@ -120,6 +120,8 @@ struct HaMergeTreeLogEntryData
     void readText(ReadBuffer & in);
     String toString() const;
 
+    String toDebugString() const;
+
     /// -------- Members below may be serialized --------
 
     /// Head
