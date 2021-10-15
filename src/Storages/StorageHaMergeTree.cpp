@@ -1,13 +1,17 @@
 #include <Storages/StorageHaMergeTree.h>
 
-#include <Parsers/queryToString.h>
-#include <Storages/AlterCommands.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/InterserverCredentials.h>
-#include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
-#include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
+#include <Interpreters/MutationLog.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Storages/AlterCommands.h>
+#include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
+
+#include <regex>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-parameter"
@@ -143,6 +147,14 @@ static String extractZooKeeperPath(const String & path)
     return normalizeZooKeeperPath(path);
 }
 
+static NameOrderedSet collectPartitionsFromParts(const MergeTreeData::DataPartsVector & parts)
+{
+    NameOrderedSet partitions;
+    for (auto & part : parts)
+        partitions.insert(part->info.partition_id);
+    return partitions;
+}
+
 StorageHaMergeTree::StorageHaMergeTree(
     const String & zookeeper_path_,
     const String & replica_name_,
@@ -195,9 +207,6 @@ StorageHaMergeTree::StorageHaMergeTree(
 
     queue_updating_task = getContext()->getSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::queueUpdatingTask)", [this] { queueUpdatingTask(); });
-
-    /// TODO: mutations_updating_task = global_context.getSchedulePool().createTask(
-    /// TODO:     getStorageID().getFullTableName() + " (StorageHaMergeTree::mutationsUpdatingTask)", [this] { mutationsUpdatingTask(); });
 
     merge_selecting_task = getContext()->getMergeSelectSchedulePool().createTask(
         getStorageID().getFullTableName() + " (StorageHaMergeTree::mergeSelectingTask)", [this] { mergeSelectingTask(); });
@@ -744,7 +753,7 @@ void StorageHaMergeTree::checkParts(bool)
 }
 
 void StorageHaMergeTree::truncate(
-    const ASTPtr &, const StorageMetadataPtr &, ContextPtr , TableExclusiveLockHolder & table_lock)
+    const ASTPtr &, const StorageMetadataPtr &, ContextPtr query_context, TableExclusiveLockHolder & table_lock)
 {
     table_lock.release();   /// Truncate is done asynchronously.
 
@@ -754,17 +763,9 @@ void StorageHaMergeTree::truncate(
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
 
-    Strings partitions = zookeeper->getChildren(zookeeper_path + "/block_numbers");
-
-    /*
-    for (String & partition_id : partitions)
-    {
-        LogEntry entry;
-
-        if (dropAllPartsInPartitions(*zookeeper, partition_id, entry, query_context, false))
-            waitForAllReplicasToProcessLogEntry(entry);
-    }
-    */
+    auto parts = getDataPartsVector();
+    dropAllPartsInPartitions(
+        zookeeper, collectPartitionsFromParts(parts), false, getContext()->getSettingsRef().replication_alter_partitions_sync > 0);
 }
 
 void StorageHaMergeTree::startup()
@@ -1202,12 +1203,30 @@ void StorageHaMergeTree::alter(
 
     table_lock_holder.reset();
 
-    /// auto wait_timeout = settings.mutations_wait_timeout;
+    auto wait_timeout = settings.mutations_wait_timeout;
     UInt64 alter_data_sync = settings.ha_alter_data_sync;
     /// Waiting alter data means that must wait alter metadata, so override later
     UInt64 alter_metadata_sync = std::max(UInt64(settings.ha_alter_metadata_sync), alter_data_sync);
 
-    /// TODO: wait
+    /// Anyway, wait data mutations first if needed
+    if (alter_data_sync && alter_data_index)
+    {
+        LOG_DEBUG(log, "Waiting for replicas to apply metadata & data changes. Sync level {}", alter_data_sync);
+        String mutation_path = dynamic_cast<const Coordination::CreateResponse &>(*results[*alter_data_index]).path_created;
+        String mutation_node = mutation_path.substr(mutation_path.find_last_of('/') + 1);
+        waitMutation(mutation_node, false, alter_data_sync, wait_timeout);
+        LOG_DEBUG(log, "Data & metadata changes applied");
+    }
+    /// Still need to wait metadata
+    UInt64 actual_data_sync = alter_data_index ? alter_data_sync : 0;
+    if (alter_metadata_sync > actual_data_sync)
+    {
+        LOG_DEBUG(log, "Waiting for replicas to apply metadata changes. Sync level {}",  alter_metadata_sync);
+        String mutation_path = dynamic_cast<const Coordination::CreateResponse &>(*results[alter_metadata_index]).path_created;
+        String mutation_node = mutation_path.substr(mutation_path.find_last_of('/') + 1);
+        waitMutation(mutation_node, true, alter_metadata_sync, wait_timeout);
+        LOG_DEBUG(log, "Metadata changes applied");
+    }
 }
 
 void StorageHaMergeTree::mutate(const MutationCommands & commands, ContextPtr query_context)
@@ -1455,8 +1474,7 @@ void StorageHaMergeTree::rename(const String & new_path_to_table_data, const Sto
         try
         {
             auto zookeeper = getZooKeeper();
-            /// TODO:
-            /// zookeeper->set(replica_path + "/host", getHaMergeTreeAddress().toString());
+            zookeeper->set(replica_path + "/host", getHaMergeTreeAddress().toString());
         }
         catch (Coordination::Exception & e)
         {
@@ -1484,8 +1502,8 @@ ActionLock StorageHaMergeTree::getActionLock(StorageActionBlockType action_type)
         return data_parts_exchange_ptr ? data_parts_exchange_ptr->blocker.cancel() : ActionLock();
     }
 
-    // if (action_type == ActionLocks::ReplicationQueue)
-    //     return queue.actions_blocker.cancel();
+    if (action_type == ActionLocks::ReplicationQueue)
+        return queue.actions_blocker.cancel();
 
     if (action_type == ActionLocks::PartsMove)
         return parts_mover.moves_blocker.cancel();
@@ -2389,7 +2407,7 @@ void StorageHaMergeTree::executeMetadataAlter(const MutationEntry & entry)
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
 {
     return false;
-    /// TODO:
+    /// TODO: p0
     /// return queue.isVirtualPart(part);
 }
 
@@ -2400,7 +2418,6 @@ void StorageHaMergeTree::queueUpdatingTask()
         queue.pullLogsToQueue(getZooKeeper(), queue_updating_task->getWatchCallback());
         queue_updating_task->scheduleAfter(getSettings()->ha_queue_update_sleep_ms);
 
-        /// TODO: It's simple that put commitLogTask() here
         commitLogTask();
     }
     catch (const zkutil::KeeperException & e)
@@ -2421,10 +2438,6 @@ void StorageHaMergeTree::queueUpdatingTask()
         queue_updating_task->scheduleAfter(QUEUE_UPDATE_ERROR_SLEEP_MS);
     }
 
-}
-
-void StorageHaMergeTree::mutationsUpdatingTask()
-{
 }
 
 void StorageHaMergeTree::commitLogTask()
@@ -2945,13 +2958,12 @@ void StorageHaMergeTree::mergeSelectingTask()
 
     const auto storage_settings = getSettings();
 
-    /// TODO:
-    /// auto & pattern = getContext()->getSettingsRef().blacklist_for_merge_task_regex.value;
-    /// if (std::regex_search(table_name, std::regex(pattern)))
-    /// {
-    ///     LOG_TRACE(log, "Cancel merge task by settings blacklist_for_merge_task_regex: " << pattern);
-    ///     return;
-    /// }
+    auto & pattern = getContext()->getSettingsRef().blacklist_for_merge_task_regex.value;
+    if (std::regex_search(getStorageID().table_name, std::regex(pattern)))
+    {
+        LOG_TRACE(log, "Cancel merge task by settings blacklist_for_merge_task_regex: {} ", pattern);
+        return;
+    }
 
 
     bool success = false;
@@ -3449,13 +3461,11 @@ void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detac
     if (!is_leader)
         throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
-    NameOrderedSet partitions;
     auto parts = getPartsByPredicate(predicate);
-    for (auto & part : parts)
-        partitions.emplace(part->info.partition_id);
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
-    dropAllPartsInPartitions(zookeeper, partitions, detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
+    dropAllPartsInPartitions(
+        zookeeper, collectPartitionsFromParts(parts), detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
 }
 
 PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
@@ -3780,29 +3790,29 @@ UInt64 StorageHaMergeTree::allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zook
 void StorageHaMergeTree::writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry)
 try
 {
-    /* TODO
     auto log = getContext()->getMutationLog();
     if (!log)
         return;
 
+    auto storage_id = getStorageID();
+
     MutationLogElement elem;
     elem.event_type = type;
     elem.event_time = time(nullptr);
-    elem.database_name = database_name;
-    elem.table_name = table_name;
+    elem.database_name = storage_id.database_name;
+    elem.table_name = storage_id.table_name;
     elem.mutation_id = mutation_entry.znode_name;
     elem.query_id = mutation_entry.query_id;
     elem.create_time = mutation_entry.create_time;
     elem.block_number = mutation_entry.block_number;
     for (const MutationCommand & command : mutation_entry.commands)
     {
-        std::stringstream ss;
-        formatAST(*command.ast, ss, false, true);
-        elem.commands.push_back(ss.str());
+        WriteBufferFromOwnString out;
+        formatAST(*command.ast, out, false, true);
+        elem.commands.push_back(out.str());
     }
 
     log->add(elem);
-    */
 }
 catch (...)
 {

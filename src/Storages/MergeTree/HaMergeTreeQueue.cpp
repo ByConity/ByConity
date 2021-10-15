@@ -768,13 +768,16 @@ void HaMergeTreeQueue::write(const LogEntryVec & entries, bool broadcast)
     }
 
     size_t num_new_unprocessed = 0;
+    bool trigger_bg_executor = false;
     {
         std::lock_guard insert_lock(state_mutex);
         for (auto & entry : entries)
             num_new_unprocessed += insertWithStats(entry, insert_lock);
+
+        trigger_bg_executor = unprocessed_set.size() > 0; /// XXX:
     }
 
-    if (num_new_unprocessed > 0)
+    if (trigger_bg_executor)
         storage.background_executor.triggerTask();
 }
 

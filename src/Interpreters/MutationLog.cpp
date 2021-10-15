@@ -10,7 +10,7 @@
 namespace DB
 {
 
-Block MutationLogElement::createBlock()
+NamesAndTypesList MutationLogElement::getNamesAndTypes()
 {
     auto event_type_datatype = std::make_shared<DataTypeEnum8>(
         DataTypeEnum8::Values {
@@ -20,26 +20,24 @@ Block MutationLogElement::createBlock()
             {"MUTATION_ABORT", static_cast<Int8>(MUTATION_ABORT)},
         });
 
-    return
-        {
-            {std::move(event_type_datatype),        "event_type"},
-            {std::make_shared<DataTypeDate>(),      "event_date"},
-            {std::make_shared<DataTypeDateTime>(),  "event_time"},
+    return {
+        {"event_type", std::move(event_type_datatype)},
+        {"event_date", std::make_shared<DataTypeDate>()},
+        {"event_time", std::make_shared<DataTypeDateTime>()},
 
-            {std::make_shared<DataTypeString>(),    "database"},
-            {std::make_shared<DataTypeString>(),    "table"},
-            {std::make_shared<DataTypeString>(),    "mutation_id"},
-            {std::make_shared<DataTypeString>(),    "query_id"},
-            {std::make_shared<DataTypeDateTime>(),  "create_time"},
-            {std::make_shared<DataTypeUInt64>(),    "block_number"},
-            {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()),   "commands"},
-        };
+        {"database", std::make_shared<DataTypeString>()},
+        {"table", std::make_shared<DataTypeString>()},
+        {"mutation_id", std::make_shared<DataTypeString>()},
+        {"query_id", std::make_shared<DataTypeString>()},
+        {"create_time", std::make_shared<DataTypeDateTime>()},
+        {"block_number", std::make_shared<DataTypeUInt64>()},
+        {"commands", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+    };
+
 }
 
-void MutationLogElement::appendToBlock(Block & block) const
+void MutationLogElement::appendToBlock(MutableColumns & columns) const
 {
-    MutableColumns columns = block.mutateColumns();
-
     size_t i = 0;
 
     columns[i++]->insert(UInt64(event_type));
@@ -58,8 +56,6 @@ void MutationLogElement::appendToBlock(Block & block) const
     for (auto & command : commands)
         commands_array.push_back(command);
     columns[i++]->insert(commands_array);
-
-    block.setColumns(std::move(columns));
 }
 
 } // end of namespace DB

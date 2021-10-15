@@ -379,8 +379,6 @@ private:
       */
     void queueUpdatingTask();
 
-    void mutationsUpdatingTask();
-
     void commitLogTask();
 
     void forceSetTableStructure(zkutil::ZooKeeperPtr & zookeeper);

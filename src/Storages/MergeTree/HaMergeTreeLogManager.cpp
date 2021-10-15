@@ -91,17 +91,14 @@ void HaMergeTreeLogManager::createOrOpen(bool create)
 
     auto create_or_open_impl = [&] (LogFiles & files)
     {
-        if (!files.entry_wbuf)
-            files.entry_wbuf = std::make_unique<WriteBufferFromFile>(files.entry_filename, LOG_ENTRY_FILE_BUFFER_SIZE, write_flags, 0600);
-        if (!files.index_wbuf)
-            files.index_wbuf = std::make_unique<WriteBufferFromFile>(files.index_filename, LOG_INDEX_FILE_BUFFER_SIZE, write_flags, 0600);
+        /// Always reopen files
+        files.entry_wbuf = std::make_unique<WriteBufferFromFile>(files.entry_filename, LOG_ENTRY_FILE_BUFFER_SIZE, write_flags, 0600);
+        files.index_wbuf = std::make_unique<WriteBufferFromFile>(files.index_filename, LOG_INDEX_FILE_BUFFER_SIZE, write_flags, 0600);
         files.entry_wbuf->seek(0, SEEK_END);
         files.index_wbuf->seek(0, SEEK_END);
 
-        if (!files.entry_rbuf)
-            files.entry_rbuf = std::make_unique<ReadBufferFromFile>(files.entry_filename, LOG_ENTRY_FILE_BUFFER_SIZE);
-        if (!files.index_rbuf)
-            files.index_rbuf = std::make_unique<ReadBufferFromFile>(files.index_filename, LOG_INDEX_FILE_BUFFER_SIZE);
+        files.entry_rbuf = std::make_unique<ReadBufferFromFile>(files.entry_filename, LOG_ENTRY_FILE_BUFFER_SIZE);
+        files.index_rbuf = std::make_unique<ReadBufferFromFile>(files.index_filename, LOG_INDEX_FILE_BUFFER_SIZE);
 
         files.ok = true;
     };

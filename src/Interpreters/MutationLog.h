@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/SystemLog.h>
-
+#include <Core/NamesAndAliases.h>
 
 namespace DB
 {
@@ -28,8 +28,10 @@ struct MutationLogElement
 
     static std::string name() { return "MutationLog"; }
 
-    static Block createBlock();
-    void appendToBlock(Block & block) const;
+    static NamesAndTypesList getNamesAndTypes();
+    static NamesAndAliases getNamesAndAliases() { return {}; }
+
+    void appendToBlock(MutableColumns & columns) const;
 };
 
 /// Instead of typedef - to allow forward declaration.
