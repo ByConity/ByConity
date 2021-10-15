@@ -594,6 +594,12 @@
     M(2006, BRPC_CANNOT_INIT_CHANNEL) \
     M(2007, BRPC_EXCEPTION) \
     M(2010, EXCHANGE_DATA_TRANS_EXCEPTION) \
+    \
+    M(4001, RESOURCE_GROUP_ILLEGAL_CONFIG) \
+    M(4002,  RESOURCE_NOT_ENOUGH) \
+    M(4003, WAIT_FOR_RESOURCE_TIMEOUT) \
+    M(4004, RESOURCE_GROUP_INTERNAL_ERROR) \
+    M(4005, RESOURCE_GROUP_MISMATCH) \
 
 /* See END */
 
@@ -605,7 +611,7 @@ namespace ErrorCodes
     APPLY_FOR_ERROR_CODES(M)
 #undef M
 
-    constexpr ErrorCode END = 3000;
+    constexpr ErrorCode END = 5000;
     ErrorPairHolder values[END + 1]{};
 
     struct ErrorCodesNames

@@ -97,6 +97,8 @@ using ActionLocksManagerPtr = std::shared_ptr<ActionLocksManager>;
 class ShellCommand;
 class ICompressionCodec;
 class AccessControlManager;
+class InternalResourceGroup;
+class ResourceGroupManager;
 class Credentials;
 class GSSAcceptorContext;
 class SettingsConstraints;
@@ -199,6 +201,7 @@ private:
     bool use_default_roles = false;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
+    InternalResourceGroup* resourceGroup = nullptr; /// Current resource group.
     String current_database;
     Settings settings;  /// Setting for query execution.
 
@@ -457,6 +460,13 @@ public:
 
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
+
+    void setResourceGroup(const IAST *ast);
+    InternalResourceGroup* getResourceGroup();
+    ResourceGroupManager & getResourceGroupManager();
+    const ResourceGroupManager & getResourceGroupManager() const;
+    void startResourceGroup();
+    void stopResourceGroup();
 
     enum StorageNamespace
     {

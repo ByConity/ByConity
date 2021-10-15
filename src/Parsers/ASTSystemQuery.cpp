@@ -87,6 +87,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RELOAD MUTATION";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
+        case Type::START_RESOURCE_GROUP:
+            return "START RESOURCE GROUP";
+        case Type::STOP_RESOURCE_GROUP:
+            return "STOP RESOURCE GROUP";
         case Type::RELOAD_DICTIONARY:
             return "RELOAD DICTIONARY";
         case Type::RELOAD_DICTIONARIES:

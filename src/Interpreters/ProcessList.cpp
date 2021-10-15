@@ -52,7 +52,8 @@ static bool isUnlimitedQuery(const IAST * ast)
             return false;
 
         if (auto database_and_table = getDatabaseAndTable(*ast_select, 0))
-            return database_and_table->database == "system" && database_and_table->table == "processes";
+            return database_and_table->database == "system" &&
+                (database_and_table->table == "processes" || database_and_table->table == "resource_groups");
 
         return false;
     }
@@ -72,6 +73,17 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         throw Exception("Query id cannot be empty", ErrorCodes::LOGICAL_ERROR);
 
     bool is_unlimited_query = isUnlimitedQuery(ast);
+
+    InternalResourceGroup::Container::iterator gpIt;
+    InternalResourceGroup *resourceGroup = nullptr;
+    if (!is_unlimited_query)
+    {
+        const_cast<Context *>(query_context.get())->setResourceGroup(ast);
+        /// FIXME(xuruiliang): change getResourceGroup to const getResourceGroup
+        resourceGroup = const_cast<Context *>(query_context.get())->getResourceGroup();
+    }
+    if (resourceGroup != nullptr)
+        gpIt = resourceGroup->run(query_, *query_context);
 
     {
         std::unique_lock lock(mutex);
@@ -175,7 +187,8 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         }
 
         auto process_it = processes.emplace(processes.end(),
-            query_context, query_, client_info, priorities.insert(settings.priority));
+            query_context, query_, client_info, priorities.insert(settings.priority),
+            resourceGroup == nullptr ? nullptr : resourceGroup->insert(gpIt));
 
         res = std::make_shared<Entry>(*this, process_it);
 
@@ -231,6 +244,9 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
             total_network_throttler = std::make_shared<Throttler>(settings.max_network_bandwidth_for_all_users);
         }
     }
+
+    if (resourceGroup != nullptr)
+        (*gpIt)->queryStatus = &res->get();
 
     return res;
 }
@@ -289,11 +305,16 @@ ProcessListEntry::~ProcessListEntry()
 
 
 QueryStatus::QueryStatus(
-    ContextPtr context_, const String & query_, const ClientInfo & client_info_, QueryPriorities::Handle && priority_handle_)
+    ContextPtr context_,
+    const String & query_,
+    const ClientInfo & client_info_,
+    QueryPriorities::Handle && priority_handle_,
+    InternalResourceGroup::Handle && resource_group_handle_)
     : WithContext(context_)
     , query(query_)
     , client_info(client_info_)
     , priority_handle(std::move(priority_handle_))
+    , resource_group_handle(std::move(resource_group_handle_))
     , num_queries_increment{CurrentMetrics::Query}
 {
     auto settings = getContext()->getSettings();

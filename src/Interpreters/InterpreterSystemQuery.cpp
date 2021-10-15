@@ -543,7 +543,6 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::FETCH_PARTS:
             fetchParts(query, table_id, system_context);
             break;
-
         case Type::EXECUTE_LOG:
         case Type::SKIP_LOG:
         case Type::SET_VALUE:
@@ -556,6 +555,12 @@ BlockIO InterpreterSystemQuery::execute()
             break;
         case Type::CLEAR_BROKEN_TABLES:
             clearBrokenTables(system_context);
+            break;
+        case Type::START_RESOURCE_GROUP:
+            system_context->startResourceGroup();
+            break;
+        case Type::STOP_RESOURCE_GROUP:
+            system_context->stopResourceGroup();
             break;
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
@@ -973,7 +978,7 @@ void InterpreterSystemQuery::restartDisk(String & name)
 
 void InterpreterSystemQuery::executeMetastoreCmd(ASTSystemQuery & query) const
 {
-    switch (query.meta_ops.operation) 
+    switch (query.meta_ops.operation)
     {
         case MetastoreOperation::START_AUTO_SYNC:
             getContext()->getGlobalContext()->setMetaCheckerStatus(false);
@@ -990,7 +995,7 @@ void InterpreterSystemQuery::executeMetastoreCmd(ASTSystemQuery & query) const
             break;
         }
         case MetastoreOperation::DROP_ALL_KEY:
-            /// TODO : implement later. directly remove all metadata for one table. 
+            /// TODO : implement later. directly remove all metadata for one table.
             throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
         case MetastoreOperation::DROP_BY_KEY:
         {
@@ -1228,6 +1233,9 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
 
         case Type::STOP_LISTEN_QUERIES: break;
         case Type::START_LISTEN_QUERIES: break;
+        // FIXME(xuruiliang): fix for resource group
+        case Type::START_RESOURCE_GROUP: break;
+        case Type::STOP_RESOURCE_GROUP: break;
         case Type::UNKNOWN: break;
         case Type::END: break;
     }
@@ -1316,7 +1324,7 @@ void InterpreterSystemQuery::fetchParts(const ASTSystemQuery & query, const Stor
         // attach fetched part
         merge_tree_storage->attachPartsInDirectory(fetched, part_relative_path, local_context);
     }
-    
+
 }
 
 }

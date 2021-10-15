@@ -68,6 +68,7 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/HaReplicaHandler.h>
+#include <Interpreters/ResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
@@ -438,6 +439,7 @@ struct ContextSharedPart
     String system_profile_name;                             /// Profile used by system processes
     String buffer_profile_name;                             /// Profile used by Buffer engine for flushing to the underlying
     AccessControlManager access_control_manager;
+    ResourceGroupManager resource_group_manager;              /// Known resource groups
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;                      /// Cache of queries' results.
@@ -894,6 +896,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     auto lock = getLock();
     shared->users_config = config;
     shared->access_control_manager.setUsersConfig(*shared->users_config);
+    shared->resource_group_manager.loadFromConfig(*shared->users_config);
 }
 
 ConfigurationPtr Context::getUsersConfig()
@@ -902,6 +905,26 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::setResourceGroup(const IAST *ast)
+{
+    auto lock = getLock();
+    if (shared->resource_group_manager.isInUse())
+        resourceGroup = shared->resource_group_manager.selectGroup(*this, ast);
+    else
+        resourceGroup = nullptr;
+}
+
+InternalResourceGroup* Context::getResourceGroup()
+{
+    auto lock = getLock();
+    return resourceGroup;
+}
+
+ResourceGroupManager& Context::getResourceGroupManager() { return shared->resource_group_manager; }
+const ResourceGroupManager& Context::getResourceGroupManager() const { return shared->resource_group_manager; }
+
+void Context::startResourceGroup() { shared->resource_group_manager.enable(); }
+void Context::stopResourceGroup() { shared->resource_group_manager.disable(); }
 
 void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address)
 {

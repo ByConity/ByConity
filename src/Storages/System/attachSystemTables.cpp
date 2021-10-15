@@ -46,6 +46,7 @@
 #include <Storages/System/StorageSystemTables.h>
 #include <Storages/System/StorageSystemZooKeeper.h>
 #include <Storages/System/StorageSystemContributors.h>
+#include <Storages/System/StorageSystemResourceGroups.h>
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
@@ -171,6 +172,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 #if USE_RDKAFKA
     attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
 #endif
+    attach<StorageSystemResourceGroups>(system_database, "resource_groups");
 
     if (has_zookeeper)
         attach<StorageSystemZooKeeper>(system_database, "zookeeper");
