@@ -5,6 +5,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/parseDatabaseAndTableName.h>
+#include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ParserSetQuery.h>
 
 
 namespace ErrorCodes
@@ -250,10 +252,38 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::SKIP_LOG:
+        case Type::EXECUTE_LOG:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+
+            if (!ParserKeyword{"WHERE"}.ignore(pos, expected))
+                return false;
+
+            if (!ParserExpression{}.parse(pos, res->predicate, expected))
+                return false;
+
+            break;
+        }
+
+        case Type::SET_VALUE:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (!ParserSetQuery(true).parse(pos, res->values_changes, expected))
+                return false;
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;
     }
+
+    if (res->predicate)
+        res->children.push_back(res->predicate);
+
 
     node = std::move(res);
     return true;

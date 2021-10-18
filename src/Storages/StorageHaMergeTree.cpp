@@ -3763,6 +3763,55 @@ std::unique_ptr<MergeTreeSettings> StorageHaMergeTree::getDefaultSettings() cons
     return std::make_unique<MergeTreeSettings>(getContext()->getReplicatedMergeTreeSettings());
 }
 
+void StorageHaMergeTree::systemExecuteLog(const std::vector<UInt64> & lsns)
+{
+    auto entries = queue.lookupEntriesByLSN(lsns);
+    for (auto & entry : entries)
+    {
+        auto executing_set = queue.tryCreateExecutingSet(entry);
+        if (!executing_set)
+            continue;
+
+        try
+        {
+            if (executeLogEntry(executing_set))
+            {
+                LOG_DEBUG(log, "system execute log succeed: {} ", entry->toDebugString());
+                queue.removeProcessedEntry(entry);
+            }
+            else
+                LOG_ERROR(log, "system execute log failed: {} ", entry->toDebugString());
+        }
+        catch (...)
+        {
+            LOG_ERROR(log, "system execute log failed: {}: {} ", entry->toDebugString(), getCurrentExceptionMessage(true));
+        }
+    }
+}
+
+void StorageHaMergeTree::systemSkipLog(const std::vector<UInt64> & lsns)
+{
+    auto entries = queue.lookupEntriesByLSN(lsns);
+    queue.removeProcessedEntries(entries);
+}
+
+void StorageHaMergeTree::systemSetValues(const ASTPtr & values_changes)
+{
+    auto & changes = values_changes->as<ASTSetQuery &>().changes;
+
+    for (auto & c : changes)
+    {
+        if (c.name == "committed_lsn")
+        {
+            log_manager->commitTo(c.value.get<UInt64>());
+        }
+        else
+        {
+            throw Exception("Unknown value: " + c.name, ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+}
+
 /// allocLSNAndSet() need two separated ZK operations which cannot be packed.
 /// And it is ok to postpone the latter one, so that leave it as a request.
 std::pair<UInt64, Coordination::RequestPtr> StorageHaMergeTree::allocLSNAndMakeSetRequest()

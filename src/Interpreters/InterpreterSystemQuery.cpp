@@ -26,16 +26,20 @@
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/executeQuery.h>
 #include <Access/ContextAccess.h>
 #include <Access/AllowedClientHosts.h>
 #include <Databases/IDatabase.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <Disks/DiskRestartProxy.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageFactory.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/formatAST.h>
 #include <csignal>
 #include <algorithm>
 
@@ -131,6 +135,77 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
 
 constexpr std::string_view table_is_not_replicated = "Table {} is not replicated";
 
+
+BlockIO executeOrSkipLog(const ASTSystemQuery & query, StorageHaMergeTree & ha, ContextPtr local_context)
+{
+    auto table_id = ha.getStorageID();
+
+    String generated_query = fmt::format(
+        "SELECT type, lsn, create_time, source_replica, new_part_name FROM system.ha_queue "
+        "WHERE database = '{}' AND table = '{}' AND {}",
+        table_id.database_name,
+        table_id.table_name,
+        query.predicate);
+
+    auto block_io = executeQuery(generated_query, Context::createCopy(local_context), true);
+    auto in = block_io.getInputStream();
+    auto block = in->read();
+    if (!block)
+        return block_io;
+
+    auto column = block.getByName("lsn").column;
+    std::vector<UInt64> lsns(column->size());
+    for (size_t i = 0; i < column->size(); ++i)
+        lsns[i] = column->getUInt(i);
+
+    if (query.type == ASTSystemQuery::Type::EXECUTE_LOG)
+    {
+        ha.systemExecuteLog(lsns);
+    }
+    else if (query.type == ASTSystemQuery::Type::SKIP_LOG)
+    {
+        ha.systemSkipLog(lsns);
+    }
+
+    block_io.in = std::make_shared<OneBlockInputStream>(block);
+    return block_io;
+}
+
+BlockIO executeOnTable(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)
+{
+    using Type = ASTSystemQuery::Type;
+
+    BlockIO block_io;
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, local_context);
+
+#define CAST_CALL(_table, _storage, _f) \
+    do \
+    { \
+        if (auto _t = dynamic_cast<_storage *>(_table.get())) \
+            _f(_t); \
+        else \
+            throw Exception("Table " + table_id.getNameForLogs() + " is not " + #_storage, ErrorCodes::BAD_ARGUMENTS); \
+    } while (false);
+
+    switch (query.type)
+    {
+        case Type::EXECUTE_LOG:
+        case Type::SKIP_LOG:
+            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { block_io = executeOrSkipLog(query, *t, local_context); })
+            break;
+
+        case Type::SET_VALUE:
+            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->systemSetValues(query.values_changes); })
+            break;
+
+        default:
+            throw Exception("Unknown type of SYSTEM query on table", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+#undef CAST_CALL
+
+    return block_io;
+}
 }
 
 /// Implements SYSTEM [START|STOP] <something action from ActionLocks>
@@ -423,6 +498,10 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::STOP_LISTEN_QUERIES:
         case Type::START_LISTEN_QUERIES:
             throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+        case Type::EXECUTE_LOG:
+        case Type::SKIP_LOG:
+        case Type::SET_VALUE:
+            return executeOnTable(query, table_id, system_context);
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -847,6 +926,12 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTART_DISK);
             break;
         }
+        case Type::EXECUTE_LOG:
+        case Type::SKIP_LOG:
+        case Type::SET_VALUE:
+        /// TODO:
+        break;
+
         case Type::STOP_LISTEN_QUERIES: break;
         case Type::START_LISTEN_QUERIES: break;
         case Type::UNKNOWN: break;

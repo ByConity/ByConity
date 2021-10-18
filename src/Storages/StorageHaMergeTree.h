@@ -189,6 +189,10 @@ public:
 
     void writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry);
 
+    void systemExecuteLog(const std::vector<UInt64> & lsns);
+    void systemSkipLog(const std::vector<UInt64> & lsns);
+    void systemSetValues(const ASTPtr & values_changes);
+
 private:
     /// Get a sequential consistent view of current parts.
     ReplicatedMergeTreeQuorumAddedParts::PartitionIdToMaxBlock getMaxAddedBlocks() const;
