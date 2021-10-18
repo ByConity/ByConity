@@ -2,4 +2,4 @@ CommitLint:
   commit_lint_name: regex
   commit_regex: "^(.+)$"
   mr_title_lint_name: regex
-  mr_title_regex: "^(feat|fix|build|ci|docs|perf|refactor|style|test)\\([A-Z]+-(\\d+)\\)!?: (.+)$"
+  mr_title_regex: "^(feat|fix|build|ci|docs|perf|refactor|style|test)\\(([A-Z]+-\\d+|[a-z]+@\\d+)\\)!?: (.+)$"
