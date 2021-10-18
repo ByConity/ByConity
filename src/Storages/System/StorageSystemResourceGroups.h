@@ -1,18 +1,18 @@
 #pragma once
 
-#include <common/shared_ptr_helper.h>
 #include <Storages/System/IStorageSystemOneBlock.h>
+#include <common/shared_ptr_helper.h>
 
 
 namespace DB
 {
-
 class Context;
 
 
 /** Implements `resource_groups` system table
   */
-class StorageSystemResourceGroups : public shared_ptr_helper<StorageSystemResourceGroups>, public IStorageSystemOneBlock<StorageSystemResourceGroups>
+class StorageSystemResourceGroups : public shared_ptr_helper<StorageSystemResourceGroups>,
+                                    public IStorageSystemOneBlock<StorageSystemResourceGroups>
 {
 public:
     std::string getName() const override { return "SystemResourceGroups"; }

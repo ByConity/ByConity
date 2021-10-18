@@ -1,25 +1,24 @@
-#include <Common/Exception.h>
-#include <common/logger_useful.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ResourceGroupManager.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int RESOURCE_GROUP_ILLEGAL_CONFIG;
     extern const int RESOURCE_GROUP_MISMATCH;
 }
 
-std::shared_ptr<ResourceSelectCase::QueryType> ResourceSelectCase::translateQueryType(const DB::String &queryType)
+std::shared_ptr<ResourceSelectCase::QueryType> ResourceSelectCase::translateQueryType(const DB::String & queryType)
 {
     if (queryType == "DDL")
         return std::make_shared<ResourceSelectCase::QueryType>(ResourceSelectCase::QueryType::DDL);
@@ -32,7 +31,7 @@ std::shared_ptr<ResourceSelectCase::QueryType> ResourceSelectCase::translateQuer
     return nullptr;
 }
 
-ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *ast)
+ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * ast)
 {
     if (ast->as<ASTCreateQuery>() || ast->as<ASTDropQuery>() || ast->as<ASTRenameQuery>())
         return ResourceSelectCase::QueryType::DDL;
@@ -47,15 +46,13 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *a
             for (auto command : alter_selects->command_list->children)
             {
                 auto alter_command = command->as<ASTAlterCommand>();
-                if (alter_command->type == ASTAlterCommand::Type::ADD_COLUMN
-                  || alter_command->type == ASTAlterCommand::Type::DROP_COLUMN
-                  || alter_command->type == ASTAlterCommand::Type::MODIFY_COLUMN
-                  || alter_command->type == ASTAlterCommand::Type::COMMENT_COLUMN
-                  || alter_command->type == ASTAlterCommand::Type::MODIFY_ORDER_BY
-                  || alter_command->type == ASTAlterCommand::Type::MODIFY_TTL
-                  || alter_command->type == ASTAlterCommand::Type::ADD_INDEX
-                  || alter_command->type == ASTAlterCommand::Type::DROP_INDEX)
-                //   || alter_command->type == ASTAlterCommand::Type::CHANGE_ENGINE
+                if (alter_command->type == ASTAlterCommand::Type::ADD_COLUMN || alter_command->type == ASTAlterCommand::Type::DROP_COLUMN
+                    || alter_command->type == ASTAlterCommand::Type::MODIFY_COLUMN
+                    || alter_command->type == ASTAlterCommand::Type::COMMENT_COLUMN
+                    || alter_command->type == ASTAlterCommand::Type::MODIFY_ORDER_BY
+                    || alter_command->type == ASTAlterCommand::Type::MODIFY_TTL || alter_command->type == ASTAlterCommand::Type::ADD_INDEX
+                    || alter_command->type == ASTAlterCommand::Type::DROP_INDEX)
+                    //   || alter_command->type == ASTAlterCommand::Type::CHANGE_ENGINE
                     return ResourceSelectCase::QueryType::DDL;
             }
         }
@@ -64,7 +61,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *a
     return ResourceSelectCase::QueryType::OTHER;
 }
 
-void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguration &config)
+void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguration & config)
 {
     LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Load resource group manager");
     if (!rootGroups.empty())
@@ -77,7 +74,7 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
     config.keys(prefix, config_keys);
     String prefixWithKey;
     /// load resource groups
-    for (const String &key : config_keys)
+    for (const String & key : config_keys)
     {
         prefixWithKey = prefix + "." + key;
         if (key.find("resource_group") == 0)
@@ -88,16 +85,12 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
             LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Found resource group {}", name);
             if (groups.find(name) != groups.end())
                 throw Exception("Resource group name duplicated: " + name, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
-            auto pr = groups.emplace(std::piecewise_construct,
-                                     std::forward_as_tuple(name),
-                                     std::forward_as_tuple());
-            InternalResourceGroup *group = &(pr.first->second);
+            auto pr = groups.emplace(std::piecewise_construct, std::forward_as_tuple(name), std::forward_as_tuple());
+            InternalResourceGroup * group = &(pr.first->second);
             group->setName(name);
             group->setSoftMaxMemoryUsage(config.getInt64(prefixWithKey + ".soft_max_memory_usage", 0));
-            group->setMinQueryMemoryUsage(
-                    config.getInt64(prefixWithKey + ".min_query_memory_usage", 536870912)); /// default 512MB
-            group->setMaxConcurrentQueries(
-                    config.getInt(prefixWithKey + ".max_concurrent_queries", 100)); /// default 100
+            group->setMinQueryMemoryUsage(config.getInt64(prefixWithKey + ".min_query_memory_usage", 536870912)); /// default 512MB
+            group->setMaxConcurrentQueries(config.getInt(prefixWithKey + ".max_concurrent_queries", 100)); /// default 100
             group->setMaxQueued(config.getInt(prefixWithKey + ".max_queued", 100)); /// default 100
             group->setMaxQueuedWaitingMs(config.getInt(prefixWithKey + ".max_queued_waiting_ms", 5000)); /// default 5s
             group->setPriority(config.getInt(prefixWithKey + ".priority", 0));
@@ -121,7 +114,9 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
         {
             auto parentIt = groups.find(p.second.getParentResourceGroup());
             if (parentIt == groups.end())
-                throw Exception("Resource group's parent group not found: " + p.second.getName() + " -> " +  p.second.getParentResourceGroup(), ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
+                throw Exception(
+                    "Resource group's parent group not found: " + p.second.getName() + " -> " + p.second.getParentResourceGroup(),
+                    ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             p.second.setParent(&(parentIt->second));
         }
     }
@@ -139,9 +134,11 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
             String resourceGroup = config.getString(prefixWithKey + ".resource_group");
             auto groupIt = groups.find(resourceGroup);
             if (groupIt == groups.end())
-                throw Exception("Select case's group not found: " + key + " -> " + resourceGroup, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
+                throw Exception(
+                    "Select case's group not found: " + key + " -> " + resourceGroup, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             else if (!groupIt->second.isLeaf())
-                throw Exception("Select case's group is not leaf group: " + key + " -> " + resourceGroup, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
+                throw Exception(
+                    "Select case's group is not leaf group: " + key + " -> " + resourceGroup, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             selectCase.group = &(groupIt->second);
             if (config.has(prefixWithKey + ".user"))
                 selectCase.user = std::make_shared<std::regex>(config.getString(prefixWithKey + ".user"));
@@ -152,19 +149,18 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
                 String queryType = config.getString(prefixWithKey + ".query_type");
                 selectCase.queryType = ResourceSelectCase::translateQueryType(queryType);
                 if (selectCase.queryType == nullptr)
-                    throw Exception("Select case's query type is illegal: " + key + " -> " + queryType, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
+                    throw Exception(
+                        "Select case's query type is illegal: " + key + " -> " + queryType, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             }
             selectCases.push_front(std::move(selectCase));
         }
     }
-    selectCases.sort([] (const ResourceSelectCase & c1, const ResourceSelectCase & c2) {
-        return c1.name < c2.name;
-    });
+    selectCases.sort([](const ResourceSelectCase & c1, const ResourceSelectCase & c2) { return c1.name < c2.name; });
     LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "Found {} resource groups, {} select cases", groups.size(), selectCases.size());
     bool oldVal = false;
     if (!rootGroups.empty() && started.compare_exchange_strong(oldVal, true, std::memory_order_seq_cst, std::memory_order_relaxed))
     {
-        ResourceTask *resourceTask = new ResourceTask(this);
+        ResourceTask * resourceTask = new ResourceTask(this);
         timer.scheduleAtFixedRate(resourceTask, 1, 1);
     }
 }
@@ -181,7 +177,7 @@ void ResourceGroupManager::disable()
     LOG_DEBUG(&Poco::Logger::get("ResourceGroupManager"), "disabled");
 }
 
-InternalResourceGroup* ResourceGroupManager::selectGroup(const Context &query_context, const IAST *ast)
+InternalResourceGroup * ResourceGroupManager::selectGroup(const Context & query_context, const IAST * ast)
 {
     const ClientInfo & client_info = query_context.getClientInfo();
     for (const auto & selectCase : selectCases)
@@ -191,7 +187,7 @@ InternalResourceGroup* ResourceGroupManager::selectGroup(const Context &query_co
             && (selectCase.queryType == nullptr || *selectCase.queryType == ResourceSelectCase::getQueryType(ast)))
             return selectCase.group;
     }
-    switch(query_context.getSettingsRef().resource_group_unmatched_behavior)
+    switch (query_context.getSettingsRef().resource_group_unmatched_behavior)
     {
         case 0:
             return nullptr;

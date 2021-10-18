@@ -1,34 +1,33 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ResourceGroupManager.h>
 #include <Storages/System/StorageSystemResourceGroups.h>
-#include <Interpreters/Context.h>
 
 namespace DB
 {
-
 NamesAndTypesList StorageSystemResourceGroups::getNamesAndTypes()
 {
     return {
-            {"name", std::make_shared<DataTypeString>()},
+        {"name", std::make_shared<DataTypeString>()},
 
-            {"enable", std::make_shared<DataTypeUInt8>()},
+        {"enable", std::make_shared<DataTypeUInt8>()},
 
-            {"can_run_more", std::make_shared<DataTypeUInt8>()},
-            {"can_queue_more", std::make_shared<DataTypeUInt8>()},
+        {"can_run_more", std::make_shared<DataTypeUInt8>()},
+        {"can_queue_more", std::make_shared<DataTypeUInt8>()},
 
-            {"soft_max_memory_usage", std::make_shared<DataTypeInt64>()},
-            {"cached_memory_usage", std::make_shared<DataTypeInt64>()},
+        {"soft_max_memory_usage", std::make_shared<DataTypeInt64>()},
+        {"cached_memory_usage", std::make_shared<DataTypeInt64>()},
 
-            {"max_concurrent_queries", std::make_shared<DataTypeInt32>()},
-            {"running_queries", std::make_shared<DataTypeInt32>()},
+        {"max_concurrent_queries", std::make_shared<DataTypeInt32>()},
+        {"running_queries", std::make_shared<DataTypeInt32>()},
 
-            {"max_queued", std::make_shared<DataTypeInt32>()},
-            {"queued_queries", std::make_shared<DataTypeInt32>()},
+        {"max_queued", std::make_shared<DataTypeInt32>()},
+        {"queued_queries", std::make_shared<DataTypeInt32>()},
 
-            {"priority", std::make_shared<DataTypeInt32>()},
+        {"priority", std::make_shared<DataTypeInt32>()},
 
-            {"parent_resource_group", std::make_shared<DataTypeString>()},
+        {"parent_resource_group", std::make_shared<DataTypeString>()},
     };
 }
 

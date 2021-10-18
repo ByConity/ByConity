@@ -4,89 +4,40 @@
 
 namespace DB
 {
-
 class ResourceGroup
 {
 public:
-    Int64 getSoftMaxMemoryUsage() const
-    {
-        return soft_max_memory_usage;
-    }
+    Int64 getSoftMaxMemoryUsage() const { return soft_max_memory_usage; }
 
-    void setSoftMaxMemoryUsage(Int64 softMaxMemoryUsage)
-    {
-        soft_max_memory_usage = softMaxMemoryUsage;
-    }
+    void setSoftMaxMemoryUsage(Int64 softMaxMemoryUsage) { soft_max_memory_usage = softMaxMemoryUsage; }
 
-    Int64 getMinQueryMemoryUsage() const
-    {
-        return min_query_memory_usage;
-    }
+    Int64 getMinQueryMemoryUsage() const { return min_query_memory_usage; }
 
-    void setMinQueryMemoryUsage(Int64 minQueryMemoryUsage)
-    {
-        min_query_memory_usage = minQueryMemoryUsage;
-    }
+    void setMinQueryMemoryUsage(Int64 minQueryMemoryUsage) { min_query_memory_usage = minQueryMemoryUsage; }
 
-    Int32 getMaxConcurrentQueries() const
-    {
-        return max_concurrent_queries;
-    }
+    Int32 getMaxConcurrentQueries() const { return max_concurrent_queries; }
 
-    void setMaxConcurrentQueries(Int32 maxConcurrentQueries)
-    {
-        max_concurrent_queries = maxConcurrentQueries;
-    }
+    void setMaxConcurrentQueries(Int32 maxConcurrentQueries) { max_concurrent_queries = maxConcurrentQueries; }
 
-    Int32 getMaxQueued() const
-    {
-        return max_queued;
-    }
+    Int32 getMaxQueued() const { return max_queued; }
 
-    void setMaxQueued(Int32 maxQueued)
-    {
-        max_queued = maxQueued;
-    }
+    void setMaxQueued(Int32 maxQueued) { max_queued = maxQueued; }
 
-    Int32 getMaxQueuedWaitingMs() const
-    {
-        return max_queued_waiting_ms;
-    }
+    Int32 getMaxQueuedWaitingMs() const { return max_queued_waiting_ms; }
 
-    void setMaxQueuedWaitingMs(Int32 maxQueuedWaitingMs)
-    {
-        max_queued_waiting_ms = maxQueuedWaitingMs;
-    }
+    void setMaxQueuedWaitingMs(Int32 maxQueuedWaitingMs) { max_queued_waiting_ms = maxQueuedWaitingMs; }
 
-    Int32 getPriority() const
-    {
-        return priority;
-    }
+    Int32 getPriority() const { return priority; }
 
-    void setPriority(Int32 priority_)
-    {
-        priority = priority_;
-    }
+    void setPriority(Int32 priority_) { priority = priority_; }
 
-    const String &getName() const
-    {
-        return name;
-    }
+    const String & getName() const { return name; }
 
-    void setName(const String &name_)
-    {
-        name = name_;
-    }
+    void setName(const String & name_) { name = name_; }
 
-    const String &getParentResourceGroup() const
-    {
-        return parent_resource_group;
-    }
+    const String & getParentResourceGroup() const { return parent_resource_group; }
 
-    void setParentResourceGroup(const String &parentResourceGroup)
-    {
-        parent_resource_group = parentResourceGroup;
-    }
+    void setParentResourceGroup(const String & parentResourceGroup) { parent_resource_group = parentResourceGroup; }
 
 protected:
     Int64 soft_max_memory_usage = 0;

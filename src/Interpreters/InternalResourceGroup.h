@@ -1,10 +1,10 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <list>
 #include <memory>
 #include <mutex>
-#include <condition_variable>
 #include <unordered_map>
 
 #include <Core/Types.h>
@@ -12,15 +12,14 @@
 
 namespace DB
 {
+class QueryStatus;
+class Context;
 
 enum class QueryStatusType
 {
     WAITING,
     RUNNING
 };
-
-class QueryStatus;
-class Context;
 
 struct InternalResourceGroupInfo
 {
@@ -42,17 +41,19 @@ class InternalResourceGroup : public ResourceGroup
 public:
     struct QueryEntity
     {
-    public:
-        InternalResourceGroup *group;
+        InternalResourceGroup * group;
         String query;
-        const Context *query_context;
+        const Context * query_context;
         QueryStatusType statusType = QueryStatusType::WAITING;
         Int32 id;
         /// set after run
-        QueryStatus *queryStatus;
-        bool operator==(const QueryEntity & other) { return id == other.id;}
-        QueryEntity(InternalResourceGroup *group_, const String &query_,
-                    const Context &query_context_, QueryStatusType statusType_ = QueryStatusType::WAITING);
+        QueryStatus * queryStatus;
+        bool operator==(const QueryEntity & other) { return id == other.id; }
+        QueryEntity(
+            InternalResourceGroup * group_,
+            const String & query_,
+            const Context & query_context_,
+            QueryStatusType statusType_ = QueryStatusType::WAITING);
     };
 
     using Element = std::shared_ptr<QueryEntity>;
@@ -64,23 +65,20 @@ public:
         Container::iterator entityIt;
 
     public:
-        QueryEntityHandler(Container::iterator entityIt_): entityIt(entityIt_) {}
+        QueryEntityHandler(Container::iterator entityIt_) : entityIt(entityIt_) { }
         ~QueryEntityHandler()
         {
-            InternalResourceGroup *group = (*entityIt)->group;
+            InternalResourceGroup * group = (*entityIt)->group;
             group->queryFinished(entityIt);
         }
     };
 
     using Handle = std::shared_ptr<QueryEntityHandler>;
 
-    Handle insert(Container::iterator entityId)
-    {
-        return std::make_shared<QueryEntityHandler>(entityId);
-    }
+    Handle insert(Container::iterator entityId) { return std::make_shared<QueryEntityHandler>(entityId); }
 
-    InternalResourceGroup* getParent() const;
-    void setParent(InternalResourceGroup* parent);
+    InternalResourceGroup * getParent() const;
+    void setParent(InternalResourceGroup * parent);
     Container::iterator run(const String & query, const Context & query_context);
     void processQueuedQueues();
     void setRoot();
@@ -96,17 +94,17 @@ protected:
     Container::iterator enqueueQuery(Element & element);
     Container::iterator runQuery(Element & element);
 
-    InternalResourceGroup* root = nullptr;
-    InternalResourceGroup* parent = nullptr;
-    std::unordered_map<String, InternalResourceGroup*> subGroups;
-    std::list<InternalResourceGroup*> eligibleGroups;
-    std::list<InternalResourceGroup*>::iterator eligibleGroupIterator;
-    Container  runningQueries;
-    Int32 descendentRunningQueries = 0;
+    InternalResourceGroup * root{nullptr};
+    InternalResourceGroup * parent{nullptr};
+    std::unordered_map<String, InternalResourceGroup *> subGroups;
+    std::list<InternalResourceGroup *> eligibleGroups;
+    std::list<InternalResourceGroup *>::iterator eligibleGroupIterator;
+    Container runningQueries;
+    Int32 descendentRunningQueries{0};
     Container queuedQueries;
-    Int32 descendentQueuedQueries = 0;
-    Int64 cachedMemoryUsageBytes = 0;
-    std::atomic<Int32> id {0};
+    Int32 descendentQueuedQueries{0};
+    Int64 cachedMemoryUsageBytes{0};
+    std::atomic<Int32> id{0};
     mutable std::mutex mutex;
     mutable std::condition_variable can_run;
 };

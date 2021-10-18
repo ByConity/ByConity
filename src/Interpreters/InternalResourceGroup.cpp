@@ -1,13 +1,12 @@
-#include <Common/Exception.h>
+#include <chrono>
 #include <Core/Settings.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InternalResourceGroup.h>
 #include <Interpreters/ProcessList.h>
-#include <chrono>
+#include <Common/Exception.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int RESOURCE_NOT_ENOUGH;
@@ -15,28 +14,32 @@ namespace ErrorCodes
     extern const int RESOURCE_GROUP_INTERNAL_ERROR;
 }
 
-InternalResourceGroup* InternalResourceGroup::getParent() const
+InternalResourceGroup * InternalResourceGroup::getParent() const
 {
     return parent;
 }
 
-void InternalResourceGroup::setParent(InternalResourceGroup* parent_)
+void InternalResourceGroup::setParent(InternalResourceGroup * parent_)
 {
     parent = parent_;
     root = parent->root;
     parent->subGroups[name] = this;
 }
 
-InternalResourceGroup::QueryEntity::QueryEntity(InternalResourceGroup *group_, const String &query_,
-    const Context &query_context_, QueryStatusType statusType_)
-    : group(group_), query(query_), query_context(&query_context_),
-    statusType(statusType_), id(group->root->id.fetch_add(1, std::memory_order_relaxed)) {}
+InternalResourceGroup::QueryEntity::QueryEntity(
+    InternalResourceGroup * group_, const String & query_, const Context & query_context_, QueryStatusType statusType_)
+    : group(group_)
+    , query(query_)
+    , query_context(&query_context_)
+    , statusType(statusType_)
+    , id(group->root->id.fetch_add(1, std::memory_order_relaxed))
+{
+}
 
 bool InternalResourceGroup::canRunMore() const
 {
-    return (max_concurrent_queries == 0 ||
-            static_cast<Int32>(runningQueries.size()) + descendentRunningQueries < max_concurrent_queries)
-    && (soft_max_memory_usage == 0 || cachedMemoryUsageBytes < soft_max_memory_usage);
+    return (max_concurrent_queries == 0 || static_cast<Int32>(runningQueries.size()) + descendentRunningQueries < max_concurrent_queries)
+        && (soft_max_memory_usage == 0 || cachedMemoryUsageBytes < soft_max_memory_usage);
 }
 
 bool InternalResourceGroup::canQueueMore() const
@@ -47,8 +50,9 @@ bool InternalResourceGroup::canQueueMore() const
 void InternalResourceGroup::queryFinished(InternalResourceGroup::Container::iterator entityIt)
 {
     std::unique_lock lock(root->mutex);
+
     runningQueries.erase(entityIt);
-    InternalResourceGroup *group = parent;
+    InternalResourceGroup * group = parent;
     while (group)
     {
         --group->descendentRunningQueries;
@@ -56,28 +60,33 @@ void InternalResourceGroup::queryFinished(InternalResourceGroup::Container::iter
     }
 }
 
-InternalResourceGroup::Container::iterator InternalResourceGroup::run(const String &query, const Context &query_context)
+InternalResourceGroup::Container::iterator InternalResourceGroup::run(const String & query, const Context & query_context)
 {
     std::unique_lock lock(root->mutex);
+
     bool canRun = true;
     bool canQueue = true;
-    InternalResourceGroup *group = this;
+    InternalResourceGroup * group = this;
+
     while (group)
     {
         canRun &= group->canRunMore();
         canQueue &= group->canQueueMore();
         group = group->parent;
     }
-    if (!canQueue && !canRun)
+    if (!canQueue && !canRun) {
         throw Exception("The resource is not enough for group " + name, ErrorCodes::RESOURCE_NOT_ENOUGH);
+    }
     InternalResourceGroup::Element element = std::make_shared<InternalResourceGroup::QueryEntity>(this, query, query_context);
-    if (canRun)
+    if (canRun) {
         return runQuery(element);
+    }
     auto it = enqueueQuery(element);
-    if (!root->can_run.wait_for(lock, std::chrono::milliseconds(max_queued_waiting_ms), [&]{ return element->statusType != QueryStatusType::WAITING; }))
+    if (!root->can_run.wait_for(
+            lock, std::chrono::milliseconds(max_queued_waiting_ms), [&] { return element->statusType != QueryStatusType::WAITING; }))
     {
         queuedQueries.erase(it);
-        InternalResourceGroup *s_group = parent;
+        InternalResourceGroup * s_group = parent;
         while (s_group)
         {
             --s_group->descendentQueuedQueries;
@@ -85,16 +94,17 @@ InternalResourceGroup::Container::iterator InternalResourceGroup::run(const Stri
         }
         throw Exception("Waiting for resource timeout", ErrorCodes::WAIT_FOR_RESOURCE_TIMEOUT);
     }
-    auto res = std::find(runningQueries.begin(), runningQueries.end(), element);
-    if (res == runningQueries.end())
-        throw Exception("The running query can not be found in the resource group " + name, ErrorCodes::RESOURCE_GROUP_INTERNAL_ERROR);
-    return res;
+    if (auto res = std::find(runningQueries.begin(), runningQueries.end(), element); res != runningQueries.end())
+    {
+        return res;
+    }
+    throw Exception("The running query can not be found in the resource group " + name, ErrorCodes::RESOURCE_GROUP_INTERNAL_ERROR);
 }
 
 InternalResourceGroup::Container::iterator InternalResourceGroup::enqueueQuery(InternalResourceGroup::Element & element)
 {
     Container::iterator it = queuedQueries.emplace(queuedQueries.end(), element);
-    InternalResourceGroup *group = parent;
+    InternalResourceGroup * group = parent;
     while (group)
     {
         ++group->descendentQueuedQueries;
@@ -109,7 +119,7 @@ InternalResourceGroup::Container::iterator InternalResourceGroup::runQuery(Inter
     Container::iterator it = runningQueries.emplace(runningQueries.end(), element);
     element->statusType = QueryStatusType::RUNNING;
     cachedMemoryUsageBytes += min_query_memory_usage;
-    InternalResourceGroup *group = parent;
+    InternalResourceGroup * group = parent;
     while (group)
     {
         ++group->descendentRunningQueries;
@@ -125,7 +135,8 @@ void InternalResourceGroup::internalRefreshStats()
     for (auto const & query : runningQueries)
     {
         queryMemoryUsage = 0;
-        if (query->queryStatus != nullptr) queryMemoryUsage = query->queryStatus->getUsedMemory();
+        if (query->queryStatus != nullptr)
+            queryMemoryUsage = query->queryStatus->getUsedMemory();
         newCacheMemoryUsage += queryMemoryUsage < min_query_memory_usage ? min_query_memory_usage : queryMemoryUsage;
     }
     for (auto const & item : subGroups)
@@ -159,7 +170,7 @@ bool InternalResourceGroup::internalProcessNext()
             {
                 runQuery(queuedQueries.front());
                 queuedQueries.erase(queuedQueries.begin());
-                InternalResourceGroup *group = parent;
+                InternalResourceGroup * group = parent;
                 while (group)
                 {
                     --group->descendentQueuedQueries;
@@ -206,7 +217,8 @@ void InternalResourceGroup::processQueuedQueues()
         // process all
         processed = true;
     }
-    if (processed) root->can_run.notify_all();
+    if (processed)
+        root->can_run.notify_all();
 }
 
 InternalResourceGroupInfo InternalResourceGroup::getInfo() const
