@@ -34,9 +34,9 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-StoragePtr tryGetTable(const ASTPtr & database_and_table, const Context & context)
+StoragePtr tryGetTable(const ASTPtr & database_and_table, const ContextPtr & context)
 {
-    auto table_id = context.tryResolveStorageID(database_and_table);
+    auto table_id = context->tryResolveStorageID(database_and_table);
     if (!table_id)
         return {};
     return DatabaseCatalog::instance().tryGetTable(table_id, context);
@@ -69,7 +69,7 @@ void RewriteDistributedTableMatcher::visit(ASTTableExpression & table_expression
         auto it = data.table_rewrite_info.find(table_expression.database_and_table_name.get());
         if (it != data.table_rewrite_info.end())
         {
-            auto * table_identifier = table_expression.database_and_table_name->as<ASTIdentifier>();
+            auto * table_identifier = table_expression.database_and_table_name->as<ASTTableIdentifier>();
             table_identifier->resetTable(it->second.first, it->second.second);
         }
     }
@@ -92,7 +92,7 @@ void RewriteDistributedTableMatcher::visit(ASTIdentifier & identifier, ASTPtr &,
 
 void RewriteDistributedTableMatcher::visit(ASTQualifiedAsterisk & qualified_asterisk, ASTPtr &, Data & data)
 {
-    ASTIdentifier & identifier = *qualified_asterisk.children[0]->as<ASTIdentifier>();
+    ASTTableIdentifier & identifier = *qualified_asterisk.children[0]->as<ASTTableIdentifier>();
     for (auto & rewrite_info : data.identifier_rewrite_info)
     {
         auto match = IdentifierSemantic::canReferColumnToTable(identifier, rewrite_info.first);
@@ -158,13 +158,13 @@ void InterpreterPerfectShard::collectTables()
     ClusterPtr cluster = nullptr;
     for (auto & table : tables)
     {
-        auto storage = tryGetTable(table, *context);
+        auto storage = tryGetTable(table, context);
         auto distributed_table = dynamic_cast<StorageDistributed *>(storage.get());
         if (distributed_table)
         {
             table_rewrite_info[table.get()] = {distributed_table->getRemoteDatabaseName(), distributed_table->getRemoteTableName()};
 
-            auto * identifier = table->as<ASTIdentifier>();
+            auto * identifier = table->as<ASTTableIdentifier>();
             DatabaseAndTableWithAlias database_table(*identifier, context->getCurrentDatabase());
             identifier_rewrite_info.emplace_back(database_table, distributed_table->getRemoteTableName());
 
@@ -245,12 +245,12 @@ QueryProcessingStage::Enum InterpreterPerfectShard::determineProcessingStage()
 
 void InterpreterPerfectShard::sendQuery(QueryPlan & query_plan)
 {
-    const Scalars & scalars = context->hasQueryContext() ? context->getQueryContext().getScalars() : Scalars{};
+    const Scalars & scalars = context->hasQueryContext() ? context->getQueryContext()->getScalars() : Scalars{};
 
-    Block header = InterpreterSelectQuery(query, *context, SelectQueryOptions(processed_stage)).getSampleBlock();
+    Block header = InterpreterSelectQuery(query, context, SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
 
     /// Return directly (with correct header) if no shard to query.
-    if (query_info.cluster->getShardsInfo().empty())
+    if (query_info.getCluster()->getShardsInfo().empty())
     {
         Pipe pipe(std::make_shared<NullSource>(header));
         auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(std::move(pipe));
@@ -267,7 +267,7 @@ void InterpreterPerfectShard::sendQuery(QueryPlan & query_plan)
     LOG_TRACE(log, "Perfect-Shard will send query {} ", queryToString(query));
 
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log,
-        query, *context, query_info);
+        query, context, query_info, nullptr, {}, nullptr);
 
     if (!query_plan.isInitialized())
         throw Exception("Pipeline is not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -361,14 +361,8 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
     bool overflow_row = false;
 
     Aggregator::Params params(header_before_aggregation, keys, aggregates,
-                              overflow_row, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
-                              settings.group_by_two_level_threshold,
-                              settings.group_by_two_level_threshold_bytes,
-                              settings.max_bytes_before_external_group_by,
-                              settings.empty_result_for_aggregation_by_empty_set,
-                              context->getTemporaryVolume(),
-                              settings.max_threads,
-                              settings.min_free_disk_space_for_temporary_data);
+                              overflow_row, 
+                              settings.max_threads);
 
     auto merge_threads = interpreter.getMaxStreams();
     auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads

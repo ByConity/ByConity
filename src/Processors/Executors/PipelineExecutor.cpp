@@ -857,10 +857,10 @@ void PipelineExecutor::dumpPipelineToFile(const String & suffix) const
 {
     if (process_list_element)
     {
-        if (process_list_element->tryGetQueryContext())
+        if (process_list_element->getContext())
         {
-            String query_id = process_list_element->tryGetQueryContext()->getCurrentQueryId();
-            String pipeline_log_path = process_list_element->tryGetQueryContext()->getPipelineLogpath();
+            String query_id = process_list_element->getContext()->getCurrentQueryId();
+            String pipeline_log_path = process_list_element->getContext()->getPipelineLogpath();
             String file_path = pipeline_log_path + "/" + query_id + "_" + suffix + ".dot";
 
             auto pipeline_string = dumpPipeline();
