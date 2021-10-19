@@ -48,6 +48,7 @@ struct IdentifierSemantic
 
     static void setColumnShortName(ASTIdentifier & identifier, const DatabaseAndTableWithAlias & db_and_table);
     static void setColumnLongName(ASTIdentifier & identifier, const DatabaseAndTableWithAlias & db_and_table);
+    static void setColumnTableName(ASTIdentifier & identifier, const String & table);
     static bool canBeAlias(const ASTIdentifier & identifier);
     static void setMembership(ASTIdentifier &, size_t table_pos);
     static void coverName(ASTIdentifier &, const String & alias);

@@ -769,6 +769,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SensitiveDataMasker::setInstance(std::make_unique<SensitiveDataMasker>(config(), "query_masking_rules"));
     }
 
+    if (config().has("pipeline_log_path"))
+        global_context->setPipelineLogPath(config().getString("pipeline_log_path", "/tmp/"));
+
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
         include_from_path,

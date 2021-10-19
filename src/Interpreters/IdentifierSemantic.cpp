@@ -311,4 +311,12 @@ std::vector<ASTPtr> collectConjunctions(const ASTPtr & node)
     return members;
 }
 
+void IdentifierSemantic::setColumnTableName(ASTIdentifier & identifier, const String & table)
+{
+    identifier.name_parts = {table, identifier.shortName()};
+    identifier.resetFullName();
+    identifier.semantic->table = table;
+    identifier.semantic->legacy_compound = true;
+}
+
 }

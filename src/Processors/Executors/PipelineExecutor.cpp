@@ -1,5 +1,7 @@
 #include <queue>
 #include <IO/WriteBufferFromString.h>
+#include <IO/WriteBufferFromFile.h>
+#include <Processors/printPipeline.h>
 #include <Common/EventCounter.h>
 #include <Common/CurrentThread.h>
 #include <Common/setThreadName.h>
@@ -849,6 +851,24 @@ String PipelineExecutor::dumpPipeline() const
     out.finalize();
 
     return out.str();
+}
+
+void PipelineExecutor::dumpPipelineToFile(const String & suffix) const
+{
+    if (process_list_element)
+    {
+        if (process_list_element->tryGetQueryContext())
+        {
+            String query_id = process_list_element->tryGetQueryContext()->getCurrentQueryId();
+            String pipeline_log_path = process_list_element->tryGetQueryContext()->getPipelineLogpath();
+            String file_path = pipeline_log_path + "/" + query_id + "_" + suffix + ".dot";
+
+            auto pipeline_string = dumpPipeline();
+            WriteBufferFromFile buf(file_path);
+            buf.write(pipeline_string.c_str(), pipeline_string.size());
+            buf.close();
+        }
+    }
 }
 
 }

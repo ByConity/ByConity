@@ -105,6 +105,8 @@ public:
     Names getRequiredColumns() { return required_columns; }
 
 private:
+    friend class InterpreterPerfectShard;
+
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,
         ContextPtr context_,

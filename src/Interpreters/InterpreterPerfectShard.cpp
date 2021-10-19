@@ -1,0 +1,405 @@
+#include <Interpreters/InterpreterPerfectShard.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Interpreters/ClusterProxy/executeQuery.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/IdentifierSemantic.h>
+
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTQualifiedAsterisk.h>
+#include <Parsers/queryToString.h>
+
+#include <Storages/StorageDistributed.h>
+#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <Processors/Sources/NullSource.h>
+#include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/QueryPlan/AggregatingStep.h>
+
+#include <queue>
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+StoragePtr tryGetTable(const ASTPtr & database_and_table, const Context & context)
+{
+    auto table_id = context.tryResolveStorageID(database_and_table);
+    if (!table_id)
+        return {};
+    return DatabaseCatalog::instance().tryGetTable(table_id, context);
+}
+
+bool RewriteDistributedTableMatcher::needChildVisit(ASTPtr & node, const ASTPtr &)
+{
+    if (auto * table_expression = node->as<ASTTableExpression>())
+    {
+        if (table_expression->database_and_table_name)
+            return false;
+    }
+    return true;
+}
+
+void RewriteDistributedTableMatcher::visit(ASTPtr & ast, Data & data)
+{
+    if (auto * node = ast->as<ASTTableExpression>())
+        visit(*node, ast, data);
+    if (auto * node = ast->as<ASTIdentifier>())
+        visit(*node, ast, data);
+    if (auto * node = ast->as<ASTQualifiedAsterisk>())
+        visit(*node, ast, data);
+}
+
+void RewriteDistributedTableMatcher::visit(ASTTableExpression & table_expression, ASTPtr &, Data & data)
+{
+    if (table_expression.database_and_table_name)
+    {
+        auto it = data.table_rewrite_info.find(table_expression.database_and_table_name.get());
+        if (it != data.table_rewrite_info.end())
+        {
+            auto * table_identifier = table_expression.database_and_table_name->as<ASTIdentifier>();
+            table_identifier->resetTable(it->second.first, it->second.second);
+        }
+    }
+}
+
+void RewriteDistributedTableMatcher::visit(ASTIdentifier & identifier, ASTPtr &, Data & data)
+{
+    for (auto & rewrite_info : data.identifier_rewrite_info)
+    {
+        auto match = IdentifierSemantic::canReferColumnToTable(identifier, rewrite_info.first);
+        if (match == IdentifierSemantic::ColumnMatch::DbAndTable
+            || match == IdentifierSemantic::ColumnMatch::AliasedTableName
+            || match == IdentifierSemantic::ColumnMatch::TableName)
+        {
+            IdentifierSemantic::setColumnTableName(identifier, rewrite_info.second);
+            break;
+        }
+    }
+}
+
+void RewriteDistributedTableMatcher::visit(ASTQualifiedAsterisk & qualified_asterisk, ASTPtr &, Data & data)
+{
+    ASTIdentifier & identifier = *qualified_asterisk.children[0]->as<ASTIdentifier>();
+    for (auto & rewrite_info : data.identifier_rewrite_info)
+    {
+        auto match = IdentifierSemantic::canReferColumnToTable(identifier, rewrite_info.first);
+        if (match == IdentifierSemantic::ColumnMatch::DbAndTable
+            || match == IdentifierSemantic::ColumnMatch::AliasedTableName
+            || match == IdentifierSemantic::ColumnMatch::TableName)
+        {
+            IdentifierSemantic::setColumnTableName(identifier, rewrite_info.second);
+            break;
+        }
+    }
+}
+
+bool checkIfSelectListExistConstant(const ASTPtr & node)
+{
+    if (!node)
+        return false;
+
+    for (auto & child : node->children)
+    {
+        if (child->as<ASTLiteral>())
+            return true;
+    }
+
+    return false;
+}
+
+/**
+ * We will add all rules for determining whether a sql is perfect-shardable in this function.
+ */
+bool InterpreterPerfectShard::checkPerfectShardable()
+{
+    auto * select = query->as<ASTSelectQuery>();
+    if (!select)
+        return false;
+    
+    if (checkIfSelectListExistConstant(select->select()))
+        return false;
+
+    return perfect_shardable;
+}
+
+void InterpreterPerfectShard::collectTables()
+{
+    ASTs tables;
+    std::queue<ASTPtr> q;
+    q.push(query);
+    while (!q.empty())
+    {
+        auto node = q.front();
+        for (auto & child : node->children)
+            q.push(child);
+
+        if (const ASTTableExpression * table = node->as<ASTTableExpression>())
+        {
+            if (table->database_and_table_name)
+                tables.push_back(table->database_and_table_name);
+        }
+
+        q.pop();
+    }
+
+    ClusterPtr cluster = nullptr;
+    for (auto & table : tables)
+    {
+        auto storage = tryGetTable(table, *context);
+        auto distributed_table = dynamic_cast<StorageDistributed *>(storage.get());
+        if (distributed_table)
+        {
+            table_rewrite_info[table.get()] = {distributed_table->getRemoteDatabaseName(), distributed_table->getRemoteTableName()};
+
+            auto * identifier = table->as<ASTIdentifier>();
+            DatabaseAndTableWithAlias database_table(*identifier, context->getCurrentDatabase());
+            identifier_rewrite_info.emplace_back(database_table, distributed_table->getRemoteTableName());
+
+            if (main_table.empty())
+            {
+                main_database = distributed_table->getRemoteDatabaseName();
+                main_table = distributed_table->getRemoteTableName();
+            }
+
+            // check if all tables locate on the same cluster
+            if (!cluster)
+            {
+                cluster = distributed_table->getCluster();
+                query_info.cluster = cluster;
+            }
+            else if (cluster != distributed_table->getCluster())
+            {
+                // tables in different cluster, perfect shard doesn't know
+                // how to rewrite the query, fall back to common case
+                perfect_shardable = false;
+                break;
+            }
+        }
+        else
+        {
+            perfect_shardable = false;
+            break;
+        }
+    }
+}
+
+void InterpreterPerfectShard::rewriteDistributedTables()
+{
+    RewriteDistributedTableMatcher::Data rewrite_data{.table_rewrite_info = table_rewrite_info, .identifier_rewrite_info = identifier_rewrite_info};
+    RewriteDistributedTableVisitor(rewrite_data).visit(query);
+}
+
+void InterpreterPerfectShard::buildQueryPlan(QueryPlan & query_plan)
+{
+    if (!checkPerfectShardable())
+        return;
+
+    rewriteDistributedTables();
+
+    processed_stage = determineProcessingStage();
+
+    sendQuery(query_plan);
+
+    try
+    {
+        /**
+         * For Complete stage, each worker will project the select list to final column ( project alias ).
+         * For WithMergeableStateAfterAggregation stage, final projection will not be done.
+         */
+        if (processed_stage == QueryProcessingStage::Complete)
+            getOriginalProject();
+
+        buildFinalPlan(query_plan);
+
+    }catch(...){
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        LOG_DEBUG(log, "Build query plan for Perfect-Shard failed, fallback to original plan");
+        perfect_shardable = false;
+    }
+}
+
+QueryProcessingStage::Enum InterpreterPerfectShard::determineProcessingStage()
+{
+    ASTSelectQuery * select = query->as<ASTSelectQuery>();
+    if (select->orderBy())
+        return QueryProcessingStage::WithMergeableStateAfterAggregation;
+    
+    if (select->limitBy() || select->limitLength() || select->limitOffset())
+        return QueryProcessingStage::WithMergeableStateAfterAggregation;
+
+    return QueryProcessingStage::Complete;
+}
+
+void InterpreterPerfectShard::sendQuery(QueryPlan & query_plan)
+{
+    const Scalars & scalars = context->hasQueryContext() ? context->getQueryContext().getScalars() : Scalars{};
+
+    Block header = InterpreterSelectQuery(query, *context, SelectQueryOptions(processed_stage)).getSampleBlock();
+
+    /// Return directly (with correct header) if no shard to query.
+    if (query_info.cluster->getShardsInfo().empty())
+    {
+        Pipe pipe(std::make_shared<NullSource>(header));
+        auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(std::move(pipe));
+        read_from_pipe->setStepDescription("Read from NullSource (Distributed)");
+        query_plan.addStep(std::move(read_from_pipe));
+
+        return;
+    }
+
+    ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
+        header, processed_stage, StorageID(main_database, main_table), scalars, false, context->getExternalTables()
+    );
+
+    LOG_TRACE(log, "Perfect-Shard will send query {} ", queryToString(query));
+
+    ClusterProxy::executeQuery(query_plan, select_stream_factory, log,
+        query, *context, query_info);
+
+    if (!query_plan.isInitialized())
+        throw Exception("Pipeline is not initialized", ErrorCodes::LOGICAL_ERROR);
+}
+
+void InterpreterPerfectShard::buildFinalPlan(QueryPlan & query_plan)
+{
+    if (interpreter.analysis_result.need_aggregate)
+        addAggregation(query_plan);
+
+    if (interpreter.analysis_result.has_order_by)
+    {
+        // if (processed_stage == QueryProcessingStage::WithMergeableStateAfterAggregation)
+        //     interpreter.executeMergeSorted(query_plan, "for PERFECT-SHARD ORDER BY");
+        // else
+            interpreter.executeOrder(query_plan, nullptr);
+    }
+
+    if (interpreter.analysis_result.hasLimitBy())
+    {
+        interpreter.executeExpression(query_plan, interpreter.analysis_result.before_limit_by, "Before LIMIT BY");
+        interpreter.executeLimitBy(query_plan);
+    }
+
+    interpreter.executeProjection(query_plan, interpreter.analysis_result.final_projection);
+
+    interpreter.executeLimit(query_plan);
+    interpreter.executeOffset(query_plan);
+}
+
+void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
+{
+    const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
+    ColumnNumbers keys;
+    for (const auto & key : interpreter.query_analyzer->aggregationKeys())
+        keys.push_back(header_before_aggregation.getPositionByName(key.name));
+
+    AggregateDescriptions pre_aggregates = interpreter.query_analyzer->aggregates();
+
+    AggregateDescriptions aggregates;
+
+    std::function<String(const String &, const DataTypePtr &)> get_aggregation_name = [&](const String & function_name, const DataTypePtr & type) -> String
+    {
+        if (Poco::toLower(function_name) == "max")
+            return "max";
+        else if (Poco::toLower(function_name) == "min")
+            return "min";
+        else if (Poco::toLower(function_name) == "any")
+            return "any";
+        else if (isNumber(*type))
+            return "sum";
+        else if (const auto * array = typeid_cast<const DataTypeArray *>(type.get()))
+            return get_aggregation_name(function_name, array->getNestedType()) + "ForEach";
+        else if (const auto * nullable = typeid_cast<const DataTypeNullable *>(type.get()))
+            return get_aggregation_name(function_name, nullable->getNestedType());
+        // TODO: bitmap64, pathfind, stack is not implement right now
+        else
+            throw Exception("Cannot find the matched aggregation for function " + function_name, ErrorCodes::LOGICAL_ERROR);
+        
+    };
+
+    auto build_aggregation = [&](AggregateDescription & descr)
+    {
+        AggregateDescription aggregate;
+        String argument_column_name = descr.column_name;
+        if (!original_project.empty())
+        {
+            auto it = original_project.find(descr.column_name);
+            if (it != original_project.end())
+                argument_column_name = it->second;
+        }
+        aggregate.column_name = descr.column_name;
+        aggregate.argument_names.push_back(argument_column_name);
+        aggregate.arguments.push_back(header_before_aggregation.getPositionByName(argument_column_name));
+        DataTypePtr type = header_before_aggregation.getByName(argument_column_name).type;
+
+        AggregateFunctionProperties properties;
+        aggregate.parameters = Array();
+        aggregate.function = AggregateFunctionFactory::instance().get(get_aggregation_name(descr.function->getName(), type), {type}, aggregate.parameters, properties);
+        aggregates.push_back(aggregate);
+    };
+
+    for (auto & descr : pre_aggregates)
+        build_aggregation(descr);
+
+    const Settings & settings = context->getSettingsRef();
+
+    SortDescription group_by_sort_description;
+    InputOrderInfoPtr group_by_info = nullptr;
+    // TODO: determine overflow
+    bool overflow_row = false;
+
+    Aggregator::Params params(header_before_aggregation, keys, aggregates,
+                              overflow_row, settings.max_rows_to_group_by, settings.group_by_overflow_mode,
+                              settings.group_by_two_level_threshold,
+                              settings.group_by_two_level_threshold_bytes,
+                              settings.max_bytes_before_external_group_by,
+                              settings.empty_result_for_aggregation_by_empty_set,
+                              context->getTemporaryVolume(),
+                              settings.max_threads,
+                              settings.min_free_disk_space_for_temporary_data);
+
+    auto merge_threads = interpreter.getMaxStreams();
+    auto temporary_data_merge_threads = settings.aggregation_memory_efficient_merge_threads
+                                        ? static_cast<size_t>(settings.aggregation_memory_efficient_merge_threads)
+                                        : static_cast<size_t>(settings.max_threads);
+
+    bool storage_has_evenly_distributed_read = false;
+
+    auto aggregating_step = std::make_unique<AggregatingStep>(
+            query_plan.getCurrentDataStream(),
+            params, true,
+            settings.max_block_size,
+            merge_threads,
+            temporary_data_merge_threads,
+            storage_has_evenly_distributed_read,
+            std::move(group_by_info),
+            std::move(group_by_sort_description));
+
+    query_plan.addStep(std::move(aggregating_step));
+}
+
+void InterpreterPerfectShard::getOriginalProject()
+{
+    Aliases aliases = interpreter.syntax_analyzer_result->aliases;
+    for (auto it = aliases.begin(); it != aliases.end(); ++it)
+    {
+        if (original_project.count(it->second->getColumnName()))
+            throw Exception("Found duplicated alias " + it->second->getColumnName() + 
+                " : " + it->first + " when apply Perfect-shard", ErrorCodes::LOGICAL_ERROR);
+        original_project[it->second->getColumnName()] = it->first;
+    }
+}
+
+}

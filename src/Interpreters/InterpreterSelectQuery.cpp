@@ -11,11 +11,13 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <Access/AccessFlags.h>
 #include <Access/ContextAccess.h>
 
 #include <AggregateFunctions/AggregateFunctionCount.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
@@ -34,6 +36,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/replaceAliasColumnsInQuery.h>
+#include <Interpreters/InterpreterPerfectShard.h>
 
 #include <Processors/Pipe.h>
 #include <Processors/QueryPlan/AggregatingStep.h>
@@ -575,7 +578,21 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    executeImpl(query_plan, input, std::move(input_pipe));
+    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard = 
+        context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
+
+    if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
+    {
+        interpreter_perfect_shard->buildQueryPlan(query_plan);
+        /**
+         * Double-check perfectshardable if perfect-shard is failed during the query plan construction.
+         * If it is, fallback to plan without perfect-shard.
+         */
+        if (!interpreter_perfect_shard->checkPerfectShardable())
+            executeImpl(query_plan, input, std::move(input_pipe));
+    }
+    else
+        executeImpl(query_plan, input, std::move(input_pipe));
 
     /// We must guarantee that result structure is the same as in getSampleBlock()
     ///

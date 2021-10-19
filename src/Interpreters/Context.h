@@ -195,6 +195,7 @@ private:
                             /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
     TemporaryTablesMapping external_tables_mapping;
     Scalars scalars;
+    String pipeline_log_path;
 
     /// Fields for distributed s3 function
     std::optional<ReadTaskCallback> next_task_callback;
@@ -793,6 +794,9 @@ public:
 
     ReadTaskCallback getReadTaskCallback() const;
     void setReadTaskCallback(ReadTaskCallback && callback);
+
+    void setPipelineLogPath(const String & path) { pipeline_log_path = path; }
+    String getPipelineLogpath() const { return pipeline_log_path; }
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;
