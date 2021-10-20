@@ -3024,16 +3024,15 @@ void StorageHaMergeTree::mergeSelectingTask()
 
             Stopwatch watch;
 
-            /// auto future_merge_parts = merger_mutator.selectPartsToMerge();
-            FutureMergedMutatedPart future_merge_part;
+            std::vector<FutureMergedMutatedPart> future_merge_parts;
             if (SelectPartsDecision::SELECTED
-                != merger_mutator.selectPartsToMerge(future_merge_part, false, max_source_parts_size, merge_pred, false, nullptr))
+                != merger_mutator.selectPartsToMergeMulti(future_merge_parts, false, max_source_parts_size, merge_pred, false, nullptr))
                 break;
 
             if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)
                 LOG_DEBUG(log, "selectPartsToMergeMulti elapsed {} ms.", elapsed);
 
-            success = createLogEntriesToMergeParts({future_merge_part});
+            success = createLogEntriesToMergeParts(future_merge_parts);
         } while (false);
 
         /// select parts to mutate

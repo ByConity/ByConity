@@ -164,6 +164,7 @@ void selectWithinPartition(
             continue;
 
         size_t sum_size = parts[begin].size;
+        size_t sum_rows = parts[begin].rows;
         size_t max_size = parts[begin].size;
         size_t min_age = parts[begin].age;
 
@@ -177,11 +178,16 @@ void selectWithinPartition(
                 break;
 
             size_t cur_size = parts[end - 1].size;
+            size_t cur_rows = parts[end - 1].rows;
             size_t cur_age = parts[end - 1].age;
 
             sum_size += cur_size;
+            sum_rows += cur_rows;
             max_size = std::max(max_size, cur_size);
             min_age = std::min(min_age, cur_age);
+
+            if (settings.max_total_rows_to_merge && sum_rows > settings.max_total_rows_to_merge)
+                break;
 
             if (max_total_size_to_merge && sum_size > max_total_size_to_merge)
                 break;
