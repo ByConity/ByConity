@@ -24,6 +24,8 @@
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/AggregatingStep.h>
 
+#include <IO/WriteBufferFromString.h>
+
 #include <queue>
 
 namespace DB
@@ -126,10 +128,13 @@ bool checkIfSelectListExistConstant(const ASTPtr & node)
 bool InterpreterPerfectShard::checkPerfectShardable()
 {
     auto * select = query->as<ASTSelectQuery>();
-    if (!select)
+    if (!select || !perfect_shardable)
         return false;
     
     if (checkIfSelectListExistConstant(select->select()))
+        return false;
+
+    if (!checkAggregationReturnType())
         return false;
 
     return perfect_shardable;
@@ -209,20 +214,13 @@ void InterpreterPerfectShard::buildQueryPlan(QueryPlan & query_plan)
 
     rewriteDistributedTables();
 
-    processed_stage = determineProcessingStage();
-
     sendQuery(query_plan);
 
     try
     {
-        /**
-         * For Complete stage, each worker will project the select list to final column ( project alias ).
-         * For WithMergeableStateAfterAggregation stage, final projection will not be done.
-         */
-        if (processed_stage == QueryProcessingStage::Complete)
-            getOriginalProject();
-
         buildFinalPlan(query_plan);
+
+        LOG_DEBUG(log, "Perfect-Shard applied");
 
     }catch(...){
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
@@ -298,6 +296,25 @@ void InterpreterPerfectShard::buildFinalPlan(QueryPlan & query_plan)
     interpreter.executeOffset(query_plan);
 }
 
+String InterpreterPerfectShard::getAggregationName(const String & function_name, const DataTypePtr & type) const
+{
+    if (Poco::toLower(function_name) == "max")
+            return "max";
+    else if (Poco::toLower(function_name) == "min")
+        return "min";
+    else if (Poco::toLower(function_name) == "any")
+        return "any";
+    else if (isNumber(*type))
+        return "sum";
+    else if (const auto * array = typeid_cast<const DataTypeArray *>(type.get()))
+        return getAggregationName(function_name, array->getNestedType()) + "ForEach";
+    else if (const auto * nullable = typeid_cast<const DataTypeNullable *>(type.get()))
+        return getAggregationName(function_name, nullable->getNestedType());
+    // TODO: bitmap64, pathfind, stack is not implement right now
+    else
+        return "";
+}
+
 void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
 {
     const auto & header_before_aggregation = query_plan.getCurrentDataStream().header;
@@ -309,31 +326,15 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
 
     AggregateDescriptions aggregates;
 
-    std::function<String(const String &, const DataTypePtr &)> get_aggregation_name = [&](const String & function_name, const DataTypePtr & type) -> String
-    {
-        if (Poco::toLower(function_name) == "max")
-            return "max";
-        else if (Poco::toLower(function_name) == "min")
-            return "min";
-        else if (Poco::toLower(function_name) == "any")
-            return "any";
-        else if (isNumber(*type))
-            return "sum";
-        else if (const auto * array = typeid_cast<const DataTypeArray *>(type.get()))
-            return get_aggregation_name(function_name, array->getNestedType()) + "ForEach";
-        else if (const auto * nullable = typeid_cast<const DataTypeNullable *>(type.get()))
-            return get_aggregation_name(function_name, nullable->getNestedType());
-        // TODO: bitmap64, pathfind, stack is not implement right now
-        else
-            throw Exception("Cannot find the matched aggregation for function " + function_name, ErrorCodes::LOGICAL_ERROR);
-        
-    };
-
     auto build_aggregation = [&](AggregateDescription & descr)
     {
         AggregateDescription aggregate;
         String argument_column_name = descr.column_name;
-        if (!original_project.empty())
+        /**
+         * For Complete stage, each worker will project the select list to final column ( project alias ).
+         * For WithMergeableStateAfterAggregation stage, final projection will not be done.
+         */
+        if (!original_project.empty() && processed_stage == QueryProcessingStage::Complete)
         {
             auto it = original_project.find(descr.column_name);
             if (it != original_project.end())
@@ -346,7 +347,7 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
 
         AggregateFunctionProperties properties;
         aggregate.parameters = Array();
-        aggregate.function = AggregateFunctionFactory::instance().get(get_aggregation_name(descr.function->getName(), type), {type}, aggregate.parameters, properties);
+        aggregate.function = AggregateFunctionFactory::instance().get(getAggregationName(descr.function->getName(), type), {type}, aggregate.parameters, properties);
         aggregates.push_back(aggregate);
     };
 
@@ -390,10 +391,49 @@ void InterpreterPerfectShard::getOriginalProject()
     for (auto it = aliases.begin(); it != aliases.end(); ++it)
     {
         if (original_project.count(it->second->getColumnName()))
-            throw Exception("Found duplicated alias " + it->second->getColumnName() + 
+        {
+            LOG_DEBUG(log, "Found duplicated alias " + it->second->getColumnName() + 
                 " : " + it->first + " when apply Perfect-shard", ErrorCodes::LOGICAL_ERROR);
+            perfect_shardable = false;
+            return;
+        }
         original_project[it->second->getColumnName()] = it->first;
     }
+}
+
+bool InterpreterPerfectShard::checkAggregationReturnType() const
+{
+    if (interpreter.analysis_result.need_aggregate)
+    {
+        AggregateDescriptions pre_aggregates = interpreter.query_analyzer->aggregates();
+        auto result_header = interpreter.getSampleBlock();
+
+        auto check_aggregation = [&](AggregateDescription & descr) -> bool
+        {
+            String argument_column_name = descr.column_name;
+            if (!original_project.empty())
+            {
+                auto it = original_project.find(descr.column_name);
+                if (it != original_project.end())
+                    argument_column_name = it->second;
+            }
+        
+            DataTypePtr type = result_header.getByName(argument_column_name).type;
+
+            if (getAggregationName(descr.function->getName(), type).empty())
+                return false;
+            
+            return true;
+        };
+
+        for (auto & descr : pre_aggregates)
+        {
+            if (!check_aggregation(descr))
+                return false;
+        }
+    }
+
+    return true;
 }
 
 }

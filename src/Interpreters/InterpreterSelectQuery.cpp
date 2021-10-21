@@ -202,6 +202,8 @@ static ContextPtr getSubqueryContext(ContextPtr context)
     subquery_settings.max_result_bytes = 0;
     /// The calculation of extremes does not make sense and is not necessary (if you do it, then the extremes of the subquery can be taken for whole query).
     subquery_settings.extremes = false;
+    /// subquery should not be executed in perfect-shard mode.
+    subquery_settings.distributed_perfect_shard = 0;
     subquery_context->setSettings(subquery_settings);
     return subquery_context;
 }
@@ -584,12 +586,6 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
     if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
     {
         interpreter_perfect_shard->buildQueryPlan(query_plan);
-        /**
-         * Double-check perfectshardable if perfect-shard is failed during the query plan construction.
-         * If it is, fallback to plan without perfect-shard.
-         */
-        if (!interpreter_perfect_shard->checkPerfectShardable())
-            executeImpl(query_plan, input, std::move(input_pipe));
     }
     else
         executeImpl(query_plan, input, std::move(input_pipe));

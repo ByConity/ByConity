@@ -305,7 +305,7 @@ void ExpressionAnalyzer::analyzeAggregation()
 
 void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {
-    if (do_global)
+    if (do_global && !getContext()->getSettingsRef().distributed_perfect_shard)
     {
         GlobalSubqueriesVisitor::Data subqueries_data(getContext(), subquery_depth, isRemoteStorage(),
                                                    external_tables, subqueries_for_sets, has_global_subqueries);
