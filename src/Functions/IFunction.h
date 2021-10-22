@@ -328,7 +328,7 @@ private:
 using FunctionOverloadResolverPtr = std::shared_ptr<IFunctionOverloadResolver>;
 
 /// Old function interface. Check documentation in IFunction.h.
-/// If client do not need statefull properties it can implement this interface.
+/// If client do not need stateful properties it can implement this interface.
 class IFunction
 {
 public:

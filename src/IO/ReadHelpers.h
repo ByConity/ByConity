@@ -142,6 +142,8 @@ inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
     return StringRef(data, size);
 }
 
+void readStringRefsBinary(StringRefs & v, ReadBuffer & buf, Arena& arena, size_t MAX_VECTOR_SIZE = DEFAULT_MAX_STRING_SIZE);
+
 
 template <typename T>
 void readVectorBinary(std::vector<T> & v, ReadBuffer & buf, size_t MAX_VECTOR_SIZE = DEFAULT_MAX_STRING_SIZE)
@@ -590,35 +592,32 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
         /// YYYY-MM-D
         /// YYYY-M-DD
         /// YYYY-M-D
+        /// YYYYMMDD
 
         /// The delimiters can be arbitrary characters, like YYYY/MM!DD, but obviously not digits.
 
         UInt16 year = (pos[0] - '0') * 1000 + (pos[1] - '0') * 100 + (pos[2] - '0') * 10 + (pos[3] - '0');
-        pos += 5;
+        pos += 4;
 
         if (isNumericASCII(pos[-1]))
             return ReturnType(false);
 
-        UInt8 month = pos[0] - '0';
-        if (isNumericASCII(pos[1]))
+        auto next = [&]()
         {
-            month = month * 10 + pos[1] - '0';
-            pos += 3;
-        }
-        else
-            pos += 2;
+            /// skip separator if necessary
+            if (!isNumericASCII(*pos))
+                ++pos;
 
-        if (isNumericASCII(pos[-1]))
-            return ReturnType(false);
+            UInt8 res = *pos - '0';
 
-        UInt8 day = pos[0] - '0';
-        if (isNumericASCII(pos[1]))
-        {
-            day = day * 10 + pos[1] - '0';
-            pos += 2;
-        }
-        else
-            pos += 1;
+            if (isNumericASCII(*pos))
+                res = res * 10 + (*(pos++) - '0');
+
+            return res;
+        };
+
+        UInt8 month = next();
+        UInt8 day = next();
 
         buf.position() = pos;
         date = LocalDate(year, month, day);

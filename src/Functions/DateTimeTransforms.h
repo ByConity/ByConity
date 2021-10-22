@@ -5,10 +5,12 @@
 #include <Common/Exception.h>
 #include <common/DateLUTImpl.h>
 #include <common/DateLUT.h>
+#include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
+//#include <Functions/FunctionsConversion.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -840,6 +842,26 @@ struct ToYYYYMMDDhhmmssImpl
     using FactorTransform = ZeroTransform;
 };
 
+struct LastDayImpl
+{
+    static constexpr auto name = "LastDay";
+
+    static inline UInt64 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toLastDayNumOfMonth(t);
+    }
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toLastDayNumOfMonth(t);
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toLastDayNumOfMonth(static_cast<DayNum>(d));
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
 
 template <typename FromType, typename ToType, typename Transform>
 struct Transformer
@@ -865,6 +887,14 @@ struct DateTimeTransformImpl
         using Op = Transformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform>;
 
         const ColumnPtr source_col = arguments[0].column;
+
+        // TODO:
+//        if (checkAndGetColumn<ColumnString>(source_col.get()))
+//        {
+//            auto column_date = ConvertImpl<DataTypeString, DataTypeDate, NameToDate>::execute(arguments, std::make_shared<DataTypeDate>(), source_col->size());
+//            source_col = std::move(column_date);
+//        }
+
         if (const auto * sources = checkAndGetColumn<typename FromDataType::ColumnType>(source_col.get()))
         {
             auto mutable_result_col = result_type->createColumn();

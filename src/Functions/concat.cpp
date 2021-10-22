@@ -84,7 +84,7 @@ public:
             return executeFormatImpl(arguments, input_rows_count);
     }
 
-private:
+protected:
     ContextWeakPtr context;
 
     ColumnPtr executeBinary(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const
@@ -172,10 +172,42 @@ private:
     }
 };
 
+template<typename Name>
+class ConcatWsImpl : public ConcatImpl<Name, false>
+{
+public:
+    explicit ConcatWsImpl(ContextPtr /*context*/) {}
+    using ConcatImpl<Name, false>::executeFormatImpl;
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
+    {
+        /// Format function is not proven to be faster for two arguments.
+        /// Actually there is overhead of 2 to 5 extra instructions for each string for checking empty strings in FormatImpl.
+        /// Though, benchmarks are really close, for most examples we saw executeBinary is slightly faster (0-3%).
+        /// For 3 and more arguments FormatImpl is much faster (up to 50-60%).
+
+        ColumnsWithTypeAndName new_arguments((arguments.size() << 1) - 3);
+
+        for (size_t i = 0; i < new_arguments.size(); ++i)
+        {
+            if (i & 1)
+                new_arguments[i] = arguments[0];
+            else
+                new_arguments[i] = arguments[(i >> 1) + 1];
+        }
+
+        return executeFormatImpl(new_arguments, input_rows_count);
+    }
+};
+
 
 struct NameConcat
 {
     static constexpr auto name = "concat";
+};
+struct NameConcatWs
+{
+    static constexpr auto name = "concatWs";
 };
 struct NameConcatAssumeInjective
 {
@@ -183,6 +215,7 @@ struct NameConcatAssumeInjective
 };
 
 using FunctionConcat = ConcatImpl<NameConcat, false>;
+using FunctionConcatWs = ConcatWsImpl<NameConcatWs>;
 using FunctionConcatAssumeInjective = ConcatImpl<NameConcatAssumeInjective, true>;
 
 
@@ -231,6 +264,8 @@ private:
 void registerFunctionsConcat(FunctionFactory & factory)
 {
     factory.registerFunction<ConcatOverloadResolver>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionConcatWs>();
+    factory.registerAlias("concat_ws", NameConcatWs::name);
     factory.registerFunction<FunctionConcatAssumeInjective>();
 }
 

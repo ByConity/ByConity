@@ -12,6 +12,7 @@
 #include <Functions/castTypeToEither.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/TransformDateTime64.h>
+#include <Functions/FunctionsConversion.h>
 
 #include <IO/WriteHelpers.h>
 
@@ -203,6 +204,35 @@ struct AddYearsImpl
     }
 };
 
+struct NextDayImp
+{
+    static constexpr auto name = "nextDay";
+
+    static inline DecimalUtils::DecimalComponents<DateTime64>
+    execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & timezone)
+    {
+        auto day_of_week = timezone.toDayOfWeek(t.whole);
+        Int64 diff = day_of_week >= delta ? delta + 7 - day_of_week : delta - day_of_week;
+        t.whole += diff * 86400;
+        return t;
+    }
+
+    static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
+    {
+        UInt8 day_of_week = time_zone.toDayOfWeek(t);
+        Int64 diff = day_of_week >= delta ? delta + 7 - day_of_week : delta - day_of_week;
+        return t + diff * 86400;
+    }
+
+    static inline UInt16 execute(UInt16 d, Int64 delta, const DateLUTImpl &time_zone)
+    {
+        UInt8 day_of_week = time_zone.toDayOfWeek(d * 86400);
+        Int64 diff = day_of_week >= delta ? delta + 7 - day_of_week : delta - day_of_week;
+        return d + diff;
+    }
+};
+
+
 template <typename Transform>
 struct SubtractIntervalImpl : public Transform
 {
@@ -303,10 +333,14 @@ struct DateTimeAddIntervalImpl
 
         const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, 2, 0);
 
-        const ColumnPtr source_col = arguments[0].column;
-
+        ColumnPtr source_col = arguments[0].column;
         auto result_col = result_type->createColumn();
         auto col_to = assert_cast<ToColumnType *>(result_col.get());
+
+        if (checkAndGetColumn<ColumnString>(source_col.get()))
+        {
+            source_col = ConvertImpl<DataTypeString, DataTypeDate, NameToDate>::execute(arguments, std::make_shared<DataTypeDate>(), source_col->size());
+        }
 
         if (const auto * sources = checkAndGetColumn<FromColumnType>(source_col.get()))
         {
@@ -321,6 +355,15 @@ struct DateTimeAddIntervalImpl
         {
             op.constantVector(
                 sources_const->template getValue<FromValueType>(),
+                col_to->getData(),
+                *arguments[1].column, time_zone);
+        }
+        else if (const auto * sources_const_string = checkAndGetColumnConst<ColumnString>(source_col.get()))
+        {
+            auto value = sources_const_string->template getValue<DataTypeString::FieldType>();
+
+            op.constantVector(
+                LocalDate(value).getDayNum(),
                 col_to->getData(),
                 *arguments[1].column, time_zone);
         }
@@ -375,18 +418,19 @@ public:
 
         if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type) && !isString(arguments[0].type))
                 throw Exception{"Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
                     ". Should be a date or a date with time", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
         else
         {
-            if (!WhichDataType(arguments[0].type).isDateTime()
+            if (!(WhichDataType(arguments[0].type).isDateTime() && WhichDataType(arguments[0].type).isString())
                 || !WhichDataType(arguments[2].type).isString())
             {
                 throw Exception(
                     "Function " + getName() + " supports 2 or 3 arguments. The 1st argument "
-                    "must be of type Date or DateTime. The 2nd argument must be number. "
+                    "must be of type Date or DateTime or String which could convert to Date/DateTime. "
+                    "The 2nd argument must be number. "
                     "The 3rd argument (optional) must be "
                     "a constant string with timezone name. The timezone argument is allowed "
                     "only when the 1st argument has the type DateTime",
@@ -402,10 +446,12 @@ public:
                 return resolveReturnType<DataTypeDateTime>(arguments);
             case TypeIndex::DateTime64:
                 return resolveReturnType<DataTypeDateTime64>(arguments);
+            case TypeIndex::String:
+                return resolveReturnType<DataTypeDateTime>(arguments); // TODO
             default:
             {
                 throw Exception("Invalid type of 1st argument of function " + getName() + ": "
-                    + arguments[0].type->getName() + ", expected: Date, DateTime or DateTime64.",
+                    + arguments[0].type->getName() + ", expected: Date, DateTime, DateTime64 or String.",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             }
         }
@@ -465,7 +511,7 @@ public:
         const IDataType * from_type = arguments[0].type.get();
         WhichDataType which(from_type);
 
-        if (which.isDate())
+        if (which.isDate() || which.isString())
         {
             return DateTimeAddIntervalImpl<DataTypeDate, TransformResultDataType<DataTypeDate>, Transform>::execute(
                 Transform{}, arguments, result_type);
