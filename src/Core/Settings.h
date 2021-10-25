@@ -492,6 +492,7 @@ class IColumn;
     M(UInt64, ha_alter_metadata_sync, 1, "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
     M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
     M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \

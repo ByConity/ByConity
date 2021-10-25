@@ -137,12 +137,12 @@ struct Settings;
     \
     /** ByteDance settings */ \
     \
+    /* HaMergeTree related settings */                                                                        \
     /** When we find a mutation is finished on the other replica, we don't check for hang mutation            \
      *  immediately because the current replica may finish the execution later on. So we wait for             \
      *  the configured period of time before continue. */                                                     \
     M(UInt64, ha_check_hang_mutations_wait_period, 600, "", 0) \
     M(UInt64, ha_check_hang_mutations_interval, 60, "", 0) \
-    /* HaMergeTree related settings */                                                                        \
     M(UInt64, ha_log_exchanger_queue_max_size, 8192, "", 0) \
     M(UInt64, ha_mark_lost_replica_timeout, 36 * 60 * 60, "", 0) \
     M(UInt64, ha_mark_bad_lsn_timeout, 37 * 60 * 60, "", 0) \
@@ -210,6 +210,8 @@ struct Settings;
     M(Float, bitengine_encode_loss_rate, 0.1, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
+    M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
+    M(Seconds, drop_ranges_lifetime, 60 * 60  * 36, "", 0) \
     \
     /** Obsolete settings. Kept for backward compatibility only. */ \
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \

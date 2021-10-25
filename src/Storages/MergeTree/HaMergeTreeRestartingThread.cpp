@@ -256,7 +256,7 @@ bool HaMergeTreeRestartingThread::tryStartup()
         {
             if (extra_startup)
                 LOG_DEBUG(log, "ExtraStartup trigger cloneReplicaIfNeeded");
-            /// TODO: storage.cloneReplicaIfNeeded(zookeeper);
+            storage.cloneReplicaIfNeeded(zookeeper);
 
             /// pullLogsToQueue() after we mark replica 'is_active' (and after we repair if it was lost);
             storage.queue.load(zookeeper);

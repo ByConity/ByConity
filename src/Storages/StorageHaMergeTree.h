@@ -189,6 +189,8 @@ public:
 
     void writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry);
 
+    bool isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica);
+
     void systemExecuteLog(const std::vector<UInt64> & lsns);
     void systemSkipLog(const std::vector<UInt64> & lsns);
     void systemSetValues(const ASTPtr & values_changes);
@@ -409,7 +411,8 @@ private:
     /// leader_election node in ZK is either deleted, or the session is marked expired.
     void exitLeaderElection();
 
-    void TTLWorker();
+    bool hasPartitionLevelTTL(const StorageInMemoryMetadata & metadata);
+    void tryExecutePartitionLevelTTL();
     time_t calcTTLForPartition(
         const MergeTreePartition & partition, const KeyDescription & partition_key, const TTLDescription & ttl_description) const;
 
@@ -417,7 +420,7 @@ private:
       */
     void mergeSelectingTask();
 
-    bool createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts);
+    void createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts);
     HaMergeTreeLogEntryPtr createLogEntryToMutatePart(
         const MergeTreePartInfo & part_info, Int64 mutation_version, int alter_version, bool current_replica_only = false);
 
@@ -458,6 +461,8 @@ private:
     /// NOTE: don't rely on dropPart if you 100% need to remove non-empty part
     /// and don't use any explicit locking mechanism for merges.
     bool dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const String & part_name, LogEntry & entry, bool detach, bool throw_if_noop);
+
+    void clearEmptyParts();
 
     // Partition helpers
     void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;

@@ -10,6 +10,7 @@
 #include <Storages/AlterCommands.h>
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
+#include <Storages/MergeTree/MergedBlockOutputStream.h>
 
 #include <regex>
 
@@ -58,6 +59,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_DATA_PART;
     extern const int INTERSERVER_SCHEME_DOESNT_MATCH;
     extern const int PART_IS_LOST_FOREVER;
+    extern const int BAD_TTL_EXPRESSION;
 }
 
 namespace ActionLocks
@@ -757,15 +759,16 @@ void StorageHaMergeTree::truncate(
 {
     table_lock.release();   /// Truncate is done asynchronously.
 
+    auto & settings = query_context->getSettingsRef();
+
     assertNotReadonly();
-    if (!is_leader)
+    if (!is_leader && !settings.ignore_leader_check)
         throw Exception("TRUNCATE cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
 
     auto parts = getDataPartsVector();
-    dropAllPartsInPartitions(
-        zookeeper, collectPartitionsFromParts(parts), false, getContext()->getSettingsRef().replication_alter_partitions_sync > 0);
+    dropAllPartsInPartitions(zookeeper, collectPartitionsFromParts(parts), false, settings.replication_alter_partitions_sync > 0);
 }
 
 void StorageHaMergeTree::startup()
@@ -1187,11 +1190,19 @@ void StorageHaMergeTree::alter(
 
     if (code == Coordination::Error::ZBADVERSION)
     {
-        if (results[0]->error != Coordination::Error::ZOK)
-            throw Exception(
-                "Metadata on replica is not up to date with common metadata in Zookeeper. Cannot alter", ErrorCodes::CANNOT_ASSIGN_ALTER);
+        /// if (results[0]->error != Coordination::Error::ZOK)
+        ///     throw Exception(
+        ///         "Metadata on replica is not up to date with common metadata in Zookeeper. Cannot alter", ErrorCodes::CANNOT_ASSIGN_ALTER);
 
-        /// TODO: any other cases ?
+        if (auto actual_columns_str = zookeeper->get(zookeeper_path + "/columns"); actual_columns_str != new_columns_str)
+            throw Exception(
+                "Another replica altered columns to " + actual_columns_str + ", but expected " + new_columns_str,
+                ErrorCodes::CANNOT_ASSIGN_ALTER);
+
+        if (auto actual_metadata_str = zookeeper->get(zookeeper_path + "/metadata"); actual_metadata_str != new_metadata_str)
+            throw Exception(
+                "Another replica altered metadata to " + actual_metadata_str + ", but expected " + new_metadata_str,
+                ErrorCodes::CANNOT_ASSIGN_ALTER);
 
         LOG_INFO(log, "Another replica altered columns/metadata to expeceted values. Skip this query.");
         return; /// Let queue schedule the mutation logs from other replica
@@ -1861,6 +1872,12 @@ bool StorageHaMergeTree::fetchPartHeuristically(
         break;
     }
 
+    if (MergeTreePartInfo::fromPartName(part_to_fetch, format_version).isFakeDropRangePart())
+    {
+        LOG_DEBUG(log, "Part {} is already dropped by replica {} inside {}", part_name, replica_to_fetch, part_to_fetch);
+        return true;
+    }
+
     return fetchPart(
         executing_set,
         part_to_fetch,
@@ -1998,7 +2015,7 @@ bool StorageHaMergeTree::fetchPart(
         throw;
     }
 
-    LOG_DEBUG(log, "Fetched part {} from {}", source_replica_path, (to_detached ? " (to 'detach' directory)" : ""));
+    LOG_DEBUG(log, "Fetched part {} from {} {}", part_name, source_replica_path, (to_detached ? " (to 'detach' directory)" : ""));
     return true;
 }
 
@@ -2324,45 +2341,78 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
 bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executing_set)
 {
     auto & entry = *executing_set->getExecuting();
-    auto drop_range_info = MergeTreePartInfo::fromPartName(entry.new_parts.front(), format_version);
-    drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// REMOVE ME
-
-    LOG_DEBUG(log, "{} parts in {}", (entry.detach ? "Detaching" : "Removing"), drop_range_info.partition_id);
+    auto & drop_range_name = entry.new_parts.front();
+    auto drop_range_info = MergeTreePartInfo::fromPartName(drop_range_name, format_version);
+    drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// TODO: REMOVE ME
 
     getContext()->getMergeList().cancelInPartition(getStorageID(), drop_range_info.partition_id, drop_range_info.max_block);
 
+    LOG_DEBUG(log, "{} parts inside {}", (entry.detach ? "Detaching" : "Removing"), drop_range_name);
+
+    auto metadata_snapshot = getInMemoryMetadataPtr();
     DataPartsVector parts_to_remove;
+
+    if (drop_range_info.isFakeDropRangePart())
+    {
+        auto storage_columns = metadata_snapshot->getColumns().getAllPhysical();
+
+        /// Create fake drop range part
+        auto disk = getStoragePolicy()->getAnyDisk();
+        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_range_name, disk, 0);
+        auto drop_range_part = createPart(
+            drop_range_name, MergeTreeDataPartType::COMPACT, drop_range_info, single_disk_volume, "tmp_delete_" + drop_range_name);
+        drop_range_part->setColumns(storage_columns);
+        drop_range_part->is_temp = true;
+
+        /// XXX: Fill partition with default values to prevent coredump
+        for (auto & type : metadata_snapshot->partition_key.data_types)
+            drop_range_part->partition.value.push_back(type->getDefault());
+
+        MergedBlockOutputStream out(
+            drop_range_part,
+            metadata_snapshot,
+            storage_columns,
+            {},
+            getCompressionCodecForPart(0, drop_range_part->ttl_infos, time(nullptr)));
+        out.writePrefix();
+        /// out.write(metadata_snapshot->getSampleBlock());
+        out.writeSuffixAndFinalizePart(drop_range_part);
+
+        MergeTreeData::Transaction transaction(*this);
+        parts_to_remove = renameTempPartAndReplace(drop_range_part, nullptr, &transaction);
+        transaction.commit();
+    }
+    else
     {
         auto data_parts_lock = lockParts();
         parts_to_remove = removePartsInRangeFromWorkingSet(drop_range_info, true, data_parts_lock);
         if (parts_to_remove.empty())
         {
-            if (!drop_range_info.isFakeDropRangePart())
-                LOG_INFO(log, "Log entry {} tried to drop single part {}, but part does not exist", entry.lsn, entry.new_parts.front());
-            return true; /// XXX: cannot be false
+            LOG_INFO(log, "Try to execute {}, but no part is inside it. Will skip this log.", entry.toDebugString());
+            return true;
         }
     }
 
     if (entry.detach)
     {
-        auto metadata_snapshot = getInMemoryMetadataPtr();
         /// If DETACH clone parts to detached/ directory
         for (auto & part : parts_to_remove)
         {
             LOG_INFO(log, "Detaching {}", part->relative_path);
             part->makeCloneInDetached("", metadata_snapshot);
         }
-    }
 
-    if (entry.detach)
-        LOG_DEBUG(log, "Detached {} parts inside {}.", parts_to_remove.size(), entry.new_parts.front());
+        LOG_DEBUG(log, "Detached {} parts inside {}.", parts_to_remove.size(), drop_range_name);
+    }
     else
-        LOG_DEBUG(log, "Removed {} parts inside {}.", parts_to_remove.size(), entry.new_parts.front());
+    {
+        LOG_DEBUG(log, "Removed {} parts inside {}.", parts_to_remove.size(), drop_range_name);
+    }
 
     /// We want to remove dropped parts from disk as soon as possible
     /// To be removed a partition should have zero refcount, therefore call the cleanup thread at exit
     parts_to_remove.clear();
-    cleanup_thread.wakeup();
+    clearOldPartsFromFilesystem(true); /// TODO: check whether the operation is safe
 
     return true;
 }
@@ -2393,15 +2443,16 @@ void StorageHaMergeTree::executeMetadataAlter(const MutationEntry & entry)
 
         LOG_INFO(log, "Metadata changed in ZooKeeper. Applying changes locally.");
 
-        auto metadata_diff = ReplicatedMergeTreeTableMetadata(*this, getInMemoryMetadataPtr()).checkAndFindDiff(metadata_from_entry);
+        auto metadata_diff = HaMergeTreeTableMetadata(*this, getInMemoryMetadataPtr()).checkAndFindDiff(metadata_from_entry);
         setTableStructure(std::move(columns_from_entry), metadata_diff);
-        LOG_INFO(log, "Applied changes to the metadata of the table");
-
         metadata_version = entry.alter_version;
-        /// This transaction may not happen, but it's OK, because on the next retry we will eventually create/update this node
-        zookeeper->createOrUpdate(replica_path + "/metadata_version", std::to_string(entry.alter_version), zkutil::CreateMode::Persistent);
-        LOG_DEBUG(log, "Set metadata version to: {} ", metadata_version);
+
+        LOG_INFO(log, "Applied changes to the metadata of the table. Current metadata version: {}", metadata_version);
     }
+
+    /// This transaction may not happen, but it's OK, because on the next retry we will eventually create/update this node
+    zookeeper->createOrUpdate(replica_path + "/metadata_version", std::to_string(entry.alter_version), zkutil::CreateMode::Persistent);
+    LOG_DEBUG(log, "Set metadata version to: {} ", metadata_version);
 }
 
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
@@ -2451,7 +2502,7 @@ void StorageHaMergeTree::commitLogTask()
     }
 
     auto self_lsn_status = log_manager->getLSNStatus(true);
-    if (self_lsn_status.committed_lsn == self_lsn_status.updated_lsn)
+    if (self_lsn_status.committed_lsn == self_lsn_status.updated_lsn && self_lsn_status.committed_lsn != 0)
         return;
 
     bool all_success{false};
@@ -2668,6 +2719,8 @@ void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unu
 
     LogEntry::Vec prepared_entries;
 
+    LOG_DEBUG(log, "self_committed_lsn {} peer_updated_lsn {}", cloned_replica, self_committed_lsn, peer_updated_lsn);
+
     if (self_committed_lsn != 0 || peer_updated_lsn != 0)
     {
         log_manager->resetTo(peer_updated_lsn);
@@ -2872,10 +2925,39 @@ void StorageHaMergeTree::exitLeaderElection()
     leader_election = nullptr;
 }
 
-void StorageHaMergeTree::TTLWorker()
+bool StorageHaMergeTree::hasPartitionLevelTTL(const StorageInMemoryMetadata & metadata)
+{
+    if (!metadata.hasRowsTTL())
+        return false;
+
+    NameSet partition_columns(metadata.partition_key.column_names.begin(), metadata.partition_key.column_names.end());
+
+    std::function<bool(const ASTPtr &)> isInPartitions = [&](const ASTPtr expr) -> bool {
+        String name = expr->getAliasOrColumnName();
+        if (partition_columns.count(name))
+            return true;
+
+        if (auto literal = expr->as<ASTLiteral>())
+            return true;
+        if (auto identifier = expr->as<ASTIdentifier>())
+            return false;
+        if (auto func = expr->as<ASTFunction>())
+        {
+            bool res = true;
+            for (auto & arg : func->arguments->children)
+                res &= isInPartitions(arg);
+            return res;
+        }
+        return false;
+    };
+
+    return isInPartitions(metadata.table_ttl.rows_ttl.expression_ast);
+}
+
+void StorageHaMergeTree::tryExecutePartitionLevelTTL()
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    if (!metadata_snapshot->hasRowsTTL())
+    if (!hasPartitionLevelTTL(*metadata_snapshot))
         return;
 
     auto & partition_key_description = metadata_snapshot->partition_key;
@@ -2891,6 +2973,9 @@ void StorageHaMergeTree::TTLWorker()
         if (curr_partition && *curr_partition == part->info.partition_id)
             continue;
         curr_partition = &part->info.partition_id;
+
+        if (part->info.isFakeDropRangePart())
+            continue;
 
         auto ttl = calcTTLForPartition(part->partition, partition_key_description, rows_ttl);
         if (ttl < now)
@@ -2954,10 +3039,6 @@ void StorageHaMergeTree::mergeSelectingTask()
     if (!is_leader)
         return;
 
-    LOG_TRACE(log, "{}", __PRETTY_FUNCTION__);
-
-    const auto storage_settings = getSettings();
-
     auto & pattern = getContext()->getSettingsRef().blacklist_for_merge_task_regex.value;
     if (std::regex_search(getStorageID().table_name, std::regex(pattern)))
     {
@@ -2965,12 +3046,16 @@ void StorageHaMergeTree::mergeSelectingTask()
         return;
     }
 
+    const auto storage_settings = getSettings();
 
-    bool success = false;
+    SelectPartsDecision select_decision = SelectPartsDecision::NOTHING_TO_MERGE;
+    LogEntry::Vec mutation_entries;
+    bool any_exception = false;
+
     try
     {
         /// Try to remove TTL expired partitions before selecting parts to merge
-        TTLWorker();
+        tryExecutePartitionLevelTTL();
 
         std::lock_guard merge_selecting_lock(merge_selecting_mutex);
         auto zookeeper = getZooKeeper();
@@ -3025,14 +3110,21 @@ void StorageHaMergeTree::mergeSelectingTask()
             Stopwatch watch;
 
             std::vector<FutureMergedMutatedPart> future_merge_parts;
-            if (SelectPartsDecision::SELECTED
-                != merger_mutator.selectPartsToMergeMulti(future_merge_parts, false, max_source_parts_size, merge_pred, false, nullptr))
-                break;
+            select_decision = merger_mutator.selectPartsToMergeMulti(
+                future_merge_parts,
+                false, // aggressive
+                max_source_parts_size,
+                merge_pred,
+                false, // merge_with_ttl_allowed
+                nullptr // out_disable_reason
+            );
 
             if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)
-                LOG_DEBUG(log, "selectPartsToMergeMulti elapsed {} ms.", elapsed);
+                LOG_DEBUG(log, "Selected {} groups of parts to merge in {} ms.", future_merge_parts.size(), elapsed);
 
-            success = createLogEntriesToMergeParts(future_merge_parts);
+            if (SelectPartsDecision::SELECTED == select_decision)
+                createLogEntriesToMergeParts(future_merge_parts); /// Will throw exception on any error
+
         } while (false);
 
         /// select parts to mutate
@@ -3057,7 +3149,6 @@ void StorageHaMergeTree::mergeSelectingTask()
             size_t max_parts_to_mutate = max_queued_mutates - num_queued_mutates;
 
             /// Choose parts to mutate.
-            LogEntry::Vec log_entries;
             DataPartsVector data_parts = getDataPartsVector();
             for (const auto & part : data_parts)
             {
@@ -3066,25 +3157,25 @@ void StorageHaMergeTree::mergeSelectingTask()
                     continue;
 
                 auto entry = createLogEntryToMutatePart(part->info, desired_mutation_version->first, desired_mutation_version->second);
-                log_entries.push_back(std::move(entry));
-                if (log_entries.size() >= max_parts_to_mutate)
+                mutation_entries.push_back(std::move(entry));
+                if (mutation_entries.size() >= max_parts_to_mutate)
                     break;
             }
 
-            if (!log_entries.empty())
-            {
-                queue.write(log_entries, /*broadcast=*/false);
-                success = true;
-            }
+            if (!mutation_entries.empty())
+                queue.write(mutation_entries);
 
         } while (false);
     }
     catch (...)
     {
-        throw;
+        any_exception = true;
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
-    if (!success)
+    if (any_exception)
+        merge_selecting_task->scheduleAfter(MERGE_SELECTING_SLEEP_MS);
+    else if (SelectPartsDecision::SELECTED != select_decision && mutation_entries.size() == 0)
         merge_selecting_task->scheduleAfter(MERGE_SELECTING_SLEEP_MS);
     else
         merge_selecting_task->schedule();
@@ -3269,7 +3360,7 @@ void StorageHaMergeTree::checkAndFixHangMutation()
     background_executor.triggerTask();
 }
 
-bool StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts)
+void StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts)
 {
     LogEntry::Vec entries;
 
@@ -3287,8 +3378,6 @@ bool StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMe
     }
 
     queue.write(entries);
-
-    return true;
 }
 
 HaMergeTreeLogEntryPtr StorageHaMergeTree::createLogEntryToMutatePart(
@@ -3376,8 +3465,10 @@ void StorageHaMergeTree::dropPartNoWaitNoThrow(const String & part_name)
 
 void StorageHaMergeTree::dropPart(const String & part_name, bool detach, ContextPtr query_context)
 {
+    auto & settings = query_context->getSettingsRef();
+
     assertNotReadonly();
-    if (!is_leader)
+    if (!is_leader && !settings.ignore_leader_check)
         throw Exception("DROP PART cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     auto zookeeper = getZooKeeper();
@@ -3386,7 +3477,7 @@ void StorageHaMergeTree::dropPart(const String & part_name, bool detach, Context
 
     dropPartImpl(zookeeper, part_name, *entry, detach, throw_if_noop);
 
-    if (query_context->getSettingsRef().replication_alter_partitions_sync > 0)
+    if (settings.replication_alter_partitions_sync > 0)
     {
         if (auto executing_set = queue.tryCreateExecutingSet(entry))
         {
@@ -3438,33 +3529,68 @@ bool StorageHaMergeTree::dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const St
     return true;
 }
 
+void StorageHaMergeTree::clearEmptyParts()
+{
+    auto settings = getSettings();
+    if (!settings->remove_empty_parts)
+        return;
+
+    time_t now = time(nullptr);
+    time_t drop_ranges_lifetime = std::max(settings->drop_ranges_lifetime.totalSeconds(), settings->old_parts_lifetime.totalSeconds() * 2);
+    bool is_leader_value = this->is_leader;
+
+    DataPartsVector drop_range_parts;
+    auto parts = getDataPartsVector();
+
+
+    for (const auto & part : parts)
+    {
+        if (part->info.isFakeDropRangePart() && now - part->modification_time > drop_ranges_lifetime)
+            drop_range_parts.push_back(part);
+        else if (part->rows_count == 0 && is_leader)
+            dropPartNoWaitNoThrow(part->name);
+    }
+
+    if (drop_range_parts.size() >= settings->min_drop_ranges_to_enable_cleanup)
+    {
+        auto data_parts_lock = lockParts();
+        removePartsFromWorkingSet(drop_range_parts, true, data_parts_lock);
+
+        for (auto & part : drop_range_parts)
+            LOG_DEBUG(log, "Remove drop range part from filesystem {}", part->name);
+    }
+}
 
 // Partition helpers
 void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
 {
+    auto & settings = query_context->getSettingsRef();
+
     assertNotReadonly();
-    if (!is_leader)
+    if (!is_leader && !settings.ignore_leader_check)
         throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     String partition_id = getPartitionIDFromQuery(partition, query_context);
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
-    dropAllPartsInPartitions(zookeeper, {partition_id}, detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
+    dropAllPartsInPartitions(zookeeper, {partition_id}, detach, settings.replication_alter_partitions_sync > 0);
 
     /// TODO:
 }
 
 void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context)
 {
+    auto & settings = query_context->getSettingsRef();
+
     assertNotReadonly();
-    if (!is_leader)
-        throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+    if (!is_leader && !settings.ignore_leader_check)
+        throw Exception("DROP PARTITION WHERE cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     auto parts = getPartsByPredicate(predicate);
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
     dropAllPartsInPartitions(
-        zookeeper, collectPartitionsFromParts(parts), detach, query_context->getSettingsRef().replication_alter_partitions_sync > 0);
+        zookeeper, collectPartitionsFromParts(parts), detach, settings.replication_alter_partitions_sync > 0);
 }
 
 PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
@@ -3484,6 +3610,8 @@ PartitionCommandsResultInfo StorageHaMergeTree::attachPartition(
         old_names.push_back(part->name);
 
     output.writeExistingParts(loaded_parts);
+
+    renamed_parts.old_and_new_names.clear();
 
     LOG_DEBUG(log, "Attached {} parts", loaded_parts.size());
     for (size_t i = 0; i < loaded_parts.size(); ++i)
@@ -3697,8 +3825,6 @@ void StorageHaMergeTree::fetchPartitionImpl(
 
 void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context)
 {
-    LOG_DEBUG(log, "GYZ TMP DEBUG");
-
     auto * merge_tree_table = dynamic_cast<MergeTreeData *>(source_table.get());
     if (!merge_tree_table)
         throw Exception("Target table must be MergeTree family for Move Partition.", ErrorCodes::LOGICAL_ERROR);
@@ -3748,7 +3874,7 @@ void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, cons
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const
 {
     return {};
-    /// return queue.getFirstAlterMutationCommandsForPart(part);
+    /// TODO: return queue.getFirstAlterMutationCommandsForPart(part);
 }
 
 void StorageHaMergeTree::startBackgroundMovesIfNeeded()
@@ -3760,6 +3886,20 @@ void StorageHaMergeTree::startBackgroundMovesIfNeeded()
 std::unique_ptr<MergeTreeSettings> StorageHaMergeTree::getDefaultSettings() const
 {
     return std::make_unique<MergeTreeSettings>(getContext()->getReplicatedMergeTreeSettings());
+}
+
+bool StorageHaMergeTree::isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica)
+{
+    String replica_is_lost = zookeeper->get(zookeeper_path + "/replicas/" + replica + "/is_lost");
+    if (replica_is_lost == "1")
+        return true;
+
+    /// TODO:
+    return false;
+    /// String replica_is_offline;
+    /// if (!zookeeper->tryGet(zookeeper_path + "/replicas/" + replica + "/is_offline", replica_is_offline))
+    ///     return false;
+    /// return replica_is_offline == "1";
 }
 
 void StorageHaMergeTree::systemExecuteLog(const std::vector<UInt64> & lsns)

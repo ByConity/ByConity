@@ -415,7 +415,8 @@ String HaMergeTreeLogEntryData::toString() const
 String HaMergeTreeLogEntryData::toDebugString() const
 {
     std::ostringstream oss;
-    oss << "{Log-" << lsn << " " << typeToString(type) << ", src " << source_replica << ", ";
+    oss << "{Log-" << lsn << ", src " << source_replica << ", " << typeToString(type) << ' ';
+
     switch (type)
     {
         case GET_PART:

@@ -90,11 +90,12 @@ void HaMergeTreeCleanupThread::localRun()
 void HaMergeTreeCleanupThread::iterate()
 {
     clearOldLogs();
+    storage.clearEmptyParts();
 
     if (storage.is_leader)
     {
         clearOldBlockAndLSNs();
-        /// clearOldMutations();
+        clearOldMutations();
     }
 
     // checkQuorumTimeOut();
@@ -260,10 +261,9 @@ void HaMergeTreeCleanupThread::clearOldBlockAndLSNs()
     removeEmpSeqZK("/clickhouse", "xid-");
 }
 
-#if 0
 void HaMergeTreeCleanupThread::clearOldMutations()
 {
-    UInt64 finished_mutations_to_keep = storage.settings.finished_mutations_to_keep;
+    UInt64 finished_mutations_to_keep = storage.getSettings()->finished_mutations_to_keep;
     if (!finished_mutations_to_keep)
         return;
 
@@ -283,7 +283,7 @@ void HaMergeTreeCleanupThread::clearOldMutations()
     for (const String & replica : replicas)
     {
         /// skip lost and offline replica
-        if (storage.replicaIsLostOrOffline(zookeeper, replica))
+        if (storage.isReplicaLostOrOffline(zookeeper, replica))
             continue;
 
         String pointer;
@@ -315,7 +315,7 @@ void HaMergeTreeCleanupThread::clearOldMutations()
     size_t batch_start_i = 0;
     for (size_t i = 0; i < entries.size(); ++i)
     {
-        LOG_DEBUG(log, "Removing old mutation entry " + entries[i] + " from ZK");
+        LOG_DEBUG(log, "Removing old mutation entry {} from ZK", entries[i]);
         ops.emplace_back(zkutil::makeRemoveRequest(storage.zookeeper_path + "/mutations/" + entries[i], -1));
 
         if (ops.size() > 4 * zkutil::MULTI_BATCH_SIZE || i + 1 == entries.size())
@@ -334,15 +334,12 @@ void HaMergeTreeCleanupThread::clearOldMutations()
 
                 throw;
             }
-            LOG_INFO(
-                log,
-                "Removed " + toString(i + 1 - batch_start_i) + " old mutations entries: " + entries[batch_start_i] + " - " + entries[i]);
+            LOG_INFO(log, "Removed {} old mutations entries: {} - {}", (i + 1 - batch_start_i), entries[batch_start_i], entries[i]);
             batch_start_i = i + 1;
             ops.clear();
         }
     }
 }
-#endif
 
 void HaMergeTreeCleanupThread::clearOldLogs()
 {

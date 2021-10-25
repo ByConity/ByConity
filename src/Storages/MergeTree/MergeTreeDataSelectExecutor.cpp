@@ -134,6 +134,9 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 {
     const auto & settings = context->getSettingsRef();
     auto parts = data.getDataPartsVector();
+
+    parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
+
     if (!query_info.projection)
     {
         auto plan = readFromParts(

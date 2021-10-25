@@ -2160,13 +2160,16 @@ bool MergeTreeData::renameTempPartAndReplace(
     MergeTreePartInfo part_info = part->info;
     String part_name;
 
-    if (DataPartPtr existing_part_in_partition = getAnyPartInPartition(part->info.partition_id, lock))
+    if (!part->info.isFakeDropRangePart())
     {
-        if (part->partition.value != existing_part_in_partition->partition.value)
-            throw Exception(
-                "Partition value mismatch between two parts with the same partition ID. Existing part: "
-                + existing_part_in_partition->name + ", newly added part: " + part->name,
-                ErrorCodes::CORRUPTED_DATA);
+        if (DataPartPtr existing_part_in_partition = getAnyPartInPartition(part->info.partition_id, lock))
+        {
+            if (part->partition.value != existing_part_in_partition->partition.value)
+                throw Exception(
+                    "Partition value mismatch between two parts with the same partition ID. Existing part: "
+                    + existing_part_in_partition->name + ", newly added part: " + part->name,
+                    ErrorCodes::CORRUPTED_DATA);
+        }
     }
 
     /** It is important that obtaining new block number and adding that block to parts set is done atomically.
@@ -2849,6 +2852,9 @@ MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr &
 
     for (auto & part : parts)
     {
+        if (part->info.isFakeDropRangePart())
+            continue;
+
         auto & partition_value = part->partition.value;
         for (size_t c = 0; c < mutable_columns.size(); ++c)
         {
@@ -3768,8 +3774,19 @@ MergeTreeData::DataPartPtr MergeTreeData::getAnyPartInPartition(
 {
     auto it = data_parts_by_state_and_info.lower_bound(DataPartStateAndPartitionID{DataPartState::Committed, partition_id});
 
-    if (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed && (*it)->info.partition_id == partition_id)
+    while (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed
+           && (*it)->info.partition_id == partition_id)
+    {
+        if ((*it)->info.isFakeDropRangePart())
+        {
+            ++it;
+            continue;
+        }
         return *it;
+    }
+
+    // if (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed && (*it)->info.partition_id == partition_id)
+    //     return *it;
 
     return nullptr;
 }

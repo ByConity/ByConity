@@ -657,7 +657,6 @@ size_t HaMergeTreeQueue::markRedundantEntries(LogEntryVec & entries)
     for (auto iter = entries.rbegin(); iter != entries.rend(); ++iter)
     {
         auto & entry = *iter;
-        LOG_TRACE(log, "check entry: {}", entry->toString());
 
         if (entry->type == LogEntry::BAD_LOG)
         {
@@ -694,7 +693,7 @@ size_t HaMergeTreeQueue::markRedundantEntries(LogEntryVec & entries)
             if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART)
             {
                 /// DO NOT add MERGE_PARTS
-                LOG_TRACE(log, "Add virtual parts: {}" , entry->toString());
+                LOG_TRACE(log, "Add virtual parts: {}" , entry->toDebugString());
                 virtual_parts.add(entry->new_parts.front());
             }
 
@@ -740,7 +739,7 @@ size_t HaMergeTreeQueue::insertWithStats(const LogEntryPtr & entry, std::lock_gu
             if (entry->type == LogEntry::MUTATE_PART && entry->source_replica == storage.replica_name)
                 unprocessed_mutations_of_self.fetch_add(1, std::memory_order_relaxed);
 
-            LOG_TRACE(log, "Insert entry to queue: {} ", entry->toString());
+            LOG_TRACE(log, "Insert entry to queue: {} ", entry->toDebugString());
             return 1;
         }
     }
@@ -1660,10 +1659,16 @@ Int32 HaMergeTreeMergePredicate::findMergeInterval(const MergeTreeData::DataPart
 bool HaMergeTreeMergePredicate::operator()(
     const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String *) const
 {
+    if (right->info.isFakeDropRangePart())
+        return false;
+
     if (!left)
         return true; /// TODO:
 
-    bool enable_logging = true;
+    if (left->info.isFakeDropRangePart())
+        return false;
+
+    bool enable_logging = false; /// TODO: support this
 
     if (left->info.partition_id != right->info.partition_id)
     {

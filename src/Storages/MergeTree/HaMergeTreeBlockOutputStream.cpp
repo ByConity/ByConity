@@ -175,7 +175,5 @@ void HaMergeTreeBlockOutputStream::commitParts(zkutil::ZooKeeperPtr &, MergeTree
     for (auto & part : parts)
         storage.renameTempPartAndAdd(part, nullptr, &transaction);
     transaction.commit();
-
-    storage.merge_selecting_task->schedule();
 }
 }
