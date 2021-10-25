@@ -1956,19 +1956,6 @@ bool StorageHaMergeTree::fetchPart(
 
         if (!to_detached)
         {
-            /* TODO:
-            /// Lock until part have been added
-            auto min_block_lock = getMinBlockMapLock();
-
-            auto min_block = getMinBlockUnlocked(part->info.partition_id);
-            if (part->info.max_block < min_block)
-            {
-                LOG_WARNING(log, "Try to commit fetched part " << part->name << " which should be dropped, min_block " << min_block);
-                return true;
-            }
-            */
-
-
             MergeTreeData::Transaction transaction(*this);
             renameTempPartAndReplace(part, nullptr, &transaction);
 
@@ -2026,8 +2013,6 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
     auto new_part_name = entry.new_parts.front();
 
     const auto storage_settings_ptr = getSettings();
-
-    /// TODO: min block
 
     if (getActiveContainingPart(entry.new_parts.front()))
     {
@@ -2173,8 +2158,6 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
             {}, /// entry.duduplicate_by_columns
             merging_params);
 
-        /// TODO: min block
-
         MergeTreeData::Transaction transaction(*this);
         merger_mutator.renameMergedTemporaryPart(part, parts, &transaction);
         /// checkPartChecksumsAndCommit(transaction, part);
@@ -2203,8 +2186,6 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     auto new_part_info = MergeTreePartInfo::fromPartName(new_part_name, format_version);
 
     auto storage_settings_ptr = getSettings();
-
-    /// TODO: min block
 
     /// if new part is covered by committed parts, skip the log
     if (auto containing_part = getActiveContainingPart(new_part_name))
@@ -2306,19 +2287,6 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
 
         part = merger_mutator.mutatePartToTemporaryPart(
             future_part, metadata_snapshot, commands, *merge_entry, entry.create_time, getContext(), reserved_space, table_lock);
-
-        /// {
-        ///     /// Lock until part have been added
-        ///     auto min_block_lock = getMinBlockMapLock();
-        ///     auto min_block = getMinBlockUnlocked(part->info.partition_id);
-        ///     if (part->info.max_block < min_block)
-        ///     {
-        ///         LOG_WARNING(log, "Try to commit mutated part {}  which should be dropped, min_block {}", part->name, min_block);
-        ///         return true;
-        ///     }
-
-        ///     renameTempPartAndReplace(part);
-        /// }
 
         renameTempPartAndReplace(part);
 
