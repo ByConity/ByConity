@@ -8,6 +8,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int CANNOT_ASSIGN_ALTER;
+    extern const int ABORTED;
 }
 
 HaMergeTreeQueue::HaMergeTreeQueue(StorageHaMergeTree & storage_)
@@ -329,6 +330,10 @@ bool HaMergeTreeQueue::pullLogsToQueue(
     [[maybe_unused]] bool ignore_backoff)
 {
     std::lock_guard lock(pull_logs_to_queue_mutex);
+
+    if (pull_log_blocker.isCancelled())
+        throw Exception("Log pulling is cancelled", ErrorCodes::ABORTED);
+
     /// DO NOT broadcast
     write(pullLogsImpl(zookeeper, lock, watch_callback, ignore_backoff), false);
     return prepared_lsn_list.empty();
@@ -1531,6 +1536,12 @@ HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperP
 {
     return HaMergeTreeMergePredicate(*this, zookeeper);
 }
+
+HaMergeTreeQueue::QueueLocks HaMergeTreeQueue::lockQueue()
+{
+    return QueueLocks(state_mutex, pull_logs_to_queue_mutex, update_mutations_mutex);
+}
+
 
 [[maybe_unused]] static bool hasNewParts(const HaMergeTreeLogEntry & entry)
 {

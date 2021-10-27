@@ -2184,7 +2184,7 @@ bool MergeTreeData::renameTempPartAndReplace(
     else /// Parts from ReplicatedMergeTree already have names
         part_name = part->name;
 
-    LOG_TRACE(log, "Renaming temporary part {} to {}.", part->relative_path, part_name);
+    LOG_DEBUG(log, "Renaming temporary part {} to {}.", part->relative_path, part_name);
 
     if (auto it_duplicate = data_parts_by_info.find(part_info); it_duplicate != data_parts_by_info.end())
     {

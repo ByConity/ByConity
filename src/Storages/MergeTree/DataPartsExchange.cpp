@@ -296,6 +296,10 @@ void Service::processQueryPartList(const HTMLForm & params, [[maybe_unused]]Read
         {
             data_parts = data.getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
         }
+
+        data_parts.erase(
+            std::remove_if(data_parts.begin(), data_parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }),
+            data_parts.end());
     }
 
     size_t numParts = data_parts.size();

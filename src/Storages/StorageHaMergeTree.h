@@ -189,7 +189,7 @@ public:
 
     void writeMutationLog(MutationLogElement::Type type, const MutationEntry & mutation_entry);
 
-    bool isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica);
+    bool isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica) const;
 
     void systemExecuteLog(const std::vector<UInt64> & lsns);
     void systemSkipLog(const std::vector<UInt64> & lsns);

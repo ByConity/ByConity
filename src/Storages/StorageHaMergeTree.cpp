@@ -829,14 +829,13 @@ void StorageHaMergeTree::shutdown()
     restarting_thread.shutdown();
     background_executor.finish();
 
-    /// TODO:
-    /// {
-    ///     auto lock = queue.lockQueue();
-    ///     /// Cancel logs pulling after background task were cancelled. It's still
-    ///     /// required because we can trigger pullLogsToQueue during manual OPTIMIZE,
-    ///     /// MUTATE, etc. query.
-    ///     queue.pull_log_blocker.cancelForever();
-    /// }
+    {
+        auto lock = queue.lockQueue();
+        /// Cancel logs pulling after background task were cancelled. It's still
+        /// required because we can trigger pullLogsToQueue during manual OPTIMIZE,
+        /// MUTATE, etc. query.
+        queue.pull_log_blocker.cancelForever();
+    }
     background_moves_executor.finish();
 
     auto data_parts_exchange_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, InterserverIOEndpointPtr{});
@@ -1064,7 +1063,6 @@ compareAndUpdateMetadata(const StorageInMemoryMetadata & current_metadata, Stora
         future_metadata_in_zk.constraints = new_constraints_str;
 }
 
-/// TODO: P0, prune this function
 void StorageHaMergeTree::alter(
     [[maybe_unused]] const AlterCommands & commands,
     [[maybe_unused]] ContextPtr query_context,
@@ -1313,7 +1311,8 @@ void StorageHaMergeTree::mutate(const MutationCommands & commands, ContextPtr qu
         query_context->getSettingsRef().mutations_wait_timeout);
 }
 
-void StorageHaMergeTree::waitMutation(const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const
+void StorageHaMergeTree::waitMutation(
+    const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const
 {
     if (mutations_sync == 0)
         return;
@@ -1326,9 +1325,8 @@ void StorageHaMergeTree::waitMutation(const String & znode_name, bool is_alter_m
         Strings all_replicas = zookeeper->getChildren(zookeeper_path + "/replicas");
         for (auto & replica : all_replicas)
         {
-            // TODO:
-            // if (replicaIsLostOrOffline(zookeeper, replica))
-            //     continue;
+            if (isReplicaLostOrOffline(zookeeper, replica))
+                continue;
 
             replicas.push_back(replica);
         }
@@ -1783,7 +1781,6 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
             return executeReplaceRange(executing_set);
 
         case LogEntry::BAD_LOG:
-            /// TODO: handle some corner case
             return true;
 
         default:
@@ -1914,7 +1911,7 @@ bool StorageHaMergeTree::fetchPart(
 
     auto zookeeper = getZooKeeper();
 
-    LOG_DEBUG(log, "Fetching part {} from  {}", part_name, source_replica_path);
+    LOG_DEBUG(log, "Fetching part {} from {}", part_name, source_replica_path);
 
     TableLockHolder table_lock_holder;
     if (!to_detached)
@@ -2389,7 +2386,7 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
     /// We want to remove dropped parts from disk as soon as possible
     /// To be removed a partition should have zero refcount, therefore call the cleanup thread at exit
     parts_to_remove.clear();
-    clearOldPartsFromFilesystem(true); /// TODO: check whether the operation is safe
+    cleanup_thread.wakeup();
 
     return true;
 }
@@ -2401,8 +2398,6 @@ bool StorageHaMergeTree::executeReplaceRange(HaQueueExecutingEntrySetPtr & execu
     auto & drop_range_name = entry.replace_range_entry->drop_range_part_name;
     auto drop_range_info = MergeTreePartInfo::fromPartName(drop_range_name, format_version);
     drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// TODO: REMOVE ME
-
-    /// TODO: log
 
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
@@ -2455,6 +2450,8 @@ bool StorageHaMergeTree::executeReplaceRange(HaQueueExecutingEntrySetPtr & execu
                     + address.host,
                 ErrorCodes::LOGICAL_ERROR);
 
+        LOG_DEBUG(log, "Fetching part {} from {} for replacing", part_to_fetch, source_replica_path);
+
         auto part = fetcher.fetchPart(
             getInMemoryMetadataPtr(),
             getContext(),
@@ -2470,6 +2467,8 @@ bool StorageHaMergeTree::executeReplaceRange(HaQueueExecutingEntrySetPtr & execu
             false, /// to_detached
             "tmp_replace_fetch_");
 
+        LOG_DEBUG(log, "Fetched part {} from {} for replacing", part_to_fetch, source_replica_path);
+
         new_parts.push_back(std::move(part));
         fetched_parts.add(part_to_fetch);
     }
@@ -2484,6 +2483,8 @@ bool StorageHaMergeTree::executeReplaceRange(HaQueueExecutingEntrySetPtr & execu
             renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
         transaction.commit(&data_parts_lock);
     }
+
+    LOG_DEBUG(log, "Removed {} parts inside {} for replacing", parts_to_remove.size(), drop_range_name);
 
     parts_to_remove.clear();
     cleanup_thread.wakeup();
@@ -2532,7 +2533,9 @@ void StorageHaMergeTree::executeMetadataAlter(const MutationEntry & entry)
 bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
 {
     return false;
-    /// TODO: p0
+    /// TODO:
+    /// 1. for move
+    /// 2. for drop part
     /// return queue.isVirtualPart(part);
 }
 
@@ -2926,7 +2929,6 @@ void StorageHaMergeTree::getReplicaToClone(zkutil::ZooKeeperPtr & zookeeper, Str
 
 void StorageHaMergeTree::cloneReplicaIfNeeded(zkutil::ZooKeeperPtr zookeeper)
 {
-    /// TODO:
     if (is_offline)
         return;
 
@@ -3645,8 +3647,6 @@ void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, Co
 
     zkutil::ZooKeeperPtr zookeeper = getZooKeeper();
     dropAllPartsInPartitions(zookeeper, {partition_id}, detach, settings.replication_alter_partitions_sync > 0);
-
-    /// TODO:
 }
 
 void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context)
@@ -3730,6 +3730,9 @@ void StorageHaMergeTree::replacePartitionFrom(
 
     for (const auto & src_part : src_all_parts)
     {
+        if (src_part->info.isFakeDropRangePart())
+            continue;
+
         /// We also make some kind of deduplication to avoid duplicated parts in case of ATTACH PARTITION
         /// Assume that merges in the partition are quite rare
         /// Save deduplication block ids with special prefix replace_partition
@@ -3751,16 +3754,28 @@ void StorageHaMergeTree::replacePartitionFrom(
 
     try
     {
-        auto block_number = allocateBlockNumberDirect(zookeeper);
+        /// Allocate blocks in batch ahead
+        String block_numbers_prefix = zookeeper_path + "/block_numbers/block-";
+        size_t block_numbers_prefix_len = block_numbers_prefix.length();
+        Coordination::Requests ops;
+        for (size_t i = 0; i < dst_parts.size() + 1; ++i) /// + 1 for drop_range
+            ops.push_back(zkutil::makeCreateRequest(block_numbers_prefix, "", zkutil::CreateMode::EphemeralSequential));
+        Coordination::Responses results = zookeeper->multi(ops);
+
+        auto get_block_id = [&](size_t i) {
+            return dynamic_cast<Coordination::CreateResponse &>(*results[i]).path_created.substr(block_numbers_prefix_len);
+        };
 
         /// Create drop range part
-        MergeTreePartInfo drop_range_info(partition_id, 0, block_number, MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
+        String drop_range_block_id = get_block_id(0);
+        MergeTreePartInfo drop_range_info(
+            partition_id, 0, parse<Int64>(drop_range_block_id), MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
         auto drop_range_name = drop_range_info.getPartName();
         auto drop_range_part = createDropRangePart(drop_range_name, drop_range_info, metadata_snapshot);
 
         /// Create REPLACE_RANGE entry
         auto entry = std::make_shared<LogEntry>();
-        entry->block_id = toString(block_number);
+        entry->block_id = drop_range_block_id;
         entry->type = HaMergeTreeLogEntry::REPLACE_RANGE;
         entry->source_replica = replica_name;
         entry->lsn = allocateLSN();
@@ -3772,9 +3787,11 @@ void StorageHaMergeTree::replacePartitionFrom(
         entry->replace_range_entry->drop_range_part_name = drop_range_name;
 
         /// Fill new part names
-        for (auto & part : dst_parts)
+        for (size_t i = 0; i < dst_parts.size(); ++i)
         {
-            auto part_block_number = allocateBlockNumberDirect(zookeeper); /// TODO: optimize this
+            auto part_block_number = parse<Int64>(get_block_id(i + 1));
+
+            auto & part = dst_parts[i];
             part->info.min_block = part_block_number;
             part->info.max_block = part_block_number;
             part->info.level = 0;
@@ -3796,6 +3813,8 @@ void StorageHaMergeTree::replacePartitionFrom(
                 renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
             transaction.commit(&data_parts_lock);
         }
+
+        LOG_DEBUG(log, "Removed {} parts inside {} for replacing", parts_to_remove.size(), drop_range_name);
 
         parts_to_remove.clear();
         cleanup_thread.wakeup();
@@ -3899,7 +3918,7 @@ void StorageHaMergeTree::fetchPartitionImpl(
     for (auto & part_name : part_names)
     {
         auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
-        if (part_info.isFakeDropRangePart() || getActiveContainingPart(part_info))
+        if (getActiveContainingPart(part_info))
             continue;
 
         try
@@ -3989,7 +4008,7 @@ std::unique_ptr<MergeTreeSettings> StorageHaMergeTree::getDefaultSettings() cons
     return std::make_unique<MergeTreeSettings>(getContext()->getReplicatedMergeTreeSettings());
 }
 
-bool StorageHaMergeTree::isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica)
+bool StorageHaMergeTree::isReplicaLostOrOffline(zkutil::ZooKeeperPtr & zookeeper, const String & replica) const
 {
     String replica_is_lost = zookeeper->get(zookeeper_path + "/replicas/" + replica + "/is_lost");
     if (replica_is_lost == "1")
@@ -4067,8 +4086,7 @@ std::pair<UInt64, Coordination::RequestPtr> StorageHaMergeTree::allocLSNAndMakeS
 UInt64 StorageHaMergeTree::allocateBlockNumberDirect(zkutil::ZooKeeperPtr & zookeeper, const String &)
 {
     // TBD: whether support deduplicate logic
-    String block_numbers_path = zookeeper_path + "/block_numbers";
-    String block_numbers_path_prefix = block_numbers_path + "/block-";
+    String block_numbers_path_prefix = zookeeper_path + "/block_numbers/block-";
 
     auto block_path = zookeeper->create(block_numbers_path_prefix, "", zkutil::CreateMode::EphemeralSequential);
 
