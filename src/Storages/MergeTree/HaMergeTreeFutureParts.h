@@ -21,9 +21,9 @@ class HaMergeTreeFutureParts
 public:
     explicit HaMergeTreeFutureParts(MergeTreeDataFormatVersion format_version_) : format_version(format_version_) {}
 
-    void add(UInt64 lsn, const Strings & new_parts);
+    void add(UInt64 lsn, const String & part_name);
 
-    void remove(UInt64 lsn, const Strings & new_parts);
+    void remove(UInt64 lsn, const String & part_name);
 
     void clear();
 

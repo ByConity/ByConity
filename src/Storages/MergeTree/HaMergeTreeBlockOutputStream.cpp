@@ -151,7 +151,7 @@ HaMergeTreeBlockOutputStream::generateLogEntriesForParts(zkutil::ZooKeeperPtr & 
         entry.type = HaMergeTreeLogEntry::GET_PART;
         entry.create_time = time(nullptr);
         entry.source_replica = storage.replica_name;
-        entry.new_parts.push_back(part->name);
+        entry.new_part_name = part->name;
         entry.block_id = toString(block_number);
         entry.quorum = quorum;
         entry.is_executed = true;

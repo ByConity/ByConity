@@ -788,9 +788,6 @@ CompressionCodecPtr IMergeTreeDataPart::detectDefaultCompressionCodec() const
 
 void IMergeTreeDataPart::loadPartitionAndMinMaxIndex()
 {
-    // if (info.isFakeDropRangePart())
-    //     return;
-
     if (storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING && !parent_part)
     {
         DayNum min_date;
@@ -818,6 +815,9 @@ void IMergeTreeDataPart::loadPartitionAndMinMaxIndex()
         if (parent_part)
             return;
     }
+
+    if (info.isFakeDropRangePart()) /// Skip check if drop_range_part
+        return;
 
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     String calculated_partition_id = partition.getID(metadata_snapshot->getPartitionKey().sample_block);

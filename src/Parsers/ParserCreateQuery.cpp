@@ -427,6 +427,8 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_from("FROM");
     ParserKeyword s_on("ON");
     ParserKeyword s_as("AS");
+    ParserKeyword s_ignore("IGNORE");
+    ParserKeyword s_replicated("REPLICATED");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
@@ -452,6 +454,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool or_replace = false;
     bool if_not_exists = false;
     bool is_temporary = false;
+    bool ignore_replicated = false;
 
     if (s_create.ignore(pos, expected))
     {
@@ -562,6 +565,13 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         return false;
                 }
 
+                if (s_ignore.ignore(pos, expected))
+                {
+                    if (!s_replicated.ignore(pos, expected))
+                        return false;
+                    ignore_replicated = true;
+                }
+
                 /// Optional - ENGINE can be specified.
                 if (!storage)
                     storage_p.parse(pos, storage, expected);
@@ -581,6 +591,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->create_or_replace = or_replace;
     query->if_not_exists = if_not_exists;
     query->temporary = is_temporary;
+    query->ignore_replicated = ignore_replicated;
 
     query->database = table_id.database_name;
     query->table = table_id.table_name;

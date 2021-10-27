@@ -735,7 +735,22 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 ErrorCodes::INCORRECT_QUERY);
 
         if (as_create.storage)
+        {
+            if (create.ignore_replicated)
+            {
+                bool is_ha = startsWith(as_create.storage->engine->name, "Ha");
+                bool is_replicated = startsWith(as_create.storage->engine->name, "Replicated");
+
+                if (is_ha || is_replicated)
+                {
+                    as_create.storage->engine->name = as_create.storage->engine->name.substr(is_replicated ? 10 : 2);
+                    as_create.storage->engine->arguments = nullptr;
+                    as_create.storage->engine->parameters = nullptr;
+                }
+            }
+
             create.set(create.storage, as_create.storage->ptr());
+        }
         else if (as_create.as_table_function)
             create.as_table_function = as_create.as_table_function->clone();
         else

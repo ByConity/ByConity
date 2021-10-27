@@ -8,52 +8,46 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-void HaMergeTreeFutureParts::add(UInt64 lsn, const Strings & new_parts)
+void HaMergeTreeFutureParts::add(UInt64 lsn, const String & part_name)
 {
-    for (auto & part_name : new_parts)
+    auto info = MergeTreePartInfo::fromPartName(part_name, format_version);
+    auto res = future_parts.emplace(info, lsn);
+    /// if more than one logs produce the same part, records all the LSNs for that part
+    if (!res.second)
     {
-        auto info = MergeTreePartInfo::fromPartName(part_name, format_version);
-        auto res = future_parts.emplace(info, lsn);
-        /// if more than one logs produce the same part, records all the LSNs for that part
-        if (!res.second)
+        auto prev_lsn = res.first->second;
+        if (prev_lsn == kInvalidLsn)
         {
-            auto prev_lsn = res.first->second;
-            if (prev_lsn == kInvalidLsn)
-            {
-                dup_future_parts[info].insert(lsn);
-            }
-            else
-            {
-                dup_future_parts[info] = { prev_lsn, lsn };
-                res.first->second = kInvalidLsn;
-            }
+            dup_future_parts[info].insert(lsn);
+        }
+        else
+        {
+            dup_future_parts[info] = { prev_lsn, lsn };
+            res.first->second = kInvalidLsn;
         }
     }
 }
 
-void HaMergeTreeFutureParts::remove(UInt64 lsn, const Strings & new_parts)
+void HaMergeTreeFutureParts::remove(UInt64 lsn, const String & part_name)
 {
-    for (auto & part_name : new_parts)
+    auto info = MergeTreePartInfo::fromPartName(part_name, format_version);
+    if (auto it = future_parts.find(info); it != future_parts.end())
     {
-        auto info = MergeTreePartInfo::fromPartName(part_name, format_version);
-        if (auto it = future_parts.find(info); it != future_parts.end())
+        bool should_remove_part = true;
+        if (it->second == kInvalidLsn)
         {
-            bool should_remove_part = true;
-            if (it->second == kInvalidLsn)
-            {
-                auto dup_it = dup_future_parts.find(info);
-                if (dup_it == dup_future_parts.end())
-                    throw Exception("Cannot find part " + part_name + " of lsn " + std::to_string(lsn)  + " in future parts",
-                                    ErrorCodes::LOGICAL_ERROR);
-                dup_it->second.erase(lsn);
-                if (dup_it->second.empty())
-                    dup_future_parts.erase(dup_it);
-                else
-                    should_remove_part = false;
-            }
-            if (should_remove_part)
-                future_parts.erase(it);
+            auto dup_it = dup_future_parts.find(info);
+            if (dup_it == dup_future_parts.end())
+                throw Exception("Cannot find part " + part_name + " of lsn " + std::to_string(lsn)  + " in future parts",
+                                ErrorCodes::LOGICAL_ERROR);
+            dup_it->second.erase(lsn);
+            if (dup_it->second.empty())
+                dup_future_parts.erase(dup_it);
+            else
+                should_remove_part = false;
         }
+        if (should_remove_part)
+            future_parts.erase(it);
     }
 }
 

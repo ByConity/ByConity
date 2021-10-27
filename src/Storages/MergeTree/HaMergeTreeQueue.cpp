@@ -571,8 +571,8 @@ void HaMergeTreeQueue::forceReloadMutation(const String & mutation_id)
 void HaMergeTreeQueue::removeCoveredPartsFromMutation(const LogEntry & entry, std::lock_guard<std::mutex> & /*states_lock*/)
 {
     String part_name;
-    if (entry.type == LogEntry::DROP_RANGE || entry.type == LogEntry::CLEAR_RANGE)
-        part_name = entry.new_parts.front();
+    if (entry.type == LogEntry::DROP_RANGE)
+        part_name = entry.new_part_name;
     else if (!entry.actual_committed_part.empty())
         part_name = entry.actual_committed_part;
     else
@@ -629,27 +629,17 @@ size_t HaMergeTreeQueue::markRedundantEntries(LogEntryVec & entries)
 
     /// helper functions
     auto is_dropped = [&](const LogEntry & entry) {
-        for (auto & new_part : entry.new_parts)
-        {
-            auto part_info = MergeTreePartInfo::fromPartName(new_part, storage.format_version);
-            auto iter = min_block_map.find(part_info.partition_id);
-            /// No record
-            if (iter == min_block_map.end())
-                return false;
-            /// Not dropped
-            if (part_info.min_block > iter->second)
-                return false;
-        }
+        auto part_info = MergeTreePartInfo::fromPartName(entry.new_part_name, storage.format_version);
+        auto iter = min_block_map.find(part_info.partition_id);
+        /// No record
+        if (iter == min_block_map.end())
+            return false;
+        /// Not dropped
+        if (part_info.min_block > iter->second)
+            return false;
         return true;
     };
-    auto is_covered = [&](const LogEntry & entry) {
-        for (auto & new_part : entry.new_parts)
-        {
-            if (virtual_parts.getContainingPart(new_part).empty())
-                return false;
-        }
-        return true;
-    };
+    auto is_covered = [&](const LogEntry & entry) { return !virtual_parts.getContainingPart(entry.new_part_name).empty(); };
 
     // std::sort(entries.begin(), entries.end(), [](const auto & l, const auto & r) { return l->lsn < r->lsn; });
 
@@ -662,14 +652,14 @@ size_t HaMergeTreeQueue::markRedundantEntries(LogEntryVec & entries)
         {
             entry->is_executed = true;
         }
-        else if (entry->new_parts.empty())
+        else if (entry->new_part_name.empty())
         {
             entry->is_executed = false;
         }
         else if (entry->type == LogEntry::DROP_RANGE)
         {
             /// Update min_block for DROP_RANGE
-            auto part_info = MergeTreePartInfo::fromPartName(entry->new_parts.front(), storage.format_version);
+            auto part_info = MergeTreePartInfo::fromPartName(entry->new_part_name, storage.format_version);
 
             if (min_block_map.find(part_info.partition_id) == min_block_map.end())
             {
@@ -694,7 +684,7 @@ size_t HaMergeTreeQueue::markRedundantEntries(LogEntryVec & entries)
             {
                 /// DO NOT add MERGE_PARTS
                 LOG_TRACE(log, "Add virtual parts: {}" , entry->toDebugString());
-                virtual_parts.add(entry->new_parts.front());
+                virtual_parts.add(entry->new_part_name);
             }
 
             entry->is_executed = false;
@@ -715,7 +705,7 @@ size_t HaMergeTreeQueue::insertWithStats(const LogEntryPtr & entry, std::lock_gu
     }
     else
     {
-        if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::REPLACE_PARTITION)
+        if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::REPLACE_RANGE)
         {
             if (entry->create_time < min_unprocessed_insert_time.load(std::memory_order_relaxed))
                 min_unprocessed_insert_time.store(entry->create_time);
@@ -724,14 +714,13 @@ size_t HaMergeTreeQueue::insertWithStats(const LogEntryPtr & entry, std::lock_gu
 
         if (0 == unprocessed_by_lsn.count(entry->lsn))
         {
-            if (entry->type == LogEntry::DROP_RANGE || entry->type == LogEntry::CLEAR_RANGE
-                || entry->type == LogEntry::REPLACE_PARTITION) /// pick DROP_RANGE first
+            if (entry->type == LogEntry::DROP_RANGE || entry->type == LogEntry::REPLACE_RANGE) /// pick DROP_RANGE first
                 unprocessed_queue.push_front(entry);
             else
                 unprocessed_queue.push_back(entry);
 
             if (entry->hasMergeMutateFutureParts())
-                merge_mutate_future_parts.add(entry->lsn, entry->new_parts);
+                merge_mutate_future_parts.add(entry->lsn, entry->new_part_name);
 
             unprocessed_counts[entry->type].fetch_add(1, std::memory_order_relaxed);
             if (entry->type == LogEntry::MERGE_PARTS && entry->source_replica == storage.replica_name)
@@ -818,15 +807,6 @@ HaQueueExecutingEntrySetPtr HaMergeTreeQueue::selectEntryToProcessLocked(
             num_avail_fetches += 1;
     }
 
-    auto is_useless = [&](const LogEntryPtr & e) {
-        for (auto & part_name : e->new_parts)
-        {
-            if (!storage.getActiveContainingPart(part_name))
-                return false;
-        }
-        return true;
-    };
-
     auto now = time(nullptr);
 
     for (auto it = unprocessed_queue.begin(); it != unprocessed_queue.end(); ++it)
@@ -835,7 +815,7 @@ HaQueueExecutingEntrySetPtr HaMergeTreeQueue::selectEntryToProcessLocked(
         if (entry->currently_executing)
             continue;
 
-        if (entry->willCommitNewPart() && is_useless(entry))
+        if (entry->willCommitNewPart() && !!storage.getActiveContainingPart(entry->new_part_name))
         {
             useless_entries.push_back(entry);
             continue;
@@ -883,7 +863,7 @@ void HaMergeTreeQueue::onLogExecutionError(LogEntryPtr & entry, const std::excep
 
     if (entry->type == LogEntry::MUTATE_PART)
     {
-        Int64 mutation_version = MergeTreePartInfo::fromPartName(entry->new_parts.front(), format_version).getDataVersion();
+        Int64 mutation_version = MergeTreePartInfo::fromPartName(entry->new_part_name, format_version).getDataVersion();
         if (auto it = mutations_by_version.find(mutation_version); it != mutations_by_version.end())
         {
             MutationStatus * status = it->second;
@@ -926,11 +906,11 @@ void HaMergeTreeQueue::removeProcessedEntries(const LogEntryVec & entries)
                 unprocessed_mutations_of_self.fetch_sub(1, std::memory_order_relaxed);
         }
         if (entry->hasMergeMutateFutureParts())
-            merge_mutate_future_parts.remove(entry->lsn, entry->new_parts);
+            merge_mutate_future_parts.remove(entry->lsn, entry->new_part_name);
 
         removeCoveredPartsFromMutation(*entry, state_lock);
 
-        if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::REPLACE_PARTITION)
+        if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::REPLACE_RANGE)
         {
             unprocessed_inserts_by_time.erase(entry);
 
@@ -1276,11 +1256,11 @@ bool HaMergeTreeQueue::tryFinalizeMutations(zkutil::ZooKeeperPtr zookeeper)
         {
             if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART)
             {
-                MergeTreePartInfo part_info = MergeTreePartInfo::fromPartName(entry->new_parts.front(), storage.format_version);
+                MergeTreePartInfo part_info = MergeTreePartInfo::fromPartName(entry->new_part_name, storage.format_version);
                 if (part_info.getDataVersion() < candidate->block_number && candidate->coverPartitionId(part_info.partition_id))
                 {
                     LOG_DEBUG(log, "Can't finalize mutation " + candidate->getNameForLogs()
-                                   + " because found future part " + entry->new_parts.front() + " to mutate");
+                                   + " because found future part " + entry->new_part_name + " to mutate");
                     return false;
                 }
             }
@@ -1361,7 +1341,7 @@ HaMergeTreeQueue::Status HaMergeTreeQueue::getStatus() const
         if (oldest_time[entry->type] == 0 || entry->create_time < oldest_time[entry->type])
         {
             oldest_time[entry->type] = entry->create_time;
-            oldest_part[entry->type] = entry->formatNewParts();
+            oldest_part[entry->type] = entry->new_part_name;
         }
     }
 
@@ -1552,11 +1532,10 @@ HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperP
     return HaMergeTreeMergePredicate(*this, zookeeper);
 }
 
-static bool hasNewParts(const HaMergeTreeLogEntry & entry)
+[[maybe_unused]] static bool hasNewParts(const HaMergeTreeLogEntry & entry)
 {
     return entry.type == HaMergeTreeLogEntry::MERGE_PARTS || entry.type == HaMergeTreeLogEntry::MUTATE_PART
-        || entry.type == HaMergeTreeLogEntry::GET_PART || entry.type == HaMergeTreeLogEntry::CLONE_PART
-        || entry.type == HaMergeTreeLogEntry::REPLACE_PARTITION;
+        || entry.type == HaMergeTreeLogEntry::GET_PART || entry.type == HaMergeTreeLogEntry::CLONE_PART;
 }
 
 HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, zkutil::ZooKeeperPtr & zookeeper)
@@ -1602,18 +1581,24 @@ HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, 
     log_manager.applyToEntriesFromUpdatedLSNUnsafe([&](const HaMergeTreeLogEntryPtr & entry) {
         if (!entry->is_executed)
         {
-            if (hasNewParts(*entry))
+            if (!entry->new_part_name.empty())
             {
-                for (auto & part : entry->new_parts)
-                    part_to_interval.try_emplace(part, INTERVAL_GAP);
-                for (auto & part : entry->new_parts)
-                    future_parts.add(part);
+                part_to_interval.try_emplace(entry->new_part_name, INTERVAL_GAP);
+                future_parts.add(entry->new_part_name);
+            }
+
+            if (entry->type == HaMergeTreeLogEntry::REPLACE_RANGE)
+            {
+                for (auto & new_part_name : entry->replace_range_entry->new_part_names)
+                {
+                    part_to_interval.try_emplace(new_part_name, INTERVAL_GAP);
+                    future_parts.add(new_part_name);
+                }
             }
 
             if (entry->type == HaMergeTreeLogEntry::MERGE_PARTS)
             {
-                for (auto & part : entry->new_parts)
-                    future_merge_parts.add(part);
+                future_merge_parts.add(entry->new_part_name);
             }
         }
         else
@@ -1624,10 +1609,16 @@ HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, 
 
             /// Put new_parts into current interval
             /// Do not care parts in `interval-0`
-            if (interval > 0 && hasNewParts(*entry))
+            if (interval > 0)
             {
-                for (auto & part : entry->new_parts)
-                    part_to_interval.try_emplace(part, interval);
+                if (!entry->new_part_name.empty())
+                    part_to_interval.try_emplace(entry->new_part_name, interval);
+
+                if (entry->type == HaMergeTreeLogEntry::REPLACE_RANGE)
+                {
+                    for (auto & new_part_name : entry->replace_range_entry->new_part_names)
+                        part_to_interval.try_emplace(new_part_name, interval);
+                }
             }
         }
 

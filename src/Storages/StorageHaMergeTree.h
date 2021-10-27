@@ -361,6 +361,7 @@ private:
     bool executeMerge(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeMutate(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeDropRange(HaQueueExecutingEntrySetPtr & executing_set);
+    bool executeReplaceRange(HaQueueExecutingEntrySetPtr & executed_set);
 
     void executeMetadataAlter(const MutationEntry & entry);
 
@@ -463,6 +464,9 @@ private:
     bool dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const String & part_name, LogEntry & entry, bool detach, bool throw_if_noop);
 
     void clearEmptyParts();
+
+    MergeTreeMutableDataPartPtr
+    createDropRangePart(const String & name, const MergeTreePartInfo & part_info, const StorageMetadataPtr & metadata_snapshot);
 
     // Partition helpers
     void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;

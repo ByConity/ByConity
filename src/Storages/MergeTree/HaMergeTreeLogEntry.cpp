@@ -12,40 +12,39 @@ namespace DB
 HaMergeTreeLogEntry::LSNLessCompare lsn_less_compare;
 HaMergeTreeLogEntry::LSNEqualCompare lsn_equal_compare;
 
-void HaMergeTreeLogEntryData::checkNewParts() const
+String HaMergeTreeLogEntryData::typeToString(Type t)
 {
-    switch (type)
+    switch (t)
     {
-        case GET_PART:
-        case MERGE_PARTS:
-        case DROP_RANGE:
-        case CLEAR_RANGE:
-        case MUTATE_PART:
-        case CLONE_PART:
-            if (new_parts.empty())
-                throw Exception("No new part for " + typeToString(), ErrorCodes::LOGICAL_ERROR);
-            break;
+        case HaMergeTreeLogEntryData::GET_PART:
+            return "GET_PART";
+        case HaMergeTreeLogEntryData::MERGE_PARTS:
+            return "MERGE_PARTS";
+        case HaMergeTreeLogEntryData::DROP_RANGE:
+            return "DROP_RANGE";
+        case HaMergeTreeLogEntryData::CLEAR_COLUMN:
+            return "CLEAR_COLUMN";
+        case HaMergeTreeLogEntryData::REPLACE_RANGE:
+            return "REPLACE_RANGE";
+        case HaMergeTreeLogEntryData::MUTATE_PART:
+            return "MUTATE_PART";
+        case HaMergeTreeLogEntryData::CLONE_PART:
+            return "CLONE_PART";
+        case HaMergeTreeLogEntryData::INGEST_PARTITION:
+            return "INGEST_PARTITION";
+        case HaMergeTreeLogEntryData::BAD_LOG:
+            return "BAD_LOG";
+        case HaMergeTreeLogEntryData::COMMIT_TRAN:
+            return "COMMIT_TRAN";
+        case HaMergeTreeLogEntryData::ABORT_TRAN:
+            return "ABORT_TRAN";
         default:
-            break;
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown log entry type {}", int(t));
     }
-}
-
-String HaMergeTreeLogEntryData::formatNewParts() const
-{
-    if (new_parts.empty())
-        return "";
-    String res = new_parts.front();
-    for (size_t i = 1; i < new_parts.size(); ++i)
-    {
-        res += " & ";
-        res += new_parts[i];
-    }
-    return res;
 }
 
 void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
 {
-    checkNewParts();
     Int32 status_int;
     out << "format version: ha/" << format_version << "\n"
         << "create_time: " << LocalDateTime(create_time ? create_time : time(nullptr)) << "\n"
@@ -54,13 +53,12 @@ void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
         << "source replica: " << source_replica << '\n'
         << "block_id: " << escape << block_id << '\n';
 
-    /// String storage_type_str = (storage_type == StorageType::Local ? "local" : "hdfs");
     String storage_type_str = "local";
     switch (type)
     {
         case GET_PART:
             status_int = 0;
-            out << "get\n" << new_parts.front();
+            out << "get\n" << new_part_name;
             if (format_version >= 2)
             {
                 out << "\n";
@@ -84,53 +82,30 @@ void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
             out << "merge\n";
             for (auto & s : source_parts)
                 out << s << '\n';
-            if (new_parts.size() > 1)
-            {
-                out << "into " << new_parts.size();
-                for (auto & s : new_parts)
-                    out << '\n' << s;
-            }
-            else
-            {
-                out << "into\n" << new_parts.front();
-            }
-            break;
-        case REPLACE_PARTITION:
-            out << "replace\n";
-            out << source_parts.front() << '\n';
-            if (new_parts.size() > 1)
-            {
-                out << "into " << new_parts.size();
-                for (auto & s : new_parts)
-                    out << '\n' << s;
-            }
-            else
-            {
-                out << "into\n" << new_parts.front();
-            }
-            break;
-        case CLEAR_RANGE:
-            out << "clear\n";
-            out << new_parts.front();
+            out << "into\n" << new_part_name;
             break;
         case DROP_RANGE:
             if (detach)
                 out << "detach\n";
             else
                 out << "drop\n";
-            out << new_parts.front();
+            out << new_part_name;
             break;
 
         case CLEAR_COLUMN:
-            out << "clear_column\n" << escape << column_names.front() << "\nfrom\n" << new_parts.front();
+            out << "clear_column\n" << escape << column_names.front() << "\nfrom\n" << new_part_name;
             break;
         case REPLACE_RANGE:
-            throw Exception("Unsupported Ha log entry type: " + typeToString(type), ErrorCodes::LOGICAL_ERROR);
+            out << "replace_range\n";
+            out << "drop_range_name: " << replace_range_entry->drop_range_part_name << "\n";
+            out << "new_parts: ";
+            writeQuoted(replace_range_entry->new_part_names, out);
+            break;
         case MUTATE_PART:
             out << "mutate2\n"
                 << source_parts.at(0) << "\n"
                 << "to\n"
-                << new_parts.front() << "\n"
+                << new_part_name << "\n"
                 << "alter_version\n"
                 << alter_version << "\n"
                 << "from_replica\n"
@@ -138,7 +113,7 @@ void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
             break;
 
         case CLONE_PART:
-            out << "clone\n" << new_parts.front() << "\n";
+            out << "clone\n" << new_part_name << "\n";
             out << "from\n" << from_replica;
             if (format_version >= 3)
             {
@@ -149,7 +124,7 @@ void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
 
         case INGEST_PARTITION:
             out << "ingest\n";
-            out << new_parts.front() << "\n";
+            out << new_part_name << "\n";
             out << "columns " << column_names.size();
             for (auto & s : column_names)
                 out << "\n" << s;
@@ -213,9 +188,7 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     if (type_str == "get")
     {
         type = GET_PART;
-        /// storage_type = StorageType::Local;
-        new_parts.emplace_back();
-        in >> new_parts.back();
+        in >> new_part_name;
         if (format_version >= 2)
         {
             in >> "\n";
@@ -228,10 +201,6 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
         {
             in >> "\n";
             in >> "storage_type\n" >> storage_type_str;
-            /// if (storage_type_str == "local")
-            ///     storage_type = StorageType::Local;
-            /// else
-            ///     storage_type = StorageType::Hdfs;
         }
         if (format_version >= 4)
         {
@@ -242,6 +211,29 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     else if (type_str == "merge")
     {
         type = MERGE_PARTS;
+        while (true)
+        {
+            String s;
+            in >> s >> "\n";
+            if (s == "into")
+                break;
+            source_parts.push_back(std::move(s));
+        }
+        in >> new_part_name;
+    }
+    else if (type_str == "replace_range")
+    {
+        type = REPLACE_RANGE;
+        replace_range_entry = std::make_shared<ReplaceRangeEntry>();
+
+        in >> "drop_range_name: " >> replace_range_entry->drop_range_part_name >> "\n";
+        in >> "new_parts: ";
+        readQuoted(replace_range_entry->new_part_names, in);
+    }
+    else if (type_str == "replace") /// TODO: remove me
+    {
+        type = REPLACE_RANGE;
+        replace_range_entry = std::make_shared<ReplaceRangeEntry>();
 
         size_t new_parts_size = 1;
         while (true)
@@ -260,63 +252,25 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
             {
                 in >> "\n";
             }
-            source_parts.push_back(std::move(s));
+            replace_range_entry->drop_range_part_name = std::move(s);
         }
         for (size_t i = 0; i < new_parts_size; ++i)
         {
-            new_parts.emplace_back();
-            in >> "\n" >> new_parts.back();
+            replace_range_entry->new_part_names.emplace_back();
+            in >> "\n" >> replace_range_entry->new_part_names.back();
         }
-    }
-    else if (type_str == "replace")
-    {
-        type = REPLACE_PARTITION;
-
-        size_t new_parts_size = 1;
-        while (true)
-        {
-            String s;
-            in >> s;
-
-            if (startsWith(s, "into"))
-            {
-                const size_t INTO_LEN = strlen("into ");
-                if (s.length() > INTO_LEN)
-                    new_parts_size = parse<UInt64>(s.substr(INTO_LEN));
-                break;
-            }
-            else
-            {
-                in >> "\n";
-            }
-            source_parts.push_back(std::move(s));
-        }
-        for (size_t i = 0; i < new_parts_size; ++i)
-        {
-            new_parts.emplace_back();
-            in >> "\n" >> new_parts.back();
-        }
-    }
-    else if (type_str == "clear")
-    {
-        type = CLEAR_RANGE;
-        detach = false;
-        new_parts.emplace_back();
-        in >> new_parts.back();
     }
     else if (type_str == "drop" || type_str == "detach")
     {
         type = DROP_RANGE;
         detach = (type_str == "detach");
-        new_parts.emplace_back();
-        in >> new_parts.back();
+        in >> new_part_name;
     }
     else if (type_str == "mutate" || type_str == "mutate2")
     {
         type = MUTATE_PART;
         source_parts.emplace_back();
-        new_parts.emplace_back();
-        in >> source_parts.back() >> "\n" >> "to\n" >> new_parts.back();
+        in >> source_parts.back() >> "\n" >> "to\n" >> new_part_name;
         if (type_str == "mutate2")
         {
             in >> "\nalter_version\n" >> alter_version >> "\nfrom_replica\n" >> from_replica;
@@ -325,8 +279,7 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     else if (type_str == "clone")
     {
         type = CLONE_PART;
-        new_parts.emplace_back();
-        in >> new_parts.back() >> "\n";
+        in >> new_part_name >> "\n";
         in >> "from\n" >> from_replica;
         if (format_version >= 3)
         {
@@ -342,14 +295,12 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     {
         type = CLEAR_COLUMN;
         column_names.emplace_back();
-        new_parts.emplace_back();
-        in >> escape >> column_names.back() >> "\nfrom\n" >> new_parts.back();
+        in >> escape >> column_names.back() >> "\nfrom\n" >> new_part_name;
     }
     else if (type_str == "ingest")
     {
         type = INGEST_PARTITION;
-        new_parts.emplace_back();
-        in >> new_parts.back() >> "\n";
+        in >> new_part_name >> "\n";
 
         size_t column_size;
         String column_str;
@@ -401,8 +352,6 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     }
 
     in >> "\n";
-
-    checkNewParts();
 }
 
 String HaMergeTreeLogEntryData::toString() const
@@ -422,14 +371,18 @@ String HaMergeTreeLogEntryData::toDebugString() const
         case GET_PART:
         case CLONE_PART:
         case DROP_RANGE:
-            oss << new_parts.front();
+            oss << new_part_name;
             break;
         case MERGE_PARTS:
         case MUTATE_PART:
-        case REPLACE_PARTITION:
             for (auto & old_part : source_parts)
                 oss << old_part << ' ';
-            oss << "-> " << new_parts.front();
+            oss << "-> " << new_part_name;
+            break;
+        case REPLACE_RANGE:
+            oss << replace_range_entry->drop_range_part_name << " with";
+            for (auto & new_part : replace_range_entry->new_part_names)
+                oss << " " << new_part;
             break;
         default:
             oss << "N/A";
@@ -437,48 +390,6 @@ String HaMergeTreeLogEntryData::toDebugString() const
     }
     oss << '}';
     return oss.str();
-}
-
-/// Compacted information in one line, for debugging
-std::ostream & operator<<(std::ostream & os, const HaMergeTreeLogEntry & entry)
-{
-    os << "<LSN " << entry.lsn << '|' << "REP " << entry.source_replica;
-    switch (entry.type)
-    {
-        case HaMergeTreeLogEntry::BAD_LOG:
-            os << "|BAD";
-            break;
-        case HaMergeTreeLogEntry::GET_PART:
-            os << "|GET " << entry.new_parts.front();
-            break;
-        case HaMergeTreeLogEntry::CLONE_PART:
-            os << "|CLONE " << entry.new_parts.front();
-            break;
-        case HaMergeTreeLogEntry::MERGE_PARTS:
-            os << "|MERGE ";
-            for (auto & old_part : entry.source_parts)
-                os << old_part << ' ';
-            os << "-> ";
-            for (auto & new_part : entry.new_parts)
-                os << new_part << ' ';
-            break;
-        case HaMergeTreeLogEntry::DROP_RANGE:
-            os << "|DROP " << entry.new_parts.front();
-            break;
-        case HaMergeTreeLogEntry::MUTATE_PART:
-            os << "|MUTATE " << entry.source_parts.front() << " -> " << entry.new_parts.front();
-            break;
-        case HaMergeTreeLogEntry::REPLACE_PARTITION:
-            os << "|REPLACE " << entry.source_parts.front() << "-> ";
-            for (auto & new_part : entry.new_parts)
-                os << new_part << ' ';
-            break;
-        /// TODO: support more types
-        default:
-            os << "| " << HaMergeTreeLogEntry::typeToString(entry.type);
-    }
-    os << '>';
-    return os;
 }
 
 }

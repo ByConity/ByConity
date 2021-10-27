@@ -2,7 +2,6 @@
 
 #include <Core/Names.h>
 #include <Core/Types.h>
-#include <IO/WriteHelpers.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -22,57 +21,22 @@ struct HaMergeTreeLogEntryData
     enum Type
     {
         EMPTY, /// Not used.
+        BAD_LOG,
         GET_PART, /// Get the part from another replica.
+        CLONE_PART, /// Similar to GET_PART, but only the source replica executes it.
         MERGE_PARTS, /// Merge the parts.
         DROP_RANGE, /// Delete the parts in the specified partition in the specified number range.
-        CLEAR_RANGE, /// Load the parts that is dumped in high level storage and delete parts in low level storage.
         CLEAR_COLUMN, /// (Deprecated) Drop specific column from specified partition.
         REPLACE_RANGE, /// Drop certain range of partitions and replace them by new ones (not supported)
         MUTATE_PART, /// Apply one or several mutations to the part.
-        CLONE_PART, /// Similar to GET_PART, but only the source replica executes it.
         INGEST_PARTITION, /// Replace columns of part from source replica
-        REPLACE_PARTITION, /// Enhance replace partition stability, part level atomic, include DROP_RANGE & GET_PART.
-        BAD_LOG,
         COMMIT_TRAN, /// Commit transaction log
         ABORT_TRAN, /// Abort transaction log
         MAX = ABORT_TRAN // Max element of enum Type, remember update this after add new element
     };
     constexpr static size_t TypesCount = Type::MAX + 1;
 
-    static String typeToString(Type type)
-    {
-        switch (type)
-        {
-            case HaMergeTreeLogEntryData::GET_PART:
-                return "GET_PART";
-            case HaMergeTreeLogEntryData::MERGE_PARTS:
-                return "MERGE_PARTS";
-            case HaMergeTreeLogEntryData::DROP_RANGE:
-                return "DROP_RANGE";
-            case HaMergeTreeLogEntryData::CLEAR_RANGE:
-                return "CLEAR_RANGE";
-            case HaMergeTreeLogEntryData::CLEAR_COLUMN:
-                return "CLEAR_COLUMN";
-            case HaMergeTreeLogEntryData::REPLACE_RANGE:
-                return "REPLACE_RANGE";
-            case HaMergeTreeLogEntryData::MUTATE_PART:
-                return "MUTATE_PART";
-            case HaMergeTreeLogEntryData::CLONE_PART:
-                return "CLONE_PART";
-            case HaMergeTreeLogEntryData::INGEST_PARTITION:
-                return "INGEST_PARTITION";
-            case HaMergeTreeLogEntryData::REPLACE_PARTITION:
-                return "REPLACE_PARTITION";
-            case HaMergeTreeLogEntryData::BAD_LOG:
-                return "BAD_LOG";
-            case HaMergeTreeLogEntryData::COMMIT_TRAN:
-                return "COMMIT_TRAN";
-            case HaMergeTreeLogEntryData::ABORT_TRAN:
-                return "ABORT_TRAN";
-            default:
-                throw Exception("Unknown log entry type: " + DB::toString<int>(type), ErrorCodes::LOGICAL_ERROR);
-        }
-    }
+    static String typeToString(Type type);
 
     String typeToString() const { return typeToString(type); }
 
@@ -96,21 +60,17 @@ struct HaMergeTreeLogEntryData
     /// note that merge parts will not change table's data.
     bool mayChangeStorageData() const
     {
-        return (
-            type == GET_PART || type == DROP_RANGE || type == CLEAR_RANGE || type == CLEAR_COLUMN || type == REPLACE_RANGE
-            || type == MUTATE_PART || type == CLONE_PART || type == INGEST_PARTITION || type == REPLACE_PARTITION);
+        return type == GET_PART || type == DROP_RANGE || type == CLEAR_COLUMN || type == REPLACE_RANGE || type == MUTATE_PART
+            || type == CLONE_PART || type == INGEST_PARTITION;
     }
 
     bool hasMergeMutateFutureParts() const
     {
-        return type == MERGE_PARTS || type == DROP_RANGE || type == CLEAR_RANGE || type == MUTATE_PART;
+        return type == MERGE_PARTS || type == DROP_RANGE || type == MUTATE_PART;
     }
 
     /// If true, should skip the log if the new part is covered by or conflicted with committed parts.
     bool willCommitNewPart() const { return type == GET_PART || type == CLONE_PART || type == MERGE_PARTS || type == MUTATE_PART; }
-
-    void checkNewParts() const;
-    String formatNewParts() const;
 
     bool isAlterMutation() const { return type == MUTATE_PART && alter_version != -1; }
 
@@ -131,14 +91,22 @@ struct HaMergeTreeLogEntryData
     String source_replica; // where the event happens(originally)
     String block_id;
 
-    /// FOR GET_PART / MERGE_PARTS / DROP_RANGE / CLEAR_RANGE / MUTATE_PART
-    Strings new_parts;
+    /// FOR GET_PART / MERGE_PARTS / DROP_RANGE / MUTATE_PART
+    String new_part_name;
 
     /// FOR MERGE_PARTS / MUTATE_PART
     Strings source_parts;
 
     /// For DROP_RANGE
     bool detach = false;
+
+    struct ReplaceRangeEntry
+    {
+        String drop_range_part_name;
+        Strings new_part_names;
+    };
+
+    std::shared_ptr<ReplaceRangeEntry> replace_range_entry;
 
     /// For CLONE_PART, where clone from
     /// For MUTATE_PART, if set, only the from_replica needs to execute the log

@@ -2841,6 +2841,7 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const String & part_na
 MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
 {
     DataPartsVector parts = getDataPartsVector();
+    parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
 
     auto metadata_snapshot = getInMemoryMetadataPtr();
     if (metadata_snapshot->hasPartitionKey())
@@ -2852,9 +2853,6 @@ MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr &
 
     for (auto & part : parts)
     {
-        if (part->info.isFakeDropRangePart())
-            continue;
-
         auto & partition_value = part->partition.value;
         for (size_t c = 0; c < mutable_columns.size(); ++c)
         {

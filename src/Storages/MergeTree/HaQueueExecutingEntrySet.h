@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <map>
+#include <mutex>
 
 namespace DB
 {

@@ -1779,6 +1779,9 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
         case LogEntry::DROP_RANGE:
             return executeDropRange(executing_set);
 
+        case LogEntry::REPLACE_RANGE:
+            return executeReplaceRange(executing_set);
+
         case LogEntry::BAD_LOG:
             /// TODO: handle some corner case
             return true;
@@ -1792,7 +1795,7 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
 bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_set)
 {
     auto & entry = executing_set->getExecuting();
-    auto new_part_name = entry->new_parts.front();
+    auto new_part_name = entry->new_part_name;
 
     /// Some part has already covered this one, DO NOT fetch it.
     if (auto covered_part = getActiveContainingPart(new_part_name))
@@ -2010,11 +2013,11 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
 {
     auto & entry = *executing_set->getExecuting();
 
-    auto new_part_name = entry.new_parts.front();
+    auto new_part_name = entry.new_part_name;
 
     const auto storage_settings_ptr = getSettings();
 
-    if (getActiveContainingPart(entry.new_parts.front()))
+    if (getActiveContainingPart(new_part_name))
     {
         LOG_DEBUG(log, "Cancel merging part {} by covered part(s)", new_part_name);
         merge_selecting_task->schedule();
@@ -2080,19 +2083,14 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
 
     {
         std::lock_guard current_merging_parts_lock(current_merging_parts_mutex);
-        for (auto & part_name : entry.new_parts)
-        {
-            if (current_merging_parts.count(part_name))
-                throw Exception("Duplicate merging part " + part_name, ErrorCodes::LOGICAL_ERROR);
-        }
-        for (auto & part_name : entry.new_parts)
-            current_merging_parts.emplace(part_name);
+        if (current_merging_parts.count(entry.new_part_name))
+            throw Exception("Duplicate merging part " + entry.new_part_name, ErrorCodes::LOGICAL_ERROR);
+        current_merging_parts.emplace(entry.new_part_name);
     }
 
     SCOPE_EXIT({
         std::lock_guard current_merging_parts_lock(current_merging_parts_mutex);
-        for (auto & part_name : entry.new_parts)
-            current_merging_parts.erase(part_name);
+        current_merging_parts.erase(entry.new_part_name);
     });
 
     // start to make the main merge work
@@ -2137,7 +2135,7 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
 
     auto write_part_log = [&] (const ExecutionStatus & status)
     {
-        writePartLog(PartLogElement::MERGE_PARTS, status, stopwatch.elapsed(), entry.new_parts.front(), part, parts, merge_entry.get());
+        writePartLog(PartLogElement::MERGE_PARTS, status, stopwatch.elapsed(), entry.new_part_name, part, parts, merge_entry.get());
     };
 
     try
@@ -2182,7 +2180,7 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     auto & entry = *executing_set->getExecuting();
 
     auto & src_part_name = entry.source_parts.front();
-    auto & new_part_name = entry.new_parts.front();
+    auto & new_part_name = entry.new_part_name;
     auto new_part_info = MergeTreePartInfo::fromPartName(new_part_name, format_version);
 
     auto storage_settings_ptr = getSettings();
@@ -2306,10 +2304,43 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     }
 }
 
+MergeTreeMutableDataPartPtr StorageHaMergeTree::createDropRangePart(
+    const String & drop_range_name, const MergeTreePartInfo & drop_range_info, const StorageMetadataPtr & metadata_snapshot)
+{
+    auto storage_columns = metadata_snapshot->getColumns().getAllPhysical();
+
+    auto disk = getStoragePolicy()->getAnyDisk();
+    auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_range_name, disk, 0);
+
+    /// Create fake drop range part
+    auto drop_range_part
+        = createPart(drop_range_name, MergeTreeDataPartType::COMPACT, drop_range_info, single_disk_volume, "tmp_delete_" + drop_range_name);
+    drop_range_part->setColumns(storage_columns);
+    drop_range_part->is_temp = true;
+
+    /// XXX: Fill partition with default values to prevent coredump
+    for (auto & type : metadata_snapshot->partition_key.data_types)
+        drop_range_part->partition.value.push_back(type->getDefault());
+
+    MergedBlockOutputStream out(
+        drop_range_part,
+        metadata_snapshot,
+        storage_columns,
+        {},
+        getCompressionCodecForPart(0, drop_range_part->ttl_infos, time(nullptr)));
+
+    out.writePrefix();
+    /// out.write(metadata_snapshot->getSampleBlock());
+    out.writeSuffixAndFinalizePart(drop_range_part);
+
+    return drop_range_part;
+}
+
 bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executing_set)
 {
     auto & entry = *executing_set->getExecuting();
-    auto & drop_range_name = entry.new_parts.front();
+
+    auto & drop_range_name = entry.new_part_name;
     auto drop_range_info = MergeTreePartInfo::fromPartName(drop_range_name, format_version);
     drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// TODO: REMOVE ME
 
@@ -2322,29 +2353,7 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
 
     if (drop_range_info.isFakeDropRangePart())
     {
-        auto storage_columns = metadata_snapshot->getColumns().getAllPhysical();
-
-        /// Create fake drop range part
-        auto disk = getStoragePolicy()->getAnyDisk();
-        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_range_name, disk, 0);
-        auto drop_range_part = createPart(
-            drop_range_name, MergeTreeDataPartType::COMPACT, drop_range_info, single_disk_volume, "tmp_delete_" + drop_range_name);
-        drop_range_part->setColumns(storage_columns);
-        drop_range_part->is_temp = true;
-
-        /// XXX: Fill partition with default values to prevent coredump
-        for (auto & type : metadata_snapshot->partition_key.data_types)
-            drop_range_part->partition.value.push_back(type->getDefault());
-
-        MergedBlockOutputStream out(
-            drop_range_part,
-            metadata_snapshot,
-            storage_columns,
-            {},
-            getCompressionCodecForPart(0, drop_range_part->ttl_infos, time(nullptr)));
-        out.writePrefix();
-        /// out.write(metadata_snapshot->getSampleBlock());
-        out.writeSuffixAndFinalizePart(drop_range_part);
+        auto drop_range_part = createDropRangePart(drop_range_name, drop_range_info, metadata_snapshot);
 
         MergeTreeData::Transaction transaction(*this);
         parts_to_remove = renameTempPartAndReplace(drop_range_part, nullptr, &transaction);
@@ -2381,6 +2390,103 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
     /// To be removed a partition should have zero refcount, therefore call the cleanup thread at exit
     parts_to_remove.clear();
     clearOldPartsFromFilesystem(true); /// TODO: check whether the operation is safe
+
+    return true;
+}
+
+bool StorageHaMergeTree::executeReplaceRange(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = *executing_set->getExecuting();
+
+    auto & drop_range_name = entry.replace_range_entry->drop_range_part_name;
+    auto drop_range_info = MergeTreePartInfo::fromPartName(drop_range_name, format_version);
+    drop_range_info.mutation = MergeTreePartInfo::MAX_MUTATION; /// fix log created before adding mutation support /// TODO: REMOVE ME
+
+    /// TODO: log
+
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    auto drop_range_part = createDropRangePart(drop_range_name, drop_range_info, metadata_snapshot);
+
+    /// Fetch new parts from other replicas
+    MutableDataPartsVector new_parts;
+    ActiveDataPartSet fetched_parts(format_version);
+
+    auto zookeeper = getZooKeeper();
+    auto timeouts = ConnectionTimeouts::getHTTPTimeouts(getContext());
+    auto credentials = getContext()->getInterserverCredentials();
+    String interserver_scheme = getContext()->getInterserverScheme();
+
+    auto now = time(nullptr);
+
+    for (auto & part_name : entry.replace_range_entry->new_part_names)
+    {
+        if (!fetched_parts.getContainingPart(part_name).empty())
+            continue;
+
+        bool all_success = false;
+        auto candidate_replicas = log_exchanger.findActiveContainingPart(part_name, all_success);
+        if (candidate_replicas.empty())
+        {
+            if (log_exchanger.isLostReplica(entry.source_replica))
+                throw Exception(
+                    "Part " + part_name + " is lost forever because no active replica has it and source replica is lost",
+                    ErrorCodes::PART_IS_LOST_FOREVER);
+            else if (all_success && entry.create_time + 1800 < now)
+                throw Exception(
+                    "Part " + part_name + " is lost forever because no active or failed replica has it", ErrorCodes::PART_IS_LOST_FOREVER);
+            else
+                throw Exception("No active replica has part " + part_name, ErrorCodes::NO_REPLICA_HAS_PART);
+        }
+
+        /// the "payload" field measures the load of the replica
+        std::sort(candidate_replicas.begin(), candidate_replicas.end(), [](auto & lhs, auto & rhs) { return lhs.payload < rhs.payload; });
+        auto & replica_to_fetch = candidate_replicas[0].replica;
+        auto & part_to_fetch = candidate_replicas[0].containing_part;
+
+        if (!fetched_parts.getContainingPart(part_to_fetch).empty())
+            continue;
+
+        String source_replica_path = zookeeper_path + "/replicas/" + replica_to_fetch;
+        HaMergeTreeAddress address(zookeeper->get(source_replica_path + "/host"));
+        if (interserver_scheme != address.scheme)
+            throw Exception(
+                "Interserver schemes are different '" + interserver_scheme + "' != '" + address.scheme + "', can't fetch part from "
+                    + address.host,
+                ErrorCodes::LOGICAL_ERROR);
+
+        auto part = fetcher.fetchPart(
+            getInMemoryMetadataPtr(),
+            getContext(),
+            part_to_fetch,
+            source_replica_path,
+            address.host,
+            address.replication_port,
+            timeouts,
+            credentials->getUser(),
+            credentials->getPassword(),
+            interserver_scheme,
+            replicated_fetches_throttler,
+            false, /// to_detached
+            "tmp_replace_fetch_");
+
+        new_parts.push_back(std::move(part));
+        fetched_parts.add(part_to_fetch);
+    }
+
+    DataPartsVector parts_to_remove;
+    {
+        auto data_parts_lock = lockParts();
+
+        Transaction transaction(*this);
+        renameTempPartAndReplace(drop_range_part, nullptr, &transaction, data_parts_lock, &parts_to_remove);
+        for (auto & part : new_parts)
+            renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
+        transaction.commit(&data_parts_lock);
+    }
+
+    parts_to_remove.clear();
+    cleanup_thread.wakeup();
 
     return true;
 }
@@ -2765,7 +2871,7 @@ void StorageHaMergeTree::cloneReplica(const String & cloned_replica, [[maybe_unu
         /// entry->storage_type = type;
         entry->source_replica = replica_name;
         entry->from_replica = cloned_replica;
-        entry->new_parts.push_back(part_name);
+        entry->new_part_name = part_name;
         entry->create_time = create_time;
         prepared_entries.push_back(std::move(entry));
     }
@@ -3339,7 +3445,7 @@ void StorageHaMergeTree::createLogEntriesToMergeParts(const std::vector<FutureMe
         entry->source_replica = replica_name;
         for (auto & part : future_part.parts)
             entry->source_parts.push_back(part->name);
-        entry->new_parts.push_back(future_part.name);
+        entry->new_part_name = future_part.name;
         entry->lsn = allocateLSN();
         entry->create_time = time(nullptr);
         entries.push_back(std::move(entry));
@@ -3358,7 +3464,7 @@ HaMergeTreeLogEntryPtr StorageHaMergeTree::createLogEntryToMutatePart(
     entry->type = LogEntry::MUTATE_PART;
     entry->source_replica = replica_name;
     entry->source_parts.push_back(part_info.getPartName());
-    entry->new_parts.push_back(new_part_info.getPartName());
+    entry->new_part_name = new_part_info.getPartName();
     entry->lsn = allocLSNAndSet();
     entry->create_time = time(nullptr);
     entry->alter_version = alter_version;
@@ -3383,7 +3489,7 @@ void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeep
         MergeTreePartInfo drop_range_info(partition, 0, block_id, MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
         entry->type = LogEntry::DROP_RANGE;
         entry->source_replica = replica_name;
-        entry->new_parts.push_back(drop_range_info.getPartName());
+        entry->new_part_name = drop_range_info.getPartName();
         entry->detach = detach;
         entry->lsn = allocateLSN();
         entry->create_time = time(nullptr);
@@ -3486,7 +3592,7 @@ bool StorageHaMergeTree::dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const St
 
     entry.type = LogEntry::DROP_RANGE;
     entry.source_replica = replica_name;
-    entry.new_parts.push_back(part_name);
+    entry.new_part_name = part_name;
     entry.create_time = time(nullptr);
     entry.block_id = allocateBlockNumberDirect(zookeeper);
     entry.lsn = allocateLSN();
@@ -3515,7 +3621,8 @@ void StorageHaMergeTree::clearEmptyParts()
     {
         if (part->info.isFakeDropRangePart() && now - part->modification_time > drop_ranges_lifetime)
             drop_range_parts.push_back(part);
-        else if (part->rows_count == 0 && is_leader)
+
+        if (!part->info.isFakeDropRangePart() && part->rows_count == 0 && is_leader)
             dropPartNoWaitNoThrow(part->name);
     }
 
@@ -3533,10 +3640,6 @@ void StorageHaMergeTree::clearEmptyParts()
 void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
 {
     auto & settings = query_context->getSettingsRef();
-
-    assertNotReadonly();
-    if (!is_leader && !settings.ignore_leader_check)
-        throw Exception("DROP PARTITION cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     String partition_id = getPartitionIDFromQuery(partition, query_context);
 
@@ -3648,43 +3751,56 @@ void StorageHaMergeTree::replacePartitionFrom(
 
     try
     {
-        /// Step 1: generate DROP RANGE info
-        MergeTreePartInfo drop_range_info(
-            partition_id, 0, allocateBlockNumberDirect(zookeeper), MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
+        auto block_number = allocateBlockNumberDirect(zookeeper);
 
-        /// Step 2: generate GET_PART logs
-        auto get_parts = HaMergeTreeBlockOutputStream(*this, metadata_snapshot, query_context).generateLogEntriesForParts(zookeeper, dst_parts);
-        queue.write(get_parts);
+        /// Create drop range part
+        MergeTreePartInfo drop_range_info(partition_id, 0, block_number, MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
+        auto drop_range_name = drop_range_info.getPartName();
+        auto drop_range_part = createDropRangePart(drop_range_name, drop_range_info, metadata_snapshot);
 
-        Transaction transaction(*this);
+        /// Create REPLACE_RANGE entry
+        auto entry = std::make_shared<LogEntry>();
+        entry->block_id = toString(block_number);
+        entry->type = HaMergeTreeLogEntry::REPLACE_RANGE;
+        entry->source_replica = replica_name;
+        entry->lsn = allocateLSN();
+        entry->create_time = time(nullptr);
+        entry->is_executed = true;
+        entry->replace_range_entry = std::make_shared<HaMergeTreeLogEntry::ReplaceRangeEntry>();
+
+        /// Fill drop range name
+        entry->replace_range_entry->drop_range_part_name = drop_range_name;
+
+        /// Fill new part names
+        for (auto & part : dst_parts)
         {
-            auto data_parts_lock = lockParts();
-            for (auto & part : dst_parts)
-                renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
+            auto part_block_number = allocateBlockNumberDirect(zookeeper); /// TODO: optimize this
+            part->info.min_block = part_block_number;
+            part->info.max_block = part_block_number;
+            part->info.level = 0;
+            part->name = part->getNewName(part->info);
+
+            entry->replace_range_entry->new_part_names.push_back(part->name);
         }
 
-        /// Step 3: generate RANGE_DROP log
-        auto drop_range = std::make_shared<LogEntry>();
-        drop_range->type = LogEntry::DROP_RANGE;
-        drop_range->source_replica = replica_name;
-        drop_range->new_parts.push_back(drop_range_info.getPartName());
-        drop_range->lsn = allocateLSN();
-        drop_range->create_time = time(nullptr);
+        queue.write(entry);
 
-        queue.write(drop_range);
-
+        /// Commit drop range part and new parts
         DataPartsVector parts_to_remove;
         {
             auto data_parts_lock = lockParts();
 
+            Transaction transaction(*this);
+            renameTempPartAndReplace(drop_range_part, nullptr, &transaction, data_parts_lock, &parts_to_remove);
+            for (auto & part : dst_parts)
+                renameTempPartAndReplace(part, nullptr, &transaction, data_parts_lock);
             transaction.commit(&data_parts_lock);
-            parts_to_remove = removePartsInRangeFromWorkingSet(drop_range_info, true, data_parts_lock);
         }
-
-        PartLog::addNewParts(getContext(), dst_parts, watch.elapsed());
 
         parts_to_remove.clear();
         cleanup_thread.wakeup();
+
+        PartLog::addNewParts(getContext(), dst_parts, watch.elapsed());
     }
     catch (...)
     {
@@ -3716,6 +3832,8 @@ bool StorageHaMergeTree::checkIfDetachedPartitionExists(const String & partition
 void StorageHaMergeTree::fetchPartition(
     const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context)
 {
+    assertNotReadonly();
+
     /// Macros::MacroExpansionInfo info;
     /// info.expand_special_macros_only = false; //-V1048
     /// info.table_id = getStorageID();
@@ -3752,6 +3870,8 @@ void StorageHaMergeTree::fetchPartition(
 void StorageHaMergeTree::fetchPartitionWhere(
     const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context)
 {
+    assertNotReadonly();
+
     String filter = serializeAST(*predicate, true);
     fetchPartitionImpl({}, filter, from, query_context);
 }
@@ -3778,6 +3898,10 @@ void StorageHaMergeTree::fetchPartitionImpl(
 
     for (auto & part_name : part_names)
     {
+        auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
+        if (part_info.isFakeDropRangePart() || getActiveContainingPart(part_info))
+            continue;
+
         try
         {
             bool fetched = fetchPart(nullptr, part_name, from_replica_path, false);
@@ -3830,13 +3954,22 @@ void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, cons
 
             auto source_part_path = source_detached_path / it->name();
             auto target_part_path = target_detached_path / it->name();
+
+            if (disk->exists(target_part_path))
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Partition {} already exists in {} for table {}",
+                    partition_id,
+                    target_detached_path.string(),
+                    getStorageID().getNameForLogs());
+
             disk->moveFile(source_part_path, target_part_path);
 
             LOG_DEBUG(log, "Moved part from {} to {} in disk [{}] {}", source_part_path.string(), target_part_path.string(), disk->getName(), disk->getPath());
         }
     }
 
-    /// TODO: should we detach conflicts ahead ?
+    /// TODO: should we detect conflicts ahead ?
 }
 
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const

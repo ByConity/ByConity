@@ -131,7 +131,7 @@ void StorageSystemHaQueue::fillData(MutableColumns & res_columns, ContextPtr con
             res_columns[col_num++]->insert(entry.lsn);
             res_columns[col_num++]->insert(entry.create_time);
             res_columns[col_num++]->insert(entry.source_replica);
-            res_columns[col_num++]->insert(entry.formatNewParts());
+            res_columns[col_num++]->insert(entry.new_part_name);
             res_columns[col_num++]->insert(parts_to_merge);
             res_columns[col_num++]->insert(entry.detach);
             /// res_columns[col_num++]->insert(entry.storage_type == StorageType::Local ? "local" : "hdfs");

@@ -606,7 +606,7 @@ HaMergeTreeLogManager::writeLogEntries(std::vector<LogEntryPtr> entries_to_write
             TransactionManager & transactionManager = storage.global_context.getTransactionManager();
             auto transaction = transactionManager.constructTransaction(entry->transaction_id);
             auto transaction_item_ptr = std::make_shared<MergeTreeTransactionItem>(storage, entry->transaction_index,
-                                                                                   entry->new_parts.front(),
+                                                                                   entry->new_part_name,
                                                                                    entry->transaction_id, IN_PROGRESS, entry->lsn);
             transaction->attachItem(transaction_item_ptr);
         }
@@ -690,17 +690,13 @@ void HaMergeTreeLogManager::markLogEntriesExecuted(const LogEntry::Vec & execute
         /// If there is data changes, we need to update the table's update_time
         if (entry->mayChangeStorageData())
             need_update_time = true;
+
         if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::DROP_RANGE ||
-            entry->type == LogEntry::CLONE_PART || entry->type == LogEntry::CLEAR_COLUMN ||
-            entry->type == LogEntry::REPLACE_PARTITION)
+            entry->type == LogEntry::CLONE_PART || entry->type == LogEntry::CLEAR_COLUMN)
         {
-            std::unordered_set<String> partition_ids;
-            for (const auto & part: entry->new_parts)
-            {
-                MergeTreePartInfo part_info;
-                MergeTreePartInfo::tryParsePartName(part, &part_info, storage.format_version);
-                partition_ids.insert(part_info.partition_id);
-            }
+            /// MergeTreePartInfo part_info;
+            /// MergeTreePartInfo::tryParsePartName(entry->new_part_name, &part_info, storage.format_version);
+            /// partition_ids.insert(part_info.partition_id);
 
             if (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART)
             {
@@ -712,6 +708,10 @@ void HaMergeTreeLogManager::markLogEntriesExecuted(const LogEntry::Vec & execute
                 /// if (it != partition_ids.end())
                 /// TODO:   storage.recalculateMapKeyCacheByMaxPartition(*it);
             }
+        }
+        else if (entry->type == LogEntry::REPLACE_RANGE)
+        {
+            /// TODO:
         }
     }
     markLogEntriesExecuted(lsns);
@@ -942,7 +942,7 @@ bool HaMergeTreeLogManager::verifyPartCanMerged(const Strings & parts_need_merge
         && (entry->transaction_status == IN_PROGRESS || entry->transaction_status == SUB_COMMITTED))
         {
             if (parts_need_merged.end() != std::find(parts_need_merged.begin(),
-                    parts_need_merged.end(), entry->new_parts.front()))
+                    parts_need_merged.end(), entry->new_part_name))
             {
                 LOG_INFO(log, "Log entry with valid transaction-" << entry->toString() << " Cancel merge action from parts:" << "\n");
                 for (const auto & part_name: parts_need_merged)
