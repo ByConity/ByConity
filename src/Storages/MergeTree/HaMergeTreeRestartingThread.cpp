@@ -270,7 +270,6 @@ bool HaMergeTreeRestartingThread::tryStartup()
 
             extra_startup = true; // need extra_startup
         }
-        /// TODO: storage.initMinBlockFromLogManager();
         /// TODO: storage.recoverActionOnTransaction();
 
         if (storage_settings->replicated_can_become_leader)
@@ -282,9 +281,12 @@ bool HaMergeTreeRestartingThread::tryStartup()
         storage.partial_shutdown_called = false;
         storage.partial_shutdown_event.reset();
 
-        // delay queue task as it doesn't recover from lost status
+        /// delay queue task as it doesn't recover from lost status
         if (!extra_startup)
         {
+            /// Start queue processing
+            storage.background_executor.start();
+
             storage.queue_updating_task->activateAndSchedule();
             storage.mutations_finalizing_task->activateAndSchedule();
             storage.cleanup_thread.start();
