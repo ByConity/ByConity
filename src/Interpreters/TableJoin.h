@@ -127,8 +127,10 @@ public:
     VolumePtr getTemporaryVolume() { return tmp_volume; }
     bool allowMergeJoin() const;
     bool allowDictJoin(const String & dict_key, const Block & sample_block, Names &, NamesAndTypesList &) const;
+    void setJoinAlgorithm(JoinAlgorithm join_algorithm_) { join_algorithm = join_algorithm_; }
     bool preferMergeJoin() const { return join_algorithm == JoinAlgorithm::PREFER_PARTIAL_MERGE; }
     bool forceMergeJoin() const { return join_algorithm == JoinAlgorithm::PARTIAL_MERGE; }
+    bool forceNestedLoopJoin() const { return join_algorithm == JoinAlgorithm::NESTED_LOOP_JOIN; }
     bool forceHashJoin() const
     {
         /// HashJoin always used for DictJoin
@@ -152,6 +154,7 @@ public:
 
     bool hasUsing() const { return table_join.using_expression_list != nullptr; }
     bool hasOn() const { return table_join.on_expression != nullptr; }
+    ASTPtr getOnExpression(){ return table_join.on_expression != nullptr ? table_join.on_expression : table_join.on_expression; }
 
     NamesWithAliases getNamesWithAliases(const NameSet & required_columns) const;
     NamesWithAliases getRequiredColumns(const Block & sample, const Names & action_required_columns) const;
