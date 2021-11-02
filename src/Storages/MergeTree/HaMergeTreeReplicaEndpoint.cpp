@@ -60,8 +60,7 @@ void HaMergeTreeReplicaEndpoint::processPacket(UInt64 packet_type, ReadBuffer & 
             return;
 
         case Protocol::HaClient::GetMutationStatus:
-            /// TODO:
-            /// onGetMutationStatus(in, out);
+            onGetMutationStatus(in, out);
             return;
 
         default:
@@ -204,7 +203,6 @@ void HaMergeTreeReplicaEndpoint::onGetLSNStatus(ReadBuffer &, WriteBuffer & out)
     out.next();
 }
 
-#if 0
 void HaMergeTreeReplicaEndpoint::onGetMutationStatus(ReadBuffer & in, WriteBuffer & out)
 {
     String mutation_id;
@@ -224,7 +222,6 @@ void HaMergeTreeReplicaEndpoint::onGetMutationStatus(ReadBuffer & in, WriteBuffe
     writeIntBinary(finish_time, out);
     out.next();
 }
-#endif
 
 /*
 HaUniqueMergeTreeReplicaEndpoint::HaUniqueMergeTreeReplicaEndpoint(StorageHaUniqueMergeTree & storage_)

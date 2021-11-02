@@ -290,6 +290,7 @@ bool HaMergeTreeRestartingThread::tryStartup()
             storage.queue_updating_task->activateAndSchedule();
             storage.mutations_finalizing_task->activateAndSchedule();
             storage.cleanup_thread.start();
+            storage.alter_thread.start();
             /// storage.part_check_thread.start();
         }
 
@@ -390,6 +391,7 @@ void HaMergeTreeRestartingThread::partialShutdown()
     storage.mutations_finalizing_task->deactivate();
 
     storage.cleanup_thread.stop();
+    storage.alter_thread.stop();
     /// TODO: storage.part_check_thread.stop();
 
     /// Stop queue processing

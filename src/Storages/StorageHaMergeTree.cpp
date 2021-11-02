@@ -1435,7 +1435,7 @@ std::vector<MergeTreeMutationStatus> StorageHaMergeTree::getMutationsStatus() co
     return queue.getMutationsStatus();
 }
 
-CancellationCode StorageHaMergeTree::killMutation([[maybe_unused]]const String & mutation_id)
+CancellationCode StorageHaMergeTree::killMutation(const String & mutation_id)
 {
     assertNotReadonly();
 

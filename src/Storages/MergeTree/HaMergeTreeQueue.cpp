@@ -325,9 +325,9 @@ HaMergeTreeQueue::LogEntryVec HaMergeTreeQueue::pullLogs(zkutil::ZooKeeperPtr zo
 }
 
 bool HaMergeTreeQueue::pullLogsToQueue(
-    [[maybe_unused]] zkutil::ZooKeeperPtr zookeeper,
-    [[maybe_unused]] Coordination::WatchCallback watch_callback,
-    [[maybe_unused]] bool ignore_backoff)
+    zkutil::ZooKeeperPtr zookeeper,
+    Coordination::WatchCallback watch_callback,
+    bool ignore_backoff)
 {
     std::lock_guard lock(pull_logs_to_queue_mutex);
 
@@ -900,7 +900,7 @@ void HaMergeTreeQueue::removeProcessedEntries(const LogEntryVec & entries)
     {
         if (0 == unprocessed_by_lsn.erase(entry->lsn))
         {
-            LOG_WARNING(log, "{} not found in the queue which might be removed concurrently.", entry->toString());
+            LOG_WARNING(log, "{} not found in the queue which might be removed concurrently.", entry->toDebugString());
         }
         else
         {
@@ -1542,12 +1542,6 @@ HaMergeTreeQueue::QueueLocks HaMergeTreeQueue::lockQueue()
     return QueueLocks(state_mutex, pull_logs_to_queue_mutex, update_mutations_mutex);
 }
 
-
-[[maybe_unused]] static bool hasNewParts(const HaMergeTreeLogEntry & entry)
-{
-    return entry.type == HaMergeTreeLogEntry::MERGE_PARTS || entry.type == HaMergeTreeLogEntry::MUTATE_PART
-        || entry.type == HaMergeTreeLogEntry::GET_PART || entry.type == HaMergeTreeLogEntry::CLONE_PART;
-}
 
 HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, zkutil::ZooKeeperPtr & zookeeper)
     : queue(queue_)

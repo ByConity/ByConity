@@ -7,3 +7,4 @@
   * If it does not work, return hostname - similar to calling 'hostname' without flags or 'uname -n'.
   */
 const std::string & getFQDNOrHostName();
+const std::string & getIPOrFQDNOrHostName();
