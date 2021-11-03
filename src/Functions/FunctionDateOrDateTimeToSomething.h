@@ -38,15 +38,15 @@ public:
     {
         if (arguments.size() == 1)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type) && !isString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
-                        + ". Should be a date or a date with time",
+                        + ". Should be a string, a date or a date with time",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
         }
         else if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type) && !isString(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
                         + ". Should be a date or a date with time",
@@ -57,7 +57,7 @@ public:
                           "must be of type Date or DateTime. The 2nd argument (optional) must be "
                           "a constant string with timezone name",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            if (isDate(arguments[0].type) && std::is_same_v<ToDataType, DataTypeDate>)
+            if ((isDate(arguments[0].type) || isString(arguments[0].type)) && std::is_same_v<ToDataType, DataTypeDate>)
                 throw Exception(
                     "The timezone argument of function " + getName() + " is allowed only when the 1st argument has the type DateTime",
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -101,7 +101,7 @@ public:
         const IDataType * from_type = arguments[0].type.get();
         WhichDataType which(from_type);
 
-        if (which.isDate())
+        if (which.isDate() || which.isString())
             return DateTimeTransformImpl<DataTypeDate, ToDataType, Transform>::execute(arguments, result_type, input_rows_count);
         else if (which.isDateTime())
             return DateTimeTransformImpl<DataTypeDateTime, ToDataType, Transform>::execute(arguments, result_type, input_rows_count);

@@ -21,11 +21,12 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int ARGUMENT_OUT_OF_BOUND;
-extern const int UNKNOWN_TYPE;
-extern const int TYPE_MISMATCH;
-extern const int LOGICAL_ERROR;
-extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
+    extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int BAD_ARGUMENTS;
+    extern const int UNKNOWN_TYPE;
+    extern const int TYPE_MISMATCH;
+    extern const int LOGICAL_ERROR;
+    extern const int SIZES_OF_ARRAYS_DOESNT_MATCH;
 }
 
 /**
@@ -223,7 +224,7 @@ struct MergeSteamStackData
             for (size_t i = start, j = 0; i < end; ++i, ++j)
             {
                 if(key[j] != static_cast<KeyType>(other_key[i]))
-                    throw Exception("Function MergeSteamStack need same key value when merge stream", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Function MergeSteamStack need same key value when merge stream", ErrorCodes::BAD_ARGUMENTS);
                 value[j] += static_cast<ValueType>(other_value[i]);
             }
         }
@@ -247,7 +248,7 @@ struct MergeSteamStackData
         for (size_t i = 0; i < value.size(); ++i)
         {
             if(key[i] != other.key[i])
-                throw Exception("Function MergeSteamStack need same key value when merge stream.", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Function MergeSteamStack need same key value when merge stream.", ErrorCodes::BAD_ARGUMENTS);
             this->value[i] += other.value[i];
         }
     }

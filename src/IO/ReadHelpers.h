@@ -599,16 +599,13 @@ inline ReturnType readDateTextImpl(LocalDate & date, ReadBuffer & buf)
         UInt16 year = (pos[0] - '0') * 1000 + (pos[1] - '0') * 100 + (pos[2] - '0') * 10 + (pos[3] - '0');
         pos += 4;
 
-        if (isNumericASCII(pos[-1]))
-            return ReturnType(false);
-
         auto next = [&]()
         {
             /// skip separator if necessary
             if (!isNumericASCII(*pos))
                 ++pos;
 
-            UInt8 res = *pos - '0';
+            UInt8 res = *(pos++) - '0';
 
             if (isNumericASCII(*pos))
                 res = res * 10 + (*(pos++) - '0');

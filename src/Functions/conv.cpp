@@ -151,7 +151,10 @@ private:
         auto index = getVerifiedIndex(value, from_base);
 
         if (!index || (index == 1 && *value.data == '-'))
-            return {};
+            return "0";
+
+        if (from_base == to_base)
+            return String(value.data, index);
 
         String res;
 
@@ -176,7 +179,9 @@ private:
         for (auto & c: res)
             c += (c < 10 ? '0' : 'A' - 10);
 
-        if (negative)
+        if (res.empty())
+            res.push_back('0');
+        else if (negative)
             res.push_back('-');
 
         std::reverse(res.begin(), res.end());

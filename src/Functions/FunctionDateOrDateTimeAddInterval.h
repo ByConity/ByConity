@@ -441,13 +441,12 @@ public:
         switch (arguments[0].type->getTypeId())
         {
             case TypeIndex::Date:
+            case TypeIndex::String:
                 return resolveReturnType<DataTypeDate>(arguments);
             case TypeIndex::DateTime:
                 return resolveReturnType<DataTypeDateTime>(arguments);
             case TypeIndex::DateTime64:
                 return resolveReturnType<DataTypeDateTime64>(arguments);
-            case TypeIndex::String:
-                return resolveReturnType<DataTypeDateTime>(arguments); // TODO
             default:
             {
                 throw Exception("Invalid type of 1st argument of function " + getName() + ": "

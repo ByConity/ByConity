@@ -1075,7 +1075,7 @@ public:
     inline UInt16 toLastDayNumOfMonth(DateOrDateTime v) const
     {
         const Values & values = getValues(v);
-        return toLUTIndex(v) + (values.days_in_month - values.day_of_month);
+        return (toLUTIndex(v).toUnderType() - daynum_offset_epoch) + (values.days_in_month - values.day_of_month);
     }
 
     /// Adding calendar intervals.

@@ -33,8 +33,7 @@ class ConcatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit ConcatImpl(ContextPtr context_) : context(context_) {}
-    static FunctionPtr create(ContextPtr context) { return std::make_shared<ConcatImpl>(context); }
+    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<ConcatImpl>(); }
 
     String getName() const override { return name; }
 
@@ -85,8 +84,6 @@ public:
     }
 
 protected:
-    ContextWeakPtr context;
-
     ColumnPtr executeBinary(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const
     {
         const IColumn * c0 = arguments[0].column.get();
@@ -176,16 +173,12 @@ template<typename Name>
 class ConcatWsImpl : public ConcatImpl<Name, false>
 {
 public:
-    explicit ConcatWsImpl(ContextPtr /*context*/) {}
+    static FunctionPtr create(ContextPtr /*context*/) { return std::make_shared<ConcatWsImpl>(); }
+
     using ConcatImpl<Name, false>::executeFormatImpl;
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        /// Format function is not proven to be faster for two arguments.
-        /// Actually there is overhead of 2 to 5 extra instructions for each string for checking empty strings in FormatImpl.
-        /// Though, benchmarks are really close, for most examples we saw executeBinary is slightly faster (0-3%).
-        /// For 3 and more arguments FormatImpl is much faster (up to 50-60%).
-
         ColumnsWithTypeAndName new_arguments((arguments.size() << 1) - 3);
 
         for (size_t i = 0; i < new_arguments.size(); ++i)

@@ -10,7 +10,7 @@
 #include <Columns/ColumnDecimal.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
-//#include <Functions/FunctionsConversion.h>
+#include <Functions/FunctionFactory.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
@@ -844,7 +844,7 @@ struct ToYYYYMMDDhhmmssImpl
 
 struct LastDayImpl
 {
-    static constexpr auto name = "LastDay";
+    static constexpr auto name = "lastDay";
 
     static inline UInt64 execute(Int64 t, const DateLUTImpl & time_zone)
     {
@@ -882,18 +882,22 @@ template <typename FromDataType, typename ToDataType, typename Transform>
 struct DateTimeTransformImpl
 {
     static ColumnPtr execute(
-        const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/, const Transform & transform = {})
+        const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, const Transform & transform = {})
     {
         using Op = Transformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform>;
 
-        const ColumnPtr source_col = arguments[0].column;
+        ColumnPtr source_col = arguments[0].column;
 
-        // TODO:
-//        if (checkAndGetColumn<ColumnString>(source_col.get()))
-//        {
-//            auto column_date = ConvertImpl<DataTypeString, DataTypeDate, NameToDate>::execute(arguments, std::make_shared<DataTypeDate>(), source_col->size());
-//            source_col = std::move(column_date);
-//        }
+        if (checkAndGetColumn<ColumnString>(source_col.get()))
+        {
+            auto function_overload = FunctionFactory::instance().tryGet("toDate", nullptr);
+
+            if (!function_overload)
+                throw Exception("Couldn't convert ColumnString to ColumnData since can't get function toDate", ErrorCodes::BAD_ARGUMENTS);
+
+            auto func_base = function_overload->build({arguments[0]});
+            source_col = func_base->execute(arguments, func_base->getResultType(), input_rows_count);
+        }
 
         if (const auto * sources = checkAndGetColumn<typename FromDataType::ColumnType>(source_col.get()))
         {

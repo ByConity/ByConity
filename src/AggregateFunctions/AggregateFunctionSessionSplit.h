@@ -35,8 +35,15 @@ extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
  */
 struct SessionEvent
 {
+    enum EventType: uint8_t
+    {
+        KnownType,
+        PageView,
+        BeActive
+    };
+
     UInt64 server_time;
-    UInt8 event;
+    EventType event = KnownType;
     UInt64 time;
     UInt64 start_time;
     UInt64 end_time;
@@ -46,7 +53,7 @@ struct SessionEvent
 
     SessionEvent() = default;
 
-    SessionEvent(UInt64 server_time_, UInt8 event_, UInt32 time_,
+    SessionEvent(UInt64 server_time_, EventType event_, UInt32 time_,
                  UInt64 start_time_, UInt64 end_time_, StringRef url_,
                  StringRef refer_type_, const std::vector<StringRef> & args_ = {}) :
         server_time(server_time_), event(event_), time(time_),
@@ -54,10 +61,14 @@ struct SessionEvent
         refer_type(refer_type_), args(args_)
     {}
 
+    inline UInt64 getStartTime() const { return event == PageView ? time : start_time; }
+    inline UInt64 getEndTime() const { return event == PageView ? time : end_time; }
+    inline bool isPageView() const { return event == PageView; }
+
     void serialize(WriteBuffer &buf) const
     {
         writeBinary(server_time, buf);
-        writeBinary(event, buf);
+        writeBinary(static_cast<UInt8>(event), buf);
         writeBinary(time, buf);
         writeBinary(start_time, buf);
         writeBinary(end_time, buf);
@@ -69,7 +80,9 @@ struct SessionEvent
     void deserialize(ReadBuffer &buf, Arena * arena)
     {
         readBinary(server_time, buf);
-        readBinary(event, buf);
+        UInt8 event_type;
+        readBinary(event_type, buf);
+        event = static_cast<EventType>(event_type);
         readBinary(time, buf);
         readBinary(start_time, buf);
         readBinary(end_time, buf);
@@ -78,17 +91,14 @@ struct SessionEvent
         readStringRefsBinary(args, buf, *arena);
     }
 
-    static UInt8 mapEvent(StringRef event_)
+    static EventType mapEvent(StringRef event_)
     {
         if (event_ == "predefine_pageview")
-        {
-            return 1;
-        }
+            return EventType::PageView;
         else if (event_ == "_be_active")
-        {
-            return 2;
-        }
-        return 0;
+            return EventType::BeActive;
+        else
+            return EventType::KnownType;
     }
 };
 
@@ -127,7 +137,7 @@ struct AggregateFunctionSessionSplitData
 
     auto get(size_t i) const { return events.begin() + order[i]; }
 
-    void add(UInt64 server_time, UInt8 event, UInt64 time, UInt64 start_time, UInt64 end_time, StringRef url, StringRef refer_type, const std::vector<StringRef> & args = {})
+    void add(UInt64 server_time, SessionEvent::EventType event, UInt64 time, UInt64 start_time, UInt64 end_time, StringRef url, StringRef refer_type, const std::vector<StringRef> & args = {})
     {
         if(sorted && !events.empty() && events.back().time > time)
             sorted = false;
@@ -239,51 +249,59 @@ public:
      */
     DataTypePtr getReturnType() const override
     {
-        DataTypes types;
-        types.emplace_back(std::make_shared<DataTypeUInt32>()); // session duration
-        types.emplace_back(std::make_shared<DataTypeUInt32>()); // session depth
-        types.emplace_back(std::make_shared<DataTypeString>());
-        types.emplace_back(std::make_shared<DataTypeString>());
+        DataTypes types {
+            std::make_shared<DataTypeUInt32>(), // session duration
+            std::make_shared<DataTypeUInt32>(), // session depth
+            std::make_shared<DataTypeString>(),
+            std::make_shared<DataTypeString>()
+        };
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(types));
     }
 
     void add(AggregateDataPtr place, const IColumn **columns, size_t row_num, Arena * arena) const override
     {
-        // read records from input columns, those values are stored in MAP structure, and should be Nullable.
-        UInt64 server_time = static_cast<const ColumnVector <UInt64> *>(columns[0])->getData()[row_num];
-        const ColumnString * event_column = static_cast<const ColumnString *>(columns[1]);
-        UInt8 event = SessionEvent::mapEvent(event_column->getDataAt(row_num));
-        UInt64 _time = static_cast<const ColumnVector <UInt64> *>(columns[2])->getData()[row_num];
+        if (dynamic_cast<const ColumnNullable *>(columns[3]))
+            std::cout << "Nullable Column" << std::endl;
+        else if (dynamic_cast<const ColumnUInt64 *>(columns[3]))
+            std::cout << "UInt64 column" << std::endl;
+        else if (dynamic_cast<const ColumnInt64 *>(columns[3]))
+            std::cout << "Int64 column" << std::endl;
+        else
+            std::cout << "Known column" << std::endl;
 
-        if (!event || server_time < m_base_time)
+        UInt64 server_time = assert_cast<const ColumnUInt64 *>(columns[0])->getData()[row_num];
+        auto event = SessionEvent::mapEvent(assert_cast<const ColumnString *>(columns[1])->getDataAt(row_num));
+        UInt64 event_time = assert_cast<const ColumnUInt64 *>(columns[2])->getData()[row_num];
+
+        if (event == SessionEvent::KnownType || server_time < m_base_time)
             return;
 
         UInt64 start_time = 0;
         UInt64 end_time = 0;
-        if (event == 2)
+
+        if (event == SessionEvent::BeActive)
         {
-            const ColumnNullable *start_time_col = static_cast<const ColumnNullable *>(columns[3]);
-            const ColumnNullable *end_time_col = static_cast<const ColumnNullable *>(columns[4]);
-            if (start_time_col->isNullAt(row_num) || end_time_col->isNullAt(row_num))
-                return;
-            const UInt64 &start_time_data = static_cast<const ColumnUInt64 &>(*start_time_col->getNestedColumnPtr()).getData()[row_num];
-            const UInt64 &end_time_data = static_cast<const ColumnUInt64 &>(*end_time_col->getNestedColumnPtr()).getData()[row_num];
-            start_time = start_time_col->isNullAt(row_num) ? 0 : start_time_data / 1000;
-            end_time = end_time_col->isNullAt(row_num) ? 0 : end_time_data / 1000;
+            start_time = assert_cast<const ColumnUInt64 *>(columns[3])->getData()[row_num];
+            end_time = assert_cast<const ColumnUInt64 *>(columns[4])->getData()[row_num];
+
+            if (start_time >= std::numeric_limits<UInt32>::max()) // ms
+                start_time /= 1000;
+            if (end_time >= std::numeric_limits<UInt32>::max()) // ms
+                end_time /= 1000;
+
             if (start_time > end_time)
                 return;
         }
-        const ColumnNullable * url_column = static_cast<const ColumnNullable *>(columns[5]);
-        const auto url = static_cast<const ColumnString &>(*url_column->getNestedColumnPtr()).getDataAt(row_num);
-        const ColumnNullable * ref_column = static_cast<const ColumnNullable *>(columns[6]);
-        const auto ref = static_cast<const ColumnString &>(*ref_column->getNestedColumnPtr()).getDataAt(row_num);
+
+        const auto url = assert_cast<const ColumnString *>(columns[5])->getDataAt(row_num);
+        const auto ref = assert_cast<const ColumnString *>(columns[6])->getDataAt(row_num);
 
         char * url_data = arena->alloc(url.size);
         char * refer_data = arena->alloc(ref.size);
         strncpy(url_data, url.data, url.size);
         strncpy(refer_data, ref.data, ref.size);
 
-        this->data(place).add(server_time, event, _time, start_time, end_time, StringRef(url_data, url.size), StringRef(refer_data, ref.size));
+        this->data(place).add(server_time, event, event_time, start_time, end_time, {url_data, url.size}, {refer_data, ref.size});
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -310,84 +328,82 @@ public:
             return;
 
         data.sort();
-        auto cur_session = data.get(0);
-        UInt64 _start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
-        UInt64 _end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
+        auto curr_session = data.get(0);
+        UInt64 session_start_time = curr_session->getStartTime();
+        UInt64 session_end_time = curr_session->getEndTime();
         UInt32 depth = 1;
-        bool new_session = false, has_pv = (*cur_session).event == 1; // has_pv 切分之后的session中是否含有predefine_pageview事件
-        StringRef url[2];
+        bool new_session = false;
+        bool has_pv = curr_session->isPageView(); // has_pv 切分之后的session中是否含有predefine_pageview事件
+        StringRef url[2] {curr_session->url, curr_session->refer_type};
 
-        url[0] = (*cur_session).url;
-        url[1] = (*cur_session).refer_type;
         UInt64 cur_start_time = 0;
         UInt64 cur_end_time = 0;
         for (size_t i = 1; i < data.events.size(); ++i)
         {
-            cur_session = data.get(i);
-            cur_start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
+            curr_session = data.get(i);
+            cur_start_time = curr_session->getStartTime();
             /// split session by mWindowSize
-            if (_start_time / m_window_size != cur_start_time / m_window_size)
-            {
+            if (session_start_time / m_window_size != cur_start_time / m_window_size)
                 new_session = true;
-            }
-            /// split session by mSessionSplitTime
-            if (cur_start_time >= _end_time && cur_start_time - _end_time > m_session_split_time)
-            {
-                new_session = true;
-            }
 
-            if(!new_session)
+            /// split session by mSessionSplitTime
+            if (cur_start_time >= session_end_time && cur_start_time - session_end_time > m_session_split_time)
+                new_session = true;
+
+            if (!new_session)
             {
-                depth += (*cur_session).event == 1;
-                cur_end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
-                _end_time = std::max(_end_time, cur_end_time);
-                _start_time = std::min(_start_time, cur_start_time);
-                if ((*cur_session).event == 1)
+                depth += curr_session->isPageView();
+                cur_end_time = curr_session->getEndTime();
+                session_end_time = std::max(session_end_time, cur_end_time);
+                session_start_time = std::min(session_start_time, cur_start_time);
+                if (curr_session->isPageView())
                 {
-                    if(!has_pv || type == 1)
+                    if (!has_pv || type == 1)
                     {
                         has_pv = true;
-                        url[0] = (*cur_session).url;
-                        url[1] = (*cur_session).refer_type;
+                        url[0] = (*curr_session).url;
+                        url[1] = (*curr_session).refer_type;
                     }
-                    else if(type == 2)
+                    else if (type == 2)
                     {
-                        url[1] = (*cur_session).refer_type;
+                        url[1] = (*curr_session).refer_type;
                     }
                 }
             }
             else
             {
-                if (!has_pv) { url[0] = url[1] = StringRef(); }
-                res.emplace_back(static_cast<UInt32>(_end_time - _start_time), depth, url[0], url[1]);
-                new_session = false;
+                if (!has_pv)
+                    url[0] = url[1] = StringRef();
+                res.emplace_back(static_cast<UInt32>(session_end_time - session_start_time), depth, url[0], url[1]);
 
-                _start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
-                _end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
-                url[0] = (*cur_session).url;
-                url[1] = (*cur_session).refer_type;
+                new_session = false;
+                session_start_time = curr_session->getStartTime();
+                session_end_time = curr_session->getEndTime();
+                url[0] = (*curr_session).url;
+                url[1] = (*curr_session).refer_type;
                 depth = 1;
-                has_pv = (*cur_session).event == 1;
+                has_pv = curr_session->isPageView();
             }
         }
-        if (!has_pv) { url[0] = url[1] = StringRef(); }
-        res.emplace_back(static_cast<UInt32>(_end_time - _start_time), depth, url[0], url[1]);
+        if (!has_pv)
+            url[0] = url[1] = StringRef();
+        res.emplace_back(static_cast<UInt32>(session_end_time - session_start_time), depth, url[0], url[1]);
     }
 
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
     {
-        std::vector <Session> sess;
-        splitToSessions(const_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
-        ColumnArray &array_to = static_cast<ColumnArray &>(to);
-        ColumnArray::Offsets &offset_to = array_to.getOffsets();
-        ColumnTuple &array_to_nest = static_cast<ColumnTuple &>(array_to.getData());
+        std::vector<Session> sess;
+        splitToSessions(static_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
+        ColumnArray & array_to = assert_cast<ColumnArray &>(to);
+        ColumnArray::Offsets & offset_to = array_to.getOffsets();
+        ColumnTuple & array_to_nest = assert_cast<ColumnTuple &>(array_to.getData());
         offset_to.push_back(sess.size() + (offset_to.empty() ? 0 : offset_to.back()));
-        auto & dur_col_data = static_cast<ColumnVector <UInt32> &>(array_to_nest.getColumn(0)).getData();
-        auto & depth_col_data = static_cast<ColumnVector <UInt32> &>(array_to_nest.getColumn(1)).getData();
-        auto & url_col = static_cast<ColumnString &>(array_to_nest.getColumn(2));
-        auto &ref_col = static_cast<ColumnString &>(array_to_nest.getColumn(3));
+        auto & dur_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(0)).getData();
+        auto & depth_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(1)).getData();
+        auto & url_col = assert_cast<ColumnString &>(array_to_nest.getColumn(2));
+        auto & ref_col = assert_cast<ColumnString &>(array_to_nest.getColumn(3));
 
-        for (auto &s : sess)
+        for (auto & s : sess)
         {
             dur_col_data.push_back(s.session_duration);
             depth_col_data.push_back(s.session_depth);
@@ -433,7 +449,7 @@ public:
         types.emplace_back(std::make_shared<DataTypeString>()); // url
         types.emplace_back(std::make_shared<DataTypeString>()); // refer_type
         for(size_t i = 7; i < argument_types.size(); ++i)
-            types.emplace_back(std::make_shared<DataTypeString>()); // Column must be Nullable(String)
+            types.emplace_back(std::make_shared<DataTypeString>());
     }
 
     String getName() const override { return "sessionSplit"; }
@@ -453,35 +469,32 @@ public:
 
     void add(AggregateDataPtr place, const IColumn **columns, size_t row_num, Arena * arena) const override
     {
-        // read records from input columns, those values are stored in MAP structure, and should be Nullable.
-        UInt64 server_time = assert_cast<const ColumnVector <UInt64> *>(columns[0])->getData()[row_num];
-        const ColumnString * event_column = assert_cast<const ColumnString *>(columns[1]);
-        UInt8 event = SessionEvent::mapEvent(event_column->getDataAt(row_num));
-        UInt64 _time = static_cast<const ColumnVector <UInt64> *>(columns[2])->getData()[row_num];
+        UInt64 server_time = assert_cast<const ColumnUInt64 *>(columns[0])->getData()[row_num];
+        auto event = SessionEvent::mapEvent(assert_cast<const ColumnString *>(columns[1])->getDataAt(row_num));
+        UInt64 event_time = assert_cast<const ColumnUInt64 *>(columns[2])->getData()[row_num];
 
-        if (!event || server_time < m_base_time)
+        if (event == SessionEvent::KnownType || server_time < m_base_time)
             return;
 
         UInt64 start_time = 0;
         UInt64 end_time = 0;
-        if (event == 2)
-        {
-            const ColumnNullable *start_time_col = static_cast<const ColumnNullable *>(columns[3]);
-            const ColumnNullable *end_time_col = static_cast<const ColumnNullable *>(columns[4]);
-            if (start_time_col->isNullAt(row_num) || end_time_col->isNullAt(row_num))
-                return;
 
-            const UInt64 &start_time_data = static_cast<const ColumnUInt64 &>(*start_time_col->getNestedColumnPtr()).getData()[row_num];
-            const UInt64 &end_time_data = static_cast<const ColumnUInt64 &>(*end_time_col->getNestedColumnPtr()).getData()[row_num];
-            start_time = start_time_col->isNullAt(row_num) ? 0 : start_time_data / 1000;
-            end_time = end_time_col->isNullAt(row_num) ? 0 : end_time_data / 1000;
+        if (event == SessionEvent::BeActive)
+        {
+            start_time = assert_cast<const ColumnUInt64 *>(columns[3])->getData()[row_num];
+            end_time = assert_cast<const ColumnUInt64 *>(columns[4])->getData()[row_num];
+
+            if (start_time >= std::numeric_limits<UInt32>::max()) // ms
+                start_time /= 1000;
+            if (end_time >= std::numeric_limits<UInt32>::max()) // ms
+                end_time /= 1000;
+
             if (start_time > end_time)
                 return;
         }
-        const ColumnNullable * url_column = static_cast<const ColumnNullable *>(columns[5]);
-        const auto url = static_cast<const ColumnString &>(*url_column->getNestedColumnPtr()).getDataAt(row_num);
-        const ColumnNullable * ref_column = static_cast<const ColumnNullable *>(columns[6]);
-        const auto refer_type = static_cast<const ColumnString &>(*ref_column->getNestedColumnPtr()).getDataAt(row_num);
+
+        const auto url = assert_cast<const ColumnString *>(columns[5])->getDataAt(row_num);
+        const auto refer_type = assert_cast<const ColumnString *>(columns[6])->getDataAt(row_num);
 
         char * url_data = arena->alloc(url.size);
         char * refer_data = arena->alloc(refer_type.size);
@@ -492,15 +505,13 @@ public:
         args.reserve(types.size() - 4);
         for (size_t i = 7; i < argument_types.size(); ++i)
         {
-            const ColumnNullable * arg_column = static_cast<const ColumnNullable *>(columns[i]);
-            const auto arg = static_cast<const ColumnString &>(*arg_column->getNestedColumnPtr()).getDataAt(row_num);
+            const auto arg = assert_cast<const ColumnString *>(columns[i])->getDataAt(row_num);
             char * data = arena->alloc(arg.size);
-            // arg is temporary
             strncpy(data, arg.data, arg.size);
-            args.emplace_back(StringRef(data, arg.size));
+            args.emplace_back(data, arg.size);
         }
 
-        this->data(place).add(server_time, event, _time, start_time, end_time, StringRef(url_data, url.size), StringRef(refer_data, refer_type.size), args);
+        this->data(place).add(server_time, event, event_time, start_time, end_time, {url_data, url.size}, {refer_data, refer_type.size}, args);
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -527,111 +538,107 @@ public:
             return;
 
         data.sort();
-        auto cur_session = data.get(0);
-        UInt64 start_time = (*cur_session).start_time;
-        UInt64 end_time = (*cur_session).end_time;
+        auto curr_session = data.get(0);
+        UInt64 session_start_time = curr_session->getStartTime();
+        UInt64 session_end_time = curr_session->getEndTime();
         UInt32 depth = 1;
-        bool new_session = false, has_pv = false; // has_pv 切分之后的session中是否含有predefine_pageview事件
+        bool new_session = false;
+        bool has_pv = curr_session->isPageView(); // has_pv 切分之后的session中是否含有predefine_pageview事件
         StringRef url;
         StringRef refer_type;
         std::vector<StringRef> args;
         UInt64 cur_start_time = 0;
         UInt64 cur_end_time = 0;
 
-        if ((*cur_session).event == 1)
+        if (curr_session->isPageView())
         {
-            url = (*cur_session).url;
-            refer_type = (*cur_session).refer_type;
-            args = (*cur_session).args;
-            start_time = end_time = (*cur_session).time;
-            has_pv = true;
+            url = (*curr_session).url;
+            refer_type = (*curr_session).refer_type;
+            args = (*curr_session).args;
         }
         for (size_t i = 1; i < data.events.size(); ++i)
         {
-            cur_session = data.get(i);
-            cur_start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
+            curr_session = data.get(i);
+            cur_start_time = curr_session->getStartTime();
             /// split session by mWindowSize
-            if (start_time / m_window_size != cur_start_time / m_window_size)
-            {
+            if (session_start_time / m_window_size != cur_start_time / m_window_size)
                 new_session = true;
-            }
-            /// split session by mSessionSplitTime
-            if (cur_start_time >= end_time && cur_start_time - end_time > m_session_split_time)
-            {
-                new_session = true;
-            }
-            /// split session by refer_type
-            if ((*cur_session).event == 1 && ((*cur_session).refer_type.size && !((*cur_session).refer_type == "inner")))
-            {
-                new_session = true;
-            }
 
-            if(!new_session)
+            /// split session by mSessionSplitTime
+            if (cur_start_time >= session_end_time && cur_start_time - session_end_time > m_session_split_time)
+                new_session = true;
+
+            /// split session by refer_type
+            if ((*curr_session).event == 1 && ((*curr_session).refer_type.size && !((*curr_session).refer_type == "inner")))
+                new_session = true;
+
+            if (!new_session)
             {
-                cur_end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
-                end_time = std::max(end_time, cur_end_time);
-                start_time = std::min(start_time, cur_start_time);
-                if ((*cur_session).event == 1)
+                cur_end_time = curr_session->getEndTime();
+                session_end_time = std::max(session_end_time, cur_end_time);
+                session_start_time = std::min(session_start_time, cur_start_time);
+
+                if (curr_session->isPageView())
                 {
                     depth += 1;
-                    if(!has_pv) // first predefine_pageview
+                    if (!has_pv) // first predefine_pageview
                     {
-                        url = (*cur_session).url;
-                        refer_type = (*cur_session).refer_type;
-                        args = (*cur_session).args;
+                        url = (*curr_session).url;
+                        refer_type = (*curr_session).refer_type;
+                        args = (*curr_session).args;
                         has_pv = true;
                     }
-                    else if(type == 1)
+                    else if (type == 1)
                     {
                         /**
-                         * type = 0 fist pageview args
-                         * type = 1 last pageview args
+                         * type = 0 fist page_view args
+                         * type = 1 last page_view args
                          */
-                        args = (*cur_session).args;
+                        args = (*curr_session).args;
                     }
                 }
             }
             else
             {
-                res.emplace_back(static_cast<UInt32>(end_time - start_time), depth, url, refer_type, args);
+                res.emplace_back(static_cast<UInt32>(session_end_time - session_start_time), depth, url, refer_type, args);
                 new_session = false;
                 depth = 1;
-                if ((*cur_session).event == 1)
+                session_start_time = curr_session->getStartTime();
+                session_end_time = curr_session->getEndTime();
+                has_pv = curr_session->isPageView();
+
+                if (curr_session->isPageView())
                 {
-                    start_time = end_time = (*cur_session).time;
-                    url = (*cur_session).url;
-                    refer_type = (*cur_session).refer_type;
-                    args = (*cur_session).args;
-                    has_pv = true;
+                    url = (*curr_session).url;
+                    refer_type = (*curr_session).refer_type;
+                    args = (*curr_session).args;
                 }
                 else
                 {
-                    start_time =  (*cur_session).start_time;
-                    end_time = (*cur_session).end_time;
                     url = StringRef();
                     refer_type = StringRef();
                     args.clear();
-                    has_pv = false;
                 }
             }
         }
-        res.emplace_back(static_cast<UInt32 >(end_time - start_time), depth, url, refer_type, args);
+        res.emplace_back(static_cast<UInt32>(session_end_time - session_start_time), depth, url, refer_type, args);
     }
 
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
     {
         std::vector <SessionRes> sess;
         splitToSessions(const_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
-        ColumnArray &array_to = static_cast<ColumnArray &>(to);
+        ColumnArray & array_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets &offset_to = array_to.getOffsets();
-        ColumnTuple &array_to_nest = static_cast<ColumnTuple &>(array_to.getData());
+        ColumnTuple &array_to_nest = assert_cast<ColumnTuple &>(array_to.getData());
         offset_to.push_back(sess.size() + (offset_to.empty() ? 0 : offset_to.back()));
-        auto & dur_col_data = static_cast<ColumnUInt32 &>(array_to_nest.getColumn(0)).getData();
-        auto & depth_col_data = static_cast<ColumnUInt32 &>(array_to_nest.getColumn(1)).getData();
-        auto & url_col = static_cast<ColumnString &>(array_to_nest.getColumn(2));
-        auto & refer_col = static_cast<ColumnString &>(array_to_nest.getColumn(3));
 
-        for (auto &s : sess)
+        auto & dur_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(0)).getData();
+        auto & depth_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(1)).getData();
+        auto & url_col = assert_cast<ColumnString &>(array_to_nest.getColumn(2));
+        auto & refer_col = assert_cast<ColumnString &>(array_to_nest.getColumn(3));
+
+        for (auto & s : sess)
         {
             dur_col_data.push_back(s.session_duration);
             depth_col_data.push_back(s.session_depth);
@@ -641,7 +648,7 @@ public:
 
         for(size_t i = 4; i < types.size(); ++i)
         {
-            auto & arg = static_cast<ColumnString &>(array_to_nest.getColumn(i));
+            auto & arg = assert_cast<ColumnString &>(array_to_nest.getColumn(i));
 
             std::for_each(sess.begin(), sess.end(), [&](const auto & v) {
                 /// If args is Empty, this session not contain pageView event
@@ -751,11 +758,12 @@ public:
 
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
     {
-        ColumnTuple & tuple_to = static_cast<ColumnTuple &>(to);
-        auto & cnt_data = static_cast<ColumnVector <UInt64> &>(tuple_to.getColumn(0)).getData();
-        auto & dur_data = static_cast<ColumnVector <UInt64> &>(tuple_to.getColumn(1)).getData();
-        auto & depth_data = static_cast<ColumnVector <UInt64> &>(tuple_to.getColumn(2)).getData();
-        auto & jmp_data = static_cast<ColumnVector <UInt64> &>(tuple_to.getColumn(3)).getData();
+        ColumnTuple & tuple_to = assert_cast<ColumnTuple &>(to);
+        auto & cnt_data = assert_cast<ColumnUInt64 &>(tuple_to.getColumn(0)).getData();
+        auto & dur_data = assert_cast<ColumnUInt64 &>(tuple_to.getColumn(1)).getData();
+        auto & depth_data = assert_cast<ColumnUInt64 &>(tuple_to.getColumn(2)).getData();
+        auto & jmp_data = assert_cast<ColumnUInt64 &>(tuple_to.getColumn(3)).getData();
+
         const auto & metric = this->data(place);
         cnt_data.push_back(metric.session_cnt);
         dur_data.push_back(metric.total_dur);
@@ -805,51 +813,49 @@ public:
      */
     DataTypePtr getReturnType() const override
     {
-        DataTypes types;
-        types.emplace_back(std::make_shared<DataTypeString>()); // page_view url
-        types.emplace_back(std::make_shared<DataTypeUInt32>()); // cnt(all url)
-        types.emplace_back(std::make_shared<DataTypeUInt32>()); // total duration
+        DataTypes types {
+            std::make_shared<DataTypeString>(), // page_view url
+            std::make_shared<DataTypeUInt32>(), // cnt(all url)
+            std::make_shared<DataTypeUInt32>() // total duration
+        };
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(types));
     }
 
     void add(AggregateDataPtr place, const IColumn **columns, size_t row_num, Arena * arena) const override
     {
-        // read records from input columns, those values are stored in MAP structure, and should be Nullable
-        UInt64 server_time = static_cast<const ColumnVector <UInt64> *>(columns[0])->getData()[row_num];
-        const ColumnString * event_column = static_cast<const ColumnString *>(columns[1]);
-        UInt8 event = SessionEvent::mapEvent(event_column->getDataAt(row_num));
-        UInt64 _time = static_cast<const ColumnVector <UInt64> *>(columns[2])->getData()[row_num];
+        UInt64 server_time = assert_cast<const ColumnUInt64 *>(columns[0])->getData()[row_num];
+        auto event = SessionEvent::mapEvent(assert_cast<const ColumnString *>(columns[1])->getDataAt(row_num));
+        UInt64 event_time = assert_cast<const ColumnUInt64 *>(columns[2])->getData()[row_num];
 
-        if (!event || server_time < m_base_time)
+        if (event == SessionEvent::KnownType || server_time < m_base_time)
             return;
 
         UInt64 start_time = 0;
         UInt64 end_time = 0;
-        if (event == 2)
-        {
-            const ColumnNullable *start_time_col = static_cast<const ColumnNullable *>(columns[3]);
-            const ColumnNullable *end_time_col = static_cast<const ColumnNullable *>(columns[4]);
-            if (start_time_col->isNullAt(row_num) || end_time_col->isNullAt(row_num))
-                return;
 
-            const UInt64 &start_time_data = static_cast<const ColumnUInt64 &>(*start_time_col->getNestedColumnPtr()).getData()[row_num];
-            const UInt64 &end_time_data = static_cast<const ColumnUInt64 &>(*end_time_col->getNestedColumnPtr()).getData()[row_num];
-            start_time = start_time_col->isNullAt(row_num) ? 0 : start_time_data / 1000;
-            end_time = end_time_col->isNullAt(row_num) ? 0 : end_time_data / 1000;
+        if (event == SessionEvent::BeActive)
+        {
+            start_time = assert_cast<const ColumnUInt64 *>(columns[3])->getData()[row_num];
+            end_time = assert_cast<const ColumnUInt64 *>(columns[4])->getData()[row_num];
+
+            if (start_time >= std::numeric_limits<UInt32>::max()) // ms
+                start_time /= 1000;
+            if (end_time >= std::numeric_limits<UInt32>::max()) // ms
+                end_time /= 1000;
+
             if (start_time > end_time)
                 return;
         }
-        const ColumnNullable * url_column = static_cast<const ColumnNullable *>(columns[5]);
-        const auto url = static_cast<const ColumnString &>(*url_column->getNestedColumnPtr()).getDataAt(row_num);
-        const ColumnNullable * ref_column = static_cast<const ColumnNullable *>(columns[6]);
-        const auto ref = static_cast<const ColumnString &>(*ref_column->getNestedColumnPtr()).getDataAt(row_num);
+
+        const auto url = assert_cast<const ColumnString *>(columns[5])->getDataAt(row_num);
+        const auto ref = assert_cast<const ColumnString *>(columns[6])->getDataAt(row_num);
 
         char * url_data = arena->alloc(url.size);
         char * refer_data = arena->alloc(ref.size);
         strncpy(url_data, url.data, url.size);
         strncpy(refer_data, ref.data, ref.size);
 
-        this->data(place).add(server_time, event, _time, start_time, end_time, StringRef(url_data, url.size), StringRef(refer_data, ref.size));
+        this->data(place).add(server_time, event, event_time, start_time, end_time, {url_data, url.size}, {refer_data, ref.size});
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -867,78 +873,78 @@ public:
         this->data(place).deserialize(buf, arena);
     }
 
-    void splitToSessions(AggregateFunctionSessionSplitData & data, std::unordered_map <StringRef, AggregateFunctionRefer> &res) const
+    void splitToSessions(AggregateFunctionSessionSplitData & data, std::unordered_map<StringRef, AggregateFunctionRefer> & res) const
     {
         if (data.events.empty())
             return;
 
         data.sort();
-        auto cur_session = data.get(0);
-        UInt64 start_time = (*cur_session).start_time;
-        UInt64 end_time = (*cur_session).end_time;
+        auto curr_session = data.get(0);
+        UInt64 session_start_time = curr_session->getStartTime();
+        UInt64 session_end_time = curr_session->getEndTime();
         UInt64 page_start_time = 0;
         StringRef url;
         StringRef refer;
-        if ((*cur_session).event == 1)
-        {
-            page_start_time = start_time = (*cur_session).time;
-            end_time = (*cur_session).time;
-            url = (*cur_session).url;
-            refer = (*cur_session).refer_type;
-        }
         bool new_session = false;
         UInt64 cur_start_time = 0;
         UInt64 cur_end_time = 0;
-        auto func = [&](StringRef refer_) -> bool { return refer_url == "all" || refer_url == refer_; };
 
-        /// urlCnt += 1 when event = 1
-        /// urlDur += duration_time when pageview is not the last one of session
-        if ((*cur_session).event == 1 && func(refer))
-            res[url].url_cnt += 1;
+        auto valid_url = [&](StringRef refer_) -> bool { return refer_url == "all" || refer_url == refer_; };
+
+        if (curr_session->isPageView())
+        {
+            url = (*curr_session).url;
+            refer = (*curr_session).refer_type;
+            page_start_time = session_start_time;
+
+            /// urlCnt += 1 when event = 1
+            /// urlDur += duration_time when page_view is not the last one of session
+            if (valid_url(refer))
+                res[url].url_cnt += 1;
+        }
 
         for (size_t i = 1; i < data.events.size(); ++i)
         {
-            cur_session = data.get(i);
-            cur_start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
-            if (start_time / m_window_size != cur_start_time / m_window_size)
-            {
+            curr_session = data.get(i);
+            cur_start_time = curr_session->getStartTime();
+            if (session_start_time / m_window_size != cur_start_time / m_window_size)
                 new_session = true;
-            }
-            if (cur_start_time >= end_time && cur_start_time - end_time > m_session_split_time)
-            {
+
+            if (cur_start_time >= session_end_time && cur_start_time - session_end_time > m_session_split_time)
                 new_session = true;
-            }
 
             if (!new_session)
             {
-                if ((*cur_session).event == 1 && func(refer))
+                if (curr_session->isPageView() && valid_url(refer))
                 {
-                    if (page_start_time && (*cur_session).time > page_start_time)
-                        res[url].url_dur += (*cur_session).time - page_start_time;
-                    url = (*cur_session).url;
+                    if (page_start_time && curr_session->getStartTime() > page_start_time)
+                        res[url].url_dur += curr_session->getStartTime() - page_start_time;
+                    url = (*curr_session).url;
                     res[url].url_cnt += 1;
-                    page_start_time = (*cur_session).time;
+                    page_start_time = curr_session->getStartTime();
                 }
-                cur_end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
-                end_time = std::max(end_time, cur_end_time);
+
+                cur_end_time = curr_session->getEndTime();
+                session_end_time = std::max(session_end_time, cur_end_time);
             }
             else
             {
+                session_start_time = curr_session->getStartTime();
+                session_end_time = curr_session->getEndTime();
                 new_session = false;
-                if ((*cur_session).event == 1)
+
+                if (curr_session->isPageView())
                 {
-                    page_start_time = start_time = (*cur_session).time;
-                    end_time = (*cur_session).time;
-                    refer = (*cur_session).refer_type;
-                    url = (*cur_session).url;
-                    if (func(refer))
+                    page_start_time = session_start_time;
+                    refer = (*curr_session).refer_type;
+                    url = (*curr_session).url;
+
+                    if (valid_url(refer))
                         res[url].url_cnt += 1;
                 }
                 else
                 {
                     page_start_time = 0;
-                    start_time = (*cur_session).start_time;
-                    end_time = (*cur_session).end_time;
                     refer = url = StringRef();
                 }
             }
@@ -948,14 +954,15 @@ public:
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
     {
         std::unordered_map <StringRef, AggregateFunctionRefer> sess;
-        splitToSessions(const_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
-        ColumnArray &array_to = static_cast<ColumnArray &>(to);
-        ColumnArray::Offsets &offset_to = array_to.getOffsets();
-        ColumnTuple &array_to_nest = static_cast<ColumnTuple &>(array_to.getData());
+        splitToSessions(static_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
+        ColumnArray & array_to = assert_cast<ColumnArray &>(to);
+        ColumnArray::Offsets & offset_to = array_to.getOffsets();
+        ColumnTuple & array_to_nest = assert_cast<ColumnTuple &>(array_to.getData());
         offset_to.push_back(sess.size() + (offset_to.empty() ? 0 : offset_to.back()));
-        auto & ref_col = static_cast<ColumnString &>(array_to_nest.getColumn(0));
-        auto & cnt_col_data = static_cast<ColumnVector <UInt32> &>(array_to_nest.getColumn(1)).getData();
-        auto & dur_col_data = static_cast<ColumnVector <UInt32> &>(array_to_nest.getColumn(2)).getData();
+
+        auto & ref_col = assert_cast<ColumnString &>(array_to_nest.getColumn(0));
+        auto & cnt_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(1)).getData();
+        auto & dur_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(2)).getData();
 
         for (auto &s : sess)
         {
@@ -1018,52 +1025,49 @@ public:
 
     void add(AggregateDataPtr place, const IColumn **columns, size_t row_num, Arena * arena) const override
     {
-        UInt64 server_time = static_cast<const ColumnVector <UInt64> *>(columns[0])->getData()[row_num];
-        const ColumnString * event_column = static_cast<const ColumnString *>(columns[1]);
-        UInt8 event = SessionEvent::mapEvent(event_column->getDataAt(row_num));
-        UInt64 _time = static_cast<const ColumnVector <UInt64> *>(columns[2])->getData()[row_num];
+        UInt64 server_time = assert_cast<const ColumnUInt64 *>(columns[0])->getData()[row_num];
+        auto event = SessionEvent::mapEvent(assert_cast<const ColumnString *>(columns[1])->getDataAt(row_num));
+        UInt64 event_time = assert_cast<const ColumnUInt64 *>(columns[2])->getData()[row_num];
 
-        if (!event || server_time < m_base_time)
+        if (event == SessionEvent::KnownType || server_time < m_base_time)
             return;
 
         UInt64 start_time = 0;
         UInt64 end_time = 0;
-        if (event == 2)
+
+        if (event == SessionEvent::BeActive)
         {
-            const ColumnNullable *start_time_col = static_cast<const ColumnNullable *>(columns[3]);
-            const ColumnNullable *end_time_col = static_cast<const ColumnNullable *>(columns[4]);
-            if (start_time_col->isNullAt(row_num) || end_time_col->isNullAt(row_num))
-                return;
-            const UInt64 &start_time_data = static_cast<const ColumnUInt64 &>(*start_time_col->getNestedColumnPtr()).getData()[row_num];
-            const UInt64 &end_time_data = static_cast<const ColumnUInt64 &>(*end_time_col->getNestedColumnPtr()).getData()[row_num];
-            start_time = start_time_col->isNullAt(row_num) ? 0 : start_time_data / 1000;
-            end_time = end_time_col->isNullAt(row_num) ? 0 : end_time_data / 1000;
+            start_time = assert_cast<const ColumnUInt64 *>(columns[3])->getData()[row_num];
+            end_time = assert_cast<const ColumnUInt64 *>(columns[4])->getData()[row_num];
+
+            if (start_time >= std::numeric_limits<UInt32>::max()) // ms
+                start_time /= 1000;
+            if (end_time >= std::numeric_limits<UInt32>::max()) // ms
+                end_time /= 1000;
+
             if (start_time > end_time)
                 return;
         }
-        const ColumnNullable * url_column = static_cast<const ColumnNullable *>(columns[5]);
-        const auto url = static_cast<const ColumnString &>(*url_column->getNestedColumnPtr()).getDataAt(row_num);
-        const ColumnNullable * ref_column = static_cast<const ColumnNullable *>(columns[6]);
-        const auto refer_type = static_cast<const ColumnString &>(*ref_column->getNestedColumnPtr()).getDataAt(row_num);
+
+        const auto url = assert_cast<const ColumnString *>(columns[5])->getDataAt(row_num);
+        const auto ref = assert_cast<const ColumnString *>(columns[6])->getDataAt(row_num);
 
         char * url_data = arena->alloc(url.size);
-        char * refer_data = arena->alloc(refer_type.size);
+        char * refer_data = arena->alloc(ref.size);
         strncpy(url_data, url.data, url.size);
-        strncpy(refer_data, refer_type.data, refer_type.size);
+        strncpy(refer_data, ref.data, ref.size);
 
         std::vector<StringRef> args;
         args.reserve(types.size() - 3);
         for (size_t i = 7; i < argument_types.size(); ++i)
         {
-            const ColumnNullable * arg_column = static_cast<const ColumnNullable *>(columns[i]);
-            const auto arg = static_cast<const ColumnString &>(*arg_column->getNestedColumnPtr()).getDataAt(row_num);
+            auto arg = assert_cast<const ColumnString *>(columns[i])->getDataAt(row_num);
             char * data = arena->alloc(arg.size);
-            // arg is temporary
             strncpy(data, arg.data, arg.size);
-            args.emplace_back(StringRef(data, arg.size));
+            args.emplace_back(data, arg.size);
         }
 
-        this->data(place).add(server_time, event, _time, start_time, end_time, StringRef(url_data, url.size), StringRef(refer_data, refer_type.size), args);
+        this->data(place).add(server_time, event, event_time, start_time, end_time, {url_data, url.size}, {refer_data, ref.size}, args);
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena) const override
@@ -1087,94 +1091,92 @@ public:
             return;
 
         data.sort();
-        auto cur_session = data.get(0);
-        UInt64 start_time = (*cur_session).start_time;
+        auto curr_session = data.get(0);
+        UInt64 session_start_time = curr_session->getStartTime();
+        UInt64 session_end_time = curr_session->getEndTime();
         UInt64 page_start_time = 0;
-        UInt64 end_time = (*cur_session).end_time;
         StringRef url;
         StringRef refer_type;
         std::vector<StringRef> args;
-        if ((*cur_session).event == 1)
-        {
-            url = (*cur_session).url;
-            refer_type = (*cur_session).refer_type;
-            page_start_time = start_time = (*cur_session).time;
-            end_time = (*cur_session).time;
-            args = (*cur_session).args;
-        }
+
         bool new_session = false;
         UInt64 cur_start_time = 0;
         UInt64 cur_end_time = 0;
 
+        if (curr_session->isPageView())
+        {
+            url = (*curr_session).url;
+            refer_type = (*curr_session).refer_type;
+            args = (*curr_session).args;
+            page_start_time = session_start_time;
+        }
+
         for (size_t i = 1; i < data.events.size(); ++i)
         {
-            cur_session = data.get(i);
-            cur_start_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).start_time;
-            if (start_time / m_window_size != cur_start_time / m_window_size)
-            {
+            curr_session = data.get(i);
+            cur_start_time = curr_session->getStartTime();
+            if (session_start_time / m_window_size != cur_start_time / m_window_size)
                 new_session = true;
-            }
-            if (cur_start_time >= end_time && cur_start_time - end_time > m_session_split_time)
-            {
+
+            if (cur_start_time >= session_end_time && cur_start_time - session_end_time > m_session_split_time)
                 new_session = true;
-            }
-            if ((*cur_session).event == 1 && ((*cur_session).refer_type.size && !((*cur_session).refer_type == "inner")))
-            {
+
+            if (curr_session->isPageView() && ((*curr_session).refer_type.size && !((*curr_session).refer_type == "inner")))
                 new_session = true;
-            }
 
             if (!new_session)
             {
-                if ((*cur_session).event == 1)
+                if (curr_session->isPageView())
                 {
-                    if (page_start_time && (*cur_session).time >= page_start_time)
-                        res.emplace_back(url, (*cur_session).time - page_start_time, refer_type, args);
-                    url = (*cur_session).url;
-                    refer_type = (*cur_session).refer_type;
-                    args = (*cur_session).args;
-                    page_start_time = (*cur_session).time;
+                    if (page_start_time && curr_session->getStartTime() >= page_start_time)
+                        res.emplace_back(url, curr_session->getStartTime() - page_start_time, refer_type, args);
+                    url = (*curr_session).url;
+                    refer_type = (*curr_session).refer_type;
+                    args = (*curr_session).args;
+                    page_start_time = curr_session->getStartTime();
                 }
-                cur_end_time = (*cur_session).event == 1 ? (*cur_session).time : (*cur_session).end_time;
-                end_time = std::max(end_time, cur_end_time);
+
+                cur_end_time = curr_session->getEndTime();
+                session_end_time = std::max(session_end_time, cur_end_time);
             }
             else
             {
                 new_session = false;
-                if(page_start_time)
+                if (page_start_time)
                     res.emplace_back(url, 0, refer_type, args);
-                if ((*cur_session).event == 1)
+
+                session_start_time = curr_session->getStartTime();
+                session_end_time = curr_session->getEndTime();
+                page_start_time = 0;
+
+                if (curr_session->isPageView())
                 {
-                    url = (*cur_session).url;
-                    refer_type = (*cur_session).refer_type;
-                    args = (*cur_session).args;
-                    page_start_time = start_time = (*cur_session).time;
-                    end_time = (*cur_session).time;
-                }
-                else
-                {
-                    start_time = (*cur_session).start_time;
-                    end_time = (*cur_session).end_time;
-                    page_start_time = 0;
+                    url = (*curr_session).url;
+                    refer_type = (*curr_session).refer_type;
+                    args = (*curr_session).args;
+                    page_start_time = session_start_time;
                 }
             }
         }
-        if(page_start_time)
+
+        if (page_start_time)
             res.emplace_back(url, 0, refer_type, args);
     }
 
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
     {
         std::vector<PageTime2Data> sess;
-        splitToSessions(const_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
-        ColumnArray &array_to = static_cast<ColumnArray &>(to);
-        ColumnArray::Offsets &offset_to = array_to.getOffsets();
-        ColumnTuple &array_to_nest = static_cast<ColumnTuple &>(array_to.getData());
+        splitToSessions(assert_cast<AggregateFunctionSessionSplitData &>(this->data(place)), sess);
+        ColumnArray & array_to = assert_cast<ColumnArray &>(to);
+        ColumnArray::Offsets & offset_to = array_to.getOffsets();
+        ColumnTuple & array_to_nest = assert_cast<ColumnTuple &>(array_to.getData());
         offset_to.push_back(sess.size() + (offset_to.empty() ? 0 : offset_to.back()));
-        auto & url_col = static_cast<ColumnString &>(array_to_nest.getColumn(0));
-        auto & dur_col_data = static_cast<ColumnVector <UInt32> &>(array_to_nest.getColumn(1)).getData();
-        auto & ref_col = static_cast<ColumnString &>(array_to_nest.getColumn(2));
 
-        for (auto &s : sess)
+        auto & url_col = assert_cast<ColumnString &>(array_to_nest.getColumn(0));
+        auto & dur_col_data = assert_cast<ColumnUInt32 &>(array_to_nest.getColumn(1)).getData();
+        auto & ref_col = assert_cast<ColumnString &>(array_to_nest.getColumn(2));
+
+        for (auto & s : sess)
         {
             url_col.insertData(s.url.data, s.url.size);
             dur_col_data.push_back(s.url_dur);
@@ -1183,8 +1185,8 @@ public:
 
         for(size_t i = 3; i < types.size(); ++i)
         {
-            auto & arg = static_cast<ColumnString &>(array_to_nest.getColumn(i));
-            std::for_each(sess.begin(), sess.end(), [&](const auto & v){ arg.insertData(v.args[i - 3].data, v.args[i - 3].size); });
+            auto & arg = assert_cast<ColumnString &>(array_to_nest.getColumn(i));
+            std::for_each(sess.begin(), sess.end(), [&](const auto & v) { arg.insertData(v.args[i - 3].data, v.args[i - 3].size); });
         }
     }
 

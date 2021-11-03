@@ -265,7 +265,7 @@ public:
 
 struct HiveSplitNameAndIndex
 {
-    static constexpr auto name = "SPLIT";
+    static constexpr auto name = "split";
     static constexpr size_t data_index = 0;
     static constexpr size_t regex_index = 1;
 };

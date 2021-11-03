@@ -54,26 +54,27 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        DataTypes type;
-        type.emplace_back(std::make_shared<DataTypeDate>());
-        type.emplace_back(std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>()));
-        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(type));
+        DataTypes types {
+            std::make_shared<DataTypeDate>(),
+            std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())
+        };
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(types));
     }
 
-    void add(AggregateDataPtr place, const IColumn** columns, size_t row_num, [[maybe_unused]] Arena * arena) const override
+    void add(AggregateDataPtr place, const IColumn** columns, size_t row_num, Arena *) const override
     {
-        const ColumnArray & first_column = static_cast<const ColumnArray &>(*columns[0]);
+        const ColumnArray & first_column = assert_cast<const ColumnArray &>(*columns[0]);
         const IColumn::Offsets & first_offsets = first_column.getOffsets();
-        auto & first_container = static_cast<const ColumnVector<T> &>(first_column.getData()).getData();
+        const auto & first_container = assert_cast<const ColumnVector<T> &>(first_column.getData()).getData();
         const size_t first_vec_offset = row_num == 0 ? 0 : first_offsets[row_num - 1];
         const T* cur_first_container = &first_container[0] + first_vec_offset;
         const size_t first_vec_size = (first_offsets[row_num] - first_vec_offset);
 
-        const ColumnArray & retention_column = static_cast<const ColumnArray &>(*columns[1]);
+        const ColumnArray & retention_column = assert_cast<const ColumnArray &>(*columns[1]);
         const IColumn::Offsets & retention_offsets = retention_column.getOffsets();
-        auto & retention_container = static_cast<const ColumnVector<T> &>(retention_column.getData()).getData();
+        const auto & retention_container = assert_cast<const ColumnVector<T> &>(retention_column.getData()).getData();
         const size_t retention_vec_offset = row_num == 0 ? 0 : retention_offsets[row_num - 1];
-        const T* cur_retention_container = &retention_container[0] + retention_vec_offset;
+        const T * cur_retention_container = &retention_container[0] + retention_vec_offset;
         const size_t retention_vec_size = (retention_offsets[row_num] - retention_vec_offset);
 
         const size_t step = sizeof(T) << 3;
@@ -95,7 +96,9 @@ public:
         for (; iw < first_vec_size; ++iw, iw_offset += step)
         {
             first_word = cur_first_container[iw];
-            if (first_word == 0) continue;
+            if (first_word == 0)
+                continue;
+
             for (size_t iiw = 0; iiw < step; ++iiw)
             {
                 auto pos = iw_offset + iiw;
@@ -149,7 +152,7 @@ public:
         }
     }
 
-    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, [[maybe_unused]] Arena * arena) const override
+    void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         auto & cur_data = this->data(place).retentions;
         auto & rhs_data = this->data(rhs).retentions;
@@ -166,7 +169,7 @@ public:
         buf.write(reinterpret_cast<const char *>(&value[0]), m_ret_array_size * sizeof(value[0]));
     }
 
-    void deserialize(AggregateDataPtr place, ReadBuffer & buf, [[maybe_unused]] Arena *arena) const override
+    void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
     {
         auto & value = this->data(place).retentions;
         buf.read(reinterpret_cast<char *>(&value[0]), m_ret_array_size * sizeof(value[0]));
@@ -176,20 +179,20 @@ public:
     {
         const auto & value = this->data(place).retentions;
 
-        ColumnArray & arr_to = static_cast<ColumnArray &>(to);
+        ColumnArray & arr_to = assert_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
 
-        ColumnTuple & tuple_to = static_cast<ColumnTuple &>(arr_to.getData());
-        auto & date_tp = static_cast<ColumnVector<UInt16> &>(tuple_to.getColumn(0)).getData();
-        ColumnArray & arr_in = static_cast<ColumnArray &>(tuple_to.getColumn(1));
+        ColumnTuple & tuple_to = assert_cast<ColumnTuple &>(arr_to.getData());
+        auto & date_tp = assert_cast<ColumnUInt16 &>(tuple_to.getColumn(0)).getData();
+        ColumnArray & arr_in = assert_cast<ColumnArray &>(tuple_to.getColumn(1));
         ColumnArray::Offsets  & offsets_in = arr_in.getOffsets();
 
         int ind = 0;
         for (auto date = m_start_date; date < m_end_date; ++date, ++ind)
         {
             date_tp.push_back(date);
-            auto & date_to = static_cast<ColumnVector<UInt64> &>(arr_in.getData()).getData();
-            date_to.insert(value + (m_ret_window*ind), value+(m_ret_window*ind+m_ret_window));
+            auto & date_to = assert_cast<ColumnUInt64 &>(arr_in.getData()).getData();
+            date_to.insert(value + (m_ret_window*ind), value+(m_ret_window * ind + m_ret_window));
             offsets_in.push_back((offsets_in.empty() ? 0: offsets_in.back()) + m_ret_window);
         }
 
@@ -199,9 +202,8 @@ public:
 
     bool allocatesMemoryInArena() const override
     {
-        return true;
+        return false;
     }
-
 };
 
 }

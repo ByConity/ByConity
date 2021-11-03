@@ -1,6 +1,8 @@
 #include <AggregateFunctions/AggregateFunctionSessionSplit.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypeNullable.h>
+
+
 namespace DB
 {
 
@@ -15,19 +17,20 @@ void checkArgumentTypes(const String & name, const DataTypes & argument_types)
     if(argument_size > max_session_argument_size)
         throw Exception("Aggregate function " + name + "has to many parameter, max is 20.", ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION);
 
-    String types = "(UInt64, String, UInt64, Nullable(Int64/UInt64), Nullable(Int64/UInt64)" ;
-    for (size_t i = 0; i < argument_size - 5; ++i)
-        types += ", Nullable(String)";
-    types += ")";
+    auto on_error = [&](size_t idx, const String & type_name, const String & require_type) {
+        throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                        "{}-th argument for aggregate function {} not match, should {}, but got {}",
+                        toString(idx), name, require_type, type_name);
+    };
 
     if (!typeid_cast<const DataTypeUInt64 *>(argument_types[0].get()))
-        throw Exception("Aggregate function " + name + types + " type not matched in line 0!", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        on_error(1, argument_types[0]->getName(), "UInt64");
 
     if (!typeid_cast<const DataTypeString *>(argument_types[1].get()))
-        throw Exception("Aggregate function " + name + types + " type not matched in line 1!", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        on_error(2, argument_types[1]->getName(), "String");
 
     if (!typeid_cast<const DataTypeUInt64 *>(argument_types[2].get()))
-        throw Exception("Aggregate function " + name + types + " type not matched in line 2!", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        on_error(3, argument_types[2]->getName(), "UInt64");
 
     auto type_bit64 = [](const DataTypePtr & type) -> bool
     {
@@ -36,13 +39,10 @@ void checkArgumentTypes(const String & name, const DataTypes & argument_types)
 
     for (size_t i = 3; i < argument_size; ++i)
     {
-        const DataTypeNullable * nullable = typeid_cast<const DataTypeNullable *>(argument_types[i].get());
-        if (!nullable ||
-            (i >= 5 && !typeid_cast<const DataTypeString *>(nullable->getNestedType().get())) ||
-            (i < 5 && !type_bit64(nullable->getNestedType())))
-        {
-            throw Exception("Aggregate function " + name + types + " type not matched in line " + std::to_string(i) + "!", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-        }
+        if (i < 5 && !type_bit64(argument_types[i]))
+            on_error(i + 1, argument_types[i]->getName(), "Nullable(Int64/UInt64)");
+        if (i >= 5 && !typeid_cast<const DataTypeString *>(argument_types[i].get()))
+            on_error(i + 1, argument_types[i]->getName(), "Nullable(String)");
     }
 }
 
