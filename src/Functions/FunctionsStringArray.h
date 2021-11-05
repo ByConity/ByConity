@@ -263,6 +263,21 @@ public:
     }
 };
 
+struct HiveSplitNameAndIndex
+{
+    static constexpr auto name = "split";
+    static constexpr size_t data_index = 0;
+    static constexpr size_t regex_index = 1;
+};
+
+struct SplitByRegexNameAndIndex
+{
+    static constexpr auto name = "splitByRegexp";
+    static constexpr size_t data_index = 1;
+    static constexpr size_t regex_index = 0;
+};
+
+template <typename NameAndIndex>
 class SplitByRegexpImpl
 {
 private:
@@ -272,7 +287,7 @@ private:
     Pos pos;
     Pos end;
 public:
-    static constexpr auto name = "splitByRegexp";
+    static constexpr auto name = NameAndIndex::name;
     static String getName() { return name; }
     static size_t getNumberOfArguments() { return 2; }
 
@@ -285,10 +300,11 @@ public:
     /// Initialize by the function arguments.
     void init(const ColumnsWithTypeAndName & arguments)
     {
-        const ColumnConst * col = checkAndGetColumnConstStringOrFixedString(arguments[0].column.get());
+        size_t regex_index = NameAndIndex::regex_index;
+        const ColumnConst * col = checkAndGetColumnConstStringOrFixedString(arguments[regex_index].column.get());
 
         if (!col)
-            throw Exception("Illegal column " + arguments[0].column->getName()
+            throw Exception("Illegal column " + arguments[regex_index].column->getName()
                             + " of first argument of function " + getName() + ". Must be constant string.",
                             ErrorCodes::ILLEGAL_COLUMN);
 
@@ -300,7 +316,7 @@ public:
     /// Returns the position of the argument that is the column of strings
     size_t getStringsArgumentPosition()
     {
-        return 1;
+        return NameAndIndex::data_index;
     }
 
     /// Called for each next string.
@@ -664,7 +680,8 @@ public:
 using FunctionAlphaTokens = FunctionTokens<AlphaTokensImpl>;
 using FunctionSplitByChar = FunctionTokens<SplitByCharImpl>;
 using FunctionSplitByString = FunctionTokens<SplitByStringImpl>;
-using FunctionSplitByRegexp = FunctionTokens<SplitByRegexpImpl>;
+using FunctionHiveSplit = FunctionTokens<SplitByRegexpImpl<HiveSplitNameAndIndex>>;
+using FunctionSplitByRegexp = FunctionTokens<SplitByRegexpImpl<SplitByRegexNameAndIndex>>;
 using FunctionExtractAll = FunctionTokens<ExtractAllImpl>;
 
 }

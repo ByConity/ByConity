@@ -56,6 +56,7 @@ using FunctionLength = FunctionStringOrArrayToT<LengthImpl, NameLength, UInt64>;
 void registerFunctionLength(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionLength>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("size", NameLength::name, FunctionFactory::CaseInsensitive);
 }
 
 }

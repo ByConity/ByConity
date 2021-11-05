@@ -893,7 +893,7 @@ struct ConvertThroughParsing
         {
             const auto result_type = removeNullable(res_type);
             // Time zone is already figured out during result type resolution, no need to do it here.
-            if (const auto dt_col = checkAndGetDataType<ToDataType>(result_type.get()))
+            if (const auto * dt_col = checkAndGetDataType<ToDataType>(result_type.get()))
                 local_time_zone = &dt_col->getTimeZone();
             else
             {

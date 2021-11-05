@@ -37,6 +37,7 @@ void registerFunctionCountMatches(FunctionFactory &);
 void registerFunctionEncodeXMLComponent(FunctionFactory &);
 void registerFunctionDecodeXMLComponent(FunctionFactory &);
 void registerFunctionExtractTextFromHTML(FunctionFactory &);
+void registerFunctionsAppVersionCompare(FunctionFactory &);
 
 
 #if USE_BASE64
@@ -77,6 +78,7 @@ void registerFunctionsString(FunctionFactory & factory)
     registerFunctionEncodeXMLComponent(factory);
     registerFunctionDecodeXMLComponent(factory);
     registerFunctionExtractTextFromHTML(factory);
+    registerFunctionsAppVersionCompare(factory);
 #if USE_BASE64
     registerFunctionBase64Encode(factory);
     registerFunctionBase64Decode(factory);
