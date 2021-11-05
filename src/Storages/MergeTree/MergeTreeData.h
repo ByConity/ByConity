@@ -313,6 +313,7 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
+            Unique              = 102,
         };
 
         Mode mode;
@@ -441,6 +442,8 @@ public:
     /// Returns the part with the given name and state or nullptr if no such part.
     DataPartPtr getPartIfExists(const String & part_name, const DataPartStates & valid_states);
     DataPartPtr getPartIfExists(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
+
+    DataPartsVector getPartsByPredicate(const ASTPtr & predicate);
 
     /// Total size of active parts in bytes.
     size_t getTotalActiveSizeInBytes() const;
@@ -834,6 +837,18 @@ public:
     /// Mutex for currently_submerging_parts and currently_emerging_parts
     mutable std::mutex currently_submerging_emerging_mutex;
 
+    /// Get throttler for replicated fetches
+    ThrottlerPtr getFetchesThrottler() const
+    {
+        return replicated_fetches_throttler;
+    }
+
+    /// Get throttler for replicated sends
+    ThrottlerPtr getSendsThrottler() const
+    {
+        return replicated_sends_throttler;
+    }
+
 protected:
 
     friend class IMergeTreeDataPart;
@@ -1000,6 +1015,7 @@ protected:
 
     virtual void dropPart(const String & part_name, bool detach, ContextPtr context) = 0;
     virtual void dropPartition(const ASTPtr & partition, bool detach, ContextPtr context) = 0;
+    virtual void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context);
     virtual PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context) = 0;
     virtual void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context) = 0;
     virtual void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context) = 0;
@@ -1010,8 +1026,12 @@ protected:
         const String & from,
         bool fetch_part,
         ContextPtr query_context);
+    virtual void fetchPartitionWhere(
+        const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context);
 
     virtual void movePartitionToShard(const ASTPtr & partition, bool move_part, const String & to, ContextPtr query_context);
+
+    virtual void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr context);
 
     void writePartLog(
         PartLogElement::Type type,
@@ -1035,6 +1055,10 @@ protected:
     /// Moves part to specified space, used in ALTER ... MOVE ... queries
     bool movePartsToSpace(const DataPartsVector & parts, SpacePtr space);
 
+    /// Throttlers used in DataPartsExchange to lower maximum fetch/sends
+    /// speed.
+    ThrottlerPtr replicated_fetches_throttler;
+    ThrottlerPtr replicated_sends_throttler;
 
 private:
     /// RAII Wrapper for atomic work with currently moving parts

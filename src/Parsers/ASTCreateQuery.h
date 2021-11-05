@@ -65,6 +65,8 @@ public:
     bool is_live_view{false};
     bool is_populate{false};
     bool replace_view{false}; /// CREATE OR REPLACE VIEW
+    bool ignore_replicated{false};
+
     ASTColumns * columns_list = nullptr;
     ASTExpressionList * tables = nullptr;
 

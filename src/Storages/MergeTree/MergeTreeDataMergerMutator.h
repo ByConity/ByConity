@@ -95,6 +95,14 @@ public:
         bool merge_with_ttl_allowed,
         String * out_disable_reason = nullptr);
 
+    SelectPartsDecision selectPartsToMergeMulti(
+        std::vector<FutureMergedMutatedPart> & future_parts,
+        bool aggressive,
+        size_t max_total_size_to_merge,
+        const AllowedMergingPredicate & can_merge,
+        bool merge_with_ttl_allowed,
+        String * out_disable_reason = nullptr);
+
     /** Select all the parts in the specified partition for merge, if possible.
       * final - choose to merge even a single part - that is, allow to merge one part "with itself",
       * but if setting optimize_skip_merged_partitions is true than single part with level > 0

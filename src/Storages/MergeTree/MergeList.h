@@ -25,6 +25,8 @@ namespace CurrentMetrics
 namespace DB
 {
 
+struct HaMergeTreeMutationEntry;
+
 struct MergeInfo
 {
     std::string database;
@@ -122,6 +124,8 @@ public:
         if (isTTLMergeType(entry->merge_type))
             --merges_with_ttl_counter;
     }
+
+    void cancelHaPartMutations(const StorageID & table_id, const HaMergeTreeMutationEntry & mutation_entry);
 
     void cancelPartMutations(const StorageID & table_id, const String & partition_id, Int64 mutation_version)
     {

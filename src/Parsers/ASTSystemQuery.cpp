@@ -98,13 +98,19 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "FLUSH LOGS";
         case Type::RESTART_DISK:
             return "RESTART DISK";
+        case Type::SKIP_LOG:
+            return "SKIP LOG";
+        case Type::EXECUTE_LOG:
+            return "EXECUTE LOG";
+        case Type::SET_VALUE:
+            return "SET VALUE";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
 }
 
 
-void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
     settings.ostr << (settings.hilite ? hilite_keyword : "") << "SYSTEM ";
     settings.ostr << typeToString(type) << (settings.hilite ? hilite_none : "");
@@ -196,6 +202,37 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState &, 
             << (settings.hilite ? hilite_keyword : "") << " SECOND"
             << (settings.hilite ? hilite_none : "");
     }
+    else if (type == Type::SKIP_LOG || type == Type::EXECUTE_LOG)
+    {
+        print_database_table();
+        settings.ostr << " ";
+        predicate->formatImpl(settings, state, frame);
+    }
+    else if (type == Type::SET_VALUE)
+    {
+        print_database_table();
+        settings.ostr << " ";
+        values_changes->formatImpl(settings, state, frame);
+    }
+}
+
+ASTPtr ASTSystemQuery::clone() const
+{
+    auto res = std::make_shared<ASTSystemQuery>(*this);
+    res->children.clear();
+
+    if (predicate)
+    {
+        res->predicate = predicate->clone();
+        res->children.push_back(res->predicate);
+    }
+    if (values_changes)
+    {
+        res->values_changes = values_changes->clone();
+        res->children.push_back(res->values_changes);
+    }
+
+    return res;
 }
 
 

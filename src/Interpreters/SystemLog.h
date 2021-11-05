@@ -74,6 +74,7 @@ class CrashLog;
 class MetricLog;
 class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
+class MutationLog;
 
 
 class ISystemLog
@@ -110,6 +111,8 @@ struct SystemLogs
     std::shared_ptr<AsynchronousMetricLog> asynchronous_metric_log;
     /// OpenTelemetry trace spans.
     std::shared_ptr<OpenTelemetrySpanLog> opentelemetry_span_log;
+
+    std::shared_ptr<MutationLog> mutation_log;
 
     std::vector<ISystemLog *> logs;
 };

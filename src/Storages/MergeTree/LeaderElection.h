@@ -41,8 +41,14 @@ public:
         const std::string & path_,
         ZooKeeper & zookeeper_,
         LeadershipHandler handler_,
-        const std::string & identifier_)
-        : pool(pool_), path(path_), zookeeper(zookeeper_), handler(handler_), identifier(identifier_ + suffix)
+        const std::string & identifier_,
+        bool allow_multiple_leaders_)
+        : pool(pool_)
+        , path(path_)
+        , zookeeper(zookeeper_)
+        , handler(handler_)
+        , identifier(allow_multiple_leaders_ ? (identifier_ + suffix) : identifier_)
+        , allow_multiple_leaders(allow_multiple_leaders_)
         , log_name("LeaderElection (" + path + ")")
         , log(&Poco::Logger::get(log_name))
     {
@@ -72,6 +78,7 @@ private:
     ZooKeeper & zookeeper;
     LeadershipHandler handler;
     std::string identifier;
+    bool allow_multiple_leaders;
     std::string log_name;
     Poco::Logger * log;
 
@@ -112,14 +119,25 @@ private:
 
             String value = zookeeper.get(path + "/" + children.front());
 
-            if (value.ends_with(suffix))
+            if (allow_multiple_leaders)
             {
-                handler();
-                return;
-            }
+                if (value.ends_with(suffix))
+                {
+                    handler();
+                    return;
+                }
 
-            if (my_node_it == children.begin())
-                throw Poco::Exception("Assertion failed in LeaderElection");
+                if (my_node_it == children.begin())
+                    throw Poco::Exception("Assertion failed in LeaderElection");
+            }
+            else
+            {
+                if (my_node_it == children.begin())
+                {
+                    handler();
+                    return;
+                }
+            }
 
             /// Watch for the node in front of us.
             --my_node_it;

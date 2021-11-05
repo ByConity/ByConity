@@ -388,8 +388,8 @@ private:
 
     /// Throttlers used in DataPartsExchange to lower maximum fetch/sends
     /// speed.
-    ThrottlerPtr replicated_fetches_throttler;
-    ThrottlerPtr replicated_sends_throttler;
+    // ThrottlerPtr replicated_fetches_throttler;
+    // ThrottlerPtr replicated_sends_throttler;
 
     template <class Func>
     void foreachCommittedParts(Func && func, bool select_sequential_consistency) const;

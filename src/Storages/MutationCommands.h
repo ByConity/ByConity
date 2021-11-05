@@ -26,9 +26,11 @@ struct MutationCommand
     {
         EMPTY,     /// Not used.
         DELETE,
+        FAST_DELETE,
         UPDATE,
         MATERIALIZE_INDEX,
         MATERIALIZE_PROJECTION,
+        ADD_COLUMN, /// For detecting conflicts
         READ_COLUMN, /// Read column and apply conversions (MODIFY COLUMN alter query).
         DROP_COLUMN,
         DROP_INDEX,
@@ -71,6 +73,8 @@ class MutationCommands : public std::vector<MutationCommand>
 {
 public:
     std::shared_ptr<ASTExpressionList> ast() const;
+
+    bool willMutateData() const;
 
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);

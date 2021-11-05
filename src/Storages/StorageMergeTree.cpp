@@ -592,11 +592,13 @@ std::vector<MergeTreeMutationStatus> StorageMergeTree::getMutationsStatus() cons
             result.push_back(MergeTreeMutationStatus
             {
                 entry.file_name,
+                {},  /// query_id
                 buf.str(),
                 entry.create_time,
                 block_numbers_map,
                 parts_to_do_names,
                 /* is_done = */parts_to_do_names.empty(),
+                {}, /// finish_time
                 entry.latest_failed_part,
                 entry.latest_fail_time,
                 entry.latest_fail_reason,

@@ -283,6 +283,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
         }
         case ASTAlterCommand::DELETE:
         case ASTAlterCommand::DROP_PARTITION:
+        case ASTAlterCommand::DROP_PARTITION_WHERE:
         case ASTAlterCommand::DROP_DETACHED_PARTITION:
         {
             required_access.emplace_back(AccessType::ALTER_DELETE, database, table);
@@ -309,6 +310,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             }
             break;
         }
+        case ASTAlterCommand::MOVE_PARTITION_FROM:
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::ALTER_DELETE, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::REPLACE_PARTITION:
         {
             required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);
@@ -316,6 +323,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::FETCH_PARTITION:
+        case ASTAlterCommand::FETCH_PARTITION_WHERE:
         {
             required_access.emplace_back(AccessType::ALTER_FETCH_PARTITION, database, table);
             break;

@@ -66,6 +66,7 @@
 #include "MetricsTransmitter.h"
 #include <Common/StatusFile.h>
 #include <Server/TCPHandlerFactory.h>
+#include <Server/HaTCPHandlerFactory.h>
 #include <Common/SensitiveDataMasker.h>
 #include <Common/ThreadFuzzer.h>
 #include <Common/getHashOfLoadedBinary.h>
@@ -1305,6 +1306,24 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
                         ErrorCodes::SUPPORT_IS_DISABLED};
 #endif
+            });
+
+            port_name = "ha_tcp_port";
+            createServer(listen_host, port_name, listen_try, [&](UInt16 port)
+            {
+                Poco::Net::ServerSocket socket;
+                auto address = socketBindListen(socket, listen_host, port);
+                socket.setReceiveTimeout(settings.receive_timeout);
+                socket.setSendTimeout(settings.send_timeout);
+                servers->emplace_back(
+                    port_name,
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new HaTCPHandlerFactory(*this),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
+
+                LOG_INFO(log, "Listening for ha communication (tcp): {}", address.toString());
             });
 
             port_name = "mysql_port";

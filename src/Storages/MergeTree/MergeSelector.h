@@ -33,6 +33,9 @@ public:
         /// Size of data part in bytes.
         size_t size = 0;
 
+        /// Number of rows after removing deletes
+        size_t rows;
+
         /// How old this data part in seconds.
         time_t age = 0;
 
@@ -64,6 +67,14 @@ public:
     virtual PartsRange select(
         const PartsRanges & parts_ranges,
         const size_t max_total_size_to_merge) = 0;
+
+    virtual PartsRanges selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge)
+    {
+        if (auto res = select(partitions, max_total_size_to_merge); res.empty())
+            return {};
+        else
+            return {res};
+    }
 
     virtual ~IMergeSelector() = default;
 };

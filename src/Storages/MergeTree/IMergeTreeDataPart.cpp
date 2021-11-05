@@ -816,6 +816,9 @@ void IMergeTreeDataPart::loadPartitionAndMinMaxIndex()
             return;
     }
 
+    if (info.isFakeDropRangePart()) /// Skip check if drop_range_part
+        return;
+
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     String calculated_partition_id = partition.getID(metadata_snapshot->getPartitionKey().sample_block);
     if (calculated_partition_id != info.partition_id)

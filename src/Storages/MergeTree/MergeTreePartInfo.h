@@ -106,6 +106,7 @@ struct MergeTreePartInfo
 
     static constexpr UInt32 MAX_LEVEL = 999999999;
     static constexpr UInt32 MAX_BLOCK_NUMBER = 999999999;
+    static constexpr UInt32 MAX_MUTATION = 999999999;
 
     static constexpr UInt32 LEGACY_MAX_LEVEL = std::numeric_limits<decltype(level)>::max();
 };

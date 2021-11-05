@@ -34,6 +34,8 @@
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemReplicas.h>
 #include <Storages/System/StorageSystemReplicationQueue.h>
+#include <Storages/System/StorageSystemHaReplicas.h>
+#include <Storages/System/StorageSystemHaQueue.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
 #include <Storages/System/StorageSystemMergeTreeSettings.h>
@@ -143,6 +145,8 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemMutations>(system_database, "mutations");
     attach<StorageSystemReplicas>(system_database, "replicas");
     attach<StorageSystemReplicationQueue>(system_database, "replication_queue");
+    attach<StorageSystemHaReplicas>(system_database, "ha_replicas");
+    attach<StorageSystemHaQueue>(system_database, "ha_queue");
     attach<StorageSystemDDLWorkerQueue>(system_database, "distributed_ddl_queue");
     attach<StorageSystemDistributionQueue>(system_database, "distribution_queue");
     attach<StorageSystemDictionaries>(system_database, "dictionaries");

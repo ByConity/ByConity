@@ -14,6 +14,9 @@
 #include <Common/NetException.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <common/scope_guard.h>
+#include <Parsers/parseQuery.h>
+
+#include <Poco/File.h>
 #include <Poco/Net/HTTPRequest.h>
 
 
@@ -40,6 +43,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int S3_ERROR;
     extern const int INCORRECT_PART_TYPE;
+    extern const int SYNTAX_ERROR;
 }
 
 namespace DataPartsExchange
@@ -88,15 +92,47 @@ struct ReplicatedFetchReadCallback
 }
 
 
-Service::Service(StorageReplicatedMergeTree & data_) :
-    data(data_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)")) {}
+Service::Service(MergeTreeData & data_, const StoragePtr & storage_)
+    : data(data_), storage(storage_), log(&Poco::Logger::get(data.getLogName() + " (Replicated PartsService)"))
+{
+}
 
 std::string Service::getId(const std::string & node_id) const
 {
     return getEndpointId(node_id);
 }
 
-void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, WriteBuffer & out, HTTPServerResponse & response)
+void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response)
+{
+    String qtype = params.get("qtype", "FetchPart");
+
+    if (qtype == "FetchPart")
+    {
+        bool incrementally = params.get("fetch_part_incrementally", "false") == "true";
+        processQueryPart(params, body, out, response, incrementally);
+    }
+    else if (qtype == "FetchList")
+    {
+        processQueryPartList(params, body, out, response);
+    }
+    else if (qtype == "checkExist")
+    {
+        processQueryExist(params, body, out, response);
+    }
+    else if (qtype == "FetchDeleteFiles")
+    {
+        /// TODO:
+        throw Exception("Not support qtype: " + qtype, ErrorCodes::LOGICAL_ERROR);
+        /// processQueryDeleteFiles(params, body, out, response);
+    }
+    else
+    {
+        throw Exception("Not support qtype: " + qtype, ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void Service::processQueryPart(
+    const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally)
 {
     int client_protocol_version = parse<int>(params.get("client_protocol_version", "0"));
 
@@ -123,6 +159,10 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
 
     /// We pretend to work as older server version, to be sure that client will correctly process our version
     response.addCookie({"server_protocol_version", toString(std::min(client_protocol_version, REPLICATION_PROTOCOL_VERSION_WITH_PARTS_PROJECTION))});
+    if (incrementally)
+    {
+        response.addCookie({"fetch_part_incrementally", "true"});
+    }
 
     ++total_sends;
     SCOPE_EXIT({--total_sends;});
@@ -222,6 +262,69 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & /*body*/, Write
         report_broken_part();
         throw;
     }
+}
+
+/// Only return local data parts.
+void Service::processQueryPartList(const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, [[maybe_unused]]HTTPServerResponse & response)
+{
+    StoragePtr owned_storage = storage.lock();
+    if (!owned_storage)
+        throw Exception("The table was already dropped", ErrorCodes::UNKNOWN_TABLE);
+
+    MergeTreeData::DataPartsVector data_parts;
+
+    if (String filter = params.get("filter"); !filter.empty())
+    {
+        ParserExpression p_expr;
+        auto predicate = parseQuery(p_expr, filter, 0, 0);
+        if (!predicate)
+            throw Exception("Failed to parse filter of fetch list, may be a logic error: " + filter, ErrorCodes::SYNTAX_ERROR);
+
+        data_parts = data.getPartsByPredicate(predicate);
+    }
+    else
+    {
+        String partition_id = params.get("id");
+
+        LOG_TRACE(log, "Sending parts namelist");
+        // Get committed parts based on id
+        if (partition_id == "all")
+        {
+            data_parts = data.getDataPartsVector();
+        }
+        else
+        {
+            data_parts = data.getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
+        }
+
+        data_parts.erase(
+            std::remove_if(data_parts.begin(), data_parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }),
+            data_parts.end());
+    }
+
+    size_t numParts = data_parts.size();
+
+    writeBinary(numParts, out);
+
+    for (auto& part : data_parts)
+    {
+        // Write the names into response
+        writeStringBinary(part->name, out);
+    }
+}
+
+void Service::processQueryExist(
+    const HTMLForm & params,
+    [[maybe_unused]] ReadBuffer & body,
+    WriteBuffer & out,
+    [[maybe_unused]] HTTPServerResponse & response)
+{
+    String part_name = params.get("part");
+    auto part = data.getPartIfExists(
+        part_name, {MergeTreeDataPartState::PreCommitted, MergeTreeDataPartState::Committed, MergeTreeDataPartState::Outdated});
+
+    UInt8 exist = (part ? 'Y' : 'N');
+    writeBinary(exist, out);
 }
 
 void Service::sendPartFromMemory(
@@ -595,6 +698,54 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     return part_type == "InMemory"
         ? downloadPartToMemory(part_name, part_uuid, metadata_snapshot, context, std::move(reservation), in, projections, throttler)
         : downloadPartToDisk(part_name, replica_path, to_detached, tmp_prefix_, sync, reservation->getDisk(), in, projections, checksums, throttler);
+}
+
+Strings Fetcher::fetchPartList(
+    const String & partition_id,
+    const String & filter,
+    const String & endpoint_str,
+    const String & host,
+    int port,
+    const ConnectionTimeouts & timeouts,
+    const String & user,
+    const String & password,
+    const String & interserver_scheme)
+{
+    Strings res;
+
+    Poco::URI uri;
+    uri.setScheme(interserver_scheme);
+    uri.setScheme("http");
+    uri.setHost(host);
+    uri.setPort(port);
+    uri.setQueryParameters(
+        {{"qtype", "FetchList"},
+         {"endpoint", getEndpointId(endpoint_str)},
+         {"id", partition_id},
+         {"filter", filter},
+         {"compress", "false"}});
+
+    Poco::Net::HTTPBasicCredentials creds{};
+    if (!user.empty())
+    {
+        creds.setUsername(user);
+        creds.setPassword(password);
+    }
+
+    ReadWriteBufferFromHTTP in{uri, Poco::Net::HTTPRequest::HTTP_POST, {}, timeouts, 0, creds};
+
+    //TODO: add Metrics to track such sync process.
+
+    size_t num_parts = 0;
+    readBinary(num_parts, in);
+
+    for (size_t i = 0; i < num_parts; i++)
+    {
+        res.emplace_back();
+        readStringBinary(res.back(), in);
+    }
+
+    return res;
 }
 
 MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(

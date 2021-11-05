@@ -59,6 +59,9 @@ public:
         FLUSH_DISTRIBUTED,
         STOP_DISTRIBUTED_SENDS,
         START_DISTRIBUTED_SENDS,
+        SKIP_LOG,
+        EXECUTE_LOG,
+        SET_VALUE,
         END
     };
 
@@ -77,9 +80,12 @@ public:
     String disk;
     UInt64 seconds{};
 
+    ASTPtr predicate;
+    ASTPtr values_changes;
+
     String getID(char) const override { return "SYSTEM query"; }
 
-    ASTPtr clone() const override { return std::make_shared<ASTSystemQuery>(*this); }
+    ASTPtr clone() const override;
 
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
     {

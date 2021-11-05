@@ -83,6 +83,9 @@ class IColumn;
     M(UInt64, background_schedule_pool_size, 128, "Number of threads performing background tasks for replicated tables, dns cache updates. Only has meaning at server startup.", 0) \
     M(UInt64, background_message_broker_schedule_pool_size, 16, "Number of threads performing background tasks for message streaming. Only has meaning at server startup.", 0) \
     M(UInt64, background_distributed_schedule_pool_size, 16, "Number of threads performing background tasks for distributed sends. Only has meaning at server startup.", 0) \
+    M(UInt64, background_local_schedule_pool_size, 16, "Number of threads performing background no-network operation tasks for replicated tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_consume_schedule_pool_size, 16, "Number of threads performing background tasks for kafka tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_unique_table_schedule_pool_size, 16, "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_fetches_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_sends_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited. Only has meaning at server startup.", 0) \
     \
@@ -403,6 +406,8 @@ class IColumn;
     M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
     M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
     M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
+    M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
+    M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
     M(Bool, optimize_move_functions_out_of_any, false, "Move functions out of aggregate functions 'any', 'anyLast'.", 0) \
     M(Bool, optimize_normalize_count_variants, true, "Rewrite aggregate functions that semantically equals to count() as count().", 0) \
     M(Bool, optimize_injective_functions_inside_uniq, true, "Delete injective functions of one argument inside uniq*() functions.", 0) \
@@ -481,6 +486,13 @@ class IColumn;
     \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
+    \
+    /** Bytedance */ \
+    M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \
+    M(UInt64, ha_alter_metadata_sync, 1, "Wait for actions to alter metadata. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
+    M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
@@ -571,6 +583,7 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
     \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

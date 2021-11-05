@@ -75,6 +75,16 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.projection_name = command->projection->as<ASTIdentifier &>().name();
         return res;
     }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::ADD_COLUMN)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::ADD_COLUMN;
+        const auto & ast_col_decl = command->col_decl->as<ASTColumnDeclaration &>();
+        res.column_name = ast_col_decl.name;
+        res.data_type = DataTypeFactory::instance().get(ast_col_decl.type);
+        return res;
+    }
     else if (parse_alter_commands && command->type == ASTAlterCommand::MODIFY_COLUMN)
     {
         MutationCommand res;
@@ -151,6 +161,13 @@ std::shared_ptr<ASTExpressionList> MutationCommands::ast() const
     return res;
 }
 
+bool MutationCommands::willMutateData() const
+{
+    for (auto & c : *this)
+        if (c.type != MutationCommand::Type::ADD_COLUMN)
+            return true;
+    return false;
+}
 
 void MutationCommands::writeText(WriteBuffer & out) const
 {

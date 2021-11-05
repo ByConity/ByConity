@@ -55,6 +55,7 @@ class ExternalModelsLoader;
 class InterserverCredentials;
 using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
+class HaReplicaHandler;
 class BackgroundSchedulePool;
 class MergeList;
 class ReplicatedFetchList;
@@ -76,6 +77,7 @@ class TraceLog;
 class MetricLog;
 class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
+class MutationLog;
 struct MergeTreeSettings;
 class StorageS3Settings;
 class IDatabase;
@@ -328,6 +330,9 @@ public:
 
     VolumePtr setTemporaryStorage(const String & path, const String & policy_name = "");
 
+    void setReadyForQuery();
+    bool isReadyForQuery() const;
+
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
     /// Global application configuration settings.
@@ -536,6 +541,8 @@ public:
 
     InterserverIOHandler & getInterserverIOHandler();
 
+    HaReplicaHandler & getHaReplicaHandler();
+
     /// How other servers can access this for downloading replicated data.
     void setInterserverIOAddress(const String & host, UInt16 port);
     std::pair<String, UInt16> getInterserverIOAddress() const;
@@ -556,6 +563,9 @@ public:
     UInt16 getTCPPort() const;
 
     std::optional<UInt16> getTCPPortSecure() const;
+
+    /// The port that the server exchange ha log
+    UInt16 getHaTCPPort() const;
 
     /// Allow to use named sessions. The thread will be run to cleanup sessions after timeout has expired.
     /// The method must be called at the server startup.
@@ -670,6 +680,14 @@ public:
     BackgroundSchedulePool & getMessageBrokerSchedulePool() const;
     BackgroundSchedulePool & getDistributedSchedulePool() const;
 
+    BackgroundSchedulePool & getConsumeSchedulePool() const;
+    BackgroundSchedulePool & getRestartSchedulePool() const;
+    BackgroundSchedulePool & getHaLogSchedulePool() const;
+    BackgroundSchedulePool & getMutationSchedulePool() const;
+    BackgroundSchedulePool & getLocalSchedulePool() const;
+    BackgroundSchedulePool & getMergeSelectSchedulePool() const;
+    BackgroundSchedulePool & getUniqueTableSchedulePool() const;
+
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
@@ -704,6 +722,7 @@ public:
     std::shared_ptr<MetricLog> getMetricLog() const;
     std::shared_ptr<AsynchronousMetricLog> getAsynchronousMetricLog() const;
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
+    std::shared_ptr<MutationLog> getMutationLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.

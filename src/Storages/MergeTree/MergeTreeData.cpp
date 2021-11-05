@@ -157,6 +157,8 @@ MergeTreeData::MergeTreeData(
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     , parts_mover(this)
+    , replicated_fetches_throttler(std::make_shared<Throttler>(getSettings()->max_replicated_fetches_network_bandwidth, getContext()->getReplicatedFetchesThrottler()))
+    , replicated_sends_throttler(std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
     const auto settings = getSettings();
     allow_nullable_key = attach || settings->allow_nullable_key;
@@ -810,6 +812,7 @@ String MergeTreeData::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
+        case Unique:        return "Unique";
     }
 
     __builtin_unreachable();
@@ -2157,13 +2160,16 @@ bool MergeTreeData::renameTempPartAndReplace(
     MergeTreePartInfo part_info = part->info;
     String part_name;
 
-    if (DataPartPtr existing_part_in_partition = getAnyPartInPartition(part->info.partition_id, lock))
+    if (!part->info.isFakeDropRangePart())
     {
-        if (part->partition.value != existing_part_in_partition->partition.value)
-            throw Exception(
-                "Partition value mismatch between two parts with the same partition ID. Existing part: "
-                + existing_part_in_partition->name + ", newly added part: " + part->name,
-                ErrorCodes::CORRUPTED_DATA);
+        if (DataPartPtr existing_part_in_partition = getAnyPartInPartition(part->info.partition_id, lock))
+        {
+            if (part->partition.value != existing_part_in_partition->partition.value)
+                throw Exception(
+                    "Partition value mismatch between two parts with the same partition ID. Existing part: "
+                    + existing_part_in_partition->name + ", newly added part: " + part->name,
+                    ErrorCodes::CORRUPTED_DATA);
+        }
     }
 
     /** It is important that obtaining new block number and adding that block to parts set is done atomically.
@@ -2178,7 +2184,7 @@ bool MergeTreeData::renameTempPartAndReplace(
     else /// Parts from ReplicatedMergeTree already have names
         part_name = part->name;
 
-    LOG_TRACE(log, "Renaming temporary part {} to {}.", part->relative_path, part_name);
+    LOG_DEBUG(log, "Renaming temporary part {} to {}.", part->relative_path, part_name);
 
     if (auto it_duplicate = data_parts_by_info.find(part_info); it_duplicate != data_parts_by_info.end())
     {
@@ -2832,6 +2838,56 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const String & part_na
     return getPartIfExists(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
 }
 
+MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
+{
+    DataPartsVector parts = getDataPartsVector();
+    parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
+
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (metadata_snapshot->hasPartitionKey())
+        return parts;
+
+    auto & partition_key = metadata_snapshot->getPartitionKey();
+
+    MutableColumns mutable_columns = partition_key.sample_block.cloneEmptyColumns();
+
+    for (auto & part : parts)
+    {
+        auto & partition_value = part->partition.value;
+        for (size_t c = 0; c < mutable_columns.size(); ++c)
+        {
+            if (c < partition_value.size())
+                mutable_columns[c]->insert(partition_value[c]);
+            else
+                /// When partitions have different partition key insert default value
+                /// TODO: insert default value may cause delete partition with default value
+                mutable_columns[c]->insertDefault();
+        }
+    }
+
+    auto block = partition_key.sample_block.cloneWithColumns(std::move(mutable_columns));
+
+    auto predicate = predicate_->clone();
+    auto syntax_result = TreeRewriter(getContext()).analyze(predicate, block.getNamesAndTypesList());
+    auto actions = ExpressionAnalyzer(predicate, syntax_result, getContext()).getActions(true);
+    actions->execute(block);
+
+    /// Check the result
+    if (1 != block.columns())
+        throw Exception("Wrong column number of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+    else if (block.getNamesAndTypesList().front().type->getName() != "UInt8")
+        throw Exception("Wrong column type of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+
+    DataPartsVector res;
+    const auto & flag_column = block.getColumnsWithTypeAndName().front().column;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        if (flag_column->getInt(i))
+            res.push_back(parts[i]);
+    }
+
+    return res;
+}
 
 static void loadPartAndFixMetadataImpl(MergeTreeData::MutableDataPartPtr part)
 {
@@ -2894,7 +2950,8 @@ void MergeTreeData::checkAlterPartitionIsPossible(
             throw DB::Exception("Cannot execute query: DROP DETACHED PART is disabled "
                                 "(see allow_drop_detached setting)", ErrorCodes::SUPPORT_IS_DISABLED);
 
-        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION)
+        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION
+            && command.type != PartitionCommand::DROP_PARTITION_WHERE && command.type != PartitionCommand::FETCH_PARTITION_WHERE)
         {
             if (command.part)
             {
@@ -3039,6 +3096,11 @@ void MergeTreeData::movePartitionToShard(const ASTPtr & /*partition*/, bool /*mo
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MOVE PARTITION TO SHARD is not supported by storage {}", getName());
 }
 
+void MergeTreeData::dropPartitionWhere(const ASTPtr &, bool, ContextPtr)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DROP PARTITION WHERE is not supported by storage {}", getName());
+}
+
 void MergeTreeData::fetchPartition(
     const ASTPtr & /*partition*/,
     const StorageMetadataPtr & /*metadata_snapshot*/,
@@ -3047,6 +3109,11 @@ void MergeTreeData::fetchPartition(
     ContextPtr /*query_context*/)
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION is not supported by storage {}", getName());
+}
+
+void MergeTreeData::fetchPartitionWhere(const ASTPtr &, const StorageMetadataPtr &, const String &, ContextPtr)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION WHERE is not supported by storage {}", getName());
 }
 
 Pipe MergeTreeData::alterPartition(
@@ -3075,6 +3142,10 @@ Pipe MergeTreeData::alterPartition(
                 }
             }
             break;
+
+            case PartitionCommand::DROP_PARTITION_WHERE:
+                dropPartitionWhere(command.partition, command.detach, query_context);
+                break;
 
             case PartitionCommand::DROP_DETACHED_PARTITION:
                 dropDetached(command.partition, command.part, query_context);
@@ -3117,6 +3188,14 @@ Pipe MergeTreeData::alterPartition(
             }
             break;
 
+            case PartitionCommand::MOVE_PARTITION_FROM:
+            {
+                String from_database = query_context->resolveDatabase(command.from_database);
+                auto from_storage = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+                movePartitionFrom(from_storage, command.partition, query_context);
+            }
+            break;
+
             case PartitionCommand::REPLACE_PARTITION:
             {
                 checkPartitionCanBeDropped(command.partition);
@@ -3128,6 +3207,10 @@ Pipe MergeTreeData::alterPartition(
 
             case PartitionCommand::FETCH_PARTITION:
                 fetchPartition(command.partition, metadata_snapshot, command.from_zookeeper_path, command.part, query_context);
+                break;
+
+            case PartitionCommand::FETCH_PARTITION_WHERE:
+                fetchPartitionWhere(command.partition, metadata_snapshot, command.from_zookeeper_path, query_context);
                 break;
 
             case PartitionCommand::FREEZE_PARTITION:
@@ -3171,6 +3254,11 @@ Pipe MergeTreeData::alterPartition(
         return convertCommandsResultToSource(result);
 
     return {};
+}
+
+void MergeTreeData::movePartitionFrom(const StoragePtr &, const ASTPtr &, ContextPtr)
+{
+    throw Exception("movePartitionFrom is not supported by " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr local_context) const
@@ -3684,8 +3772,19 @@ MergeTreeData::DataPartPtr MergeTreeData::getAnyPartInPartition(
 {
     auto it = data_parts_by_state_and_info.lower_bound(DataPartStateAndPartitionID{DataPartState::Committed, partition_id});
 
-    if (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed && (*it)->info.partition_id == partition_id)
+    while (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed
+           && (*it)->info.partition_id == partition_id)
+    {
+        if ((*it)->info.isFakeDropRangePart())
+        {
+            ++it;
+            continue;
+        }
         return *it;
+    }
+
+    // if (it != data_parts_by_state_and_info.end() && (*it)->getState() == DataPartState::Committed && (*it)->info.partition_id == partition_id)
+    //     return *it;
 
     return nullptr;
 }

@@ -35,7 +35,7 @@ public:
         : server(server_), parse_proxy_protocol(parse_proxy_protocol_)
         , log(&Poco::Logger::get(std::string("TCP") + (secure_ ? "S" : "") + "HandlerFactory"))
     {
-        server_display_name = server.config().getString("display_name", getFQDNOrHostName());
+        server_display_name = server.config().getString("display_name", getIPOrFQDNOrHostName());
     }
 
     Poco::Net::TCPServerConnection * createConnection(const Poco::Net::StreamSocket & socket) override

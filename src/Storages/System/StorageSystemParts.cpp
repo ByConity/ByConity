@@ -100,9 +100,16 @@ void StorageSystemParts::processNextStorage(
         size_t src_index = 0, res_index = 0;
         if (columns_mask[src_index++])
         {
-            WriteBufferFromOwnString out;
-            part->partition.serializeText(*info.data, out, format_settings);
-            columns[res_index++]->insert(out.str());
+            if (part->info.isFakeDropRangePart())
+            {
+                columns[res_index++]->insertDefault();
+            }
+            else
+            {
+                WriteBufferFromOwnString out;
+                part->partition.serializeText(*info.data, out, format_settings);
+                columns[res_index++]->insert(out.str());
+            }
         }
         if (columns_mask[src_index++])
             columns[res_index++]->insert(part->name);
