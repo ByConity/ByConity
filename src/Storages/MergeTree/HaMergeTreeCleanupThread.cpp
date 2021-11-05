@@ -75,6 +75,8 @@ void HaMergeTreeCleanupThread::localRun()
 
         {
             auto lock = storage.lockForShare(RWLockImpl::NO_QUERY, storage_settings->lock_acquire_timeout_for_background_operations);
+            /// Both use relative_data_path which changes during rename, so we
+            /// do it under share lock
             storage.clearOldTemporaryDirectories();
         }
     }

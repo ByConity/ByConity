@@ -1,0 +1,16 @@
+CREATE TABLE test.ha_con_alter1\n(\n    `k` Int64,\n    `v` Int64,\n    `d` Date\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r1\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_con_alter2\n(\n    `k` Int64,\n    `v` Int64,\n    `d` Date\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r2\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_con_alter1\n(\n    `k` Int64,\n    `v` String,\n    `d` Date,\n    `v00` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r1\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_con_alter2\n(\n    `k` Int64,\n    `v` String,\n    `d` Date,\n    `v00` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r2\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_con_alter1\n(\n    `k` Int64,\n    `v` String,\n    `d` Date,\n    `v00` Int32,\n    `v01` Int32,\n    `v02` Int32,\n    `v03` Int32,\n    `v04` Int32,\n    `v05` Int32,\n    `v06` Int32,\n    `v07` Int32,\n    `v08` Int32,\n    `v09` Int32,\n    `v10` Int32,\n    `v11` Int32,\n    `v12` Int32,\n    `v13` Int32,\n    `v14` Int32,\n    `v15` Int32,\n    `v16` Int32,\n    `v17` Int32,\n    `v18` Int32,\n    `v19` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r1\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_con_alter2\n(\n    `k` Int64,\n    `v` String,\n    `d` Date,\n    `v00` Int32,\n    `v01` Int32,\n    `v02` Int32,\n    `v03` Int32,\n    `v04` Int32,\n    `v05` Int32,\n    `v06` Int32,\n    `v07` Int32,\n    `v08` Int32,\n    `v09` Int32,\n    `v10` Int32,\n    `v11` Int32,\n    `v12` Int32,\n    `v13` Int32,\n    `v14` Int32,\n    `v15` Int32,\n    `v16` Int32,\n    `v17` Int32,\n    `v18` Int32,\n    `v19` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_con_alter\', \'r2\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+0	1	1970-01-01	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-02	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-03	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-04	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-05	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-06	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-07	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-08	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-09	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0
+0	1	1970-01-10	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0

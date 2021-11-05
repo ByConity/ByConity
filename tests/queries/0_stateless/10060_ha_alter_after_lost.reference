@@ -1,0 +1,15 @@
+0
+CREATE TABLE test.ha_lost1\n(\n    `d` Date,\n    `k` UInt64,\n    `i32` String,\n    `s` String\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_lost\', \'r1\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_mark_lost_replica_timeout = 1, ha_update_replica_stats_min_period = 1, ha_update_replica_stats_period = 1, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_lost2\n(\n    `d` Date,\n    `k` UInt64,\n    `i32` String,\n    `s` String\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_lost\', \'r2\')\nPARTITION BY d\nORDER BY k\nSETTINGS zk_local_diff_threshold = 4, ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+d	Date					
+k	UInt64					
+i32	String					
+s	String					
+d	Date					
+k	UInt64					
+i32	String					
+s	String					
+1970-01-01	0	0	
+1970-01-01	3	1	aaa
+1970-01-01	0	0	
+1970-01-01	3	1	aaa

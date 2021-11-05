@@ -49,6 +49,7 @@ private:
 
     void restartReplicas(ContextMutablePtr system_context);
     void syncReplica(ASTSystemQuery & query);
+    void syncMutation(ASTSystemQuery & query, ContextMutablePtr system_context);
 
     void restoreReplica();
 

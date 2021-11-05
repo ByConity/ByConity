@@ -1,0 +1,12 @@
+1
+2
+3
+4
+CREATE TABLE test.test_ttl1\n(\n    `datetime` DateTime,\n    `id` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/test_ttl_case\', \'1\')\nPARTITION BY datetime\nORDER BY id\nTTL datetime + toIntervalSecond(1)\nSETTINGS index_granularity = 8192
+CREATE TABLE test.test_ttl2\n(\n    `datetime` DateTime,\n    `id` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/test_ttl_case\', \'2\')\nPARTITION BY datetime\nORDER BY id\nTTL datetime + toIntervalSecond(1)\nSETTINGS index_granularity = 8192
+CREATE TABLE test.test_ttl1\n(\n    `datetime` DateTime,\n    `id` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/test_ttl_case\', \'1\')\nPARTITION BY datetime\nORDER BY id\nTTL datetime + toIntervalMinute(3)\nSETTINGS index_granularity = 8192
+CREATE TABLE test.test_ttl2\n(\n    `datetime` DateTime,\n    `id` Int32\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/test_ttl_case\', \'2\')\nPARTITION BY datetime\nORDER BY id\nTTL datetime + toIntervalMinute(3)\nSETTINGS index_granularity = 8192
+5
+6
+7
+8

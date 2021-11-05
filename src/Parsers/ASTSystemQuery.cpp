@@ -50,6 +50,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP REPLICA";
         case Type::SYNC_REPLICA:
             return "SYNC REPLICA";
+        case Type::SYNC_MUTATION:
+            return "SYNC MUTATION";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
         case Type::RELOAD_DICTIONARY:
@@ -104,6 +106,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "EXECUTE LOG";
         case Type::SET_VALUE:
             return "SET VALUE";
+        case Type::MARK_LOST:
+            return "MARK LOST";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -186,6 +190,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (  type == Type::RESTART_REPLICA
             || type == Type::RESTORE_REPLICA
             || type == Type::SYNC_REPLICA
+            || type == Type::SYNC_MUTATION
+            || type == Type::MARK_LOST
             || type == Type::FLUSH_DISTRIBUTED
             || type == Type::RELOAD_DICTIONARY)
     {

@@ -1,0 +1,14 @@
+CREATE TABLE test.ha_fail1\n(\n    `d` Date,\n    `k` UInt64,\n    `i32` String,\n    `s` String\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_fail\', \'r1\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+CREATE TABLE test.ha_fail2\n(\n    `d` Date,\n    `k` UInt64,\n    `i32` String,\n    `s` String\n)\nENGINE = HaMergeTree(\'/clickhouse/tables/test/ha_fail\', \'r2\')\nPARTITION BY d\nORDER BY k\nSETTINGS ha_queue_update_sleep_ms = 1000, index_granularity = 8192
+d	Date					
+k	UInt64					
+i32	String					
+s	String					
+d	Date					
+k	UInt64					
+i32	String					
+s	String					
+1970-01-01	0	0	
+1970-01-01	3	1	aaa
+1970-01-01	0	0	
+1970-01-01	3	1	aaa

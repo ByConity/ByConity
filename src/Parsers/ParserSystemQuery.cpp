@@ -163,6 +163,8 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
 
         case Type::RESTART_REPLICA:
         case Type::SYNC_REPLICA:
+        case Type::SYNC_MUTATION:
+        case Type::MARK_LOST:
             if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
                 return false;
             break;
