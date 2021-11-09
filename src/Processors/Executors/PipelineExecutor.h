@@ -159,6 +159,7 @@ private:
     void finish();
 
     String dumpPipeline() const;
+    void dumpPipelineToFile(const String & suffix) const;
 };
 
 using PipelineExecutorPtr = std::shared_ptr<PipelineExecutor>;
