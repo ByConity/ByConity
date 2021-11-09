@@ -77,6 +77,14 @@ void RewriteDistributedTableMatcher::visit(ASTTableExpression & table_expression
     }
 }
 
+/**
+ * Rewrite column if we find it has a table reference.
+ * for example:
+ * select a.id from a,
+ * after we rewrite sql (perfectshardable), it will be
+ * select a_local.id from a_local.
+ */
+
 void RewriteDistributedTableMatcher::visit(ASTIdentifier & identifier, ASTPtr &, Data & data)
 {
     for (auto & rewrite_info : data.identifier_rewrite_info)
@@ -124,6 +132,7 @@ bool checkIfSelectListExistConstant(const ASTPtr & node)
 
 /**
  * We will add all rules for determining whether a sql is perfect-shardable in this function.
+ * 1. disable perfect-shard if select list has a constant ( if constant can be removed, it must removed before Perfect-Shard is checked.)
  */
 bool InterpreterPerfectShard::checkPerfectShardable()
 {
@@ -401,6 +410,12 @@ void InterpreterPerfectShard::getOriginalProject()
     }
 }
 
+/**
+ * Perfect-Shard uses return type to determine the final merge aggregate functions.
+ * If the return type we checked is not a valid type for Perfect-Shard, perfect-shard will not be performed.
+ * Be careful for alias of aggregate function, worker side will return a column without alias, hence we use original_project
+ * to determine the arguments of final merge aggregate functions.
+ **/
 bool InterpreterPerfectShard::checkAggregationReturnType() const
 {
     if (interpreter.analysis_result.need_aggregate)
