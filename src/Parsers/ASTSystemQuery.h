@@ -35,6 +35,7 @@ public:
         RESTORE_REPLICA,
         DROP_REPLICA,
         SYNC_REPLICA,
+        SYNC_MUTATION,
         RELOAD_DICTIONARY,
         RELOAD_DICTIONARIES,
         RELOAD_MODEL,
@@ -62,6 +63,7 @@ public:
         SKIP_LOG,
         EXECUTE_LOG,
         SET_VALUE,
+        MARK_LOST,
         END
     };
 

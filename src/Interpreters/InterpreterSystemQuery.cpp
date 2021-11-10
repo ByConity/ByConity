@@ -198,6 +198,10 @@ BlockIO executeOnTable(const ASTSystemQuery & query, const StorageID & table_id,
             CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->systemSetValues(query.values_changes); })
             break;
 
+        case Type::MARK_LOST:
+            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->markLost(); })
+            break;
+
         default:
             throw Exception("Unknown type of SYSTEM query on table", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -464,6 +468,9 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::SYNC_REPLICA:
             syncReplica(query);
             break;
+        case Type::SYNC_MUTATION:
+            syncMutation(query, system_context);
+            break;
         case Type::FLUSH_DISTRIBUTED:
             flushDistributed(query);
             break;
@@ -498,9 +505,11 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::STOP_LISTEN_QUERIES:
         case Type::START_LISTEN_QUERIES:
             throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+
         case Type::EXECUTE_LOG:
         case Type::SKIP_LOG:
         case Type::SET_VALUE:
+        case Type::MARK_LOST:
             return executeOnTable(query, table_id, system_context);
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
@@ -747,8 +756,31 @@ void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
         }
         LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
     }
+    else if (auto storage_ha = dynamic_cast<StorageHaMergeTree *>(table.get()))
+    {
+        LOG_TRACE(log, "Synchronizing entries in replica's queue with table's log and waiting for it to become empty");
+        if (!storage_ha->waitForShrinkingQueueSize(0, getContext()->getSettingsRef().receive_timeout.totalMilliseconds()))
+        {
+            LOG_ERROR(log, "SYNC REPLICA {}: Timed out!", table_id.getNameForLogs());
+            throw Exception(
+                "SYNC REPLICA " + table_id.getNameForLogs() + ": command timed out! See the 'receive_timeout' setting",
+                ErrorCodes::TIMEOUT_EXCEEDED);
+        }
+        LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
+    }
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), table_id.getNameForLogs());
+}
+
+void InterpreterSystemQuery::syncMutation(ASTSystemQuery &, ContextMutablePtr system_context)
+{
+    /// TODO: getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+
+    if (auto ha = dynamic_cast<StorageHaMergeTree *>(table.get()))
+        ha->waitAllMutations(system_context->getSettingsRef().receive_timeout.value.totalMilliseconds());
+    else
+        throw Exception("Table " + table_id.getNameForLogs() + " is not HaMergeTree", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
@@ -929,6 +961,8 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::EXECUTE_LOG:
         case Type::SKIP_LOG:
         case Type::SET_VALUE:
+        case Type::SYNC_MUTATION:
+        case Type::MARK_LOST:
         /// TODO:
         break;
 

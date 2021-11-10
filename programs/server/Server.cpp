@@ -1163,6 +1163,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
+    std::shared_ptr<ProtocolServerAdapter> ha_server;
     {
         /// This object will periodically calculate some metrics.
         AsynchronousMetrics async_metrics(
@@ -1318,13 +1319,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port);
                 socket.setReceiveTimeout(settings.receive_timeout);
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(
+                ha_server = std::make_shared<ProtocolServerAdapter>(
                     port_name,
                     std::make_unique<Poco::Net::TCPServer>(
-                        new HaTCPHandlerFactory(*this),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
+                        new HaTCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
 
                 LOG_INFO(log, "Listening for ha communication (tcp): {}", address.toString());
             });
@@ -1444,6 +1442,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         for (auto & server : *servers)
             server.start();
+        ha_server->start();
         LOG_INFO(log, "Ready for connections.");
 
         SCOPE_EXIT({
@@ -1458,6 +1457,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server.stop();
                 current_connections += server.currentConnections();
             }
+            ha_server->stop();
 
             if (current_connections)
                 LOG_INFO(log, "Closed all listening sockets. Waiting for {} outstanding connections.", current_connections);
@@ -1469,6 +1469,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             if (current_connections)
                 current_connections = waitServersToFinish(*servers, config().getInt("shutdown_wait_unfinished", 5));
+            /// Don't wait for ha server
 
             if (current_connections)
                 LOG_INFO(log, "Closed connections. But {} remain."

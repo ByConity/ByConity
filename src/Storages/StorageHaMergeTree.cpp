@@ -1004,16 +1004,28 @@ BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe
 }
 
 bool StorageHaMergeTree::optimize(
-    [[maybe_unused]]const ASTPtr &,
-    [[maybe_unused]]const StorageMetadataPtr &,
-    [[maybe_unused]]const ASTPtr & partition,
-    [[maybe_unused]]bool final,
-    [[maybe_unused]]bool deduplicate,
-    [[maybe_unused]]const Names & deduplicate_by_columns,
-    [[maybe_unused]]ContextPtr query_context)
+    [[maybe_unused]] const ASTPtr &,
+    [[maybe_unused]] const StorageMetadataPtr &,
+    [[maybe_unused]] const ASTPtr & partition,
+    [[maybe_unused]] bool final,
+    [[maybe_unused]] bool deduplicate,
+    [[maybe_unused]] const Names & deduplicate_by_columns,
+    [[maybe_unused]] ContextPtr query_context)
 {
+    assertNotReadonly();
+
+    auto & settings = query_context->getSettingsRef();
+    if (!is_leader && !settings.ignore_leader_check)
+        throw Exception("OPTIMIZE cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
+
+    /// NOTE: exclusive lock cannot be used here, since this may lead to deadlock (see comments below),
+    /// but it should be safe to use non-exclusive to avoid dropping parts that may be required for processing queue.
+    auto table_lock = lockForShare(query_context->getCurrentQueryId(), query_context->getSettingsRef().lock_acquire_timeout);
+
+    tryExecutePartitionLevelTTL();
+
     /// TODO:
-    throw Exception("Not supported", ErrorCodes::SUPPORT_IS_DISABLED);
+    return true;
 }
 
 static String ast_to_str(ASTPtr query)
@@ -1169,6 +1181,8 @@ void StorageHaMergeTree::alter(
 
     if (!mutation_commands.empty())
     {
+        /// TODO: MODIFY TTL will generate data mutations which may cost more resources
+
         /// Create mutation entry for mutation commands
         HaMergeTreeMutationEntry mutation_entry;
         mutation_entry.query_id = query_context->getInitialQueryId();
@@ -1529,6 +1543,29 @@ void StorageHaMergeTree::onActionLockRemove(StorageActionBlockType action_type)
     else if (action_type == ActionLocks::PartsMove)
         background_moves_executor.triggerTask();
 }
+
+bool StorageHaMergeTree::waitForShrinkingQueueSize(size_t queue_size, UInt64 max_wait_milliseconds)
+{
+    Stopwatch watch;
+    /// Let's fetch new log entries firstly
+    log_exchanger.resetReplicaStatusAndConnection(); /// make sure replica status is up-to-date
+    queue.pullLogsToQueue(getZooKeeper(), {}, /*ignore_backoff=*/true);
+
+    while (queue.getQueueSize() > queue_size)
+    {
+        if (partial_shutdown_called)
+            throw Exception("Shutdown is called for table", ErrorCodes::ABORTED);
+
+        if (max_wait_milliseconds && watch.elapsedMilliseconds() > max_wait_milliseconds)
+            return false;
+
+        background_executor.triggerTask();
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+    return true;
+}
+
 
 void StorageHaMergeTree::getStatus(Status & res, bool with_zk_fields)
 {
@@ -3475,6 +3512,22 @@ HaMergeTreeLogEntryPtr StorageHaMergeTree::createLogEntryToMutatePart(
     return entry;
 }
 
+/// If new version returns ordinary name, else returns part name containing the first and last month of the month
+static String getPartNamePossiblyFake(MergeTreeDataFormatVersion format_version, const MergeTreePartInfo & part_info)
+{
+    if (format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
+    {
+        /// The date range is all month long.
+        const auto & lut = DateLUT::instance();
+        time_t start_time = lut.YYYYMMDDToDate(parse<UInt32>(part_info.partition_id + "01"));
+        DayNum left_date = DayNum(lut.toDayNum(start_time).toUnderType());
+        DayNum right_date = DayNum(static_cast<size_t>(left_date) + lut.daysInMonth(start_time) - 1);
+        return part_info.getPartNameV0(left_date, right_date);
+    }
+
+    return part_info.getPartName();
+}
+
 void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeeper, const NameOrderedSet & partitions, bool detach, bool sync)
 {
     /// It's OK to use same block id
@@ -3491,7 +3544,7 @@ void StorageHaMergeTree::dropAllPartsInPartitions(zkutil::ZooKeeperPtr & zookeep
         MergeTreePartInfo drop_range_info(partition, 0, block_id, MergeTreePartInfo::MAX_LEVEL, MergeTreePartInfo::MAX_MUTATION);
         entry->type = LogEntry::DROP_RANGE;
         entry->source_replica = replica_name;
-        entry->new_part_name = drop_range_info.getPartName();
+        entry->new_part_name = getPartNamePossiblyFake(format_version, drop_range_info);
         entry->detach = detach;
         entry->lsn = allocateLSN();
         entry->create_time = time(nullptr);
@@ -4069,6 +4122,14 @@ void StorageHaMergeTree::systemSetValues(const ASTPtr & values_changes)
             throw Exception("Unknown value: " + c.name, ErrorCodes::BAD_ARGUMENTS);
         }
     }
+}
+
+void StorageHaMergeTree::markLost()
+{
+    if (!current_zookeeper)
+        return;
+
+    current_zookeeper->set(zookeeper_path + "/replicas/" + replica_name + "/is_lost", "1", -1);
 }
 
 /// allocLSNAndSet() need two separated ZK operations which cannot be packed.

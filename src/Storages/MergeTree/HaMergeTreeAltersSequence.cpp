@@ -68,7 +68,7 @@ HaMergeTreeAltersSequence::canAddMetadataAlter(const MutationCommands & commands
     for (auto & command : commands)
     {
         /// If current_columns contains a column which will be modified by the commands, the commands cannot be added
-        if (current_columns.count(command.column_name))
+        if (!command.column_name.empty() && current_columns.count(command.column_name))
             return std::make_optional(command.column_name);
     }
     return std::nullopt;

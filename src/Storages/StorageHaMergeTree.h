@@ -195,6 +195,8 @@ public:
     void systemSkipLog(const std::vector<UInt64> & lsns);
     void systemSetValues(const ASTPtr & values_changes);
 
+    void markLost();
+
 private:
     /// Get a sequential consistent view of current parts.
     ReplicatedMergeTreeQuorumAddedParts::PartitionIdToMaxBlock getMaxAddedBlocks() const;
