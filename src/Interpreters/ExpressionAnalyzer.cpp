@@ -23,6 +23,7 @@
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/JoinSwitcher.h>
 #include <Interpreters/MergeJoin.h>
+#include <Interpreters/NestedLoopJoin.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/TableJoin.h>
 
@@ -875,6 +876,8 @@ static std::shared_ptr<IJoin> makeJoin(std::shared_ptr<TableJoin> analyzed_join,
         return std::make_shared<HashJoin>(analyzed_join, sample_block);
     else if (analyzed_join->forceMergeJoin() || (analyzed_join->preferMergeJoin() && allow_merge_join))
         return std::make_shared<MergeJoin>(analyzed_join, sample_block);
+    else if (analyzed_join->forceNestedLoopJoin())
+        return std::make_shared<NestedLoopJoin>(analyzed_join, sample_block, context);
     return std::make_shared<JoinSwitcher>(analyzed_join, sample_block);
 }
 

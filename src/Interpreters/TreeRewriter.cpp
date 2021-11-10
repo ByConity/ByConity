@@ -532,11 +532,13 @@ void collectJoinedColumns(TableJoin & analyzed_join, const ASTTableJoin & table_
 
         CollectJoinOnKeysVisitor::Data data{analyzed_join, tables[0], tables[1], aliases, is_asof};
         CollectJoinOnKeysVisitor(data).visit(table_join.on_expression);
-        if (!data.has_some)
+        if (!data.has_some && !data.is_nest_loop_join)
             throw Exception("Cannot get JOIN keys from JOIN ON section: " + queryToString(table_join.on_expression),
                             ErrorCodes::INVALID_JOIN_ON_EXPRESSION);
         if (is_asof)
             data.asofToJoinKeys();
+        if (data.is_nest_loop_join)
+            analyzed_join.setJoinAlgorithm(JoinAlgorithm::NESTED_LOOP_JOIN);
     }
 }
 
