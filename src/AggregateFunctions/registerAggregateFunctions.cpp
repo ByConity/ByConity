@@ -52,6 +52,9 @@ void registerAggregateFunctionSequenceNextNode(AggregateFunctionFactory &);
 void registerAggregateFunctionMergeStreamStack(AggregateFunctionFactory &);
 void registerAggregateFunctionSessionSplit(AggregateFunctionFactory &);
 void registerAggregateFunctionRetention4(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionAnalysis(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionAnalysisMerge(AggregateFunctionFactory &);
+void registerAggregateFunctionAttributionCorrelationMerge(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -120,6 +123,9 @@ void registerAggregateFunctions()
         registerAggregateFunctionMergeStreamStack(factory);
         registerAggregateFunctionSessionSplit(factory);
         registerAggregateFunctionRetention4(factory);
+        registerAggregateFunctionAttributionAnalysis(factory);
+        registerAggregateFunctionAttributionAnalysisMerge(factory);
+        registerAggregateFunctionAttributionCorrelationMerge(factory);
 
         registerWindowFunctions(factory);
 
