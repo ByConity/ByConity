@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypeBitMap64.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Common/Exception.h>
@@ -150,6 +151,11 @@ DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) c
 {
     const auto & name = static_cast<const AggregateFunctionStateData &>(x).name;
     return DataTypeFactory::instance().get(name);
+}
+
+DataTypePtr FieldToDataType::operator() (const BitMap64 &) const
+{
+    return std::make_shared<DataTypeBitMap64>();
 }
 
 }

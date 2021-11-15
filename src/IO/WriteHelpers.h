@@ -894,6 +894,7 @@ inline void writeText(const DayNum & x, WriteBuffer & buf) { writeDateText(Local
 inline void writeText(const LocalDate & x, WriteBuffer & buf) { writeDateText(x, buf); }
 inline void writeText(const LocalDateTime & x, WriteBuffer & buf) { writeDateTimeText(x, buf); }
 inline void writeText(const UUID & x, WriteBuffer & buf) { writeUUIDText(x, buf); }
+inline void writeText(const BitMap64 & x, WriteBuffer & buf) { writeText(x.toString(), buf); }
 
 template <typename T>
 String decimalFractional(const T & x, UInt32 scale)

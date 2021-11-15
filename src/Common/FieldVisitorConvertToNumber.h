@@ -113,6 +113,11 @@ public:
         throw Exception("Cannot convert AggregateFunctionStateData to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
     }
 
+    T operator() (const BitMap64 &) const
+    {
+        throw Exception("Cannot convert BitMap64 to " + demangle(typeid(T).name()), ErrorCodes::CANNOT_CONVERT_TYPE);
+    }
+
     template <typename U, typename = std::enable_if_t<is_big_int_v<U>> >
     T operator() (const U & x) const
     {
@@ -126,4 +131,3 @@ public:
 };
 
 }
-

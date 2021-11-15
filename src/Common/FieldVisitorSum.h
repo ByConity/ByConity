@@ -27,6 +27,7 @@ public:
     bool operator() (Map &) const;
     bool operator() (UUID &) const;
     bool operator() (AggregateFunctionStateData &) const;
+    bool operator() (BitMap64 &) const;
 
     template <typename T>
     bool operator() (DecimalField<T> & x) const
@@ -44,4 +45,3 @@ public:
 };
 
 }
-

@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeBitMap64.h>
 
 #include <Core/AccurateComparison.h>
 #include <Common/typeid_cast.h>
@@ -346,6 +347,11 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             throw Exception("Cannot convert " + name + " to " + agg_func_type->getName(), ErrorCodes::TYPE_MISMATCH);
 
         return src;
+    }
+    else if (const DataTypeBitMap64 * bitmap_type = typeid_cast<const DataTypeBitMap64 *>(&type))
+    {
+        if (src.getType() == Field::Types::BitMap64)
+            return src;
     }
 
     /// Conversion from string by parsing.

@@ -168,6 +168,24 @@ void writeText(const Map & x, WriteBuffer & buf)
     writeFieldText(DB::Field(x), buf);
 }
 
+void readBinary(BitMap64 & x, ReadBuffer & buf)
+{
+    size_t bytes{0};
+    DB::readVarUInt(bytes, buf);
+    PODArray<char> tmp_buf(bytes);
+    buf.readStrict(tmp_buf.data(), bytes);
+    x = roaring::Roaring64Map::readSafe(tmp_buf.data(), bytes);
+}
+
+void writeBinary(const BitMap64 & x, WriteBuffer & buf)
+{
+    const size_t bytes = x.getSizeInBytes();
+    DB::writeVarUInt(bytes, buf);
+    PODArray<char> tmp_buf(bytes);
+    x.write(tmp_buf.data());
+    writeString(tmp_buf.data(), bytes, buf);
+}
+
 template <typename T>
 void readQuoted(DecimalField<T> & x, ReadBuffer & buf)
 {
@@ -402,6 +420,29 @@ Field Field::restoreFromDump(const std::string_view & dump_)
         readQuotedString(res.name, name_buf);
         readQuotedString(res.data, data_buf);
         return res;
+    }
+
+    prefix = std::string_view{"BitMap64_{"};
+    if (dump.starts_with(prefix))
+    {
+        std::string_view tail = dump.substr(prefix.length());
+        trimLeft(tail);
+        BitMap64 bitmap;
+        while (tail != "}")
+        {
+            size_t separator = tail.find_first_of(",}");
+            if (separator == std::string_view::npos)
+                show_error();
+            bool comma = (tail[separator] == ',');
+            std::string_view element = tail.substr(0, separator);
+            tail.remove_prefix(separator);
+            if (comma)
+                tail.remove_prefix(1);
+            trimLeft(tail);
+            if (!comma && tail != "}")
+                show_error();
+            bitmap.add(parseFromString<UInt64>(element));
+        }
     }
 
     show_error();

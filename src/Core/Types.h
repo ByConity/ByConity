@@ -6,6 +6,7 @@
 #include <common/strong_typedef.h>
 #include <common/extended_types.h>
 #include <common/defines.h>
+#include <roaring64map.hh>
 
 
 namespace DB
@@ -59,6 +60,7 @@ enum class TypeIndex
     AggregateFunction,
     LowCardinality,
     Map,
+    BitMap64,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -72,6 +74,7 @@ using Int256 = ::Int256;
 
 STRONG_TYPEDEF(UInt128, UUID)
 
+using BitMap64 = roaring::Roaring64Map;
 
 template <typename T> constexpr const char * TypeName = "";
 
@@ -277,6 +280,7 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::AggregateFunction: return "AggregateFunction";
         case TypeIndex::LowCardinality: return "LowCardinality";
         case TypeIndex::Map:        return "Map";
+        case TypeIndex::BitMap64:  return "BitMap64";
     }
 
     __builtin_unreachable();

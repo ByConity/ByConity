@@ -211,6 +211,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainSimpleAggregateFunction(*this);
     registerDataTypeDomainGeo(*this);
     registerDataTypeMap(*this);
+    registerDataTypeBitMap64(*this);
 }
 
 DataTypeFactory & DataTypeFactory::instance()

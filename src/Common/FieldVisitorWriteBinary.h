@@ -26,7 +26,7 @@ public:
     void operator() (const DecimalField<Decimal128> & x, WriteBuffer & buf) const;
     void operator() (const DecimalField<Decimal256> & x, WriteBuffer & buf) const;
     void operator() (const AggregateFunctionStateData & x, WriteBuffer & buf) const;
+    void operator() (const BitMap64 & x, WriteBuffer & buf) const;
 };
 
 }
-

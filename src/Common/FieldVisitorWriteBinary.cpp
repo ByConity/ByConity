@@ -1,8 +1,7 @@
 #include <Common/FieldVisitorWriteBinary.h>
 
 #include <IO/WriteHelpers.h>
-
-
+#include <Common/PODArray.h>
 namespace DB
 {
 
@@ -66,5 +65,13 @@ void FieldVisitorWriteBinary::operator() (const Map & x, WriteBuffer & buf) cons
     }
 }
 
+void FieldVisitorWriteBinary::operator() (const BitMap64 & x, WriteBuffer & buf) const
+{
+    const size_t bytes = x.getSizeInBytes();
+    writeBinary(bytes, buf);
+    PODArray<char> buffer(bytes);
+    x.write(buffer.data());
+    writeString(buffer.data(), bytes, buf);
 }
 
+}
