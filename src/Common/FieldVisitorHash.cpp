@@ -146,4 +146,14 @@ void FieldVisitorHash::operator() (const Int256 & x) const
     hash.update(x);
 }
 
+void FieldVisitorHash::operator() (const BitMap64 & x) const
+{
+    UInt8 type = Field::Types::BitMap64;
+    hash.update(type);
+    hash.update(x.cardinality());
+
+    for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
+        applyVisitor(*this, Field(*it));
+}
+
 }

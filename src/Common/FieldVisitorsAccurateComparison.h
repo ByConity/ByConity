@@ -28,7 +28,7 @@ public:
     {
         if constexpr (std::is_same_v<T, Null> || std::is_same_v<U, Null>)
             return std::is_same_v<T, U>;
-        else
+        else if constexpr (!std::is_same_v<T, BitMap64> && !std::is_same_v<U, BitMap64>)
         {
             if constexpr (std::is_same_v<T, U>)
                 return l == r;
@@ -77,7 +77,7 @@ public:
     {
         if constexpr (std::is_same_v<T, Null> || std::is_same_v<U, Null>)
             return false;
-        else
+        else if constexpr (!std::is_same_v<T, BitMap64> && !std::is_same_v<U, BitMap64>)
         {
             if constexpr (std::is_same_v<T, U>)
                 return l < r;

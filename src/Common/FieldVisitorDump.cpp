@@ -105,5 +105,11 @@ String FieldVisitorDump::operator() (const AggregateFunctionStateData & x) const
     return wb.str();
 }
 
+String FieldVisitorDump::operator() (const BitMap64 & x) const
+{
+    WriteBufferFromOwnString wb;
+    wb << "BitMap64_" << x.toString();
+    return wb.str();
 }
 
+}

@@ -220,6 +220,7 @@ template <> struct NearestFieldTypeImpl<bool> { using Type = UInt64; };
 template <> struct NearestFieldTypeImpl<Null> { using Type = Null; };
 
 template <> struct NearestFieldTypeImpl<AggregateFunctionStateData> { using Type = AggregateFunctionStateData; };
+template <> struct NearestFieldTypeImpl<BitMap64> { using Type = BitMap64; };
 
 // For enum types, use the field type that corresponds to their underlying type.
 template <typename T>
@@ -269,6 +270,7 @@ public:
             Int256  = 25,
             Map = 26,
             UUID = 27,
+            BitMap64 = 28,
         };
 
         static const char * toString(Which which)
@@ -293,6 +295,7 @@ public:
                 case Decimal128: return "Decimal128";
                 case Decimal256: return "Decimal256";
                 case AggregateFunctionState: return "AggregateFunctionState";
+                case BitMap64: return "BitMap64";
             }
 
             throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -477,6 +480,7 @@ public:
             case Types::Decimal128: return get<DecimalField<Decimal128>>() < rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() < rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() < rhs.get<AggregateFunctionStateData>();
+            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -514,6 +518,7 @@ public:
             case Types::Decimal128: return get<DecimalField<Decimal128>>() <= rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() <= rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() <= rhs.get<AggregateFunctionStateData>();
+            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -555,6 +560,7 @@ public:
             case Types::Decimal128: return get<DecimalField<Decimal128>>() == rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() == rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() == rhs.get<AggregateFunctionStateData>();
+            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
@@ -595,6 +601,7 @@ public:
             case Types::Decimal128: return f(field.template get<DecimalField<Decimal128>>());
             case Types::Decimal256: return f(field.template get<DecimalField<Decimal256>>());
             case Types::AggregateFunctionState: return f(field.template get<AggregateFunctionStateData>());
+            case Types::BitMap64: return f(field.template get<BitMap64>());
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
@@ -610,7 +617,7 @@ private:
     std::aligned_union_t<DBMS_MIN_FIELD_SIZE - sizeof(Types::Which),
         Null, UInt64, UInt128, UInt256, Int64, Int128, Int256, UUID, Float64, String, Array, Tuple, Map,
         DecimalField<Decimal32>, DecimalField<Decimal64>, DecimalField<Decimal128>, DecimalField<Decimal256>,
-        AggregateFunctionStateData
+        AggregateFunctionStateData, BitMap64
         > storage;
 
     Types::Which which;
@@ -709,6 +716,9 @@ private:
             case Types::AggregateFunctionState:
                 destroy<AggregateFunctionStateData>();
                 break;
+            case Types::BitMap64:
+                destroy<BitMap64>();
+                break;
             default:
                  break;
         }
@@ -749,6 +759,7 @@ template <> struct Field::TypeToEnum<DecimalField<Decimal128>>{ static const Typ
 template <> struct Field::TypeToEnum<DecimalField<Decimal256>>{ static const Types::Which value = Types::Decimal256; };
 template <> struct Field::TypeToEnum<DecimalField<DateTime64>>{ static const Types::Which value = Types::Decimal64; };
 template <> struct Field::TypeToEnum<AggregateFunctionStateData>{ static const Types::Which value = Types::AggregateFunctionState; };
+template <> struct Field::TypeToEnum<BitMap64>{ static const Types::Which value = Types::BitMap64; };
 
 template <> struct Field::EnumToType<Field::Types::Null>    { using Type = Null; };
 template <> struct Field::EnumToType<Field::Types::UInt64>  { using Type = UInt64; };
@@ -768,6 +779,7 @@ template <> struct Field::EnumToType<Field::Types::Decimal64> { using Type = Dec
 template <> struct Field::EnumToType<Field::Types::Decimal128> { using Type = DecimalField<Decimal128>; };
 template <> struct Field::EnumToType<Field::Types::Decimal256> { using Type = DecimalField<Decimal256>; };
 template <> struct Field::EnumToType<Field::Types::AggregateFunctionState> { using Type = DecimalField<AggregateFunctionStateData>; };
+template <> struct Field::EnumToType<Field::Types::BitMap64> { using Type = BitMap64; };
 
 inline constexpr bool isInt64OrUInt64FieldType(Field::Types::Which t)
 {
@@ -847,6 +859,7 @@ template <> inline constexpr const char * TypeName<Array> = "Array";
 template <> inline constexpr const char * TypeName<Tuple> = "Tuple";
 template <> inline constexpr const char * TypeName<Map> = "Map";
 template <> inline constexpr const char * TypeName<AggregateFunctionStateData> = "AggregateFunctionState";
+template <> inline constexpr const char * TypeName<BitMap64> = "BitMap64";
 
 
 template <typename T>
@@ -953,6 +966,14 @@ inline void writeText(const DecimalField<T> & value, WriteBuffer & buf)
     writeText(value.getValue(), value.getScale(), buf);
 }
 
+void readBinary(BitMap64 & x, ReadBuffer & buf);
+[[noreturn]] inline void readText(BitMap64 &, ReadBuffer &) { throw Exception("Cannot read BitMap64.", ErrorCodes::NOT_IMPLEMENTED); }
+[[noreturn]] inline void readQuoted(BitMap64 &, ReadBuffer &) { throw Exception("Cannot read BitMap64.", ErrorCodes::NOT_IMPLEMENTED); }
+
+void writeBinary(const BitMap64 & x, WriteBuffer & buf);
+void writeText(const BitMap64 & x, WriteBuffer & buf);
+[[noreturn]] inline void writeQuoted(const BitMap64 &, WriteBuffer &) { throw Exception("Cannot write BitMap64 quoted.", ErrorCodes::NOT_IMPLEMENTED); }
+
 template <typename T>
 void readQuoted(DecimalField<T> & x, ReadBuffer & buf);
 
@@ -985,4 +1006,3 @@ struct fmt::formatter<DB::Field>
         return format_to(ctx.out(), "{}", toString(x));
     }
 };
-

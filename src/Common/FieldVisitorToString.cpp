@@ -126,5 +126,11 @@ String FieldVisitorToString::operator() (const Map & x) const
     return wb.str();
 }
 
+String FieldVisitorToString::operator() (const BitMap64 & x) const
+{
+    WriteBufferFromOwnString wb;
+    wb << "BitMap64_" << x.toString();
+    return wb.str();
 }
 
+}

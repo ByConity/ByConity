@@ -156,6 +156,15 @@ namespace
             hash.update(x.data.size());
             hash.update(x.data.data(), x.data.size());
         }
+        void operator() (const BitMap64 & x) const
+        {
+            UInt8 type = Field::Types::BitMap64;
+            hash.update(type);
+            hash.update(x.cardinality());
+
+            for (roaring::Roaring64MapSetBitForwardIterator it(x); it != x.end(); ++it)
+                applyVisitor(*this, Field(*it));
+        }
     };
 }
 
