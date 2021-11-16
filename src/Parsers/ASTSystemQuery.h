@@ -64,6 +64,9 @@ public:
         EXECUTE_LOG,
         SET_VALUE,
         MARK_LOST,
+        START_CONSUME,
+        STOP_CONSUME,
+        RESTART_CONSUME,
         END
     };
 

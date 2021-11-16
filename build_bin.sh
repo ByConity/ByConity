@@ -22,7 +22,7 @@ git submodule sync
 http_proxy=http://sys-proxy-rd-relay.byted.org:8118 https_proxy=http://sys-proxy-rd-relay.byted.org:8118 no_proxy=.byted.org git submodule update --init --recursive
 
 export CMAKE_BUILD_TYPE=${CUSTOM_CMAKE_BUILD_TYPE:-RelWithDebInfo}
-export CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=../output -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} ${CMAKE_FLAGS}"
+export CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=../output -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DUSE_BYTEDANCE_RDKAFKA=${CUSTOM_USE_BYTEDANCE_RDKAFKA:-1} ${CMAKE_FLAGS}"
 
 rm -rf build && mkdir build && cd build && cmake ../ ${CMAKE_FLAGS} && ninja
 ninja install

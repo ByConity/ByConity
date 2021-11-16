@@ -78,6 +78,10 @@ Chunk IRowInputFormat::generate()
                 info.read_columns.clear();
                 continue_reading = readRow(columns, info);
 
+                /// only `read_virtual_columns_callback` after reading ordinary columns succ, or virtual columns may have an extra row
+                if (continue_reading && read_virtual_columns_callback)
+                    read_virtual_columns_callback();
+
                 for (size_t column_idx = 0; column_idx < info.read_columns.size(); ++column_idx)
                 {
                     if (!info.read_columns[column_idx])
@@ -104,12 +108,20 @@ Chunk IRowInputFormat::generate()
             catch (Exception & e)
             {
                 /// Logic for possible skipping of errors.
+                if (on_error)
+                    on_error(e);
 
                 if (!isParseError(e.code()))
                     throw;
 
                 if (params.allow_errors_num == 0 && params.allow_errors_ratio == 0)
                     throw;
+
+                if (!parse_exception)
+                    parse_exception.emplace(e);
+
+                if (columns.size() > rows)
+                    error_bytes += columns[rows]->byteSize();
 
                 ++num_errors;
                 Float64 current_error_ratio = static_cast<Float64>(num_errors) / total_rows;

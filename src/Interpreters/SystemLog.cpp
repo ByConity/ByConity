@@ -9,6 +9,7 @@
 #include <Interpreters/AsynchronousMetricLog.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/MutationLog.h>
+#include <Interpreters/KafkaLog.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/logger_useful.h>
@@ -105,6 +106,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         global_context, "system", "opentelemetry_span_log", config,
         "opentelemetry_span_log");
     mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log");
+    kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log");
 
     if (query_log)
         logs.emplace_back(query_log.get());
@@ -126,6 +128,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(opentelemetry_span_log.get());
     if (mutation_log)
         logs.emplace_back(mutation_log.get());
+    if (kafka_log)
+        logs.emplace_back(kafka_log.get());
 
     try
     {

@@ -499,6 +499,7 @@ include (GNUInstallDirs)
 include (cmake/contrib_finder.cmake)
 
 find_contrib_lib(double-conversion) # Must be before parquet
+include (cmake/lib_name.cmake)
 include (cmake/find/ssl.cmake)
 include (cmake/find/ldap.cmake) # after ssl
 include (cmake/find/icu.cmake)
@@ -557,6 +558,9 @@ set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
 
 find_contrib_lib(farmhash)
+find_contrib_lib(infsec)
+find_contrib_lib(minizip)
+find_contrib_lib(consul)
 
 if (ENABLE_TESTS)
     include (cmake/find/gtest.cmake)

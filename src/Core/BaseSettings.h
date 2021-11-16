@@ -80,8 +80,8 @@ public:
     static String valueToStringUtil(const std::string_view & name, const Field & value);
     static Field stringToValueUtil(const std::string_view & name, const String & str);
 
-    void write(WriteBuffer & out, SettingsWriteFormat format = SettingsWriteFormat::DEFAULT) const;
-    void read(ReadBuffer & in, SettingsWriteFormat format = SettingsWriteFormat::DEFAULT);
+    void write(WriteBuffer & out, SettingsWriteFormat write_format = SettingsWriteFormat::DEFAULT) const;
+    void read(ReadBuffer & in, SettingsWriteFormat read_format = SettingsWriteFormat::DEFAULT);
 
     // A debugging aid.
     std::string toString() const;
@@ -407,7 +407,7 @@ Field BaseSettings<Traits_>::stringToValueUtil(const std::string_view & name, co
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat format) const
+void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat write_format) const
 {
     const auto & accessor = Traits::Accessor::instance();
 
@@ -418,7 +418,7 @@ void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat format)
 
         BaseSettingsHelpers::writeString(field.getName(), out);
 
-        if ((format >= SettingsWriteFormat::STRINGS_WITH_FLAGS) || is_custom)
+        if ((write_format >= SettingsWriteFormat::STRINGS_WITH_FLAGS) || is_custom)
         {
             using Flags = BaseSettingsHelpers::Flags;
             Flags flags{0};
@@ -439,7 +439,7 @@ void BaseSettings<Traits_>::write(WriteBuffer & out, SettingsWriteFormat format)
 }
 
 template <typename Traits_>
-void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat format)
+void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat read_format)
 {
     resetToDefault();
     const auto & accessor = Traits::Accessor::instance();
@@ -452,7 +452,7 @@ void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat format)
 
         using Flags = BaseSettingsHelpers::Flags;
         Flags flags{0};
-        if (format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
+        if (read_format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
             flags = BaseSettingsHelpers::readFlags(in);
         bool is_important = (flags & Flags::IMPORTANT);
         bool is_custom = (flags & Flags::CUSTOM);
@@ -465,7 +465,7 @@ void BaseSettings<Traits_>::read(ReadBuffer & in, SettingsWriteFormat format)
                 temp.parseFromString(BaseSettingsHelpers::readString(in));
                 accessor.setValue(*this, index, static_cast<Field>(temp));
             }
-            else if (format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
+            else if (read_format >= SettingsWriteFormat::STRINGS_WITH_FLAGS)
                 accessor.setValueString(*this, index, BaseSettingsHelpers::readString(in));
             else
                 accessor.readBinary(*this, index, in);

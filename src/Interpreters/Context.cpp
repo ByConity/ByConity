@@ -2188,6 +2188,16 @@ std::shared_ptr<OpenTelemetrySpanLog> Context::getOpenTelemetrySpanLog() const
     return shared->system_logs->opentelemetry_span_log;
 }
 
+std::shared_ptr<KafkaLog> Context::getKafkaLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->kafka_log;
+}
+
 
 std::shared_ptr<MutationLog> Context::getMutationLog() const
 {

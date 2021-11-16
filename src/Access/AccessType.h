@@ -158,6 +158,7 @@ enum class AccessType
     M(SYSTEM_FLUSH_DISTRIBUTED, "FLUSH DISTRIBUTED", TABLE, SYSTEM_FLUSH) \
     M(SYSTEM_FLUSH_LOGS, "FLUSH LOGS", GLOBAL, SYSTEM_FLUSH) \
     M(SYSTEM_FLUSH, "", GROUP, SYSTEM) \
+    M(SYSTEM_CONSUME, "SYSTEM START CONSUME, SYSTEM STOP CONSUME, SYSTEM RESTART CONSUME", TABLE, SYSTEM) \
     M(SYSTEM, "", GROUP, ALL) /* allows to execute SYSTEM {SHUTDOWN|RELOAD CONFIG|...} */ \
     \
     M(dictGet, "dictHas, dictGetHierarchy, dictIsIn", DICTIONARY, ALL) /* allows to execute functions dictGet(), dictHas(), dictGetHierarchy(), dictIsIn() */\

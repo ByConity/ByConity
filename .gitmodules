@@ -8,9 +8,6 @@
 [submodule "contrib/lz4"]
 	path = contrib/lz4
 	url = https://github.com/lz4/lz4.git
-[submodule "contrib/librdkafka"]
-	path = contrib/librdkafka
-	url = https://github.com/ClickHouse-Extras/librdkafka.git
 [submodule "contrib/cctz"]
 	path = contrib/cctz
 	url = https://github.com/ClickHouse-Extras/cctz.git
@@ -157,10 +154,6 @@
 [submodule "contrib/AMQP-CPP"]
 	path = contrib/AMQP-CPP
 	url = https://github.com/ClickHouse-Extras/AMQP-CPP.git
-[submodule "contrib/cassandra"]
-	path = contrib/cassandra
-	url = https://github.com/ClickHouse-Extras/cpp-driver.git
-	branch = clickhouse
 [submodule "contrib/libuv"]
 	path = contrib/libuv
 	url = https://github.com/ClickHouse-Extras/libuv.git
@@ -227,3 +220,18 @@
 [submodule "contrib/croaring"]
 	path = contrib/croaring
 	url = git@code.byted.org:dp/CRoaring.git
+[submodule "contrib/consul"]
+	path = contrib/consul
+	url = git@code.byted.org:cpputil/consul.git
+[submodule "contrib/librdkafka-origin"]
+	path = contrib/librdkafka-origin
+	url = git@code.byted.org:dp/librdkafka-origin.git
+[submodule "contrib/librdkafka"]
+	path = contrib/librdkafka
+	url = git@code.byted.org:dp/librdkafka.git
+[submodule "contrib/infsec"]
+	path = contrib/infsec
+	url = git@code.byted.org:cpputil/infsec.git
+[submodule "contrib/cassandra"]
+	path = contrib/cassandra
+	url = git@code.byted.org:dp/cassandra.git

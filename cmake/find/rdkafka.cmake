@@ -9,6 +9,8 @@ endif()
 
 option (USE_INTERNAL_RDKAFKA_LIBRARY "Set to FALSE to use system librdkafka instead of the bundled" ${NOT_UNBUNDLED})
 
+option (USE_BYTEDANCE_RDKAFKA "Use librdkafka maintained by ByteDance" ON)
+
 if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/cppkafka/CMakeLists.txt")
     if(USE_INTERNAL_RDKAFKA_LIBRARY)
         message (WARNING "submodule contrib/cppkafka is missing. to fix try run: \n git submodule update --init --recursive")
@@ -18,7 +20,7 @@ if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/cppkafka/CMakeLists.txt")
     set (MISSING_INTERNAL_CPPKAFKA_LIBRARY 1)
 endif ()
 
-if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/librdkafka/CMakeLists.txt")
+if (NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/librdkafka-cmake/CMakeLists.txt")
     if(USE_INTERNAL_RDKAFKA_LIBRARY OR MISSING_INTERNAL_CPPKAFKA_LIBRARY)
         message (WARNING "submodule contrib/librdkafka is missing. to fix try run: \n git submodule update --init --recursive")
         message (${RECONFIGURE_MESSAGE_LEVEL} "Can't find internal rdkafka")
