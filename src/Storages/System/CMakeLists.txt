@@ -50,3 +50,10 @@ target_link_libraries(clickhouse_storages_system PRIVATE
     clickhouse_parsers
     Poco::JSON
 )
+
+if (USE_RDKAFKA)
+    target_link_libraries(clickhouse_storages_system PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY})
+    if(NOT USE_INTERNAL_RDKAFKA_LIBRARY)
+        target_include_directories(clickhouse_storages_system SYSTEM BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
+    endif()
+endif ()

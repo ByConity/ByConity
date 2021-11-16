@@ -10,27 +10,57 @@ class ASTStorage;
 
 
 #define KAFKA_RELATED_SETTINGS(M) \
-    M(String, kafka_broker_list, "", "A comma-separated list of brokers for Kafka engine.", 0) \
-    M(String, kafka_topic_list, "", "A list of Kafka topics.", 0) \
-    M(String, kafka_group_name, "", "Client group id string. All Kafka consumers sharing the same group.id belong to the same group.", 0) \
-    M(String, kafka_client_id, "", "Client identifier.", 0) \
-    M(UInt64, kafka_num_consumers, 1, "The number of consumers per table for Kafka engine.", 0) \
-    M(Bool, kafka_commit_every_batch, false, "Commit every consumed and handled batch instead of a single commit after writing a whole block", 0) \
+    M(String, broker_list, "", "A comma-separated list of brokers for Kafka engine.", 0) \
+    M(String, topic_list, "", "A list of Kafka topics.", 0) \
+    M(String, group_name, "", "Client group id string. All Kafka consumers sharing the same group.id belong to the same group.", 0) \
+    M(String, client_id, "", "Client identifier.", 0) \
+    M(UInt64, num_consumers, 1, "The number of consumers per table for Kafka engine.", 0) \
+    M(Bool, commit_every_batch, false, "Commit every consumed and handled batch instead of a single commit after writing a whole block", 0) \
     /* default is stream_poll_timeout_ms */ \
-    M(Milliseconds, kafka_poll_timeout_ms, 0, "Timeout for single poll from Kafka.", 0) \
+    M(Milliseconds, poll_timeout_ms, 0, "Timeout for single poll from Kafka.", 0) \
     /* default is min(max_block_size, kafka_max_block_size)*/ \
-    M(UInt64, kafka_poll_max_batch_size, 0, "Maximum amount of messages to be polled in a single Kafka poll.", 0) \
+    M(UInt64, poll_max_batch_size, 0, "Maximum amount of messages to be polled in a single Kafka poll.", 0) \
     /* default is = max_insert_block_size / kafka_num_consumers  */ \
-    M(UInt64, kafka_max_block_size, 0, "Number of row collected by poll(s) for flushing data from Kafka.", 0) \
+    M(UInt64, max_block_size, 65536, "Number of row collected by poll(s) for flushing data from Kafka.", 0) \
     /* default is stream_flush_interval_ms */ \
-    M(Milliseconds, kafka_flush_interval_ms, 0, "Timeout for flushing data from Kafka.", 0) \
+    M(Milliseconds, flush_interval_ms, 0, "Timeout for flushing data from Kafka.", 0) \
     /* those are mapped to format factory settings */ \
-    M(String, kafka_format, "", "The message format for Kafka engine.", 0) \
-    M(Char, kafka_row_delimiter, '\0', "The character to be considered as a delimiter in Kafka message.", 0) \
-    M(String, kafka_schema, "", "Schema identifier (used by schema-based formats) for Kafka engine", 0) \
-    M(UInt64, kafka_skip_broken_messages, 0, "Skip at least this number of broken messages from Kafka topic per block", 0) \
-    M(Bool, kafka_thread_per_consumer, false, "Provide independent thread for each consumer", 0) \
+    M(String, format, "", "The message format for Kafka engine.", 0) \
+    M(Char, row_delimiter, '\0', "The character to be considered as a delimiter in Kafka message.", 0) \
+    M(String, schema, "", "Schema identifier (used by schema-based formats) for Kafka engine", 0) \
+    M(UInt64, skip_broken_messages, 0, "Skip at least this number of broken messages from Kafka topic per block", 0) \
+    M(Bool, thread_per_consumer, false, "Provide independent thread for each consumer", 0) \
     M(HandleKafkaErrorMode, kafka_handle_error_mode, HandleKafkaErrorMode::DEFAULT, "How to handle errors for Kafka engine. Passible values: default, stream.", 0) \
+    \
+    /* Settings added for Bytedance kafka */ \
+    M(String, cluster, "", "Kafka cluster name required by bytedance kafka client", 0) \
+    M(String, bytedance_owner, "", "Owner(user) of bytedance Kafka/BMQ", 0) \
+    M(UInt64, max_block_bytes_size, 20ull * 1024 * 1024 * 1024, "The maximum block bytes size per consumer for Kafka engine.", 0) \
+    M(UInt64, max_partition_fetch_bytes, 10485760, "Max bytes of each partition read from kafka", 0) \
+    M(String, leader_priority, "0", "The priority in leader election", 0) \
+    M(Int64, max_delay_to_yield_leadership, 600, "Minimal absolute delay to yield leadership.", 0) \
+    M(String, partition_num, "-1", "Kafka partition number", 0) \
+    M(String, shard_count, "1", "The number of shards in ClickHouse cluster", 0) \
+    M(Bool, enable_memory_tracker, false, "Enable memory tracker while consuming", 0) \
+    M(Bool, enable_transaction, false, "Enable transaction while consuming", 0) \
+    M(Bool, enable_memory_table, false, "Enable memory table", 0) \
+    M(UInt64, memory_table_min_time, 60, "Memory table minimum time", 0) \
+    M(UInt64, memory_table_max_time, 300,"Memory table maximum time", 0) \
+    M(UInt64, memory_table_min_rows, 200000,"Memory table minimum rows", 0) \
+    M(UInt64, memory_table_max_rows, 10000000,"Memory table maximum rows", 0) \
+    M(UInt64, memory_table_min_bytes, 209715200,"Memory table minimum bytes default value 200M", 0) \
+    M(UInt64, memory_table_max_bytes, 838860800,"Memory table maximum bytes default value 800M", 0) \
+    M(String, memory_table_read_mode, "ALL", "Memory table read mode valid values: ALL, PART, SKIP", 0) \
+    M(UInt64, memory_table_queue_size, 2, "Memory table write block queue size", 0) \
+    M(Bool, json_aggregate_function_type_base64_encode, false, "Indicate whether the json data of aggregate function type is encoded by base64.", 0) \
+    M(Bool, protobuf_enable_multiple_message, true, "Same as 'format_protobuf_enable_multiple_message' in settings", 0) \
+    M(Bool, protobuf_default_length_parser, false, "Same as 'format_protobuf_default_length_parser' in settings", 0) \
+    M(String, api_version_request, "true", "Librdkafka config: request broker's supported API versions to adjust functionality to available protocol features", 0) \
+    M(String, broker_version_fallback, "", "Librdkafka config: older broker versions", 0) \
+    M(String, auto_offset_reset, "", "Librdkafka config: action to take when there is no initial offset in offset store or the desired offset is out of range", 0) \
+    M(String, extra_librdkafka_config, "", "Extra configuration for librdkafka, in JSON format", 0) \
+    M(Bool, librdkafka_enable_debug_log, false, "Enable librdkafka debug level logs", 0) \
+
 
     /** TODO: */
     /* https://github.com/edenhill/librdkafka/blob/master/CONFIGURATION.md */
@@ -48,7 +78,11 @@ DECLARE_SETTINGS_TRAITS(KafkaSettingsTraits, LIST_OF_KAFKA_SETTINGS)
   */
 struct KafkaSettings : public BaseSettings<KafkaSettingsTraits>
 {
+    void applyKafkaSettingChanges(const SettingsChanges & changes);
     void loadFromQuery(ASTStorage & storage_def);
 };
+
+class IAST;
+void sortKafkaSettings(IAST & settings_ast);
 
 }

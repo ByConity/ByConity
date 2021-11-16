@@ -2,6 +2,7 @@
 
 #include <Interpreters/IInterpreter.h>
 #include <Parsers/IAST_fwd.h>
+#include <Parsers/ASTSystemQuery.h>
 #include <Storages/IStorage_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Common/ActionLock.h>
@@ -15,7 +16,6 @@ namespace DB
 
 class Context;
 class AccessRightsElements;
-class ASTSystemQuery;
 
 
 /** Implement various SYSTEM queries.
@@ -60,6 +60,7 @@ private:
 
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);
+    void startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type);
 
     void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const override;
 };

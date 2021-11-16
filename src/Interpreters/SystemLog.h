@@ -75,6 +75,7 @@ class MetricLog;
 class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
+class KafkaLog;
 
 
 class ISystemLog
@@ -111,6 +112,8 @@ struct SystemLogs
     std::shared_ptr<AsynchronousMetricLog> asynchronous_metric_log;
     /// OpenTelemetry trace spans.
     std::shared_ptr<OpenTelemetrySpanLog> opentelemetry_span_log;
+    /// Kafka event log
+    std::shared_ptr<KafkaLog> kafka_log;
 
     std::shared_ptr<MutationLog> mutation_log;
 

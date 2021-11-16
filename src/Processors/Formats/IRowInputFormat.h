@@ -6,6 +6,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <Poco/Timespan.h>
 #include <Common/Stopwatch.h>
+#include <Formats/FormatFactory.h>
 
 
 namespace DB
@@ -46,6 +47,18 @@ public:
 
     void resetParser() override;
 
+    size_t getNumErrors() const { return num_errors; }
+    size_t getErrorBytes() const { return error_bytes; }
+    Exception getAndParseException()
+    {
+        auto res = parse_exception.value();
+        parse_exception.reset();
+        return res;
+    }
+    void setReadCallBack(const FormatFactory::ReadCallback call_back) { read_virtual_columns_callback = call_back; }
+    void setCallbackOnError(const std::function<void(Exception &)> & on_error_) { on_error = on_error_; }
+
+
 protected:
     /** Read next row and append it to the columns.
       * If no more rows - return false.
@@ -77,6 +90,13 @@ private:
 
     size_t total_rows = 0;
     size_t num_errors = 0;
+    size_t error_bytes = 0;
+    std::optional<Exception> parse_exception;
+
+    /// Callback used to setup virtual columns after reading each row.
+    /// Only used by HaKafkaBlockInputStream, which is different from implementation logic of community version
+    FormatFactory::ReadCallback read_virtual_columns_callback;
+    std::function<void(Exception &)> on_error;
 
     BlockMissingValues block_missing_values;
 };

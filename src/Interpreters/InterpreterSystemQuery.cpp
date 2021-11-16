@@ -36,7 +36,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageFactory.h>
-#include <Parsers/ASTSystemQuery.h>
+#include <Storages/Kafka/StorageHaKafka.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -502,6 +502,11 @@ BlockIO InterpreterSystemQuery::execute()
             );
             break;
         }
+        case Type::START_CONSUME:
+        case Type::STOP_CONSUME:
+        case Type::RESTART_CONSUME:
+            startOrStopConsume(table_id, query.type);
+            break;
         case Type::STOP_LISTEN_QUERIES:
         case Type::START_LISTEN_QUERIES:
             throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
@@ -516,6 +521,33 @@ BlockIO InterpreterSystemQuery::execute()
     }
 
     return BlockIO();
+}
+
+void InterpreterSystemQuery::startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type)
+{
+    if (table_id.empty())
+        throw Exception("Empty table id for executing START/STOP consume", ErrorCodes::LOGICAL_ERROR);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, getContext());
+    auto ha_kafka = dynamic_cast<StorageHaKafka *>(storage.get());
+    if (!ha_kafka)
+        throw Exception("HaKafka is supported but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+    using Type = ASTSystemQuery::Type;
+    switch (type)
+    {
+        case Type::START_CONSUME:
+            ha_kafka->startConsume();
+            break;
+        case Type::STOP_CONSUME:
+            ha_kafka->stopConsume();
+            break;
+        case Type::RESTART_CONSUME:
+            ha_kafka->restartConsume();
+            break;
+        default:
+            throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
 void InterpreterSystemQuery::restoreReplica()
@@ -966,6 +998,14 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         /// TODO:
         break;
 
+        case Type::START_CONSUME: [[fallthrough]];
+        case Type::STOP_CONSUME: [[fallthrough]];
+        case Type::RESTART_CONSUME:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_CONSUME, query.database, query.table);
+            break;
+        }
+        
         case Type::STOP_LISTEN_QUERIES: break;
         case Type::START_LISTEN_QUERIES: break;
         case Type::UNKNOWN: break;

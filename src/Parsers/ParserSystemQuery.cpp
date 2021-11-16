@@ -237,6 +237,9 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::START_REPLICATED_SENDS:
         case Type::STOP_REPLICATION_QUEUES:
         case Type::START_REPLICATION_QUEUES:
+        case Type::START_CONSUME:
+        case Type::STOP_CONSUME:
+        case Type::RESTART_CONSUME:
             parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
 

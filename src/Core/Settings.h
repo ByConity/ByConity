@@ -63,6 +63,10 @@ class IColumn;
     M(Milliseconds, connection_pool_max_wait_ms, 0, "The wait time when the connection pool is full.", 0) \
     M(Milliseconds, replace_running_query_max_wait_ms, 5000, "The wait time for running query with the same query_id to finish when setting 'replace_running_query' is active.", 0) \
     M(Milliseconds, kafka_max_wait_ms, 5000, "The wait time for reading from Kafka before retry.", 0) \
+    M(Milliseconds, kafka_session_timeout_ms, 180000, "Kafka client session.timeout.ms", 0) \
+    M(UInt64, kafka_refresh_consul_time, 60 * 60, "Time to refresh consul", 0) \
+    M(Bool, enable_debug_select_from_kafka_table, 0, "Enable read from StorageHaKafka for debug", 0) \
+    M(Bool, constraint_skip_violate, 0, "Whether to skip constraint violated rows.", 0)  \
     M(Milliseconds, rabbitmq_max_wait_ms, 5000, "The wait time for reading from RabbitMQ before retry.", 0) \
     M(UInt64, poll_interval, DBMS_DEFAULT_POLL_INTERVAL, "Block at the query wait loop on the server for the specified number of seconds.", 0) \
     M(UInt64, idle_connection_timeout, 3600, "Close idle TCP connections after specified number of seconds.", 0) \
@@ -136,7 +140,7 @@ class IColumn;
     M(UInt64, optimize_skip_unused_shards_nesting, 0, "Same as optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     M(UInt64, force_optimize_skip_unused_shards_nesting, 0, "Same as force_optimize_skip_unused_shards, but accept nesting level until which it will work.", 0) \
     \
-    M(Bool, input_format_parallel_parsing, true, "Enable parallel parsing for some data formats.", 0) \
+    M(Bool, input_format_parallel_parsing, false, "Enable parallel parsing for some data formats.", 0) \
     M(UInt64, min_chunk_bytes_for_parallel_parsing, (10 * 1024 * 1024), "The minimum chunk size in bytes, which each thread will parse in parallel.", 0) \
     M(Bool, output_format_parallel_formatting, true, "Enable parallel formatting for some data formats.", 0) \
     \

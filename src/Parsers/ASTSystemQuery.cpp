@@ -108,6 +108,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SET VALUE";
         case Type::MARK_LOST:
             return "MARK LOST";
+        case Type::START_CONSUME:
+            return "START CONSUME";
+        case Type::STOP_CONSUME:
+            return "STOP CONSUME";
+        case Type::RESTART_CONSUME:
+            return "RESTART CONSUME";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -193,7 +199,10 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             || type == Type::SYNC_MUTATION
             || type == Type::MARK_LOST
             || type == Type::FLUSH_DISTRIBUTED
-            || type == Type::RELOAD_DICTIONARY)
+            || type == Type::RELOAD_DICTIONARY
+             || type == Type::START_CONSUME
+             || type == Type::STOP_CONSUME
+             || type == Type::RESTART_CONSUME)
     {
         print_database_table();
     }

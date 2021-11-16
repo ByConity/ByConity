@@ -7,6 +7,7 @@
 #include <Common/ZooKeeper/ZooKeeper.h>
 #include <Common/ZooKeeper/KeeperException.h>
 #include <Core/BackgroundSchedulePool.h>
+#include <Disks/IDisk.h>
 
 
 namespace zkutil

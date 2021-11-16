@@ -127,6 +127,17 @@
         <table>query_log</table>
         <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </query_log>
+    <kafka_log>
+        <database>system</database>
+        <table>kafka_log</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </kafka_log>
+    <bytedance_kafka>
+        <owner>renqiang.0429</owner>
+        <prefer_service>dcleader</prefer_service>
+        <psm>aeolus.clickhouse.ch_helper</psm>
+        <team>data-dp-olap</team>
+    </bytedance_kafka>
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
     <compression incl="clickhouse_compression">
     </compression>

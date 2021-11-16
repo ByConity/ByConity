@@ -47,7 +47,8 @@ void registerStorageMySQL(StorageFactory & factory);
 void registerStorageMongoDB(StorageFactory & factory);
 
 #if USE_RDKAFKA
-void registerStorageKafka(StorageFactory & factory);
+/// void registerStorageKafka(StorageFactory & factory);
+void registerStorageHaKafka(StorageFactory & factory);
 #endif
 
 #if USE_AMQPCPP
@@ -109,7 +110,8 @@ void registerStorages()
     registerStorageMongoDB(factory);
 
     #if USE_RDKAFKA
-    registerStorageKafka(factory);
+    /// registerStorageKafka(factory);
+    registerStorageHaKafka(factory);
     #endif
 
     #if USE_AMQPCPP

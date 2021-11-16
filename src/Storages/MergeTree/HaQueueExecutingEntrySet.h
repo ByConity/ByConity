@@ -34,7 +34,6 @@ using HaQueueExecutingEntrySetPtr = std::shared_ptr<HaQueueExecutingEntrySet>;
 
 class FetchingPartToExecutingEntrySet
 {
-    friend class Handle;
 public:
     using PartToEntrySet = std::map<String, HaQueueExecutingEntrySetPtr>;
 
@@ -55,6 +54,7 @@ public:
         FetchingPartToExecutingEntrySet & parent;
         PartToEntrySet::iterator it;
     };
+    friend class Handle;
 
     /// Thread safe; assume only one new part
     std::unique_ptr<Handle> insertOrMerge(const String & part_name, const HaQueueExecutingEntrySetPtr & executing_set);

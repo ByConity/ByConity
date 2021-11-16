@@ -144,8 +144,21 @@ if (ENABLE_MYSQL AND USE_INTERNAL_MYSQL_LIBRARY)
     mysql_support()
 endif ()
 
+if (USE_INTERNAL_MINIZIP_LIBRARY)
+    add_subdirectory(minizip)
+endif ()
+
+if (USE_INTERNAL_CONSUL_LIBRARY)
+    add_subdirectory(consul-cmake)
+endif ()
+
 if (USE_INTERNAL_RDKAFKA_LIBRARY)
-    add_subdirectory (librdkafka-cmake)
+    if (USE_BYTEDANCE_RDKAFKA)
+        add_subdirectory (librdkafka-cmake)
+    else()
+        add_subdirectory (librdkafka-origin-cmake)
+    endif()
+
     target_include_directories(rdkafka BEFORE PRIVATE ${ZLIB_INCLUDE_DIR})
     if(OPENSSL_INCLUDE_DIR)
         target_include_directories(rdkafka BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
@@ -195,6 +208,10 @@ endif()
 if (USE_INTERNAL_AVRO_LIBRARY)
     add_subdirectory(avro-cmake)
 endif()
+
+if (USE_INTERNAL_INFSEC_LIBRARY)
+    add_subdirectory(infsec-cmake)
+endif ()
 
 if(USE_INTERNAL_GTEST_LIBRARY)
     set(GOOGLETEST_VERSION 1.10.0) # master
