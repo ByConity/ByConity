@@ -1442,7 +1442,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         for (auto & server : *servers)
             server.start();
-        ha_server->start();
+        if (ha_server)
+            ha_server->start();
         LOG_INFO(log, "Ready for connections.");
 
         SCOPE_EXIT({
@@ -1457,7 +1458,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server.stop();
                 current_connections += server.currentConnections();
             }
-            ha_server->stop();
+            if (ha_server)
+                ha_server->stop();
 
             if (current_connections)
                 LOG_INFO(log, "Closed all listening sockets. Waiting for {} outstanding connections.", current_connections);
