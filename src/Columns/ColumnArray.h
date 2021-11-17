@@ -142,13 +142,12 @@ public:
 
     bool isCollationSupported() const override { return getData().isCollationSupported(); }
 
-private:
-    WrappedPtr data;
-    WrappedPtr offsets;
-
     size_t ALWAYS_INLINE offsetAt(ssize_t i) const { return getOffsets()[i - 1]; }
     size_t ALWAYS_INLINE sizeAt(ssize_t i) const { return getOffsets()[i] - getOffsets()[i - 1]; }
 
+private:
+    WrappedPtr data;
+    WrappedPtr offsets;
 
     /// Multiply values if the nested column is ColumnVector<T>.
     template <typename T>
