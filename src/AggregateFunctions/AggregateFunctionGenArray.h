@@ -13,7 +13,7 @@
 
 #include <Columns/ColumnArray.h>
 
-#include <AggregateFunctions/AggregateUBACommon.h>
+#include <AggregateFunctions/AggregateRetentionCommon.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnTuple.h>
 #include <DataTypes/DataTypeTuple.h>

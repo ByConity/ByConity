@@ -53,6 +53,7 @@ void registerAggregateFunctionMergeStreamStack(AggregateFunctionFactory &);
 void registerAggregateFunctionSessionSplit(AggregateFunctionFactory &);
 void registerAggregateFunctionRetention4(AggregateFunctionFactory &);
 void registerAggregateFunctionRetention2(AggregateFunctionFactory &);
+void registerAggregateFunctionRetentionLoss(AggregateFunctionFactory &);
 void registerAggregateFunctionGenArray(AggregateFunctionFactory & factory);
 void registerAggregateFunctionGenArrayMonth(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAttributionAnalysis(AggregateFunctionFactory &);
@@ -129,6 +130,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionSessionSplit(factory);
         registerAggregateFunctionRetention4(factory);
         registerAggregateFunctionRetention2(factory);
+        registerAggregateFunctionRetentionLoss(factory);
         registerAggregateFunctionGenArray(factory);
         registerAggregateFunctionGenArrayMonth(factory);
         registerAggregateFunctionAttributionAnalysis(factory);

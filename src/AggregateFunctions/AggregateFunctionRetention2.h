@@ -16,7 +16,7 @@
 
 #include <Functions/FunctionHelpers.h>
 
-#include <AggregateFunctions/AggregateUBACommon.h>
+#include <AggregateFunctions/AggregateRetentionCommon.h>
 #include <Columns/ColumnString.h>
 
 

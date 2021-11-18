@@ -1,6 +1,6 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionRetention2.h>
-#include <AggregateFunctions/AggregateUBACommon.h>
+#include <AggregateFunctions/AggregateRetentionCommon.h>
 #include <AggregateFunctions/Helpers.h>
 #include <DataTypes/DataTypeString.h>
 

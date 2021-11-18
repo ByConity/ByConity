@@ -1,7 +1,6 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 
 #define FOR_BASIC_NUMERIC_TYPES(M) \
