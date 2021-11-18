@@ -58,6 +58,8 @@ void registerAggregateFunctionGenArrayMonth(AggregateFunctionFactory & factory);
 void registerAggregateFunctionAttributionAnalysis(AggregateFunctionFactory &);
 void registerAggregateFunctionAttributionAnalysisMerge(AggregateFunctionFactory &);
 void registerAggregateFunctionAttributionCorrelationMerge(AggregateFunctionFactory &);
+void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -132,6 +134,8 @@ void registerAggregateFunctions()
         registerAggregateFunctionAttributionAnalysis(factory);
         registerAggregateFunctionAttributionAnalysisMerge(factory);
         registerAggregateFunctionAttributionCorrelationMerge(factory);
+        registerAggregateFunctionFinderFunnel(factory);
+        registerAggregateFunctionFinderGroupFunnel(factory);
 
         registerWindowFunctions(factory);
 
