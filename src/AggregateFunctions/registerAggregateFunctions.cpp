@@ -61,6 +61,9 @@ void registerAggregateFunctionAttributionAnalysisMerge(AggregateFunctionFactory 
 void registerAggregateFunctionAttributionCorrelationMerge(AggregateFunctionFactory &);
 void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory);
 void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep2(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFunnelRep3(AggregateFunctionFactory & factory);
 void registerAggregateFunctionSessionAnalysis(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
@@ -139,6 +142,9 @@ void registerAggregateFunctions()
         registerAggregateFunctionAttributionCorrelationMerge(factory);
         registerAggregateFunctionFinderFunnel(factory);
         registerAggregateFunctionFinderGroupFunnel(factory);
+        registerAggregateFunctionFunnelRep(factory);
+        registerAggregateFunctionFunnelRep2(factory);
+        registerAggregateFunctionFunnelRep3(factory);
         registerAggregateFunctionSessionAnalysis(factory);
 
         registerWindowFunctions(factory);

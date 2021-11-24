@@ -3,6 +3,7 @@
 #include <AggregateFunctions/AggregateFunnelMapDict.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/AggregateFunnelMapDict.h>
+#include <AggregateFunctions/QuantileTDigest.h>
 
 #include <Common/ArenaAllocator.h>
 #include <Common/PODArray.h>
@@ -25,6 +26,17 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
+
+using ArithmeticType = Float64;
+using IntervalType = UInt64;
+struct Arithmetics
+{
+    ArithmeticType avg_count{};
+    ArithmeticType avg_sum{};
+    ArithmeticType max = -1;
+    ArithmeticType min = INFINITY;
+    QuantileTDigest<ArithmeticType> quantileTDigest;
+};
 
 using Allocator = MixedArenaAllocator<4096>;
 using Times = std::vector<UInt64>;
