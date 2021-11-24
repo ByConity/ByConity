@@ -10,15 +10,36 @@
 namespace DB
 {
 
+using KeeperServerConfigPtr = nuraft::ptr<nuraft::srv_config>;
+
+/// When our configuration changes the following action types
+/// can happen
+enum class ConfigUpdateActionType
+{
+    RemoveServer,
+    AddServer,
+    UpdatePriority,
+};
+
+/// Action to update configuration
+struct ConfigUpdateAction
+{
+    ConfigUpdateActionType action_type;
+    KeeperServerConfigPtr server;
+};
+
+using ConfigUpdateActions = std::vector<ConfigUpdateAction>;
+
+/// Responsible for managing our and cluster configuration
 class KeeperStateManager : public nuraft::state_mgr
 {
 public:
     KeeperStateManager(
         int server_id_,
         const std::string & config_prefix,
+        const std::string & log_storage_path,
         const Poco::Util::AbstractConfiguration & config,
-        const CoordinationSettingsPtr & coordination_settings,
-        bool standalone_keeper);
+        const CoordinationSettingsPtr & coordination_settings);
 
     KeeperStateManager(
         int server_id_,
@@ -63,6 +84,20 @@ public:
     uint64_t getTotalServers() const { return total_servers; }
 
 private:
+    /// Wrapper struct for Keeper cluster config. We parse this
+    /// info from XML files.
+    struct KeeperConfigurationWrapper
+    {
+        /// Our port
+        int port;
+        /// Our config
+        KeeperServerConfigPtr config;
+        /// Servers id's to start as followers
+        std::unordered_set<int> servers_start_as_followers;
+        /// Cluster config
+        // ClusterConfigPtr cluster_config;
+    };
+
     int my_server_id;
     int my_port;
     bool secure;

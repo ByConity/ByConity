@@ -132,7 +132,8 @@
 #endif
 
 #if USE_NURAFT
-#   include <Server/KeeperTCPHandlerFactory.h>
+#    include <Coordination/FourLetterCommand.h>
+#    include <Server/KeeperTCPHandlerFactory.h>
 #endif
 
 #if USE_JEMALLOC
@@ -1215,8 +1216,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("keeper_server"))
     {
 #if USE_NURAFT
-        /// Initialize test keeper RAFT. Do nothing if no nu_keeper_server in config.
-        global_context->initializeKeeperDispatcher();
+        // /// Initialize test keeper RAFT. Do nothing if no nu_keeper_server in config.
+        // global_context->initializeKeeperDispatcher();
+        // //// If we don't have configured connection probably someone trying to use clickhouse-server instead
+        // //// of clickhouse-keeper, so start synchronously.
+        // bool can_initialize_keeper_async = false;
+
+        // if (has_zookeeper) /// We have configured connection to some zookeeper cluster
+        // {
+        //     /// If we cannot connect to some other node from our cluster then we have to wait our Keeper start
+        //     /// synchronously.
+        //     can_initialize_keeper_async = global_context->tryCheckClientConnectionToMyKeeperCluster();
+        // }
+        /// Initialize keeper RAFT.
+        global_context->initializeKeeperDispatcher(/*can_initialize_keeper_async*/);
+        FourLetterCommandFactory::registerCommands(*global_context->getKeeperDispatcher());
+
         for (const auto & listen_host : listen_hosts)
         {
             /// TCP Keeper

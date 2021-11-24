@@ -19,6 +19,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <filesystem>
 #include <IO/UseSSL.h>
+#include <Coordination/FourLetterCommand.h>
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
@@ -355,8 +356,10 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
 
-    /// Initialize test keeper RAFT. Do nothing if no nu_keeper_server in config.
-    global_context->initializeKeeperDispatcher();
+    /// Initialize keeper RAFT. Do nothing if no keeper_server in config.
+    global_context->initializeKeeperDispatcher(/* start_async = false*/);
+    FourLetterCommandFactory::registerCommands(*global_context->getKeeperDispatcher());
+
     for (const auto & listen_host : listen_hosts)
     {
         /// TCP Keeper
