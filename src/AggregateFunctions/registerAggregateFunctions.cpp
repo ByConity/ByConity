@@ -51,6 +51,7 @@ void registerAggregateFunctionStudentTTest(AggregateFunctionFactory &);
 void registerAggregateFunctionSequenceNextNode(AggregateFunctionFactory &);
 void registerAggregateFunctionMergeStreamStack(AggregateFunctionFactory &);
 void registerAggregateFunctionSessionSplit(AggregateFunctionFactory &);
+void registerAggregateFunctionSessionAnalysis(AggregateFunctionFactory & factory);
 void registerAggregateFunctionRetention4(AggregateFunctionFactory &);
 void registerAggregateFunctionRetention2(AggregateFunctionFactory &);
 void registerAggregateFunctionRetentionLoss(AggregateFunctionFactory &);
@@ -64,7 +65,10 @@ void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & facto
 void registerAggregateFunctionFunnelRep(AggregateFunctionFactory & factory);
 void registerAggregateFunctionFunnelRep2(AggregateFunctionFactory & factory);
 void registerAggregateFunctionFunnelRep3(AggregateFunctionFactory & factory);
-void registerAggregateFunctionSessionAnalysis(AggregateFunctionFactory & factory);
+void registerAggregateFunctionUserDistribution(AggregateFunctionFactory & factory);
+void registerAggregateFunctionUserDistributionMonthly(AggregateFunctionFactory & factory);
+void registerAggregateFunctionLastRangeCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionSlideMatchCount(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -132,6 +136,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionStudentTTest(factory);
         registerAggregateFunctionMergeStreamStack(factory);
         registerAggregateFunctionSessionSplit(factory);
+        registerAggregateFunctionSessionAnalysis(factory);
         registerAggregateFunctionRetention4(factory);
         registerAggregateFunctionRetention2(factory);
         registerAggregateFunctionRetentionLoss(factory);
@@ -145,7 +150,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionFunnelRep(factory);
         registerAggregateFunctionFunnelRep2(factory);
         registerAggregateFunctionFunnelRep3(factory);
-        registerAggregateFunctionSessionAnalysis(factory);
+        registerAggregateFunctionUserDistribution(factory);
+        registerAggregateFunctionUserDistributionMonthly(factory);
+        registerAggregateFunctionLastRangeCount(factory);
+        registerAggregateFunctionSlideMatchCount(factory);
 
         registerWindowFunctions(factory);
 
