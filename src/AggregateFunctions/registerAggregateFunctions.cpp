@@ -69,6 +69,7 @@ void registerAggregateFunctionUserDistribution(AggregateFunctionFactory & factor
 void registerAggregateFunctionUserDistributionMonthly(AggregateFunctionFactory & factory);
 void registerAggregateFunctionLastRangeCount(AggregateFunctionFactory & factory);
 void registerAggregateFunctionSlideMatchCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionFrequency(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -154,6 +155,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionUserDistributionMonthly(factory);
         registerAggregateFunctionLastRangeCount(factory);
         registerAggregateFunctionSlideMatchCount(factory);
+        registerAggregateFunctionFrequency(factory);
 
         registerWindowFunctions(factory);
 
