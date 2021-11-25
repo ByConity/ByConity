@@ -80,9 +80,10 @@ void substituteBlock(Block & block, const std::unordered_map<String, String> & n
 
                         /// Since this merge aggregate function inside a null aggregate function, we generate a new aggregate function
                         /// that can handle nullable arguments instead of using the nested function directly.
+                        AggregateFunctionProperties properties;
                         auto function = AggregateFunctionFactory::instance().get(nested_func->getName(),
                                                                                  merge_func_arg_type.getArgumentsDataTypes(),
-                                                                                 nested_func->getParameters());
+                                                                                 nested_func->getParameters(), properties);
                         it->type = std::make_shared<DataTypeAggregateFunction>(function,
                                                                                function->getArgumentTypes(),
                                                                                function->getParameters());
@@ -104,3 +105,4 @@ void substituteBlock(Block & block, const std::unordered_map<String, String> & n
 }
 
 }
+

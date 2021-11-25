@@ -522,7 +522,7 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
         Dependencies dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
         for (const auto & database_table : dependencies)
         {
-            auto dependent_table = DatabaseCatalog::instance().getTable(database_table);
+            auto dependent_table = DatabaseCatalog::instance().getTable(database_table, getContext());
             auto & materialized_view = dynamic_cast<StorageMaterializedView &>(*dependent_table);
             if (!materialized_view.isRefreshable(cascading))
                 return false;
@@ -736,3 +736,4 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
 }
 
 }
+
