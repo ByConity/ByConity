@@ -15,6 +15,8 @@ struct SelectQueryDescription
     ASTPtr select_query;
     /// First query from select_query list
     ASTPtr inner_query;
+    /// First query from select_query list after tree rewriter normalized query
+    ASTPtr normalized_inner_query;
 
     /// Parse description from select query for materialized view. Also
     /// validates query.

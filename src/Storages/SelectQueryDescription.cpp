@@ -5,6 +5,7 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/TreeRewriter.h>
 
 namespace DB
 {
@@ -128,7 +129,8 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForMatView(c
     result.select_table_id = extractDependentTableFromSelectQuery(select_query, context);
     result.select_query = select->as<ASTSelectWithUnionQuery &>().clone();
     result.inner_query = new_inner_query->clone();
-
+    result.normalized_inner_query = new_inner_query->clone();
+    TreeRewriter(context).analyzeSelect(result.normalized_inner_query, TreeRewriterResult({}));
     return result;
 }
 

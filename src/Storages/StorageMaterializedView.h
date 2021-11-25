@@ -95,12 +95,22 @@ public:
 
     Strings getDataPaths() const override;
 
+    ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.select_query->clone(); }
+    bool isRefreshable(bool cascading) const;
+    void refresh(const ASTPtr & partition, ContextPtr local_context, bool async);
+    bool isRefreshing() const { return refreshing; }
+    const String & getRefreshingPartition() const { return refreshing_partition_id; }
+
 private:
+    void refreshImpl(const ASTPtr & partition, ContextPtr local_context, bool async);
+
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();
 
     bool has_inner_table = false;
 
+    std::atomic<bool> refreshing{false};
+    String refreshing_partition_id;
     void checkStatementCanBeForwarded() const;
 
 protected:

@@ -800,6 +800,38 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     return res;
 }
 
+MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr local_context)
+{
+    DataPartsVector parts = getDataPartsVector();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    ASTPtr expression_ast;
+    Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);
+
+    // Generate valid expressions for filtering
+    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast);
+
+    PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
+    if (partition_pruner.isUseless() && !valid)
+        return {};
+
+    std::unordered_set<String> part_values;
+    if (valid && expression_ast)
+    {
+        virtual_columns_block = getBlockWithVirtualPartColumns(parts, false /* one_part */);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast);
+        part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
+        if (part_values.empty())
+            return {};
+    }
+
+    DataPartsVector required_parts;
+    for (const auto & part : parts)
+    {
+        if ((part_values.empty() || part_values.find(part->name) != part_values.end()) && !partition_pruner.canBePruned(*part))
+            required_parts.emplace_back(part);
+    }
+    return required_parts;
+}
 
 String MergeTreeData::MergingParams::getModeName() const
 {

@@ -8,6 +8,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
 #include <Interpreters/StorageID.h>
+#include <Interpreters/MaterializedViewSubstitutionOptimizer.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryInfo.h>
@@ -171,6 +172,8 @@ private:
       */
     void initSettings();
 
+    void rewriteQueryBaseOnView();
+
     TreeRewriterResultPtr syntax_analyzer_result;
     std::unique_ptr<SelectQueryExpressionAnalyzer> query_analyzer;
     SelectQueryInfo query_info;
@@ -205,6 +208,8 @@ private:
 
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
+
+    MaterializedViewOptimizerResultPtr mv_optimizer_result;
 };
 
 }
