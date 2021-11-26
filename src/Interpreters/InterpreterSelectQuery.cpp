@@ -516,7 +516,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     };
 
     analyze(shouldMoveToPrewhere());
-
     rewriteQueryBaseOnView();
     if (mv_optimizer_result->rewrite_by_view)
         analyze(shouldMoveToPrewhere());
@@ -595,6 +594,7 @@ void InterpreterSelectQuery::rewriteQueryBaseOnView()
     SelectQueryInfo current_info;
     current_info.query = query_ptr;
     current_info.sets = query_analyzer->getPreparedSets();
+    current_info.syntax_analyzer_result = query_info.syntax_analyzer_result;
     mv_optimizer_result = MaterializedViewSubstitutionOptimizer(context, options).optimize(current_info);
     if (mv_optimizer_result->rewrite_by_view)
     {
@@ -602,7 +602,12 @@ void InterpreterSelectQuery::rewriteQueryBaseOnView()
         if (process_list_elem)
             process_list_elem->setQueryRewriteByView(queryToString(query_ptr));
         if (storage)
+        {
             storage = mv_optimizer_result->storage;
+            table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
+            table_id = storage->getStorageID();
+            metadata_snapshot = storage->getInMemoryMetadataPtr();
+        }
     }
 }
 

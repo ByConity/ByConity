@@ -100,7 +100,7 @@ public:
     void refresh(const ASTPtr & partition, ContextPtr local_context, bool async);
     bool isRefreshing() const { return refreshing; }
     const String & getRefreshingPartition() const { return refreshing_partition_id; }
-
+    ASTPtr normalizeInnerQuery();
 private:
     void refreshImpl(const ASTPtr & partition, ContextPtr local_context, bool async);
 
@@ -111,6 +111,8 @@ private:
 
     std::atomic<bool> refreshing{false};
     String refreshing_partition_id;
+    std::mutex inner_query_mutex;
+    ASTPtr normalized_inner_query;
     void checkStatementCanBeForwarded() const;
 
 protected:

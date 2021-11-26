@@ -5,6 +5,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserPartition.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/queryToString.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -16,6 +17,7 @@
 #include <Interpreters/getHeaderForProcessingStage.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/predicateExpressionsUtils.h>
+#include <Interpreters/TreeRewriter.h>
 
 #include <Access/AccessFlags.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -735,5 +737,21 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
     }
 }
 
+ASTPtr StorageMaterializedView::normalizeInnerQuery()
+{
+    std::unique_lock lock(inner_query_mutex);
+    if (normalized_inner_query)
+        return normalized_inner_query;
+    normalized_inner_query = getInMemoryMetadataPtr()->select.inner_query->clone();
+    StoragePtr select_storage_ptr = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, getContext());
+    TreeRewriter(getContext()).analyzeSelect(normalized_inner_query,
+                                              TreeRewriterResult({}, select_storage_ptr,
+                                              select_storage_ptr->getInMemoryMetadataPtr()),
+                                              SelectQueryOptions().analyze());
+    LOG_DEBUG(&Poco::Logger::get("normalizeInnerQuery"), "normalize query-{}", queryToString(normalized_inner_query));
+    return normalized_inner_query;
 }
+
+}
+
 

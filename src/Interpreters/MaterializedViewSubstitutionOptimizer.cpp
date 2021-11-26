@@ -904,10 +904,10 @@ namespace DB
     /// Return whether the materialized view satisfies some constraints
     std::pair<bool, String> satisfyViewConstraints(StorageMaterializedView & materialized_view, ASTSelectQuery & view_query)
     {
-        auto view_table = materialized_view.tryGetTargetTable();
-        if (view_table && (MERGE_TREES.count(view_table->getName()) || AGGREGATING_MERGE_TREES.count(view_table->getName())))
+        auto view_target_table = materialized_view.tryGetTargetTable();
+        if (view_target_table && (MERGE_TREES.count(view_target_table->getName()) || AGGREGATING_MERGE_TREES.count(view_target_table->getName())))
         {
-            if (AGGREGATING_MERGE_TREES.count(view_table->getName()))
+            if (AGGREGATING_MERGE_TREES.count(view_target_table->getName()))
             {
                 /// View query with no group by is not support. The AggregatingMergeTree will replaces all rows with the
                 /// same sorting key, we can think it will do a group operation on the sorting key. So specify group by
@@ -919,15 +919,10 @@ namespace DB
                 }
 
                 std::unordered_set<String> sorting_columns;
-                auto sorting_key_ast = view_table->getInMemoryMetadataPtr()->sorting_key.definition_ast;
-                if (sorting_key_ast)
-                {
-                    for (auto & child : sorting_key_ast->children)
-                    {
-                        sorting_columns.emplace(child->getColumnName());
-                    }
-                }
-
+                auto sorting_key_names = view_target_table->getInMemoryMetadataPtr()->getSortingKeyColumns();
+                for (auto & key_name : sorting_key_names)
+                    sorting_columns.emplace(key_name);
+                    
                 for (auto & child : view_query.select()->children)
                 {
                     /// Every column which is not under aggregate function should appear in sorting columns.
@@ -990,10 +985,12 @@ namespace DB
             if (!materialized_view->supportsSampling() && result.rewriting_target_query.sampleSize())
                 result.view_match_info = "Match failed target table-" + result.view_target_table->getStorageID().getFullTableName() + " not support sample";
 
-            auto * view_query = view_table_ptr->getInMemoryMetadataPtr()->select.normalized_inner_query->as<ASTSelectQuery>();
+            auto * view_query = materialized_view->normalizeInnerQuery()->as<ASTSelectQuery>();
+            
+            if (!view_query)
+                continue;
 
-            if (view_query)
-                LOG_DEBUG(log, "View query-{}",  queryToString(*view_query));
+            LOG_DEBUG(log, "Normalized View query-{}",  queryToString(*view_query));
 
             /// If there is having expression in view, then such view should be ignored,
             /// since aggregate value in view is a partial value, this will cause incorrect
@@ -1026,7 +1023,7 @@ namespace DB
             candidates.insert(std::make_shared<MatchResult>(result));
         }
 
-        LOG_DEBUG(log, "candidates size-{}", candidates.size());
+        LOG_DEBUG(log, "Materialized view candidates size-{}", candidates.size());
 
         if (!candidates.empty())
         {
