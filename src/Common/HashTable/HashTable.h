@@ -392,75 +392,6 @@ public:
     static_assert(allocatorInitialBytes<Allocator> == 0
         || allocatorInitialBytes<Allocator> == initial_buffer_bytes);
 
-protected:
-    friend class const_iterator;
-    friend class iterator;
-    friend class Reader;
-
-    template <typename, typename, typename, typename, typename, typename, size_t>
-    friend class TwoLevelHashTable;
-
-    template <typename, typename, size_t>
-    friend class TwoLevelStringHashTable;
-
-    template <typename SubMaps>
-    friend class StringHashTable;
-
-    using HashValue = size_t;
-    using Self = HashTable;
-
-    size_t m_size = 0;        /// Amount of elements
-    Cell * buf;               /// A piece of memory for all elements except the element with zero key.
-    Grower grower;
-
-#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-    mutable size_t collisions = 0;
-#endif
-
-    /// Find a cell with the same key or an empty cell, starting from the specified position and further along the collision resolution chain.
-    size_t ALWAYS_INLINE findCell(const Key & x, size_t hash_value, size_t place_value) const
-    {
-        while (!buf[place_value].isZero(*this) && !buf[place_value].keyEquals(x, hash_value, *this))
-        {
-            place_value = grower.next(place_value);
-#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            ++collisions;
-#endif
-        }
-
-        return place_value;
-    }
-
-
-    /// Find an empty cell, starting with the specified position and further along the collision resolution chain.
-    size_t ALWAYS_INLINE findEmptyCell(size_t place_value) const
-    {
-        while (!buf[place_value].isZero(*this))
-        {
-            place_value = grower.next(place_value);
-#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
-            ++collisions;
-#endif
-        }
-
-        return place_value;
-    }
-
-    void alloc(const Grower & new_grower)
-    {
-        buf = reinterpret_cast<Cell *>(Allocator::alloc(new_grower.bufSize() * sizeof(Cell)));
-        grower = new_grower;
-    }
-
-    void free()
-    {
-        if (buf)
-        {
-            Allocator::free(buf, getBufferSizeInBytes());
-            buf = nullptr;
-        }
-    }
-
     /// Increase the size of the buffer.
     void resize(size_t for_num_elems = 0, size_t for_buf_size = 0)
     {
@@ -548,11 +479,79 @@ protected:
 #ifdef DBMS_HASH_MAP_DEBUG_RESIZES
         watch.stop();
         std::cerr << std::fixed << std::setprecision(3)
-            << "Resize from " << old_size << " to " << grower.bufSize() << " took " << watch.elapsedSeconds() << " sec."
-            << std::endl;
+                  << "Resize from " << old_size << " to " << grower.bufSize() << " took " << watch.elapsedSeconds() << " sec."
+                  << std::endl;
 #endif
     }
 
+protected:
+    friend class const_iterator;
+    friend class iterator;
+    friend class Reader;
+
+    template <typename, typename, typename, typename, typename, typename, size_t>
+    friend class TwoLevelHashTable;
+
+    template <typename, typename, size_t>
+    friend class TwoLevelStringHashTable;
+
+    template <typename SubMaps>
+    friend class StringHashTable;
+
+    using HashValue = size_t;
+    using Self = HashTable;
+
+    size_t m_size = 0;        /// Amount of elements
+    Cell * buf;               /// A piece of memory for all elements except the element with zero key.
+    Grower grower;
+
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
+    mutable size_t collisions = 0;
+#endif
+
+    /// Find a cell with the same key or an empty cell, starting from the specified position and further along the collision resolution chain.
+    size_t ALWAYS_INLINE findCell(const Key & x, size_t hash_value, size_t place_value) const
+    {
+        while (!buf[place_value].isZero(*this) && !buf[place_value].keyEquals(x, hash_value, *this))
+        {
+            place_value = grower.next(place_value);
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
+            ++collisions;
+#endif
+        }
+
+        return place_value;
+    }
+
+
+    /// Find an empty cell, starting with the specified position and further along the collision resolution chain.
+    size_t ALWAYS_INLINE findEmptyCell(size_t place_value) const
+    {
+        while (!buf[place_value].isZero(*this))
+        {
+            place_value = grower.next(place_value);
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
+            ++collisions;
+#endif
+        }
+
+        return place_value;
+    }
+
+    void alloc(const Grower & new_grower)
+    {
+        buf = reinterpret_cast<Cell *>(Allocator::alloc(new_grower.bufSize() * sizeof(Cell)));
+        grower = new_grower;
+    }
+
+    void free()
+    {
+        if (buf)
+        {
+            Allocator::free(buf, getBufferSizeInBytes());
+            buf = nullptr;
+        }
+    }
 
     /** Paste into the new buffer the value that was in the old buffer.
       * Used when increasing the buffer size.

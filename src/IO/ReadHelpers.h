@@ -885,6 +885,11 @@ inline void readBinary(Decimal64 & x, ReadBuffer & buf) { readPODBinary(x, buf);
 inline void readBinary(Decimal128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Decimal256 & x, ReadBuffer & buf) { readPODBinary(x.value, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(PairInt64 & x, ReadBuffer & buf)
+{
+    readBinary(x.low, buf);
+    readBinary(x.high, buf);
+}
 
 
 template <typename T>
