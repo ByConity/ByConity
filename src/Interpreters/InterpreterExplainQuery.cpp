@@ -12,13 +12,14 @@
 #include <Parsers/queryToString.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectQuery.h>
-
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/printPipeline.h>
-
+#include <Storages/StorageMaterializedView.h>
 #include <Common/JSONBuilder.h>
 
 namespace DB
@@ -81,13 +82,30 @@ BlockIO InterpreterExplainQuery::execute()
 Block InterpreterExplainQuery::getSampleBlock()
 {
     Block block;
-
-    ColumnWithTypeAndName col;
-    col.name = "explain";
-    col.type = std::make_shared<DataTypeString>();
-    col.column = col.type->createColumn();
-    block.insert(col);
-
+    const auto & ast = query->as<ASTExplainQuery &>();
+    if (ast.getKind() == ASTExplainQuery::MaterializedView)
+    {
+        auto view_table_column = ColumnString::create();
+        auto hit_view = ColumnUInt8::create();
+        auto match_cost = ColumnInt64::create();
+        auto read_cost = ColumnUInt64::create();
+        auto view_inner_query = ColumnString::create();
+        auto miss_match_reason = ColumnString::create();
+        block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
+        block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
+        block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
+        block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
+        block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
+        block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
+    }
+    else
+    {
+        ColumnWithTypeAndName col;
+        col.name = "explain";
+        col.type = std::make_shared<DataTypeString>();
+        col.column = col.type->createColumn();
+        block.insert(col);
+    }
     return block;
 }
 
@@ -221,6 +239,45 @@ ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
 
 }
 
+void InterpreterExplainQuery::rewriteDistributedToLocal(ASTPtr & ast)
+{
+    if (!ast)
+        return;
+
+    if (ASTSelectWithUnionQuery * select_with_union = ast->as<ASTSelectWithUnionQuery>())
+    {
+        for (auto & child : select_with_union->list_of_selects->children)
+            rewriteDistributedToLocal(child);
+    }
+    else if (ASTTableExpression * table = ast->as<ASTTableExpression>())
+    {
+        if (table->subquery)
+            rewriteDistributedToLocal(table->subquery);
+        else if (table->database_and_table_name)
+        {
+            auto target_table_id = getContext()->resolveStorageID(table->database_and_table_name);
+            auto storage = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+            auto * distributed = dynamic_cast<StorageDistributed *>(storage.get());
+
+            if (!distributed)
+                return;
+
+            String table_alias = table->database_and_table_name->tryGetAlias();
+            auto old_table_ast = std::find(table->children.begin(), table->children.end(), table->database_and_table_name);
+            table->database_and_table_name = std::make_shared<ASTTableIdentifier>(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
+            *old_table_ast = table->database_and_table_name;
+
+            if (!table_alias.empty())
+                table->database_and_table_name->setAlias(table_alias);
+        }
+    }
+    else
+    {
+        for (auto & child : ast->children)
+            rewriteDistributedToLocal(child);
+    }
+}
+
 BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
 {
     const auto & ast = query->as<ASTExplainQuery &>();
@@ -311,6 +368,87 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         else
         {
             plan.explainPipeline(buf, settings.query_pipeline_options);
+        }
+    }
+    else if (ast.getKind() == ASTExplainQuery::MaterializedView)
+    {
+        /// rewrite distributed table to local table
+        ASTPtr explain_query = ast.getExplainedQuery()->clone();
+        rewriteDistributedToLocal(explain_query);
+
+        ASTSelectWithUnionQuery * select_union_query = explain_query->as<ASTSelectWithUnionQuery>();
+        if (select_union_query && !select_union_query->list_of_selects->children.empty())
+        {
+            Block block;
+            auto view_table_column = ColumnString::create();
+            auto hit_view = ColumnUInt8::create();
+            auto match_cost = ColumnInt64::create();
+            auto read_cost = ColumnUInt64::create();
+            auto view_inner_query = ColumnString::create();
+            auto miss_match_reason = ColumnString::create();
+
+            /// Enable enable_view_based_query_rewrite setting to get view match result
+            ContextMutablePtr context = Context::createCopy(getContext());
+            context->setSetting("enable_view_based_query_rewrite", 1);
+            for (const auto & element : select_union_query->list_of_selects->children)
+            {
+                InterpreterSelectQuery interpreter{element, context, SelectQueryOptions(QueryProcessingStage::FetchColumns)};
+                std::shared_ptr<const MaterializedViewOptimizerResult> mv_optimizer_result = interpreter.getMaterializeViewMatchResult();
+                int MAX = std::numeric_limits<int>::max();
+                if (!mv_optimizer_result->validate_info.empty())
+                {
+                    view_table_column->insertDefault();
+                    hit_view->insert(0);
+                    match_cost->insertDefault();
+                    read_cost->insert(0);
+                    view_inner_query->insertDefault();
+                    miss_match_reason->insert(mv_optimizer_result->validate_info);
+                }
+                else
+                {
+                    for (auto iter = mv_optimizer_result->views_match_info.begin(); iter != mv_optimizer_result->views_match_info.end();
+                         iter++)
+                    {
+                        MatchResult::ResultPtr result = *iter;
+                        if (!result->view_table)
+                            continue;
+
+                        /// insert view name
+                        view_table_column->insert(result->view_table->getStorageID().getFullNameNotQuoted());
+
+                        /// insert view match result
+                        if (result->cost != MAX && iter == mv_optimizer_result->views_match_info.begin())
+                            hit_view->insert(1);
+                        else
+                            hit_view->insert(0);
+
+                        /// insert cost value
+                        match_cost->insert(result->cost);
+
+                        /// insert read cost
+                        read_cost->insert(result->read_cost);
+
+                        /// insert view inner query
+                        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(result->view_table.get());
+                        if (materialized_view)
+                        {
+                            ASTPtr view_query = materialized_view->getInnerQuery();
+                            view_inner_query->insert(queryToString(view_query));
+                        }
+                        else
+                            view_inner_query->insertDefault();
+
+                        miss_match_reason->insert(result->view_match_info);
+                    }
+                }
+            }
+            block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
+            block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
+            block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
+            block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
+            block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
+            block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
+            return std::make_shared<OneBlockInputStream>(block);
         }
     }
 

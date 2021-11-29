@@ -17,7 +17,7 @@ protected:
     void transform(Chunk & chunk) override;
 
 private:
-    const std::unordered_map<String, String> & name_substitution_info;
+    std::unordered_map<String, String> name_substitution_info;
 };
 
 }

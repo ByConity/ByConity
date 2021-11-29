@@ -95,7 +95,7 @@ public:
 
     Strings getDataPaths() const override;
 
-    ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.select_query->clone(); }
+    ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.inner_query->clone(); }
     bool isRefreshable(bool cascading) const;
     void refresh(const ASTPtr & partition, ContextPtr local_context, bool async);
     bool isRefreshing() const { return refreshing; }

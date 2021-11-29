@@ -15,12 +15,14 @@ public:
 
     BlockIO execute() override;
 
-    static Block getSampleBlock();
+    Block getSampleBlock();
 
 private:
     ASTPtr query;
 
     BlockInputStreamPtr executeImpl();
+
+    void rewriteDistributedToLocal(ASTPtr & ast);
 };
 
 

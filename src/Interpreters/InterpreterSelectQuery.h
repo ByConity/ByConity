@@ -105,6 +105,8 @@ public:
 
     Names getRequiredColumns() { return required_columns; }
 
+    MaterializedViewOptimizerResultPtr getMaterializeViewMatchResult() { return mv_optimizer_result; }
+
 private:
     friend class InterpreterPerfectShard;
 
