@@ -19,13 +19,12 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_syntax("SYNTAX");
     ParserKeyword s_pipeline("PIPELINE");
     ParserKeyword s_plan("PLAN");
-    ParserKeyword s_view("MATERIALIZED VIEW");
+    ParserKeyword s_view("VIEW");
     ParserKeyword s_element("ELEMENT");
 
-        if (s_explain.ignore(pos, expected))
+    if (s_explain.ignore(pos, expected))
     {
         kind = ASTExplainQuery::QueryPlan;
-
         if (s_ast.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::ParsedAST;
         else if (s_syntax.ignore(pos, expected))

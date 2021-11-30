@@ -476,7 +476,7 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         ASTPtr explain_query = ast.getExplainedQuery()->clone();
         rewriteDistributedToLocal(explain_query);
         InterpreterSelectWithUnionQuery interpreter(explain_query, getContext(),
-                                                    SelectQueryOptions(QueryProcessingStage::FetchColumns).analyze());
+                                                    SelectQueryOptions(QueryProcessingStage::FetchColumns).analyze().modify());
         const auto & ast_ptr = interpreter.getQuery()->children.at(0)->as<ASTExpressionList &>();
         if (ast_ptr.children.size() != 1)
             throw Exception("Element query not support multiple select query", ErrorCodes::LOGICAL_ERROR);
@@ -533,7 +533,7 @@ void InterpreterExplainQuery::elementDatabaseAndTable(const ASTSelectQuery & sel
 void InterpreterExplainQuery::listPartitionKeys(StoragePtr & storage, WriteBuffer & buffer)
 {
     buffer << "\"partition_keys\": [";
-    if (auto partition_key = storage->getInMemoryMetadataPtr()->getPartitionKeyAST())
+    if (auto partition_key = storage->getInMemoryMetadataPtr()->getPartitionKey().expression_list_ast)
     {
         const auto & partition_expr_list = partition_key->as<ASTExpressionList &>();
         if (!partition_expr_list.children.empty())
@@ -566,7 +566,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().in;
+            BlockInputStreamPtr in = select.execute().getInputStream();
 
             in->readPrefix();
             Block block = in->read();
@@ -617,7 +617,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().in;
+            BlockInputStreamPtr in = select.execute().getInputStream();
 
             in->readPrefix();
             Block block = in->read();
@@ -643,7 +643,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
         auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get());
         size_t mv_index_granularity = merge_tree_data->getSettings()->index_granularity;
         if (view_rows != 0 && base_rows != 0 && merge_tree_data->getSettings()->index_granularity!= 0)
-            mv_index_granularity = roundup_pow_of_two((unsigned int)(merge_tree_data->getSettings()->index_granularity / (base_rows / view_rows)));
+            mv_index_granularity = roundup_pow_of_two(static_cast<unsigned int>(merge_tree_data->getSettings()->index_granularity / (base_rows / view_rows)));
         buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", " << "\"recommend_mv_index_granularity\": " << mv_index_granularity << ", ";
     }
 }
