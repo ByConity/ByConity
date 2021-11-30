@@ -9,6 +9,7 @@
 #include <Processors/QueryPlan/Optimizations/Optimizations.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Common/JSONBuilder.h>
 
 namespace DB
@@ -344,7 +345,7 @@ std::string debugExplainStep(const IQueryPlanStep & step)
     return out.str();
 }
 
-void QueryPlan::explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options)
+void QueryPlan::explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options) const
 {
     checkInitialized();
 
@@ -432,6 +433,76 @@ void QueryPlan::explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptio
 void QueryPlan::optimize(const QueryPlanOptimizationSettings & optimization_settings)
 {
     QueryPlanOptimizations::optimizeTree(optimization_settings, *root, nodes);
+}
+
+void QueryPlan::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(nodes.size(), buffer);
+    /**
+     * we first encode the query plan node for serialize / deserialize
+     */
+    size_t id = 0;
+    for (auto it = nodes.begin(); it != nodes.end(); ++it)
+        it->id = id++;
+
+    for (auto it = nodes.begin(); it != nodes.end(); ++it)
+    {
+        serializePlanStep(it->step, buffer);
+        /**
+         * serialize its children ids
+         */
+        writeBinary(it->children.size(), buffer);
+        for (auto jt = it->children.begin(); jt != it->children.end(); ++jt)
+            writeBinary((*jt)->id, buffer);
+        
+        writeBinary(it->id, buffer);
+    }
+}
+
+void QueryPlan::deserialize(ReadBuffer & buffer)
+{
+    size_t nodes_size;
+    readBinary(nodes_size, buffer);
+
+    std::unordered_map<size_t, Node *> map_to_node;
+    std::unordered_map<size_t, std::vector<size_t>> map_to_children;
+
+    for (size_t i = 0; i < nodes_size; ++i)
+    {
+        QueryPlanStepPtr step = deserializePlanStep(buffer, interpreter_context.empty() ? nullptr : interpreter_context.back());
+        /**
+         * deserialize children ids
+         */
+        size_t children_size;
+        readBinary(children_size, buffer);
+        std::vector<size_t> children(children_size);
+        for (size_t j = 0; j < children_size; ++j)
+            readBinary(children[i], buffer);
+
+        /**
+         * construct node, node-id mapping and id-children mapping
+         */
+        size_t id;
+        readBinary(id, buffer);
+        nodes.emplace_back(Node{.step=std::move(step), .id = id});
+        map_to_node[id] = &nodes.back();
+        map_to_children[id] = std::move(children);
+    }
+
+    /**
+     * After we have node-id mapping and id-children mapping,
+     * fill the children infomation to each node.
+     */
+    for (auto it = nodes.begin(); it != nodes.end(); ++it)
+    {
+        size_t id = it->id;
+        auto children = map_to_children[id];
+        for (auto & child_id : children)
+            it->children.push_back(map_to_node[child_id]);
+    }
+
+    if (!nodes.empty())
+        root = &nodes.back();
 }
 
 }

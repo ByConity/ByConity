@@ -114,7 +114,8 @@ void IStorage::read(
     }
     else
     {
-        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
+        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), getStorageID());
+        read_step->setDeserializeInfo(query_info, column_names, processed_stage, max_block_size, num_streams);
         query_plan.addStep(std::move(read_step));
     }
 }

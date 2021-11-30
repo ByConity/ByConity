@@ -19,6 +19,8 @@ public:
 
     String getName() const override { return "MergingSorted"; }
 
+    Type getType() const override { return Type::MergingSorted; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

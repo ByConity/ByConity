@@ -24,6 +24,8 @@ public:
 
     String getName() const override { return "TotalsHaving"; }
 
+    Type getType() const override { return Type::TotalsHaving; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

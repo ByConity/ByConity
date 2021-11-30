@@ -12,6 +12,8 @@ public:
 
     String getName() const override { return "ReadNothing"; }
 
+    Type getType() const override { return Type::ReadNothing; }
+
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 };
 

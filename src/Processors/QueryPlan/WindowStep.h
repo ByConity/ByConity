@@ -20,6 +20,8 @@ public:
 
     String getName() const override { return "Window"; }
 
+    Type getType() const override { return Type::Window; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

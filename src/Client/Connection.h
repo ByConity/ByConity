@@ -54,6 +54,9 @@ class Connection;
 using ConnectionPtr = std::shared_ptr<Connection>;
 using Connections = std::vector<ConnectionPtr>;
 
+class PlanSegment;
+using PlanSegmentPtr = std::unique_ptr<PlanSegment>;
+
 
 /// Packet that could be received from server.
 struct Packet
@@ -151,6 +154,12 @@ public:
         const Settings * settings = nullptr,
         const ClientInfo * client_info = nullptr,
         bool with_pending_data = false);
+
+    void sendPlanSegment(
+        const ConnectionTimeouts & timeouts,
+        const PlanSegmentPtr & plan_segment,
+        const Settings * settings = nullptr,
+        const ClientInfo * client_info = nullptr);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.

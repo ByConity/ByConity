@@ -13,6 +13,8 @@ public:
 
     String getName() const override { return "Union"; }
 
+    Type getType() const override { return Type::Union; }
+
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings &) override;
 
     void describePipeline(FormatSettings & settings) const override;

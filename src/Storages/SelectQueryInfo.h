@@ -157,6 +157,9 @@ struct SelectQueryInfo
     std::optional<ProjectionCandidate> projection;
     bool ignore_projections = false;
     bool is_projection_query = false;
+
+    void serialize(WriteBuffer &) const {}
+    void deserialize(ReadBuffer &) {}
 };
 
 }

@@ -20,6 +20,8 @@ public:
 
     String getName() const override { return "Join"; }
 
+    Type getType() const override { return Type::Join; }
+
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings &) override;
 
     void describePipeline(FormatSettings & settings) const override;
@@ -40,6 +42,9 @@ public:
     FilledJoinStep(const DataStream & input_stream_, JoinPtr join_, size_t max_block_size_);
 
     String getName() const override { return "FilledJoin"; }
+
+    Type getType() const override { return Type::FilledJoin; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
 private:

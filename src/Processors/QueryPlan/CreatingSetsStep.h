@@ -21,6 +21,8 @@ public:
 
     String getName() const override { return "CreatingSet"; }
 
+    Type getType() const override { return Type::CreatingSet; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;
@@ -38,6 +40,8 @@ public:
     explicit CreatingSetsStep(DataStreams input_streams_);
 
     String getName() const override { return "CreatingSets"; }
+
+    Type getType() const override { return Type::CreatingSets; }
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings &) override;
 

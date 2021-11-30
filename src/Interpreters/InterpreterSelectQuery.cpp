@@ -572,6 +572,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
         analysis_result.required_columns = required_columns;
     }
 
+    LOG_TRACE(log, "query: " + queryToString(query));
+    std::ostringstream ostr;
+    for (auto & c : required_columns)
+        ostr << c << ", ";
+    LOG_TRACE(log, "required_columns: " + ostr.str());
     /// Blocks used in expression analysis contains size 1 const columns for constant folding and
     ///  null non-const columns to avoid useless memory allocations. However, a valid block sample
     ///  requires all columns to be of size 0, thus we need to sanitize the block here.

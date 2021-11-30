@@ -17,6 +17,8 @@ public:
 
     String getName() const override { return "Cube"; }
 
+    Type getType() const override { return Type::Cube; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     const Aggregator::Params & getParams() const;

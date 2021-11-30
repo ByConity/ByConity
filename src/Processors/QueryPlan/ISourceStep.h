@@ -16,6 +16,8 @@ public:
 
     void describePipeline(FormatSettings & settings) const override;
 
+    Type getType() const override { return Type::ISource; }
+
 protected:
     /// We collect processors got after pipeline transformation.
     Processors processors;

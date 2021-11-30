@@ -67,6 +67,7 @@
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/InterpreterExternalDDLQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
@@ -97,6 +98,16 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     OpenTelemetrySpanHolder span("InterpreterFactory::get()");
 
     ProfileEvents::increment(ProfileEvents::Query);
+
+    DistributedStagesSettings distributed_stages_settings = InterpreterDistributedStages::extractDistributedStagesSettings(query, context);
+
+    bool use_distributed_stages = (distributed_stages_settings.enable_distributed_stages) && !options.is_internal;
+
+    if (use_distributed_stages)
+    {
+        if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
+            return std::make_unique<InterpreterDistributedStages>(query, context);
+    }
 
     if (query->as<ASTSelectQuery>())
     {

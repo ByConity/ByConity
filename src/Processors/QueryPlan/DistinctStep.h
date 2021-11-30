@@ -18,6 +18,8 @@ public:
 
     String getName() const override { return "Distinct"; }
 
+    Type getType() const override { return Type::Distinct; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

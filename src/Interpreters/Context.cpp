@@ -1952,6 +1952,17 @@ String Context::getInterserverScheme() const
     return shared->interserver_scheme;
 }
 
+String Context::getLocalHost() const
+{
+    auto macros = getMacros()->getMacroMap();
+    auto replica_iter = macros.find("replica");
+    if (replica_iter != macros.end())
+    {
+        return replica_iter->second;
+    }
+    throw Exception("Logical error: there is no macro named replica", ErrorCodes::LOGICAL_ERROR);
+}
+
 void Context::setRemoteHostFilter(const Poco::Util::AbstractConfiguration & config)
 {
     shared->remote_host_filter.setValuesFromConfig(config);

@@ -13,6 +13,8 @@ public:
     explicit ArrayJoinStep(const DataStream & input_stream_, ArrayJoinActionPtr array_join_);
     String getName() const override { return "ArrayJoin"; }
 
+    Type getType() const override { return Type::ArrayJoin; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

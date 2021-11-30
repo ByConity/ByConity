@@ -11,6 +11,8 @@ public:
 
     String getName() const override { return "Extremes"; }
 
+    Type getType() const override { return Type::Extremes; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 };
 

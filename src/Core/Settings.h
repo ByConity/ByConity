@@ -502,6 +502,9 @@ class IColumn;
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \

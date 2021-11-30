@@ -23,6 +23,8 @@
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
@@ -309,7 +311,10 @@ void TCPHandler::runImpl()
 
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
-            state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
+            if (state.plan_segment)
+                state.io = executePlanSegment(state.plan_segment, query_context);
+            else
+                state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
 
             unknown_packet_in_send_data = query_context->getSettingsRef().unknown_packet_in_send_data;
 
@@ -1038,6 +1043,10 @@ bool TCPHandler::receivePacket()
             out->next();
             return false;
 
+        case Protocol::Client::PlanSegment:
+            receivePlanSegment();
+            return true;
+
         default:
             throw Exception("Unknown packet " + toString(packet_type) + " from client", ErrorCodes::UNKNOWN_PACKET_FROM_CLIENT);
     }
@@ -1273,6 +1282,86 @@ void TCPHandler::receiveUnexpectedQuery()
     readStringBinary(skip_string, *in);
 
     throw NetException("Unexpected packet Query received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+}
+
+void TCPHandler::receivePlanSegment()
+{
+    state.is_empty = false;
+
+    /// Client info
+    ClientInfo & client_info = query_context->getClientInfo();
+    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+        client_info.read(*in, client_tcp_protocol_version);
+
+    /// Set fields, that are known apriori.
+    client_info.interface = ClientInfo::Interface::TCP;
+
+    /// Per query settings are also passed via TCP.
+    /// We need to check them before applying due to they can violate the settings constraints.
+    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+        ? SettingsWriteFormat::STRINGS_WITH_FLAGS
+        : SettingsWriteFormat::BINARY;
+    Settings passed_settings;
+    passed_settings.read(*in, settings_format);
+
+    UInt64 compression = 0;
+    readVarUInt(compression, *in);
+    state.compression = static_cast<Protocol::Compression>(compression);
+
+    query_context->setInitialRowPolicy();
+
+    ///
+    /// Settings
+    ///
+    auto settings_changes = passed_settings.changes();
+    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+    {
+        /// Throw an exception if the passed settings violate the constraints.
+        query_context->checkSettingsConstraints(settings_changes);
+    }
+    else
+    {
+        /// Quietly clamp to the constraints if it's not an initial query.
+        query_context->clampToSettingsConstraints(settings_changes);
+    }
+    query_context->applySettingsChanges(settings_changes);
+
+    /// Disable function name normalization when it's a secondary query, because queries are either
+    /// already normalized on initiator node, or not normalized and should remain unnormalized for
+    /// compatibility.
+    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    {
+        query_context->setSetting("normalize_function_names", Field(0));
+    }
+
+    // Use the received query id, or generate a random default. It is convenient
+    // to also generate the default OpenTelemetry trace id at the same time, and
+    // set the trace parent.
+    // Why is this done here and not earlier:
+    // 1) ClientInfo might contain upstream trace id, so we decide whether to use
+    // the default ids after we have received the ClientInfo.
+    // 2) There is the opentelemetry_start_trace_probability setting that
+    // controls when we start a new trace. It can be changed via Native protocol,
+    // so we have to apply the changes first.
+    query_context->setCurrentQueryId(state.query_id);
+
+    // Set parameters of initial query.
+    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
+    {
+        /// 'Current' fields was set at receiveHello.
+        client_info.initial_user = client_info.current_user;
+        client_info.initial_query_id = client_info.current_query_id;
+        client_info.initial_address = client_info.current_address;
+    }
+
+    /// Sync timeouts on client and server during current query to avoid dangling queries on server
+    /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
+    ///  because settings.send_timeout is client-side setting which has opposite meaning on the server side.
+    /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
+    const Settings & settings = query_context->getSettingsRef();
+    state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+
+    state.plan_segment = PlanSegment::deserializePlanSegment(*in, query_context);
 }
 
 bool TCPHandler::receiveData(bool scalar)

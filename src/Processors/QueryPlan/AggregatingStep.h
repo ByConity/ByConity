@@ -26,6 +26,8 @@ public:
         SortDescription group_by_sort_description_);
 
     String getName() const override { return "Aggregating"; }
+    
+    Type getType() const override { return Type::Aggregating; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
