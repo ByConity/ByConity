@@ -31,6 +31,17 @@
     M(Float32) \
     M(Float64)
 
+// added for bytedance functions
+#define FOR_INTEGER_TYPES_DATA(M) \
+    M(UInt8) \
+    M(UInt16) \
+    M(UInt32) \
+    M(UInt64) \
+    M(Int8) \
+    M(Int16) \
+    M(Int32) \
+    M(Int64)
+
 namespace DB
 {
 struct Settings;
@@ -277,4 +288,94 @@ static IAggregateFunction * createWithStringType(const IDataType & argument_type
     return nullptr;
 }
 
+template <template <typename, typename> class AggregateFunctionTemplate, typename KnownType, typename... TArgs>
+static IAggregateFunction * createWithIntegerTypeLastKnown(const IDataType & argument_type, TArgs &&... args)
+{
+    WhichDataType which(argument_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<TYPE, KnownType>(std::forward<TArgs>(args)...);
+    FOR_INTEGER_TYPES_DATA(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+template <typename FirstType, template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithTwoTypesSecond(const IDataType & second_type, TArgs && ... args)
+{
+    WhichDataType which(second_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) return new AggregateFunctionTemplate<FirstType, TYPE>(std::forward<TArgs>(args)...);
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (which.idx == TypeIndex::Enum8) return new AggregateFunctionTemplate<FirstType, Int8>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Enum16) return new AggregateFunctionTemplate<FirstType, Int16>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::String) return new AggregateFunctionTemplate<FirstType, String>(std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
+template <template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithTwoTypes(const IDataType & first_type, const IDataType & second_type, TArgs && ... args)
+{
+    WhichDataType which(first_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return createWithTwoTypesSecond<TYPE, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    FOR_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    if (which.idx == TypeIndex::Enum8)
+        return createWithTwoTypesSecond<Int8, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Enum16)
+        return createWithTwoTypesSecond<UInt16, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
+template <template <typename> class AggregateFunctionTemplate, typename ... TArgs>
+static IAggregateFunction * createWithIntegerType(const IDataType & argument_type, TArgs && ... args)
+{
+    WhichDataType which(argument_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return new AggregateFunctionTemplate<TYPE>(std::forward<TArgs>(args)...);
+    FOR_INTEGER_TYPES_DATA(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+template <template <typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithSingleTypeLastKnown(const IDataType & attr_type, TArgs && ... args)
+{
+    WhichDataType which(attr_type);
+    if (which.idx == TypeIndex::UInt8) return new AggregateFunctionTemplate<UInt8>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::UInt32) return new AggregateFunctionTemplate<UInt32>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Int64) return new AggregateFunctionTemplate<Int64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::UInt64) return new AggregateFunctionTemplate<UInt64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Float64) return new AggregateFunctionTemplate<Float64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::String) return new AggregateFunctionTemplate<String>(std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
+template <typename FirstType, template <typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithTypesSecondType(const IDataType & second_type, TArgs && ... args)
+{
+    WhichDataType which(second_type);
+    if (which.idx == TypeIndex::UInt8) return new AggregateFunctionTemplate<FirstType, UInt8>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::UInt32) return new AggregateFunctionTemplate<FirstType, UInt32>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Int64) return new AggregateFunctionTemplate<FirstType, Int64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::UInt64) return new AggregateFunctionTemplate<FirstType, UInt64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::Float64) return new AggregateFunctionTemplate<FirstType, Float64>(std::forward<TArgs>(args)...);
+    if (which.idx == TypeIndex::String) return new AggregateFunctionTemplate<FirstType, String>(std::forward<TArgs>(args)...);
+    return nullptr;
+}
+
+template <template <typename, typename > class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithTypesAndIntegerType(const IDataType & first_type, const IDataType & second_type, TArgs && ... args)
+{
+    WhichDataType which(first_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return createWithTypesSecondType<TYPE, AggregateFunctionTemplate>(second_type, std::forward<TArgs>(args)...);
+    FOR_INTEGER_TYPES_DATA(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
 }

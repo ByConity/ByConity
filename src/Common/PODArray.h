@@ -498,6 +498,24 @@ public:
         this->c_end += bytes_to_copy;
     }
 
+    template <typename ... TAllocatorParams>
+    void insert_one(iterator it, T val, TAllocatorParams &&... allocator_params)
+    {
+        size_t bytes_to_copy = sizeof(T);
+        size_t bytes_to_move = (end() - it) * sizeof(T);
+
+        size_t required_capacity = this->size() + 1;
+        if (required_capacity > this->capacity())
+            this->reserve(roundUpToPowerOfTwoOrZero(required_capacity), std::forward<TAllocatorParams>(allocator_params)...);
+
+        if (unlikely(bytes_to_move))
+            memmove(this->c_end + bytes_to_copy - bytes_to_move, this->c_end - bytes_to_move, bytes_to_move);
+
+        memcpy(this->c_end - bytes_to_move, reinterpret_cast<const void *>(&val), bytes_to_copy);
+        this->c_end += bytes_to_copy;
+    }
+
+
     /// Do not insert into the array a piece of itself. Because with the resize, the iterators on themselves can be invalidated.
     template <typename It1, typename It2>
     void insert(iterator it, It1 from_begin, It2 from_end)
@@ -557,6 +575,24 @@ public:
             memcpy(this->c_end, reinterpret_cast<const void *>(&*from_begin), bytes_to_copy);
             this->c_end += bytes_to_copy;
         }
+    }
+
+    void insert_nzero_assume_reserved(size_t n)
+    {
+        size_t bytes_to_reset = this->byte_size(n);
+        memset(this->c_end, 0, bytes_to_reset);
+        this->c_end += bytes_to_reset;
+    }
+
+    /// this routine is similar to resize_fill except how resource is reserved.
+    template <typename ... TAllocatorParams>
+    void insert_nzero(size_t n, TAllocatorParams &&... allocator_params)
+    {
+        size_t required_capacity = this->size() + n;
+        if (required_capacity > this->capacity())
+            this->reserve(roundUpToPowerOfTwoOrZero(required_capacity), std::forward<TAllocatorParams>(allocator_params)...);
+
+        insert_nzero_assume_reserved(n);
     }
 
     template <typename... TAllocatorParams>

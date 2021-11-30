@@ -869,6 +869,11 @@ inline void writeBinary(const Decimal256 & x, WriteBuffer & buf) { writePODBinar
 inline void writeBinary(const LocalDate & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const LocalDateTime & x, WriteBuffer & buf) { writePODBinary(x, buf); }
 inline void writeBinary(const UUID & x, WriteBuffer & buf) { writePODBinary(x, buf); }
+inline void writeBinary(const PairInt64 & x, WriteBuffer & buf)
+{
+    writeBinary(x.low, buf);
+    writeBinary(x.high, buf);
+}
 
 /// Methods for outputting the value in text form for a tab-separated format.
 template <typename T>

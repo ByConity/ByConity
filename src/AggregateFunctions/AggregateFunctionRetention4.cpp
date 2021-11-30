@@ -14,23 +14,6 @@ namespace ErrorCodes
 namespace
 {
 
-template <template <typename> class AggregateFunctionTemplate, typename... TArgs>
-static IAggregateFunction * createWithIntegerType(const IDataType & argument_type, TArgs && ... args)
-{
-    WhichDataType which(argument_type);
-    if (which.idx == TypeIndex::Int8) return new AggregateFunctionTemplate<Int8>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int16) return new AggregateFunctionTemplate<Int16>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int32) return new AggregateFunctionTemplate<Int32>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int64) return new AggregateFunctionTemplate<Int64>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::Int128) return new AggregateFunctionTemplate<Int128>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt8) return new AggregateFunctionTemplate<UInt8>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt16) return new AggregateFunctionTemplate<UInt16>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt32) return new AggregateFunctionTemplate<UInt32>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt64) return new AggregateFunctionTemplate<UInt64>(std::forward<TArgs>(args)...);
-    if (which.idx == TypeIndex::UInt128) return new AggregateFunctionTemplate<UInt128>(std::forward<TArgs>(args)...);
-    return nullptr;
-}
-
 AggregateFunctionPtr createAggregateFunctionRetention4(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     if (argument_types.size() != 2)

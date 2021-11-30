@@ -103,6 +103,11 @@ public:
         return getDayNum();
     }
 
+    operator time_t() const
+    {
+        return DateLUT::instance().makeDate(m_year, m_month, m_day);
+    }
+
     unsigned short year() const { return m_year; }
     unsigned char month() const { return m_month; }
     unsigned char day() const { return m_day; }

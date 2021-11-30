@@ -22,7 +22,7 @@ list(REMOVE_ITEM clickhouse_aggregate_functions_headers
     FactoryHelpers.h
 )
 
-add_library(clickhouse_aggregate_functions ${clickhouse_aggregate_functions_sources})
+add_library(clickhouse_aggregate_functions ${clickhouse_aggregate_functions_sources} AggregateFunctionFunnelRep.cpp AggregateFunctionFunnelRep.h AggregateFunctionFunnelRep2.cpp AggregateFunctionFunnelRep2.h AggregateFunctionFunnelRep3.cpp AggregateFunctionFunnelRep3.h AggregateFunctionLastRangeCount.cpp AggregateFunctionLastRangeCount.h AggregateFunctionUserDistribution.cpp AggregateFunctionUserDistribution.h AggregateFunctionUserDistributionCommon.h AggregateFunctionUserDistributionMonthly.cpp AggregateFunctionUserDistributionMonthly.h)
 target_link_libraries(clickhouse_aggregate_functions PRIVATE dbms PUBLIC ${CITYHASH_LIBRARIES})
 
 if(ENABLE_EXAMPLES)
