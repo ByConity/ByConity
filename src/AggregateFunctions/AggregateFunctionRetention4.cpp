@@ -8,6 +8,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int BAD_QUERY_PARAMETER;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
@@ -27,15 +28,14 @@ AggregateFunctionPtr createAggregateFunctionRetention4(const std::string & name,
     size_t params_size = parameters.size();
 
     if (params_size != 3)
-        throw Exception("This instantiation of " + name + "aggregate function doesn't accept " + toString(params_size) + " parameters, should be 3",
-                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+        throw Exception("This instantiation of " + name + "aggregate function doesn't accept " + toString(params_size) + " parameters, should be 3", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
     UInt64 ret_window = parameters[0].safeGet<UInt64>();
     DayNum start_date = LocalDate(parameters[1].safeGet<String>()).getDayNum();
     DayNum end_date = LocalDate(parameters[2].safeGet<String>()).getDayNum();
 
     if(start_date > end_date)
-        throw Exception("The start_date should be less than end_date", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("The start_date should be less than end_date", ErrorCodes::BAD_QUERY_PARAMETER);
 
     AggregateFunctionPtr res(createWithIntegerType<AggregateFunctionRetention4>(*array_first[0].getNestedType(), ret_window, start_date, end_date, argument_types, parameters));
 
