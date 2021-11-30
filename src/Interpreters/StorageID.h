@@ -27,6 +27,8 @@ static constexpr char const * TABLE_WITH_UUID_NAME_PLACEHOLDER = "_";
 class ASTQueryWithTableAndOutput;
 class ASTTableIdentifier;
 class Context;
+class WriteBuffer;
+class ReadBuffer;
 
 // TODO(ilezhankin): refactor and merge |ASTTableIdentifier|
 struct StorageID
@@ -92,6 +94,10 @@ struct StorageID
     /// If dictionary has UUID, then use it as dictionary name in ExternalLoader to allow dictionary renaming.
     /// ExternalDictnariesLoader::resolveDictionaryName(...) should be used to access such dictionaries by name.
     String getInternalDictionaryName() const;
+
+    void serialize(WriteBuffer & buffer) const;
+
+    static StorageID deserialize(ReadBuffer & buffer);
 
 private:
     StorageID() = default;

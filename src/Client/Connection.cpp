@@ -21,6 +21,7 @@
 #include <Common/OpenSSLHelpers.h>
 #include <Common/randomSeed.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Compression/CompressionFactory.h>
 #include <Processors/Pipe.h>
 #include <Processors/QueryPipeline.h>
@@ -504,6 +505,66 @@ void Connection::sendQuery(
     }
 }
 
+void Connection::sendPlanSegment(
+    const ConnectionTimeouts & timeouts,
+    const PlanSegmentPtr & plan_segment,
+    const Settings * settings,
+    const ClientInfo * client_info
+)
+{
+     if (!connected)
+        connect(timeouts);
+
+    TimeoutSetter timeout_setter(*socket, timeouts.send_timeout, timeouts.receive_timeout, true);
+
+    if (settings)
+    {
+        std::optional<int> level;
+        std::string method = Poco::toUpper(settings->network_compression_method.toString());
+
+        /// Bad custom logic
+        if (method == "ZSTD")
+            level = settings->network_zstd_compression_level;
+
+        CompressionCodecFactory::instance().validateCodec(method, level, !settings->allow_suspicious_codecs, settings->allow_experimental_codecs);
+        compression_codec = CompressionCodecFactory::instance().get(method, level);
+    }
+    else
+        compression_codec = CompressionCodecFactory::instance().getDefaultCodec();
+
+    writeVarUInt(Protocol::Client::PlanSegment, *out);
+
+    /// Client info.
+    if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
+    {
+        if (client_info && !client_info->empty())
+            client_info->write(*out, server_revision);
+        else
+            ClientInfo().write(*out, server_revision);
+    }
+
+    /// Per query settings.
+    if (settings)
+    {
+        auto settings_format = (server_revision >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS) ? SettingsWriteFormat::STRINGS_WITH_FLAGS
+                                                                                                          : SettingsWriteFormat::BINARY;
+        settings->write(*out, settings_format);
+    }
+    else
+        writeStringBinary("" /* empty string is a marker of the end of settings */, *out);
+
+    writeVarUInt(static_cast<bool>(compression), *out);
+
+    plan_segment->serialize(*out);
+
+    maybe_compressed_in.reset();
+    maybe_compressed_out.reset();
+    block_in.reset();
+    block_logs_in.reset();
+    block_out.reset();
+
+    out->next();
+}
 
 void Connection::sendCancel()
 {

@@ -16,6 +16,8 @@ public:
 
     String getName() const override { return "Rollup"; }
 
+    Type getType() const override { return Type::Rollup; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
 private:

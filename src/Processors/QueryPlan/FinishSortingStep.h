@@ -18,6 +18,8 @@ public:
 
     String getName() const override { return "FinishSorting"; }
 
+    Type getType() const override { return Type::FinishSorting; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

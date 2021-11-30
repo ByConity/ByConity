@@ -72,6 +72,8 @@ public:
 
     String getName() const override { return "ReadFromMergeTree"; }
 
+    Type getType() const override { return Type::ReadFromMergeTree; }
+
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(FormatSettings & format_settings) const override;

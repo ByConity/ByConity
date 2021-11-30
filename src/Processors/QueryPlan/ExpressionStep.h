@@ -18,6 +18,8 @@ public:
     explicit ExpressionStep(const DataStream & input_stream_, ActionsDAGPtr actions_dag_);
     String getName() const override { return "Expression"; }
 
+    Type getType() const override { return Type::Expression; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     void updateInputStream(DataStream input_stream, bool keep_header);

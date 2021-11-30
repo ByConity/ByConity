@@ -24,6 +24,8 @@ public:
 
     String getName() const override { return "MergeSorting"; }
 
+    Type getType() const override { return Type::MergeSorting; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

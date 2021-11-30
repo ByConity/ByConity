@@ -120,4 +120,25 @@ String StorageID::getInternalDictionaryName() const
     return database_name + "." + table_name;
 }
 
+void StorageID::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(database_name, buffer);
+    writeBinary(table_name, buffer);
+    writeBinary(uuid, buffer);
+}
+
+StorageID StorageID::deserialize(ReadBuffer & buffer)
+{
+    String database_name;
+    readBinary(database_name, buffer);
+
+    String table_name;
+    readBinary(table_name, buffer);
+
+    UUID uuid;
+    readBinary(uuid, buffer);
+
+    return StorageID(database_name, table_name, uuid);
+}
+
 }

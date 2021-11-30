@@ -20,6 +20,7 @@ class QueryPipeline;
 using QueryPipelinePtr = std::unique_ptr<QueryPipeline>;
 
 class WriteBuffer;
+class ReadBuffer;
 
 class QueryPlan;
 using QueryPlanPtr = std::unique_ptr<QueryPlan>;
@@ -83,7 +84,7 @@ public:
     };
 
     JSONBuilder::ItemPtr explainPlan(const ExplainPlanOptions & options);
-    void explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options);
+    void explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options) const;
     void explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options);
 
     /// Set upper limit for the recommend number of threads. Will be applied to the newly-created pipelines.
@@ -93,11 +94,18 @@ public:
 
     void addInterpreterContext(std::shared_ptr<Context> context);
 
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
+
     /// Tree node. Step and it's children.
     struct Node
     {
         QueryPlanStepPtr step;
         std::vector<Node *> children = {};
+        /**
+         * Only used for serialize query plan for distributed query.
+         */
+        mutable size_t id;
     };
 
     using Nodes = std::list<Node>;

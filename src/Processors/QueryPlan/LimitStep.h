@@ -18,6 +18,8 @@ public:
 
     String getName() const override { return "Limit"; }
 
+    Type getType() const override { return Type::Limit; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

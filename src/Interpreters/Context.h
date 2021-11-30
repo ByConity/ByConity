@@ -548,6 +548,8 @@ public:
     void setInterserverIOAddress(const String & host, UInt16 port);
     std::pair<String, UInt16> getInterserverIOAddress() const;
 
+    String getLocalHost() const;
+
     /// Credentials which server will use to communicate with others
     void updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config);
     InterserverCredentialsPtr getInterserverCredentials();

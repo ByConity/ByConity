@@ -18,6 +18,9 @@ public:
         bool remove_filter_column_);
 
     String getName() const override { return "Filter"; }
+
+    Type getType() const override { return Type::Filter; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
 
     void updateInputStream(DataStream input_stream, bool keep_header);

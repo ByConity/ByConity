@@ -13,6 +13,8 @@ public:
 
     String getName() const override { return "Offset"; }
 
+    Type getType() const override { return Type::Offset; }
+
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     void describeActions(JSONBuilder::JSONMap & map) const override;

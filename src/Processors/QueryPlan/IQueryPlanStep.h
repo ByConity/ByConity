@@ -66,13 +66,63 @@ public:
 
 using DataStreams = std::vector<DataStream>;
 
+class IQueryPlanStep;
+using QueryPlanStepPtr = std::unique_ptr<IQueryPlanStep>;
+class Context;
+using ContextPtr = std::shared_ptr<const Context>;
+
 /// Single step of query plan.
 class IQueryPlanStep
 {
 public:
+    #define APPLY_STEP_TYPES(M) \
+        M(Aggregating) \
+        M(ArrayJoin) \
+        M(CreatingSet) \
+        M(CreatingSets) \
+        M(Cube) \
+        M(Distinct) \
+        M(Expression) \
+        M(Extremes) \
+        M(Filling) \
+        M(FilledJoin) \
+        M(Filter) \
+        M(FinishSorting) \
+        M(ISource) \
+        M(ITransforming) \
+        M(Join) \
+        M(LimitBy) \
+        M(Limit) \
+        M(MergeSorting) \
+        M(MergingAggregated) \
+        M(MergingSorted) \
+        M(Offset) \
+        M(PartialSorting) \
+        M(ReadFromStorage) \
+        M(ReadNothing) \
+        M(Rollup) \
+        M(SettingQuotaAndLimits) \
+        M(TotalsHaving) \
+        M(Union) \
+        M(Window)
+
+    #define ENUM_DEF(ITEM) ITEM,
+
+    enum class Type
+    {
+        Any = 0,
+        APPLY_STEP_TYPES(ENUM_DEF) UNDEFINED,
+        ReadFromMergeTree,
+        ReadFromPreparedSource,
+    };
+
+    #undef ENUM_DEF
+
     virtual ~IQueryPlanStep() = default;
 
     virtual String getName() const = 0;
+
+    virtual Type getType() const = 0;
 
     /// Add processors from current step to QueryPipeline.
     /// Calling this method, we assume and don't check that:
@@ -111,6 +161,10 @@ public:
     /// Get description of processors added in current step. Should be called after updatePipeline().
     virtual void describePipeline(FormatSettings & /*settings*/) const {}
 
+    virtual void serialize(WriteBuffer &) const { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual void deserializeImpl(ReadBuffer &) { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
+
 protected:
     DataStreams input_streams;
     std::optional<DataStream> output_stream;
@@ -121,5 +175,4 @@ protected:
     static void describePipeline(const Processors & processors, FormatSettings & settings);
 };
 
-using QueryPlanStepPtr = std::unique_ptr<IQueryPlanStep>;
 }

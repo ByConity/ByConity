@@ -80,6 +80,7 @@ namespace Protocol
                                       /// This is such an inverted logic, where server sends requests
                                       /// And client returns back response
             MAX = ReadTaskRequest,
+
         };
 
         /// NOTE: If the type of packet argument would be Enum, the comparison packet >= 0 && packet < 10
@@ -139,8 +140,9 @@ namespace Protocol
             Scalar = 7,              /// A block of data (compressed or not).
             IgnoredPartUUIDs = 8,    /// List of unique parts ids to exclude from query processing
             ReadTaskResponse = 9,     /// TODO:
+            PlanSegment = 10,
 
-            MAX = ReadTaskResponse,
+            MAX = PlanSegment,
         };
 
         inline const char * toString(UInt64 packet)
@@ -156,6 +158,7 @@ namespace Protocol
                 "Scalar",
                 "IgnoredPartUUIDs",
                 "ReadTaskResponse",
+                "PlanSegment"
             };
             return packet <= MAX
                 ? data[packet]

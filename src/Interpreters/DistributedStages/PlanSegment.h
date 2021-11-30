@@ -9,6 +9,9 @@
 namespace DB
 {
 
+class Context;
+using ContextMutablePtr = std::shared_ptr<Context>;
+
 /**
  * SOURCE means the plan is the leaf of a plan segment tree, i.g. TableScan Node.
  * EXCHANGE always marking the plan that need to repartiton the data.
@@ -21,6 +24,8 @@ enum class PlanSegmentType : UInt8
     EXCHANGE,
     OUTPUT
 };
+
+String planSegmentTypeToString(const PlanSegmentType & type);
 
 /***
  * Base class for input && output of PlanSegment.
@@ -70,6 +75,8 @@ public:
 
     virtual void deserialize(ReadBuffer & buf);
 
+    virtual String toString() const;
+
 protected:
     Block header;
     PlanSegmentType type = PlanSegmentType::UNKNOWN;
@@ -88,6 +95,8 @@ public:
     PlanSegmentInput(const PlanSegmentType & type_)
     : IPlanSegment(type_) {}
 
+    PlanSegmentInput() = default;
+
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
     void insertSourceAddress(const AddressInfos & address_infos) { source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end()); }
@@ -99,6 +108,8 @@ public:
     void serialize(WriteBuffer & buf) const override;
 
     void deserialize(ReadBuffer & buf) override;
+
+    String toString() const override;
 
 private:
     size_t parallel_index = 0;
@@ -117,6 +128,8 @@ public:
     PlanSegmentOutput(const PlanSegmentType & type_)
     : IPlanSegment(type_) {}
 
+    PlanSegmentOutput() = default;
+
     Names getShufflekeys() const { return shuffle_keys; }
 
     void setShufflekeys(const Names & keys) { shuffle_keys = keys; } 
@@ -132,6 +145,8 @@ public:
     void serialize(WriteBuffer & buf) const override;
 
     void deserialize(ReadBuffer & buf) override;
+
+    String toString() const override;
 
 private:
     Names shuffle_keys;
@@ -155,8 +170,11 @@ class PlanSegment
 public:
 
     PlanSegment() = default;
+    PlanSegment(const ContextMutablePtr & context_) : context(context_) {}
     PlanSegment(PlanSegment && ) = default;
     PlanSegment & operator=(PlanSegment &&) = default;
+
+    ~PlanSegment() = default;
 
     QueryPlan & getQueryPlan() { return query_plan; }
 
@@ -168,6 +186,8 @@ public:
 
     void deserialize(ReadBuffer & buf);
 
+    static PlanSegmentPtr deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context);
+
     size_t getPlanSegmentId() const { return segment_id; }
 
     void setPlanSegmentId(size_t segment_id_) { segment_id = segment_id_; }
@@ -177,6 +197,8 @@ public:
     PlanSegmentInputs getPlanSegmentInputs() const { return inputs; }
 
     void appendPlanSegmentInput(const PlanSegmentInputPtr & input) { inputs.push_back(input); }
+
+    void setPlanSegmentOutput(const PlanSegmentOutputPtr & output_) { output = output_; }
 
     PlanSegmentOutputPtr getPlanSegmentOutput() const { return output; }
 
@@ -190,6 +212,10 @@ public:
 
     PlanSegmentPtr clone();
 
+    void setContext(const ContextMutablePtr & context_) { context = context_; }
+
+    String toString() const;
+
 private:
     size_t segment_id;
     String query_id;
@@ -202,6 +228,7 @@ private:
     AddressInfo current_address;
     String cluster_name;
 
+    ContextMutablePtr context;
 };
 
 class PlanSegmentTree

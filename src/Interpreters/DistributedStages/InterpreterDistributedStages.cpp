@@ -4,17 +4,22 @@
 #include <Interpreters/DistributedStages/InterpreterPlanSegment.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/Cluster.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/IAST.h>
+#include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
+#include <Client/Connection.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
 InterpreterDistributedStages::InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextPtr context_)
@@ -45,6 +50,68 @@ BlockIO InterpreterDistributedStages::execute()
     return executePlanSegment();
 }
 
+PlanSegmentPtr MockPlanSegment(ContextPtr context)
+{
+    PlanSegmentPtr plan_segment = std::make_unique<PlanSegment>();
+    
+    PlanSegmentInputPtr left = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
+    PlanSegmentInputPtr right = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
+    PlanSegmentOutputPtr output = std::make_shared<PlanSegmentOutput>(PlanSegmentType::OUTPUT);
+
+    plan_segment->appendPlanSegmentInput(left);
+    plan_segment->appendPlanSegmentInput(right);
+    plan_segment->setPlanSegmentOutput(output);
+
+    /***
+     * only read from system.one
+     */
+    StorageID table_id = StorageID("system", "one");
+    StoragePtr storage = DatabaseCatalog::instance().getTable(table_id, context);
+
+
+    QueryPlan query_plan;
+    SelectQueryInfo select_query_info;
+    storage->read(query_plan, {"dummy"}, storage->getInMemoryMetadataPtr(), select_query_info, context, {}, 0, 0);
+
+    plan_segment->setQueryPlan(std::move(query_plan));
+
+    return plan_segment;
+}
+
+void MockSendPlanSegment(ContextPtr query_context)
+{
+    auto plan_segment = MockPlanSegment(query_context);
+
+    auto cluster = query_context->getCluster("test_shard_localhost");
+
+    /**
+     * only get the current node
+     */
+    auto node = cluster->getShardsAddresses().back()[0];
+
+    auto connection = std::make_shared<Connection>(
+                    node.host_name, node.port, node.default_database,
+                    node.user, node.password, node.cluster, node.cluster_secret,
+                    "MockSendPlanSegment", node.compression, node.secure);
+    
+    const auto & settings = query_context->getSettingsRef();
+    auto connection_timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
+    connection->sendPlanSegment(connection_timeouts, plan_segment, &settings, &query_context->getClientInfo());
+    connection->poll(1000);
+    Packet packet = connection->receivePacket();
+    LOG_TRACE(&Poco::Logger::get("MockSendPlanSegment"), "sendPlanSegmentToLocal finish:" + std::to_string(packet.type));
+    switch (packet.type)
+    {
+        case Protocol::Server::Exception:
+            throw *packet.exception;
+        case Protocol::Server::EndOfStream:
+            break;
+        default:
+            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
+    }
+    connection->disconnect();
+}
+
 BlockIO InterpreterDistributedStages::executePlanSegment()
 {
     BlockIO res;
@@ -52,6 +119,11 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
     PlanSegment * plan_segment = plan_segment_tree->getRoot()->getPlanSegment();
     res = InterpreterPlanSegment(plan_segment, context).execute();
     LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
+
+    /***
+     * Mock a connection and plan segment to test
+     */
+    MockSendPlanSegment(context);
 
     return res;
 }
