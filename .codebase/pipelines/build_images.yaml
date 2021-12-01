@@ -1,0 +1,34 @@
+name: BUILD_IMAGE
+trigger:
+  change:
+    types: ["create", "push"]
+    paths:
+      - "docker/test/base/*"
+      - "docker/test/stateless/*"
+jobs:
+  build_test_base_image:
+    name: Build Docker Image For bytehouse/clickhouse-test-base
+    image: hub.byted.org/data-ci-debian:latest
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - id: clickhouse-test-base
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/base
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:stable
+      - id: clickhouse-stateless-test
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/stateless
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+          build-args:
+            - TAG=stable
+    services:
+      - id: buildkit
+        image: hub.byted.org/pipeline/buildkit

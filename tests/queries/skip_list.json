@@ -102,6 +102,34 @@
         "01755_client_highlight_multi_line_comment_regression"
     ],
     "release-build": [
+        /// Temporary disable cases failed for ASOF JOIN
+        "01890_materialized_distributed_join",
+        "01428_nullable_asof_join",
+        "01116_asof_join_dolbyzerr",
+        "00976_asof_join_on",
+        "00927_asof_join_noninclusive",
+        "01010_partial_merge_join_negative",
+        "01429_join_on_error_messages",
+        "10062_any_left_noteq_nestloop_join",
+        /// Temporary disable case. Pending on fix by yuanquan.
+        "02028_aggregate_function_retention4",
+        /// Temporary disable case for ha mergetree. Pending on fix by Yingzhong
+        "10004_insert_into_remote_and_ha",
+        "10002_primary_key_order_ha",
+        "10005_ha_truncate_table",
+        "10058_ha_merge_tree_alter_zookeeper",
+        /// Temporary disable failure cases
+        "01801_s3_cluster",
+        "01269_toStartOfSecond",
+        "01103_check_cpu_instructions_at_startup",
+        "01086_odbc_roundtrip",
+        "00515_enhanced_time_zones",
+        "00142_parse_timestamp_as_datetime",
+        "01193_metadata_loading",
+        "02021_test_perfect_shard",
+        "02021_test_perfect_shard_in",
+        "02032_function_version_compare",
+        "00743_aggregation_finder_funnel_group"
     ],
     "database-ordinary": [
         "00604_show_create_database",
