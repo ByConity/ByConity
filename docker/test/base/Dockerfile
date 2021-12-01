@@ -3,7 +3,11 @@ FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive LLVM_VERSION=11
 
-RUN sed -i 's|http://archive|http://ru.archive|g' /etc/apt/sources.list
+RUN sed -i 's|http://archive|http://cn.archive|g' /etc/apt/sources.list
+
+ENV http_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV https_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV no_proxy=.byted.org
 
 RUN apt-get update \
     && apt-get install ca-certificates lsb-release wget gnupg apt-transport-https \
@@ -49,6 +53,7 @@ RUN apt-get update \
         pkg-config \
         tzdata \
         pv \
+        vim \
         --yes --no-install-recommends
 
 # Sanitizer options for services (clickhouse-server)
@@ -62,5 +67,10 @@ RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=1 history_size=7'" >> /etc/
 ENV TSAN_OPTIONS='halt_on_error=1 history_size=7'
 ENV UBSAN_OPTIONS='print_stacktrace=1'
 ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
+
+# unset http proxy env
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
 
 CMD sleep 1

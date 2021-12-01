@@ -3,14 +3,21 @@
 # fail on errors, verbose and export all env variables
 set -e -x -a
 
-dpkg -i package_folder/clickhouse-common-static_*.deb
-dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
-dpkg -i package_folder/clickhouse-server_*.deb
-dpkg -i package_folder/clickhouse-client_*.deb
-dpkg -i package_folder/clickhouse-test_*.deb
+# install packages
+# dpkg -i package_folder/clickhouse-common-static_*.deb
+# dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
+# dpkg -i package_folder/clickhouse-server_*.deb
+# dpkg -i package_folder/clickhouse-client_*.deb
+# dpkg -i package_folder/clickhouse-test_*.deb
+sudo clickhouse/bin/clickhouse install
+cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
+cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # install test configs
 /usr/share/clickhouse-test/config/install.sh
+
+# prepare test_output directory
+mkdir -p test_output
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then

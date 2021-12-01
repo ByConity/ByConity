@@ -1,5 +1,11 @@
 # docker build -t yandex/clickhouse-stateless-test .
-FROM yandex/clickhouse-test-base
+ARG TAG=stable
+FROM hub.byted.org/bytehouse/clickhouse-test-base:${TAG}
+
+# set http proxy env
+ENV http_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV https_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV no_proxy=.byted.org
 
 ARG odbc_driver_url="https://github.com/ClickHouse/clickhouse-odbc/releases/download/v1.1.4.20200302/clickhouse-odbc-1.1.4-Linux.tar.gz"
 
@@ -33,7 +39,7 @@ RUN apt-get update -y \
             mysql-client=5.7* \
             postgresql-client
 
-RUN pip3 install numpy scipy pandas
+RUN pip3 install numpy scipy pandas --index-url https://bytedpypi.byted.org/simple/
 
 RUN mkdir -p /tmp/clickhouse-odbc-tmp \
    && wget -nv -O - ${odbc_driver_url} | tar --strip-components=1 -xz -C /tmp/clickhouse-odbc-tmp \
@@ -48,6 +54,11 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 ENV NUM_TRIES=1
 ENV MAX_RUN_TIME=0
 
+# unset http proxy env
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
+
 COPY run.sh /
 COPY process_functional_tests_result.py /
-CMD ["/bin/bash", "/run.sh"]
+# CMD ["/bin/bash", "/run.sh"]
