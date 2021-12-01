@@ -19,11 +19,13 @@ Block SubstitutionTransform::transformHeader(Block header, const std::unordered_
 
 void SubstitutionTransform::transform(Chunk & chunk)
 {
+    size_t chunk_rows = chunk.getNumRows();
     auto columns = chunk.detachColumns();
     Block block = getInputPort().getHeader().cloneWithColumns(columns);
     columns.clear();
     substituteBlock(block, name_substitution_info);
     columns = block.getColumns();
+    chunk.setColumns(std::move(columns), chunk_rows);
 }
 
 }
