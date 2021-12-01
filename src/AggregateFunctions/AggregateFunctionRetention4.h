@@ -24,18 +24,18 @@ struct AggregateFunctionRetention4Data
 template <typename T>
 class AggregateFunctionRetention4 final : public IAggregateFunctionDataHelper<AggregateFunctionRetention4Data, AggregateFunctionRetention4<T>>
 {
-    UInt64 m_ret_window;
-    DayNum m_start_date;
-    DayNum m_end_date;
-    UInt64 m_ret_array_size;
+    UInt64 window;
+    DayNum start_date;
+    DayNum end_date;
+    UInt64 array_size;
 
 public:
-    AggregateFunctionRetention4(UInt64 retWindow, DayNum start_date, DayNum end_date, const DataTypes & arguments, const Array & params) :
-        IAggregateFunctionDataHelper<AggregateFunctionRetention4Data, AggregateFunctionRetention4<T>>(arguments, params),
-        m_ret_window(retWindow),
-        m_start_date(start_date),
-        m_end_date(end_date + static_cast<DayNum>(1)),
-        m_ret_array_size(m_ret_window * (m_end_date - m_start_date))
+    AggregateFunctionRetention4(UInt64 window_, DayNum start_date_, DayNum end_date_, const DataTypes & arguments, const Array & params)
+        : IAggregateFunctionDataHelper<AggregateFunctionRetention4Data, AggregateFunctionRetention4<T>>(arguments, params),
+        window(window_),
+        start_date(start_date_),
+        end_date(end_date_ + 1),
+        array_size(window * (end_date - start_date))
     {}
 
     String getName() const override { return "retention4"; }
@@ -43,13 +43,13 @@ public:
     void create(AggregateDataPtr place) const override
     {
         auto * d = new (place) AggregateFunctionRetention4Data;
-        std::fill(d->retentions, d->retentions + m_ret_array_size, 0);
+        std::fill(d->retentions, d->retentions + array_size, 0);
     }
 
     size_t sizeOfData() const override
     {
         // reserve additional space for retentions information.
-        return sizeof(AggregateFunctionRetention4Data) + m_ret_array_size * sizeof(RType);
+        return sizeof(AggregateFunctionRetention4Data) + array_size * sizeof(RType);
     }
 
     DataTypePtr getReturnType() const override
@@ -104,16 +104,16 @@ public:
                 auto pos = iw_offset + iiw;
 
                 /// Date limit exceeded, early break
-                if (pos >= static_cast<size_t>(m_end_date - m_start_date))
+                if (pos >= static_cast<size_t>(end_date - start_date))
                 {
                     first_event = pos;
                     break;
                 }
 
-                if(first_word & (1u << iiw))
+                if (first_word & (1u << iiw))
                 {
                     first_event = pos;
-                    values[first_event * m_ret_window] += 1;
+                    values[first_event * window] += 1;
                     break;
                 }
             }
@@ -121,7 +121,7 @@ public:
                 break;
         }
 
-        if(first_event == static_cast<size_t>(-1) || first_event >= static_cast<size_t>(m_end_date - m_start_date))
+        if (first_event == static_cast<size_t>(-1) || first_event >= static_cast<size_t>(end_date - start_date))
             return;
 
         /// use retention_events calculate retention
@@ -132,7 +132,7 @@ public:
                 continue;
 
             /// retWindow limit exceeded, early break
-            if (jw_offset > first_event && jw_offset - first_event >= m_ret_window)
+            if (jw_offset > first_event && jw_offset - first_event >= window)
                 break;
 
             for (size_t jjw = 0; jjw < step; ++jjw)
@@ -143,11 +143,11 @@ public:
                     continue;
 
                 /// retWindow limit exceeded, early break
-                if (pos - first_event >= m_ret_window)
+                if (pos - first_event >= window)
                     break;
 
-                if (pos > first_event && pos < m_ret_array_size && (retention_word & (1u << jjw)))
-                    values[first_event * m_ret_window + pos - first_event] += 1;
+                if (pos > first_event && pos < array_size && (retention_word & (1u << jjw)))
+                    values[first_event * window + pos - first_event] += 1;
             }
         }
     }
@@ -157,7 +157,7 @@ public:
         auto & cur_data = this->data(place).retentions;
         auto & rhs_data = this->data(rhs).retentions;
 
-        for (size_t i = 0; i < m_ret_array_size; i++)
+        for (size_t i = 0; i < array_size; i++)
         {
             cur_data[i] += rhs_data[i];
         }
@@ -166,13 +166,13 @@ public:
     void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
     {
         const auto & value = this->data(place).retentions;
-        buf.write(reinterpret_cast<const char *>(&value[0]), m_ret_array_size * sizeof(value[0]));
+        buf.write(reinterpret_cast<const char *>(&value[0]), array_size * sizeof(value[0]));
     }
 
     void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *) const override
     {
         auto & value = this->data(place).retentions;
-        buf.read(reinterpret_cast<char *>(&value[0]), m_ret_array_size * sizeof(value[0]));
+        buf.read(reinterpret_cast<char *>(&value[0]), array_size * sizeof(value[0]));
     }
 
     void insertResultInto(AggregateDataPtr place, IColumn & to, Arena *) const override
@@ -188,17 +188,16 @@ public:
         ColumnArray::Offsets  & offsets_in = arr_in.getOffsets();
 
         int ind = 0;
-        for (auto date = m_start_date; date < m_end_date; ++date, ++ind)
+        for (auto date = start_date; date < end_date; ++date, ++ind)
         {
             date_tp.push_back(date);
             auto & date_to = assert_cast<ColumnUInt64 &>(arr_in.getData()).getData();
-            date_to.insert(value + (m_ret_window*ind), value+(m_ret_window * ind + m_ret_window));
-            offsets_in.push_back((offsets_in.empty() ? 0: offsets_in.back()) + m_ret_window);
+            date_to.insert(value + (window *ind), value+(window * ind + window));
+            offsets_in.push_back((offsets_in.empty() ? 0: offsets_in.back()) + window);
         }
 
-        offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + (m_end_date - m_start_date));
+        offsets_to.push_back((offsets_to.empty() ? 0 : offsets_to.back()) + (end_date - start_date));
     }
-
 
     bool allocatesMemoryInArena() const override
     {
