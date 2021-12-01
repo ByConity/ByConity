@@ -468,7 +468,7 @@ static BlockInputStreamPtr generateInput(ASTPtr query, const Block & result_head
     else
         select_query.setExpression(ASTSelectQuery::Expression::WHERE, std::move(equals_function));
     InterpreterSelectQuery select(query, local_context, SelectQueryOptions());
-    BlockInputStreamPtr in = std::make_shared<MaterializingBlockInputStream>(select.execute().in);
+    BlockInputStreamPtr in = std::make_shared<MaterializingBlockInputStream>(select.execute().getInputStream());
     in = std::make_shared<SquashingBlockInputStream>(
         in, local_context->getSettingsRef().min_insert_block_size_rows, local_context->getSettingsRef().min_insert_block_size_bytes);
     in = std::make_shared<ConvertingBlockInputStream>(in, result_header, ConvertingBlockInputStream::MatchColumnsMode::Name);
@@ -486,7 +486,7 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
     QueryAliasesVisitor(query_aliases_data, ast_log.stream()).visit(query);
 
     auto target_table = getTargetTable();
-    auto target_partition_key = target_table->getInMemoryMetadataPtr()->getPartitionKeyAST();
+    auto target_partition_key = target_table->getInMemoryMetadataPtr()->getPartitionKey().expression_list_ast;
     if (!target_partition_key)
         throw Exception("View's target table had not specified partition key.", ErrorCodes::LOGICAL_ERROR);
 
@@ -496,7 +496,7 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
     QueryNormalizer(normalizer_data).visit(target_partition_key);
 
     auto select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, getContext());
-    auto select_partition_key = select_table->getInMemoryMetadataPtr()->getPartitionKeyAST();
+    auto select_partition_key = select_table->getInMemoryMetadataPtr()->getPartitionKey().expression_list_ast;
     if (!select_partition_key)
         throw Exception("Base table had not specified partition key.", ErrorCodes::LOGICAL_ERROR);
 
@@ -582,9 +582,6 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
             {
                 refreshing = false;
                 refreshing_partition_id = "";
-
-                if (!async)
-                    throw;
             }
         }
         else

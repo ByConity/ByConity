@@ -803,6 +803,8 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
 MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr local_context)
 {
     DataPartsVector parts = getDataPartsVector();
+    if (parts.empty())
+        return {};
     auto metadata_snapshot = getInMemoryMetadataPtr();
     ASTPtr expression_ast;
     Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);

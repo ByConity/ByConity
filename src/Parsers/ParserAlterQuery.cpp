@@ -84,6 +84,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_in_partition("IN PARTITION");
     ParserKeyword s_with("WITH");
     ParserKeyword s_name("NAME");
+    ParserKeyword s_cascading("CASCADING");
 
     ParserKeyword s_to_disk("TO DISK");
     ParserKeyword s_to_volume("TO VOLUME");
@@ -125,6 +126,12 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserNameList values_p;
     ParserSelectWithUnionQuery select_p;
     ParserTTLExpressionList parser_ttl_list;
+
+    // Optional CASCADING keyword for drop/detach partition
+    if (s_cascading.ignore(pos, expected))
+    {
+        command->cascading = true;
+    }
 
     if (is_live_view)
     {
