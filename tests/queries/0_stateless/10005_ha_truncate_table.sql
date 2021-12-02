@@ -15,6 +15,8 @@ SELECT * FROM ha_truncate2 ORDER BY k;
 SELECT '======After Truncate And Empty======';
 TRUNCATE TABLE ha_truncate1;
 
+SYSTEM SYNC REPLICA ha_truncate2;
+
 SELECT * FROM ha_truncate1 ORDER BY k;
 SELECT * FROM ha_truncate2 ORDER BY k;
 
