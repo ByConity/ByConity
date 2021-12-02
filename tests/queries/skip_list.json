@@ -111,8 +111,6 @@
         "01010_partial_merge_join_negative",
         "01429_join_on_error_messages",
         "10062_any_left_noteq_nestloop_join",
-        /// Temporary disable case. Pending on fix by yuanquan.
-        "02028_aggregate_function_retention4",
         /// Temporary disable case for ha mergetree. Pending on fix by Yingzhong
         "10004_insert_into_remote_and_ha",
         "10002_primary_key_order_ha",
