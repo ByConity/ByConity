@@ -498,8 +498,8 @@ class IColumn;
     M(UInt64, ha_alter_data_sync, 0, "Wait for actions to alter data. 0 - do not wait, 1 - wait for execution only of itself, 2 - wait for everyone.", 0) \
     M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
-    M(Bool, enable_view_based_query_rewrite, false, "whether to enable view-based query rewriting.", 0) \
-    M(Bool, enable_mv_estimate_read_cost, false, "enable materialized view estimate with read cost", 0) \
+    M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
+    M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
     M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
     \
