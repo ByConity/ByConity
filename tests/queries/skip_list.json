@@ -111,11 +111,6 @@
         "01010_partial_merge_join_negative",
         "01429_join_on_error_messages",
         "10062_any_left_noteq_nestloop_join",
-        /// Temporary disable case for ha mergetree. Pending on fix by Yingzhong
-        "10004_insert_into_remote_and_ha",
-        "10002_primary_key_order_ha",
-        "10005_ha_truncate_table",
-        "10058_ha_merge_tree_alter_zookeeper",
         /// Temporary disable failure cases
         "01801_s3_cluster",
         "01269_toStartOfSecond",
