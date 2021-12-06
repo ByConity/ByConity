@@ -85,6 +85,7 @@ public:
     void setChunkInfo(ChunkInfoPtr chunk_info_) { chunk_info = std::move(chunk_info_); }
 
     UInt64 getNumRows() const { return num_rows; }
+    void setNumRows(UInt64 num_rows_) { num_rows = num_rows_; }
     UInt64 getNumColumns() const { return columns.size(); }
     bool hasRows() const { return num_rows > 0; }
     bool hasColumns() const { return !columns.empty(); }

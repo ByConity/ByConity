@@ -553,6 +553,7 @@ include (cmake/find/cassandra.cmake)
 include (cmake/find/sentry.cmake)
 include (cmake/find/stats.cmake)
 include (cmake/find/datasketches.cmake)
+include (cmake/find/brpc.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
@@ -561,6 +562,8 @@ find_contrib_lib(farmhash)
 find_contrib_lib(infsec)
 find_contrib_lib(minizip)
 find_contrib_lib(consul)
+
+include(cmake/find_gflags.cmake)
 
 if (ENABLE_TESTS)
     include (cmake/find/gtest.cmake)

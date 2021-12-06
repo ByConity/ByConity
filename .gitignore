@@ -151,3 +151,6 @@ website/package-lock.json
 
 .tags
 
+# generating code
+/src/Protos/*.pb.cc
+/src/Protos/*.pb.h
