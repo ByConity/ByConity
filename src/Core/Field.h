@@ -971,7 +971,6 @@ void readBinary(BitMap64 & x, ReadBuffer & buf);
 [[noreturn]] inline void readQuoted(BitMap64 &, ReadBuffer &) { throw Exception("Cannot read BitMap64.", ErrorCodes::NOT_IMPLEMENTED); }
 
 void writeBinary(const BitMap64 & x, WriteBuffer & buf);
-void writeText(const BitMap64 & x, WriteBuffer & buf);
 [[noreturn]] inline void writeQuoted(const BitMap64 &, WriteBuffer &) { throw Exception("Cannot write BitMap64 quoted.", ErrorCodes::NOT_IMPLEMENTED); }
 
 template <typename T>
