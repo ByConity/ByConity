@@ -44,21 +44,20 @@ void NativeChunkInputStream::readData(
 
 Chunk NativeChunkInputStream::readImpl()
 {
-    Chunk res;
     if (istr.eof())
     {
-        return res;
+        return Chunk();
     }
 
     /// Dimensions
-    size_t columns = 0;
-    size_t rows = 0;
+    size_t col_num = 0;
+    size_t row_num = 0;
 
-    readVarUInt(columns, istr);
-    readVarUInt(rows, istr);
+    readVarUInt(col_num, istr);
+    readVarUInt(row_num, istr);
 
-    res.setNumRows(rows);
-    for (size_t i = 0; i < columns; ++i)
+    Columns columns(col_num);
+    for (size_t i = 0; i < col_num; ++i)
     {
         DataTypePtr data_type = header.getDataTypes().at(i);
 
@@ -66,12 +65,12 @@ Chunk NativeChunkInputStream::readImpl()
         ColumnPtr read_column = data_type->createColumn();
 
         double avg_value_size_hint = avg_value_size_hints.empty() ? 0 : avg_value_size_hints[i];
-        if (rows) /// If no rows, nothing to read.
-            readData(*data_type, read_column, istr, rows, avg_value_size_hint);
+        if (row_num) /// If no rows, nothing to read.
+            readData(*data_type, read_column, istr, row_num, avg_value_size_hint);
 
-        res.addColumn(read_column);
+        columns.push_back(read_column);
     }
 
-    return res;
+    return Chunk(columns, row_num);
 }
 }
