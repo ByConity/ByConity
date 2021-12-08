@@ -164,7 +164,7 @@ void NestedLoopJoin::completeColumnsAfterJoin(NamesAndTypesList & total_columns)
         total_columns.insert(it, table_join->columnsFromJoinedTable().begin(), table_join->columnsFromJoinedTable().end());
     else
     {
-        auto name_type_list = right_columns_to_add.getNamesAndTypesList();
+        auto name_type_list = right_blocks.front().cloneEmpty().getNamesAndTypesList();
         total_columns.insert(it, name_type_list.begin(), name_type_list.end());
     }
 }

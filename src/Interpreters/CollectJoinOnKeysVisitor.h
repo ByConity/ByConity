@@ -29,8 +29,8 @@ public:
         const TableWithColumnNamesAndTypes & left_table;
         const TableWithColumnNamesAndTypes & right_table;
         const Aliases & aliases;
-        bool is_nest_loop_join{false};
         const bool is_asof{false};
+        bool is_nest_loop_join{false};
         ASTPtr asof_left_key{};
         ASTPtr asof_right_key{};
         bool has_some{false};
