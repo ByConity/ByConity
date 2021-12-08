@@ -28,7 +28,7 @@ create table test.event_metric (
   `duration` UInt64,
   `event_date` Date
 ) ENGINE = Distributed(
-  local_test,
+  test_shard_localhost,
   test,
   event_metric_local
 );
@@ -63,7 +63,7 @@ create table test.aggregate_data (
     `sum_cost` AggregateFunction(sum, UInt64),
     `max_duration` AggregateFunction(max, UInt64)
 ) ENGINE = Distributed(
-  local_test,
+  test_shard_localhost,
   test,
   aggregate_data_local
 );
@@ -243,8 +243,8 @@ GROUP BY
     app_id,
     event_name settings enable_view_based_query_rewrite = 1;
 
--- DROP TABLE event_metric_local;
--- DROP TABLE event_metric;
--- DROP TABLE aggregate_data_local;
--- DROP TABLE aggregate_data;
--- DROP TABLE aggregate_view;
+DROP TABLE event_metric_local;
+DROP TABLE event_metric;
+DROP TABLE aggregate_data_local;
+DROP TABLE aggregate_data;
+DROP TABLE aggregate_view;
