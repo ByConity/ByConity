@@ -43,7 +43,10 @@ static int fls(int x)
 
 static unsigned int roundup_pow_of_two(unsigned int x)
 {
-    return 1UL << fls(x - 1);
+    if (x <= 1)
+        return 2;
+    else
+        return 1UL << fls(x - 1);
 }
 
 namespace ErrorCodes
@@ -547,6 +550,9 @@ void InterpreterExplainQuery::listPartitionKeys(StoragePtr & storage, WriteBuffe
     buffer << "], ";
 }
 
+/**
+ * Select one partition to estimate view table definition is suitable with ratio of view rows and base table rows.
+ */
 void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer)
 {
     auto partition_condition = getActivePartCondition(storage);
