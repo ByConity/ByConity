@@ -1,0 +1,16 @@
+syntax = "proto2";
+package DB.Protos;
+
+option cc_generic_services = true;
+
+message RegistryRequest {
+  required string data_key = 1;
+};
+
+message RegistryResponse {
+  optional string message = 1;
+};
+
+service RegistryService {
+  rpc registry(RegistryRequest) returns (RegistryResponse);
+};

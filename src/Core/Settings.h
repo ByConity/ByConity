@@ -591,6 +591,10 @@ class IColumn;
     M(Bool, cross_to_inner_join_rewrite, true, "Use inner join instead of comma/cross join if possible", 0) \
     \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
+    \
+    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
+    M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_max_buf_size, 73400320, "Default 70M, -1 means no limit", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

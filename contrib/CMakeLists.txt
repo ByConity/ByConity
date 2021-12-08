@@ -260,6 +260,7 @@ if (USE_INTERNAL_BROTLI_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_PROTOBUF_LIBRARY)
+    set(HAVE_ZLIB 1)
     add_subdirectory(protobuf-cmake)
 endif ()
 
@@ -344,5 +345,10 @@ if (USE_NURAFT)
   add_subdirectory(nuraft-cmake)
 endif()
 
+if (USE_INTERNAL_GFLAGS_LIBRARY)
+    add_subdirectory (gflags)
+endif ()
+
 add_subdirectory(fast_float)
 
+add_subdirectory(incubator-brpc)

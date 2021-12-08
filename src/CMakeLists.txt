@@ -65,6 +65,7 @@ add_subdirectory (Formats)
 add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
+add_subdirectory (Protos)
 
 
 set(dbms_headers)
@@ -209,6 +210,10 @@ add_object_library(clickhouse_processors_merges Processors/Merges)
 add_object_library(clickhouse_processors_merges_algorithms Processors/Merges/Algorithms)
 add_object_library(clickhouse_processors_queryplan Processors/QueryPlan)
 add_object_library(clickhouse_processors_queryplan_optimizations Processors/QueryPlan/Optimizations)
+add_object_library(clickhouse_processors_exchange Processors/Exchange)
+add_object_library(clickhouse_processors_exchange_datatrans Processors/Exchange/DataTrans)
+add_object_library(clickhouse_processors_exchange_datatrans_brpc Processors/Exchange/DataTrans/Brpc)
+add_object_library(clickhouse_processors_exchange_datatrans_local Processors/Exchange/DataTrans/Local)
 
 if (USE_NURAFT)
     add_object_library(clickhouse_coordination Coordination)
@@ -401,6 +406,11 @@ dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR}
 if (USE_PROTOBUF)
     dbms_target_link_libraries (PRIVATE ${Protobuf_LIBRARY})
     dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${Protobuf_INCLUDE_DIR})
+    target_link_libraries(clickhouse_common_io PUBLIC brpc-static ${DYNAMIC_LIB})
+    target_include_directories(clickhouse_common_io SYSTEM BEFORE PUBLIC ${BRPC_INCLUDE_DIR})
+    target_link_libraries(clickhouse_common_io PUBLIC clickhouse_protos_lib)
+    target_link_libraries(clickhouse_common_io PUBLIC ${Protobuf_LIBRARY})
+    target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${Protobuf_INCLUDE_DIR})
 endif ()
 
 if (USE_GRPC)
@@ -494,7 +504,9 @@ if (ENABLE_TESTS AND USE_GTEST)
         clickhouse_storages_system
         dbms
         clickhouse_common_zookeeper
-        string_utils)
+        string_utils
+        brpc-static
+        )
 
     # For __udivmodti4 referenced in Core/tests/gtest_DecimalFunctions.cpp
     if (OS_DARWIN AND COMPILER_GCC)

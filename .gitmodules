@@ -235,3 +235,9 @@
 [submodule "contrib/cassandra"]
 	path = contrib/cassandra
 	url = git@code.byted.org:dp/cassandra.git
+[submodule "contrib/incubator-brpc"]
+	path = contrib/incubator-brpc
+	url = git@code.byted.org:dp/brpc.git
+[submodule "contrib/gflags"]
+	path = contrib/gflags
+	url = git@code.byted.org:dp/gflags.git
