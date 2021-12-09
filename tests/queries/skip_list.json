@@ -102,17 +102,7 @@
         "01755_client_highlight_multi_line_comment_regression"
     ],
     "release-build": [
-        /// Temporary disable cases failed for ASOF JOIN
-        "01890_materialized_distributed_join",
-        "01428_nullable_asof_join",
-        "01116_asof_join_dolbyzerr",
-        "00976_asof_join_on",
-        "00927_asof_join_noninclusive",
-        "01010_partial_merge_join_negative",
-        "01429_join_on_error_messages",
-        "10062_any_left_noteq_nestloop_join",
-        /// Temporary disable failure cases
-        "01801_s3_cluster",
+       "01801_s3_cluster",
         "01269_toStartOfSecond",
         "01103_check_cpu_instructions_at_startup",
         "01086_odbc_roundtrip",
