@@ -2,6 +2,8 @@
 #include <thread>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/DistributedStages/InterpreterPlanSegment.h>
+#include <Interpreters/DistributedStages/ExchangeStepVisitor.h>
+#include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Cluster.h>
@@ -37,12 +39,17 @@ void InterpreterDistributedStages::createPlanSegments()
 {
     QueryPlan query_plan;
     InterpreterSelectWithUnionQuery(query_ptr, context, {}).buildQueryPlan(query_plan);
-    PlanSegmentPtr plan_segment = std::make_unique<PlanSegment>();
-    plan_segment->setQueryPlan(std::move(query_plan));
 
-    PlanSegmentTree::Node node{.plan_segment = std::move(plan_segment)};
+    ExchangeStepContext exchange_context{.context = context, .query_plan = query_plan};
+    AddExchangeRewriter::rewrite(query_plan, exchange_context);
 
-    plan_segment_tree->addNode(std::move(node));
+    PlanSegmentContext plan_segment_context{.context = context, 
+                                            .query_plan = query_plan,
+                                            .query_id = context->getCurrentQueryId(),
+                                            .plan_segment_tree = plan_segment_tree.get()};
+    PlanSegmentSpliter::rewrite(query_plan, plan_segment_context);
+
+    LOG_DEBUG(log, "PLAN-SEGMENTS \n" + plan_segment_tree->toString());
 }
 
 BlockIO InterpreterDistributedStages::execute()
@@ -116,14 +123,14 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 {
     BlockIO res;
 
-    PlanSegment * plan_segment = plan_segment_tree->getRoot()->getPlanSegment();
-    res = InterpreterPlanSegment(plan_segment, context).execute();
+    // PlanSegment * plan_segment = plan_segment_tree->getRoot()->getPlanSegment();
+    // res = InterpreterPlanSegment(plan_segment, context).execute();
     LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
 
     /***
      * Mock a connection and plan segment to test
      */
-    MockSendPlanSegment(context);
+    //MockSendPlanSegment(context);
 
     return res;
 }

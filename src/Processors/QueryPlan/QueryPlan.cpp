@@ -134,6 +134,80 @@ void QueryPlan::addStep(QueryPlanStepPtr step)
                     " input expected", ErrorCodes::LOGICAL_ERROR);
 }
 
+void QueryPlan::addNode(Node && node_)
+{
+    nodes.emplace_back(std::move(node_));
+}
+
+void QueryPlan::addRoot(Node && node_)
+{
+    nodes.emplace_back(std::move(node_));
+    root = &nodes.back();
+}
+
+/**
+ * Remove nodes that have no step and children.
+ * Refresh children of each node since this childen maybe removed.
+ */
+void QueryPlan::freshPlan()
+{
+    for (auto it = nodes.begin(); it != nodes.end();)
+    {
+        if (!it->step && it->children.empty())
+            it = nodes.erase(it);
+        else
+            ++it;
+    }
+
+    std::unordered_set<Node *> exists_nodes;
+
+    for (auto & node : nodes)
+        exists_nodes.insert(&node);
+
+    for (auto & node : nodes)
+    {
+        std::vector<Node *> freshed_children;
+        for (auto & child : node.children)
+        {
+            if (exists_nodes.count(child))
+                freshed_children.push_back(child);
+        }
+        node.children.swap(freshed_children);
+    }
+}
+
+/**
+ * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
+ * More precisely， nodes that moved to sub_plan are deleted.
+ */
+QueryPlan QueryPlan::getSubPlan(QueryPlan::Node * node_)
+{
+    QueryPlan sub_plan;
+    
+    std::stack<QueryPlan::Node *> plan_nodes;
+    sub_plan.addRoot(Node{.step = std::move(node_->step), .children = std::move(node_->children)});
+    plan_nodes.push(sub_plan.getRoot());
+
+    while(!plan_nodes.empty())
+    {
+        auto current = plan_nodes.top();
+        plan_nodes.pop();
+
+        std::vector<Node *> result_children;
+        for (auto & child : current->children)
+        {
+            sub_plan.addNode(Node{.step = std::move(child->step), .children = std::move(child->children)});
+            result_children.push_back(sub_plan.getLastNode());
+            plan_nodes.push(sub_plan.getLastNode());
+        }
+        current->children.swap(result_children);
+    }
+
+    freshPlan();
+
+    return sub_plan;
+}
+
 QueryPipelinePtr QueryPlan::buildQueryPipeline(
     const QueryPlanOptimizationSettings & optimization_settings,
     const BuildQueryPipelineSettings & build_pipeline_settings)

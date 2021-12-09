@@ -110,6 +110,23 @@ public:
 
     using Nodes = std::list<Node>;
 
+    Nodes & getNodes() { return nodes; }
+
+    Node * getRoot() { return root; }
+    void setRoot(Node * root_) { root = root_; }
+
+    Node * getLastNode() { return &nodes.back(); }
+
+    void addNode(QueryPlan::Node && node_);
+
+    void addRoot(QueryPlan::Node && node_);
+
+    QueryPlan getSubPlan(QueryPlan::Node * node_);
+
+    void freshPlan();
+
+    size_t getSize() const { return nodes.size(); }
+
 private:
     Nodes nodes;
     Node * root = nullptr;

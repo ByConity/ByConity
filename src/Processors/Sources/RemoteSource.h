@@ -3,6 +3,7 @@
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Pipe.h>
+#include <Processors/QueryPlan/IQueryPlanStep.h>
 #include <atomic>
 
 namespace DB
@@ -12,6 +13,9 @@ class RemoteQueryExecutor;
 using RemoteQueryExecutorPtr = std::shared_ptr<RemoteQueryExecutor>;
 
 class RemoteQueryExecutorReadContext;
+class PlanSegmentInput;
+using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
+using PlanSegmentInputs = std::vector<PlanSegmentInputPtr>;
 
 /// Source from RemoteQueryExecutor. Executes remote query and returns query result chunks.
 class RemoteSource : public SourceWithProgress
@@ -86,5 +90,22 @@ private:
 Pipe createRemoteSourcePipe(
     RemoteQueryExecutorPtr query_executor,
     bool add_aggregation_info, bool add_totals, bool add_extremes, bool async_read);
+
+class RemoteExchangeSourceStep : public IQueryPlanStep
+{
+public:
+    explicit RemoteExchangeSourceStep(const PlanSegmentInputs & inputs_, DataStream input_stream_);
+
+    String getName() const override { return "RemoteExchangeSource"; }
+
+    Type getType() const override { return Type::RemoteExchangeSource; }
+
+    QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings) override;
+
+    PlanSegmentInputs getInput() const { return inputs; }
+
+private:
+    PlanSegmentInputs inputs;
+};
 
 }

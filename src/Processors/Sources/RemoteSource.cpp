@@ -3,6 +3,8 @@
 #include <DataStreams/RemoteQueryExecutorReadContext.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <Processors/QueryPlan/IQueryPlanStep.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 
 namespace DB
 {
@@ -177,6 +179,18 @@ Pipe createRemoteSourcePipe(
         pipe.addExtremesSource(std::make_shared<RemoteExtremesSource>(query_executor));
 
     return pipe;
+}
+
+RemoteExchangeSourceStep::RemoteExchangeSourceStep(const PlanSegmentInputs & inputs_, DataStream input_stream_)
+: inputs(inputs_)
+{
+    input_streams.emplace_back(std::move(input_stream_));
+    output_stream = DataStream{.header = input_streams[0].header};
+}
+
+QueryPipelinePtr RemoteExchangeSourceStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
+{
+    return nullptr;
 }
 
 }
