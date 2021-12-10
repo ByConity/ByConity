@@ -57,6 +57,9 @@ void InterpreterDistributedStages::createPlanSegments()
 
     QueryPlan query_plan;
     SelectQueryOptions options;
+    if (add_exchange)
+        options.distributedStages();
+
     InterpreterSelectWithUnionQuery(query_ptr, context, options).buildQueryPlan(query_plan);
 
     if (add_exchange)

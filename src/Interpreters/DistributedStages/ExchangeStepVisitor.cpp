@@ -37,9 +37,6 @@ ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::No
 
     auto params = step->getParams()->params;
 
-    std::cout<<" header from params: " << params.getHeader(false) << std::endl;
-    std::cout<<" header from aggregator: " << step->getParams()->getHeader() << std::endl;
-
     Block result_header = params.getHeader(false);
 
     Names keys;

@@ -1176,8 +1176,11 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
 
             if (expressions.need_aggregate)
             {
+                /// if options.distributed_stages is true, we need to build distributed plan segment so that we should always generate
+                /// Aggregating with partial state.
+                bool aggregate_stage = options.distributed_stages ? false : aggregate_final;
                 executeAggregation(
-                    query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_final, query_info.input_order_info);
+                    query_plan, expressions.before_aggregation, aggregate_overflow_row, aggregate_stage, query_info.input_order_info);
                 /// We need to reset input order info, so that executeOrder can't use  it
                 query_info.input_order_info.reset();
             }
@@ -1236,6 +1239,12 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                 /// If you need to combine aggregated results from multiple servers
                 if (!expressions.first_stage)
                     executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final);
+                else
+                {
+                    /// if we have first_stage and distributed_stage, it means we need build distributed plan segments
+                    if (options.distributed_stages)
+                        executeMergeAggregated(query_plan, aggregate_overflow_row, aggregate_final);
+                }
 
                 if (!aggregate_final)
                 {

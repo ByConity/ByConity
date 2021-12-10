@@ -45,6 +45,11 @@ struct SelectQueryOptions
     bool is_subquery = false; // non-subquery can also have subquery_depth > 0, e.g. insert select
     bool with_all_cols = false; /// asterisk include materialized and aliased columns
 
+    /**
+     * if true, it means we should generate plans being compatible with distributed plansegments.
+     */
+    bool distributed_stages = false;
+
     SelectQueryOptions(
         QueryProcessingStage::Enum stage = QueryProcessingStage::Complete,
         size_t depth = 0,
@@ -122,6 +127,12 @@ struct SelectQueryOptions
     SelectQueryOptions & setWithAllColumns(bool value = true)
     {
         with_all_cols = value;
+        return *this;
+    }
+
+    SelectQueryOptions & distributedStages(bool value = true)
+    {
+        distributed_stages = value;
         return *this;
     }
 };
