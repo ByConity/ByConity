@@ -2,6 +2,7 @@
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Cluster.h>
 
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -29,7 +30,7 @@ StoragePtr RewriteDistributedQueryMatcher::tryGetTable(const ASTPtr & database_a
     return DatabaseCatalog::instance().tryGetTable(table_id, context);
 }
 
-RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTables(const ASTPtr & query, const ContextPtr & context)
+RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTableInfos(const ASTPtr & query, const ContextPtr & context)
 {
     RewriteDistributedQueryMatcher::Data result_data;
 
@@ -51,6 +52,7 @@ RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTabl
         q.pop();
     }
 
+
     for (auto & table : tables)
     {
         auto storage = tryGetTable(table, context);
@@ -62,6 +64,17 @@ RewriteDistributedQueryMatcher::Data RewriteDistributedQueryMatcher::collectTabl
             auto * identifier = table->as<ASTTableIdentifier>();
             DatabaseAndTableWithAlias database_table(*identifier, context->getCurrentDatabase());
             result_data.identifier_rewrite_info.emplace_back(database_table, distributed_table->getRemoteTableName());
+
+            if (!result_data.cluster)
+            {
+                result_data.cluster = distributed_table->getCluster();
+                result_data.cluster_name = distributed_table->getClusterName();
+            }
+            else
+            {
+                if (result_data.cluster != distributed_table->getCluster())
+                    throw Exception("Cannot rewrite distributed query with multiple different cluster", ErrorCodes::LOGICAL_ERROR);
+            }
         }
         else
         {

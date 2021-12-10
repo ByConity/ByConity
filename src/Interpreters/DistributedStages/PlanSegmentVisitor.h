@@ -22,6 +22,8 @@ struct PlanSegmentContext
     QueryPlan & query_plan;
     String query_id;
     size_t id = 0;
+    size_t shard_number = 0;
+    String cluster_name;
     PlanSegmentTree * plan_segment_tree;
 
     size_t getSegmentId() { return id++; }

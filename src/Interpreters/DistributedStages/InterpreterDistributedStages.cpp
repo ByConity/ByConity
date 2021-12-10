@@ -48,7 +48,7 @@ void InterpreterDistributedStages::createPlanSegments()
      * as it original worked.
      */
     bool add_exchange = false;
-    auto query_data = RewriteDistributedQueryMatcher::collectTables(query_ptr, context);
+    auto query_data = RewriteDistributedQueryMatcher::collectTableInfos(query_ptr, context);
     if (query_data.all_distributed && !query_data.table_rewrite_info.empty())
     {
         RewriteDistributedQueryVisitor(query_data).visit(query_ptr);
@@ -75,6 +75,8 @@ void InterpreterDistributedStages::createPlanSegments()
     PlanSegmentContext plan_segment_context{.context = context, 
                                             .query_plan = query_plan,
                                             .query_id = context->getCurrentQueryId(),
+                                            .shard_number = query_data.cluster ? query_data.cluster->getShardCount() : 1,
+                                            .cluster_name = query_data.cluster_name,
                                             .plan_segment_tree = plan_segment_tree.get()};
     PlanSegmentSpliter::rewrite(query_plan, plan_segment_context);
 

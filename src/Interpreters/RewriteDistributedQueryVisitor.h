@@ -13,6 +13,8 @@ class ASTIdentifier;
 class ASTQualifiedAsterisk;
 class Context;
 using ContextPtr = std::shared_ptr<const Context>;
+class Cluster;
+using ClusterPtr = std::shared_ptr<Cluster>;
 
 class RewriteDistributedQueryMatcher
 {
@@ -22,6 +24,8 @@ public:
     {
         std::unordered_map<IAST*, std::pair<String, String>> table_rewrite_info;
         std::vector<std::pair<DatabaseAndTableWithAlias, String>> identifier_rewrite_info;
+        ClusterPtr cluster;
+        String cluster_name;
         bool all_distributed = true;
     };
 
@@ -31,7 +35,7 @@ public:
 
     static StoragePtr tryGetTable(const ASTPtr & database_and_table, const ContextPtr & context);
 
-    static Data collectTables(const ASTPtr & query, const ContextPtr & context);
+    static Data collectTableInfos(const ASTPtr & query, const ContextPtr & context);
 
 private:
 

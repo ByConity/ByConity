@@ -54,13 +54,12 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
      */ 
     QueryPlan sub_plan = plan_segment_context.query_plan.getSubPlan(node);
 
-    auto plan_segment = std::make_unique<PlanSegment>();
+    auto plan_segment = std::make_unique<PlanSegment>(segment_id, plan_segment_context.query_id, plan_segment_context.cluster_name);
     plan_segment->setQueryPlan(std::move(sub_plan));
-    plan_segment->setPlanSegmentId(segment_id);
-    plan_segment->setQueryId(plan_segment_context.query_id);
 
     PlanSegmentType output_type = segment_id == 0? PlanSegmentType::OUTPUT : PlanSegmentType::EXCHANGE;
     auto output = std::make_shared<PlanSegmentOutput>(plan_segment->getQueryPlan().getRoot()->step->getOutputStream().header, output_type);
+    output->setParallelSize(plan_segment_context.shard_number);
     plan_segment->setPlanSegmentOutput(output);
 
     auto inputs = findInputs(sub_plan.getRoot());

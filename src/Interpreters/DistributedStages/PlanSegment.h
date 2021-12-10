@@ -174,6 +174,13 @@ public:
     PlanSegment(PlanSegment && ) = default;
     PlanSegment & operator=(PlanSegment &&) = default;
 
+    PlanSegment(size_t segment_id_,
+                const String & query_id_,
+                const String & cluster_name_)
+                : segment_id(segment_id_)
+                , query_id(query_id_)
+                , cluster_name(cluster_name_) {}
+
     ~PlanSegment() = default;
 
     QueryPlan & getQueryPlan() { return query_plan; }
