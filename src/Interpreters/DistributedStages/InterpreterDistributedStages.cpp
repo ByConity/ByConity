@@ -7,6 +7,7 @@
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/RewriteDistributedQueryVisitor.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
@@ -37,11 +38,36 @@ InterpreterDistributedStages::InterpreterDistributedStages(const ASTPtr & query_
 
 void InterpreterDistributedStages::createPlanSegments()
 {
-    QueryPlan query_plan;
-    InterpreterSelectWithUnionQuery(query_ptr, context, {}).buildQueryPlan(query_plan);
+    /**
+     * we collect all distributed tables and try to rewrite distributed query into local query because
+     * distributed query cannot generate a plan with ScanTable so that it hard to build distributed plan segment on this 
+     * kind of plan.
+     * 
+     * if there is any local table or there is no tables, we treat the query as original query so that it will
+     * not be splited to several segments, instead it only has one segment and we will execute this segment in local server
+     * as it original worked.
+     */
+    bool add_exchange = false;
+    auto query_data = RewriteDistributedQueryMatcher::collectTables(query_ptr, context);
+    if (query_data.all_distributed && !query_data.table_rewrite_info.empty())
+    {
+        RewriteDistributedQueryVisitor(query_data).visit(query_ptr);
+        add_exchange = true;
+    }
 
-    ExchangeStepContext exchange_context{.context = context, .query_plan = query_plan};
-    AddExchangeRewriter::rewrite(query_plan, exchange_context);
+    QueryPlan query_plan;
+    SelectQueryOptions options;
+    InterpreterSelectWithUnionQuery(query_ptr, context, options).buildQueryPlan(query_plan);
+
+    if (add_exchange)
+    {
+        ExchangeStepContext exchange_context{.context = context, .query_plan = query_plan};
+        AddExchangeRewriter::rewrite(query_plan, exchange_context);
+    }
+
+    WriteBufferFromOwnString plan_str;
+    query_plan.explainPlan(plan_str, {});
+    LOG_DEBUG(log, "QUERY-PLAN-AFTER-EXCHANGE \n" + plan_str.str());
 
     PlanSegmentContext plan_segment_context{.context = context, 
                                             .query_plan = query_plan,

@@ -25,7 +25,9 @@ public:
 
     ExchangeStepResult visitPlan(QueryPlan::Node *, ExchangeStepContext & exchange_context) override;
 
-    ExchangeStepResult visitAggregatingStep(QueryPlan::Node * node, ExchangeStepContext &) override;
+    ExchangeStepResult visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext &) override;
+
+    ExchangeStepResult visitJoinStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
     
 private:
 

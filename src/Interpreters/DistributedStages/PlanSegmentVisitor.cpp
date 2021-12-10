@@ -8,17 +8,12 @@ namespace DB
 
 PlanSegmentResult PlanSegmentVisitor::visitPlan(QueryPlan::Node * node, PlanSegmentContext & plan_segment_context)
 {
-    std::vector<QueryPlan::Node *> result_children;
-
-    for (QueryPlan::Node * child : node->children)
+    for (size_t i = 0; i < node->children.size(); ++i)
     {
-        auto result_node = visitChild(child, plan_segment_context);
+        auto result_node = visitChild(node->children[i], plan_segment_context);
         if (result_node)
-            result_children.push_back(result_node);
+            node->children[i] = result_node;
     }
-
-    if (!result_children.empty())
-        node->children.swap(result_children);
 
     return nullptr;
 }
@@ -86,9 +81,6 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, Plan
     if (!result_node)
         result_node = node;
 
-    WriteBufferFromOwnString plan_str;
-    plan_segment_context.query_plan.explainPlan(plan_str, {});
-
     return createPlanSegment(result_node, segment_id, plan_segment_context);
 }
 
@@ -97,7 +89,22 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
     if (!node)
         return {};
     
-    if (auto * remote_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get()))
+    if (auto * join_step = dynamic_cast<JoinStep *>(node->step.get()))
+    {
+        PlanSegmentInputs inputs;
+        for (auto & child : node->children)
+        {
+            if (child->step->getType() == IQueryPlanStep::Type::RemoteExchangeSource)
+            {
+                auto child_input = findInputs(child);
+                if (child_input.size() != 1)
+                    throw Exception("Join step should contain one input in each child", ErrorCodes::LOGICAL_ERROR);
+                inputs.insert(inputs.end(), child_input.begin(), child_input.end());
+            }
+        }
+        return inputs;
+    }
+    else if (auto * remote_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get()))
     {
         return remote_step->getInput();
     }

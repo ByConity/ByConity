@@ -4,6 +4,7 @@
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/IdentifierSemantic.h>
+#include <Interpreters/RewriteDistributedQueryVisitor.h>
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeArray.h>
@@ -34,86 +35,6 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-}
-
-StoragePtr tryGetTable(const ASTPtr & database_and_table, const ContextPtr & context)
-{
-    auto table_id = context->tryResolveStorageID(database_and_table);
-    if (!table_id)
-        return {};
-    return DatabaseCatalog::instance().tryGetTable(table_id, context);
-}
-
-bool RewriteDistributedTableMatcher::needChildVisit(ASTPtr & node, const ASTPtr &)
-{
-    if (auto * table_expression = node->as<ASTTableExpression>())
-    {
-        if (table_expression->database_and_table_name)
-            return false;
-    }
-    return true;
-}
-
-void RewriteDistributedTableMatcher::visit(ASTPtr & ast, Data & data)
-{
-    if (auto * node = ast->as<ASTTableExpression>())
-        visit(*node, ast, data);
-    if (auto * node = ast->as<ASTIdentifier>())
-        visit(*node, ast, data);
-    if (auto * node = ast->as<ASTQualifiedAsterisk>())
-        visit(*node, ast, data);
-}
-
-void RewriteDistributedTableMatcher::visit(ASTTableExpression & table_expression, ASTPtr &, Data & data)
-{
-    if (table_expression.database_and_table_name)
-    {
-        auto it = data.table_rewrite_info.find(table_expression.database_and_table_name.get());
-        if (it != data.table_rewrite_info.end())
-        {
-            auto * table_identifier = table_expression.database_and_table_name->as<ASTTableIdentifier>();
-            table_identifier->resetTable(it->second.first, it->second.second);
-        }
-    }
-}
-
-/**
- * Rewrite column if we find it has a table reference.
- * for example:
- * select a.id from a,
- * after we rewrite sql (perfectshardable), it will be
- * select a_local.id from a_local.
- */
-
-void RewriteDistributedTableMatcher::visit(ASTIdentifier & identifier, ASTPtr &, Data & data)
-{
-    for (auto & rewrite_info : data.identifier_rewrite_info)
-    {
-        auto match = IdentifierSemantic::canReferColumnToTable(identifier, rewrite_info.first);
-        if (match == IdentifierSemantic::ColumnMatch::DbAndTable
-            || match == IdentifierSemantic::ColumnMatch::AliasedTableName
-            || match == IdentifierSemantic::ColumnMatch::TableName)
-        {
-            IdentifierSemantic::setColumnTableName(identifier, rewrite_info.second);
-            break;
-        }
-    }
-}
-
-void RewriteDistributedTableMatcher::visit(ASTQualifiedAsterisk & qualified_asterisk, ASTPtr &, Data & data)
-{
-    ASTTableIdentifier & identifier = *qualified_asterisk.children[0]->as<ASTTableIdentifier>();
-    for (auto & rewrite_info : data.identifier_rewrite_info)
-    {
-        auto match = IdentifierSemantic::canReferColumnToTable(identifier, rewrite_info.first);
-        if (match == IdentifierSemantic::ColumnMatch::DbAndTable
-            || match == IdentifierSemantic::ColumnMatch::AliasedTableName
-            || match == IdentifierSemantic::ColumnMatch::TableName)
-        {
-            IdentifierSemantic::setColumnTableName(identifier, rewrite_info.second);
-            break;
-        }
-    }
 }
 
 bool checkIfSelectListExistConstant(const ASTPtr & node)
@@ -172,7 +93,7 @@ void InterpreterPerfectShard::collectTables()
     ClusterPtr cluster = nullptr;
     for (auto & table : tables)
     {
-        auto storage = tryGetTable(table, context);
+        auto storage = RewriteDistributedQueryMatcher::tryGetTable(table, context);
         auto distributed_table = dynamic_cast<StorageDistributed *>(storage.get());
         if (distributed_table)
         {
@@ -212,8 +133,8 @@ void InterpreterPerfectShard::collectTables()
 
 void InterpreterPerfectShard::rewriteDistributedTables()
 {
-    RewriteDistributedTableMatcher::Data rewrite_data{.table_rewrite_info = table_rewrite_info, .identifier_rewrite_info = identifier_rewrite_info};
-    RewriteDistributedTableVisitor(rewrite_data).visit(query);
+    RewriteDistributedQueryMatcher::Data rewrite_data{.table_rewrite_info = table_rewrite_info, .identifier_rewrite_info = identifier_rewrite_info};
+    RewriteDistributedQueryVisitor(rewrite_data).visit(query);
 }
 
 void InterpreterPerfectShard::buildQueryPlan(QueryPlan & query_plan)

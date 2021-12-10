@@ -14,6 +14,13 @@ namespace DB
 class Partitioning
 {
 public:
+
+    enum class Type : UInt8
+    {
+        UNKNOWN = 0,
+        LOCAL,
+        DISTRIBUTED,
+    };
     
     Partitioning(const Names & columns_ = {})
         : columns(columns_){}

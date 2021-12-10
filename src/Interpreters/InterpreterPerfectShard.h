@@ -14,35 +14,8 @@
 namespace DB
 {
 
-struct ASTTableExpression;
-class ASTIdentifier;
-class ASTQualifiedAsterisk;
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
-
-class RewriteDistributedTableMatcher
-{
-public:
-
-    struct Data
-    {
-        std::unordered_map<IAST*, std::pair<String, String>> table_rewrite_info;
-        std::vector<std::pair<DatabaseAndTableWithAlias, String>> identifier_rewrite_info;
-    };
-
-    static bool needChildVisit(ASTPtr & node, const ASTPtr & child);
-
-    static void visit(ASTPtr & ast, Data & data);
-
-private:
-
-    static void visit(ASTTableExpression & query, ASTPtr & node, Data & data);
-    static void visit(ASTIdentifier & query, ASTPtr & node, Data & data);
-    static void visit(ASTQualifiedAsterisk & query, ASTPtr & node, Data & data);
-};
-
-using RewriteDistributedTableVisitor = InDepthNodeVisitor<RewriteDistributedTableMatcher, true>; 
-
 
 /**
  * Perfect-Shard, is a execution mode if data is sharded in advance.
