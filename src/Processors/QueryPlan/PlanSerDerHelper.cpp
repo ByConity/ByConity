@@ -57,6 +57,54 @@ Strings deserializeStrings(ReadBuffer & buf)
     return strings;
 }
 
+void serializeStringSet(const NameSet & stringSet, WriteBuffer & buf)
+{
+    writeBinary(stringSet.size(), buf);
+    for (const auto& str: stringSet)
+        writeBinary(str, buf);
+}
+
+NameSet deserializeStringSet(ReadBuffer & buf)
+{
+    size_t s_size;
+    readBinary(s_size, buf);
+
+    NameSet stringSet;
+    for (size_t i = 0; i < s_size; ++i)
+    {
+        String str;
+        readBinary(str, buf);
+        stringSet.emplace(str);
+    }
+
+    return stringSet;
+}
+
+template<typename T>
+void serializeItemVector(const std::vector<T> & itemVec, WriteBuffer & buf)
+{
+    writeBinary(itemVec.size(), buf);
+    for (const auto & item : itemVec)
+        item.serialize(buf);
+}
+
+template<typename T>
+std::vector<T> deserializeItemVector(ReadBuffer & buf)
+{
+    size_t s_size;
+    readBinary(s_size, buf);
+
+    std::vector<T> itemVec(s_size);
+    for (size_t i = 0; i < s_size; ++i)
+    {
+        T item;
+        item.deserialize(buf);
+        itemVec[i] = item;
+    }
+
+    return itemVec;
+}
+
 void serializeBlock(const Block & block, WriteBuffer & buf)
 {
     BlockOutputStreamPtr block_out = std::make_shared<NativeBlockOutputStream>(
@@ -72,6 +120,39 @@ Block deserializeBlock(ReadBuffer & buf)
                                     buf,
                                     ClickHouseRevision::getVersionRevision());
     return block_in->read();
+}
+
+void serializeDataStream(const DataStream & data_stream, WriteBuffer & buf)
+{
+    serializeBlock(data_stream.header, buf);
+    serializeStringSet(data_stream.distinct_columns, buf);
+    writeBinary(data_stream.has_single_port, buf);
+    serializeItemVector<SortColumnDescription>(data_stream.sort_description, buf);
+    writeBinary(UInt8(data_stream.sort_mode), buf);
+}
+
+DataStream deserializeDataStream(ReadBuffer & buf)
+{
+    Block header;
+    header = deserializeBlock(buf);
+
+    NameSet distinct_columns = {};
+    distinct_columns = deserializeStringSet(buf);
+
+    bool has_single_port = false;
+    readBinary(has_single_port, buf);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buf);
+
+    UInt8 sort_mode;
+    readBinary(sort_mode, buf);
+
+    return DataStream{.header = std::move(header),
+                      .distinct_columns = std::move(distinct_columns),
+                      .has_single_port = has_single_port,
+                      .sort_description = std::move(sort_description),
+                      .sort_mode = DataStream::SortMode(sort_mode)};
 }
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)

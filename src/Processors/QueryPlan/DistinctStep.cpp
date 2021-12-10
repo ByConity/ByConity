@@ -112,4 +112,15 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Columns", std::move(columns_array));
 }
 
+void DistinctStep::serialize(WriteBuffer & buffer) const
+{
+//    serializeBlock(output_stream->header, buffer);
+}
+
+QueryPlanStepPtr DistinctStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+//    Block output_header = deserializeBlock(buffer);
+//    return std::make_unique<ReadNothingStep>(output_header);
+}
+
 }

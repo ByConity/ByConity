@@ -10,6 +10,8 @@
 namespace DB
 {
 
+class DataStream;
+
 class IQueryPlanStep;
 using QueryPlanStepPtr = std::unique_ptr<IQueryPlanStep>;
 
@@ -43,8 +45,19 @@ void deserializeEnum(Type & item, ReadBuffer & buf)
 void serializeStrings(const Strings & strings, WriteBuffer & buf);
 Strings deserializeStrings(ReadBuffer & buf);
 
+void serializeStringSet(const NameSet & stringSet, WriteBuffer & buf);
+NameSet deserializeStringSet(ReadBuffer & buf);
+
+template<typename T>
+void serializeItemVector(const std::vector<T> & itemVec, WriteBuffer & buf);
+template<typename T>
+std::vector<T> deserializeItemVector(ReadBuffer & buf);
+
 void serializeBlock(const Block & block, WriteBuffer & buf);
 Block deserializeBlock(ReadBuffer & buf);
+
+void serializeDataStream(const DataStream & block, WriteBuffer & buf);
+DataStream deserializeDataStream(ReadBuffer & buf);
 
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context);

@@ -6,6 +6,9 @@
 #include <string>
 #include <Core/Field.h>
 #include <Core/SettingsEnums.h>
+#include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
+
 
 class Collator;
 
@@ -38,9 +41,9 @@ struct SortColumnDescription
     int direction;           /// 1 - ascending, -1 - descending.
     int nulls_direction;     /// 1 - NULLs and NaNs are greater, -1 - less.
                              /// To achieve NULLS LAST, set it equal to direction, to achieve NULLS FIRST, set it opposite.
-    std::shared_ptr<Collator> collator; /// Collator for locale-specific comparison of strings
-    bool with_fill;
-    FillColumnDescription fill_description;
+    std::shared_ptr<Collator> collator = nullptr; /// Collator for locale-specific comparison of strings
+    bool with_fill = false;
+    FillColumnDescription fill_description = {};
 
     SortColumnDescription(
             size_t column_number_, int direction_, int nulls_direction_,
@@ -55,6 +58,8 @@ struct SortColumnDescription
             bool with_fill_ = false, const FillColumnDescription & fill_description_ = {})
             : column_name(column_name_), column_number(0), direction(direction_), nulls_direction(nulls_direction_)
             , collator(collator_), with_fill(with_fill_), fill_description(fill_description_) {}
+
+    SortColumnDescription() {}
 
     bool operator == (const SortColumnDescription & other) const
     {
@@ -73,6 +78,25 @@ struct SortColumnDescription
     }
 
     void explain(JSONBuilder::JSONMap & map, const Block & header) const;
+
+    /// It seems that the current construction of SortColumnDescription only uses the first four fields,
+    /// so this time will temporarily ignore the serialize/deserialize of field collator/with_fill/fill_description
+
+    void serialize(WriteBuffer & buffer) const
+    {
+        writeBinary(column_name, buffer);
+        writeBinary(column_number, buffer);
+        writeBinary(direction, buffer);
+        writeBinary(nulls_direction, buffer);
+    }
+
+    void deserialize(ReadBuffer & buffer)
+    {
+        readBinary(column_name, buffer);
+        readBinary(column_number, buffer);
+        readBinary(direction, buffer);
+        readBinary(nulls_direction, buffer);
+    }
 };
 
 /// Description of the sorting rule for several columns.

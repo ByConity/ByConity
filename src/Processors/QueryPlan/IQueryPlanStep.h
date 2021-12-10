@@ -1,6 +1,7 @@
 #pragma once
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 
 namespace JSONBuilder { class JSONMap; }
