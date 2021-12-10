@@ -18,9 +18,15 @@ namespace ErrorCodes
 
 int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size)
 {
+    if (receiver.expired())
+    {
+        LOG_WARNING(log, "StreamHandler::on_received_messages receiver is expired.");
+        return 0;
+    }
+    auto receiver_ptr = receiver.lock();
     try
     {
-        auto header = receiver->getHeader();
+        auto header = receiver_ptr->getHeader();
         for (size_t index = 0; index < size; index++)
         {
             butil::IOBuf & msg = *messages[index];
@@ -32,7 +38,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
-            receiver->pushReceiveQueue(chunk);
+            receiver_ptr->pushReceiveQueue(chunk);
             LOG_DEBUG(
                 log,
                 "StreamHandler::on_received_messages: StreamId-{} received exchange data successfully, io-buffer size{}, chunk rows:{}",
@@ -46,7 +52,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
         try
         {
             String exception_str = getCurrentExceptionMessage(true);
-            receiver->pushException(exception_str);
+            receiver_ptr->pushException(exception_str);
         }
         catch (...)
         {
@@ -63,7 +69,14 @@ void StreamHandler::on_idle_timeout(brpc::StreamId id)
 
 void StreamHandler::on_closed(brpc::StreamId stream_id)
 {
-    receiver->clearQueue();
-    LOG_DEBUG(log, "StreamHandler::on_closed: StreamId-{} closed", stream_id);
+    if (receiver.expired())
+    {
+        LOG_WARNING(log, "StreamHandler::on_closed receiver is expired.");
+    }
+    else
+    {
+        receiver.lock()->clearQueue();
+        LOG_DEBUG(log, "StreamHandler::on_closed: StreamId-{} closed", stream_id);
+    }
 }
 }

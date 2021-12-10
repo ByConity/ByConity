@@ -48,7 +48,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             brpc::StreamOptions stream_options;
             const auto stream_max_buf_size_bytes = -1;
             stream_options.max_buf_size = stream_max_buf_size_bytes;
-            stream_options.handler = std::make_shared<StreamHandler>(context, shared_from_this());
+            stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
             cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
             if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
                 throw Exception("Fail to create stream for data_key-" + data_key, ErrorCodes::BRPC_EXCEPTION);

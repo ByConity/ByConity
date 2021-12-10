@@ -13,7 +13,7 @@ namespace DB
 class StreamHandler : public brpc::StreamInputHandler
 {
 public:
-    StreamHandler(const ContextPtr & context_, BrpcRemoteBroadcastReceiverShardPtr receiver_) : context(context_), receiver(receiver_) { }
+    StreamHandler(const ContextPtr & context_, BrpcRemoteBroadcastReceiverWeakPtr receiver_) : context(context_), receiver(receiver_) { }
 
     int on_received_messages(brpc::StreamId id, butil::IOBuf * const * messages, size_t size) override;
 
@@ -24,7 +24,7 @@ public:
 private:
     ContextPtr context;
     Poco::Logger * log = &Poco::Logger::get("StreamHandler");
-    BrpcRemoteBroadcastReceiverShardPtr receiver;
+    BrpcRemoteBroadcastReceiverWeakPtr receiver;
 };
 
 }
