@@ -34,10 +34,10 @@ create table test.event_metric (
 );
 
 --- insert into original table data
-insert into table test.event_metric_local(app_id, server_time, event_name, uid, cost, duration, event_date) values (1, now(), 'show', 121245, 44, 64, toDate('2021-11-30'));
-insert into table test.event_metric_local(app_id, server_time, event_name, uid, cost, duration, event_date) values (2, now(), 'send', 2345, 476, 64, toDate('2021-11-30'));
-insert into table test.event_metric_local(app_id, server_time, event_name, uid, cost, duration, event_date) values (3, now(), 'show', 544545, 87, 889, toDate('2021-11-30'));
-insert into table test.event_metric_local(app_id, server_time, event_name, uid, cost, duration, event_date) values (4, now(), 'slide', 234545, 123, 98, toDate('2021-11-30'));
+insert into table test.event_metric(app_id, server_time, event_name, uid, cost, duration, event_date) values (1, now(), 'show', 121245, 44, 64, toDate('2021-11-30'));
+insert into table test.event_metric(app_id, server_time, event_name, uid, cost, duration, event_date) values (2, now(), 'send', 2345, 476, 64, toDate('2021-11-30'));
+insert into table test.event_metric(app_id, server_time, event_name, uid, cost, duration, event_date) values (3, now(), 'show', 544545, 87, 889, toDate('2021-11-30'));
+insert into table test.event_metric(app_id, server_time, event_name, uid, cost, duration, event_date) values (4, now(), 'slide', 234545, 123, 98, toDate('2021-11-30'));
 
 --- destination aggregate table
 DROP TABLE IF EXISTS test.aggregate_data_local;
