@@ -257,6 +257,37 @@ void ColumnLowCardinality::insertRangeFromDictionaryEncodedColumn(const IColumn 
     // idx.check(getDictionary().size());
 }
 
+void ColumnLowCardinality::insertRangeSelective(
+    const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
+{
+    
+    const auto * low_cardinality_src = typeid_cast<const ColumnLowCardinality *>(&src);
+    if (!low_cardinality_src)
+        throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    const IColumn & src_index = low_cardinality_src->getIndexes();
+
+    if (&low_cardinality_src->getDictionary() == &getDictionary())
+    {
+        /// Dictionary is shared with src column. Insert only indexes.
+        for (size_t i = 0; i < length; i++)
+        {
+            size_t position = src_index.getUInt(selector[selector_start + i]);
+            idx.insertPosition(position);
+        }
+    }
+    else
+    {
+        compactIfSharedDictionary();
+        const auto & dict_col = *low_cardinality_src->getDictionary().getNestedColumn();
+        for (size_t i = 0; i < length; i++)
+        {
+            size_t position = src_index.getUInt(selector[selector_start + i]);
+            idx.insertPosition(dictionary.getColumnUnique().uniqueInsertFrom(dict_col, position));
+        }
+    }
+}
+
 void ColumnLowCardinality::insertData(const char * pos, size_t length)
 {
     compactIfSharedDictionary();

@@ -75,3 +75,4 @@ Chunk NativeChunkInputStream::readImpl()
     return res;
 }
 }
+

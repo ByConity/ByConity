@@ -49,6 +49,9 @@ private:
     virtual MutablePtr clone() const = 0;
 
 public:
+    using ColumnIndex = UInt64;
+    using Selector = PaddedPODArray<ColumnIndex>;
+
     /// Name of a Column. It is used in info messages.
     virtual std::string getName() const { return getFamilyName(); }
 
@@ -152,6 +155,18 @@ public:
         MutablePtr res = cloneEmpty();
         res->insertRangeFrom(*this, start, length);
         return res;
+    }
+
+    /// This function will get row index from selector and append the data to this column.
+    /// This function will handle indexes start from input 'selector_start' and will append 'size' times
+    /// For example:
+    ///      input selector: [1, 2, 3, 4, 5, 6]
+    ///      selector_start: 2
+    ///      length: 3
+    /// This function will copy the [3, 4, 5] row of src to this column.
+    virtual void insertRangeSelective(const IColumn & /*src*/, const Selector & /*selector*/, size_t /*selector_start*/, size_t /*length*/)
+    {
+        throw Exception("insertRangeSelective is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /// Appends new value at the end of column (column's size is increased by 1).
@@ -318,8 +333,6 @@ public:
       * Selector must contain values from 0 to num_columns - 1.
       * For default implementation, see scatterImpl.
       */
-    using ColumnIndex = UInt64;
-    using Selector = PaddedPODArray<ColumnIndex>;
     virtual std::vector<MutablePtr> scatter(ColumnIndex num_columns, const Selector & selector) const = 0;
 
     /// Insert data from several other columns according to source mask (used in vertical merge).

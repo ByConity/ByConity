@@ -66,6 +66,7 @@ public:
     void updateWeakHash32(WeakHash32 & hash) const override;
     void updateHashFast(SipHash & hash) const override;
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    void insertRangeSelective(const IColumn & src, const Selector & selector, size_t selector_start, size_t length) override;
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src_, size_t n) override;
     void insertDefault() override;

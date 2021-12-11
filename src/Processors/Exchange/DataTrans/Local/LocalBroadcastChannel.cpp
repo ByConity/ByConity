@@ -1,0 +1,119 @@
+#include <atomic>
+#include <memory>
+#include <optional>
+#include <string>
+#include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Poco/Logger.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
+
+namespace DB
+{
+LocalBroadcastChannel::LocalBroadcastChannel(const DataTransKey & data_key_, LocalChannelOptions options_)
+    : data_key_id(data_key_.getKey())
+    , options(options_)
+    , receive_queue(options_.queue_size)
+    , logger(&Poco::Logger::get("LocalBroadcastChannel"))
+{
+    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
+}
+
+RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
+{
+    UInt32 total_timeout_ms = timeout_ms == 0 ? options.max_timeout_ms : timeout_ms;
+    Chunk recv_chunk;
+    for (UInt32 elapsed_time_ms = 0; elapsed_time_ms < total_timeout_ms; elapsed_time_ms += options.poll_span_ms)
+    {
+        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+        /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
+        if (current_status_ptr->code > 0 || (current_status_ptr->code < 0 && receive_queue.size() == 0))
+            return *current_status_ptr;
+
+        if (receive_queue.tryPop(recv_chunk, options.poll_span_ms)) //NOLINT
+            return RecvDataPacket(std::move(recv_chunk));
+    }
+    BroadcastStatus current_status = finish(
+        BroadcastStatusCode::RECV_TIMEOUT,
+        "Receive from channel " + data_key_id + " timeout after ms: " + std::to_string(total_timeout_ms));
+    return current_status;
+}
+
+
+BroadcastStatus LocalBroadcastChannel::send(Chunk && chunk)
+{
+    for (UInt32 elapsed_time_ms = 0; elapsed_time_ms < options.max_timeout_ms; elapsed_time_ms += options.poll_span_ms)
+    {
+        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+        if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
+            return *broadcast_status.load(std::memory_order_relaxed);
+        if (receive_queue.tryEmplace(options.poll_span_ms, std::move(chunk))) //NOLINT
+            return BroadcastStatus{BroadcastStatusCode::RUNNING};
+    }
+    BroadcastStatus current_status = finish(
+        BroadcastStatusCode::SEND_TIMEOUT,
+        "Send to channel " + data_key_id + " timeout after ms: " + std::to_string(options.max_timeout_ms));
+    return current_status;
+}
+
+
+BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, String message)
+{
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
+    {
+        LOG_WARNING(
+            logger,
+            "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
+            data_key_id,
+            status_code,
+            current_status_ptr->code);
+        return *current_status_ptr;
+    }
+
+    BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code);
+    new_status_ptr->message = message;
+
+    if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_relaxed, std::memory_order_relaxed))
+    {
+        LOG_INFO(
+            logger,
+            "{} BroadcastStatus from {} to {} with message: {}",
+            data_key_id,
+            current_status_ptr->code,
+            new_status_ptr->code,
+            new_status_ptr->message);
+        delete current_status_ptr;
+        auto res = *new_status_ptr;
+        res.is_modifer = true;
+        return res;
+    }
+    else
+    {
+        LOG_WARNING(
+            logger, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
+        delete new_status_ptr;
+        return *current_status_ptr;
+    }
+}
+
+void LocalBroadcastChannel::registerToSenders(UInt32 /*timeout_ms*/)
+{
+}
+
+LocalBroadcastChannel::~LocalBroadcastChannel()
+{
+    try
+    {
+        delete broadcast_status.load(std::memory_order_relaxed);
+        LocalBroadcastRegistry::getInstance().clearChannel(data_key_id);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger);
+    }
+}
+}

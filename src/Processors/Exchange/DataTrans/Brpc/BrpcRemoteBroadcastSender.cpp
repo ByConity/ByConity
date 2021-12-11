@@ -7,6 +7,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <IO/WriteHelpers.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
+#include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <brpc/protocol.h>
 #include <brpc/stream.h>
@@ -62,7 +63,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
     }
 }
 
-void BrpcRemoteBroadcastSender::waitAllReceiversReady(const Int32 timeout_ms)
+void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
 {
     size_t max_num = timeout_ms / 100;
     for (const auto & id : receiver_ids)
@@ -86,7 +87,7 @@ void BrpcRemoteBroadcastSender::waitAllReceiversReady(const Int32 timeout_ms)
     is_ready = true;
 }
 
-void BrpcRemoteBroadcastSender::send(Chunk & chunk)
+BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk && chunk)
 {
     if (!is_ready)
     {
@@ -118,6 +119,8 @@ void BrpcRemoteBroadcastSender::send(Chunk & chunk)
     {
         sendIOBuffer(buf, stream_id);
     }
+    //TODO
+    return BroadcastStatus(BroadcastStatusCode::RUNNING);
 }
 
 bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id)
@@ -187,9 +190,9 @@ bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::Strea
     return true;
 }
 
-void BrpcRemoteBroadcastSender::finish(Int32 /*status_code*/)
+BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode /*status_code*/, String /*message*/)
 {
     // todo::aron 需要 brpc 层支持 finish 接口. 优雅关闭
+    return BroadcastStatus(BroadcastStatusCode::SEND_CANCELLED);
 }
-
 }
