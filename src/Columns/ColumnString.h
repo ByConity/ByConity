@@ -209,6 +209,8 @@ public:
     }
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    
+    void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
 

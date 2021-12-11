@@ -85,6 +85,7 @@ public:
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertRangeFromFullColumn(const IColumn & src, size_t start, size_t length);
     void insertRangeFromDictionaryEncodedColumn(const IColumn & keys, const IColumn & positions);
+    void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     void insertData(const char * pos, size_t length) override;
 

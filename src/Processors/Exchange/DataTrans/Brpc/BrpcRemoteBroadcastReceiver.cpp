@@ -2,6 +2,9 @@
 #include "BrpcExchangeRegistryCenter.h"
 #include "StreamHandler.h"
 
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/DataTrans/DataTransStruct.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
@@ -30,7 +33,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
     }
 }
 
-void BrpcRemoteBroadcastReceiver::registerToSender(UInt32 timeout_ms)
+void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 {
     Stopwatch s;
     size_t retry_times = 0;
@@ -38,6 +41,7 @@ void BrpcRemoteBroadcastReceiver::registerToSender(UInt32 timeout_ms)
     {
         try
         {
+            // FIXME: not register to coodinator adress
             std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(trans_key->getCoordinatorAddress(), false);
             Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
             brpc::Controller cntl;
@@ -100,18 +104,23 @@ void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
 }
 
-DataTransPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms)
+RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms)
 {
-    DataTransPacket packet;
-    if (!queue->receive_queue->tryPop(packet, timeout_ms))
+    RecvDataPacket res_packet;
+    DataTransPacket brpc_data_packet;
+    if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
         throw Exception(
             "Try pop receive queue for stream id-" + std::to_string(stream_id) + " timeout for " + std::to_string(timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-    return packet;
+    if(!brpc_data_packet.exception.empty()){
+        return BroadcastStatus(BroadcastStatusCode::RECV_UNKNOWN_ERROR, true);
+    }
+
+    return RecvDataPacket(std::move(brpc_data_packet.chunk));
 }
 
-void BrpcRemoteBroadcastReceiver::finish(Int32 /*status_code*/)
-{
+BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code, String message){
+    //TODO
+    return BroadcastStatus(status_code, true, message);
 }
-
 }

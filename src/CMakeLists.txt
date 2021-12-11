@@ -481,10 +481,18 @@ if (ENABLE_TESTS AND USE_GTEST)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
+    macro (grep_gtest_headers BASE_DIR DST_VAR)
+    # Cold match files that are not in tests/ directories
+    file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.h")
+    endmacro()
+
     # attach all dbms gtest sources
     grep_gtest_sources("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_sources)
+    grep_gtest_headers("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_headers)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
+    target_include_directories(unit_tests_dbms PRIVATE ${dbms_gtest_headers})
+    
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
         -Wno-zero-as-null-pointer-constant

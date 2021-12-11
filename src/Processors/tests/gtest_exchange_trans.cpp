@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <random>
+#include <variant>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Compression/CompressedReadBuffer.h>
@@ -16,7 +17,7 @@
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 #include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
 #include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
-#include <Processors/NullSink.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/server.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/tests/gtest_global_context.h>
@@ -76,18 +77,20 @@ void start_brpc_server()
         return;
     }
     LOG(INFO) << "start Server";
-    server.RunUntilAskedToQuit();
+    sleep(10000);
+    // server.RunUntilAskedToQuit();
 }
 
 void receiver1()
 {
-    ExchangeDataKeyPtr receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
     Block header = getHeader(TOTAL_SIZE_IN_BYTES / SIZE_OF_ROW_IN_BYTES);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, getContext().context, header);
-    receiver->registerToSender(20 * 1000);
+    receiver->registerToSenders(20 * 1000);
     auto packet = receiver->recv(20 * 1000);
-    Chunk & chunk = packet.chunk;
+    EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
+    Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
     auto col = chunk.getColumns().at(0);
     EXPECT_EQ(col->getUInt(1), 7);
@@ -95,13 +98,14 @@ void receiver1()
 
 void receiver2()
 {
-    ExchangeDataKeyPtr receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
     Block header = getHeader(TOTAL_SIZE_IN_BYTES / SIZE_OF_ROW_IN_BYTES);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, getContext().context, header);
-    receiver->registerToSender(20 * 1000);
+    receiver->registerToSenders(20 * 1000);
     auto packet = receiver->recv(20 * 1000);
-    Chunk & chunk = packet.chunk;
+    EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
+    Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
     auto col = chunk.getColumns().at(0);
     EXPECT_EQ(col->getUInt(1), 7);
@@ -109,8 +113,8 @@ void receiver2()
 
 TEST(Exchange, SendWithTwoReceivers)
 {
-    ExchangeDataKeyPtr receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
-    ExchangeDataKeyPtr receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
+    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
+    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
 
     auto origin_chunk = getChunkWithSize(SIZE_OF_ROW_IN_BYTES, TOTAL_ROW_NUM);
     auto header = getHeader(TOTAL_ROW_NUM);
@@ -124,7 +128,7 @@ TEST(Exchange, SendWithTwoReceivers)
 
     BrpcRemoteBroadcastSender sender(receiver_ids, getContext().context, header, receiver_data2);
     sender.waitAllReceiversReady(100 * 1000);
-    sender.send(origin_chunk);
+    sender.send(std::move(origin_chunk));
     thread_receiver1.join();
     thread_receiver2.join();
     thread_server.detach();
