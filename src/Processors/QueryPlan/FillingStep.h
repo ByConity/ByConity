@@ -22,7 +22,11 @@ public:
 
     const SortDescription & getSortDescription() const { return sort_description; }
 
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+
 private:
+    DataStream input_stream;
     SortDescription sort_description;
 };
 

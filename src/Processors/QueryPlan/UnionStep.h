@@ -21,6 +21,9 @@ public:
 
     size_t getMaxThreads() const { return max_threads; }
 
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+
 private:
     Block header;
     size_t max_threads;

@@ -82,4 +82,28 @@ void UnionStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
+void UnionStep::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(input_streams.size(), buffer);
+    for (const auto& input_stream : input_streams)
+        serializeDataStream(input_stream, buffer);
+
+    writeBinary(max_threads, buffer);
+}
+
+QueryPlanStepPtr UnionStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    size_t size;
+    readBinary(size, buffer);
+
+    DataStreams input_streams(size);
+    for (size_t i = 0; i < size; ++i)
+        input_streams[i] = deserializeDataStream(buffer);
+
+    size_t max_threads;
+    readBinary(max_threads, buffer);
+
+    return std::make_unique<UnionStep>(input_streams, max_threads);
+}
+
 }

@@ -29,6 +29,7 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
+    DataStream input_stream;
     SizeLimits set_size_limits;
     UInt64 limit_hint;
     Names columns;

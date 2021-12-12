@@ -24,11 +24,12 @@ static ITransformingStep::Traits getTraits(size_t limit)
 }
 
 MergingSortedStep::MergingSortedStep(
-    const DataStream & input_stream,
+    const DataStream & input_stream_,
     SortDescription sort_description_,
     size_t max_block_size_,
     UInt64 limit_)
-    : ITransformingStep(input_stream, input_stream.header, getTraits(limit_))
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
+    , input_stream(input_stream_)
     , sort_description(std::move(sort_description_))
     , max_block_size(max_block_size_)
     , limit(limit_)
@@ -80,6 +81,31 @@ void MergingSortedStep::describeActions(JSONBuilder::JSONMap & map) const
 
     if (limit)
         map.add("Limit", limit);
+}
+
+void MergingSortedStep::serialize(WriteBuffer & buffer) const
+{
+    serializeDataStream(input_stream, buffer);
+    serializeItemVector<SortColumnDescription>(sort_description, buffer);
+    writeBinary(max_block_size, buffer);
+    writeBinary(limit, buffer);
+}
+
+QueryPlanStepPtr MergingSortedStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    size_t max_block_size;
+    readBinary(max_block_size, buffer);
+
+    UInt64 limit;
+    readBinary(limit, buffer);
+
+    return std::make_unique<MergingSortedStep>(input_stream, sort_description, max_block_size, limit);
 }
 
 }

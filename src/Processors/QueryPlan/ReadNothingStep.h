@@ -15,6 +15,10 @@ public:
     Type getType() const override { return Type::ReadNothing; }
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
+
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+
 };
 
 }

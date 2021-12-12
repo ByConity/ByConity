@@ -48,6 +48,7 @@ DistinctStep::DistinctStep(
             input_stream_,
             input_stream_.header,
             getTraits(pre_distinct_, checkColumnsAlreadyDistinct(columns_, input_stream_.distinct_columns)))
+    , input_stream(input_stream_)
     , set_size_limits(set_size_limits_)
     , limit_hint(limit_hint_)
     , columns(columns_)
@@ -114,13 +115,31 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void DistinctStep::serialize(WriteBuffer & buffer) const
 {
-//    serializeBlock(output_stream->header, buffer);
+    serializeDataStream(input_stream, buffer);
+    set_size_limits.serialize(buffer);
+    writeBinary(limit_hint, buffer);
+    serializeStrings(columns, buffer);
+    writeBinary(pre_distinct, buffer);
 }
 
 QueryPlanStepPtr DistinctStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
-//    Block output_header = deserializeBlock(buffer);
-//    return std::make_unique<ReadNothingStep>(output_header);
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SizeLimits size_limits;
+    size_limits.deserialize(buffer);
+
+    UInt64 limit_hint;
+    readBinary(limit_hint, buffer);
+
+    Names columns;
+    columns = deserializeStrings(buffer);
+
+    UInt8 pre_distinct;
+    readBinary(pre_distinct, buffer);
+
+    return std::make_unique<DistinctStep>(input_stream, size_limits, limit_hint, columns, bool(pre_distinct));
 }
 
 }

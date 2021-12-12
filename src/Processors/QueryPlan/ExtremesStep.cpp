@@ -30,4 +30,17 @@ void ExtremesStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryP
     pipeline.addExtremesTransform();
 }
 
+void ExtremesStep::serialize(WriteBuffer & buffer) const
+{
+    serializeDataStream(input_stream, buffer);
+}
+
+QueryPlanStepPtr ExtremesStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    return std::make_unique<ExtremesStep>(input_stream);
+}
+
 }

@@ -20,7 +20,11 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+
 private:
+    DataStream input_stream;
     size_t offset;
 };
 

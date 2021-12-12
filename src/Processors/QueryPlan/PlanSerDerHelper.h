@@ -49,9 +49,29 @@ void serializeStringSet(const NameSet & stringSet, WriteBuffer & buf);
 NameSet deserializeStringSet(ReadBuffer & buf);
 
 template<typename T>
-void serializeItemVector(const std::vector<T> & itemVec, WriteBuffer & buf);
+void serializeItemVector(const std::vector<T> & itemVec, WriteBuffer & buf)
+{
+    writeBinary(itemVec.size(), buf);
+    for (const auto & item : itemVec)
+        item.serialize(buf);
+}
+
 template<typename T>
-std::vector<T> deserializeItemVector(ReadBuffer & buf);
+std::vector<T> deserializeItemVector(ReadBuffer & buf)
+{
+    size_t s_size;
+    readBinary(s_size, buf);
+
+    std::vector<T> itemVec(s_size);
+    for (size_t i = 0; i < s_size; ++i)
+    {
+        T item;
+        item.deserialize(buf);
+        itemVec[i] = item;
+    }
+
+    return itemVec;
+}
 
 void serializeBlock(const Block & block, WriteBuffer & buf);
 Block deserializeBlock(ReadBuffer & buf);

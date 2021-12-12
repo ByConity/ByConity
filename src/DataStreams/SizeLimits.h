@@ -2,7 +2,6 @@
 
 #include <common/types.h>
 
-
 namespace DB
 {
 
@@ -18,6 +17,8 @@ enum class OverflowMode
     ANY       = 2,
 };
 
+class ReadBuffer;
+class WriteBuffer;
 
 struct SizeLimits
 {
@@ -38,6 +39,9 @@ struct SizeLimits
     bool softCheck(UInt64 rows, UInt64 bytes) const;
 
     bool hasLimits() const { return max_rows || max_bytes; }
+
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 }

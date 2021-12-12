@@ -111,4 +111,33 @@ void FinishSortingStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
+void FinishSortingStep::serialize(WriteBuffer & buffer) const
+{
+    serializeDataStream(input_stream, buffer);
+    serializeItemVector<SortColumnDescription>(prefix_description, buffer);
+    serializeItemVector<SortColumnDescription>(result_description, buffer);
+    writeBinary(max_block_size, buffer);
+    writeBinary(limit, buffer);
+}
+
+QueryPlanStepPtr FinishSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription prefix_description;
+    prefix_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    SortDescription result_description;
+    result_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    size_t max_block_size;
+    readBinary(max_block_size, buffer);
+
+    size_t limit;
+    readBinary(limit, buffer);
+
+    return std::make_unique<FinishSortingStep>(input_stream, prefix_description, result_description, max_block_size, limit);
+}
+
 }

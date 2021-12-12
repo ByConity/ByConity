@@ -30,6 +30,7 @@ static ITransformingStep::Traits getTraits()
 
 FillingStep::FillingStep(const DataStream & input_stream_, SortDescription sort_description_)
     : ITransformingStep(input_stream_, FillingTransform::transformHeader(input_stream_.header, sort_description_), getTraits())
+    , input_stream(input_stream_)
     , sort_description(std::move(sort_description_))
 {
     if (!input_stream_.has_single_port)
@@ -57,4 +58,20 @@ void FillingStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Sort Description", explainSortDescription(sort_description, input_streams.front().header));
 }
 
+void FillingStep::serialize(WriteBuffer & buffer) const
+{
+    serializeDataStream(input_stream, buffer);
+    serializeItemVector<SortColumnDescription>(sort_description, buffer);
+}
+
+QueryPlanStepPtr FillingStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    return std::make_unique<FillingStep>(input_stream, sort_description);
+}
 }

@@ -36,10 +36,10 @@ LimitStep::LimitStep(
 {
 }
 
-void LimitStep::updateInputStream(DataStream input_stream)
+void LimitStep::updateInputStream(DataStream input_stream_)
 {
     input_streams.clear();
-    input_streams.emplace_back(std::move(input_stream));
+    input_streams.emplace_back(std::move(input_stream_));
     output_stream = createOutputStream(input_streams.front(), output_stream->header, getDataStreamTraits());
 }
 
@@ -85,4 +85,32 @@ void LimitStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Reads All Data", always_read_till_end);
 }
 
+void LimitStep::serialize(WriteBuffer & buffer) const
+{
+    serializeDataStream(input_stream, buffer);
+    writeBinary(limit, buffer);
+    writeBinary(offset, buffer);
+    writeBinary(always_read_till_end, buffer);
+    writeBinary(with_ties, buffer);
+    serializeItemVector<SortColumnDescription>(description, buffer);
+}
+
+QueryPlanStepPtr LimitStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    size_t limit, offset;
+    readBinary(limit, buffer);
+    readBinary(offset, buffer);
+
+    bool always_read_till_end, with_ties;
+    readBinary(always_read_till_end, buffer);
+    readBinary(with_ties, buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    return std::make_unique<LimitStep>(input_stream, limit, offset, always_read_till_end, with_ties, sort_description);
+}
 }
