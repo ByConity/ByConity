@@ -67,6 +67,7 @@ struct QueryStatusInfo
     std::shared_ptr<ProfileEvents::Counters> profile_counters;
     std::shared_ptr<Settings> query_settings;
     std::string current_database;
+    String query_rewrite_by_view;
 };
 
 /// Query and information about its execution.
@@ -120,6 +121,8 @@ protected:
 
     ProcessListForUser * user_process_list = nullptr;
 
+    String query_rewrite_by_view;
+
 public:
 
     QueryStatus(
@@ -170,6 +173,8 @@ public:
 
     /// Copies pointers to in/out streams
     void setQueryStreams(const BlockIO & io);
+
+    void setQueryRewriteByView(const String & rewrite_query);
 
     /// Frees in/out streams
     void releaseQueryStreams();

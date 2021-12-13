@@ -13,13 +13,16 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/formatAST.h>
 
 #include <Columns/ColumnConst.h>
-#include <Columns/ColumnsNumber.h>
-#include <Columns/ColumnsCommon.h>
 #include <Columns/FilterDescription.h>
 
 #include <Storages/VirtualColumnUtils.h>
+#include <Storages/PartitionCommands.h>
+#include <Storages/StorageMaterializedView.h>
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
 #include <Interpreters/ActionsVisitor.h>
@@ -221,6 +224,55 @@ void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr contex
     {
         ColumnPtr & column = block.safeGetByPosition(i).column;
         column = column->filter(*filter.data, -1);
+    }
+}
+
+void cascadingDrop(const StorageID & table_id, const ASTPtr & partition_or_predicate,
+                   bool drop_where, bool detach, bool cascading, ContextPtr context)
+{
+    if (cascading)
+    {
+        Dependencies dependencies = DatabaseCatalog::instance().getDependencies(table_id);
+        for (const auto & database_table : dependencies)
+        {
+            auto dependent_table = DatabaseCatalog::instance().getTable(database_table, context);
+            auto & materialized_view = dynamic_cast<StorageMaterializedView &>(*dependent_table);
+            auto target_table = materialized_view.tryGetTargetTable();
+            /// We can cascading drop/detach only when the dependent view is refreshable,
+            /// i.e. the select table and the target table of the view must have the same partition key.
+            if (target_table && materialized_view.isRefreshable(cascading))
+            {
+                PartitionCommand drop_command;
+                if (drop_where)
+                    drop_command.type = PartitionCommand::DROP_PARTITION_WHERE;
+                else
+                    drop_command.type = PartitionCommand::DROP_PARTITION;
+
+                drop_command.partition = partition_or_predicate;
+                drop_command.detach = detach;
+                drop_command.cascading = cascading;
+
+                PartitionCommands drop_commands;
+                drop_commands.emplace_back(std::move(drop_command));
+
+                // construct the alter query string
+                std::stringstream query_ss;
+                query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "."
+                         << backQuoteIfNeed(target_table->getStorageID().getTableName()) << " CASCADING "
+                         << (detach ? "DETACH" : "DROP")
+                         << (drop_where ? " PARTITION WHERE " : " PARTITION ")
+                         << serializeAST(*partition_or_predicate, true);
+
+                String query_str = query_ss.str();
+                const char * begin = query_str.data();
+                const char * end = query_str.data() + query_str.size();
+
+                ParserQuery parser(end);
+                auto ast = parseQuery(parser, begin, end, "", 0, 0);
+                auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
+                target_table->alterPartition(metadata_snapshot, drop_commands, context);
+            }
+        }
     }
 }
 

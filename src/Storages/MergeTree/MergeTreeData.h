@@ -849,6 +849,9 @@ public:
         return replicated_sends_throttler;
     }
 
+    /// Get required partition vector with query info
+    DataPartsVector getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr context);
+
 protected:
 
     friend class IMergeTreeDataPart;

@@ -26,6 +26,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.type = DROP_PARTITION;
         res.partition = command_ast->partition;
         res.detach = command_ast->detach;
+        res.cascading = command_ast->cascading;
         res.part = command_ast->part;
         return res;
     }
@@ -42,6 +43,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         PartitionCommand res;
         res.type = DROP_PARTITION_WHERE;
         res.partition = command_ast->predicate;
+        res.cascading = command_ast->cascading;
         res.detach = command_ast->detach;
         return res;
     }

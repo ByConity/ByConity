@@ -308,6 +308,11 @@ void QueryStatus::setQueryStreams(const BlockIO & io)
     query_streams_status = QueryStreamsStatus::Initialized;
 }
 
+void QueryStatus::setQueryRewriteByView(const String & rewrite_query)
+{
+    query_rewrite_by_view = rewrite_query;
+}
+
 void QueryStatus::releaseQueryStreams()
 {
     BlockInputStreamPtr in;
@@ -425,6 +430,7 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
 
     res.query             = query;
     res.client_info       = client_info;
+    res.query_rewrite_by_view = query_rewrite_by_view;
     res.elapsed_seconds   = watch.elapsedSeconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
     res.read_rows         = progress_in.read_rows;

@@ -30,6 +30,8 @@ public:
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override;
 
+    ASTPtr getQuery() const { return query_ptr; }
+
 protected:
     ASTPtr query_ptr;
     ContextMutablePtr context;

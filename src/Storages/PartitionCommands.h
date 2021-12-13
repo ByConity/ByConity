@@ -47,6 +47,9 @@ struct PartitionCommand
     /// true for ATTACH PART and DROP DETACHED PART (and false for PARTITION)
     bool part = false;
 
+    /// true for DROP/DETACH PARTITION [WHERE]
+    bool cascading = false;
+
     /// For ATTACH PARTITION partition FROM db.table
     String from_database;
     String from_table;

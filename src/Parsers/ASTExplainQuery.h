@@ -17,6 +17,8 @@ public:
         AnalyzedSyntax, /// 'EXPLAIN SYNTAX SELECT ...'
         QueryPlan, /// 'EXPLAIN SELECT ...'
         QueryPipeline, /// 'EXPLAIN PIPELINE ...'
+        MaterializedView, /// 'EXPLAIN VIEW SELECT ...'
+        QueryElement, /// 'EXPLAIN ELEMENT ...'
     };
 
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
@@ -76,6 +78,8 @@ private:
             case AnalyzedSyntax: return "EXPLAIN SYNTAX";
             case QueryPlan: return "EXPLAIN";
             case QueryPipeline: return "EXPLAIN PIPELINE";
+            case MaterializedView: return "EXPLAIN VIEW";
+            case QueryElement: return "EXPLAIN ELEMENT";
         }
 
         __builtin_unreachable();

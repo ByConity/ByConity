@@ -7,22 +7,47 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/predicateExpressionsUtils.h>
 #include <Formats/FormatFactory.h>
 #include <Parsers/DumpASTNode.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ASTExplainQuery.h>
-#include <Parsers/ASTSelectQuery.h>
-
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ParserQuery.h>
+#include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/printPipeline.h>
-
+#include <Storages/StorageMaterializedView.h>
 #include <Common/JSONBuilder.h>
+#include <IO/WriteBufferFromString.h>
 
 namespace DB
 {
+
+static int fls(int x)
+{
+    int position;
+    int i;
+    if(0 != x)
+    {
+        for (i = (x >> 1), position = 0; i != 0; ++position)
+            i >>= 1;
+    }
+    else
+        position = -1;
+    return position+1;
+}
+
+static unsigned int roundup_pow_of_two(unsigned int x)
+{
+    if (x <= 1)
+        return 2;
+    else
+        return 1UL << fls(x - 1);
+}
 
 namespace ErrorCodes
 {
@@ -81,13 +106,30 @@ BlockIO InterpreterExplainQuery::execute()
 Block InterpreterExplainQuery::getSampleBlock()
 {
     Block block;
-
-    ColumnWithTypeAndName col;
-    col.name = "explain";
-    col.type = std::make_shared<DataTypeString>();
-    col.column = col.type->createColumn();
-    block.insert(col);
-
+    const auto & ast = query->as<ASTExplainQuery &>();
+    if (ast.getKind() == ASTExplainQuery::MaterializedView)
+    {
+        auto view_table_column = ColumnString::create();
+        auto hit_view = ColumnUInt8::create();
+        auto match_cost = ColumnInt64::create();
+        auto read_cost = ColumnUInt64::create();
+        auto view_inner_query = ColumnString::create();
+        auto miss_match_reason = ColumnString::create();
+        block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
+        block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
+        block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
+        block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
+        block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
+        block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
+    }
+    else
+    {
+        ColumnWithTypeAndName col;
+        col.name = "explain";
+        col.type = std::make_shared<DataTypeString>();
+        col.column = col.type->createColumn();
+        block.insert(col);
+    }
     return block;
 }
 
@@ -221,6 +263,45 @@ ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
 
 }
 
+void InterpreterExplainQuery::rewriteDistributedToLocal(ASTPtr & ast)
+{
+    if (!ast)
+        return;
+
+    if (ASTSelectWithUnionQuery * select_with_union = ast->as<ASTSelectWithUnionQuery>())
+    {
+        for (auto & child : select_with_union->list_of_selects->children)
+            rewriteDistributedToLocal(child);
+    }
+    else if (ASTTableExpression * table = ast->as<ASTTableExpression>())
+    {
+        if (table->subquery)
+            rewriteDistributedToLocal(table->subquery);
+        else if (table->database_and_table_name)
+        {
+            auto target_table_id = getContext()->resolveStorageID(table->database_and_table_name);
+            auto storage = DatabaseCatalog::instance().getTable(target_table_id, getContext());
+            auto * distributed = dynamic_cast<StorageDistributed *>(storage.get());
+
+            if (!distributed)
+                return;
+
+            String table_alias = table->database_and_table_name->tryGetAlias();
+            auto old_table_ast = std::find(table->children.begin(), table->children.end(), table->database_and_table_name);
+            table->database_and_table_name = std::make_shared<ASTTableIdentifier>(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
+            *old_table_ast = table->database_and_table_name;
+
+            if (!table_alias.empty())
+                table->database_and_table_name->setAlias(table_alias);
+        }
+    }
+    else
+    {
+        for (auto & child : ast->children)
+            rewriteDistributedToLocal(child);
+    }
+}
+
 BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
 {
     const auto & ast = query->as<ASTExplainQuery &>();
@@ -313,6 +394,108 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
             plan.explainPipeline(buf, settings.query_pipeline_options);
         }
     }
+    else if (ast.getKind() == ASTExplainQuery::MaterializedView)
+    {
+        /// rewrite distributed table to local table
+        ASTPtr explain_query = ast.getExplainedQuery()->clone();
+        rewriteDistributedToLocal(explain_query);
+        ASTSelectWithUnionQuery * select_union_query = explain_query->as<ASTSelectWithUnionQuery>();
+        if (select_union_query && !select_union_query->list_of_selects->children.empty())
+        {
+            Block block;
+            auto view_table_column = ColumnString::create();
+            auto hit_view = ColumnUInt8::create();
+            auto match_cost = ColumnInt64::create();
+            auto read_cost = ColumnUInt64::create();
+            auto view_inner_query = ColumnString::create();
+            auto miss_match_reason = ColumnString::create();
+
+            /// Enable enable_view_based_query_rewrite setting to get view match result
+            ContextMutablePtr context = Context::createCopy(getContext());
+            context->setSetting("enable_view_based_query_rewrite", 1);
+            for (const auto & element : select_union_query->list_of_selects->children)
+            {
+                InterpreterSelectQuery interpreter{element, context, SelectQueryOptions(QueryProcessingStage::FetchColumns)};
+                std::shared_ptr<const MaterializedViewOptimizerResult> mv_optimizer_result = interpreter.getMaterializeViewMatchResult();
+                int MAX = std::numeric_limits<int>::max();
+                if (!mv_optimizer_result->validate_info.empty())
+                {
+                    view_table_column->insertDefault();
+                    hit_view->insert(0);
+                    match_cost->insertDefault();
+                    read_cost->insert(0);
+                    view_inner_query->insertDefault();
+                    miss_match_reason->insert(mv_optimizer_result->validate_info);
+                }
+                else
+                {
+                    for (auto iter = mv_optimizer_result->views_match_info.begin(); iter != mv_optimizer_result->views_match_info.end();
+                         iter++)
+                    {
+                        MatchResult::ResultPtr result = *iter;
+                        if (!result->view_table)
+                            continue;
+
+                        /// insert view name
+                        view_table_column->insert(result->view_table->getStorageID().getFullNameNotQuoted());
+
+                        /// insert view match result
+                        if (result->cost != MAX && iter == mv_optimizer_result->views_match_info.begin())
+                            hit_view->insert(1);
+                        else
+                            hit_view->insert(0);
+
+                        /// insert cost value
+                        match_cost->insert(result->cost);
+
+                        /// insert read cost
+                        read_cost->insert(result->read_cost);
+
+                        /// insert view inner query
+                        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(result->view_table.get());
+                        if (materialized_view)
+                        {
+                            ASTPtr view_query = materialized_view->getInnerQuery();
+                            view_inner_query->insert(queryToString(view_query));
+                        }
+                        else
+                            view_inner_query->insertDefault();
+
+                        miss_match_reason->insert(result->view_match_info);
+                    }
+                }
+            }
+            block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
+            block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
+            block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
+            block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
+            block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
+            block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
+            return std::make_shared<OneBlockInputStream>(block);
+        }
+    }
+    else if (ast.getKind() == ASTExplainQuery::ExplainKind::QueryElement)
+    {
+        ASTPtr explain_query = ast.getExplainedQuery()->clone();
+        rewriteDistributedToLocal(explain_query);
+        InterpreterSelectWithUnionQuery interpreter(explain_query, getContext(),
+                                                    SelectQueryOptions(QueryProcessingStage::FetchColumns).analyze().modify());
+        const auto & ast_ptr = interpreter.getQuery()->children.at(0)->as<ASTExpressionList &>();
+        if (ast_ptr.children.size() != 1)
+            throw Exception("Element query not support multiple select query", ErrorCodes::LOGICAL_ERROR);
+        const auto & select_query = ast_ptr.children.at(0)->as<ASTSelectQuery &>();
+        ASTs where_expressions = {select_query.prewhere(), select_query.where()};
+        where_expressions.erase(std::remove_if(where_expressions.begin(), where_expressions.end(), [](const auto & q) { return !q;} ), where_expressions.end());
+        ASTPtr where = composeAnd(where_expressions);
+
+        buf << "{";
+        elementDatabaseAndTable(select_query, where, buf);
+        elementDimensions(select_query.select(), buf);
+        elementMetrics(select_query.select(), buf);
+        elementWhere(where, buf);
+        elementGroupBy(select_query.groupBy(), buf);
+        buf << "}";
+    }
 
     if (single_line)
         res_columns[0]->insertData(buf.str().data(), buf.str().size());
@@ -320,6 +503,265 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         fillColumn(*res_columns[0], buf.str());
 
     return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));
+}
+
+
+void InterpreterExplainQuery::elementDatabaseAndTable(const ASTSelectQuery & select_query, const ASTPtr & where, WriteBuffer & buffer)
+{
+    if (!select_query.tables())
+        throw Exception("Can not get database and table in element query", ErrorCodes::LOGICAL_ERROR);
+
+    if(select_query.tables()->children.size() != 1)
+        throw Exception("Element query not support multiple table query, such as join, etc", ErrorCodes::LOGICAL_ERROR);
+
+    auto database_and_table = getDatabaseAndTable(select_query, 0);
+    if (database_and_table)
+    {
+        StoragePtr storage = DatabaseCatalog::instance().getTable({database_and_table->database, database_and_table->table}, getContext());
+        buffer << "\"database\": \"" << storage->getStorageID().getDatabaseName() << "\", ";
+        buffer << "\"table\": \"" << storage->getStorageID().getTableName() << "\", ";
+        auto dependencies = DatabaseCatalog::instance().getDependencies(storage->getStorageID());
+        buffer << "\"dependencies\": [";
+        for (size_t i = 0, size = dependencies.size(); i < size; ++i)
+            buffer << "\"" << dependencies[i].getDatabaseName() << "." << dependencies[i].getTableName() << "\"" << (i + 1 != size ? ", " : "");
+        buffer << "], ";
+
+        listPartitionKeys(storage, buffer);
+        listRowsOfOnePartition(storage, select_query.groupBy(), where, buffer);
+    }
+    else
+        throw Exception("Can not get database and table in element query", ErrorCodes::LOGICAL_ERROR);
+}
+
+void InterpreterExplainQuery::listPartitionKeys(StoragePtr & storage, WriteBuffer & buffer)
+{
+    buffer << "\"partition_keys\": [";
+    if (auto partition_key = storage->getInMemoryMetadataPtr()->getPartitionKey().expression_list_ast)
+    {
+        const auto & partition_expr_list = partition_key->as<ASTExpressionList &>();
+        if (!partition_expr_list.children.empty())
+        {
+            for (size_t i = 0, size = partition_expr_list.children.size(); i < size; ++i)
+            {
+                buffer << "\"" << partition_expr_list.children[i]->getColumnName() << "\"" << (i + 1 != size ? ", " : "");
+            }
+        }
+    }
+    buffer << "], ";
+}
+
+/**
+ * Select one partition to estimate view table definition is suitable with ratio of view rows and base table rows.
+ */
+void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer)
+{
+    auto partition_condition = getActivePartCondition(storage);
+    if (partition_condition)
+    {
+        UInt64 base_rows = 0;
+        {
+            WriteBufferFromOwnString query_buffer;
+            query_buffer << "select count() as count from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
+                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
+
+            String query_str = query_buffer.str();
+            const char * begin = query_str.data();
+            const char * end = query_str.data() + query_str.size();
+
+            ParserQuery parser(end);
+            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+            BlockInputStreamPtr in = select.execute().getInputStream();
+
+            in->readPrefix();
+            Block block = in->read();
+            in->readSuffix();
+
+            auto & column = block.getByName("count").column;
+            if (column->size() == 1)
+                base_rows = column->getUInt(0);
+        }
+
+        UInt64 view_rows = 0;
+        {
+            WriteBufferFromOwnString query_ss;
+            query_ss << "select";
+            if(group_by)
+            {
+                query_ss << " uniq(";
+                auto & expression_list = group_by->as<ASTExpressionList &>();
+                for (size_t i = 0, size = expression_list.children.size(); i < size; ++i)
+                {
+                    expression_list.children[i]->format(IAST::FormatSettings(query_ss, true, true));
+                    query_ss << (i + 1 != size ? ", " : ")");
+                }
+                query_ss << " as count";
+            }
+            else
+            {
+                query_ss << " count() as count";
+            }
+
+            query_ss << " from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
+                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
+
+            if (where)
+            {
+                query_ss << " and (";
+                where->format(IAST::FormatSettings(query_ss, true));
+                query_ss << ")";
+            }
+
+            String query_str = query_ss.str();
+
+            LOG_DEBUG(log, "element view rows query-{}",  query_str);
+            const char * begin = query_str.data();
+            const char * end = query_str.data() + query_str.size();
+
+            ParserQuery parser(end);
+            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+            BlockInputStreamPtr in = select.execute().getInputStream();
+
+            in->readPrefix();
+            Block block = in->read();
+            in->readSuffix();
+
+            auto & column = block.getByName("count").column;
+            if (column->size() == 1)
+            {
+                if (isColumnNullable(*column))
+                {
+                    const auto * nullable_column = static_cast<const ColumnNullable *>(column.get());
+                    view_rows = nullable_column->isNullAt(0) ? 0 : nullable_column->getNestedColumnPtr()->getUInt(0);
+                }
+                else
+                {
+                    view_rows = column->getUInt(0);
+                }
+                LOG_DEBUG(log, "view query count column-{}, result-{}", column->dumpStructure(), view_rows);
+            }
+        }
+
+        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", ";
+        auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get());
+        size_t mv_index_granularity = merge_tree_data->getSettings()->index_granularity;
+        if (view_rows != 0 && base_rows != 0 && merge_tree_data->getSettings()->index_granularity!= 0)
+            mv_index_granularity = roundup_pow_of_two(static_cast<unsigned int>(merge_tree_data->getSettings()->index_granularity / (base_rows / view_rows)));
+        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", " << "\"recommend_mv_index_granularity\": " << mv_index_granularity << ", ";
+    }
+}
+
+
+std::optional<String> InterpreterExplainQuery::getActivePartCondition(StoragePtr & storage)
+{
+    auto * merge_tree = dynamic_cast<MergeTreeData *>(storage.get());
+    if (!merge_tree)
+        throw Exception("Unknown engine: " + storage->getName(), ErrorCodes::LOGICAL_ERROR);
+
+    auto parts = merge_tree->getDataPartsVector();
+    if (!parts.empty())
+    {
+        return "_partition_id = '" + parts[0]->partition.getID(*merge_tree) + "'";
+    }
+
+    return {};
+}
+
+void InterpreterExplainQuery::elementWhere(const ASTPtr & where, WriteBuffer & buffer)
+{
+    buffer << "\"where\": " << "\"";
+    if (where)
+        where->format(IAST::FormatSettings(buffer, true));
+    buffer << "\", ";
+}
+
+void InterpreterExplainQuery::elementMetrics(const ASTPtr & select, WriteBuffer & buffer)
+{
+    buffer << "\"metrics\": [";
+    std::vector<String> metric_aliases;
+    if(select)
+    {
+        auto & expression_list = select->as<ASTExpressionList &>();
+        bool first_metric = true;
+        for (auto & child : expression_list.children)
+        {
+            auto * func = child->as<ASTFunction>();
+            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+            {
+                if(!first_metric)
+                    buffer << ", ";
+                buffer << "\"";
+                child->format(IAST::FormatSettings(buffer, true, true));
+                buffer << "\"";
+                metric_aliases.push_back(child->tryGetAlias());
+                first_metric = false;
+            }
+        }
+    }
+
+    buffer << "], ";
+    buffer << "\"metric_aliases\": [";
+    for(size_t i = 0, size = metric_aliases.size(); i < size; ++i)
+        buffer << "\"" << metric_aliases[i] << "\"" << (i + 1 != size ? ", " : "");
+    buffer << "], ";
+}
+
+void InterpreterExplainQuery::elementDimensions(const ASTPtr & select, WriteBuffer & buffer)
+{
+    buffer << "\"dimensions\": [";
+    std::vector<String> dimension_aliases;
+    if(select)
+    {
+        auto & expression_list = select->as<ASTExpressionList &>();
+        bool first_dimension = true;
+        for (auto & child : expression_list.children)
+        {
+            auto * func = child->as<ASTFunction>();
+            auto * identifier = child->as<ASTIdentifier>();
+            if (identifier || (func && !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name)))
+            {
+                if (!first_dimension)
+                    buffer << ", ";
+                buffer << "\"";
+                child->format(IAST::FormatSettings(buffer, true, true));
+                buffer << "\"";
+                dimension_aliases.push_back(child->tryGetAlias());
+                first_dimension = false;
+            }
+        }
+    }
+
+    buffer << "], ";
+    buffer << "\"dimension_aliases\": [";
+    for(size_t i = 0, size = dimension_aliases.size(); i < size; ++i)
+        buffer << "\"" << dimension_aliases[i] << "\"" << (i + 1 != size ? ", " : "");
+    buffer << "], ";
+}
+
+void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffer & buffer)
+{
+    buffer << "\"group_by\": [";
+    if(group_by)
+    {
+        auto & expression_list = group_by->as<ASTExpressionList &>();
+        bool first_group_expression = true;
+        for (auto & child : expression_list.children)
+        {
+            if(child->as<ASTFunction>() || child->as<ASTIdentifier>())
+            {
+                if (!first_group_expression)
+                    buffer << ", ";
+                buffer << "\"";
+                child->format(IAST::FormatSettings(buffer, true, true));
+                buffer << "\"";
+                first_group_expression = false;
+            }
+        }
+    }
+    buffer << "]";
 }
 
 }

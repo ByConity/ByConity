@@ -23,6 +23,7 @@
 #include <Parsers/ParserShowPrivilegesQuery.h>
 #include <Parsers/ParserExplainQuery.h>
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
+#include <Parsers/ParserRefreshQuery.h>
 
 
 namespace DB
@@ -49,6 +50,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end);
+    ParserRefreshQuery refresh_p;
 
     ASTPtr query;
 
@@ -71,7 +73,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || show_access_p.parse(pos, query, expected)
         || show_access_entities_p.parse(pos, query, expected)
         || show_grants_p.parse(pos, query, expected)
-        || show_privileges_p.parse(pos, query, expected);
+        || show_privileges_p.parse(pos, query, expected)
+        || refresh_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

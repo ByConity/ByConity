@@ -29,6 +29,7 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
@@ -68,6 +69,7 @@
 #include <Interpreters/InterpreterExternalDDLQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
+#include <Interpreters/InterpreterRefreshQuery.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
@@ -274,6 +276,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTExternalDDLQuery>())
     {
         return std::make_unique<InterpreterExternalDDLQuery>(query, context);
+    }
+    else if (query->as<ASTRefreshQuery>())
+    {
+        return std::make_unique<InterpreterRefreshQuery>(query, context);
     }
     else
     {
