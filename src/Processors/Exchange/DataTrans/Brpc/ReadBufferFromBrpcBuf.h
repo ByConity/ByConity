@@ -12,7 +12,7 @@ public:
 
     bool nextImpl() override
     {
-        if (processed + 1 == int64_t(buf.backing_block_num())) /// A little hack
+        if (processed + 1 == int64_t(buf.backing_block_num()))
             return false;
         auto block_view = buf.backing_block(++processed);
         working_buffer = Buffer(const_cast<Position>(block_view.data()), const_cast<Position>(block_view.data() + block_view.size()));

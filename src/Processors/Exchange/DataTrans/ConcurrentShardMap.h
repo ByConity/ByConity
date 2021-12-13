@@ -46,11 +46,11 @@ public:
 
     String keys()
     {
-        std::ostringstream oss;
+        String ret;
         std::for_each(shards.begin(), shards.end(), [&](std::unique_ptr<ConcurrentShardElement<KeyType, ElementType>> & element) {
-            oss << element->keys();
+            ret += element->keys();
         });
-        return oss.str();
+        return ret;
     }
 
     void forEach(std::function<void(std::pair<KeyType, ElementType>)> func)
