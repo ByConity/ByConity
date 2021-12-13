@@ -24,6 +24,8 @@
 #include <IO/Operators.h>
 #include <Interpreters/JIT/compileFunction.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/Context.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 
 
 namespace ProfileEvents
@@ -212,6 +214,95 @@ void Aggregator::Params::explain(JSONBuilder::JSONMap & map) const
 
         map.add("Aggregates", std::move(aggregates_array));
     }
+}
+
+void Aggregator::Params::serialize(WriteBuffer & buf) const
+{
+    serializeBlock(src_header, buf);
+    serializeBlock(intermediate_header, buf);
+
+    /// keys
+    writeBinary(keys, buf);
+
+    /// aggregates
+    writeBinary(aggregates.size(), buf);
+    for (const auto & aggregate : aggregates)
+        aggregate.serialize(buf);
+
+    writeBinary(overflow_row, buf);
+    writeBinary(max_rows_to_group_by, buf);
+    serializeEnum(group_by_overflow_mode, buf);
+
+    writeBinary(group_by_two_level_threshold, buf);
+    writeBinary(group_by_two_level_threshold_bytes, buf);
+
+    writeBinary(max_bytes_before_external_group_by, buf);
+
+    writeBinary(empty_result_for_aggregation_by_empty_set, buf);
+
+    writeBinary(max_threads, buf);
+    writeBinary(min_free_disk_space, buf);
+
+    writeBinary(compile_aggregate_expressions, buf);
+    writeBinary(min_count_to_compile_aggregate_expression, buf);
+}
+
+Aggregator::Params Aggregator::Params::deserialize(ReadBuffer & buf, const ContextPtr & context)
+{
+    
+    auto src_header = deserializeBlock(buf);
+    auto intermediate_header = deserializeBlock(buf);
+
+    ColumnNumbers keys;
+    readBinary(keys, buf);
+
+    size_t aggregates_size;
+    readBinary(aggregates_size, buf);
+    AggregateDescriptions aggregates;
+    aggregates.resize(aggregates_size);
+    for (size_t i = 0; i < aggregates_size; ++i)
+    {
+        aggregates[i].deserialize(buf);
+    }
+
+    bool overflow_row;
+    readBinary(overflow_row, buf);
+    size_t max_rows_to_group_by;
+    readBinary(max_rows_to_group_by, buf);
+    OverflowMode group_by_overflow_mode;
+    deserializeEnum(group_by_overflow_mode, buf);
+
+    size_t group_by_two_level_threshold;
+    readBinary(group_by_two_level_threshold, buf);
+    size_t group_by_two_level_threshold_bytes;
+    readBinary(group_by_two_level_threshold_bytes, buf);
+
+    size_t max_bytes_before_external_group_by;
+    readBinary(max_bytes_before_external_group_by, buf);
+    bool empty_result_for_aggregation_by_empty_set;
+    readBinary(empty_result_for_aggregation_by_empty_set, buf);
+
+    size_t max_threads;
+    readBinary(max_threads, buf);
+    size_t min_free_disk_space;
+    readBinary(min_free_disk_space, buf);
+
+    bool compile_aggregate_expressions;
+    readBinary(compile_aggregate_expressions, buf);
+    size_t min_count_to_compile_aggregate_expression;
+    readBinary(min_count_to_compile_aggregate_expression, buf);
+
+    return Aggregator::Params(src_header, keys, aggregates,
+                              overflow_row, max_rows_to_group_by, group_by_overflow_mode,
+                              group_by_two_level_threshold, group_by_two_level_threshold_bytes,
+                              max_bytes_before_external_group_by,
+                              empty_result_for_aggregation_by_empty_set,
+                              context->getTemporaryVolume(),
+                              max_threads,
+                              min_free_disk_space,
+                              compile_aggregate_expressions,
+                              min_count_to_compile_aggregate_expression,
+                              intermediate_header);
 }
 
 #if USE_EMBEDDED_COMPILER

@@ -978,6 +978,10 @@ void readQuoted(DecimalField<T> & x, ReadBuffer & buf);
 
 void writeFieldText(const Field & x, WriteBuffer & buf);
 
+void readFieldBinary(Field & field, ReadBuffer & buf);
+
+void writeFieldBinary(const Field & field, WriteBuffer & buf);
+
 [[noreturn]] inline void writeQuoted(const Tuple &, WriteBuffer &) { throw Exception("Cannot write Tuple quoted.", ErrorCodes::NOT_IMPLEMENTED); }
 
 String toString(const Field & x);
