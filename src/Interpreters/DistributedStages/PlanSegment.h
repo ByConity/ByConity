@@ -71,11 +71,15 @@ public:
 
     void setPlanSegmentId(size_t segment_id_) { segment_id = segment_id_; }
 
+    Names getShufflekeys() const { return shuffle_keys; }
+
+    void setShufflekeys(const Names & keys) { shuffle_keys = keys; } 
+
     virtual void serialize(WriteBuffer & buf) const;
 
     virtual void deserialize(ReadBuffer & buf);
 
-    virtual String toString() const;
+    virtual String toString(size_t indent = 0) const;
 
 protected:
     Block header;
@@ -84,6 +88,7 @@ protected:
     size_t exchange_parallel_size = 0;
     String name;
     size_t segment_id = std::numeric_limits<size_t>::max();
+    Names shuffle_keys;
 };
 
 class PlanSegmentInput : public IPlanSegment
@@ -109,7 +114,7 @@ public:
 
     void deserialize(ReadBuffer & buf) override;
 
-    String toString() const override;
+    String toString(size_t indent = 0) const override;
 
 private:
     size_t parallel_index = 0;
@@ -130,10 +135,6 @@ public:
 
     PlanSegmentOutput() = default;
 
-    Names getShufflekeys() const { return shuffle_keys; }
-
-    void setShufflekeys(const Names & keys) { shuffle_keys = keys; } 
-
     size_t getParallelSize() const { return parallel_size; }
 
     void setParallelSize(size_t parallel_size_) { parallel_size = parallel_size_; }
@@ -146,10 +147,9 @@ public:
 
     void deserialize(ReadBuffer & buf) override;
 
-    String toString() const override;
+    String toString(size_t indent = 0) const override;
 
 private:
-    Names shuffle_keys;
     String shuffle_function_name = "cityHash64";
     size_t parallel_size;
     bool keep_order = false;
@@ -174,6 +174,13 @@ public:
     PlanSegment(PlanSegment && ) = default;
     PlanSegment & operator=(PlanSegment &&) = default;
 
+    PlanSegment(size_t segment_id_,
+                const String & query_id_,
+                const String & cluster_name_)
+                : segment_id(segment_id_)
+                , query_id(query_id_)
+                , cluster_name(cluster_name_) {}
+
     ~PlanSegment() = default;
 
     QueryPlan & getQueryPlan() { return query_plan; }
@@ -194,9 +201,13 @@ public:
 
     String getQueryId() const { return query_id; }
 
+    void setQueryId(const String & query_id_) { query_id = query_id_; }
+
     PlanSegmentInputs getPlanSegmentInputs() const { return inputs; }
 
     void appendPlanSegmentInput(const PlanSegmentInputPtr & input) { inputs.push_back(input); }
+
+    void appendPlanSegmentInputs(const PlanSegmentInputs & inputs_) { inputs.insert(inputs.end(), inputs_.begin(), inputs_.end()); }
 
     void setPlanSegmentOutput(const PlanSegmentOutputPtr & output_) { output = output_; }
 
@@ -264,7 +275,15 @@ public:
         root = &nodes.front();
     }
 
+    void setRoot(Node * root_) { root = root_; }
+
     Node * getRoot() { return root; }
+
+    Node * getLastNode() { return &nodes.back(); }
+
+    Nodes & getNodes() { return nodes; }
+
+    String toString() const;
 
 private:
     Nodes nodes;

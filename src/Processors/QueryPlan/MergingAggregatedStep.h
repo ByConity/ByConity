@@ -28,6 +28,8 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
+    AggregatingTransformParamsPtr getParams() const { return params; }
+
 private:
     AggregatingTransformParamsPtr params;
     bool memory_efficient_aggregation;

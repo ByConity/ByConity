@@ -84,6 +84,7 @@ public:
         M(Distinct) \
         M(Expression) \
         M(Extremes) \
+        M(Exchange) \
         M(Filling) \
         M(FilledJoin) \
         M(Filter) \
@@ -100,6 +101,7 @@ public:
         M(PartialSorting) \
         M(ReadFromStorage) \
         M(ReadNothing) \
+        M(RemoteExchangeSource) \
         M(Rollup) \
         M(SettingQuotaAndLimits) \
         M(TotalsHaving) \

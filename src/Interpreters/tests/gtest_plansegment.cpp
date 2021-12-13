@@ -29,7 +29,6 @@ TEST(PlanSegmentTest, PlanSegmentSerDer)
 {   
     PlanSegmentPtr plan_segment = createPlanSegment();
 
-    std::cout<<" begin to serialize" << std::endl;
     /**
      * serialize to buffer
      */
