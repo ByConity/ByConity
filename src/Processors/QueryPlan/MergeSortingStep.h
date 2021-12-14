@@ -38,7 +38,6 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
-    DataStream input_stream;
     SortDescription description;
     size_t max_merged_block_size;
     UInt64 limit;

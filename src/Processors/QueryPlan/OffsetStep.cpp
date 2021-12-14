@@ -49,7 +49,7 @@ void OffsetStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void OffsetStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     writeBinary(offset, buffer);
 }
 

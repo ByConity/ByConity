@@ -29,7 +29,6 @@ MergingSortedStep::MergingSortedStep(
     size_t max_block_size_,
     UInt64 limit_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
-    , input_stream(input_stream_)
     , sort_description(std::move(sort_description_))
     , max_block_size(max_block_size_)
     , limit(limit_)
@@ -85,7 +84,7 @@ void MergingSortedStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void MergingSortedStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     serializeItemVector<SortColumnDescription>(sort_description, buffer);
     writeBinary(max_block_size, buffer);
     writeBinary(limit, buffer);

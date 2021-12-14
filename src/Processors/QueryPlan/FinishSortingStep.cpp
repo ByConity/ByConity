@@ -113,7 +113,7 @@ void FinishSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void FinishSortingStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     serializeItemVector<SortColumnDescription>(prefix_description, buffer);
     serializeItemVector<SortColumnDescription>(result_description, buffer);
     writeBinary(max_block_size, buffer);

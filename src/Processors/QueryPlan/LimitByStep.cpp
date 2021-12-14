@@ -86,7 +86,7 @@ void LimitByStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void LimitByStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     writeBinary(group_length, buffer);
     writeBinary(group_offset, buffer);
     serializeStrings(columns, buffer);

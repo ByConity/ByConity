@@ -217,6 +217,14 @@ QueryPlanStepPtr createDistinctStep()
     return std::make_unique<DistinctStep>(stream, limits, 0, columns, false);
 }
 
+QueryPlanStepPtr createUnionStep()
+{
+    DataStreams streams;
+    streams.push_back(createDataStream());
+    streams.push_back(createDataStream());
+    return std::make_unique<UnionStep>(streams, 0);
+}
+
 TEST(QueryPlanTest, SimpleStepTest)
 {
     TestSingleSimpleStep(createReadNothingStep());
@@ -231,4 +239,5 @@ TEST(QueryPlanTest, SimpleStepTest)
     TestSingleSimpleStep(createFillingStep());
     TestSingleSimpleStep(createExtremesStep());
     TestSingleSimpleStep(createDistinctStep());
+    TestSingleSimpleStep(createUnionStep());
 }

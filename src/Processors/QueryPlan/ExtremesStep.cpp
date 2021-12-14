@@ -32,7 +32,7 @@ void ExtremesStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryP
 
 void ExtremesStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
 }
 
 QueryPlanStepPtr ExtremesStep::deserialize(ReadBuffer & buffer, ContextPtr )

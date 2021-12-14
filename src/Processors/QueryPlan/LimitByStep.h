@@ -25,7 +25,6 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
-    DataStream input_stream;
     size_t group_length;
     size_t group_offset;
     Names columns;

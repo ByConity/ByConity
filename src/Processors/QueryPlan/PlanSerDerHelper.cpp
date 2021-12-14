@@ -130,6 +130,15 @@ DataStream deserializeDataStream(ReadBuffer & buf)
                       .sort_mode = DataStream::SortMode(sort_mode)};
 }
 
+void serializeDataStreamFromDataStreams(const DataStreams & data_streams, WriteBuffer & buf)
+{
+    DataStream stream{.header = Block()};
+    if (!data_streams.empty())
+        stream = data_streams.front();
+
+    serializeDataStream(stream, buf);
+}
+
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)
 {
     IQueryPlanStep::Type type;

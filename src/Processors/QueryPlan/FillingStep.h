@@ -26,7 +26,6 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
-    DataStream input_stream;
     SortDescription sort_description;
 };
 

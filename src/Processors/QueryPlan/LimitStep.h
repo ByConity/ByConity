@@ -42,7 +42,6 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
-    DataStream input_stream;
     size_t limit;
     size_t offset;
     bool always_read_till_end;

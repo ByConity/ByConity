@@ -48,7 +48,6 @@ DistinctStep::DistinctStep(
             input_stream_,
             input_stream_.header,
             getTraits(pre_distinct_, checkColumnsAlreadyDistinct(columns_, input_stream_.distinct_columns)))
-    , input_stream(input_stream_)
     , set_size_limits(set_size_limits_)
     , limit_hint(limit_hint_)
     , columns(columns_)
@@ -115,7 +114,7 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void DistinctStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     set_size_limits.serialize(buffer);
     writeBinary(limit_hint, buffer);
     serializeStrings(columns, buffer);

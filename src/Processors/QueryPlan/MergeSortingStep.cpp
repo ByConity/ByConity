@@ -35,7 +35,6 @@ MergeSortingStep::MergeSortingStep(
     VolumePtr tmp_volume_,
     size_t min_free_disk_space_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
-    , input_stream(input_stream_)
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
@@ -46,7 +45,7 @@ MergeSortingStep::MergeSortingStep(
 {
     /// TODO: check input_stream is partially sorted by the same description.
     output_stream->sort_description = description;
-    output_stream->sort_mode = input_stream.has_single_port ? DataStream::SortMode::Stream
+    output_stream->sort_mode = input_stream_.has_single_port ? DataStream::SortMode::Stream
                                                             : DataStream::SortMode::Port;
 }
 
@@ -97,7 +96,7 @@ void MergeSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void MergeSortingStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStream(input_stream, buffer);
+    serializeDataStreamFromDataStreams(input_streams, buffer);
     serializeItemVector<SortColumnDescription>(description, buffer);
     writeBinary(max_merged_block_size, buffer);
     writeBinary(max_bytes_before_remerge, buffer);
