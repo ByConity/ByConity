@@ -255,6 +255,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::START_CONSUME:
         case Type::STOP_CONSUME:
         case Type::RESTART_CONSUME:
+        case Type::DROP_CHECKSUMS_CACHE:
             parseDatabaseAndTableName(pos, expected, res->database, res->table);
             break;
 
@@ -302,6 +303,44 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 return false;
             if (!ParserStringLiteral().parse(pos, res->target_path, expected))
                 return false;
+            break;
+        }
+
+        case Type::METASTORE:
+        {
+            if (ParserKeyword{"SYNC"}.ignore(pos, expected))
+            {
+                res->meta_ops.operation = MetastoreOperation::SYNC;
+                if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                    return false;
+            }
+            else if (ParserKeyword{"DROP"}.ignore(pos, expected))
+            {
+                if (ParserKeyword{"BY KEY"}.ignore(pos, expected))
+                {
+                    res->meta_ops.operation = MetastoreOperation::DROP_BY_KEY;
+                    ASTPtr ast_literal;
+                    if (!ParserStringLiteral{}.parse(pos, ast_literal, expected))
+                        return false;
+                    res->meta_ops.drop_key= ast_literal->as<ASTLiteral &>().value.safeGet<String>();
+                }
+                else
+                    res->meta_ops.operation = MetastoreOperation::DROP_ALL_KEY;
+                
+                if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                    return false;
+            }
+            else if (ParserKeyword{"STOP AUTO SYNC"}.ignore(pos, expected))
+            {
+                res->meta_ops.operation = MetastoreOperation::STOP_AUTO_SYNC;
+            }
+            else if (ParserKeyword{"START AUTO SYNC"}.ignore(pos, expected))
+            {
+                res->meta_ops.operation = MetastoreOperation::START_AUTO_SYNC;
+            }
+            else
+                return false;
+
             break;
         }
 

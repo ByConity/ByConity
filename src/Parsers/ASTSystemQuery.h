@@ -11,6 +11,24 @@
 namespace DB
 {
 
+enum class MetastoreOperation
+{
+    UNKNOWN,
+    START_AUTO_SYNC,
+    STOP_AUTO_SYNC,
+    SYNC,
+    DROP_ALL_KEY,
+    DROP_BY_KEY
+};
+
+const char * metaOptToString(MetastoreOperation opt);
+
+struct MetastoreOptions
+{
+    MetastoreOperation operation = MetastoreOperation::UNKNOWN;
+    String drop_key {};
+};
+
 class ASTSystemQuery : public IAST, public ASTQueryWithOnCluster
 {
 public:
@@ -25,6 +43,7 @@ public:
         DROP_MARK_CACHE,
         DROP_UNCOMPRESSED_CACHE,
         DROP_MMAP_CACHE,
+        DROP_CHECKSUMS_CACHE,
 #if USE_EMBEDDED_COMPILER
         DROP_COMPILED_EXPRESSION_CACHE,
 #endif
@@ -71,6 +90,8 @@ public:
         STOP_CONSUME,
         RESTART_CONSUME,
         FETCH_PARTS,
+        METASTORE,
+        CLEAR_BROKEN_TABLES,
         END
     };
 
@@ -91,6 +112,8 @@ public:
 
     // For execute/reload mutation
     String mutation_id;
+
+    MetastoreOptions meta_ops;
 
     ASTPtr predicate;
     ASTPtr values_changes;

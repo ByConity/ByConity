@@ -1291,7 +1291,7 @@ void StorageReplicatedMergeTree::checkPartChecksumsAndAddCommitOps(const zkutil:
         part_name = part->name;
 
     auto local_part_header = ReplicatedMergeTreePartHeader::fromColumnsAndChecksums(
-        part->getColumns(), part->checksums);
+        part->getColumns(), *(part->getChecksums()));
 
     Strings replicas = zookeeper->getChildren(fs::path(zookeeper_path) / "replicas");
     std::shuffle(replicas.begin(), replicas.end(), thread_local_rng);
@@ -1376,7 +1376,7 @@ void StorageReplicatedMergeTree::checkPartChecksumsAndAddCommitOps(const zkutil:
             ops.emplace_back(zkutil::makeCreateRequest(
                 fs::path(part_path) / "columns", part->getColumns().toString(), zkutil::CreateMode::Persistent));
             ops.emplace_back(zkutil::makeCreateRequest(
-                fs::path(part_path) / "checksums", getChecksumsForZooKeeper(part->checksums), zkutil::CreateMode::Persistent));
+                fs::path(part_path) / "checksums", getChecksumsForZooKeeper(*(part->getChecksums())), zkutil::CreateMode::Persistent));
         }
     }
     else
@@ -1477,7 +1477,7 @@ MergeTreeData::MutableDataPartPtr StorageReplicatedMergeTree::attachPartHelperFo
                 continue;
             }
 
-            if (entry.part_checksum == part->checksums.getTotalChecksumHex())
+            if (entry.part_checksum == part->getChecksums()->getTotalChecksumHex())
             {
                 part->modification_time = disk->getLastModified(part->getFullRelativePath()).epochTime();
                 return part;
@@ -2429,7 +2429,7 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
                 continue;
             }
 
-            String checksum_hex  = src_part->checksums.getTotalChecksumHex();
+            String checksum_hex  = src_part->getChecksums()->getTotalChecksumHex();
 
             if (checksum_hex != part_desc->checksum_hex)
             {
@@ -2541,7 +2541,7 @@ bool StorageReplicatedMergeTree::executeReplaceRange(const LogEntry & entry)
         if (part_desc->src_table_part)
         {
 
-            if (part_desc->checksum_hex != part_desc->src_table_part->checksums.getTotalChecksumHex())
+            if (part_desc->checksum_hex != part_desc->src_table_part->getChecksums()->getTotalChecksumHex())
                 throw Exception("Checksums of " + part_desc->src_table_part->name + " is suddenly changed", ErrorCodes::UNFINISHED);
 
             part_desc->res_part = cloneAndLoadDataPartOnSameDisk(
@@ -4064,7 +4064,7 @@ bool StorageReplicatedMergeTree::fetchPart(const String & part_name, const Stora
         if (source_part)
         {
             MinimalisticDataPartChecksums source_part_checksums;
-            source_part_checksums.computeTotalChecksums(source_part->checksums);
+            source_part_checksums.computeTotalChecksums(*(source_part->getChecksums()));
 
             MinimalisticDataPartChecksums desired_checksums;
             String part_path = fs::path(source_replica_path) / "parts" / part_name;
@@ -6427,7 +6427,7 @@ void StorageReplicatedMergeTree::replacePartitionFrom(
                 "Cannot replace partition '" + partition_id + "' because part '" + src_part->name + "' has inconsistent granularity with table",
                 ErrorCodes::LOGICAL_ERROR);
 
-        String hash_hex = src_part->checksums.getTotalChecksumHex();
+        String hash_hex = src_part->getChecksums()->getTotalChecksumHex();
 
         if (replace)
             LOG_INFO(log, "Trying to replace {} with hash_hex {}", src_part->name, hash_hex);
@@ -6639,7 +6639,7 @@ void StorageReplicatedMergeTree::movePartitionToTable(const StoragePtr & dest_ta
                 "Cannot move partition '" + partition_id + "' because part '" + src_part->name + "' has inconsistent granularity with table",
                 ErrorCodes::LOGICAL_ERROR);
 
-        String hash_hex = src_part->checksums.getTotalChecksumHex();
+        String hash_hex = src_part->getChecksums()->getTotalChecksumHex();
         String block_id_path;
 
         auto lock = dest_table_storage->allocateBlockNumber(partition_id, zookeeper, block_id_path);
@@ -6905,7 +6905,7 @@ void StorageReplicatedMergeTree::getCommitPartOps(
     {
         ops.emplace_back(zkutil::makeCreateRequest(
             fs::path(replica_path) / "parts" / part->name,
-            ReplicatedMergeTreePartHeader::fromColumnsAndChecksums(part->getColumns(), part->checksums).toString(),
+            ReplicatedMergeTreePartHeader::fromColumnsAndChecksums(part->getColumns(), *(part->getChecksums())).toString(),
             zkutil::CreateMode::Persistent));
     }
     else
@@ -6920,7 +6920,7 @@ void StorageReplicatedMergeTree::getCommitPartOps(
             zkutil::CreateMode::Persistent));
         ops.emplace_back(zkutil::makeCreateRequest(
             fs::path(replica_path) / "parts" / part->name / "checksums",
-            getChecksumsForZooKeeper(part->checksums),
+            getChecksumsForZooKeeper(*(part->getChecksums())),
             zkutil::CreateMode::Persistent));
     }
 }

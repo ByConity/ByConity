@@ -113,8 +113,8 @@ MergedColumnOnlyOutputStream::writeSuffixAndGetChecksums(
     for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
         checksums.addFile(
             projection_name + ".proj",
-            projection_part->checksums.getTotalSizeOnDisk(),
-            projection_part->checksums.getTotalChecksumUInt128());
+            projection_part->getChecksums()->getTotalSizeOnDisk(),
+            projection_part->getChecksums()->getTotalChecksumUInt128());
 
     auto columns = new_part->getColumns();
 

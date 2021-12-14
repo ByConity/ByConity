@@ -65,7 +65,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
                 String implKeyName;
                 {
                     //auto data_lock = data_part->getColumnsReadLock();
-                    for (auto & file : data_part->checksums.files)
+                    for (auto & file : data_part->getChecksums()->files)
                     {
                         //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
                         const String & fileName = file.first;
@@ -290,7 +290,7 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
         if (streams.count(stream_name))
             return;
 
-        bool data_file_exists = data_part->checksums.files.count(stream_name + DATA_FILE_EXTENSION);
+        bool data_file_exists = data_part->getChecksums()->files.count(stream_name + DATA_FILE_EXTENSION);
 
         /** If data file is missing then we will not try to open it.
           * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.

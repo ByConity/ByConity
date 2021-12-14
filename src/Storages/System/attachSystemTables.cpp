@@ -76,6 +76,8 @@
 #include <Storages/System/StorageSystemQuotasUsage.h>
 #include <Storages/System/StorageSystemUserDirectories.h>
 #include <Storages/System/StorageSystemPrivileges.h>
+#include <Storages/System/StorageSystemMetastore.h>
+#include <Storages/System/StorageSystemBrokenTables.h>
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>
@@ -172,6 +174,9 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 
     if (has_zookeeper)
         attach<StorageSystemZooKeeper>(system_database, "zookeeper");
+
+    attach<StorageSystemMetastore>(system_database, "metastore");
+    attach<StorageSystemBrokenTables>(system_database, "broken_tables");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

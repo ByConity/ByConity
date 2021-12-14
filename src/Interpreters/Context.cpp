@@ -3,6 +3,39 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <Poco/Mutex.h>
+#include <Poco/UUID.h>
+#include <Poco/Net/IPAddress.h>
+#include <Poco/Util/Application.h>
+#include <Common/Macros.h>
+#include <Common/escapeForFileName.h>
+#include <Common/setThreadName.h>
+#include <Common/Stopwatch.h>
+#include <Common/formatReadable.h>
+#include <Common/Throttler.h>
+#include <Common/thread_local_rng.h>
+#include <Common/FieldVisitorToString.h>
+#include <Coordination/KeeperStorageDispatcher.h>
+#include <Compression/ICompressionCodec.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Formats/FormatFactory.h>
+#include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Databases/IDatabase.h>
+#include <Storages/IStorage.h>
+#include <Storages/MarkCache.h>
+#include <Storages/MergeTree/MergeList.h>
+#include <Storages/MergeTree/ReplicatedFetchList.h>
+#include <Storages/MergeTree/MergeTreeData.h>
+#include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/CompressionCodecSelector.h>
+#include <Storages/StorageS3Settings.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
+#include <Disks/DiskLocal.h>
+#include <TableFunctions/TableFunctionFactory.h>
+#include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Core/Settings.h>
+#include <Core/SettingsQuirks.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -384,6 +417,7 @@ struct ContextSharedPart
     String flags_path;                                      /// Path to the directory with some control flags for server maintenance.
     String user_files_path;                                 /// Path to the directory with user provided files, usable by 'file' table function.
     String dictionaries_lib_path;                           /// Path to the directory with user provided binaries and libraries for external dictionaries.
+    String metastore_path;                                  /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
     ConfigurationPtr config;                                /// Global configuration settings.
 
     String tmp_path;                                        /// Path to the temporary files that occur when processing the request.
@@ -437,6 +471,11 @@ struct ContextSharedPart
     mutable std::shared_ptr<const DiskSelector> merge_tree_disk_selector;
     /// Storage policy chooser for MergeTree engines
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
+    /// global checksums cache;
+    mutable ChecksumsCachePtr checksums_cache;
+
+    std::atomic_bool stop_sync{false};
+    BackgroundSchedulePool::TaskHolder meta_checker;
 
     std::optional<MergeTreeSettings> merge_tree_settings;   /// Settings of MergeTree* engines.
     std::optional<MergeTreeSettings> replicated_merge_tree_settings;   /// Settings of ReplicatedMergeTree* engines.
@@ -523,6 +562,9 @@ struct ContextSharedPart
             system_logs->shutdown();
 
         DatabaseCatalog::shutdown();
+
+        /// reset scheduled task before schedule pool shutdown
+        meta_checker = BackgroundSchedulePool::TaskHolder(nullptr);
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         {
@@ -725,6 +767,12 @@ String Context::getDictionariesLibPath() const
     return shared->dictionaries_lib_path;
 }
 
+String Context::getMetastorePath() const
+{
+    auto lock = getLock();
+    return shared->metastore_path;
+}
+
 VolumePtr Context::getTemporaryVolume() const
 {
     auto lock = getLock();
@@ -794,6 +842,12 @@ void Context::setDictionariesLibPath(const String & path)
 {
     auto lock = getLock();
     shared->dictionaries_lib_path = path;
+}
+
+void Context::setMetastorePath(const String & path)
+{
+    auto lock = getLock();
+    shared->metastore_path = path;
 }
 
 void Context::setConfig(const ConfigurationPtr & config)
@@ -3046,6 +3100,73 @@ DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
     return shared->delete_bitmap_cache;
 }
 
+void Context::setMetaChecker()
+{
+    auto metaChecker = [this]() {
+        Poco::Logger *log = &Poco::Logger::get("MetaChecker");
+
+        Stopwatch stopwatch;
+        LOG_DEBUG(log, "Start to run metadata synchronization task.");
+
+        size_t task_min_interval = 0;
+        size_t table_count = 0;
+
+        if (this->shared->stop_sync)
+        {
+            /// if task stopped. we should make sure it is not been scheduled too often.
+            task_min_interval = 5*60*1000;
+            LOG_WARNING(log, "Metadata synchronization task has been stopped.");
+        }
+        else
+        {
+            auto database_snapshot = DatabaseCatalog::instance().getDatabases();
+
+            for (auto it = database_snapshot.begin(); it != database_snapshot.end(); it++) {
+                try {
+                    String current_database_name = it->first;
+                    DatabasePtr current_database = it->second;
+
+                    DatabaseCatalog::instance().assertDatabaseExists(it->first);
+                    for (auto tb_it = current_database->getTablesIterator(this->shared_from_this()); tb_it->isValid(); tb_it->next()) {
+                        String current_table_name = tb_it->name();
+                        StoragePtr current_table = tb_it->table();
+                        /// skip if current table is removed or the table is not in MergeTree family.
+                        if (!current_table || !endsWith(current_table->getName(), "MergeTree"))
+                            continue;
+                        /// lock current table to avoid conflict with drop query.
+                        auto lock = current_table->lockForShare("SYNC_META_TASK", this->getSettingsRef().lock_acquire_timeout);
+
+                        MergeTreeData &data = dynamic_cast<MergeTreeData &>(*current_table);
+                        LOG_INFO(log, "Start check metadata of table " + current_database_name+ "." + current_table_name);
+
+                        /// To avoid blocking whole task, we may skip current table if failed to get data part lock.
+                        data.trySyncMetaData();
+                        table_count++;
+                    }
+                }
+                catch (...) {
+                    tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                }
+            }
+        }
+
+        LOG_DEBUG(log, "Finish the metadata synchronization task for {} tables in {}ms.", table_count, stopwatch.elapsedMilliseconds());
+        /// default interval is 10min.
+        size_t delay_ms = this->getSettingsRef().meta_sync_task_interval_ms.totalMilliseconds();
+        this->shared->meta_checker->scheduleAfter(std::max(delay_ms,task_min_interval));
+    };
+
+    shared->meta_checker = getLocalSchedulePool().createTask("MetaCheck", metaChecker);
+    shared->meta_checker->activate();
+    /// do not start sync immediately, delay 10min
+    shared->meta_checker->scheduleAfter(10*60*1000);
+}
+
+void Context::setMetaCheckerStatus(bool stop)
+{
+    shared->stop_sync = stop;
+}
+
 void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();
@@ -3090,6 +3211,19 @@ void Context::addKMSKeyCache(const String & config_name, const String & key) con
 {
     auto lock = getLock();
     shared->kms_cache[config_name] = key;
+}
+
+void Context::setChecksumsCache(size_t cache_size_in_bytes)
+{
+    if (shared->checksums_cache)
+        throw Exception("Checksums cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->checksums_cache = std::make_shared<ChecksumsCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
+{
+    return shared->checksums_cache;
 }
 
 }

@@ -84,6 +84,10 @@ private:
     fs::directory_iterator entry;
 };
 
+UInt64 DiskLocal::getID() const
+{
+    return static_cast<UInt64>(std::hash<String>{}(DiskType::toString(getType())) ^ std::hash<String>{}(getPath()));
+}
 
 ReservationPtr DiskLocal::reserve(UInt64 bytes)
 {

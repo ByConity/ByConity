@@ -217,7 +217,9 @@ struct Settings;
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
     M(Seconds, drop_ranges_lifetime, 60 * 60  * 36, "", 0) \
-    \
+    /* Metastore settings */\
+    M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
+    M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
     /** Obsolete settings. Kept for backward compatibility only. */ \
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \

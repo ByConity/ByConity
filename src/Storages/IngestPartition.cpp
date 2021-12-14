@@ -822,7 +822,8 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
     new_data_part->versions = target_part->versions;
 
     new_data_part->setColumns(part_columns);
-    new_data_part->checksums = target_part->checksums;
+    new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
+    *(new_data_part->checksums_ptr) = *(target_part->getChecksums());
     /// It shouldn't be changed by mutation.
     new_data_part->index_granularity_info = target_part->index_granularity_info;
     new_data_part->partition.assign(target_part->partition);
@@ -1017,8 +1018,9 @@ void IngestPartition::ingestWidePart(MergeTreeData & data,
         throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
 
     pipeline_input_stream->readSuffix();
-    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums, false);
-    new_data_part->checksums.add(std::move(changed_checksums));
+
+    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, *(new_data_part->getChecksums()), false);
+    new_data_part->getChecksums()->add(std::move(changed_checksums));
 
     MergeTreeDataMergerMutator::finalizeMutatedPart(target_part, new_data_part, false, compression_codec);
 }

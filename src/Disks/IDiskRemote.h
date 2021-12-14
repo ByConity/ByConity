@@ -51,6 +51,8 @@ public:
 
     struct Metadata;
 
+    UInt64 getID() const override;
+
     const String & getName() const final override { return name; }
 
     const String & getPath() const final override { return metadata_path; }

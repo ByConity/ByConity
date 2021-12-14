@@ -14,6 +14,7 @@
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/TableLockHolder.h>
+#include <Disks/IDisk.h>
 #include <Common/ActionLock.h>
 #include <Common/Exception.h>
 #include <Common/RWLock.h>
@@ -62,6 +63,9 @@ class EnabledQuota;
 struct SelectQueryInfo;
 
 using NameDependencies = std::unordered_map<String, std::vector<String>>;
+
+using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
+using PartNamesWithDiskNames = std::vector<std::pair<String, String>>;
 
 struct ColumnSize
 {

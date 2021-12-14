@@ -280,7 +280,7 @@ IMergeTreeDataPart::Checksums checkDataPartInMemory(const DataPartInMemoryPtr & 
 {
     IMergeTreeDataPart::Checksums data_checksums;
     data_checksums.files["data.bin"] = data_part->calculateBlockChecksum();
-    data_part->checksums.checkEqual(data_checksums, true);
+    data_part->getChecksums()->checkEqual(data_checksums, true);
     return data_checksums;
 }
 

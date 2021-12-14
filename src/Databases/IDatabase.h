@@ -266,6 +266,10 @@ public:
     /// Delete data and metadata stored inside the database, if exists.
     virtual void drop(ContextPtr /*context*/) {}
 
+    /// tables marked as broken if can not be loaded when instance startup.
+    virtual std::map<String, String> getBrokenTables() {return {};}
+    virtual void clearBrokenTables() {}
+
     virtual ~IDatabase() = default;
 
 protected:

@@ -192,6 +192,15 @@ DiskPtr StoragePolicy::getDiskByName(const String & disk_name) const
 }
 
 
+DiskPtr StoragePolicy::getDiskByID(const UInt64 & disk_id) const
+{
+    for (auto && volume : volumes)
+        for (auto && disk : volume->getDisks())
+            if (disk->getID() == disk_id)
+                return disk;
+    return {};
+}
+
 UInt64 StoragePolicy::getMaxUnreservedFreeSpace() const
 {
     UInt64 res = 0;

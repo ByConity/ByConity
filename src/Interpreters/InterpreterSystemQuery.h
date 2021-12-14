@@ -62,6 +62,13 @@ private:
     void startStopAction(StorageActionBlockType action_type, bool start);
     void startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type);
 
+    void executeMetastoreCmd(ASTSystemQuery & query) const;
+
+    void dropChecksumsCache(const StorageID & table_id) const;
+
+    // clear Broken Table infos
+    void clearBrokenTables(ContextMutablePtr & system_context) const;
+
     void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const override;
 
     /// fetch part from remote storage and attach to target table.

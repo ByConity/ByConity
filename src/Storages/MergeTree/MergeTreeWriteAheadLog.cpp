@@ -81,6 +81,12 @@ void MergeTreeWriteAheadLog::addPart(DataPartInMemoryPtr & part)
     block_out->flush();
     sync(lock);
 
+    if (!has_sync_to_metastore)
+    {
+        storage.addWriteAheadLog(name, disk);
+        has_sync_to_metastore = true;
+    }
+
     auto max_wal_bytes = storage.getSettings()->write_ahead_log_max_bytes;
     if (out->count() > max_wal_bytes)
         rotate(lock);
@@ -108,6 +114,7 @@ void MergeTreeWriteAheadLog::rotate(const std::unique_lock<std::mutex> &)
         + toString(max_block_number) + WAL_FILE_EXTENSION;
 
     disk->replaceFile(path, storage.getRelativeDataPath() + new_name);
+    storage.addWriteAheadLog(new_name, disk);
     init();
 }
 

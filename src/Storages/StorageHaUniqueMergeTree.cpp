@@ -1592,7 +1592,7 @@ void StorageHaUniqueMergeTree::executeDeatchParts(const ManifestLogEntry & entry
         }
         else
         {
-            const_cast<IMergeTreeDataPart &>(*part).loadChecksumsIfNeed();
+            // const_cast<IMergeTreeDataPart &>(*part).loadChecksumsIfNeed();
             to_remove.emplace_back(part);
         }
     }
@@ -2296,8 +2296,8 @@ void StorageHaUniqueMergeTree::leaderDeatchParts(
 
     removePartsFromWorkingSet(parts_to_drop, true);
 
-    for (auto & part : parts_to_drop)
-        const_cast<IMergeTreeDataPart &>(*part).loadChecksumsIfNeed();
+    // for (auto & part : parts_to_drop)
+    //     const_cast<IMergeTreeDataPart &>(*part).loadChecksumsIfNeed();
 
     // recalculateMapKeyCacheByParts(parts_to_drop);
     // getContext()->dropCaches(database_name, table_name);

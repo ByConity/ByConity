@@ -17,6 +17,7 @@ StorageSystemDisks::StorageSystemDisks(const StorageID & table_id_)
     storage_metadata.setColumns(ColumnsDescription(
     {
         {"name", std::make_shared<DataTypeString>()},
+        {"id", std::make_shared<DataTypeString>()},
         {"path", std::make_shared<DataTypeString>()},
         {"free_space", std::make_shared<DataTypeUInt64>()},
         {"total_space", std::make_shared<DataTypeUInt64>()},
@@ -38,6 +39,7 @@ Pipe StorageSystemDisks::read(
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
 
     MutableColumnPtr col_name = ColumnString::create();
+    MutableColumnPtr col_id = ColumnString::create();
     MutableColumnPtr col_path = ColumnString::create();
     MutableColumnPtr col_free = ColumnUInt64::create();
     MutableColumnPtr col_total = ColumnUInt64::create();
@@ -47,6 +49,7 @@ Pipe StorageSystemDisks::read(
     for (const auto & [disk_name, disk_ptr] : context->getDisksMap())
     {
         col_name->insert(disk_name);
+        col_id->insert(disk_ptr->getID());
         col_path->insert(disk_ptr->getPath());
         col_free->insert(disk_ptr->getAvailableSpace());
         col_total->insert(disk_ptr->getTotalSpace());
@@ -56,6 +59,7 @@ Pipe StorageSystemDisks::read(
 
     Columns res_columns;
     res_columns.emplace_back(std::move(col_name));
+    res_columns.emplace_back(std::move(col_id));
     res_columns.emplace_back(std::move(col_path));
     res_columns.emplace_back(std::move(col_free));
     res_columns.emplace_back(std::move(col_total));

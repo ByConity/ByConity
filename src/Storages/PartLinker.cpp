@@ -36,7 +36,7 @@ NameSet PartLinker::collectFilesToSkip(
         {
             if (column->type->isMap() && !column->type->isMapKVStore())
             {
-                Strings files = source_part->checksums.collectFilesForMapColumnNotKV(column->name);
+                Strings files = source_part->getChecksums()->collectFilesForMapColumnNotKV(column->name);
                 files_to_skip.insert(files.begin(), files.end());
             }
             else

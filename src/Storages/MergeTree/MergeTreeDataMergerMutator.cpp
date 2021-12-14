@@ -1027,6 +1027,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     new_data_part->uuid = future_part.uuid;
     new_data_part->setColumns(storage_columns);
     new_data_part->partition.assign(future_part.getPartition());
+    new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
     new_data_part->is_temp = parent_part == nullptr;
 
     bool need_remove_expired_values = false;
@@ -1452,8 +1453,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                         else
                         {
                             //auto data_lock = data_part->getColumnsReadLock();
-                            const auto & checksums = part->checksums;
-                            for (const auto & it : checksums.files)
+                            const auto & checksums = part->getChecksums();
+                            for (const auto & it : checksums->files)
                             {
                                 String key_name;
                                 const auto & file_name = it.first;
@@ -1732,8 +1733,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
             auto clear_map_key_files = collectFilesForClearMapKey(new_data_part, for_file_renames);
             for (const auto & file : clear_map_key_files)
             {
-                if (new_data_part->checksums.files.count(file))
-                    new_data_part->checksums.files.erase(file);
+                if (new_data_part->getChecksums()->files.count(file))
+                    new_data_part->getChecksums()->files.erase(file);
                 String destination = new_part_tmp_path + file;
                 disk->removeFileIfExists(destination);
             }
@@ -1778,7 +1779,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
         merge_entry->columns_written = storage_columns.size() - updated_header.columns();
 
-        new_data_part->checksums = source_part->checksums; /// FIXME: replace source_part->checksums with getChecksumsWithColumnsLock()
+        new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>(*(source_part->getChecksums()));
 
         auto compression_codec = source_part->default_codec;
 
@@ -1804,15 +1805,15 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
         for (const auto & [rename_from, rename_to] : files_to_rename)
         {
-            if (rename_to.empty() && new_data_part->checksums.files.count(rename_from))
+            if (rename_to.empty() && new_data_part->checksums_ptr->files.count(rename_from))
             {
-                new_data_part->checksums.files.erase(rename_from);
+                new_data_part->checksums_ptr->files.erase(rename_from);
             }
-            else if (new_data_part->checksums.files.count(rename_from))
+            else if (new_data_part->checksums_ptr->files.count(rename_from))
             {
-                new_data_part->checksums.files[rename_to] = new_data_part->checksums.files[rename_from];
+                new_data_part->checksums_ptr->files[rename_to] = new_data_part->checksums_ptr->files[rename_from];
 
-                new_data_part->checksums.files.erase(rename_from);
+                new_data_part->checksums_ptr->files.erase(rename_from);
             }
         }
 
@@ -2054,7 +2055,7 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
     {
         if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
             continue;
-        auto files = source_part->checksums.files;
+        auto files = source_part->getChecksums()->files; 
 
         /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
         NameSet file_set;
@@ -2064,7 +2065,7 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
         {
             const auto & key = typeid_cast<const ASTLiteral &>(*mapKeyAst).value.get<std::string>();
             String implicitKeyName = getImplicitFileNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
-            for (const auto & [file, _] : source_part->checksums.files)
+            for (const auto & [file, _] : source_part->getChecksums()->files)
             {
                 if (startsWith(file, implicitKeyName))
                 {
@@ -2122,11 +2123,12 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
 
     NameToNameVector rename_vector;
     /// Remove old data
+    auto source_checksums = source_part->getChecksums();
     for (const auto & command : commands_for_removes)
     {
         if (command.type == MutationCommand::Type::DROP_INDEX)
         {
-            if (source_part->checksums.has(INDEX_FILE_PREFIX + command.column_name + ".idx"))
+            if (source_checksums->has(INDEX_FILE_PREFIX + command.column_name + ".idx"))
             {
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + ".idx", "");
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + mrk_extension, "");
@@ -2134,7 +2136,7 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
         }
         else if (command.type == MutationCommand::Type::DROP_PROJECTION)
         {
-            if (source_part->checksums.has(command.column_name + ".proj"))
+            if (source_checksums->has(command.column_name + ".proj"))
                 rename_vector.emplace_back(command.column_name + ".proj", "");
         }
         else if (command.type == MutationCommand::Type::DROP_COLUMN)
@@ -2155,7 +2157,7 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             {
                 if (column->type->isMap() && !column->type->isMapKVStore())
                 {
-                    Strings files = source_part->checksums.collectFilesForMapColumnNotKV(command.column_name);
+                    Strings files = source_part->getChecksums()->collectFilesForMapColumnNotKV(command.column_name);
                     for (auto & file : files)
                         rename_vector.emplace_back(file, "");
                 }
@@ -2351,7 +2353,7 @@ std::set<MergeTreeIndexPtr> MergeTreeDataMergerMutator::getIndicesToRecalculate(
         const auto & index = indices[i];
 
         // If we ask to materialize and it already exists
-        if (!source_part->checksums.has(INDEX_FILE_PREFIX + index.name + ".idx") && materialized_indices.count(index.name))
+        if (!source_part->getChecksums()->has(INDEX_FILE_PREFIX + index.name + ".idx") && materialized_indices.count(index.name))
         {
             if (indices_to_recalc.insert(index_factory.get(index)).second)
             {
@@ -2412,7 +2414,7 @@ std::set<MergeTreeProjectionPtr> MergeTreeDataMergerMutator::getProjectionsToRec
     for (const auto & projection : metadata_snapshot->getProjections())
     {
         // If we ask to materialize and it doesn't exist
-        if (!source_part->checksums.has(projection.name + ".proj") && materialized_projections.count(projection.name))
+        if (!source_part->getChecksums()->has(projection.name + ".proj") && materialized_projections.count(projection.name))
         {
             projections_to_recalc.insert(projection_factory.get(projection));
         }
@@ -2750,9 +2752,9 @@ void MergeTreeDataMergerMutator::mutateSomePartColumns(
 
     mutating_stream->readSuffix();
 
-    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums, need_sync);
+    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, *(new_data_part->getChecksums()), need_sync);
 
-    new_data_part->checksums.add(std::move(changed_checksums));
+    new_data_part->checksums_ptr->add(std::move(changed_checksums));
 }
 
 void MergeTreeDataMergerMutator::finalizeMutatedPart(
@@ -2762,14 +2764,14 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
     const CompressionCodecPtr & codec)
 {
     auto disk = new_data_part->volume->getDisk();
-
+    auto new_part_checksums_ptr = new_data_part->getChecksums();
     if (new_data_part->uuid != UUIDHelpers::Nil)
     {
         auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, 4096);
         HashingWriteBuffer out_hashing(*out);
         writeUUIDText(new_data_part->uuid, out_hashing);
-        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
-        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_hash = out_hashing.getHash();
+        new_part_checksums_ptr->files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
+        new_part_checksums_ptr->files[IMergeTreeDataPart::UUID_FILE_NAME].file_hash = out_hashing.getHash();
     }
 
     if (need_remove_expired_values)
@@ -2778,15 +2780,15 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
         auto out_ttl = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "ttl.txt", 4096);
         HashingWriteBuffer out_hashing(*out_ttl);
         new_data_part->ttl_infos.write(out_hashing);
-        new_data_part->checksums.files["ttl.txt"].file_size = out_hashing.count();
-        new_data_part->checksums.files["ttl.txt"].file_hash = out_hashing.getHash();
+        new_part_checksums_ptr->files["ttl.txt"].file_size = out_hashing.count();
+        new_part_checksums_ptr->files["ttl.txt"].file_hash = out_hashing.getHash();
     }
 
     {
         /// Write file with checksums.
         auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
-        new_data_part->checksums.versions = new_data_part->versions;
-        new_data_part->checksums.write(*out_checksums);
+        new_part_checksums_ptr->versions = new_data_part->versions;
+        new_part_checksums_ptr->write(*out_checksums);
     } /// close fd
 
     {
@@ -2802,7 +2804,7 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
 
     new_data_part->rows_count = source_part->rows_count;
     new_data_part->index_granularity = source_part->index_granularity;
-    new_data_part->index = source_part->index;
+    new_data_part->index = source_part->getIndex();
     new_data_part->minmax_idx = source_part->minmax_idx;
     new_data_part->modification_time = time(nullptr);
     new_data_part->loadProjections(false, false);

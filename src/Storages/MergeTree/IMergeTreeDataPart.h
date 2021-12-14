@@ -65,6 +65,7 @@ public:
 
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
+    using ChecksumsPtr = std::shared_ptr<Checksums>;
     using ValueSizeMap = std::map<std::string, double>;
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
@@ -72,6 +73,9 @@ public:
 
     using ColumnSizeByName = std::unordered_map<std::string, ColumnSize>;
     using NameToNumber = std::unordered_map<std::string, size_t>;
+
+    using Index = Columns;
+    using IndexPtr = std::shared_ptr<Index>;
 
     using Type = MergeTreeDataPartType;
 
@@ -285,8 +289,7 @@ public:
     /// Primary key (correspond to primary.idx file).
     /// Always loaded in RAM. Contains each index_granularity-th value of primary key tuple.
     /// Note that marks (also correspond to primary key) is not always in RAM, but cached. See MarkCache.h.
-    using Index = Columns;
-    Index index;
+    IndexPtr index = std::make_shared<Columns>();
 
     MergeTreePartition partition;
 
@@ -315,8 +318,10 @@ public:
         }
 
         void load(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path);
+        void load(const MergeTreeData & data, ReadBuffer & buf);
         void store(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
         void store(const Names & column_names, const DataTypes & data_types, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
+        void store(const MergeTreeData & data, const String & part_path, WriteBuffer & buf) const;
 
         void update(const Block & block, const Names & column_names);
         void merge(const MinMaxIndex & other);
@@ -324,14 +329,22 @@ public:
 
     MinMaxIndex minmax_idx;
 
+
 	Versions versions;
 
-    Checksums checksums;
+    /// only be used if the storage enables persistent checksums.
+    ChecksumsPtr checksums_ptr {nullptr};
 
     /// Columns with values, that all have been zeroed by expired ttl
     NameSet expired_columns;
 
     CompressionCodecPtr default_codec;
+
+    /// load checksum on demand. return ChecksumsPtr from global cache or its own checksums_ptr;
+    ChecksumsPtr getChecksums() const;
+
+    /// Get primary index, load if primary index is not initialized.
+    IndexPtr getIndex() const;
 
     /// For data in RAM ('index')
     UInt64 getIndexSizeInBytes() const;
@@ -535,7 +548,7 @@ public:
     }
 
     /// If Checksum has not been initialized, load it from filesystem(local/remote).
-    void loadChecksumsIfNeed();
+    // void loadChecksumsIfNeed();
 
     void loadMemoryUniqueIndex(const std::unique_lock<std::mutex> & unique_index_lock);
 
@@ -547,10 +560,6 @@ public:
         auto addr = reinterpret_cast<uintptr_t>(this);
         return String(reinterpret_cast<char *>(&addr), sizeof(addr));
     }
-
-    /// FIXME (UNIQUE KEY): related to metastore, verify later.
-    mutable std::shared_mutex columns_lock;
-    mutable std::atomic_bool checksum_loaded{false};
 
     /// FIXME: move to PartMetaEntry once metastore is added
     /// Used to prevent concurrent modification to a part.
@@ -624,7 +633,7 @@ private:
     void loadVersions();
 
     /// If checksums.txt exists, reads file's checksums (and sizes) from it
-    void loadChecksums(bool require);
+    ChecksumsPtr loadChecksums(bool require);
 
     /// Loads marks index granularity into memory
     virtual void loadIndexGranularity();
@@ -651,6 +660,34 @@ private:
     CompressionCodecPtr detectDefaultCompressionCodec() const;
 
     mutable State state{State::Temporary};
+
+    /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
+    /// to prevent checksums_ptr from being modified and corvered by multiple threads.
+    mutable std::mutex checksums_mutex;
+
+    mutable std::mutex index_mutex;
+
+public:
+
+    /// APIs for data parts serialization/deserialization
+    void storePartitionAndMinMaxIndex(WriteBuffer & buf) const;
+    void loadColumns(ReadBuffer & buf);
+    void loadPartitionAndMinMaxIndex(ReadBuffer & buf);
+    /// FIXME: old_meta_format is used to make it compatible with old part metadata. Remove it later.
+    void loadTTLInfos(ReadBuffer & buf, bool old_meta_format = false);
+    void loadDefaultCompressionCodec(const String & codec_str);
+    virtual void loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities);
+
+    /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+    /*  compatible with old metastore. remove this later  */
+
+    /// deserialize metadata into MergeTreeDataPart.
+    /// @IMPORTANT Do not load checksums
+    void deserializeMetaInfo(const String & metadata);
+    void deserializeColumns(ReadBuffer & buffer);
+    void deserializePartitionAndMinMaxIndex(ReadBuffer & buffer);
+
+    /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 };
 
 using MergeTreeDataPartState = IMergeTreeDataPart::State;

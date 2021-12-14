@@ -136,6 +136,11 @@ private:
     const WriteMode mode;
 };
 
+UInt64 DiskMemory::getID() const
+{
+    return static_cast<UInt64>(std::hash<String>{}(DiskType::toString(getType())) ^ std::hash<String>{}(getName()));
+}
+
 
 ReservationPtr DiskMemory::reserve(UInt64 /*bytes*/)
 {

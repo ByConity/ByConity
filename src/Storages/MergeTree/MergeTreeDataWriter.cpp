@@ -383,6 +383,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     new_data_part->rows_count = block.rows();
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
+    new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
     new_data_part->is_temp = true;
 
     SyncGuardPtr sync_guard;

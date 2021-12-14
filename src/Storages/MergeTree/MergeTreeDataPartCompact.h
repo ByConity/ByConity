@@ -60,6 +60,8 @@ public:
 
     String getFileNameForColumn(const NameAndTypePair & /* column */) const override { return DATA_FILE_NAME; }
 
+    void loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities) override;
+
     ~MergeTreeDataPartCompact() override;
 
     size_t getColumnsWithoutByteMapColSize() const { return columns_without_bytemap_col_size; }

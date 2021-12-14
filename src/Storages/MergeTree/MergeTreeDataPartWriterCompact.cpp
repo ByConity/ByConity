@@ -477,6 +477,7 @@ static void fillIndexGranularityImpl(
             index_granularity.appendMark(index_granularity_for_block);
         }
     }
+    index_granularity.setInitialized();
 }
 
 void MergeTreeDataPartWriterCompact::fillIndexGranularity(size_t index_granularity_for_block, size_t rows_in_block)

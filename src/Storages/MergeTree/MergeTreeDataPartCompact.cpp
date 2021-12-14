@@ -101,15 +101,16 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCompact::getWriter(
 
 void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & /*each_columns_size*/, ColumnSize & total_size) const
 {
-    auto bin_checksum = checksums.files.find(DATA_FILE_NAME_WITH_EXTENSION);
-    if (bin_checksum != checksums.files.end())
+    auto checksums = getChecksums();
+    auto bin_checksum = checksums->files.find(DATA_FILE_NAME_WITH_EXTENSION);
+    if (bin_checksum != checksums->files.end())
     {
         total_size.data_compressed += bin_checksum->second.file_size;
         total_size.data_uncompressed += bin_checksum->second.uncompressed_size;
     }
 
-    auto mrk_checksum = checksums.files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
-    if (mrk_checksum != checksums.files.end())
+    auto mrk_checksum = checksums->files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
+    if (mrk_checksum != checksums->files.end())
         total_size.marks += mrk_checksum->second.file_size;
 }
 
@@ -145,15 +146,27 @@ void MergeTreeDataPartCompact::loadIndexGranularity()
     index_granularity.setInitialized();
 }
 
+void MergeTreeDataPartCompact::loadIndexGranularity(const size_t /*marks_count*/, const std::vector<size_t> & index_granularities)
+{
+    if (index_granularities.empty())
+        throw Exception("MergeTreeDataPartCompact cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
+    
+    for (auto & granularity : index_granularities)
+        index_granularity.appendMark(granularity);
+
+    index_granularity.setInitialized();
+}
+
 bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) const
 {
+    auto checksums = getChecksums();
     if (!getColumnPosition(column.name))
         return false;
 
-    auto bin_checksum = checksums.files.find(DATA_FILE_NAME_WITH_EXTENSION);
-    auto mrk_checksum = checksums.files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
+    auto bin_checksum = checksums->files.find(DATA_FILE_NAME_WITH_EXTENSION);
+    auto mrk_checksum = checksums->files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
 
-    return (bin_checksum != checksums.files.end() && mrk_checksum != checksums.files.end());
+    return (bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end());
 }
 
 void MergeTreeDataPartCompact::setColumns(const NamesAndTypesList & new_columns)
@@ -189,18 +202,19 @@ void MergeTreeDataPartCompact::checkConsistency(bool require_part_metadata) cons
     checkConsistencyBase();
     String path = getFullRelativePath();
     String mrk_file_name = DATA_FILE_NAME + index_granularity_info.marks_file_extension;
+    auto checksums = getChecksums();
 
-    if (!checksums.empty())
+    if (!checksums->empty())
     {
         /// count.txt should be present even in non custom-partitioned parts
-        if (!checksums.files.count("count.txt"))
+        if (!checksums->files.count("count.txt"))
             throw Exception("No checksum for count.txt", ErrorCodes::NO_FILE_IN_DATA_PART);
 
         if (require_part_metadata)
         {
-            if (!checksums.files.count(mrk_file_name))
+            if (!checksums->files.count(mrk_file_name))
                 throw Exception("No marks file checksum for column in part " + fullPath(volume->getDisk(), path), ErrorCodes::NO_FILE_IN_DATA_PART);
-            if (!checksums.files.count(DATA_FILE_NAME_WITH_EXTENSION))
+            if (!checksums->files.count(DATA_FILE_NAME_WITH_EXTENSION))
                 throw Exception("No data file checksum for in part " + fullPath(volume->getDisk(), path), ErrorCodes::NO_FILE_IN_DATA_PART);
         }
     }

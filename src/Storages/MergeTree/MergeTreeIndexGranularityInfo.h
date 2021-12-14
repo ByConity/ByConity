@@ -39,10 +39,11 @@ public:
 
     static std::optional<std::string> getMarksExtensionFromFilesystem(const DiskPtr & disk, const String & path_to_part);
 
-private:
-    MergeTreeDataPartType type;
     void setAdaptive(size_t index_granularity_bytes_);
     void setNonAdaptive();
+
+private:
+    MergeTreeDataPartType type;
 };
 
 constexpr inline auto getNonAdaptiveMrkExtension() { return ".mrk"; }

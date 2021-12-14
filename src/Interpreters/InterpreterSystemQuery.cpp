@@ -38,6 +38,7 @@
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageHaKafka.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
@@ -371,6 +372,9 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_DROP_MMAP_CACHE);
             system_context->dropMMappedFileCache();
             break;
+        case Type::DROP_CHECKSUMS_CACHE:
+            dropChecksumsCache(table_id);
+            break;
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             getContext()->checkAccess(AccessType::SYSTEM_DROP_COMPILED_EXPRESSION_CACHE);
@@ -539,6 +543,12 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::EXECUTE_MUTATION:
         case Type::RELOAD_MUTATION:
             return executeOnTable(query, table_id, system_context);
+        case Type::METASTORE:
+            executeMetastoreCmd(query);
+            break;
+        case Type::CLEAR_BROKEN_TABLES:
+            clearBrokenTables(system_context);
+            break;
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -636,6 +646,11 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
         create_ast = database->getCreateTableQuery(replica.table_name, getContext());
 
         database->detachTable(replica.table_name);
+
+        MergeTreeData * storage = dynamic_cast<MergeTreeData *>(table.get());
+
+        if (storage && storage->getMetastore())
+            storage->getMetastore()->closeMetastore();
     }
     table.reset();
 
@@ -864,6 +879,76 @@ void InterpreterSystemQuery::restartDisk(String & name)
         throw Exception("Disk " + name + " doesn't have possibility to restart", ErrorCodes::BAD_ARGUMENTS);
 }
 
+void InterpreterSystemQuery::executeMetastoreCmd(ASTSystemQuery & query) const
+{
+    switch (query.meta_ops.operation) 
+    {
+        case MetastoreOperation::START_AUTO_SYNC:
+            getContext()->getGlobalContext()->setMetaCheckerStatus(false);
+            break;
+        case MetastoreOperation::STOP_AUTO_SYNC:
+            getContext()->getGlobalContext()->setMetaCheckerStatus(true);
+            break;
+        case MetastoreOperation::SYNC:
+        {
+            StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+            MergeTreeData * storage = dynamic_cast<MergeTreeData *>(table.get());
+            if (storage)
+                storage->syncMetaData();
+            break;
+        }
+        case MetastoreOperation::DROP_ALL_KEY:
+            /// TODO : implement later. directly remove all metadata for one table. 
+            throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
+        case MetastoreOperation::DROP_BY_KEY:
+        {
+            StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+            MergeTreeData * storage = dynamic_cast<MergeTreeData *>(table.get());
+            if (!storage)
+                return;
+            if (auto metastore = storage->getMetastore())
+            {
+                if (!query.meta_ops.drop_key.empty())
+                    metastore->dropMetaData(*storage, query.meta_ops.drop_key);
+            }
+            break;
+        }
+        default:
+            throw Exception("Unknown metastore operation.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void InterpreterSystemQuery::dropChecksumsCache(const StorageID & table_id) const
+{
+    auto checksums_cache = getContext()->getChecksumsCache();
+
+    if (!checksums_cache)
+        return;
+
+    if (table_id.empty())
+    {
+        LOG_INFO(log, "Reset checksums cache.");
+        checksums_cache->reset();
+    }
+    else
+    {
+        StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+        MergeTreeData * storage = dynamic_cast<MergeTreeData *>(table.get());
+        if (storage)
+        {
+            LOG_INFO(log, "Drop checksums cache for table {}", table_id.getFullNameNotQuoted());
+            checksums_cache->dropChecksumCache(storage->getStorageUniqueID());
+        }
+    }
+}
+
+void InterpreterSystemQuery::clearBrokenTables(ContextMutablePtr & ) const
+{
+    const auto databases = DatabaseCatalog::instance().getDatabases();
+
+    for (auto & elem : databases)
+        elem.second->clearBrokenTables();
+}
 
 AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() const
 {
@@ -883,6 +968,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::DROP_DNS_CACHE: [[fallthrough]];
         case Type::DROP_MARK_CACHE: [[fallthrough]];
         case Type::DROP_MMAP_CACHE: [[fallthrough]];
+        case Type::DROP_CHECKSUMS_CACHE: [[fallthrough]];
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE: [[fallthrough]];
 #endif
@@ -1025,6 +1111,8 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::MARK_LOST:
         case Type::EXECUTE_MUTATION:
         case Type::RELOAD_MUTATION:
+        case Type::METASTORE:
+        case Type::CLEAR_BROKEN_TABLES:
         /// TODO:
         break;
 
