@@ -314,7 +314,7 @@ private:
 
     FetchingPartToExecutingEntrySet current_fetching_parts_with_entries;
 
-    std::mutex current_merging_parts_mutex;
+    mutable std::mutex current_merging_parts_mutex;
     NameSet current_merging_parts;
 
     time_t last_commit_log_time {0};
@@ -344,13 +344,6 @@ private:
     /// A part of ALTER: apply metadata changes only (data parts are altered separately).
     /// Must be called under IStorage::lockForAlter() lock.
     void setTableStructure(ColumnsDescription new_columns, const ReplicatedMergeTreeTableMetadata::Diff & metadata_diff);
-
-    /** Check that the set of parts corresponds to that in ZK (/replicas/me/parts/).
-      * If any parts described in ZK are not locally, throw an exception.
-      * If any local parts are not mentioned in ZK, remove them.
-      *  But if there are too many, throw an exception just in case - it's probably a configuration error.
-      */
-    void checkParts(bool skip_sanity_checks);
 
     bool partIsAssignedToBackgroundOperation(const DataPartPtr & part) const override;
 

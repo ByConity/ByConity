@@ -334,7 +334,7 @@ public:
 
     void checkAddMetadataAlter(const MutationCommands & commands) const;
 
-    HaMergeTreeMergePredicate getMergePredicate(zkutil::ZooKeeperPtr&);
+    HaMergeTreeMergePredicate getMergePredicate(zkutil::ZooKeeperPtr &, bool enable_logging);
 
     using QueueLocks = std::scoped_lock<std::mutex, std::mutex, std::mutex>;
 
@@ -349,13 +349,14 @@ public:
 class HaMergeTreeMergePredicate
 {
 public:
-    HaMergeTreeMergePredicate(HaMergeTreeQueue& queue_, zkutil::ZooKeeperPtr & zookeeper);
+    HaMergeTreeMergePredicate(HaMergeTreeQueue& queue_, zkutil::ZooKeeperPtr & zookeeper, bool enable_logging);
 
     // could two parts be merged
-    bool operator()
-        (const MergeTreeData::DataPartPtr & left,
-         const MergeTreeData::DataPartPtr & right,
-         String * output = nullptr) const;
+    bool operator()(const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String * output = nullptr) const;
+
+    bool canMergeTwoParts(
+        const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String * out_reason = nullptr) const;
+    bool canMergeSinglePart(const MergeTreeData::DataPartPtr & part, String * out_reason) const;
 
     /// /// For consistency
     /// std::function< bool(
@@ -372,12 +373,14 @@ private:
     Int32 findMergeInterval(const MergeTreeData::DataPartPtr &) const;
 
     HaMergeTreeQueue & queue;
+    bool enable_logging;
     ActiveDataPartSet future_merge_parts;
     ActiveDataPartSet future_parts;
     time_t snapshot_time;
+    Poco::Logger * log{nullptr};
+
     constexpr static Int32 INTERVAL_GAP = -1;
     std::unordered_map<String, Int32> part_to_interval;
-    Poco::Logger * log{nullptr};
 };
 
 }

@@ -230,7 +230,7 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
         in >> "new_parts: ";
         readQuoted(replace_range_entry->new_part_names, in);
     }
-    else if (type_str == "replace") /// TODO: remove me
+    else if (type_str == "replace") /// XXX: remove me
     {
         type = REPLACE_RANGE;
         replace_range_entry = std::make_shared<ReplaceRangeEntry>();

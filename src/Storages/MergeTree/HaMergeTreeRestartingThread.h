@@ -46,7 +46,7 @@ private:
     Int64 check_period_ms;                  /// The frequency of checking expiration of session in ZK.
     bool first_time = true;                 /// Activate replica for the first time.
     bool extra_startup = false; // in fast_create model, some intialization is not invoked, and need extra logic
-    [[maybe_unused]] time_t prev_time_of_check_delay = 0;
+    time_t prev_time_of_check_delay = 0;
     bool startup_completed = false;
 
     void run();

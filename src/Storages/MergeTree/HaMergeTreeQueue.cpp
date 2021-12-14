@@ -1532,9 +1532,9 @@ void HaMergeTreeQueue::checkAddMetadataAlter(const MutationCommands & commands) 
         throw Exception("There are unfinished async ALTERs with data mutation, please wait...", ErrorCodes::CANNOT_ASSIGN_ALTER);
 }
 
-HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperPtr & zookeeper)
+HaMergeTreeMergePredicate HaMergeTreeQueue::getMergePredicate(zkutil::ZooKeeperPtr & zookeeper, bool enable_logging)
 {
-    return HaMergeTreeMergePredicate(*this, zookeeper);
+    return HaMergeTreeMergePredicate(*this, zookeeper, enable_logging);
 }
 
 HaMergeTreeQueue::QueueLocks HaMergeTreeQueue::lockQueue()
@@ -1543,12 +1543,13 @@ HaMergeTreeQueue::QueueLocks HaMergeTreeQueue::lockQueue()
 }
 
 
-HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, zkutil::ZooKeeperPtr & zookeeper)
+HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, zkutil::ZooKeeperPtr & zookeeper, bool enable_logging_)
     : queue(queue_)
-      , future_merge_parts(queue.storage.format_version)
-      , future_parts(queue.storage.format_version)
-      , snapshot_time(time(nullptr))
-      , log(&Poco::Logger::get(queue.storage.getStorageID().getNameForLogs() + " (MergePredicate)"))
+    , enable_logging(enable_logging_)
+    , future_merge_parts(queue.storage.format_version)
+    , future_parts(queue.storage.format_version)
+    , snapshot_time(time(nullptr))
+    , log(&Poco::Logger::get(queue.storage.getStorageID().getNameForLogs() + " (MergePredicate)"))
 {
     Stopwatch watch;
     // actively sync up-to-date logs
@@ -1633,7 +1634,7 @@ HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, 
 
     if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)
     {
-        LOG_DEBUG(queue.log, "Create MergePredicate took {} ms ({} ms in pull logs to queue)", elapsed, pull_logs_millis);
+        LOG_DEBUG(log, "Create MergePredicate took {} ms ({} ms in pull logs to queue)", elapsed, pull_logs_millis);
     }
 }
 
@@ -1653,18 +1654,22 @@ Int32 HaMergeTreeMergePredicate::findMergeInterval(const MergeTreeData::DataPart
 }
 
 bool HaMergeTreeMergePredicate::operator()(
-    const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String *) const
+    const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, String * out_reason) const
+{
+    if (left)
+        return canMergeTwoParts(left, right, out_reason);
+    else
+        return canMergeSinglePart(right, out_reason);
+}
+
+bool HaMergeTreeMergePredicate::canMergeTwoParts(
+    const MergeTreeData::DataPartPtr & left, const MergeTreeData::DataPartPtr & right, [[maybe_unused]] String * out_reason) const
 {
     if (right->info.isFakeDropRangePart())
         return false;
 
-    if (!left)
-        return true; /// TODO:
-
     if (left->info.isFakeDropRangePart())
         return false;
-
-    bool enable_logging = false; /// TODO: support this
 
     if (left->info.partition_id != right->info.partition_id)
     {
@@ -1762,21 +1767,36 @@ bool HaMergeTreeMergePredicate::operator()(
             return false;
         }
 
-        /// TODO:
-        /// if (queue.storage.global_context.getSettingsRef().conservative_merge_predicate)
-        /// {
-        ///     /// `left_interval == right_interval` now
-        ///     /// XXX: This may block high level merge for a long time until the LSN gap is filled.
-        ///     if (left_interval > 0 && (left->info.level > 0 || right->info.level > 0))
-        ///     {
-        ///         if (enable_logging)
-        ///             LOG_WARNING(
-        ///                 log, "{} & {}: only level-0 parts in non-zero interval can merge; Please check log hole.", left->name, right->name);
-        ///         return false;
-        ///     }
-        /// }
+        if (queue.storage.getContext()->getSettingsRef().conservative_merge_predicate)
+        {
+            /// `left_interval == right_interval` now
+            /// XXX: This may block high level merge for a long time until the LSN gap is filled.
+            if (left_interval > 0 && (left->info.level > 0 || right->info.level > 0))
+            {
+                if (enable_logging)
+                    LOG_WARNING(
+                        log, "{} & {}: only level-0 parts in non-zero interval can merge; Please check log hole.", left->name, right->name);
+                return false;
+            }
+        }
     }
 
+    return true;
+}
+
+bool HaMergeTreeMergePredicate::canMergeSinglePart(const MergeTreeData::DataPartPtr & part, String *) const
+{
+    {
+        std::lock_guard lock(queue.state_mutex);
+        /// check whether we have created any log to merge/mutate/delete the part
+        String containing_part;
+        if (queue.merge_mutate_future_parts.hasContainingPart(part->info, &containing_part))
+        {
+            if (enable_logging)
+                LOG_TRACE(log, "{} is covered by future parts ", part->name, containing_part);
+            return false;
+        }
+    }
     return true;
 }
 

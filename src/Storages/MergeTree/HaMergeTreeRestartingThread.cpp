@@ -134,9 +134,9 @@ void HaMergeTreeRestartingThread::run()
             first_time = false;
         }
 
-        /* TODO:
+        const auto storage_settings = storage.getSettings();
         time_t current_time = time(nullptr);
-        if (current_time >= prev_time_of_check_delay + static_cast<time_t>(storage.settings.check_delay_period))
+        if (current_time >= prev_time_of_check_delay + static_cast<time_t>(storage_settings->check_delay_period))
         {
             /// Find out lag of replicas.
             time_t absolute_delay = 0;
@@ -145,16 +145,19 @@ void HaMergeTreeRestartingThread::run()
             storage.getReplicaDelays(absolute_delay, relative_delay);
 
             if (absolute_delay)
-                LOG_DEBUG(log, "Absolute delay: " << absolute_delay << ". Relative delay: " << relative_delay << ".");
+                LOG_DEBUG(log, "Absolute delay: {}. Relative delay: {}.", absolute_delay, relative_delay);
 
             prev_time_of_check_delay = current_time;
 
             /// We give up leadership if the relative lag is greater than threshold.
             if (storage.is_leader
-                && relative_delay > static_cast<time_t>(storage.settings.min_relative_delay_to_yield_leadership))
+                && relative_delay > static_cast<time_t>(storage_settings->min_relative_delay_to_yield_leadership))
             {
-                LOG_INFO(log, "Relative replica delay (" << relative_delay << " seconds) is bigger than threshold ("
-                    << storage.settings.min_relative_delay_to_yield_leadership << "). Will yield leadership.");
+                LOG_INFO(
+                    log,
+                    "Relative replica delay ({} seconds) is bigger than threshold ({}). Will yield leadership.",
+                    relative_delay,
+                    storage_settings->min_relative_delay_to_yield_leadership);
 
                 ProfileEvents::increment(ProfileEvents::ReplicaYieldLeadership);
 
@@ -165,7 +168,6 @@ void HaMergeTreeRestartingThread::run()
                 storage.enterLeaderElection();
             }
         }
-        */
     }
     catch (...)
     {
