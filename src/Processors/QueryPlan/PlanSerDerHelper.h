@@ -76,7 +76,7 @@ std::vector<T> deserializeItemVector(ReadBuffer & buf)
 void serializeBlock(const Block & block, WriteBuffer & buf);
 Block deserializeBlock(ReadBuffer & buf);
 
-void serializeDataStream(const DataStream & block, WriteBuffer & buf);
+void serializeDataStream(const DataStream & stream, WriteBuffer & buf);
 DataStream deserializeDataStream(ReadBuffer & buf);
 
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);

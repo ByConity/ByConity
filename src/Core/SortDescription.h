@@ -6,9 +6,6 @@
 #include <string>
 #include <Core/Field.h>
 #include <Core/SettingsEnums.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-
 
 class Collator;
 
@@ -23,6 +20,8 @@ namespace JSONBuilder
 }
 
 class Block;
+class WriteBuffer;
+class ReadBuffer;
 
 struct FillColumnDescription
 {
@@ -82,21 +81,9 @@ struct SortColumnDescription
     /// It seems that the current construction of SortColumnDescription only uses the first four fields,
     /// so this time will temporarily ignore the serialize/deserialize of field collator/with_fill/fill_description
 
-    void serialize(WriteBuffer & buffer) const
-    {
-        writeBinary(column_name, buffer);
-        writeBinary(column_number, buffer);
-        writeBinary(direction, buffer);
-        writeBinary(nulls_direction, buffer);
-    }
+    void serialize(WriteBuffer & buffer) const;
 
-    void deserialize(ReadBuffer & buffer)
-    {
-        readBinary(column_name, buffer);
-        readBinary(column_number, buffer);
-        readBinary(direction, buffer);
-        readBinary(nulls_direction, buffer);
-    }
+    void deserialize(ReadBuffer & buffer);
 };
 
 /// Description of the sorting rule for several columns.
@@ -108,5 +95,8 @@ void dumpSortDescription(const SortDescription & description, const Block & head
 std::string dumpSortDescription(const SortDescription & description);
 
 JSONBuilder::ItemPtr explainSortDescription(const SortDescription & description, const Block & header);
+
+void serializeSortDescription(const SortDescription & sort_descriptions, WriteBuffer & buffer);
+void deserializeSortDescription(SortDescription & sort_descriptions, ReadBuffer & buffer);
 
 }

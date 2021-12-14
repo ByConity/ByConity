@@ -87,12 +87,17 @@ struct InputOrderInfo
     InputOrderInfo(const SortDescription & order_key_prefix_descr_, int direction_)
         : order_key_prefix_descr(order_key_prefix_descr_), direction(direction_) {}
 
+    InputOrderInfo() = default;
+
     bool operator ==(const InputOrderInfo & other) const
     {
         return order_key_prefix_descr == other.order_key_prefix_descr && direction == other.direction;
     }
 
     bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 class IMergeTreeDataPart;

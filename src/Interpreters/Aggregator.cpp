@@ -297,7 +297,7 @@ Aggregator::Params Aggregator::Params::deserialize(ReadBuffer & buf, const Conte
                               group_by_two_level_threshold, group_by_two_level_threshold_bytes,
                               max_bytes_before_external_group_by,
                               empty_result_for_aggregation_by_empty_set,
-                              context->getTemporaryVolume(),
+                              context ? context->getTemporaryVolume() : nullptr,
                               max_threads,
                               min_free_disk_space,
                               compile_aggregate_expressions,
