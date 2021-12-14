@@ -100,11 +100,11 @@ void MergeSortingStep::serialize(WriteBuffer & buffer) const
     serializeDataStream(input_stream, buffer);
     serializeItemVector<SortColumnDescription>(description, buffer);
     writeBinary(max_merged_block_size, buffer);
-    writeBinary(limit, buffer);
     writeBinary(max_bytes_before_remerge, buffer);
-    writeBinary(remerge_lowered_memory_bytes_ratio, buffer);
     writeBinary(max_bytes_before_external_sort, buffer);
     writeBinary(min_free_disk_space, buffer);
+    writeBinary(limit, buffer);
+    writeBinary(remerge_lowered_memory_bytes_ratio, buffer);
 }
 
 QueryPlanStepPtr MergeSortingStep::deserialize(ReadBuffer & buffer, ContextPtr context)

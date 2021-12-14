@@ -134,7 +134,7 @@ QueryPlanStepPtr FinishSortingStep::deserialize(ReadBuffer & buffer, ContextPtr 
     size_t max_block_size;
     readBinary(max_block_size, buffer);
 
-    size_t limit;
+    UInt64 limit;
     readBinary(limit, buffer);
 
     return std::make_unique<FinishSortingStep>(input_stream, prefix_description, result_description, max_block_size, limit);
