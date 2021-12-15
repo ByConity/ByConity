@@ -35,6 +35,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeHelper.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 
 namespace DB
 {
@@ -197,6 +198,25 @@ void serializeDataStreamFromDataStreams(const DataStreams & data_streams, WriteB
         stream = data_streams.front();
 
     serializeDataStream(stream, buf);
+}
+
+void serializeAggregatingTransformParams(const AggregatingTransformParamsPtr & params, WriteBuffer & buf)
+{
+    if (!params)
+        throw Exception("Params cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+
+    params->params.serialize(buf);
+    writeBinary(params->final, buf);
+}
+
+AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer & buf, ContextPtr context)
+{
+    Aggregator::Params params = Aggregator::Params::deserialize(buf, context);
+
+    bool final;
+    readBinary(final, buf);
+
+    return std::make_shared<AggregatingTransformParams>(params, final);
 }
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)

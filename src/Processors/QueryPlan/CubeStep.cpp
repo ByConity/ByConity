@@ -48,4 +48,18 @@ const Aggregator::Params & CubeStep::getParams() const
     return params->params;
 }
 
+void CubeStep::serialize(WriteBuffer & buf) const
+{
+    serializeDataStreamFromDataStreams(input_streams, buf);
+    serializeAggregatingTransformParams(params, buf);
+}
+
+QueryPlanStepPtr CubeStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    DataStream input_stream = deserializeDataStream(buf);
+    auto transform_params = deserializeAggregatingTransformParams(buf, context);
+
+    return std::make_unique<CubeStep>(input_stream, std::move(transform_params));
+}
+
 }

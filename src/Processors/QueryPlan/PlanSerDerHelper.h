@@ -19,6 +19,9 @@ using QueryPlanStepPtr = std::unique_ptr<IQueryPlanStep>;
 class Context;
 using ContextPtr = std::shared_ptr<const Context>;
 
+struct AggregatingTransformParams;
+using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
+
 #define SERIALIZE_ENUM(ITEM, BUF) writeBinary(UInt8(ITEM), BUF);
 
 #define DESERIALIZE_ENUM(TYPE, ITEM, BUF) \
@@ -83,6 +86,9 @@ ColumnPtr deserializeColumn(ReadBuffer & buf);
 void serializeDataStream(const DataStream & stream, WriteBuffer & buf);
 void serializeDataStreamFromDataStreams(const std::vector<DataStream> & stream, WriteBuffer & buf);
 DataStream deserializeDataStream(ReadBuffer & buf);
+
+void serializeAggregatingTransformParams(const AggregatingTransformParamsPtr & params, WriteBuffer & buf);
+AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer & buf, ContextPtr context);
 
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context);

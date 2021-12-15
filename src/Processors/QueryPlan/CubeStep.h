@@ -22,6 +22,10 @@ public:
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
     const Aggregator::Params & getParams() const;
+
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     AggregatingTransformParamsPtr params;
 };

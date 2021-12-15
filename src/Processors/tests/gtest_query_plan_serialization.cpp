@@ -33,6 +33,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/tests/gtest_global_context.h>
 
 
@@ -65,14 +66,12 @@ SizeLimits createSizeLimits()
     return SizeLimits();
 }
 
-QueryPlanStepPtr createAggregatingStep()
+Aggregator::Params createAggregatorParams()
 {
-    DataStream input_stream{.header = Block()};
-
     ColumnNumbers keys;
     AggregateDescriptions aggregates;
 
-    Aggregator::Params params(
+    return Aggregator::Params(
         Block(),
         keys,
         aggregates,
@@ -90,6 +89,13 @@ QueryPlanStepPtr createAggregatingStep()
         7,
         Block()
     );
+}
+
+QueryPlanStepPtr createAggregatingStep()
+{
+    DataStream input_stream{.header = Block()};
+
+    Aggregator::Params params = createAggregatorParams();
 
     SortDescription group_by_sort_description;
 
@@ -225,6 +231,27 @@ QueryPlanStepPtr createUnionStep()
     return std::make_unique<UnionStep>(streams, 0);
 }
 
+QueryPlanStepPtr createMergingAggregatedStep()
+{
+    DataStream stream = createDataStream();
+    AggregatingTransformParamsPtr params = std::make_shared<AggregatingTransformParams>(createAggregatorParams(), true);
+    return std::make_unique<MergingAggregatedStep>(stream, params, false, 0, 0);
+}
+
+QueryPlanStepPtr createCubeStep()
+{
+    DataStream stream = createDataStream();
+    AggregatingTransformParamsPtr params = std::make_shared<AggregatingTransformParams>(createAggregatorParams(), true);
+    return std::make_unique<CubeStep>(stream, params);
+}
+
+QueryPlanStepPtr createRollupStep()
+{
+    DataStream stream = createDataStream();
+    AggregatingTransformParamsPtr params = std::make_shared<AggregatingTransformParams>(createAggregatorParams(), true);
+    return std::make_unique<RollupStep>(stream, params);
+}
+
 TEST(QueryPlanTest, SimpleStepTest)
 {
     TestSingleSimpleStep(createReadNothingStep());
@@ -240,4 +267,8 @@ TEST(QueryPlanTest, SimpleStepTest)
     TestSingleSimpleStep(createExtremesStep());
     TestSingleSimpleStep(createDistinctStep());
     TestSingleSimpleStep(createUnionStep());
+
+    TestSingleSimpleStep(createMergingAggregatedStep());
+    TestSingleSimpleStep(createCubeStep());
+    TestSingleSimpleStep(createRollupStep());
 }

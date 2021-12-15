@@ -43,4 +43,18 @@ void RollupStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
     });
 }
 
+void RollupStep::serialize(WriteBuffer & buf) const
+{
+    serializeDataStreamFromDataStreams(input_streams, buf);
+    serializeAggregatingTransformParams(params, buf);
+}
+
+QueryPlanStepPtr RollupStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    DataStream input_stream = deserializeDataStream(buf);
+    auto transform_params = deserializeAggregatingTransformParams(buf, context);
+
+    return std::make_unique<RollupStep>(input_stream, std::move(transform_params));
+}
+
 }

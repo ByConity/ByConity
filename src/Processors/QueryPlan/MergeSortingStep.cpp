@@ -126,7 +126,7 @@ QueryPlanStepPtr MergeSortingStep::deserialize(ReadBuffer & buffer, ContextPtr c
     double remerge_lowered_memory_bytes_ratio;
     readBinary(remerge_lowered_memory_bytes_ratio, buffer);
 
-    VolumePtr tmp_volume = context->getTemporaryVolume();
+    VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
 
     return std::make_unique<MergeSortingStep>(
         input_stream,
