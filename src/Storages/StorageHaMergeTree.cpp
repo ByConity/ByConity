@@ -3,6 +3,7 @@
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/MutationLog.h>
+#include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
@@ -60,6 +61,7 @@ namespace ErrorCodes
     extern const int INTERSERVER_SCHEME_DOESNT_MATCH;
     extern const int PART_IS_LOST_FOREVER;
     extern const int BAD_TTL_EXPRESSION;
+    extern const int DUPLICATE_DATA_PART;
 }
 
 namespace ActionLocks
@@ -357,7 +359,6 @@ StorageHaMergeTree::StorageHaMergeTree(
         }
 
         checkTableStructure(replica_path, metadata_snapshot);
-        checkParts(skip_sanity_checks);
 
         if (current_zookeeper->exists(replica_path + "/metadata_version"))
         {
@@ -749,11 +750,6 @@ bool StorageHaMergeTree::removeTableNodesFromZooKeeper(zkutil::ZooKeeperPtr zook
     return completely_removed;
 }
 
-void StorageHaMergeTree::checkParts(bool)
-{
-    /// TODO:
-}
-
 void StorageHaMergeTree::truncate(
     const ASTPtr &, const StorageMetadataPtr &, ContextPtr query_context, TableExclusiveLockHolder & table_lock)
 {
@@ -1004,7 +1000,7 @@ BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe
 }
 
 bool StorageHaMergeTree::optimize(
-    [[maybe_unused]] const ASTPtr &,
+    [[maybe_unused]] const ASTPtr & query,
     [[maybe_unused]] const StorageMetadataPtr &,
     [[maybe_unused]] const ASTPtr & partition,
     [[maybe_unused]] bool final,
@@ -1014,17 +1010,52 @@ bool StorageHaMergeTree::optimize(
 {
     assertNotReadonly();
 
+    if (final)
+        throw Exception("FINAL is disabled because it is dangerous", ErrorCodes::NOT_IMPLEMENTED);
+
+    auto optimize_query = query->as<ASTOptimizeQuery>();
+    auto enable_try = optimize_query->enable_try;
     auto & settings = query_context->getSettingsRef();
-    if (!is_leader && !settings.ignore_leader_check)
-        throw Exception("OPTIMIZE cannot be done on this replica because it is not a leader", ErrorCodes::NOT_A_LEADER);
 
     /// NOTE: exclusive lock cannot be used here, since this may lead to deadlock (see comments below),
     /// but it should be safe to use non-exclusive to avoid dropping parts that may be required for processing queue.
     auto table_lock = lockForShare(query_context->getCurrentQueryId(), query_context->getSettingsRef().lock_acquire_timeout);
 
-    tryExecutePartitionLevelTTL();
+    if (!enable_try)
+        tryExecutePartitionLevelTTL();
 
-    /// TODO:
+    MergeTreeData::DataPartsVector data_parts;
+    if (partition)
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+        data_parts = getDataPartsVectorInPartition(DataPartState::Committed, partition_id);
+    }
+    else
+    {
+        data_parts = getDataPartsVector();
+    }
+
+    auto zookeeper = getZooKeeper();
+    const bool enable_logging = enable_try;
+    auto merge_pred = queue.getMergePredicate(zookeeper, enable_logging);
+
+    std::vector<FutureMergedMutatedPart> future_merge_parts;
+    auto select_decision = merger_mutator.selectPartsToMergeMulti(
+        future_merge_parts,
+        data_parts,
+        false, // aggressive
+        getSettings()->max_bytes_to_merge_at_max_space_in_pool,
+        merge_pred,
+        false, // merge_with_ttl_allowed
+        nullptr /// out_disable_reason
+    );
+
+    if (SelectPartsDecision::SELECTED != select_decision)
+        return false;
+
+    if (!enable_try)
+        createLogEntriesToMergeParts(future_merge_parts); /// Will throw exception on any error
+
     return true;
 }
 
@@ -2389,9 +2420,18 @@ bool StorageHaMergeTree::executeDropRange(HaQueueExecutingEntrySetPtr & executin
     {
         auto drop_range_part = createDropRangePart(drop_range_name, drop_range_info, metadata_snapshot);
 
-        MergeTreeData::Transaction transaction(*this);
-        parts_to_remove = renameTempPartAndReplace(drop_range_part, nullptr, &transaction);
-        transaction.commit();
+        try
+        {
+            MergeTreeData::Transaction transaction(*this);
+            parts_to_remove = renameTempPartAndReplace(drop_range_part, nullptr, &transaction);
+            transaction.commit();
+        }
+        catch (const Exception & e)
+        {
+            if (e.code() == ErrorCodes::DUPLICATE_DATA_PART)
+                LOG_WARNING(log, "Tried to add duplicated fake drop range part: {}", e.what());
+            throw;
+        }
     }
     else
     {
@@ -2567,13 +2607,15 @@ void StorageHaMergeTree::executeMetadataAlter(const MutationEntry & entry)
     LOG_DEBUG(log, "Set metadata version to: {} ", metadata_version);
 }
 
-bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & ) const
+bool StorageHaMergeTree::partIsAssignedToBackgroundOperation(const DataPartPtr & part) const
 {
+    std::lock_guard current_merging_parts_lock(current_merging_parts_mutex);
+    if (current_merging_parts.count(part->name))
+        return true;
+
+    /// TODO obviously, current implementation is not correct.
+    /// we should introduce the concept `virtual part` to complete the function
     return false;
-    /// TODO:
-    /// 1. for move
-    /// 2. for drop part
-    /// return queue.isVirtualPart(part);
 }
 
 void StorageHaMergeTree::queueUpdatingTask()
@@ -3190,7 +3232,7 @@ void StorageHaMergeTree::mergeSelectingTask()
         // ready in leader yet. How to address without race condition is quite complex.
         //
         // Look through the log queue + delay selection strategy should be applicable in practice.
-        auto merge_pred = queue.getMergePredicate(zookeeper);
+        auto merge_pred = queue.getMergePredicate(zookeeper, false);
         auto merges_and_mutations_queued = queue.countMergesAndPartMutations();
 
 
@@ -3225,6 +3267,7 @@ void StorageHaMergeTree::mergeSelectingTask()
             std::vector<FutureMergedMutatedPart> future_merge_parts;
             select_decision = merger_mutator.selectPartsToMergeMulti(
                 future_merge_parts,
+                getDataPartsVector(),
                 false, // aggressive
                 max_source_parts_size,
                 merge_pred,
@@ -3631,8 +3674,7 @@ bool StorageHaMergeTree::dropPartImpl(zkutil::ZooKeeperPtr & zookeeper, const St
         return false;
     }
 
-    /// impl hasDropRange
-    /// TODO:
+    /// NOTE: Won't check drop range here, let's handle it when executing log entry.
 
     /// There isn't a lot we can do otherwise. Can't cancel merges because it is possible that a replica already
     /// finished the merge.
@@ -3906,37 +3948,19 @@ void StorageHaMergeTree::fetchPartition(
 {
     assertNotReadonly();
 
-    /// Macros::MacroExpansionInfo info;
-    /// info.expand_special_macros_only = false; //-V1048
-    /// info.table_id = getStorageID();
-    /// info.table_id.uuid = UUIDHelpers::Nil;
-    /// auto expand_from = query_context->getMacros()->expand(from_, info);
-    /// String auxiliary_zookeeper_name = extractZooKeeperName(expand_from);
-    /// String from = extractZooKeeperPath(expand_from);
-    /// if (from.empty())
-    ///     throw Exception("ZooKeeper path should not be empty", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-    /// zkutil::ZooKeeperPtr zookeeper;
-    /// if (auxiliary_zookeeper_name != default_zookeeper_name)
-    ///     zookeeper = getContext()->getAuxiliaryZooKeeper(auxiliary_zookeeper_name);
-    /// else
-    ///     zookeeper = getZooKeeper();
-
-    /// if (from.back() == '/')
-    ///     from.resize(from.size() - 1);
-
     if (fetch_part)
     {
         String part_name = partition->as<ASTLiteral &>().value.safeGet<String>();
-        /// TODO handle exception
-        fetchPart(nullptr, part_name, zookeeper_path + "/replicas/" + from, false);
-        return;
+        if (!fetchPart(nullptr, part_name, zookeeper_path + "/replicas/" + from, false))
+            throw Exception(ErrorCodes::UNFINISHED, "Failed to fetch part {} from {}", part_name, from);
     }
+    else
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+        LOG_INFO(log, "Will fetch partition {} from replica {}", partition_id, from);
 
-    String partition_id = getPartitionIDFromQuery(partition, query_context);
-    /// LOG_INFO(log, "Will fetch partition {} from shard {} (zookeeper '{}')", partition_id, from_, auxiliary_zookeeper_name);
-
-    fetchPartitionImpl(partition_id, {}, from, query_context);
+        fetchPartitionImpl(partition_id, {}, from, query_context);
+    }
 }
 
 void StorageHaMergeTree::fetchPartitionWhere(

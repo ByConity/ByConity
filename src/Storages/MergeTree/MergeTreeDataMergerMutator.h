@@ -97,6 +97,7 @@ public:
 
     SelectPartsDecision selectPartsToMergeMulti(
         std::vector<FutureMergedMutatedPart> & future_parts,
+        const MergeTreeData::DataPartsVector & data_parts,
         bool aggressive,
         size_t max_total_size_to_merge,
         const AllowedMergingPredicate & can_merge,
