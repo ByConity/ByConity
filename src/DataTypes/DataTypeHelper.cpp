@@ -89,7 +89,7 @@ DataTypePtr createBaseDataTypeFromTypeIndex(TypeIndex index)
     }
 }
 
-DataTypePtr deserializeDataType(ReadBuffer & buf)
+DataTypePtr deserializeDataTypeV1V1(ReadBuffer & buf)
 {
     DESERIALIZE_ENUM(TypeIndex, index, buf)
     switch (index)
@@ -146,7 +146,7 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
             return createDecimal<DataTypeDecimal>(precision, scale);
         }
         case TypeIndex::Array: {
-            auto nest_type = deserializeDataType(buf);
+            auto nest_type = deserializeDataTypeV1V1(buf);
             return std::make_shared<DataTypeArray>(nest_type);
         }
         case TypeIndex::Tuple: {
@@ -156,7 +156,7 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
             Strings names;
             for (size_t i = 0; i < size; ++i)
             {
-                types.emplace_back(deserializeDataType(buf));
+                types.emplace_back(deserializeDataTypeV1V1(buf));
             }
             for (size_t i = 0; i < size; ++i)
             {
@@ -179,16 +179,16 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
             return std::make_shared<DataTypeInterval>(kind);
         }
         case TypeIndex::Nullable: {
-            auto nest_type = deserializeDataType(buf);
+            auto nest_type = deserializeDataTypeV1V1(buf);
             return std::make_shared<DataTypeNullable>(nest_type);
         }
         case TypeIndex::LowCardinality: {
-            auto dict_type = deserializeDataType(buf);
+            auto dict_type = deserializeDataTypeV1V1(buf);
             return std::make_shared<DataTypeLowCardinality>(dict_type);
         }
         case TypeIndex::Map: {
-            auto key_type = deserializeDataType(buf);
-            auto value_type = deserializeDataType(buf);
+            auto key_type = deserializeDataTypeV1V1(buf);
+            auto value_type = deserializeDataTypeV1V1(buf);
             return std::make_shared<DataTypeMap>(key_type, value_type);
         }
         case TypeIndex::Function: {
@@ -197,9 +197,9 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
             DataTypes args;
             for (size_t i = 0; i < size; ++i)
             {
-                args.emplace_back(deserializeDataType(buf));
+                args.emplace_back(deserializeDataTypeV1V1(buf));
             }
-            DataTypePtr result_type = deserializeDataType(buf);
+            DataTypePtr result_type = deserializeDataTypeV1V1(buf);
             return std::make_shared<DataTypeFunction>(args, result_type);
         }
         case TypeIndex::AggregateFunction: {
@@ -211,7 +211,7 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
             DataTypes type_args;
             for (size_t i = 0; i < size; ++i)
             {
-                type_args.emplace_back(deserializeDataType(buf));
+                type_args.emplace_back(deserializeDataTypeV1V1(buf));
             }
             Array params;
             readVarUInt(size, buf);
@@ -231,7 +231,7 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
     }
 }
 
-void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
+void serializeDataTypeV1(const DataTypePtr & data_type, WriteBuffer & buf)
 {
     TypeIndex index = data_type->getTypeId();
     SERIALIZE_ENUM(index, buf)
@@ -276,7 +276,7 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
         }
         case TypeIndex::Array: {
             auto type = std::dynamic_pointer_cast<const DataTypeArray>(data_type);
-            serializeDataType(type->getNestedType(), buf);
+            serializeDataTypeV1(type->getNestedType(), buf);
             return;
         }
         case TypeIndex::Tuple: {
@@ -284,7 +284,7 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
             writeBinary(type->getElements().size(), buf);
             for (const auto & elem : type->getElements())
             {
-                serializeDataType(elem, buf);
+                serializeDataTypeV1(elem, buf);
             }
 
             for (const auto & name : type->getElementNames())
@@ -300,18 +300,18 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
         }
         case TypeIndex::Nullable: {
             auto type = std::dynamic_pointer_cast<const DataTypeNullable>(data_type);
-            serializeDataType(type->getNestedType(), buf);
+            serializeDataTypeV1(type->getNestedType(), buf);
             return;
         }
         case TypeIndex::LowCardinality: {
             auto type = std::dynamic_pointer_cast<const DataTypeLowCardinality>(data_type);
-            serializeDataType(type->getDictionaryType(), buf);
+            serializeDataTypeV1(type->getDictionaryType(), buf);
             return;
         }
         case TypeIndex::Map: {
             auto type = std::dynamic_pointer_cast<const DataTypeMap>(data_type);
-            serializeDataType(type->getKeyType(), buf);
-            serializeDataType(type->getValueType(), buf);
+            serializeDataTypeV1(type->getKeyType(), buf);
+            serializeDataTypeV1(type->getValueType(), buf);
             return;
         }
         case TypeIndex::Function: {
@@ -319,10 +319,10 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
             writeBinary(type->getArgumentTypes().size(), buf);
             for (const auto & arg : type->getArgumentTypes())
             {
-                serializeDataType(arg, buf);
+                serializeDataTypeV1(arg, buf);
             }
 
-            serializeDataType(type->getReturnType(), buf);
+            serializeDataTypeV1(type->getReturnType(), buf);
             return;
         }
         case TypeIndex::AggregateFunction: {
@@ -331,7 +331,7 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
             writeBinary(type->getArgumentsDataTypes().size(), buf);
             for (const auto & arg : type->getArgumentsDataTypes())
             {
-                serializeDataType(arg, buf);
+                serializeDataTypeV1(arg, buf);
             }
             writeBinary(type->getFunction()->getParameters().size(), buf);
             for (const auto & param : type->getFunction()->getParameters())
@@ -345,6 +345,18 @@ void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
     }
 }
 
+void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf)
+{
+    writeBinary(data_type->getName(), buf);
+}
+
+DataTypePtr deserializeDataType(ReadBuffer & buf)
+{
+    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+    String type_name;
+    readBinary(type_name, buf);
+    return data_type_factory.get(type_name);
+}
 
 }
 

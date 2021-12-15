@@ -2,6 +2,7 @@
 
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeHelper.h>
 #include <Functions/IFunction.h>
 #include <Functions/IFunctionAdaptors.h>
 #include <Functions/FunctionsConversion.h>
@@ -10,6 +11,9 @@
 #include <Interpreters/Context.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 
 #include <stack>
 #include <Common/JSONBuilder.h>
@@ -69,6 +73,123 @@ void ActionsDAG::Node::toTree(JSONBuilder::JSONMap & map) const
         map.add("Compiled", is_function_compiled);
 }
 
+void ActionsDAG::Node::serialize(WriteBuffer & buf) const
+{
+    writeBinary(id, buf);
+
+    /// children
+    writeBinary(children.size(), buf);
+    for (auto & child : children)
+        writeBinary(child->id, buf);
+    
+    serializeEnum(type, buf);
+
+    writeBinary(result_name, buf);
+
+    if (result_type)
+    {
+        writeBinary(true, buf);
+        serializeDataType(result_type, buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    if (function_builder)
+    {
+        writeBinary(true, buf);
+        writeBinary(function_builder->getName(), buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    if (function_base)
+    {
+        writeBinary(true, buf);
+        /// function_base should be built when deserializing.
+    }
+    else
+        writeBinary(false, buf);
+
+    if (function)
+    {
+        writeBinary(true, buf);
+        /// function should be built when deserializing.
+    }
+    else
+        writeBinary(false, buf);
+
+    writeBinary(is_function_compiled, buf);
+
+    if (column)
+    {
+        writeBinary(true, buf);
+        serializeColumn(column, result_type, buf);
+    }
+    else
+        writeBinary(false, buf);
+}
+
+ActionsDAG::Node ActionsDAG::Node::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    size_t id;
+    readBinary(id, buf);
+
+    /// children
+    size_t children_size;
+    readBinary(children_size, buf);
+    std::vector<size_t> children_ids(children_size);
+    for (size_t i = 0; i < children_size; ++i)
+        readBinary(children_ids[i], buf);
+
+    ActionType type;
+    deserializeEnum(type, buf);
+
+    String result_name;
+    readBinary(result_name, buf);
+
+    bool has_result_type;
+    readBinary(has_result_type, buf);
+    DataTypePtr result_type;
+    if (has_result_type)
+        result_type = deserializeDataType(buf);
+
+    bool has_function_builder;
+    FunctionOverloadResolverPtr function_builder;
+    readBinary(has_function_builder, buf);
+    if (has_function_builder)
+    {
+        String function_name;
+        readBinary(function_name, buf);
+        function_builder = FunctionFactory::instance().get(function_name, context);
+    }
+
+    bool has_function_base;
+    readBinary(has_function_base, buf);
+
+    bool has_function;
+    readBinary(has_function, buf);
+
+    bool is_function_compiled;
+    readBinary(is_function_compiled, buf);
+
+    bool has_column;
+    readBinary(has_column, buf);
+    ColumnPtr column;
+    if (has_column)
+        column = deserializeColumn(buf);
+
+    return Node{.type = type,
+                .result_name = result_name,
+                .result_type = result_type,
+                .function_builder = function_builder,
+                .is_function_compiled = is_function_compiled,
+                .column = column,
+                .id = id,
+                .children_ids = children_ids,
+                .has_function_base = has_function_base,
+                .has_function = has_function
+                };
+}
 
 ActionsDAG::ActionsDAG(const NamesAndTypesList & inputs_)
 {
@@ -1880,6 +2001,101 @@ ActionsDAGPtr ActionsDAG::cloneActionsForFilterPushDown(
     }
 
     return actions;
+}
+
+void ActionsDAG::serialize(WriteBuffer & buf) const
+{
+    /**
+     * encode each node with an id to deserialize node
+     */
+    size_t id = 0;
+    for (auto & node : nodes)
+        node.id = id++;
+
+    /**
+     * serialize node
+     */
+    writeBinary(nodes.size(), buf);
+    for (auto & node : nodes)
+        node.serialize(buf);
+
+    /**
+     * serialize index
+     */
+    writeBinary(index.size(), buf);
+    for (auto & node: index)
+        writeBinary(node->id, buf);
+
+    writeBinary(project_input, buf);
+    writeBinary(projected_output, buf);
+}
+
+ActionsDAGPtr ActionsDAG::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto actions_dag = std::make_shared<ActionsDAG>();
+
+    size_t node_size;
+    readBinary(node_size, buf);
+
+    std::unordered_map<size_t, Node *> node_mapping;
+
+    for (size_t i = 0; i< node_size; ++i)
+    {
+        auto node = actions_dag->addNode(ActionsDAG::Node::deserialize(buf, context));
+        node_mapping[node.id] = &node;
+    }
+
+    /**
+     * deserialize index
+     */
+    size_t index_size;
+    readBinary(index_size, buf);
+    auto & actions_index = actions_dag->getIndex();
+    for (size_t i = 0; i < index_size; ++i)
+    {
+        size_t index_id;
+        readBinary(index_id, buf);
+        actions_index.emplace_back(node_mapping[index_id]);
+    }
+
+    bool project_input;
+    readBinary(project_input, buf);
+    bool projected_output;
+    readBinary(projected_output, buf);
+
+    actions_dag->projectInput(project_input);
+    actions_dag->projectedOutput(projected_output);
+
+    /**
+     * reconstruct nodes according to ids
+     */
+    for (auto & node : actions_dag->getNodes())
+    {
+        for (auto & child : node.children_ids)
+        {
+            const_cast<ActionsDAG::Node &>(node).children.emplace_back(node_mapping[child]);
+        }
+        /**
+         * reconstruct functions according to children
+         */
+        ColumnsWithTypeAndName arguments;
+        for (auto & child : node.children)
+        {
+            ColumnWithTypeAndName argument;
+            argument.column = child->column;
+            argument.type = child->result_type;
+            argument.name = child->result_name;
+
+            arguments.push_back(std::move(argument));
+        }
+
+        if (node.has_function_base)
+            const_cast<ActionsDAG::Node &>(node).function_base = node.function_builder->build(arguments);
+        if (node.has_function)
+            const_cast<ActionsDAG::Node &>(node).function = node.function_base->prepare(arguments);
+    }
+
+    return actions_dag;
 }
 
 }

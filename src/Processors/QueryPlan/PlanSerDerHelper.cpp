@@ -34,6 +34,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <DataTypes/DataTypeHelper.h>
 
 namespace DB
 {
@@ -78,6 +79,65 @@ NameSet deserializeStringSet(ReadBuffer & buf)
     }
 
     return stringSet;
+}
+
+void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, WriteBuffer & buf)
+{
+    /** If there are columns-constants - then we materialize them.
+      * (Since the data type does not know how to serialize / deserialize constants.)
+      */
+
+    writeBinary(isColumnConst(*column), buf);
+
+    ColumnPtr full_column = column->convertToFullColumnIfConst();
+
+    serializeDataType(data_type, buf);
+    writeBinary(full_column->size(), buf);
+
+    ISerialization::SerializeBinaryBulkSettings settings;
+    settings.getter = [&buf](ISerialization::SubstreamPath) -> WriteBuffer * { return &buf; };
+    settings.position_independent_encoding = false;
+    settings.low_cardinality_max_dictionary_size = 0; //-V1048
+
+    auto serialization = data_type->getDefaultSerialization();
+
+    ISerialization::SerializeBinaryBulkStatePtr state;
+    serialization->serializeBinaryBulkStatePrefix(settings, state);
+    serialization->serializeBinaryBulkWithMultipleStreams(*full_column, 0, 0, settings, state);
+    serialization->serializeBinaryBulkStateSuffix(settings, state);
+}
+
+ColumnPtr deserializeColumn(ReadBuffer & buf)
+{
+    bool is_const_column;
+    readBinary(is_const_column, buf);
+
+    auto data_type = deserializeDataType(buf);
+    size_t rows;
+    readBinary(rows, buf);
+
+    ColumnPtr column = data_type->createColumn();
+
+    ISerialization::DeserializeBinaryBulkSettings settings;
+    settings.getter = [&](ISerialization::SubstreamPath) -> ReadBuffer * { return &buf; };
+    settings.avg_value_size_hint = 0;
+    settings.position_independent_encoding = false;
+    settings.native_format = true;
+
+    ISerialization::DeserializeBinaryBulkStatePtr state;
+    auto serialization = data_type->getDefaultSerialization();
+
+    serialization->deserializeBinaryBulkStatePrefix(settings, state);
+    serialization->deserializeBinaryBulkWithMultipleStreams(column, rows, settings, state, nullptr);
+
+    if (column->size() != rows)
+        throw Exception("Cannot read all data when deserialize column. Rows read: " + toString(column->size()) + ". Rows expected: " + toString(rows) + ".",
+            ErrorCodes::CANNOT_READ_ALL_DATA);
+
+    if (is_const_column)
+        column = ColumnConst::create(column, rows);
+
+    return column;
 }
 
 void serializeBlock(const Block & block, WriteBuffer & buf)

@@ -6,6 +6,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Core/Block.h>
+#include <Columns/IColumn.h>
 
 namespace DB
 {
@@ -75,6 +76,9 @@ std::vector<T> deserializeItemVector(ReadBuffer & buf)
 
 void serializeBlock(const Block & block, WriteBuffer & buf);
 Block deserializeBlock(ReadBuffer & buf);
+
+void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, WriteBuffer & buf);
+ColumnPtr deserializeColumn(ReadBuffer & buf);
 
 void serializeDataStream(const DataStream & stream, WriteBuffer & buf);
 void serializeDataStreamFromDataStreams(const std::vector<DataStream> & stream, WriteBuffer & buf);

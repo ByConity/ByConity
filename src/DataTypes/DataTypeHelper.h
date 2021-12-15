@@ -12,6 +12,9 @@ class WriteBuffer;
 
 DataTypePtr createBaseDataTypeFromTypeIndex(TypeIndex index);
 
+void serializeDataTypeV1(const DataTypePtr & data_type, WriteBuffer & buf);
+DataTypePtr deserializeDataTypeV1(ReadBuffer & buf);
+
 void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf);
 DataTypePtr deserializeDataType(ReadBuffer & buf);
 
