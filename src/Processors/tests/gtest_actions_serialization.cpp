@@ -10,6 +10,7 @@
 #include <Core/Field.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
+#include <Common/tests/gtest_global_register.h>
 
 using namespace DB;
 
@@ -33,8 +34,9 @@ ActionsDAGPtr createActionsFunction()
     auto actions_dag = std::make_shared<ActionsDAG>();
     const auto & context = getContext().context;
 
-    registerFunctions();
-    auto function_builder = FunctionFactory::instance().get("lower", context);
+    tryRegisterFunctions();    
+    auto & factory = FunctionFactory::instance();
+    auto function_builder = factory.get("lower", context);
 
     ColumnWithTypeAndName column;
     column.name = "TEST";
