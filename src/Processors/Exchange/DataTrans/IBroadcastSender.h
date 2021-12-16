@@ -11,7 +11,7 @@ namespace DB
 class IBroadcastSender
 {
 public:
-    virtual BroadcastStatus send(Chunk && chunk) = 0;
+    virtual BroadcastStatus send(Chunk chunk) = 0;
     virtual void waitAllReceiversReady(UInt32 timeout_ms) = 0;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code, String message) = 0;
     virtual ~IBroadcastSender() = default;

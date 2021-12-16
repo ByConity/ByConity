@@ -14,7 +14,7 @@ namespace UnitTest
 {
 using namespace DB;
 
-TEST(LocalBroadcasTest, LocalBroadcastRegistryTest)
+TEST(LocalBroadcast, LocalBroadcastRegistryTest)
 {
     LocalChannelOptions options{10, 1000};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
@@ -28,7 +28,7 @@ TEST(LocalBroadcasTest, LocalBroadcastRegistryTest)
 }
 
 
-TEST(LocalBroadcasTest, NormalSendRecvTest)
+TEST(LocalBroadcast, NormalSendRecvTest)
 {
     LocalChannelOptions options{10, 1000};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
@@ -46,7 +46,7 @@ TEST(LocalBroadcasTest, NormalSendRecvTest)
     ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
 }
 
-TEST(LocalBroadcasTest, SendTimeoutTest)
+TEST(LocalBroadcast, SendTimeoutTest)
 {
     LocalChannelOptions options{1, 200};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
@@ -61,7 +61,7 @@ TEST(LocalBroadcasTest, SendTimeoutTest)
     ASSERT_TRUE(timeout_status.is_modifer == true);
 }
 
-TEST(LocalBroadcasTest, AllSendDoneTest)
+TEST(LocalBroadcast, AllSendDoneTest)
 {
     LocalChannelOptions options{10, 1000};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};

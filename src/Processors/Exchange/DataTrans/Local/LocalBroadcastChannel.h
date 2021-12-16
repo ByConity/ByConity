@@ -22,7 +22,7 @@ public:
     virtual RecvDataPacket recv(UInt32 timeout_ms) override;
     virtual void registerToSenders(UInt32 timeout_ms) override;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
-    virtual BroadcastStatus send(Chunk && chunk) override;
+    virtual BroadcastStatus send(Chunk chunk) override;
     virtual void waitAllReceiversReady(UInt32 /*timeout_ms*/) override { }
     virtual ~LocalBroadcastChannel() override;
 

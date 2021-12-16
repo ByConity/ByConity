@@ -1,0 +1,84 @@
+#include <tuple>
+#include <Processors/Exchange/DataTrans/IBroadcastSender.h>
+#include <Processors/Exchange/MultiPartitionExchangeSink.h>
+#include <Processors/ISink.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+#include <Columns/IColumn.h>
+#include <Processors/Exchange/ExchangeBufferedSender.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/RepartitionTransform.h>
+
+namespace DB
+{
+
+MultiPartitionExchangeSink::MultiPartitionExchangeSink(
+    Block header_,
+    BroadcastSenderPtrs partition_senders_,
+    ExecutableFunctionPtr repartition_func_,
+    ColumnNumbers repartition_keys_,
+    ExchangeOptions options_)
+    : ISink(std::move(header_))
+    , header(getPort().getHeader())
+    , partition_senders(std::move(partition_senders_))
+    , partition_num(partition_senders.size())
+    , column_num(header.columns())
+    , repartition_func(std::move(repartition_func_))
+    , repartition_keys(std::move(repartition_keys_))
+    , options(options_)
+    , logger(&Poco::Logger::get("MultiPartitionExchangeSink"))
+
+{
+    for(size_t i = 0; i < partition_num; ++i)
+    {
+        ExchangeBufferedSender buffered_sender (header, partition_senders[i], options.send_threshold_in_bytes, options.send_threshold_in_row_num);
+        buffered_senders.emplace_back(std::move(buffered_sender));
+    }
+}
+
+void MultiPartitionExchangeSink::consume(Chunk chunk)
+{
+    IColumn::Selector partition_selector;
+    RepartitionTransform::PartitionStartPoints partition_start_points;
+    std::tie(partition_selector, partition_start_points) = RepartitionTransform::doRepartition(
+        partition_num, chunk, header, repartition_keys, repartition_func, RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE);
+
+    const auto &  columns = chunk.getColumns();
+    for (size_t i = 0; i < column_num; i++)
+    {
+        for (size_t j = 0; j < partition_num; ++j)
+        {
+            size_t from = partition_start_points[j];
+            size_t length = partition_start_points[j + 1] - from;
+            if (length == 0)
+                continue; // no data for this partition continue;
+            buffered_senders[j].appendSelective(i, *columns[i], partition_selector, from, length);
+        }
+    }
+    
+    for(size_t i = 0; i < partition_num ; ++i)
+    {  
+        buffered_senders[i].flush(false);
+    }
+    
+}
+
+void MultiPartitionExchangeSink::onFinish()
+{
+    LOG_TRACE(logger, "MultiPartitionExchangeSink finish");
+    was_finished = true;
+    for(size_t i = 0; i < partition_num ; ++i)
+        buffered_senders[i].flush(true);
+}
+
+void MultiPartitionExchangeSink::onCancel()
+{
+    LOG_TRACE(logger, "MultiPartitionExchangeSink cancel");
+    if (!was_finished)
+    {
+        for (BroadcastSenderPtr & sender : partition_senders)
+            sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
+    }
+}
+
+}

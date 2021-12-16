@@ -14,10 +14,10 @@ namespace DB
 class ExchangeSource : public SourceWithProgress
 {
 public:
-    explicit ExchangeSource(Block header_, BroadcastReceiverPtr receiver_ptr_);
+    explicit ExchangeSource(Block header_, BroadcastReceiverPtr receiver_);
     ~ExchangeSource() override;
 
-    Status prepare() override;
+    IProcessor::Status prepare() override;
     String getName() const override { return "ExchangeSource"; }
     void onUpdatePorts() override;
 
@@ -26,7 +26,7 @@ protected:
     void onCancel() override;
 
 private:
-    BroadcastReceiverPtr receive_ptr;
+    BroadcastReceiverPtr receiver;
     std::atomic<bool> was_query_canceled = false;
     std::atomic<bool> was_receiver_finished = false;
 };

@@ -18,19 +18,19 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_ptr_)
-    : SourceWithProgress(std::move(header_), false), receive_ptr(receiver_ptr_)
+ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_)
+    : SourceWithProgress(std::move(header_), false), receiver(std::move(receiver_))
 {
 }
 
 ExchangeSource::~ExchangeSource() = default;
 
-ISource::Status ExchangeSource::prepare()
+IProcessor::Status ExchangeSource::prepare()
 {
     const auto & status = SourceWithProgress::prepare();
     if (status == Status::Finished)
     {
-        receive_ptr->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
+        receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
     }
     return status;
 }
@@ -40,7 +40,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 
-    RecvDataPacket packet = receive_ptr->recv(0);
+    RecvDataPacket packet = receiver->recv(0);
 
     if (std::holds_alternative<Chunk>(packet))
     {
@@ -62,7 +62,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 void ExchangeSource::onCancel()
 {
     was_query_canceled = true;
-    receive_ptr->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
+    receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }
 
 void ExchangeSource::onUpdatePorts()
@@ -70,7 +70,7 @@ void ExchangeSource::onUpdatePorts()
     if (getPort().isFinished())
     {
         was_receiver_finished = true;
-        receive_ptr->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
+        receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
     }
 }
 

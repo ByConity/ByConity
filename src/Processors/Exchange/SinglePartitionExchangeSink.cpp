@@ -1,0 +1,78 @@
+#include <tuple>
+#include <Columns/IColumn.h>
+#include <DataStreams/RemoteQueryExecutor.h>
+#include <DataStreams/RemoteQueryExecutorReadContext.h>
+#include <DataTypes/DataTypeAggregateFunction.h>
+#include <Processors/Exchange/DataTrans/IBroadcastSender.h>
+#include <Processors/Exchange/ExchangeBufferedSender.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/SinglePartitionExchangeSink.h>
+#include <Processors/Exchange/RepartitionTransform.h>
+#include <Processors/ISink.h>
+#include <Processors/ISource.h>
+#include <Processors/Transforms/AggregatingTransform.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+
+namespace DB
+{
+    
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+SinglePartitionExchangeSink::SinglePartitionExchangeSink(
+    Block header_, BroadcastSenderPtr sender_, size_t partition_id_, ExchangeOptions options_)
+    : ISink(std::move(header_))
+    , header(getPort().getHeader())
+    , sender(sender_)
+    , partition_id(partition_id_)
+    , column_num(header.columns())
+    , options(options_)
+    , buffered_sender(header, sender, options.send_threshold_in_bytes, options.send_threshold_in_row_num)
+    , logger(&Poco::Logger::get("SinglePartitionExchangeSink"))
+{
+}
+
+void SinglePartitionExchangeSink::consume(Chunk chunk)
+{
+    const auto & info = chunk.getChunkInfo();
+    if (!info)
+        throw Exception("Chunk info was not set for chunk.", ErrorCodes::LOGICAL_ERROR);
+    const auto * repartition_info = typeid_cast<const RepartitionTransform::RepartitionChunkInfo *>(info.get());
+    if (!repartition_info)
+        throw Exception("Chunk should have RepartitionChunkInfo .", ErrorCodes::LOGICAL_ERROR);
+
+    const IColumn::Selector & partition_selector = repartition_info->selector;
+
+    size_t from = repartition_info->start_points[partition_id];
+    size_t length = repartition_info->start_points[partition_id + 1] - from;
+    if (length == 0)
+        return;
+
+    const auto & columns = chunk.getColumns();
+    for (size_t i = 0; i < column_num; i++)
+    {
+        buffered_sender.appendSelective(i, *columns[i], partition_selector, from, length);
+    }
+    buffered_sender.flush(false);
+}
+
+void SinglePartitionExchangeSink::onFinish()
+{
+    LOG_TRACE(logger, "SinglePartitionExchangeSink finish");
+    was_finished = true;
+    buffered_sender.flush(true);
+}
+
+void SinglePartitionExchangeSink::onCancel()
+{
+    LOG_TRACE(logger, "SinglePartitionExchangeSink cancel");
+    if (!was_finished)
+    {
+        sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
+    }
+}
+
+}
