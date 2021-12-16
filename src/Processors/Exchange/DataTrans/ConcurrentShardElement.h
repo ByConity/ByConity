@@ -65,10 +65,10 @@ public:
     String keys()
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
-        std::ostringstream oss;
+        String ret;
         for (const auto & element : map_data)
-            oss << element.first << std::endl;
-        return oss.str();
+            ret = ret + element.first + "\n";
+        return ret;
     }
 
     void removeIf(std::function<bool(std::pair<KeyType, ElementType>)> predicate)

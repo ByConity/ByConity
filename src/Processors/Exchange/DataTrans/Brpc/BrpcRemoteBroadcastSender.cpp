@@ -65,7 +65,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 
 void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
 {
-    size_t max_num = timeout_ms / 100;
+    size_t max_num = timeout_ms / 10;
     for (const auto & id : receiver_ids)
     {
         // for each receiver_id check exists in registry_center
@@ -78,7 +78,7 @@ void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
                     "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
             }
             retry_count++;
-            bthread_usleep(100 * 1000);
+            bthread_usleep(10 * 1000);
         }
         auto stream_id = registry_center.getSenderStreamId(id);
         sender_stream_ids.push_back(stream_id);
