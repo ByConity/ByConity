@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <vector>
 #include "common/types.h"
 
 namespace DB
@@ -9,6 +10,7 @@ class IBroadcastReceiver;
 class IBroadcastSender;
 using BroadcastReceiverPtr = std::shared_ptr<IBroadcastReceiver>;
 using BroadcastSenderPtr = std::shared_ptr<IBroadcastSender>;
+using BroadcastSenderPtrs = std::vector<BroadcastSenderPtr>;
 
 /// Status code indicates the status of the broadcaster which consists by connected senders and receiver.
 /// We should cancel data transport immediately when return positive status code and close gracefully when meet negative code.

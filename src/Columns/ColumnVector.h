@@ -123,6 +123,7 @@ private:
 
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il) : data{il} {}
+    explicit ColumnVector(Container && data_): data(std::move(data_)) {}
 
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }

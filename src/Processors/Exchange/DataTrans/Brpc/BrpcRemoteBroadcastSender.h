@@ -19,7 +19,7 @@ public:
     ~BrpcRemoteBroadcastSender() override;
 
     void waitAllReceiversReady(UInt32 timeout_ms) override;
-    BroadcastStatus send(Chunk && chunk) override;
+    BroadcastStatus send(Chunk chunk) override;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
 
     bool sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id);

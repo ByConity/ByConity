@@ -87,7 +87,7 @@ void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
     is_ready = true;
 }
 
-BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk && chunk)
+BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk)
 {
     if (!is_ready)
     {

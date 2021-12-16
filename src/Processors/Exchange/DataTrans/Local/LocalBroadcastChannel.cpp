@@ -43,7 +43,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 }
 
 
-BroadcastStatus LocalBroadcastChannel::send(Chunk && chunk)
+BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 {
     for (UInt32 elapsed_time_ms = 0; elapsed_time_ms < options.max_timeout_ms; elapsed_time_ms += options.poll_span_ms)
     {
