@@ -4,6 +4,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
 #include <Common/tests/gtest_global_context.h>
+#include <Common/tests/gtest_global_register.h>
 #include <Interpreters/ActionsDAG.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Core/ColumnWithTypeAndName.h>
@@ -34,7 +35,7 @@ ActionsDAGPtr createActionsFunction()
     auto actions_dag = std::make_shared<ActionsDAG>();
     const auto & context = getContext().context;
 
-    tryRegisterFunctions();    
+    tryRegisterFunctions();
     auto & factory = FunctionFactory::instance();
     auto function_builder = factory.get("lower", context);
 
@@ -50,6 +51,41 @@ ActionsDAGPtr createActionsFunction()
     ActionsDAG::NodeRawConstPtrs children;
     children.push_back(&actions_dag->getNodes().back());
     actions_dag->addFunction(function_builder, std::move(children), "lower()");
+
+    return actions_dag;
+}
+
+ActionsDAGPtr createActionsMoreFunction()
+{
+    auto actions_dag = std::make_shared<ActionsDAG>();
+    const auto & context = getContext().context;
+
+    tryRegisterFunctions();
+    auto & factory = FunctionFactory::instance();
+    auto function_builder = factory.get("equals", context);
+
+    ColumnWithTypeAndName column1;
+    column1.name = "T";
+
+    DataTypePtr type1 = DataTypeFactory::instance().get("String");
+    column1.column = type1->createColumnConst(1, Field("T CONSTANT"));
+    column1.type = type1;
+
+    actions_dag->addColumn(column1);
+
+    ColumnWithTypeAndName column2;
+    column2.name = "TEST";
+
+    DataTypePtr type2 = DataTypeFactory::instance().get("String");
+    column2.column = type2->createColumnConst(1, Field("TEST CONSTANT"));
+    column2.type = type2;
+
+    actions_dag->addColumn(column2);
+
+    ActionsDAG::NodeRawConstPtrs children;
+    children.push_back(&actions_dag->getNodes().front());
+    children.push_back(&actions_dag->getNodes().back());
+    actions_dag->addFunction(function_builder, std::move(children), "equals()");
 
     return actions_dag;
 }
@@ -86,5 +122,10 @@ TEST(TestActions, TestActionsSerialization)
 
     auto function_actions_dag = createActionsFunction();
     auto new_function_actions_dag = serializeActions(function_actions_dag);
-    checkResult(function_actions_dag, new_function_actions_dag); 
+    checkResult(function_actions_dag, new_function_actions_dag);
+
+//    // todo cannot pass yet
+//    auto more_function_actions_dag = createActionsMoreFunction();
+//    auto new_more_function_actions_dag = serializeActions(more_function_actions_dag);
+//    checkResult(more_function_actions_dag, new_more_function_actions_dag);
 }

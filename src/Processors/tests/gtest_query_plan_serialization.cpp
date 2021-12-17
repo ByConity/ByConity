@@ -1,4 +1,7 @@
 #include <gtest/gtest.h>
+#include <Common/tests/gtest_global_context.h>
+#include <Common/tests/gtest_global_register.h>
+
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Processors/QueryPlan/IQueryPlanStep.h>
 #include <Processors/QueryPlan/AggregatingStep.h>
@@ -29,12 +32,17 @@
 #include <Processors/QueryPlan/TotalsHavingStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
+#include <Processors/Transforms/AggregatingTransform.h>
+
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
-#include <Processors/Transforms/AggregatingTransform.h>
-#include <Common/tests/gtest_global_context.h>
+
+#include <DataTypes/DataTypeFactory.h>
+#include <Functions/FunctionFactory.h>
+#include <Functions/registerFunctions.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 
 
 using namespace DB;
@@ -42,12 +50,22 @@ using namespace DB;
 
 Block createBlock()
 {
-    return Block();
+    ColumnWithTypeAndName column;
+    column.name = "RES";
+
+    DataTypePtr type = DataTypeFactory::instance().get("UInt8");
+    column.column = type->createColumnConst(1, Field("RES COLUMN"));
+    column.type = type;
+
+    ColumnsWithTypeAndName columns;
+    columns.push_back(column);
+
+    return Block(columns);
 }
 
 DataStream createDataStream()
 {
-    return DataStream();
+    return DataStream{.header = createBlock()};
 }
 
 SortDescription createSortDescription()
@@ -135,7 +153,7 @@ TEST(QueryPlanTest, QueryPlanSerialization)
     auto new_agg_step = serializeQueryPlanStep(agg_step);
     std::cout << new_agg_step->getName() << std::endl;
     EXPECT_EQ(agg_step->getName(), new_agg_step->getName());
-    EXPECT_EQ(dynamic_cast<AggregatingStep *>(agg_step.get())->getParams().src_header.dumpStructure(), 
+    EXPECT_EQ(dynamic_cast<AggregatingStep *>(agg_step.get())->getParams().src_header.dumpStructure(),
               dynamic_cast<AggregatingStep *>(new_agg_step.get())->getParams().src_header.dumpStructure());
 }
 
@@ -271,4 +289,78 @@ TEST(QueryPlanTest, SimpleStepTest)
     TestSingleSimpleStep(createMergingAggregatedStep());
     TestSingleSimpleStep(createCubeStep());
     TestSingleSimpleStep(createRollupStep());
+}
+
+ActionsDAGPtr createActionsDAG()
+{
+    auto actions_dag = std::make_shared<ActionsDAG>();
+    const auto & context = getContext().context;
+
+    tryRegisterFunctions();
+    auto & factory = FunctionFactory::instance();
+    auto function_builder = factory.get("lower", context);
+
+    ColumnWithTypeAndName column;
+    column.name = "TEST";
+
+    DataTypePtr type = DataTypeFactory::instance().get("String");
+    column.column = type->createColumnConst(1, Field("TEST CONSTANT"));
+    column.type = type;
+
+    actions_dag->addColumn(column);
+
+    ActionsDAG::NodeRawConstPtrs children;
+    children.push_back(&actions_dag->getNodes().back());
+    actions_dag->addFunction(function_builder, std::move(children), "lower()");
+
+    return actions_dag;
+}
+
+void TestSingleActionsStep(QueryPlanStepPtr step)
+{
+    auto new_step = serializeQueryPlanStep(step);
+    std::cout << new_step->getName() << std::endl;
+
+    EXPECT_EQ(step->getName(), new_step->getName());
+
+    // todo test for others
+}
+
+QueryPlanStepPtr createExpressionStep()
+{
+    DataStream stream = createDataStream();
+    ActionsDAGPtr actions = createActionsDAG();
+
+    return std::make_unique<ExpressionStep>(stream, std::move(actions));
+}
+
+QueryPlanStepPtr createFilterStep()
+{
+    DataStream stream = createDataStream();
+    ActionsDAGPtr actions = createActionsDAG();
+
+    return std::make_unique<FilterStep>(stream, std::move(actions), "RES", false);
+}
+
+QueryPlanStepPtr createTotalsHavingStep()
+{
+    DataStream stream = createDataStream();
+    ActionsDAGPtr actions = createActionsDAG();
+
+    return std::make_unique<TotalsHavingStep>(
+        stream,
+        false,
+        std::move(actions),
+        "TEST",
+        TotalsMode::AFTER_HAVING_AUTO,
+        1.0,
+        false
+        );
+}
+
+TEST(QueryPlanTest, ActionsStepTest)
+{
+    TestSingleActionsStep(createExpressionStep());
+    TestSingleActionsStep(createFilterStep());
+    TestSingleActionsStep(createTotalsHavingStep());
 }

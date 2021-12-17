@@ -6,6 +6,9 @@
 #include <IO/Operators.h>
 #include <Common/JSONBuilder.h>
 
+#include <IO/WriteBuffer.h>
+#include <IO/ReadBuffer.h>
+
 namespace DB
 {
 
@@ -122,6 +125,32 @@ void FilterStep::describeActions(JSONBuilder::JSONMap & map) const
 
     auto expression = std::make_shared<ExpressionActions>(actions_dag);
     map.add("Expression", expression->toTree());
+}
+
+void FilterStep::serialize(WriteBuffer & buf) const
+{
+    serializeDataStreamFromDataStreams(input_streams, buf);
+
+    if (!actions_dag)
+        throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+    actions_dag->serialize(buf);
+
+    writeBinary(filter_column_name, buf);
+    writeBinary(remove_filter_column, buf);
+}
+
+QueryPlanStepPtr FilterStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    DataStream input_stream = deserializeDataStream(buf);
+    ActionsDAGPtr actions_dag = ActionsDAG::deserialize(buf, context);
+
+    String filter_column_name;
+    readBinary(filter_column_name, buf);
+
+    bool remove_filter_column;
+    readBinary(remove_filter_column, buf);
+
+    return std::make_unique<FilterStep>(input_stream, std::move(actions_dag), filter_column_name, remove_filter_column);
 }
 
 }

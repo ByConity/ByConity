@@ -102,4 +102,21 @@ void ExpressionStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Expression", expression->toTree());
 }
 
+void ExpressionStep::serialize(WriteBuffer & buf) const
+{
+    serializeDataStreamFromDataStreams(input_streams, buf);
+
+    if (!actions_dag)
+        throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+    actions_dag->serialize(buf);
+}
+
+QueryPlanStepPtr ExpressionStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    DataStream input_stream = deserializeDataStream(buf);
+    ActionsDAGPtr actions_dag = ActionsDAG::deserialize(buf, context);
+
+    return std::make_unique<ExpressionStep>(input_stream, std::move(actions_dag));
+}
+
 }
