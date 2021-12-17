@@ -86,7 +86,7 @@ void LimitByStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void LimitByStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     writeBinary(group_length, buffer);
     writeBinary(group_offset, buffer);
     serializeStrings(columns, buffer);
@@ -94,6 +94,9 @@ void LimitByStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr LimitByStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -103,7 +106,9 @@ QueryPlanStepPtr LimitByStep::deserialize(ReadBuffer & buffer, ContextPtr )
 
     Names column = deserializeStrings(buffer);
 
-    return std::make_unique<LimitByStep>(input_stream, group_length, group_offset, column);
+    auto step = std::make_unique<LimitByStep>(input_stream, group_length, group_offset, column);
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

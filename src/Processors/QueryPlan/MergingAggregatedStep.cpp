@@ -75,7 +75,7 @@ void MergingAggregatedStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void MergingAggregatedStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buf);
+    IQueryPlanStep::serializeImpl(buf);
     serializeAggregatingTransformParams(params, buf);
     writeBinary(memory_efficient_aggregation, buf);
     writeBinary(max_threads, buf);
@@ -84,6 +84,9 @@ void MergingAggregatedStep::serialize(WriteBuffer & buf) const
 
 QueryPlanStepPtr MergingAggregatedStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
+    String step_description;
+    readBinary(step_description, buf);
+
     DataStream input_stream = deserializeDataStream(buf);
 
     auto transform_params = deserializeAggregatingTransformParams(buf, context);
@@ -95,11 +98,14 @@ QueryPlanStepPtr MergingAggregatedStep::deserialize(ReadBuffer & buf, ContextPtr
     readBinary(max_threads, buf);
     readBinary(memory_efficient_merge_threads, buf);
 
-    return std::make_unique<MergingAggregatedStep>(input_stream,
+    auto step = std::make_unique<MergingAggregatedStep>(input_stream,
                                                    std::move(transform_params),
                                                    memory_efficient_aggregation,
                                                    max_threads,
                                                    memory_efficient_merge_threads);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

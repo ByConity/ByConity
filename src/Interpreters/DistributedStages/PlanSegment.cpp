@@ -145,6 +145,7 @@ String PlanSegmentInput::toString(size_t indent) const
 
 void PlanSegmentOutput::serialize(WriteBuffer & buf) const
 {
+    IPlanSegment::serialize(buf);
     writeBinary(shuffle_function_name, buf);
     writeBinary(parallel_size, buf);
     writeBinary(keep_order, buf);
@@ -152,6 +153,7 @@ void PlanSegmentOutput::serialize(WriteBuffer & buf) const
 
 void PlanSegmentOutput::deserialize(ReadBuffer & buf)
 {   
+    IPlanSegment::deserialize(buf);
     readBinary(shuffle_function_name, buf);
     readBinary(parallel_size, buf);
     readBinary(keep_order, buf);

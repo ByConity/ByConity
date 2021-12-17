@@ -1,6 +1,7 @@
 #include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
 #include <Processors/QueryPipeline.h>
 #include <Storages/IStorage.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -66,6 +67,75 @@ void SettingQuotaAndLimitsStep::transformPipeline(QueryPipeline & pipeline, cons
 
     if (table_lock)
         pipeline.addTableLock(std::move(table_lock));
+}
+
+void SettingQuotaAndLimitsStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    if (storage)
+    {
+        writeBinary(true, buf);
+        storage->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    if (table_lock)
+        writeBinary(true, buf);
+    else
+        writeBinary(false, buf);
+
+    limits.serialize(buf);
+    leaf_limits.serialize(buf);
+
+    if (quota)
+        writeBinary(true, buf);
+    else
+        writeBinary(false, buf);
+}
+
+QueryPlanStepPtr SettingQuotaAndLimitsStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    auto input_stream = deserializeDataStream(buf);
+
+    bool has_storage;
+    readBinary(has_storage, buf);
+    StoragePtr storage;
+    if (has_storage)
+        storage = IStorage::deserialize(buf, context);
+
+    bool has_table_lock;
+    readBinary(has_table_lock, buf);
+    TableLockHolder table_lock;
+    if (has_table_lock)
+        table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
+    
+    StreamLocalLimits limits;
+    SizeLimits leaf_limits;
+    std::shared_ptr<const EnabledQuota> quota;
+
+    limits.deserialize(buf);
+    leaf_limits.deserialize(buf);
+
+    bool has_quota;
+    readBinary(has_quota, buf);
+    if (has_quota)
+        quota = context->getQuota();
+
+    auto step = std::make_unique<SettingQuotaAndLimitsStep>(input_stream,
+                                                       storage,
+                                                       std::move(table_lock),
+                                                       limits,
+                                                       leaf_limits,
+                                                       quota,
+                                                       context);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

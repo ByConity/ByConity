@@ -531,6 +531,8 @@ void QueryPlan::serialize(WriteBuffer & buffer) const
         
         writeBinary(it->id, buffer);
     }
+
+    writeBinary(root->id, buffer);
 }
 
 void QueryPlan::deserialize(ReadBuffer & buffer)
@@ -551,7 +553,7 @@ void QueryPlan::deserialize(ReadBuffer & buffer)
         readBinary(children_size, buffer);
         std::vector<size_t> children(children_size);
         for (size_t j = 0; j < children_size; ++j)
-            readBinary(children[i], buffer);
+            readBinary(children[j], buffer);
 
         /**
          * construct node, node-id mapping and id-children mapping
@@ -563,6 +565,9 @@ void QueryPlan::deserialize(ReadBuffer & buffer)
         map_to_children[id] = std::move(children);
     }
 
+    size_t root_id;
+    readBinary(root_id, buffer);
+
     /**
      * After we have node-id mapping and id-children mapping,
      * fill the children infomation to each node.
@@ -570,13 +575,12 @@ void QueryPlan::deserialize(ReadBuffer & buffer)
     for (auto it = nodes.begin(); it != nodes.end(); ++it)
     {
         size_t id = it->id;
-        auto children = map_to_children[id];
+        auto & children = map_to_children[id];
         for (auto & child_id : children)
             it->children.push_back(map_to_node[child_id]);
     }
 
-    if (!nodes.empty())
-        root = &nodes.back();
+    root = map_to_node[root_id];
 }
 
 }

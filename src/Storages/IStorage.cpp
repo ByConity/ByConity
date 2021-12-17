@@ -4,6 +4,8 @@
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -120,6 +122,23 @@ void IStorage::read(
     }
 }
 
+void IStorage::read(
+    QueryPlan & query_plan,
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context,
+    QueryProcessingStage::Enum processed_stage,
+    size_t max_block_size,
+    unsigned num_streams,
+    bool distributed_stages)
+{
+    if (distributed_stages)
+        IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+    else
+        throw Exception("Shouldn't call this read function if it is not a distributed stage query", ErrorCodes::LOGICAL_ERROR);
+}
+
 Pipe IStorage::alterPartition(
     const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
 {
@@ -200,6 +219,17 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
         }
     }
     return name_deps;
+}
+
+void IStorage::serialize(WriteBuffer & buf) const
+{
+    storage_id.serialize(buf);
+}
+
+StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
+{
+    StorageID storage_id = StorageID::deserialize(buf);
+    return DatabaseCatalog::instance().getTable(storage_id, context);
 }
 
 std::string PrewhereInfo::dump() const

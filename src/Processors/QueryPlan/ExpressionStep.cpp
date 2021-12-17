@@ -4,6 +4,8 @@
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Interpreters/ExpressionActions.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Interpreters/JoinSwitcher.h>
 
@@ -104,19 +106,34 @@ void ExpressionStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void ExpressionStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buf);
+    IQueryPlanStep::serializeImpl(buf);
 
-    if (!actions_dag)
-        throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
-    actions_dag->serialize(buf);
+    if (actions_dag)
+    {
+        writeBinary(true, buf);
+        actions_dag->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
 }
 
 QueryPlanStepPtr ExpressionStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
-    DataStream input_stream = deserializeDataStream(buf);
-    ActionsDAGPtr actions_dag = ActionsDAG::deserialize(buf, context);
+    String step_description;
+    readBinary(step_description, buf);
 
-    return std::make_unique<ExpressionStep>(input_stream, std::move(actions_dag));
+    auto input_stream = deserializeDataStream(buf);
+
+    bool has_actions_dag;
+    readBinary(has_actions_dag, buf);
+    ActionsDAGPtr actions_dag;
+    if (has_actions_dag)
+        actions_dag = ActionsDAG::deserialize(buf, context);
+
+
+    auto step = std::make_unique<ExpressionStep>(input_stream, actions_dag);
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

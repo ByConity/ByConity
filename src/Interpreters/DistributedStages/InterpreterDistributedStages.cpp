@@ -150,6 +150,55 @@ void MockSendPlanSegment(ContextPtr query_context)
     connection->disconnect();
 }
 
+void checkPlan(PlanSegment * lhs, PlanSegment * rhs)
+{
+    auto lhs_str = lhs->toString();
+    auto rhs_str = rhs->toString();
+
+    std::cout<<" <<< lhs:\n" << lhs_str << std::endl;
+    std::cout<<" <<< rhs:\n" << rhs_str << std::endl;
+
+    if(lhs_str != rhs_str)
+        throw Exception("checkPlan failed", ErrorCodes::LOGICAL_ERROR);
+}
+
+void MockTestQuery(PlanSegmentTree * plan_segment_tree, ContextMutablePtr context)
+{
+    /**
+     * serialize to buffer
+     */
+    WriteBufferFromOwnString write_buffer;
+    writeBinary(plan_segment_tree->getNodes().size(), write_buffer);
+    for (auto & node : plan_segment_tree->getNodes())
+        node.plan_segment->serialize(write_buffer);
+
+    ReadBufferFromString read_buffer(write_buffer.str());
+    size_t plan_size;
+    readBinary(plan_size, read_buffer);
+    std::vector<std::shared_ptr<PlanSegment>> plansegments;
+
+    for (size_t i = 0; i < plan_size; ++i)
+    {
+        auto plan = std::make_shared<PlanSegment>(context);
+        plan->deserialize(read_buffer);
+        plansegments.push_back(plan);
+    }
+
+    /**
+     * check results
+     */
+    std::vector<PlanSegment *> old_plans;
+    for (auto & node : plan_segment_tree->getNodes())
+        old_plans.push_back(node.plan_segment.get());
+    
+    for (size_t i = 0; i < plan_size; ++i)
+    {
+        auto lhs = old_plans[i];
+        auto rhs = plansegments[i].get();
+        checkPlan(lhs, rhs);
+    }
+}
+
 BlockIO InterpreterDistributedStages::executePlanSegment()
 {
     BlockIO res;
@@ -162,6 +211,8 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
      * Mock a connection and plan segment to test
      */
     //MockSendPlanSegment(context);
+
+    MockTestQuery(plan_segment_tree.get(), context);
 
     return res;
 }

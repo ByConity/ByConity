@@ -110,4 +110,11 @@ void IQueryPlanStep::describePipeline(const Processors & processors, FormatSetti
         doDescribeProcessor(*prev, count, settings);
 }
 
+void IQueryPlanStep::serializeImpl(WriteBuffer & buf) const
+{
+    writeBinary(step_description, buf);
+
+    serializeDataStreamFromDataStreams(input_streams, buf);
+}
+
 }

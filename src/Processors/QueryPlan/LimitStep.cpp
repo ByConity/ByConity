@@ -87,7 +87,7 @@ void LimitStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void LimitStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     writeBinary(limit, buffer);
     writeBinary(offset, buffer);
     writeBinary(always_read_till_end, buffer);
@@ -97,6 +97,9 @@ void LimitStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr LimitStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -111,6 +114,8 @@ QueryPlanStepPtr LimitStep::deserialize(ReadBuffer & buffer, ContextPtr )
     SortDescription sort_description;
     sort_description = deserializeItemVector<SortColumnDescription>(buffer);
 
-    return std::make_unique<LimitStep>(input_stream, limit, offset, always_read_till_end, with_ties, sort_description);
+    auto step = std::make_unique<LimitStep>(input_stream, limit, offset, always_read_till_end, with_ties, sort_description);
+    step->setStepDescription(step_description);
+    return step;
 }
 }

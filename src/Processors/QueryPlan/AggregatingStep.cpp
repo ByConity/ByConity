@@ -187,7 +187,8 @@ void AggregatingStep::describePipeline(FormatSettings & settings) const
 
 void AggregatingStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStream(input_streams[0], buf);
+    IQueryPlanStep::serializeImpl(buf);
+
     params.serialize(buf);
     writeBinary(final, buf);
     writeBinary(max_block_size, buf);
@@ -208,6 +209,9 @@ void AggregatingStep::serialize(WriteBuffer & buf) const
 
 QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
+    String step_description;
+    readBinary(step_description, buf);
+
     DataStream input_stream = deserializeDataStream(buf);
     Aggregator::Params params = Aggregator::Params::deserialize(buf, context);
     bool final;
@@ -225,15 +229,21 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
     readBinary(has_group_by_info, buf);
     InputOrderInfoPtr group_by_info = nullptr;
     if (has_group_by_info)
+    {
+        group_by_info = std::make_shared<InputOrderInfo>();
         const_cast<InputOrderInfo &>(*group_by_info).deserialize(buf);
+    }
 
     SortDescription group_by_sort_description;
     deserializeSortDescription(group_by_sort_description, buf);
 
-    return std::make_unique<AggregatingStep>(input_stream, params, final, max_block_size,
+    auto step = std::make_unique<AggregatingStep>(input_stream, params, final, max_block_size,
                                              merge_threads, temporary_data_merge_threads,
                                              storage_has_evenly_distributed_read,
                                              group_by_info, group_by_sort_description);
+    
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

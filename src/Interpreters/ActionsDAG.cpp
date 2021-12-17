@@ -2041,7 +2041,7 @@ ActionsDAGPtr ActionsDAG::deserialize(ReadBuffer & buf, ContextPtr context)
 
     for (size_t i = 0; i< node_size; ++i)
     {
-        auto node = actions_dag->addNode(ActionsDAG::Node::deserialize(buf, context));
+        auto & node = actions_dag->addNode(ActionsDAG::Node::deserialize(buf, context));
         node_mapping[node.id] = &node;
     }
 

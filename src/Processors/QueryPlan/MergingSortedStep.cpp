@@ -84,7 +84,7 @@ void MergingSortedStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void MergingSortedStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     serializeItemVector<SortColumnDescription>(sort_description, buffer);
     writeBinary(max_block_size, buffer);
     writeBinary(limit, buffer);
@@ -92,6 +92,9 @@ void MergingSortedStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr MergingSortedStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -104,7 +107,10 @@ QueryPlanStepPtr MergingSortedStep::deserialize(ReadBuffer & buffer, ContextPtr 
     UInt64 limit;
     readBinary(limit, buffer);
 
-    return std::make_unique<MergingSortedStep>(input_stream, sort_description, max_block_size, limit);
+    auto step = std::make_unique<MergingSortedStep>(input_stream, sort_description, max_block_size, limit);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }
