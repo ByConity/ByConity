@@ -30,6 +30,9 @@ struct FillColumnDescription
     Field fill_from;        /// Fill value >= FILL_FROM
     Field fill_to;          /// Fill value + STEP < FILL_TO
     Field fill_step;        /// Default = 1 or -1 according to direction
+
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 /// Description of the sorting rule by one column.
@@ -82,7 +85,6 @@ struct SortColumnDescription
     /// so this time will temporarily ignore the serialize/deserialize of field collator/with_fill/fill_description
 
     void serialize(WriteBuffer & buffer) const;
-
     void deserialize(ReadBuffer & buffer);
 };
 

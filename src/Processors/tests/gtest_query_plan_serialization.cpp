@@ -74,7 +74,11 @@ SortDescription createSortDescription()
 
     Names keys{"key1", "key2", "key3", "key4"};
     for (const auto & key_name : keys)
-        sort_desc.emplace_back(SortColumnDescription(key_name, 1, 1));
+    {
+        auto sort = SortColumnDescription(key_name, 1, 1);
+        sort.fill_description.fill_from = Field("field_from");
+        sort_desc.emplace_back(sort);
+    }
 
     return sort_desc;
 }
