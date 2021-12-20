@@ -92,7 +92,7 @@ void PartialSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void PartialSortingStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     serializeItemVector<SortColumnDescription>(sort_description, buffer);
     writeBinary(limit, buffer);
     size_limits.serialize(buffer);
@@ -100,6 +100,9 @@ void PartialSortingStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr PartialSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -112,7 +115,10 @@ QueryPlanStepPtr PartialSortingStep::deserialize(ReadBuffer & buffer, ContextPtr
     SizeLimits size_limits;
     size_limits.deserialize(buffer);
 
-    return std::make_unique<PartialSortingStep>(input_stream, sort_description, limit, size_limits);
+    auto step = std::make_unique<PartialSortingStep>(input_stream, sort_description, limit, size_limits);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

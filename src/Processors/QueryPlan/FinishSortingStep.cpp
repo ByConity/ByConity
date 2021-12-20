@@ -113,7 +113,7 @@ void FinishSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void FinishSortingStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     serializeItemVector<SortColumnDescription>(prefix_description, buffer);
     serializeItemVector<SortColumnDescription>(result_description, buffer);
     writeBinary(max_block_size, buffer);
@@ -122,6 +122,9 @@ void FinishSortingStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr FinishSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -137,7 +140,10 @@ QueryPlanStepPtr FinishSortingStep::deserialize(ReadBuffer & buffer, ContextPtr 
     UInt64 limit;
     readBinary(limit, buffer);
 
-    return std::make_unique<FinishSortingStep>(input_stream, prefix_description, result_description, max_block_size, limit);
+    auto step = std::make_unique<FinishSortingStep>(input_stream, prefix_description, result_description, max_block_size, limit);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

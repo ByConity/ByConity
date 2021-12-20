@@ -33,6 +33,7 @@
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <Interpreters/ArrayJoinAction.h>
 
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
@@ -40,6 +41,8 @@
 #include <IO/ReadBufferFromString.h>
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeArray.h>
+#include <Columns/IColumn.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/registerFunctions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -362,9 +365,25 @@ QueryPlanStepPtr createTotalsHavingStep()
         );
 }
 
+QueryPlanStepPtr createArrayJoinStep()
+{
+    const auto & context = getContext().context;
+
+    auto val = ColumnUInt32::create();
+    auto off = ColumnUInt64::create();
+
+    ColumnsWithTypeAndName columns;
+    columns.emplace_back(ColumnWithTypeAndName(ColumnArray::create(std::move(val), std::move(off)), std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt32>()), "Array"));
+
+    return std::make_unique<ArrayJoinStep>(DataStream{.header = Block(columns)},
+                                           std::make_shared<ArrayJoinAction>(NameSet{"Array"}, false, context));
+}
+
 TEST(QueryPlanTest, ActionsStepTest)
 {
     TestSingleActionsStep(createExpressionStep());
     TestSingleActionsStep(createFilterStep());
     TestSingleActionsStep(createTotalsHavingStep());
+
+    TestSingleActionsStep(createArrayJoinStep());
 }

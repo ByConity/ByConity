@@ -115,7 +115,7 @@ void TotalsHavingStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void TotalsHavingStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buf);
+    IQueryPlanStep::serializeImpl(buf);
     writeBinary(overflow_row, buf);
 
     if (!actions_dag)
@@ -130,6 +130,9 @@ void TotalsHavingStep::serialize(WriteBuffer & buf) const
 
 QueryPlanStepPtr TotalsHavingStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
+    String step_description;
+    readBinary(step_description, buf);
+
     DataStream input_stream = deserializeDataStream(buf);
 
     bool overflow_row;
@@ -149,7 +152,10 @@ QueryPlanStepPtr TotalsHavingStep::deserialize(ReadBuffer & buf, ContextPtr cont
     bool final;
     readBinary(final, buf);
 
-    return std::make_unique<TotalsHavingStep>(input_stream, overflow_row, std::move(actions_dag), filter_column_name, totals_mode, auto_include_threshold, final);
+    auto step = std::make_unique<TotalsHavingStep>(input_stream, overflow_row, std::move(actions_dag), filter_column_name, totals_mode, auto_include_threshold, final);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

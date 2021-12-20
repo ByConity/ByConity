@@ -24,6 +24,9 @@ public:
 
     const ArrayJoinActionPtr & arrayJoin() const { return array_join; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     ArrayJoinActionPtr array_join;
     Block res_header;

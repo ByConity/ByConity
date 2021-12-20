@@ -129,7 +129,7 @@ void FilterStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void FilterStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buf);
+    IQueryPlanStep::serializeImpl(buf);
 
     if (!actions_dag)
         throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
@@ -141,6 +141,9 @@ void FilterStep::serialize(WriteBuffer & buf) const
 
 QueryPlanStepPtr FilterStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
+    String step_description;
+    readBinary(step_description, buf);
+
     DataStream input_stream = deserializeDataStream(buf);
     ActionsDAGPtr actions_dag = ActionsDAG::deserialize(buf, context);
 
@@ -150,7 +153,10 @@ QueryPlanStepPtr FilterStep::deserialize(ReadBuffer & buf, ContextPtr context)
     bool remove_filter_column;
     readBinary(remove_filter_column, buf);
 
-    return std::make_unique<FilterStep>(input_stream, std::move(actions_dag), filter_column_name, remove_filter_column);
+    auto step = std::make_unique<FilterStep>(input_stream, std::move(actions_dag), filter_column_name, remove_filter_column);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

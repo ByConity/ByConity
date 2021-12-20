@@ -36,6 +36,7 @@
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeHelper.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <Interpreters/ArrayJoinAction.h>
 
 namespace DB
 {
@@ -217,6 +218,34 @@ AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer &
     readBinary(final, buf);
 
     return std::make_shared<AggregatingTransformParams>(params, final);
+}
+
+void serializeArrayJoinAction(const ArrayJoinActionPtr & array_join, WriteBuffer & buf)
+{
+    if (!array_join)
+    {
+        writeBinary(false, buf);
+        return;
+    }
+
+    writeBinary(true, buf);
+    serializeStringSet(array_join->columns, buf);
+    writeBinary(array_join->is_left, buf);
+}
+
+ArrayJoinActionPtr deserializeArrayJoinAction(ReadBuffer & buf, ContextPtr context)
+{
+    bool has_array_join = false;
+    readBinary(has_array_join, buf);
+    if (!has_array_join)
+        return nullptr;
+
+    NameSet columns = deserializeStringSet(buf);
+
+    bool is_left;
+    readBinary(is_left, buf);
+
+    return std::make_shared<ArrayJoinAction>(columns, is_left, context);
 }
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)

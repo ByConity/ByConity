@@ -49,19 +49,25 @@ void OffsetStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void OffsetStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     writeBinary(offset, buffer);
 }
 
 QueryPlanStepPtr OffsetStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
     size_t offset;
     readBinary(offset, buffer);
 
-    return std::make_unique<OffsetStep>(input_stream, offset);
+    auto step = std::make_unique<OffsetStep>(input_stream, offset);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

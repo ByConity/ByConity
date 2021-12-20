@@ -114,7 +114,7 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
 
 void DistinctStep::serialize(WriteBuffer & buffer) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buffer);
+    IQueryPlanStep::serializeImpl(buffer);
     set_size_limits.serialize(buffer);
     writeBinary(limit_hint, buffer);
     serializeStrings(columns, buffer);
@@ -123,6 +123,9 @@ void DistinctStep::serialize(WriteBuffer & buffer) const
 
 QueryPlanStepPtr DistinctStep::deserialize(ReadBuffer & buffer, ContextPtr )
 {
+    String step_description;
+    readBinary(step_description, buffer);
+
     DataStream input_stream;
     input_stream = deserializeDataStream(buffer);
 
@@ -138,7 +141,10 @@ QueryPlanStepPtr DistinctStep::deserialize(ReadBuffer & buffer, ContextPtr )
     UInt8 pre_distinct;
     readBinary(pre_distinct, buffer);
 
-    return std::make_unique<DistinctStep>(input_stream, size_limits, limit_hint, columns, bool(pre_distinct));
+    auto step = std::make_unique<DistinctStep>(input_stream, size_limits, limit_hint, columns, bool(pre_distinct));
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

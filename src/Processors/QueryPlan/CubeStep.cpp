@@ -50,16 +50,22 @@ const Aggregator::Params & CubeStep::getParams() const
 
 void CubeStep::serialize(WriteBuffer & buf) const
 {
-    serializeDataStreamFromDataStreams(input_streams, buf);
+    IQueryPlanStep::serializeImpl(buf);
     serializeAggregatingTransformParams(params, buf);
 }
 
 QueryPlanStepPtr CubeStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
+    String step_description;
+    readBinary(step_description, buf);
+
     DataStream input_stream = deserializeDataStream(buf);
     auto transform_params = deserializeAggregatingTransformParams(buf, context);
 
-    return std::make_unique<CubeStep>(input_stream, std::move(transform_params));
+    auto step = std::make_unique<CubeStep>(input_stream, std::move(transform_params));
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }
