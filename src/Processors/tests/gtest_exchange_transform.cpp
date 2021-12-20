@@ -44,7 +44,7 @@ TEST(RepartitionTransform, doRepartitionTest)
     {
         if (startpoints[i] > 0)
         {
-            ASSERT_TRUE(startpoints[i + 1] - startpoints[i] == rows);
+            ASSERT_TRUE(startpoints[i] - startpoints[i-1] == rows);
             break;
         }
     }
