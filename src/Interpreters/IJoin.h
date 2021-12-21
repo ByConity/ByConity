@@ -6,6 +6,7 @@
 #include <Core/Names.h>
 #include <Columns/IColumn.h>
 #include <DataStreams/IBlockStream_fwd.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -15,6 +16,9 @@ struct ExtraBlock;
 using ExtraBlockPtr = std::shared_ptr<ExtraBlock>;
 
 class TableJoin;
+
+class IJoin;
+using JoinPtr = std::shared_ptr<IJoin>;
 
 class IJoin
 {
@@ -44,8 +48,9 @@ public:
     virtual bool isFilled() const { return false; }
 
     virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64) const { return {}; }
+    
+    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement join serialize", ErrorCodes::NOT_IMPLEMENTED); }
+    static JoinPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not implement join deserialize", ErrorCodes::NOT_IMPLEMENTED); }
 };
-
-using JoinPtr = std::shared_ptr<IJoin>;
 
 }

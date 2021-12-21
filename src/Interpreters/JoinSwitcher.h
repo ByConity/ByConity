@@ -61,6 +61,9 @@ public:
         return join->createStreamWithNonJoinedRows(block, max_block_size);
     }
 
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+
 private:
     JoinPtr join;
     SizeLimits limits;

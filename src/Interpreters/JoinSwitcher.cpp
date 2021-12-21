@@ -3,6 +3,7 @@
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/MergeJoin.h>
 #include <Interpreters/join_common.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -82,6 +83,20 @@ void JoinSwitcher::switchJoin()
     }
 
     switched = true;
+}
+
+void JoinSwitcher::serialize(WriteBuffer & buf) const
+{
+    serializeTableJoin(*table_join, buf);
+    serializeBlock(right_sample_block, buf);
+}
+
+JoinPtr JoinSwitcher::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto table_join = deserializeTableJoin(buf, context);
+    auto right_sample_block = deserializeBlock(buf);
+
+    return std::make_shared<JoinSwitcher>(table_join, right_sample_block);
 }
 
 }

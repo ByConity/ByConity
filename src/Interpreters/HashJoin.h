@@ -336,6 +336,9 @@ public:
 
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
 
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+
 private:
     friend class NonJoinedBlockInputStream;
     friend class JoinSource;
