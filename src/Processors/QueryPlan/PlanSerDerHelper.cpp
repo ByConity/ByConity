@@ -29,6 +29,7 @@
 #include <Processors/QueryPlan/TotalsHavingStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
+#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 #include <Processors/Sources/RemoteSource.h>
 #include <Common/ClickHouseRevision.h>
 #include <DataStreams/NativeBlockOutputStream.h>
@@ -276,10 +277,8 @@ QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf)
 {
     auto num = UInt8(step->getType());
-    std::cout<<" <<<<< serializePlanStep: " << step->getName() << ", num: " << num << std::endl;
     writeBinary(num, buf);
     step->serialize(buf);
-    std::cout<<" <<<<< finished serializePlanStep: " << step->getName() << std::endl;
 }
 
 

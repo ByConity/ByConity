@@ -11,6 +11,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 #include <sstream>
 
@@ -172,6 +173,22 @@ String PlanSegmentOutput::toString(size_t indent) const
     return ostr.str();
 }
 
+void PlanSegment::setPlanSegmentToQueryPlan(QueryPlan::Node * node)
+{
+    if (!node)
+        return;
+
+    if (auto * remote_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get()))
+        remote_step->setPlanSegment(this);
+    else
+    {
+        for (auto & child : node->children)
+        {
+            setPlanSegmentToQueryPlan(child);
+        }
+    }
+}
+
 void PlanSegment::serialize(WriteBuffer & buf) const
 {
     writeBinary(segment_id, buf);
@@ -223,6 +240,7 @@ PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMuta
 {
     auto plan_segment = std::make_unique<PlanSegment>(context_);
     plan_segment->deserialize(buf);
+    plan_segment->setPlanSegmentToQueryPlan(plan_segment->getQueryPlan().getRoot());
     return plan_segment;
 }
 

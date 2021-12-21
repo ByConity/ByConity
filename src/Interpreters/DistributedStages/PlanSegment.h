@@ -221,6 +221,8 @@ public:
 
     void setCurrentAddress(const AddressInfo & current_address_) { current_address = current_address_; }
 
+    void setPlanSegmentToQueryPlan(QueryPlan::Node * node);
+
     PlanSegmentPtr clone();
 
     void setContext(const ContextMutablePtr & context_) { context = context_; }
