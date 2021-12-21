@@ -94,6 +94,9 @@ private:
 
     VolumePtr tmp_volume;
 
+    // Used to generate TableJoin during serialization
+    ASTPtr select_query;
+
     Names requiredJoinedNames() const;
 
     /// Create converting actions and change key column names if required
@@ -123,6 +126,9 @@ public:
     ASTTableJoin::Kind kind() const { return table_join.kind; }
     ASTTableJoin::Strictness strictness() const { return table_join.strictness; }
     ASTTableJoin::Locality locality() const { return table_join.locality; }
+
+    void setSelectQuery(const ASTPtr & select_query_) { select_query = select_query_; }
+    ASTPtr getSelectQuery() const { return select_query; }
 
     bool sameStrictnessAndKind(ASTTableJoin::Strictness, ASTTableJoin::Kind) const;
     const SizeLimits & sizeLimits() const { return size_limits; }

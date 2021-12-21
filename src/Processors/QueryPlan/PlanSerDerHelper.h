@@ -25,6 +25,9 @@ using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams
 class ArrayJoinAction;
 using ArrayJoinActionPtr = std::shared_ptr<ArrayJoinAction>;
 
+class TableJoin;
+using TableJoinPtr = std::shared_ptr<TableJoin>;
+
 #define SERIALIZE_ENUM(ITEM, BUF) writeBinary(UInt8(ITEM), BUF);
 
 #define DESERIALIZE_ENUM(TYPE, ITEM, BUF) \
@@ -95,6 +98,9 @@ AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer &
 
 void serializeArrayJoinAction(const ArrayJoinActionPtr & array_join, WriteBuffer & buf);
 ArrayJoinActionPtr deserializeArrayJoinAction(ReadBuffer & buf, ContextPtr context);
+
+void serializeTableJoin(const TableJoin & table_join, WriteBuffer & buf);
+TableJoinPtr deserializeTableJoin(ReadBuffer & buf, ContextPtr context);
 
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context);

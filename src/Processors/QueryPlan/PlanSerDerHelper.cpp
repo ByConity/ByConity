@@ -37,6 +37,8 @@
 #include <DataTypes/DataTypeHelper.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Interpreters/ArrayJoinAction.h>
+#include <Interpreters/TableJoin.h>
+#include <Interpreters/JoinedTables.h>
 
 namespace DB
 {
@@ -246,6 +248,23 @@ ArrayJoinActionPtr deserializeArrayJoinAction(ReadBuffer & buf, ContextPtr conte
     readBinary(is_left, buf);
 
     return std::make_shared<ArrayJoinAction>(columns, is_left, context);
+}
+
+void serializeTableJoin(const TableJoin & table_join, WriteBuffer & buf)
+{
+    ASTPtr select_query = table_join.getSelectQuery();
+    select_query->serialize(buf);
+}
+
+TableJoinPtr deserializeTableJoin(ReadBuffer & buf, ContextPtr context)
+{
+    ASTPtr select_query = ASTSelectQuery::deserialize(buf);
+    if (const auto * query = select_query->as<ASTSelectQuery>())
+    {
+        JoinedTables joined_tables(context, *query);
+        return joined_tables.makeTableJoin(*query);
+    }
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "deserializeTableJoin needs ASTSelectQuery");
 }
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)
