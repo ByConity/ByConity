@@ -10,6 +10,7 @@
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/StorageHaMergeTree.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/NetException.h>
 #include <IO/createReadBufferFromFileBase.h>
@@ -508,6 +509,9 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     if (blocker.isCancelled())
         throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
 
+    if (data.isBitEngineMode())
+        fetchBitEngineDictionary(replica_path);
+
     /// Validation of the input that may come from malicious replica.
     auto part_info = MergeTreePartInfo::fromPartName(part_name, data.format_version);
     const auto data_settings = data.getSettings();
@@ -821,6 +825,22 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
 
     return new_data_part;
 }
+
+void Fetcher::fetchBitEngineDictionary(const String & replica_path)
+{
+    StorageHaMergeTree * ha_merge_tree = dynamic_cast<StorageHaMergeTree *>(&data);
+    if (!ha_merge_tree)
+        return;
+
+    BitEngineDictionaryHaManager * ha_manager = ha_merge_tree->getBitEngineDictionaryHaManager();
+    if (!ha_manager)
+        return;
+
+    LOG_DEBUG(log, "Try to fetch bitengine dictionary from {} ", replica_path);
+
+    ha_manager->tryUpdateDictFromReplicaPath(replica_path);
+}
+
 
 void Fetcher::downloadBaseOrProjectionPartToDisk(
     const String & replica_path,

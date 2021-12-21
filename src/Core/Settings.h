@@ -511,6 +511,14 @@ class IColumn;
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     \
+    /** Settings used for BITENGINE */ \
+    M(Bool, decode_bitengine_bitmap, false, "Whether to decode bitmap column if it is encoded.", 0) \
+    M(Bool, use_encoded_bitmap, true, "Whether to decode bitmap column if it is encoded.", 0) \
+    M(Bool, enable_parallel_bitengine_recode, false, "Whether to encode bitengine in parallel.", 0) \
+    M(Bool, bitengine_encode_without_lock, false, "Whether to encode bitengine without lock.", 0)   \
+    M(Bool, bitengine_encode_fast_mode, false, "Whether to encode bitengine in parallel but with a ZooKeeper lock. It's used for BitEngineDictionary::encodeFast.", 0)\
+    M(UInt64, max_parallel_threads_for_bitengine_recode, 5, "The maximum number of threads to recode bitengine parts", 0) \
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \

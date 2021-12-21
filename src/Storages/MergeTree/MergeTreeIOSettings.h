@@ -26,6 +26,26 @@ struct MergeTreeReaderSettings
     bool checksum_on_read = true;
 };
 
+struct BitEngineEncodeSettings
+{
+    BitEngineEncodeSettings() = default;
+    BitEngineEncodeSettings(const Settings & global_settings,
+                            const MergeTreeSettingsPtr & storage_settings)
+        : without_lock(global_settings.bitengine_encode_without_lock)
+        , encode_fast_mode(global_settings.bitengine_encode_fast_mode)
+        , loss_rate(storage_settings->bitengine_encode_loss_rate)
+    {}
+
+    Float64 getLossRate() const { return loss_rate; }
+
+    bool only_recode = false;
+    bool without_lock = false;
+    bool encode_fast_mode = false;
+
+private:
+    Float64 loss_rate=0.1;
+};
+
 struct MergeTreeWriterSettings
 {
     MergeTreeWriterSettings() = default;
@@ -44,7 +64,26 @@ struct MergeTreeWriterSettings
         , can_use_adaptive_granularity(can_use_adaptive_granularity_)
         , rewrite_primary_key(rewrite_primary_key_)
         , blocks_are_granules_size(blocks_are_granules_size_)
+        , bitengine_settings(global_settings, storage_settings)
     {
+    }
+
+    BitEngineEncodeSettings & bitengineOnlyRecode(bool value = false)
+    {
+        bitengine_settings.only_recode = value;
+        return bitengine_settings;
+    }
+
+    BitEngineEncodeSettings & bitengineEncodeWithoutLock(bool value = false)
+    {
+        bitengine_settings.without_lock = value;
+        return bitengine_settings;
+    }
+
+    BitEngineEncodeSettings & bitengineEncodeFastMode(bool value = false)
+    {
+        bitengine_settings.encode_fast_mode = value;
+        return bitengine_settings;
     }
 
     size_t min_compress_block_size;
@@ -52,6 +91,8 @@ struct MergeTreeWriterSettings
     bool can_use_adaptive_granularity;
     bool rewrite_primary_key;
     bool blocks_are_granules_size;
+
+    BitEngineEncodeSettings bitengine_settings;
 };
 
 }

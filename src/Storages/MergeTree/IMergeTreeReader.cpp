@@ -5,6 +5,7 @@
 #include <Columns/ColumnArray.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/typeid_cast.h>
 
 
@@ -29,7 +30,8 @@ IMergeTreeReader::IMergeTreeReader(
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    const ValueSizeMap & avg_value_size_hints_)
+    const ValueSizeMap & avg_value_size_hints_,
+    bool internal_read_)
     : data_part(data_part_)
     , avg_value_size_hints(avg_value_size_hints_)
     , columns(columns_)
@@ -41,6 +43,7 @@ IMergeTreeReader::IMergeTreeReader(
     , metadata_snapshot(metadata_snapshot_)
     , all_mark_ranges(all_mark_ranges_)
     , alter_conversions(storage.getAlterConversionsForPart(data_part))
+    , internal_read(internal_read_)
 {
     if (settings.convert_nested_to_subcolumns)
     {
@@ -240,6 +243,11 @@ NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & requ
         return {String(it->first), subcolumn_name, type, subcolumn_type};
     }
 
+    if (checkBitEngineColumn({String(it->first), *it->second}))
+    {
+        return {String(it->first).append(BITENGINE_COLUMN_EXTENSION), type};
+    }
+
     return {String(it->first), type};
 }
 
@@ -311,6 +319,21 @@ void IMergeTreeReader::checkNumberOfColumns(size_t num_columns_to_read) const
         throw Exception("invalid number of columns passed to MergeTreeReader::readRows. "
                         "Expected " + toString(columns.size()) + ", "
                         "got " + toString(num_columns_to_read), ErrorCodes::LOGICAL_ERROR);
+}
+
+bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
+{
+    if (isBitmap64(column.type)
+        && column.type->isBitEngineEncode()
+        && storage.isBitEngineMode()
+        && !internal_read)
+    {
+        // If dict is invalid, we should also read encoded column, only throw exception when we actually need to decode it.
+        //if (storage.bitengine_dictionary_manager->isValid())
+        return true;
+        //throw Exception("Cannot decode column " + column.name + " by bitengine, since it is invalia", ErrorCodes::LOGICAL_ERROR);
+    }
+    return false;
 }
 
 }

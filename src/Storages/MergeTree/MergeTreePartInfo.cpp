@@ -286,4 +286,55 @@ bool DetachedPartInfo::tryParseDetachedPartName(const String & dir_name, Detache
     return part_info.valid_name = true;
 }
 
+String MergeTreePartInfo::getPartitionKeyInStringAt(const size_t index) const
+{
+    size_t pos = 0;
+    String key;
+    size_t idx = 0;
+    while (pos < partition_id.size())
+    {
+        size_t next_pos = partition_id.find('-', pos);
+        if (next_pos != std::string::npos)
+        {
+            if (idx == index)
+            {
+                key = partition_id.substr(pos, next_pos - pos);
+                break;
+            }
+            idx++;
+        }
+        else
+        {
+            if (idx == index)
+                key = partition_id.substr(pos);
+            break;
+        }
+
+        pos = next_pos + 1;
+    }
+    return key;
+}
+
+Names MergeTreePartInfo::splitPartitionKeys(const String & partition_id)
+{
+    Names partition_keys;
+    size_t pos = 0;
+    while (pos < partition_id.size())
+    {
+        size_t next_pos = partition_id.find('-', pos);
+        if (next_pos != std::string::npos)
+        {
+            partition_keys.push_back(partition_id.substr(pos, next_pos - pos));
+        }
+        else
+        {
+            partition_keys.push_back(partition_id.substr(pos));
+            break;
+        }
+
+        pos = next_pos + 1;
+    }
+    return partition_keys;
+}
+
 }

@@ -353,12 +353,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     ReservationPtr reservation = data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true);
     VolumePtr volume = data.getStoragePolicy()->getVolume(0);
 
-    auto new_data_part = data.createPart(
-        part_name,
-        data.choosePartType(expected_size, block.rows()),
-        new_part_info,
-        createVolumeFromReservation(reservation, volume),
-        TMP_PREFIX + part_name);
+   auto new_data_part = data.createPart(
+       part_name,
+       data.choosePartType(expected_size, block.rows()),
+       new_part_info,
+       createVolumeFromReservation(reservation, volume),
+       TMP_PREFIX + part_name);
 
     if (data.storage_settings.get()->assign_part_uuids)
         new_data_part->uuid = UUIDHelpers::generateV4();
