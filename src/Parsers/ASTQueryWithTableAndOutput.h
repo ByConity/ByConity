@@ -19,6 +19,8 @@ public:
     UUID uuid = UUIDHelpers::Nil;
     bool temporary{false};
 
+    ASTType getType() const override { return ASTType::ASTQueryWithTableAndOutput; }
+
 protected:
     void formatHelper(const FormatSettings & settings, const char * name) const;
 };

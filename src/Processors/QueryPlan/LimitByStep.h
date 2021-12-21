@@ -21,6 +21,9 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+
 private:
     size_t group_length;
     size_t group_offset;

@@ -3,6 +3,7 @@
 #include <Common/FieldVisitorHash.h>
 #include <Parsers/ASTLiteral.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 
@@ -114,6 +115,31 @@ void ASTLiteral::appendColumnNameImplLegacy(WriteBuffer & ostr) const
 void ASTLiteral::formatImplWithoutAlias(const FormatSettings & settings, IAST::FormatState &, IAST::FormatStateStacked) const
 {
     settings.ostr << applyVisitor(FieldVisitorToString(), value);
+}
+
+void ASTLiteral::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeFieldBinary(value, buf);
+    writeBinary(unique_column_name, buf);
+    writeBinary(use_legacy_column_name_of_tuple, buf);
+}
+
+void ASTLiteral::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readFieldBinary(value, buf);
+    readBinary(unique_column_name, buf);
+    readBinary(use_legacy_column_name_of_tuple, buf);
+}
+
+ASTPtr ASTLiteral::deserialize(ReadBuffer & buf)
+{
+    auto literal = std::make_shared<ASTLiteral>(Field());
+    literal->deserializeImpl(buf);
+    return literal;
 }
 
 }

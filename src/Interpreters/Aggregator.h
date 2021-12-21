@@ -44,6 +44,8 @@ namespace ErrorCodes
     extern const int UNKNOWN_AGGREGATED_DATA_VARIANT;
 }
 
+class ReadBuffer;
+class WriteBuffer;
 class IBlockOutputStream;
 
 /** Different data structures that can be used for aggregation
@@ -853,6 +855,8 @@ using ManyAggregatedDataVariants = std::vector<AggregatedDataVariantsPtr>;
 using ManyAggregatedDataVariantsPtr = std::shared_ptr<ManyAggregatedDataVariants>;
 
 class CompiledAggregateFunctionsHolder;
+class Context;
+using ContextPtr = std::shared_ptr<const Context>;
 
 /** How are "total" values calculated with WITH TOTALS?
   * (For more details, see TotalsHavingTransform.)
@@ -963,6 +967,9 @@ public:
         /// Returns keys and aggregated for EXPLAIN query
         void explain(WriteBuffer & out, size_t indent) const;
         void explain(JSONBuilder::JSONMap & map) const;
+
+        void serialize(WriteBuffer & buf) const;
+        static Params deserialize(ReadBuffer & buf, const ContextPtr & context);
     };
 
     explicit Aggregator(const Params & params_);

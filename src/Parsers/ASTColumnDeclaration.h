@@ -22,6 +22,8 @@ public:
 
     String getID(char delim) const override { return "ColumnDeclaration" + (delim + name); }
 
+    ASTType getType() const override { return ASTType::ASTColumnDeclaration; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

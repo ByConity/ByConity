@@ -57,4 +57,26 @@ void FillingStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Sort Description", explainSortDescription(sort_description, input_streams.front().header));
 }
 
+void FillingStep::serialize(WriteBuffer & buffer) const
+{
+    IQueryPlanStep::serializeImpl(buffer);
+    serializeItemVector<SortColumnDescription>(sort_description, buffer);
+}
+
+QueryPlanStepPtr FillingStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    String step_description;
+    readBinary(step_description, buffer);
+
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    auto step = std::make_unique<FillingStep>(input_stream, sort_description);
+
+    step->setStepDescription(step_description);
+    return step;
+}
 }

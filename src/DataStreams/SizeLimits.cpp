@@ -1,6 +1,8 @@
 #include <DataStreams/SizeLimits.h>
 #include <Common/formatReadable.h>
 #include <Common/Exception.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <string>
 
 
@@ -37,6 +39,23 @@ bool SizeLimits::softCheck(UInt64 rows, UInt64 bytes) const
 bool SizeLimits::check(UInt64 rows, UInt64 bytes, const char * what, int exception_code) const
 {
     return check(rows, bytes, what, exception_code, exception_code);
+}
+
+void SizeLimits::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(max_rows, buffer);
+    writeBinary(max_bytes, buffer);
+    writeBinary(UInt8(overflow_mode), buffer);
+}
+
+void SizeLimits::deserialize(ReadBuffer & buffer)
+{
+    readBinary(max_rows, buffer);
+    readBinary(max_bytes, buffer);
+
+    UInt8 mode;
+    readBinary(mode, buffer);
+    overflow_mode = OverflowMode(mode);
 }
 
 }

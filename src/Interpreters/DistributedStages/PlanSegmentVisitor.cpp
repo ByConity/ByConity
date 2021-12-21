@@ -2,6 +2,7 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Processors/QueryPlan/ExchangeStep.h>
 #include <Processors/Sources/RemoteSource.h>
+#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 namespace DB
 {
@@ -50,7 +51,7 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 {
     /**
      * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
-     * More precisely， nodes that moved to sub_plan are deleted.
+     * More precisely, nodes that moved to sub_plan are deleted.
      */ 
     QueryPlan sub_plan = plan_segment_context.query_plan.getSubPlan(node);
 
@@ -62,11 +63,13 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
     output->setParallelSize(plan_segment_context.shard_number);
     plan_segment->setPlanSegmentOutput(output);
 
-    auto inputs = findInputs(sub_plan.getRoot());
+    auto inputs = findInputs(plan_segment->getQueryPlan().getRoot());
     if (inputs.empty())
         inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::SOURCE));
 
     plan_segment->appendPlanSegmentInputs(inputs);
+
+    plan_segment->setPlanSegmentToQueryPlan(plan_segment->getQueryPlan().getRoot());
 
     PlanSegmentTree::Node plan_segment_node{.plan_segment = std::move(plan_segment)};
     plan_segment_context.plan_segment_tree->addNode(std::move(plan_segment_node));

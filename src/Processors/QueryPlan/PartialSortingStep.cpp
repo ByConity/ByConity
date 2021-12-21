@@ -25,11 +25,11 @@ static ITransformingStep::Traits getTraits(size_t limit)
 }
 
 PartialSortingStep::PartialSortingStep(
-    const DataStream & input_stream,
+    const DataStream & input_stream_,
     SortDescription sort_description_,
     UInt64 limit_,
     SizeLimits size_limits_)
-    : ITransformingStep(input_stream, input_stream.header, getTraits(limit_))
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
     , sort_description(std::move(sort_description_))
     , limit(limit_)
     , size_limits(size_limits_)
@@ -88,6 +88,37 @@ void PartialSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
     if (limit)
         map.add("Limit", limit);
+}
+
+void PartialSortingStep::serialize(WriteBuffer & buffer) const
+{
+    IQueryPlanStep::serializeImpl(buffer);
+    serializeItemVector<SortColumnDescription>(sort_description, buffer);
+    writeBinary(limit, buffer);
+    size_limits.serialize(buffer);
+}
+
+QueryPlanStepPtr PartialSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
+{
+    String step_description;
+    readBinary(step_description, buffer);
+
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    UInt64 limit;
+    readBinary(limit, buffer);
+
+    SizeLimits size_limits;
+    size_limits.deserialize(buffer);
+
+    auto step = std::make_unique<PartialSortingStep>(input_stream, sort_description, limit, size_limits);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

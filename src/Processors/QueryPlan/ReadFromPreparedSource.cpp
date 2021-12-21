@@ -3,7 +3,9 @@
 #include <Processors/QueryPipeline.h>
 #include <Storages/IStorage.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/queryToString.h>
 
 
 namespace DB
@@ -47,6 +49,15 @@ QueryPlanStepPtr ReadFromStorageStep::deserialize(ReadBuffer & buffer, ContextPt
 
     SelectQueryInfo query_info;
     query_info.deserialize(buffer);
+
+    std::cout<<" << ReadFromStorageStep: " << queryToString(query_info.query) << std::endl;
+
+    /**
+     * reconstuct query level info based on query
+     */
+    SelectQueryOptions options;
+    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, context, options.distributedStages());
+    query_info = interpreter->getQueryInfo();
 
     Names column_names = deserializeStrings(buffer);
 

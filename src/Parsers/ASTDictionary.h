@@ -22,6 +22,8 @@ public:
 
     String getID(char) const override { return "Dictionary lifetime"; }
 
+    ASTType getType() const override { return ASTType::ASTDictionaryLifetime; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
@@ -43,6 +45,8 @@ public:
 
     String getID(char) const override { return "Dictionary layout"; }
 
+    ASTType getType() const override { return ASTType::ASTDictionaryLayout; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
@@ -60,6 +64,8 @@ public:
 
     String getID(char) const override { return "Dictionary range"; }
 
+    ASTType getType() const override { return ASTType::ASTDictionaryRange; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
@@ -71,6 +77,8 @@ public:
     SettingsChanges changes;
 
     String getID(char) const override { return "Dictionary settings"; }
+
+    ASTType getType() const override { return ASTType::ASTDictionarySettings; }
 
     ASTPtr clone() const override;
 
@@ -98,6 +106,8 @@ public:
     ASTDictionarySettings * dict_settings = nullptr;
 
     String getID(char) const override { return "Dictionary definition"; }
+
+    ASTType getType() const override { return ASTType::ASTDictionary; }
 
     ASTPtr clone() const override;
 

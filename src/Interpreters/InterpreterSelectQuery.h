@@ -92,6 +92,8 @@ public:
 
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
 
+    SelectQueryInfo getQueryInfo() { return query_info; }
+
     const SelectQueryExpressionAnalyzer * getQueryAnalyzer() const { return query_analyzer.get(); }
 
     const ExpressionAnalysisResult & getAnalysisResult() const { return analysis_result; }

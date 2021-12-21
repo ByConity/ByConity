@@ -19,6 +19,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return String("QueryParameter") + delim + name + ':' + type; }
 
+    ASTType getType() const override { return ASTType::ASTQueryParameter; }
+
     ASTPtr clone() const override { return std::make_shared<ASTQueryParameter>(*this); }
 
 protected:

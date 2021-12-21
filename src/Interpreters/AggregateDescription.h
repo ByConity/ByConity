@@ -10,6 +10,9 @@ namespace DB
 
 namespace JSONBuilder { class JSONMap; }
 
+class ReadBuffer;
+class WriteBuffer;
+
 struct AggregateDescription
 {
     AggregateFunctionPtr function;
@@ -20,6 +23,9 @@ struct AggregateDescription
 
     void explain(WriteBuffer & out, size_t indent) const; /// Get description for EXPLAIN query.
     void explain(JSONBuilder::JSONMap & map) const;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 using AggregateDescriptions = std::vector<AggregateDescription>;

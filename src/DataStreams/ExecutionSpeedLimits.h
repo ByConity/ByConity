@@ -26,6 +26,9 @@ public:
     void throttle(size_t read_rows, size_t read_bytes, size_t total_rows_to_read, UInt64 total_elapsed_microseconds) const;
 
     bool checkTimeLimit(UInt64 elapsed_ns, OverflowMode overflow_mode) const;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 }

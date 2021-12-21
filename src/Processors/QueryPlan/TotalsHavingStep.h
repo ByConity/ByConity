@@ -33,6 +33,9 @@ public:
 
     const ActionsDAGPtr & getActions() const { return actions_dag; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     bool overflow_row;
     ActionsDAGPtr actions_dag;

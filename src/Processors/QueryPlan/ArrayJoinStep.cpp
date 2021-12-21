@@ -99,4 +99,23 @@ void ArrayJoinStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Columns", std::move(columns_array));
 }
 
+void ArrayJoinStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+    serializeArrayJoinAction(array_join, buf);
+}
+
+QueryPlanStepPtr ArrayJoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream input_stream = deserializeDataStream(buf);
+    auto array_join = deserializeArrayJoinAction(buf, context);
+    auto step = std::make_unique<ArrayJoinStep>(input_stream, std::move(array_join));
+
+    step->setStepDescription(step_description);
+    return step;
+}
+
 }

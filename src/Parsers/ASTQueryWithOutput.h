@@ -19,8 +19,13 @@ public:
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const final;
 
+    ASTType getType() const override { return ASTType::ASTQueryWithOutput; }
+
     /// Remove 'FORMAT <fmt> and INTO OUTFILE <file>' if exists
     static bool resetOutputASTIfExist(IAST & ast);
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
 
 protected:
     /// NOTE: call this helper at the end of the clone() method of descendant class.

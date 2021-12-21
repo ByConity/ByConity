@@ -46,7 +46,7 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
     /**
-     * Infomatino for deserilize and reconstruct the plan.
+     * Information for deserialize and reconstruct the plan.
      */
     void setDeserializeInfo(
         const SelectQueryInfo & query_info_,
@@ -68,8 +68,6 @@ public:
     QueryProcessingStage::Enum processed_stage;
     size_t max_block_size;
     unsigned num_streams;
-
-
 };
 
 }

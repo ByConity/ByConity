@@ -39,6 +39,8 @@ public:
 
     void initSettings();
 
+    PlanSegmentTree * getPlanSegmentTree() const { return plan_segment_tree.get(); }
+
     static bool isDistributedStages(const ASTPtr & query, ContextPtr context_);
     static DistributedStagesSettings extractDistributedStagesSettingsImpl(const ASTPtr & query, ContextPtr context_);
     static DistributedStagesSettings extractDistributedStagesSettings(const ASTPtr & query, ContextPtr context_);

@@ -34,6 +34,8 @@ public:
 
     String getID(char) const override;
 
+    ASTType getType() const override { return ASTType::ASTKillQueryQuery; }
+
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override

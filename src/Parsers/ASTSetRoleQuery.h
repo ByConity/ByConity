@@ -25,6 +25,9 @@ public:
     std::shared_ptr<ASTRolesOrUsersSet> to_users;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTSetRoleQuery; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };

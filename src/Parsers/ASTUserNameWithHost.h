@@ -25,6 +25,9 @@ public:
     ASTUserNameWithHost() = default;
     ASTUserNameWithHost(const String & name_) : base_name(name_) {}
     String getID(char) const override { return "UserNameWithHost"; }
+
+    ASTType getType() const override { return ASTType::ASTUserNameWithHost; }
+
     ASTPtr clone() const override { return std::make_shared<ASTUserNameWithHost>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };
@@ -46,6 +49,9 @@ public:
     bool getHostPatternIfCommon(String & out_common_host_pattern) const;
 
     String getID(char) const override { return "UserNamesWithHost"; }
+
+    ASTType getType() const override { return ASTType::ASTUserNamesWithHost; }
+
     ASTPtr clone() const override { return std::make_shared<ASTUserNamesWithHost>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };

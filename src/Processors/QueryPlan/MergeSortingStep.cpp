@@ -3,6 +3,7 @@
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <IO/Operators.h>
 #include <Common/JSONBuilder.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -24,7 +25,7 @@ static ITransformingStep::Traits getTraits(size_t limit)
 }
 
 MergeSortingStep::MergeSortingStep(
-    const DataStream & input_stream,
+    const DataStream & input_stream_,
     const SortDescription & description_,
     size_t max_merged_block_size_,
     UInt64 limit_,
@@ -33,7 +34,7 @@ MergeSortingStep::MergeSortingStep(
     size_t max_bytes_before_external_sort_,
     VolumePtr tmp_volume_,
     size_t min_free_disk_space_)
-    : ITransformingStep(input_stream, input_stream.header, getTraits(limit_))
+    : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_))
     , description(description_)
     , max_merged_block_size(max_merged_block_size_)
     , limit(limit_)
@@ -44,7 +45,7 @@ MergeSortingStep::MergeSortingStep(
 {
     /// TODO: check input_stream is partially sorted by the same description.
     output_stream->sort_description = description;
-    output_stream->sort_mode = input_stream.has_single_port ? DataStream::SortMode::Stream
+    output_stream->sort_mode = input_stream_.has_single_port ? DataStream::SortMode::Stream
                                                             : DataStream::SortMode::Port;
 }
 
@@ -91,6 +92,58 @@ void MergeSortingStep::describeActions(JSONBuilder::JSONMap & map) const
 
     if (limit)
         map.add("Limit", limit);
+}
+
+void MergeSortingStep::serialize(WriteBuffer & buffer) const
+{
+    IQueryPlanStep::serializeImpl(buffer);
+    serializeItemVector<SortColumnDescription>(description, buffer);
+    writeBinary(max_merged_block_size, buffer);
+    writeBinary(max_bytes_before_remerge, buffer);
+    writeBinary(max_bytes_before_external_sort, buffer);
+    writeBinary(min_free_disk_space, buffer);
+    writeBinary(limit, buffer);
+    writeBinary(remerge_lowered_memory_bytes_ratio, buffer);
+}
+
+QueryPlanStepPtr MergeSortingStep::deserialize(ReadBuffer & buffer, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buffer);
+
+    DataStream input_stream;
+    input_stream = deserializeDataStream(buffer);
+
+    SortDescription sort_description;
+    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
+
+    size_t max_merged_block_size, max_bytes_before_remerge, max_bytes_before_external_sort, min_free_disk_space;
+    readBinary(max_merged_block_size, buffer);
+    readBinary(max_bytes_before_remerge, buffer);
+    readBinary(max_bytes_before_external_sort, buffer);
+    readBinary(min_free_disk_space, buffer);
+
+    UInt64 limit;
+    readBinary(limit, buffer);
+
+    double remerge_lowered_memory_bytes_ratio;
+    readBinary(remerge_lowered_memory_bytes_ratio, buffer);
+
+    VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
+
+    auto step =  std::make_unique<MergeSortingStep>(
+        input_stream,
+        sort_description,
+        max_merged_block_size,
+        limit,
+        max_bytes_before_remerge,
+        remerge_lowered_memory_bytes_ratio,
+        max_bytes_before_external_sort,
+        tmp_volume,
+        max_bytes_before_external_sort);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

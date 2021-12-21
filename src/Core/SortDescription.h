@@ -20,6 +20,8 @@ namespace JSONBuilder
 }
 
 class Block;
+class WriteBuffer;
+class ReadBuffer;
 
 struct FillColumnDescription
 {
@@ -28,6 +30,9 @@ struct FillColumnDescription
     Field fill_from;        /// Fill value >= FILL_FROM
     Field fill_to;          /// Fill value + STEP < FILL_TO
     Field fill_step;        /// Default = 1 or -1 according to direction
+
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 /// Description of the sorting rule by one column.
@@ -38,9 +43,9 @@ struct SortColumnDescription
     int direction;           /// 1 - ascending, -1 - descending.
     int nulls_direction;     /// 1 - NULLs and NaNs are greater, -1 - less.
                              /// To achieve NULLS LAST, set it equal to direction, to achieve NULLS FIRST, set it opposite.
-    std::shared_ptr<Collator> collator; /// Collator for locale-specific comparison of strings
-    bool with_fill;
-    FillColumnDescription fill_description;
+    std::shared_ptr<Collator> collator = nullptr; /// Collator for locale-specific comparison of strings
+    bool with_fill = false;
+    FillColumnDescription fill_description = {};
 
     SortColumnDescription(
             size_t column_number_, int direction_, int nulls_direction_,
@@ -55,6 +60,8 @@ struct SortColumnDescription
             bool with_fill_ = false, const FillColumnDescription & fill_description_ = {})
             : column_name(column_name_), column_number(0), direction(direction_), nulls_direction(nulls_direction_)
             , collator(collator_), with_fill(with_fill_), fill_description(fill_description_) {}
+
+    SortColumnDescription() {}
 
     bool operator == (const SortColumnDescription & other) const
     {
@@ -73,6 +80,12 @@ struct SortColumnDescription
     }
 
     void explain(JSONBuilder::JSONMap & map, const Block & header) const;
+
+    /// It seems that the current construction of SortColumnDescription only uses the first four fields,
+    /// so this time will temporarily ignore the serialize/deserialize of field collator/with_fill/fill_description
+
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 /// Description of the sorting rule for several columns.
@@ -84,5 +97,8 @@ void dumpSortDescription(const SortDescription & description, const Block & head
 std::string dumpSortDescription(const SortDescription & description);
 
 JSONBuilder::ItemPtr explainSortDescription(const SortDescription & description, const Block & header);
+
+void serializeSortDescription(const SortDescription & sort_descriptions, WriteBuffer & buffer);
+void deserializeSortDescription(SortDescription & sort_descriptions, ReadBuffer & buffer);
 
 }

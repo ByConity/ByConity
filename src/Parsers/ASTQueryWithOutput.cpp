@@ -1,5 +1,7 @@
 #include <Parsers/ASTQueryWithOutput.h>
-
+#include <Parsers/ASTSerDerHelper.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 namespace DB
 {
 
@@ -61,5 +63,18 @@ bool ASTQueryWithOutput::resetOutputASTIfExist(IAST & ast)
     return false;
 }
 
+void ASTQueryWithOutput::serialize(WriteBuffer & buf) const
+{
+    serializeAST(out_file, buf);
+    serializeAST(format, buf);
+    serializeAST(settings_ast, buf);
+}
+
+void ASTQueryWithOutput::deserializeImpl(ReadBuffer & buf)
+{
+    out_file = deserializeASTWithChildren(children, buf);
+    format = deserializeASTWithChildren(children, buf);
+    settings_ast = deserializeASTWithChildren(children, buf);
+}
 
 }

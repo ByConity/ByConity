@@ -1,9 +1,13 @@
 #include <Processors/QueryPlan/AggregatingStep.h>
 #include <Processors/QueryPipeline.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/AggregatingInOrderTransform.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/FinishAggregatingInOrderTransform.h>
+
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 namespace DB
 {
@@ -179,6 +183,67 @@ void AggregatingStep::describePipeline(FormatSettings & settings) const
         IQueryPlanStep::describePipeline(aggregating_sorted, settings);
         IQueryPlanStep::describePipeline(aggregating_in_order, settings);
     }
+}
+
+void AggregatingStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    params.serialize(buf);
+    writeBinary(final, buf);
+    writeBinary(max_block_size, buf);
+    writeBinary(merge_threads, buf);
+    writeBinary(temporary_data_merge_threads, buf);
+    writeBinary(storage_has_evenly_distributed_read, buf);
+
+    if (group_by_info)
+    {
+        writeBinary(true, buf);
+        group_by_info->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    serializeSortDescription(group_by_sort_description, buf);
+}
+
+QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream input_stream = deserializeDataStream(buf);
+    Aggregator::Params params = Aggregator::Params::deserialize(buf, context);
+    bool final;
+    readBinary(final, buf);
+    size_t max_block_size;
+    readBinary(max_block_size, buf);
+    size_t merge_threads;
+    readBinary(merge_threads, buf);
+    size_t temporary_data_merge_threads;
+    readBinary(temporary_data_merge_threads, buf);
+    bool storage_has_evenly_distributed_read;
+    readBinary(storage_has_evenly_distributed_read, buf);
+
+    bool has_group_by_info = false;
+    readBinary(has_group_by_info, buf);
+    InputOrderInfoPtr group_by_info = nullptr;
+    if (has_group_by_info)
+    {
+        group_by_info = std::make_shared<InputOrderInfo>();
+        const_cast<InputOrderInfo &>(*group_by_info).deserialize(buf);
+    }
+
+    SortDescription group_by_sort_description;
+    deserializeSortDescription(group_by_sort_description, buf);
+
+    auto step = std::make_unique<AggregatingStep>(input_stream, params, final, max_block_size,
+                                             merge_threads, temporary_data_merge_threads,
+                                             storage_has_evenly_distributed_read,
+                                             group_by_info, group_by_sort_description);
+    
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

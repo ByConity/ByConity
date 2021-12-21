@@ -29,6 +29,8 @@ public:
 
     String getID(char) const override { return "Storage definition"; }
 
+    ASTType getType() const override { return ASTType::ASTStorage; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
@@ -47,6 +49,8 @@ public:
     IAST              * primary_key = nullptr;
 
     String getID(char) const override { return "Columns definition"; }
+
+    ASTType getType() const override { return ASTType::ASTColumns; }
 
     ASTPtr clone() const override;
 
@@ -94,6 +98,8 @@ public:
 
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return (attach ? "AttachQuery" : "CreateQuery") + (delim + database) + delim + table; }
+
+    ASTType getType() const override { return ASTType::ASTCreateQuery; }
 
     ASTPtr clone() const override;
 

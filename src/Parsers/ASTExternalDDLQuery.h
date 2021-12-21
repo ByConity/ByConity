@@ -31,6 +31,8 @@ public:
 
     String getID(char) const override { return "external ddl query"; }
 
+    ASTType getType() const override { return ASTType::ASTExternalDDLQuery; }
+
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked stacked) const override
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << "EXTERNAL DDL FROM " << (settings.hilite ? hilite_none : "");

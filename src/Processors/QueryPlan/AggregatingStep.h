@@ -3,12 +3,15 @@
 #include <DataStreams/SizeLimits.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Interpreters/Aggregator.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
 
 struct AggregatingTransformParams;
 using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
+class WriteBuffer;
+class ReadBuffer;
 
 /// Aggregation. See AggregatingTransform.
 class AggregatingStep : public ITransformingStep
@@ -37,6 +40,9 @@ public:
     void describePipeline(FormatSettings & settings) const override;
 
     const Aggregator::Params & getParams() const { return params; }
+
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
 
 private:
     Aggregator::Params params;

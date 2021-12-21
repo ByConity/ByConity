@@ -30,6 +30,8 @@ public:
         return "OptimizeQuery" + (delim + database) + delim + table + (final ? "_final" : "") + (deduplicate ? "_deduplicate" : "");
     }
 
+    ASTType getType() const override { return ASTType::ASTOptimizeQuery; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTOptimizeQuery>(*this);

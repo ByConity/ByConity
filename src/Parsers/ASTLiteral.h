@@ -40,9 +40,15 @@ public:
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "Literal" + (delim + applyVisitor(FieldVisitorDump(), value)); }
 
+    ASTType getType() const override { return ASTType::ASTLiteral; }
+
     ASTPtr clone() const override { return std::make_shared<ASTLiteral>(*this); }
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;

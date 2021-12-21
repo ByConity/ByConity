@@ -317,6 +317,18 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/);
 
+    /// A version of read that creating ReadFromStorageStep for Distributed Stages Mode. 
+    virtual void read(
+        QueryPlan & query_plan,
+        const Names & /*column_names*/,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        SelectQueryInfo & /*query_info*/,
+        ContextPtr /*context*/,
+        QueryProcessingStage::Enum /*processed_stage*/,
+        size_t /*max_block_size*/,
+        unsigned /*num_streams*/,
+        bool /*distributed_stages_*/);
+
     /** Writes the data to a table.
       * Receives a description of the query, which can contain information about the data write method.
       * Returns an object by which you can write data sequentially.
@@ -555,6 +567,9 @@ public:
     ///
     /// Does not takes underlying Storage (if any) into account.
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
+
+    void serialize(WriteBuffer & buf) const;
+    static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context); 
 
 private:
     /// Lock required for alter queries (lockForAlter). Always taken for write

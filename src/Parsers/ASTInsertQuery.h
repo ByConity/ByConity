@@ -33,6 +33,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "InsertQuery" + (delim + table_id.database_name) + delim + table_id.table_name; }
 
+    ASTType getType() const override { return ASTType::ASTInsertQuery; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTInsertQuery>(*this);

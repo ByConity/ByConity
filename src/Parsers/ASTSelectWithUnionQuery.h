@@ -13,6 +13,8 @@ class ASTSelectWithUnionQuery : public ASTQueryWithOutput
 public:
     String getID(char) const override { return "SelectWithUnionQuery"; }
 
+    ASTType getType() const override { return ASTType::ASTSelectWithUnionQuery; }
+
     ASTPtr clone() const override;
 
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
@@ -39,6 +41,10 @@ public:
 
     /// Consider any mode other than ALL as non-default.
     bool hasNonDefaultUnionMode() const;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 }

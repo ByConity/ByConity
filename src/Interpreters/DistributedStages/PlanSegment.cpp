@@ -11,6 +11,7 @@
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 #include <sstream>
 
@@ -145,6 +146,7 @@ String PlanSegmentInput::toString(size_t indent) const
 
 void PlanSegmentOutput::serialize(WriteBuffer & buf) const
 {
+    IPlanSegment::serialize(buf);
     writeBinary(shuffle_function_name, buf);
     writeBinary(parallel_size, buf);
     writeBinary(keep_order, buf);
@@ -152,6 +154,7 @@ void PlanSegmentOutput::serialize(WriteBuffer & buf) const
 
 void PlanSegmentOutput::deserialize(ReadBuffer & buf)
 {   
+    IPlanSegment::deserialize(buf);
     readBinary(shuffle_function_name, buf);
     readBinary(parallel_size, buf);
     readBinary(keep_order, buf);
@@ -168,6 +171,22 @@ String PlanSegmentOutput::toString(size_t indent) const
     ostr << indent_str << "keep_order: " << keep_order;
 
     return ostr.str();
+}
+
+void PlanSegment::setPlanSegmentToQueryPlan(QueryPlan::Node * node)
+{
+    if (!node)
+        return;
+
+    if (auto * remote_step = dynamic_cast<RemoteExchangeSourceStep *>(node->step.get()))
+        remote_step->setPlanSegment(this);
+    else
+    {
+        for (auto & child : node->children)
+        {
+            setPlanSegmentToQueryPlan(child);
+        }
+    }
 }
 
 void PlanSegment::serialize(WriteBuffer & buf) const
@@ -221,6 +240,7 @@ PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMuta
 {
     auto plan_segment = std::make_unique<PlanSegment>(context_);
     plan_segment->deserialize(buf);
+    plan_segment->setPlanSegmentToQueryPlan(plan_segment->getQueryPlan().getRoot());
     return plan_segment;
 }
 

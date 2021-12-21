@@ -30,6 +30,9 @@ public:
 
     AggregatingTransformParamsPtr getParams() const { return params; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     AggregatingTransformParamsPtr params;
     bool memory_efficient_aggregation;

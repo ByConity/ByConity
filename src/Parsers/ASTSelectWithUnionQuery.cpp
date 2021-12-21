@@ -1,8 +1,12 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
+#include <Parsers/ASTSerDerHelper.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Common/typeid_cast.h>
 #include <IO/Operators.h>
+#include <IO/ReadBuffer.h>
+#include <IO/WriteBuffer.h>
 
 #include <iostream>
 
@@ -76,6 +80,56 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
 bool ASTSelectWithUnionQuery::hasNonDefaultUnionMode() const
 {
     return set_of_modes.contains(Mode::DISTINCT);
+}
+
+void ASTSelectWithUnionQuery::serialize(WriteBuffer & buf) const
+{
+    ASTQueryWithOutput::serialize(buf);
+    serializeEnum(union_mode, buf);
+
+    writeBinary(list_of_modes.size(), buf);
+    for (auto & mode : list_of_modes)
+        serializeEnum(mode, buf);
+
+    writeBinary(is_normalized, buf);
+    
+    serializeAST(list_of_selects, buf);
+
+    writeBinary(set_of_modes.size(), buf);
+    for (auto & mode : set_of_modes)
+        serializeEnum(mode, buf);
+}
+
+void ASTSelectWithUnionQuery::deserializeImpl(ReadBuffer & buf)
+{
+    ASTQueryWithOutput::deserializeImpl(buf);
+    deserializeEnum(union_mode, buf);
+
+    size_t s1;
+    readBinary(s1, buf);
+    list_of_modes.resize(s1);
+    for (size_t i = 0; i < s1; ++i)
+        deserializeEnum(list_of_modes[i], buf);
+
+    readBinary(is_normalized, buf);
+
+    list_of_selects = deserializeASTWithChildren(children, buf);
+
+    size_t s2;
+    readBinary(s2, buf);
+    for (size_t i = 0; i < s2; ++i)
+    {
+        Mode mode;
+        deserializeEnum(mode, buf);
+        set_of_modes.insert(mode);
+    }
+}
+
+ASTPtr ASTSelectWithUnionQuery::deserialize(ReadBuffer & buf)
+{
+    auto select_with_union = std::make_shared<ASTSelectWithUnionQuery>();
+    select_with_union->deserializeImpl(buf);
+    return select_with_union;
 }
 
 }

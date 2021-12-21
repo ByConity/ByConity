@@ -30,6 +30,9 @@ public:
 
     void describeActions(JSONBuilder::JSONMap & map) const override;
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
+
 private:
     ActionsDAGPtr actions_dag;
 };

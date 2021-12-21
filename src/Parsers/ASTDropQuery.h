@@ -40,6 +40,8 @@ public:
     String getID(char) const override;
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTDropQuery; }
+
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
     {
         return removeOnCluster<ASTDropQuery>(clone(), new_database);

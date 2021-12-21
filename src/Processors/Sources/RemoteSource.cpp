@@ -181,16 +181,4 @@ Pipe createRemoteSourcePipe(
     return pipe;
 }
 
-RemoteExchangeSourceStep::RemoteExchangeSourceStep(const PlanSegmentInputs & inputs_, DataStream input_stream_)
-: inputs(inputs_)
-{
-    input_streams.emplace_back(std::move(input_stream_));
-    output_stream = DataStream{.header = input_streams[0].header};
-}
-
-QueryPipelinePtr RemoteExchangeSourceStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
-{
-    return nullptr;
-}
-
 }

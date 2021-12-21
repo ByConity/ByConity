@@ -1,6 +1,6 @@
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <IO/Operators.h>
-
 
 namespace DB
 {
@@ -56,6 +56,25 @@ void ASTExpressionList::formatImplMultiline(const FormatSettings & settings, For
         frame_nested.expression_list_always_start_on_new_line = false;
         (*it)->formatImpl(settings, state, frame_nested);
     }
+}
+
+void ASTExpressionList::serialize(WriteBuffer & buf) const
+{
+    writeBinary(separator, buf);
+    serializeASTs(children, buf);
+}
+
+void ASTExpressionList::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(separator, buf);
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTExpressionList::deserialize(ReadBuffer & buf)
+{
+    auto expression = std::make_shared<ASTExpressionList>();
+    expression->deserializeImpl(buf);
+    return expression;
 }
 
 }

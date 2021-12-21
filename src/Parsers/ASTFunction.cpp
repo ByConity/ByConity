@@ -8,11 +8,13 @@
 #include <IO/Operators.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTWithAlias.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 
 namespace DB
@@ -555,6 +557,39 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
         window_definition->formatImpl(settings, state, frame);
         settings.ostr << ")";
     }
+}
+
+void ASTFunction::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeBinary(name, buf);
+    serializeAST(arguments, buf);
+    serializeAST(parameters, buf);
+    writeBinary(is_window_function, buf);
+    writeBinary(window_name, buf);
+    serializeAST(window_definition, buf);
+    writeBinary(no_empty_args, buf);
+}
+
+void ASTFunction::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readBinary(name, buf);
+    arguments = deserializeASTWithChildren(children, buf);
+    parameters = deserializeASTWithChildren(children, buf);
+    readBinary(is_window_function, buf);
+    readBinary(window_name, buf);
+    window_definition = deserializeASTWithChildren(children, buf);
+    readBinary(no_empty_args, buf);
+}
+
+ASTPtr ASTFunction::deserialize(ReadBuffer & buf)
+{
+    auto function = std::make_shared<ASTFunction>();
+    function->deserializeImpl(buf);
+    return function;
 }
 
 }

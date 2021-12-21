@@ -1,6 +1,7 @@
 #pragma once
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 
 namespace JSONBuilder { class JSONMap; }
@@ -163,9 +164,9 @@ public:
     /// Get description of processors added in current step. Should be called after updatePipeline().
     virtual void describePipeline(FormatSettings & /*settings*/) const {}
 
-    virtual void serialize(WriteBuffer &) const { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
-    virtual void deserializeImpl(ReadBuffer &) { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not supported.", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual void serializeImpl(WriteBuffer & buf) const;
+    virtual void serialize(WriteBuffer &) const { throw Exception("Not supported serialize.", ErrorCodes::NOT_IMPLEMENTED); }
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not supported deserialize.", ErrorCodes::NOT_IMPLEMENTED); }
 
 protected:
     DataStreams input_streams;

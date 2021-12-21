@@ -34,9 +34,12 @@ public:
     }
 
     /// Change input stream when limit is pushed up. TODO: add clone() for steps.
-    void updateInputStream(DataStream input_stream);
+    void updateInputStream(DataStream input_stream_);
 
     bool withTies() const { return with_ties; }
+
+    void serialize(WriteBuffer &) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
 private:
     size_t limit;

@@ -4,6 +4,8 @@
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Interpreters/ExpressionActions.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Interpreters/JoinSwitcher.h>
 
@@ -100,6 +102,38 @@ void ExpressionStep::describeActions(JSONBuilder::JSONMap & map) const
 {
     auto expression = std::make_shared<ExpressionActions>(actions_dag);
     map.add("Expression", expression->toTree());
+}
+
+void ExpressionStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    if (actions_dag)
+    {
+        writeBinary(true, buf);
+        actions_dag->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
+}
+
+QueryPlanStepPtr ExpressionStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    auto input_stream = deserializeDataStream(buf);
+
+    bool has_actions_dag;
+    readBinary(has_actions_dag, buf);
+    ActionsDAGPtr actions_dag;
+    if (has_actions_dag)
+        actions_dag = ActionsDAG::deserialize(buf, context);
+
+
+    auto step = std::make_unique<ExpressionStep>(input_stream, actions_dag);
+    step->setStepDescription(step_description);
+    return step;
 }
 
 }

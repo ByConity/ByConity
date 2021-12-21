@@ -18,6 +18,9 @@ public:
     String id;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTPartition; }
+
     ASTPtr clone() const override;
 
 protected:
