@@ -58,6 +58,7 @@ using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 using ManyExpressionActions = std::vector<ExpressionActionsPtr>;
 class MergeTreeDeduplicationLog;
 class IBackgroundJobExecutor;
+class IBitEngineDictionaryManager;
 
 namespace ErrorCodes
 {
@@ -132,8 +133,11 @@ public:
 
     using PinnedPartUUIDsPtr = std::shared_ptr<const PinnedPartUUIDs>;
 
+    using BitEngineDictionaryManagerPtr = std::shared_ptr<IBitEngineDictionaryManager>;
+
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
+    constexpr static auto BITENGINE_DICTIONARY_DIR_NAME = "bitmap_dictionary";
 
     /// Auxiliary structure for index comparison. Keep in mind lifetime of MergeTreePartInfo.
     struct DataPartStateAndInfo
@@ -852,6 +856,11 @@ public:
     /// Get required partition vector with query info
     DataPartsVector getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr context);
 
+    // bitengine dictionary mananger
+    BitEngineDictionaryManagerPtr bitengine_dictionary_manager;
+    inline bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }
+    bool isBitEngineEncodeColumn(const String & name) const;
+
 protected:
 
     friend class IMergeTreeDataPart;
@@ -859,6 +868,7 @@ protected:
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;
     friend class MergeTreeDataWriter;
+    friend class BitEngineDictionaryManager;
 
     bool require_part_metadata;
 

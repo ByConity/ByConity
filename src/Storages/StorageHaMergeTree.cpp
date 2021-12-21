@@ -787,6 +787,12 @@ void StorageHaMergeTree::startup()
         /// In this thread replica will be activated.
         restarting_thread.start();
 
+        if (isBitEngineMode())
+        {
+            auto * manager_raw = dynamic_cast<BitEngineDictionaryManager *>(bitengine_dictionary_manager.get());
+            bitengine_ha_manager = std::make_unique<BitEngineDictionaryHaManager>(*this, manager_raw, zookeeper_path, replica_name);
+        }
+
         /// Wait while restarting_thread initializes LeaderElection (and so on) or makes first attempt to do it
         startup_event.wait();
 
@@ -824,6 +830,9 @@ void StorageHaMergeTree::shutdown()
 
     restarting_thread.shutdown();
     background_executor.finish();
+
+    if (bitengine_ha_manager)
+        bitengine_ha_manager->stop();
 
     {
         auto lock = queue.lockQueue();

@@ -18,6 +18,7 @@
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
+#include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 
 /// XXX
@@ -197,6 +198,12 @@ public:
 
     void markLost();
 
+    zkutil::ZooKeeperPtr getZooKeeper() const;
+
+    /************  BitEngine Related functions ******/
+    BitEngineDictionaryHaManager * getBitEngineDictionaryHaManager() { return bitengine_ha_manager.get(); }
+    /************  BitEngine Related functions ******/
+
 private:
     /// Get a sequential consistent view of current parts.
     ReplicatedMergeTreeQuorumAddedParts::PartitionIdToMaxBlock getMaxAddedBlocks() const;
@@ -218,7 +225,7 @@ private:
     mutable std::mutex current_zookeeper_mutex;    /// To recreate the session in the background thread.
 
     zkutil::ZooKeeperPtr tryGetZooKeeper() const;
-    zkutil::ZooKeeperPtr getZooKeeper() const;
+
     void setZooKeeper();
 
     /// If true, the table is offline and can not be written to it.
@@ -303,6 +310,8 @@ private:
     HaMergeTreeRestartingThread restarting_thread;
 
     HaMergeTreeAlterMetadataThread alter_thread;
+
+    std::unique_ptr<BitEngineDictionaryHaManager> bitengine_ha_manager;
 
     /// True if replica was created for existing table with fixed granularity
     bool other_replicas_fixed_granularity = false;

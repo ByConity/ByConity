@@ -260,6 +260,10 @@ public:
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
 
+    /// check the type is marked as BitEngineEncode
+    /// TODO (liuhaoqiang) write a right function logic, in community version, there is no type flag now.
+    bool isBitEngineEncode() const { return getTypeId() == TypeIndex::BitMap64; }
+
 protected:
     friend class DataTypeFactory;
     friend class AggregateFunctionSimpleState;
@@ -340,6 +344,7 @@ struct WhichDataType
     constexpr bool isNullable() const { return idx == TypeIndex::Nullable; }
     constexpr bool isFunction() const { return idx == TypeIndex::Function; }
     constexpr bool isAggregateFunction() const { return idx == TypeIndex::AggregateFunction; }
+    constexpr bool isBitmap64() const { return idx == TypeIndex::BitMap64; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
@@ -358,6 +363,7 @@ inline bool isArray(const DataTypePtr & data_type) { return WhichDataType(data_t
 inline bool isMap(const DataTypePtr & data_type) { return WhichDataType(data_type).isMap(); }
 inline bool isNothing(const DataTypePtr & data_type) { return WhichDataType(data_type).isNothing(); }
 inline bool isUUID(const DataTypePtr & data_type) { return WhichDataType(data_type).isUUID(); }
+inline bool isBitmap64(const DataTypePtr & data_type) { return WhichDataType(data_type).isBitmap64(); }
 
 template <typename T>
 inline bool isUInt8(const T & data_type)

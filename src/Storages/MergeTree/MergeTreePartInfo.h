@@ -5,6 +5,7 @@
 #include <vector>
 #include <common/types.h>
 #include <common/DayNum.h>
+#include <Core/Names.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 
 
@@ -103,6 +104,10 @@ struct MergeTreePartInfo
     static void parseMinMaxDatesFromPartName(const String & part_name, DayNum & min_date, DayNum & max_date);
 
     static bool contains(const String & outer_part_name, const String & inner_part_name, MergeTreeDataFormatVersion format_version);
+
+    String getPartitionKeyInStringAt(size_t index) const;
+
+    static Names splitPartitionKeys(const String & partition_id);
 
     static constexpr UInt32 MAX_LEVEL = 999999999;
     static constexpr UInt32 MAX_BLOCK_NUMBER = 999999999;
