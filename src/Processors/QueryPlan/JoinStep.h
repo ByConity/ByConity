@@ -28,6 +28,9 @@ public:
 
     const JoinPtr & getJoin() const { return join; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     JoinPtr join;
     size_t max_block_size;
@@ -46,6 +49,9 @@ public:
     Type getType() const override { return Type::FilledJoin; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
+
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
 
 private:
     JoinPtr join;

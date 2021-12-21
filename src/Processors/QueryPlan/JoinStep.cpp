@@ -39,6 +39,41 @@ void JoinStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
+void JoinStep::serialize(WriteBuffer & buf) const
+{
+    writeBinary(step_description, buf);
+
+    if (input_streams.size() < 2)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input streams");
+
+    serializeDataStream(input_streams[0], buf);
+    serializeDataStream(input_streams[1], buf);
+
+    // todo serialize join
+
+    writeBinary(max_block_size, buf);
+}
+
+QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr /*context*/)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream left_stream = deserializeDataStream(buf);
+    DataStream right_stream = deserializeDataStream(buf);
+
+    // todo deserialize join
+    JoinPtr join = nullptr;
+
+    bool max_block_size;
+    readBinary(max_block_size, buf);
+
+    auto step = std::make_unique<JoinStep>(left_stream, right_stream, std::move(join), max_block_size);
+
+    step->setStepDescription(step_description);
+    return step;
+}
+
 static ITransformingStep::Traits getStorageJoinTraits()
 {
     return ITransformingStep::Traits
@@ -85,5 +120,34 @@ void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
         return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, counter);
     });
 }
+
+void FilledJoinStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    // todo serialize join
+
+    writeBinary(max_block_size, buf);
+}
+
+QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr /*context*/)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream input_stream = deserializeDataStream(buf);
+
+    // todo deserialize join
+    JoinPtr join = nullptr;
+
+    bool max_block_size;
+    readBinary(max_block_size, buf);
+
+    auto step = std::make_unique<FilledJoinStep>(input_stream, std::move(join), max_block_size);
+
+    step->setStepDescription(step_description);
+    return step;
+}
+
 
 }
