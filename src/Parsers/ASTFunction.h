@@ -41,6 +41,8 @@ public:
     /** Get text identifying the AST node. */
     String getID(char delim) const override;
 
+    ASTType getType() const override { return ASTType::ASTFunction; }
+
     ASTPtr clone() const override;
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
@@ -50,6 +52,10 @@ public:
     ASTPtr toLiteral() const;  // Try to convert functions like Array or Tuple to a literal form.
 
     std::string getWindowDescription() const;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

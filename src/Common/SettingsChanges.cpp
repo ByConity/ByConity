@@ -1,5 +1,6 @@
 #include <Common/SettingsChanges.h>
-
+#include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 
 namespace DB
 {
@@ -20,6 +21,18 @@ namespace
             return nullptr;
         return &*it;
     }
+}
+
+void SettingChange::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    writeFieldBinary(value, buf);
+}
+
+void SettingChange::deserialize(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    readFieldBinary(value, buf);
 }
 
 bool SettingsChanges::tryGet(const std::string_view & name, Field & out_value) const
@@ -45,6 +58,25 @@ Field * SettingsChanges::tryGet(const std::string_view & name)
     if (!change)
         return nullptr;
     return &change->value;
+}
+
+void SettingsChanges::serialize(WriteBuffer & buf) const
+{
+    writeBinary(size(), buf);
+    for (auto & change : *this)
+        change.serialize(buf);
+}
+
+void SettingsChanges::deserialize(ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+    for (size_t i = 0; i < size; ++i)
+    {
+        SettingChange change;
+        change.deserialize(buf);
+        this->push_back(change);
+    }
 }
 
 }

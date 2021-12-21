@@ -22,6 +22,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "ProjectionSelectQuery"; }
 
+    ASTType getType() const override { return ASTType::ASTProjectionSelectQuery; }
+
     ASTPtr clone() const override;
 
     ASTPtr & refSelect() { return getExpression(Expression::SELECT); }

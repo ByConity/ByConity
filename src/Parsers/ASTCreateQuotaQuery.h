@@ -54,6 +54,9 @@ public:
     std::shared_ptr<ASTRolesOrUsersSet> roles;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTCreateQuotaQuery; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     void replaceCurrentUserTag(const String & current_user_name) const;

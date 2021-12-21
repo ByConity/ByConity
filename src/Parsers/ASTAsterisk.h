@@ -13,6 +13,7 @@ class ASTAsterisk : public IAST
 {
 public:
     String getID(char) const override { return "Asterisk"; }
+    ASTType getType() const override { return ASTType::ASTAsterisk; }
     ASTPtr clone() const override;
     void appendColumnName(WriteBuffer & ostr) const override;
 

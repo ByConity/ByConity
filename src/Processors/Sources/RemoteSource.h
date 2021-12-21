@@ -104,6 +104,9 @@ public:
 
     PlanSegmentInputs getInput() const { return inputs; }
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
 private:
     PlanSegmentInputs inputs;
 };

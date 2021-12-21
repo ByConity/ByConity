@@ -14,6 +14,9 @@ class ASTQualifiedAsterisk : public IAST
 {
 public:
     String getID(char) const override { return "QualifiedAsterisk"; }
+
+    ASTType getType() const override { return ASTType::ASTQualifiedAsterisk; }
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTQualifiedAsterisk>(*this);

@@ -155,8 +155,8 @@ void checkPlan(PlanSegment * lhs, PlanSegment * rhs)
     auto lhs_str = lhs->toString();
     auto rhs_str = rhs->toString();
 
-    std::cout<<" <<< lhs:\n" << lhs_str << std::endl;
-    std::cout<<" <<< rhs:\n" << rhs_str << std::endl;
+    // std::cout<<" <<< lhs:\n" << lhs_str << std::endl;
+    // std::cout<<" <<< rhs:\n" << rhs_str << std::endl;
 
     if(lhs_str != rhs_str)
         throw Exception("checkPlan failed", ErrorCodes::LOGICAL_ERROR);
@@ -164,6 +164,8 @@ void checkPlan(PlanSegment * lhs, PlanSegment * rhs)
 
 void MockTestQuery(PlanSegmentTree * plan_segment_tree, ContextMutablePtr context)
 {
+    if (plan_segment_tree->getNodes().size() < 2)
+        return;
     /**
      * serialize to buffer
      */
@@ -213,6 +215,11 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
     //MockSendPlanSegment(context);
 
     MockTestQuery(plan_segment_tree.get(), context);
+    // just for test plan 0
+    if (plan_segment_tree->getNodes().size() == 1)
+    {
+        res = InterpreterPlanSegment(plan_segment_tree->getNodes().front().getPlanSegment(), context).execute();
+    }
 
     return res;
 }

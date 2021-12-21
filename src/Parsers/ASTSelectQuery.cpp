@@ -5,8 +5,11 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Interpreters/StorageID.h>
 #include <IO/Operators.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 
 namespace DB
@@ -451,6 +454,84 @@ void ASTSelectQuery::setFinal() // NOLINT method can be made const
         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no table expression, it's a bug");
 
     tables_element.table_expression->as<ASTTableExpression &>().final = true;
+}
+
+void ASTSelectQuery::serialize(WriteBuffer & buf) const
+{
+    writeBinary(distinct, buf);
+    writeBinary(group_by_with_totals, buf);
+    writeBinary(group_by_with_rollup, buf);
+    writeBinary(group_by_with_cube, buf);
+    writeBinary(group_by_with_constant_keys, buf);
+    writeBinary(limit_with_ties, buf);
+
+    ASTPtr ast = nullptr;
+#define SERIALIZE_EXPRESSION(expr) \
+    ast = getExpression(expr, false); \
+    serializeAST(ast, buf);
+
+    SERIALIZE_EXPRESSION(Expression::WITH)
+    SERIALIZE_EXPRESSION(Expression::SELECT)
+    SERIALIZE_EXPRESSION(Expression::TABLES)
+    SERIALIZE_EXPRESSION(Expression::PREWHERE)
+    SERIALIZE_EXPRESSION(Expression::WHERE)
+    SERIALIZE_EXPRESSION(Expression::GROUP_BY)
+    SERIALIZE_EXPRESSION(Expression::HAVING)
+    SERIALIZE_EXPRESSION(Expression::WINDOW)
+    SERIALIZE_EXPRESSION(Expression::ORDER_BY)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY_OFFSET)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY_LENGTH)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_BY)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_OFFSET)
+    SERIALIZE_EXPRESSION(Expression::LIMIT_LENGTH)
+    SERIALIZE_EXPRESSION(Expression::SETTINGS)
+
+#undef SERIALIZE_EXPRESSION
+}
+
+void ASTSelectQuery::deserializeImpl(ReadBuffer & buf)
+{
+    children.clear();
+    positions.clear();
+
+    readBinary(distinct, buf);
+    readBinary(group_by_with_totals, buf);
+    readBinary(group_by_with_rollup, buf);
+    readBinary(group_by_with_cube, buf);
+    readBinary(group_by_with_constant_keys, buf);
+    readBinary(limit_with_ties, buf);
+
+
+#define DESERIALIZE_EXPRESSION(expr) \
+    { \
+        auto ast = deserializeAST(buf); \
+        if (ast) setExpression(expr, std::move(ast)); \
+    }
+
+    DESERIALIZE_EXPRESSION(Expression::WITH)
+    DESERIALIZE_EXPRESSION(Expression::SELECT)
+    DESERIALIZE_EXPRESSION(Expression::TABLES)
+    DESERIALIZE_EXPRESSION(Expression::PREWHERE)
+    DESERIALIZE_EXPRESSION(Expression::WHERE)
+    DESERIALIZE_EXPRESSION(Expression::GROUP_BY)
+    DESERIALIZE_EXPRESSION(Expression::HAVING)
+    DESERIALIZE_EXPRESSION(Expression::WINDOW)
+    DESERIALIZE_EXPRESSION(Expression::ORDER_BY)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY_OFFSET)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY_LENGTH)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_BY)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_OFFSET)
+    DESERIALIZE_EXPRESSION(Expression::LIMIT_LENGTH)
+    DESERIALIZE_EXPRESSION(Expression::SETTINGS)
+
+#undef DESERIALIZE_EXPRESSION
+}
+
+ASTPtr ASTSelectQuery::deserialize(ReadBuffer & buf)
+{
+    auto select = std::make_shared<ASTSelectQuery>();
+    select->deserializeImpl(buf);
+    return select;
 }
 
 }

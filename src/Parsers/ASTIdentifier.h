@@ -23,11 +23,14 @@ class ASTTableIdentifier;
 class ASTIdentifier : public ASTWithAlias
 {
 public:
+    ASTIdentifier() = default;
     explicit ASTIdentifier(const String & short_name, ASTPtr && name_param = {});
     explicit ASTIdentifier(std::vector<String> && name_parts, bool special = false, std::vector<ASTPtr> && name_params = {});
 
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "Identifier" + (delim + name()); }
+
+    ASTType getType() const override { return ASTType::ASTIdentifier; }
 
     /** Get the query param out of a non-compound identifier. */
     ASTPtr getParam() const;
@@ -49,6 +52,10 @@ public:
 
     void restoreTable();  // TODO(ilezhankin): get rid of this
     std::shared_ptr<ASTTableIdentifier> createTable() const;  // returns |nullptr| if identifier is not table.
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     String full_name;
@@ -74,8 +81,12 @@ public:
     explicit ASTTableIdentifier(const String & table_name, std::vector<ASTPtr> && name_params = {});
     explicit ASTTableIdentifier(const StorageID & table_id, std::vector<ASTPtr> && name_params = {});
     ASTTableIdentifier(const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params = {});
+    ASTTableIdentifier() = default;
 
     String getID(char delim) const override { return "TableIdentifier" + (delim + name()); }
+
+    ASTType getType() const override { return ASTType::ASTTableIdentifier; }
+
     ASTPtr clone() const override;
 
     UUID uuid = UUIDHelpers::Nil;  // FIXME(ilezhankin): make private
@@ -87,6 +98,10 @@ public:
     void resetTable(const String & database_name, const String & table_name);  // TODO(ilezhankin): get rid of this
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 

@@ -16,6 +16,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "WithElement"; }
 
+    ASTType getType() const override { return ASTType::ASTWithElement; }
+
     ASTPtr clone() const override;
 
 protected:

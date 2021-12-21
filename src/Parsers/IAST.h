@@ -26,7 +26,98 @@ namespace ErrorCodes
 using IdentifierNameSet = std::set<String>;
 
 class WriteBuffer;
+class ReadBuffer;
 
+#define APPLY_AST_TYPES(M) \
+    M(ASTAlterQuery) \
+    M(ASTAlterCommand) \
+    M(ASTAssignment) \
+    M(ASTAsterisk) \
+    M(ASTCheckQuery) \
+    M(ASTColumnDeclaration) \
+    M(ASTColumnsMatcher) \
+    M(ASTColumnsApplyTransformer) \
+    M(ASTColumnsExceptTransformer) \
+    M(ASTColumnsReplaceTransformer) \
+    M(ASTConstraintDeclaration) \
+    M(ASTStorage) \
+    M(ASTColumns) \
+    M(ASTCreateQuery) \
+    M(ASTCreateQuotaQuery) \
+    M(ASTCreateRoleQuery) \
+    M(ASTCreateRowPolicyQuery) \
+    M(ASTCreateSettingsProfileQuery) \
+    M(ASTCreateUserQuery) \
+    M(ASTDictionaryLifetime) \
+    M(ASTDictionaryLayout) \
+    M(ASTDictionaryRange) \
+    M(ASTDictionarySettings) \
+    M(ASTDictionary) \
+    M(ASTDictionaryAttributeDeclaration) \
+    M(ASTDropAccessEntityQuery) \
+    M(ASTDropQuery) \
+    M(ASTExplainQuery) \
+    M(ASTExpressionList) \
+    M(ASTExternalDDLQuery) \
+    M(ASTFunction) \
+    M(ASTFunctionWithKeyValueArguments) \
+    M(ASTGrantQuery) \
+    M(ASTIdentifier) \
+    M(ASTIndexDeclaration) \
+    M(ASTInsertQuery) \
+    M(ASTKillQueryQuery) \
+    M(ASTLiteral) \
+    M(ASTNameTypePair) \
+    M(ASTOptimizeQuery) \
+    M(ASTOrderByElement) \
+    M(ASTPair) \
+    M(ASTPartition) \
+    M(ASTProjectionDeclaration) \
+    M(ASTProjectionSelectQuery) \
+    M(ASTQualifiedAsterisk) \
+    M(ASTQueryParameter) \
+    M(ASTQueryWithOutput) \
+    M(ASTQueryWithTableAndOutput) \
+    M(ASTRefreshQuery) \
+    M(ASTRenameQuery) \
+    M(ASTRolesOrUsersSet) \
+    M(ASTRowPolicyName) \
+    M(ASTRowPolicyNames) \
+    M(ASTSampleRatio) \
+    M(ASTSelectQuery) \
+    M(ASTSelectWithUnionQuery) \
+    M(ASTSetQuery) \
+    M(ASTSetRoleQuery) \
+    M(ASTSettingsProfileElement) \
+    M(ASTSettingsProfileElements) \
+    M(ASTShowAccessEntitiesQuery) \
+    M(ASTShowCreateAccessEntityQuery) \
+    M(ASTShowGrantsQuery) \
+    M(ASTShowTablesQuery) \
+    M(ASTSubquery) \
+    M(ASTSystemQuery) \
+    M(ASTTableIdentifier) \
+    M(ASTTableExpression) \
+    M(ASTTableJoin) \
+    M(ASTArrayJoin) \
+    M(ASTTablesInSelectQueryElement) \
+    M(ASTTablesInSelectQuery) \
+    M(ASTTTLElement) \
+    M(ASTUseQuery) \
+    M(ASTUserNameWithHost) \
+    M(ASTUserNamesWithHost) \
+    M(ASTWatchQuery) \
+    M(ASTWindowDefinition) \
+    M(ASTWithElement) \
+
+#define ENUM_TYPE(ITEM) ITEM,
+
+enum class ASTType : UInt8
+{
+    APPLY_AST_TYPES(ENUM_TYPE) UNDEFINED,
+};
+
+#undef ENUM_TYPE
 
 /** Element of the syntax tree (hereinafter - directed acyclic graph with elements of semantics)
   */
@@ -70,6 +161,9 @@ public:
 
     /** Get the text that identifies this element. */
     virtual String getID(char delimiter = '_') const = 0;
+
+    /// AST type, it's used for serialize/deserialize.
+    virtual ASTType getType() const { throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED); }
 
     ASTPtr ptr() { return shared_from_this(); }
 
@@ -228,6 +322,10 @@ public:
     static std::string formatForErrorMessage(const AstArray & array);
 
     void cloneChildren();
+
+    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement serialize of " + getID(), ErrorCodes::NOT_IMPLEMENTED); } 
+    virtual void deserializeImpl(ReadBuffer &) { throw Exception("Not implement deserializeImpl AST", ErrorCodes::NOT_IMPLEMENTED); }
+    static ASTPtr deserialize(ReadBuffer &) { throw Exception("Not implement deserialize AST", ErrorCodes::NOT_IMPLEMENTED); }
 
 public:
     /// For syntax highlighting.

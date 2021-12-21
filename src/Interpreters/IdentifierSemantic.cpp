@@ -7,6 +7,9 @@
 
 #include <Parsers/ASTFunction.h>
 
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+
 namespace DB
 {
 
@@ -64,6 +67,39 @@ std::optional<size_t> tryChooseTable(const ASTIdentifier & identifier, const std
     return {};
 }
 
+}
+
+void IdentifierSemanticImpl::serialize(WriteBuffer & buf) const
+{
+    writeBinary(special, buf);
+    writeBinary(can_be_alias, buf);
+    writeBinary(covered, buf);
+    if (membership)
+    {
+        writeBinary(true, buf);
+        writeBinary(membership.value(), buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    writeBinary(table, buf);
+    writeBinary(legacy_compound, buf);
+}
+
+void IdentifierSemanticImpl::deserialize(ReadBuffer & buf)
+{
+    readBinary(special, buf);
+    readBinary(can_be_alias, buf);
+    readBinary(covered, buf);
+
+    bool has_member;
+    readBinary(has_member, buf);
+    if (has_member){
+        readBinary(membership.value(), buf);
+    }
+
+    readBinary(table, buf);
+    readBinary(legacy_compound, buf);
 }
 
 std::optional<String> IdentifierSemantic::getColumnName(const ASTIdentifier & node)

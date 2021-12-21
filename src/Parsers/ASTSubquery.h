@@ -19,6 +19,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "Subquery"; }
 
+    ASTType getType() const override { return ASTType::ASTSubquery; }
+
     ASTPtr clone() const override
     {
         const auto res = std::make_shared<ASTSubquery>(*this);
@@ -33,6 +35,10 @@ public:
     }
 
     void updateTreeHashImpl(SipHash & hash_state) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

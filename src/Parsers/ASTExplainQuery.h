@@ -34,6 +34,8 @@ public:
         return res;
     }
 
+    ASTType getType() const override { return ASTType::ASTExplainQuery; }
+
     void setExplainedQuery(ASTPtr query_)
     {
         children.emplace_back(query_);

@@ -29,6 +29,9 @@ public:
     void replaceCurrentUserTag(const String & current_user_name);
 
     String getID(char) const override { return "RolesOrUsersSet"; }
+
+    ASTType getType() const override { return ASTType::ASTRolesOrUsersSet; }
+
     ASTPtr clone() const override { return std::make_shared<ASTRolesOrUsersSet>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };

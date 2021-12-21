@@ -163,8 +163,8 @@ struct SelectQueryInfo
     bool ignore_projections = false;
     bool is_projection_query = false;
 
-    void serialize(WriteBuffer &) const {}
-    void deserialize(ReadBuffer &) {}
+    void serialize(WriteBuffer &) const;
+    void deserialize(ReadBuffer &);
 };
 
 }

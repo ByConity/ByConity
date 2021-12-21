@@ -27,6 +27,8 @@ public:
 
     String getID(char delim) const override;
 
+    ASTType getType() const override { return ASTType::ASTPair; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
@@ -56,6 +58,8 @@ public:
 
 public:
     String getID(char delim) const override;
+
+    ASTType getType() const override { return ASTType::ASTFunctionWithKeyValueArguments; }
 
     ASTPtr clone() const override;
 

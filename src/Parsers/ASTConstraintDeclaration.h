@@ -15,6 +15,8 @@ public:
 
     String getID(char) const override { return "Constraint"; }
 
+    ASTType getType() const override { return ASTType::ASTConstraintDeclaration; }
+
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;

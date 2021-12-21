@@ -193,4 +193,34 @@ QueryPipelinePtr RemoteExchangeSourceStep::updatePipeline(QueryPipelines, const 
     return nullptr;
 }
 
+void RemoteExchangeSourceStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    writeBinary(inputs.size(), buf);
+    for (auto & input : inputs)
+        input->serialize(buf);
+}
+
+QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, ContextPtr)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    auto input_stream = deserializeDataStream(buf);
+
+    size_t input_size;
+    readBinary(input_size, buf);
+    PlanSegmentInputs inputs(input_size);
+    for (size_t i = 0; i < input_size; ++i)
+    {
+        inputs[i] = std::make_shared<PlanSegmentInput>();
+        inputs[i]->deserialize(buf);
+    }
+
+    auto step = std::make_unique<RemoteExchangeSourceStep>(inputs, input_stream);
+    step->setStepDescription(step_description);
+    return step;
+}
+
 }

@@ -16,6 +16,8 @@ namespace DB
             return "RefreshQuery" + (delimiter + database) + delimiter + table;
         }
 
+        ASTType getType() const override { return ASTType::ASTRefreshQuery; }
+
         ASTPtr clone() const override
         {
             auto res = std::make_shared<ASTRefreshQuery>(*this);

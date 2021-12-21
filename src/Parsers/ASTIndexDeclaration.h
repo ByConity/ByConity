@@ -20,6 +20,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "Index"; }
 
+    ASTType getType() const override { return ASTType::ASTIndexDeclaration; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
 };

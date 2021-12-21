@@ -25,6 +25,8 @@ public:
 
     String getID(char) const override { return "OrderByElement"; }
 
+    ASTType getType() const override { return ASTType::ASTOrderByElement; }
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTOrderByElement>(*this);

@@ -38,6 +38,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "SelectQuery"; }
 
+    ASTType getType() const override { return ASTType::ASTSelectQuery; }
+
     ASTPtr clone() const override;
 
     bool distinct = false;
@@ -94,6 +96,10 @@ public:
     void updateTreeHashImpl(SipHash & hash_state) const override;
 
     void setFinal();
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;

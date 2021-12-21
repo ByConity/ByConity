@@ -68,8 +68,6 @@ public:
     QueryProcessingStage::Enum processed_stage;
     size_t max_block_size;
     unsigned num_streams;
-
-
 };
 
 }

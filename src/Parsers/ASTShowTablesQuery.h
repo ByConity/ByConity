@@ -35,6 +35,8 @@ public:
     /** Get the text that identifies this element. */
     String getID(char) const override { return "ShowTables"; }
 
+    ASTType getType() const override { return ASTType::ASTShowTablesQuery; }
+
     ASTPtr clone() const override;
 
 protected:

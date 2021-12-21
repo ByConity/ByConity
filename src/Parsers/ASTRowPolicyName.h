@@ -18,6 +18,9 @@ public:
     String toString() const { return name_parts.getName(); }
 
     String getID(char) const override { return "RowPolicyName"; }
+
+    ASTType getType() const override { return ASTType::ASTRowPolicyName; }
+
     ASTPtr clone() const override { return std::make_shared<ASTRowPolicyName>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTRowPolicyName>(clone()); }
@@ -40,6 +43,9 @@ public:
     Strings toStrings() const;
 
     String getID(char) const override { return "RowPolicyNames"; }
+
+    ASTType getType() const override { return ASTType::ASTRowPolicyNames; }
+
     ASTPtr clone() const override { return std::make_shared<ASTRowPolicyNames>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTRowPolicyNames>(clone()); }

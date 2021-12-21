@@ -45,6 +45,9 @@ public:
     std::shared_ptr<ASTRolesOrUsersSet> roles;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTCreateRowPolicyQuery; }
+
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateRowPolicyQuery>(clone()); }

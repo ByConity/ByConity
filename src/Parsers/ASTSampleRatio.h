@@ -26,6 +26,8 @@ public:
 
     String getID(char delim) const override { return "SampleRatio" + (delim + toString(ratio)); }
 
+    ASTType getType() const override { return ASTType::ASTSampleRatio; }
+
     ASTPtr clone() const override { return std::make_shared<ASTSampleRatio>(*this); }
 
     static String toString(BigNum num);

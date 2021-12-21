@@ -31,6 +31,9 @@ public:
 
     virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const = 0;
 
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+
 protected:
     virtual void appendColumnNameImpl(WriteBuffer & ostr) const = 0;
 };

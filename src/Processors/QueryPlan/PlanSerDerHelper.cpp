@@ -276,8 +276,10 @@ QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf)
 {
     auto num = UInt8(step->getType());
+    std::cout<<" <<<<< serializePlanStep: " << step->getName() << ", num: " << num << std::endl;
     writeBinary(num, buf);
     step->serialize(buf);
+    std::cout<<" <<<<< finished serializePlanStep: " << step->getName() << std::endl;
 }
 
 

@@ -163,6 +163,42 @@ void ASTIdentifier::resetFullName()
         full_name += '.' + name_parts[i];
 }
 
+void ASTIdentifier::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeBinary(full_name, buf);
+    writeBinary(name_parts, buf);
+    if (semantic)
+    {
+        writeBinary(true, buf);
+        semantic->serialize(buf);
+    }
+}
+
+void ASTIdentifier::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readBinary(full_name, buf);
+    readBinary(name_parts, buf);
+
+    bool has_semantic;
+    readBinary(has_semantic, buf);
+    if (has_semantic)
+    {
+        semantic = std::make_shared<IdentifierSemanticImpl>();
+        semantic->deserialize(buf);
+    }
+}
+
+ASTPtr ASTIdentifier::deserialize(ReadBuffer & buf)
+{
+    auto identifier = std::make_shared<ASTIdentifier>();
+    identifier->deserializeImpl(buf);
+    return identifier;
+}
+
 ASTTableIdentifier::ASTTableIdentifier(const String & table_name, std::vector<ASTPtr> && name_params)
     : ASTIdentifier({table_name}, true, std::move(name_params))
 {
@@ -213,6 +249,27 @@ void ASTTableIdentifier::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(uuid);
     IAST::updateTreeHashImpl(hash_state);
+}
+
+void ASTTableIdentifier::serialize(WriteBuffer & buf) const
+{
+    ASTIdentifier::serialize(buf);
+
+    writeBinary(uuid, buf);
+}
+
+void ASTTableIdentifier::deserializeImpl(ReadBuffer & buf)
+{
+    ASTIdentifier::deserializeImpl(buf);
+
+    readBinary(uuid, buf);
+}
+
+ASTPtr ASTTableIdentifier::deserialize(ReadBuffer & buf)
+{
+    auto identifier = std::make_shared<ASTTableIdentifier>();
+    identifier->deserializeImpl(buf);
+    return identifier;
 }
 
 String getIdentifierName(const IAST * ast)

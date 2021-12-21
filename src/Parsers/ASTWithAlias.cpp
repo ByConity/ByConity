@@ -1,5 +1,6 @@
 #include <Parsers/ASTWithAlias.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
 
 
@@ -51,6 +52,18 @@ void ASTWithAlias::appendColumnName(WriteBuffer & ostr) const
 void ASTWithAlias::appendColumnNameWithoutAlias(WriteBuffer & ostr) const
 {
     appendColumnNameImpl(ostr);
+}
+
+void ASTWithAlias::serialize(WriteBuffer & buf) const
+{
+    writeBinary(alias, buf);
+    writeBinary(prefer_alias_to_column_name, buf);
+}
+
+void ASTWithAlias::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(alias, buf);
+    readBinary(prefer_alias_to_column_name, buf);
 }
 
 }

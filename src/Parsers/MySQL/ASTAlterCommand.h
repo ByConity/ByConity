@@ -75,6 +75,8 @@ public:
 
     String getID(char delim) const override { return "AlterCommand" + (delim + std::to_string(static_cast<int>(type))); }
 
+    ASTType getType() const override { return ASTType::ASTAlterCommand; }
+
 protected:
     void formatImpl(const FormatSettings & /*settings*/, FormatState & /*state*/, FormatStateStacked /*frame*/) const override
     {

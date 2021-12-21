@@ -1,5 +1,7 @@
 #include <Parsers/ASTSubquery.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
 #include <Common/SipHash.h>
 
@@ -58,6 +60,29 @@ void ASTSubquery::updateTreeHashImpl(SipHash & hash_state) const
     if (!cte_name.empty())
         hash_state.update(cte_name);
     IAST::updateTreeHashImpl(hash_state);
+}
+
+void ASTSubquery::serialize(WriteBuffer & buf) const
+{
+    ASTWithAlias::serialize(buf);
+
+    writeBinary(cte_name, buf);
+    serializeASTs(children, buf);
+}
+
+void ASTSubquery::deserializeImpl(ReadBuffer & buf)
+{
+    ASTWithAlias::deserializeImpl(buf);
+
+    readBinary(cte_name, buf);
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTSubquery::deserialize(ReadBuffer & buf)
+{
+    auto subquery = std::make_shared<ASTSubquery>();
+    subquery->deserializeImpl(buf);
+    return subquery;
 }
 
 }

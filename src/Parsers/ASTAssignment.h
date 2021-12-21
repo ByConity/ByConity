@@ -18,6 +18,8 @@ public:
 
     String getID(char delim) const override { return "Assignment" + (delim + column_name); }
 
+    ASTType getType() const override { return ASTType::ASTAssignment; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTAssignment>(*this);

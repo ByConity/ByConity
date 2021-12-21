@@ -14,6 +14,8 @@ struct ASTCheckQuery : public ASTQueryWithTableAndOutput
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "CheckQuery" + (delim + database) + delim + table; }
 
+    ASTType getType() const override { return ASTType::ASTCheckQuery; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTCheckQuery>(*this);

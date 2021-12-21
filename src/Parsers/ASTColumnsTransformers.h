@@ -20,6 +20,9 @@ class ASTColumnsApplyTransformer : public IASTColumnsTransformer
 {
 public:
     String getID(char) const override { return "ColumnsApplyTransformer"; }
+
+    ASTType getType() const override { return ASTType::ASTColumnsApplyTransformer; }
+
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTColumnsApplyTransformer>(*this);
@@ -41,6 +44,9 @@ class ASTColumnsExceptTransformer : public IASTColumnsTransformer
 public:
     bool is_strict = false;
     String getID(char) const override { return "ColumnsExceptTransformer"; }
+
+    ASTType getType() const override { return ASTType::ASTColumnsExceptTransformer; }
+
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTColumnsExceptTransformer>(*this);
@@ -64,6 +70,7 @@ public:
     {
     public:
         String getID(char) const override { return "ColumnsReplaceTransformer::Replacement"; }
+
         ASTPtr clone() const override
         {
             auto replacement = std::make_shared<Replacement>(*this);
@@ -82,6 +89,9 @@ public:
 
     bool is_strict = false;
     String getID(char) const override { return "ColumnsReplaceTransformer"; }
+
+    ASTType getType() const override { return ASTType::ASTColumnsReplaceTransformer; }
+    
     ASTPtr clone() const override
     {
         auto clone = std::make_shared<ASTColumnsReplaceTransformer>(*this);

@@ -207,6 +207,8 @@ public:
 
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTAlterCommand; }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
@@ -223,6 +225,8 @@ public:
     bool isFreezeAlter() const;
 
     String getID(char) const override;
+
+    ASTType getType() const override { return ASTType::ASTAlterQuery; }
 
     ASTPtr clone() const override;
 

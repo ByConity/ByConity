@@ -20,6 +20,8 @@ public:
     String getID(char delim) const override { return "NameTypePair" + (delim + name); }
     ASTPtr clone() const override;
 
+    ASTType getType() const override { return ASTType::ASTNameTypePair; }
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

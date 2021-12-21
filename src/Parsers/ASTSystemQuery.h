@@ -90,6 +90,8 @@ public:
 
     String getID(char) const override { return "SYSTEM query"; }
 
+    ASTType getType() const override { return ASTType::ASTSystemQuery; }
+
     ASTPtr clone() const override;
 
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string & new_database) const override
