@@ -39,6 +39,17 @@ namespace DB
                  << "exchange_status_port: " << exchange_status_port;
             return ostr.str();
         }
+        inline bool operator == (AddressInfo const& rhs) const
+        {
+            return (this->host_name == rhs.host_name && this->port == rhs.port);
+        }
+        inline bool operator < (AddressInfo const& rhs) const
+        {
+            int ret = host_name.compare(rhs.host_name);
+            if (ret)
+                return ret < 0;
+            return port < rhs.port;
+        }
 
     private:
         String host_name;

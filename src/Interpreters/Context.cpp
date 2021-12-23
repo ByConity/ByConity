@@ -38,6 +38,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DDLTask.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/ActionLocksManager.h>
@@ -370,6 +371,11 @@ struct ContextSharedPart
     String interserver_io_host;                             /// The host name by which this server is available for other servers.
     UInt16 interserver_io_port = 0;                         /// and port.
     String interserver_scheme;                              /// http or https
+
+    UInt16 exchange_port;                                   /// Exchange port
+    UInt16 exchange_status_port;                            /// Exchange status port
+    bool complex_query_active {false};
+
     MultiVersion<InterserverCredentials> interserver_io_credentials;
 
     String path;                                            /// Path to the data directory, with a slash at the end.
@@ -397,6 +403,7 @@ struct ContextSharedPart
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list;                               /// Executing queries at the moment.
+    SegmentSchedulerPtr segment_scheduler;
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
     PlanSegmentProcessList plan_segment_process_list;       /// The list of running plansegments in the moment;
     ReplicatedFetchList replicated_fetch_list;
@@ -648,6 +655,19 @@ const MergeList & Context::getMergeList() const { return shared->merge_list; }
 ReplicatedFetchList & Context::getReplicatedFetchList() { return shared->replicated_fetch_list; }
 const ReplicatedFetchList & Context::getReplicatedFetchList() const { return shared->replicated_fetch_list; }
 
+SegmentSchedulerPtr Context::getSegmentScheduler()
+{
+    if (!shared->segment_scheduler)
+        shared->segment_scheduler = std::make_shared<SegmentScheduler>();
+    return shared->segment_scheduler;
+}
+
+SegmentSchedulerPtr Context::getSegmentScheduler() const
+{
+    if (!shared->segment_scheduler)
+        shared->segment_scheduler = std::make_shared<SegmentScheduler>();
+    return shared->segment_scheduler;
+}
 
 void Context::enableNamedSessions()
 {
@@ -1968,6 +1988,44 @@ std::pair<String, UInt16> Context::getInterserverIOAddress() const
 
     return { shared->interserver_io_host, shared->interserver_io_port };
 }
+
+void Context::setExchangePort(UInt16 port)
+{
+    shared->exchange_port = port;
+}
+
+
+UInt16 Context::getExchangePort() const
+{
+    if (shared->exchange_port == 0)
+        throw Exception("Parameter 'exchange_port' required for replication is not specified in configuration file.",
+                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+    return shared->exchange_port;
+}
+
+void Context::setExchangeStatusPort(UInt16 port)
+{
+    shared->exchange_status_port = port;
+}
+
+UInt16 Context::getExchangeStatusPort() const
+{
+    if (shared->exchange_status_port == 0)
+        throw Exception("Parameter 'exchange_status_port' required for replication is not specified in configuration file.",
+                        ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+    return shared->exchange_status_port;
+}
+
+void Context::setComplexQueryActive(bool active)
+{
+    shared->complex_query_active = active;
+}
+
+bool Context::getComplexQueryActive()
+{
+    return shared->complex_query_active;
+}
+
 
 void Context::setInterserverScheme(const String & scheme)
 {

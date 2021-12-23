@@ -352,3 +352,6 @@ endif ()
 add_subdirectory(fast_float)
 
 add_subdirectory(incubator-brpc)
+if(OPENSSL_INCLUDE_DIR)
+    target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
+endif()

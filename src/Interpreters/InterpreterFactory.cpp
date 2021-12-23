@@ -107,6 +107,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
 
     if (use_distributed_stages)
     {
+        if (!context->getComplexQueryActive())
+            throw Exception("Server config missing exchange_status_port and exchange_port cannot execute query with enable_distributed_stages enabled",
+                            ErrorCodes::LOGICAL_ERROR);
+
         if (query->as<ASTSelectQuery>() || query->as<ASTSelectWithUnionQuery>())
             return std::make_unique<InterpreterDistributedStages>(query, context);
     }

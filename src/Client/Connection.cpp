@@ -270,6 +270,26 @@ UInt16 Connection::getPort() const
     return port;
 }
 
+UInt16 Connection::getExchangePort() const
+{
+    return exchange_port;
+}
+
+UInt16 Connection::getExchangeStatusPort() const
+{
+    return exchange_status_port;
+}
+
+const String & Connection::getUser() const
+{
+    return user;
+}
+
+const String & Connection::getPassword() const
+{
+    return password;
+}
+
 void Connection::getServerVersion(const ConnectionTimeouts & timeouts,
                                   String & name,
                                   UInt64 & version_major,
@@ -507,7 +527,7 @@ void Connection::sendQuery(
 
 void Connection::sendPlanSegment(
     const ConnectionTimeouts & timeouts,
-    const PlanSegmentPtr & plan_segment,
+    const PlanSegment * plan_segment,
     const Settings * settings,
     const ClientInfo * client_info
 )

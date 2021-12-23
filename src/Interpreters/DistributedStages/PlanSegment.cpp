@@ -209,6 +209,8 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     current_address.serialize(buf);
 
     writeBinary(cluster_name, buf);
+    writeBinary(parallel, buf);
+    writeBinary(exchange_parallel_size, buf);
 }
 
 void PlanSegment::deserialize(ReadBuffer & buf)
@@ -234,6 +236,8 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     current_address.deserialize(buf);
 
     readBinary(cluster_name, buf);
+    readBinary(parallel, buf);
+    readBinary(exchange_parallel_size, buf);
 }
 
 PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context_)

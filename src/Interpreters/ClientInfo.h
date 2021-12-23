@@ -51,6 +51,8 @@ public:
     String current_user;
     String current_query_id;
     Poco::Net::SocketAddress current_address;
+    /// Use current user and password when sending query to replica leader
+    String current_password;
 
 #if defined(ARCADIA_BUILD)
     /// This field is only used in foreign "Arcadia" build.
