@@ -1094,13 +1094,13 @@ void MergeJoin::RightBlockInfo::setUsed(size_t start, size_t length)
 
 void MergeJoin::serialize(WriteBuffer & buf) const
 {
-    serializeTableJoin(*table_join, buf);
+    table_join->serialize(buf);
     serializeBlock(right_sample_block, buf);
 }
 
 JoinPtr MergeJoin::deserialize(ReadBuffer & buf, ContextPtr context)
 {
-    auto table_join = deserializeTableJoin(buf, context);
+    auto table_join = TableJoin::deserialize(buf, context);
     auto right_sample_block = deserializeBlock(buf);
 
     return std::make_shared<MergeJoin>(table_join, right_sample_block);

@@ -95,7 +95,9 @@ void IdentifierSemanticImpl::deserialize(ReadBuffer & buf)
     bool has_member;
     readBinary(has_member, buf);
     if (has_member){
-        readBinary(membership.value(), buf);
+        size_t member_tmp;
+        readBinary(member_tmp, buf);
+        membership = member_tmp;
     }
 
     readBinary(table, buf);

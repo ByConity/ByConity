@@ -41,6 +41,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeStep(QueryPlan::Node * node, 
     }
     // FIXME
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
+    remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
     return plan_segment_context.query_plan.getLastNode();

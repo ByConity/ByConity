@@ -29,6 +29,17 @@ ExchangeStepResult ExchangeStepVisitor::visitChild(QueryPlan::Node * node, Excha
     return VisitorUtil::accept(node, *this, exchange_context);
 }
 
+void ExchangeStepVisitor::addExchange(QueryPlan::Node * node, ExchangeMode mode, const Partitioning & partition, ExchangeStepContext & exchange_context)
+{
+    auto exchange_step = std::make_unique<ExchangeStep>(node->step->getInputStreams(), mode, partition);
+    exchange_step->setStepDescription(exchangeModeToString(mode));
+    QueryPlan::Node exchange_node{.step = std::move(exchange_step)};
+    exchange_context.query_plan.addNode(std::move(exchange_node));
+    auto last_node = exchange_context.query_plan.getLastNode();
+    last_node->children.push_back(last_node);
+    node->children.swap(last_node->children);
+}
+
 ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
     visitPlan(node, exchange_context);
@@ -43,12 +54,7 @@ ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::No
     for (auto & index : params.keys)
         keys.push_back(result_header.safeGetByPosition(index).name);
 
-    auto exchange_step = std::make_unique<ExchangeStep>(step->getInputStreams(), ExchangeMode::REPARTITION, Partitioning(keys));
-    QueryPlan::Node exchange_node{.step = std::move(exchange_step)};
-    exchange_context.query_plan.addNode(std::move(exchange_node));
-    auto last_node = exchange_context.query_plan.getLastNode();
-    last_node->children.push_back(last_node);
-    node->children.swap(last_node->children);
+    addExchange(node, ExchangeMode::REPARTITION, Partitioning(keys), exchange_context);
 
     return nullptr;
 }
@@ -78,6 +84,7 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinStep(QueryPlan::Node * node, Ex
     auto add_exchange = [&](DataStream data_stream, size_t index, ExchangeMode mode, const Names & keys)
     {
         auto exchange_step = std::make_unique<ExchangeStep>(DataStreams{data_stream}, mode, Partitioning(keys));
+        exchange_step->setStepDescription(exchangeModeToString(mode));
         QueryPlan::Node exchange_node{.step = std::move(exchange_step), .children = {node->children[index]}};
 
         exchange_context.query_plan.addNode(std::move(exchange_node));
@@ -103,12 +110,54 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinStep(QueryPlan::Node * node, Ex
     return nullptr;
 }
 
+ExchangeStepResult ExchangeStepVisitor::visitLimitStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+{
+    visitPlan(node, exchange_context);
+
+    if (!exchange_context.has_gathered)
+    {
+        addExchange(node, ExchangeMode::GATHER, Partitioning(Names{}), exchange_context);
+        exchange_context.has_gathered = true;
+    }
+
+    return nullptr;
+}
+
+ExchangeStepResult ExchangeStepVisitor::visitMergingSortedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+{
+    visitPlan(node, exchange_context);
+
+    if (!exchange_context.has_gathered)
+    {
+        addExchange(node, ExchangeMode::GATHER, Partitioning(Names{}), exchange_context);
+        exchange_context.has_gathered = true;
+    }
+
+    return nullptr;
+}
+
+void ExchangeStepVisitor::addGather(QueryPlan & query_plan, ExchangeStepContext & exchange_context)
+{
+    if (!exchange_context.has_gathered)
+    {
+        DataStreams data_streams = {query_plan.getCurrentDataStream()};
+        auto max_threads = exchange_context.context->getSettingsRef().max_threads;
+        auto union_step = std::make_unique<UnionStep>(std::move(data_streams), max_threads);
+        query_plan.addStep(std::move(union_step));
+
+        addExchange(query_plan.getRoot(), ExchangeMode::GATHER, Partitioning(Names{}), exchange_context);
+        exchange_context.has_gathered = true;
+    }
+}
+
 void AddExchangeRewriter::rewrite(QueryPlan & query_plan, ExchangeStepContext & exchange_context)
 {
     ExchangeStepVisitor visitor{};
     ExchangeStepResult result_node = VisitorUtil::accept(query_plan.getRoot(), visitor, exchange_context);
     if (result_node)
         query_plan.setRoot(result_node);
+    
+    visitor.addGather(query_plan, exchange_context);
 }
 
 

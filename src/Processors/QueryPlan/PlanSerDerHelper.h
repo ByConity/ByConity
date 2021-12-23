@@ -99,9 +99,6 @@ AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer &
 void serializeArrayJoinAction(const ArrayJoinActionPtr & array_join, WriteBuffer & buf);
 ArrayJoinActionPtr deserializeArrayJoinAction(ReadBuffer & buf, ContextPtr context);
 
-void serializeTableJoin(const TableJoin & table_join, WriteBuffer & buf);
-TableJoinPtr deserializeTableJoin(ReadBuffer & buf, ContextPtr context);
-
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context);
 

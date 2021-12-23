@@ -20,10 +20,20 @@ class TableJoin;
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
+enum JoinType : UInt8
+{
+    Hash = 0,
+    Merge,
+    NestedLoop,
+    Switcher,
+};
+
 class IJoin
 {
 public:
     virtual ~IJoin() = default;
+
+    virtual JoinType getType() const = 0;
 
     virtual const TableJoin & getTableJoin() const = 0;
 

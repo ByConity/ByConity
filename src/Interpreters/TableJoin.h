@@ -217,6 +217,10 @@ public:
     Block getRequiredRightKeys(const Block & right_table_keys, std::vector<String> & keys_sources) const;
 
     String renamedRightColumnName(const String & name) const;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserializeImpl(ReadBuffer & buf, ContextPtr context);
+    static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
 };
 
 }

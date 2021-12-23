@@ -43,6 +43,9 @@ public:
     String name;
     DataTypePtr type;
 
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
+
 private:
     DataTypePtr type_in_storage;
     std::optional<size_t> subcolumn_delimiter_position;
@@ -105,6 +108,9 @@ public:
 
     /// Try to get column by name, return empty optional if column not found
     std::optional<NameAndTypePair> tryGetByName(const std::string & name) const;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
 };
 
 }

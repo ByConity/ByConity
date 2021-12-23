@@ -26,6 +26,8 @@ class NestedLoopJoin : public IJoin
 public:
     NestedLoopJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_, const ContextPtr& context);
 
+    JoinType getType() const override { return JoinType::NestedLoop; }
+
     bool addJoinedBlock(const Block & block, bool check_limits = true) override;
     void joinBlock(Block &, ExtraBlockPtr & not_processed) override;
     void setTotals(const Block &) override;
