@@ -3743,7 +3743,7 @@ void StorageHaMergeTree::clearEmptyParts()
 }
 
 // Partition helpers
-void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
+void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & /*query*/)
 {
     auto & settings = query_context->getSettingsRef();
 
@@ -3753,7 +3753,7 @@ void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, Co
     dropAllPartsInPartitions(zookeeper, {partition_id}, detach, settings.replication_alter_partitions_sync > 0);
 }
 
-void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context)
+void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, const ASTPtr & /*query*/)
 {
     auto & settings = query_context->getSettingsRef();
 

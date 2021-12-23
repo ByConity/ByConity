@@ -33,11 +33,15 @@ struct FutureMergedMutatedPart
     MergeTreePartInfo part_info;
     MergeTreeData::DataPartsVector parts;
     MergeType merge_type = MergeType::REGULAR;
+    /// for unique table: hold snapshot of delete bitmap for each input part
+    MergeTreeData::DataPartsDeleteSnapshot delete_snapshot;
+    /// To determine how to get delete bitmap
+    MergeTreeData::MergingParams merging_params;
 
     const MergeTreePartition & getPartition() const { return parts.front()->partition; }
 
     FutureMergedMutatedPart() = default;
-
+    explicit FutureMergedMutatedPart(const MergeTreeData::MergingParams & merging_params_) : merging_params(merging_params_) {}
     explicit FutureMergedMutatedPart(MergeTreeData::DataPartsVector parts_)
     {
         assign(std::move(parts_));
@@ -52,6 +56,19 @@ struct FutureMergedMutatedPart
     void assign(MergeTreeData::DataPartsVector parts_, MergeTreeDataPartType future_part_type);
 
     void updatePath(const MergeTreeData & storage, const ReservationPtr & reservation);
+    DeleteBitmapPtr getDeleteBitmap(const MergeTreeData::DataPartPtr & part) const
+    {
+        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+        {
+            if (auto it = delete_snapshot.find(part); it != delete_snapshot.end())
+                return it->second;
+            return nullptr;
+        }
+        else
+        {
+            return part->getDeleteBitmap();
+        }
+    }
 };
 
 
@@ -129,6 +146,7 @@ public:
       * time_of_merge - the time when the merge was assigned.
       * Important when using ReplicatedGraphiteMergeTree to provide the same merge on replicas.
       */
+
     MergeTreeData::MutableDataPartPtr mergePartsToTemporaryPart(
         const FutureMergedMutatedPart & future_part,
         const StorageMetadataPtr & metadata_snapshot,
@@ -141,7 +159,8 @@ public:
         const Names & deduplicate_by_columns,
         const MergeTreeData::MergingParams & merging_params,
         const IMergeTreeDataPart * parent_part = nullptr,
-        const String & prefix = "");
+        const String & prefix = "",
+        const ActionBlocker * unique_table_blocker = nullptr);
 
     /// Mutate a single data part with the specified commands. Will create and return a temporary part.
     MergeTreeData::MutableDataPartPtr mutatePartToTemporaryPart(
@@ -158,7 +177,6 @@ public:
         MergeTreeData::MutableDataPartPtr & new_data_part,
         const MergeTreeData::DataPartsVector & parts,
         MergeTreeData::Transaction * out_transaction = nullptr);
-
 
     /// The approximate amount of disk space needed for merge or mutation. With a surplus.
     static size_t estimateNeededDiskSpace(const MergeTreeData::DataPartsVector & source_parts);

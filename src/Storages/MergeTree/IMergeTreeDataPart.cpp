@@ -20,6 +20,14 @@
 #include <Parsers/queryToString.h>
 #include <DataTypes/NestedUtils.h>
 
+#include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include <Storages/DiskUniqueKeyIndexCache.h>
+#include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/MaterializingBlockInputStream.h>
+#include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Poco/DirectoryIterator.h>
 
 namespace CurrentMetrics
 {
@@ -51,6 +59,7 @@ namespace ErrorCodes
     extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
     extern const int BAD_TTL_FILE;
     extern const int NOT_IMPLEMENTED;
+    extern const int UNKNOWN_FORMAT_VERSION;
 }
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
@@ -304,7 +313,6 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
     decrementStateMetric(state);
     decrementTypeMetric(part_type);
 }
-
 
 String IMergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) const
 {
@@ -1245,7 +1253,6 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
     auto disk = volume->getDisk();
     if (checksums.empty())
     {
-
         LOG_ERROR(
             storage.log,
             "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: checksums.txt is missing",
@@ -1347,7 +1354,6 @@ void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & di
     if (disk->exists(fs::path(path_to_clone) / relative_path))
     {
         LOG_WARNING(storage.log, "Path " + fullPath(disk, path_to_clone + relative_path) + " already exists. Will remove it and clone again.");
-        disk->removeRecursive(fs::path(path_to_clone) / relative_path / "");
     }
     disk->createDirectories(path_to_clone);
     volume->getDisk()->copy(getFullRelativePath(), disk, path_to_clone);
@@ -1553,4 +1559,597 @@ bool isInMemoryPart(const MergeTreeDataPartPtr & data_part)
     return (data_part && data_part->getType() == MergeTreeDataPartType::IN_MEMORY);
 }
 
+UInt32 IMergeTreeDataPart::numDeletedRows() const
+{
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        return delete_rows;
+    }
+    else if (delete_rows > 0 || is_delete_bitmap_cached)
+    {
+        /// we have loaded the delete bitmap before and cached its cardinality
+        return delete_rows;
+    }
+    else
+    {
+        DeleteBitmapPtr part_delete_bitmap = getDeleteBitmap();
+        return part_delete_bitmap ? delete_rows.load(std::memory_order_relaxed) : 0;
+    }
 }
+
+UInt64 IMergeTreeDataPart::getVersionFromPartition() const
+{
+    assert(storage.merging_params.partitionValueAsVersion());
+    if (!version_from_partition)
+        version_from_partition.emplace(partition.value[0].safeGet<UInt64>()); /// lazy init
+    return version_from_partition.value();
+}
+
+static MemoryUniqueKeyIndexPtr newUniqueArenaAndIndex(size_t num_elements, size_t extra_column_size)
+{
+    /// Choose arena initial size from 16~4096 based on estimated index size, reducing memory consumption for small part.
+    size_t arena_initial_size = 4096;
+    /// for an rough estimate, assume key to be 8 bytes
+    size_t estimate_arena_size = num_elements * (8 + extra_column_size);
+    if (estimate_arena_size < arena_initial_size)
+        arena_initial_size = std::max(static_cast<size_t>(16), roundUpToPowerOfTwoOrZero(estimate_arena_size));
+    return std::make_shared<MemoryUniqueKeyIndex>(num_elements, arena_initial_size);
+}
+
+void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::unique_lock<std::mutex> & unique_index_lock)
+{
+    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    assert(unique_index_lock.owns_lock());
+
+    Stopwatch watch;
+
+    /// load unique index from unique columns + optional version or is_offline column
+    // Names read_columns = storage.unique_key_expr->getRequiredColumns();
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    Names read_columns = metadata_snapshot->getColumnsRequiredForUniqueKey();
+    String extra_column_name = metadata_snapshot->extra_column_name;
+    size_t extra_column_size = metadata_snapshot->extra_column_size;
+
+    if (!extra_column_name.empty() && std::find(read_columns.begin(), read_columns.end(), extra_column_name) == read_columns.end())
+        read_columns.push_back(extra_column_name);
+
+    /// FIXME (UNIQUE KEY): Use delete bitmap to filter deleted rows, need to change
+    ///     read logic inside MergeTreeSequentialSource
+    Pipes pipes;
+    auto source = std::make_unique<MergeTreeSequentialSource>(
+            storage, metadata_snapshot, shared_from_this(),
+            /*delete_bitmap=*/nullptr,
+            read_columns,
+            /*direct_io=*/ false,
+            /*take_column_types_from_storage=*/true,
+            /*quite=*/false,
+            /*include_rowid_column=*/true);
+    pipes.emplace_back(Pipe(std::move(source)));
+
+    QueryPipeline pipeline;
+    pipeline.init(Pipe::unitePipes(std::move(pipes)));
+    pipeline.setMaxThreads(1);
+
+    BlockInputStreamPtr input = std::make_shared<MaterializingBlockInputStream>(
+        std::make_shared<ExpressionBlockInputStream>(
+            std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline)),
+             metadata_snapshot->getUniqueKeyExpression()));
+
+    MemoryUniqueKeyIndexPtr new_unique_index = newUniqueArenaAndIndex(numRowsRemovingDeletes(), extra_column_size);
+    ArenaPtr new_unique_index_arena = new_unique_index->getArena();
+
+    input->readPrefix();
+    while (const Block block = input->read())
+    {
+        const ColumnWithTypeAndName * extra_column = nullptr;
+        if (!extra_column_name.empty())
+            extra_column = &block.getByName(extra_column_name);
+        auto & rowid_column = block.getByName(StorageInMemoryMetadata::rowid_column_name);
+
+        size_t rows = block.rows();
+        for (size_t i = 0; i < rows; ++i)
+        {
+            WriteBufferFromOwnString buf;
+            for (auto & column_name : metadata_snapshot->getUniqueKeyColumns())
+            {
+                auto & col = block.getByName(column_name);
+                auto serialization = col.type->getDefaultSerialization();
+                serialization->serializeBinary(*col.column, i, buf);
+            }
+            String & key = buf.str();
+
+            const char * arena_key_start = nullptr;
+            if (extra_column)
+            {
+                /// write key's data and extra column
+                char * res = new_unique_index_arena->alloc(key.size() + extra_column_size);
+                memcpy(res, key.data(), key.size());
+                if (metadata_snapshot->version_type & metadata_snapshot->flag_explicit_version)
+                {
+                    UInt64 version = extra_column->column->getUInt(i);
+                    memcpy(res + key.size(), &version, extra_column_size);
+                }
+                else if (metadata_snapshot->version_type & metadata_snapshot->flag_is_offline)
+                {
+                    UInt8 is_offline_value = extra_column->column->getBool(i);
+                    memcpy(res + key.size(), &is_offline_value, extra_column_size);
+                }
+                arena_key_start = res;
+            }
+            else
+            {
+                arena_key_start = new_unique_index_arena->insert(key.data(), key.size());
+            }
+            (*new_unique_index)[StringRef(arena_key_start, key.size())] = static_cast<UInt32>(rowid_column.column->getUInt(i));
+        }
+    }
+    input->readSuffix();
+    memory_unique_index = std::move(new_unique_index);
+    auto memory_bytes = new_unique_index_arena->size() + memory_unique_index->getBufferSizeInBytes();
+    memory_unique_index->setMemoryBytes(memory_bytes);
+    memory_unique_index->setAccessTime(time(nullptr));
+    LOG_DEBUG(
+        storage.log,
+        "loaded unique index ({}): size={}, memory={}, duration={}ms",
+        name,
+        memory_unique_index->size(),
+        formatReadableSizeWithBinarySuffix(memory_bytes),
+        watch.elapsedMilliseconds());
+}
+
+DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
+{
+    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    return std::make_shared<DiskUniqueKeyIndex>(getFullPath() + UKI_FILE_NAME, storage.getContext()->getDiskUniqueKeyIndexBlockCache());
+}
+
+UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        return 0;
+
+    if (!memory_unique_index)
+        return 0; /// index is not loaded, no need to GC
+
+    UInt64 cur_time = now ? *now  : time(nullptr);
+    std::unique_lock lock(unique_index_mutex);
+    if (!memory_unique_index)
+        return 0; /// index is not loaded, no need to GC
+
+    auto index_size_before = memory_unique_index->size();
+    auto memory_bytes_before = memory_unique_index->getMemorySize();
+    auto num_rows = numRowsRemovingDeletes();
+
+    auto settings = storage.getSettings();
+    /// note that unique_index_access_time can't be 0 because unique index has been loaded
+    bool idle_timeout = memory_unique_index->getAccessTime() + settings->unique_index_max_idle_seconds < cur_time;
+    if (force_unload || num_rows == 0 || idle_timeout)
+    {
+        memory_unique_index.reset();
+        String reason = force_unload ? "force" : (num_rows == 0 ? "all rows have been deleted" : "idle timeout");
+        LOG_DEBUG(storage.log, "unload unique index of {}, reason: {}", name, reason);
+        return memory_bytes_before;
+    }
+
+    /// gc when more than half of elements in index have been deleted
+    if (static_cast<double>(num_rows) / memory_unique_index->size() >= 0.5)
+        return 0;
+
+    Stopwatch watch;
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    size_t extra_column_size = metadata_snapshot->extra_column_size;
+    MemoryUniqueKeyIndexPtr new_unique_index = newUniqueArenaAndIndex(num_rows, extra_column_size);
+    ArenaPtr new_unique_index_arena = new_unique_index->getArena();
+    /// copy all existing elements from old index to new
+    for (auto it = memory_unique_index->begin(), end = memory_unique_index->end(); it != end; ++it)
+    {
+        if (delete_bitmap && delete_bitmap->contains(it->getMapped()))
+            continue;
+        size_t value_size = it->getKey().size + extra_column_size;
+        char * dst = new_unique_index_arena->alloc(value_size);
+        memcpy(dst, it->getKey().data, value_size);
+        (*new_unique_index)[StringRef(dst, it->getKey().size)] = it->getMapped();
+    }
+    /// free memory of old index
+    memory_unique_index = std::move(new_unique_index);
+    auto memory_bytes_after = new_unique_index_arena->size() + memory_unique_index->getBufferSizeInBytes();
+    memory_unique_index->setMemoryBytes(memory_bytes_after);
+    auto duration = watch.elapsedMilliseconds();
+    if (duration >= 100)
+        LOG_DEBUG(
+            storage.log,
+            "unique index gc ({}):size {}->{}, memory {}->{}, duration {} ms",
+            name,
+            index_size_before,
+            memory_unique_index->size(),
+            formatReadableSizeWithBinarySuffix(memory_bytes_before),
+            formatReadableSizeWithBinarySuffix(memory_bytes_after),
+            duration);
+    else
+        LOG_TRACE(
+            storage.log,
+            "unique index gc ({}):size {}->{}, memory {}->{}, duration {} ms",
+            name,
+            index_size_before,
+            memory_unique_index->size(),
+            formatReadableSizeWithBinarySuffix(memory_bytes_before),
+            formatReadableSizeWithBinarySuffix(memory_bytes_after),
+            duration);
+    return memory_bytes_before - memory_bytes_after;
+}
+
+void IMergeTreeDataPart::writeDeleteFileWithVersion(const DeleteBitmapPtr & bitmap, UInt64 version) const
+{
+    /// serialize bitmap to buffer
+    size_t size = bitmap->getSizeInBytes();
+    PODArray<char> buffer(size);
+    size = bitmap->write(buffer.data());
+
+    /// write to file
+    String path = getDeleteFilePathWithVersion(version);
+    WriteBufferFromFile out(path, 4096);
+    writeIntBinary(delete_file_format_version, out);
+    writeIntBinary(size, out);
+    out.write(buffer.data(), size);
+}
+
+String IMergeTreeDataPart::getDeleteFilePath() const
+{
+    return getFullPath() + delete_file_prefix + ".del";
+}
+
+void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap) const
+{
+    /// serialize bitmap to buffer
+    size_t size = bitmap->getSizeInBytes();
+    PODArray<char> buffer(size);
+    size = bitmap->write(buffer.data());
+
+    /// write to file
+    String path = getDeleteFilePath();
+    WriteBufferFromFile out(path, 4096);
+    writeIntBinary(size, out);
+    out.write(buffer.data(), size);
+}
+
+void IMergeTreeDataPart::writeDeleteFileToBuffer(const DeleteBitmapPtr & bitmap, WriteBuffer & ostr) const
+{
+    if (bitmap)
+    {
+        /// serialize bitmap to buffer
+        size_t size = bitmap->getSizeInBytes();
+        PODArray<char> buffer(size);
+        size = bitmap->write(buffer.data());
+
+        writeIntBinary(size, ostr);
+        ostr.write(buffer.data(), size);
+    }
+}
+
+void IMergeTreeDataPart::renameDeleteFileToVersion(UInt64 version) const
+{
+    auto existing_version = listDeleteFiles(/*min_version*/ 0);
+    if (existing_version.empty())
+    {
+        throw Exception("Expect delete file exists for renaming", ErrorCodes::LOGICAL_ERROR);
+    }
+    UInt64 max_version = existing_version.back();
+    String from_path = getDeleteFilePathWithVersion(max_version);
+    String to_path = getDeleteFilePathWithVersion(version);
+    LOG_TRACE(storage.log, "Renaming part delete file from: {} to {}", from_path, to_path);
+    Poco::File(from_path).renameTo(to_path);
+}
+
+std::vector<UInt64> IMergeTreeDataPart::listDeleteFiles(UInt64 min_version) const
+{
+    std::vector<UInt64> result;
+    Poco::DirectoryIterator end;
+    String prefix = String(delete_file_prefix) + ".";
+    for (auto it = Poco::DirectoryIterator(getFullPath()); it != end; ++it)
+    {
+        auto & filename = it.name();
+        if (startsWith(filename, prefix))
+        {
+            auto suffix = filename.substr(prefix.size());
+            ReadBufferFromString buf(suffix);
+            UInt64 ver;
+            if (!tryReadIntText(ver, buf))
+                LOG_WARNING(storage.log, "Unrecognized file {} in part {}", filename, name);
+            else if (ver >= min_version)
+                result.push_back(ver);
+        }
+    }
+    std::sort(result.begin(), result.end());
+    return result;
+}
+
+UInt32 IMergeTreeDataPart::clearOldDeleteFilesIfNeeded(UInt64 commit_version, bool & retry_next_time) const
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        throw Exception("No need to clear delete files for Non-Unique table " + storage.log_name, ErrorCodes::LOGICAL_ERROR);
+
+    auto settings = storage.getSettings();
+    auto & stat = delete_files_stat;
+    auto now = time(nullptr);
+    bool has_updates = stat.last_add_time.load(std::memory_order_relaxed) >= stat.last_scan_dir_time;
+    bool can_cache_more_versions = stat.versions.size() < settings->max_cached_delete_versions_per_part;
+    bool reach_scan_interval = stat.last_scan_dir_time + settings->delete_file_gc_part_scan_interval <= static_cast<UInt64>(now);
+    bool scanned = false;
+    if (has_updates && can_cache_more_versions && reach_scan_interval)
+    {
+        /// scan dir for delete files
+        scanned = true;
+        stat.last_scan_dir_time = now;
+        UInt64 min_version = stat.versions.empty() ? 0 : stat.versions.front();
+        auto new_versions = listDeleteFiles(min_version);
+        LOG_TRACE(storage.log, "Scanned directory for part {} and found {} delete files >= {}", name, new_versions.size(), min_version);
+        std::swap(stat.versions, new_versions);
+    }
+
+    /// all versions (excluding current version) <= commit version can be deleted
+    UInt32 num_removed = 0;
+    auto remove_before = std::min(delete_version.load(std::memory_order_acquire), commit_version + 1);
+    auto new_begin = std::lower_bound(stat.versions.begin(), stat.versions.end(), remove_before);
+    for (auto it = stat.versions.begin(); it < new_begin; ++it)
+    {
+        Poco::File file(getDeleteFilePathWithVersion(*it));
+        file.remove();
+        num_removed++;
+    }
+    if (num_removed > 0)
+    {
+        LOG_TRACE(storage.log, "Removed {} delete files in [{},{}] from {}", num_removed, stat.versions.front(), *(new_begin - 1), name);
+        std::vector<UInt64> new_versions {new_begin, stat.versions.end()};
+        std::swap(stat.versions, new_versions);
+    }
+    retry_next_time = !scanned && num_removed == 0;
+    return num_removed;
+}
+
+UInt32 IMergeTreeDataPart::clearDeleteFilesExceptCurrentVersion() const
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        throw Exception("No need to clear delete files for Non-Unique table " + storage.log_name, ErrorCodes::LOGICAL_ERROR);
+
+    auto & stat = delete_files_stat;
+
+    /// scan dir for delete files first
+    stat.last_scan_dir_time = time(nullptr);
+    UInt64 min_version = stat.versions.empty() ? 0 : stat.versions.front();
+    auto new_versions = listDeleteFiles(min_version);
+    LOG_TRACE(storage.log, "Scanned directory for part {} and found {} delete files >= {}", name, new_versions.size(), min_version);
+    std::swap(stat.versions, new_versions);
+
+    /// all versions except current version will be removed.
+    UInt32 num_removed = 0;
+    auto current_version = delete_version.load(std::memory_order_relaxed);
+    for (auto it = stat.versions.begin(); it < stat.versions.end(); ++it)
+    {
+        if (*it != current_version)
+        {
+            Poco::File file(getDeleteFilePathWithVersion(*it));
+            file.remove();
+            num_removed++;
+            LOG_TRACE(storage.log, "Remove unneeded delete file at version: {} for part: {}", *it, info.getPartName());
+        }
+    }
+    if (num_removed > 0)
+    {
+        LOG_TRACE(storage.log, "Total removed {} delete files.", num_removed);
+        std::vector<UInt64> tmp = {current_version};
+        std::swap(stat.versions, tmp);
+    }
+    return num_removed;
+}
+
+DeleteBitmapPtr IMergeTreeDataPart::getDeleteBitmap() const
+{
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// For UniqueMergeTree, the latest delete bitmap is always cached in the field below
+        return delete_bitmap;
+    }
+    else
+    {
+        return nullptr;
+        /// For ordinary MergeTree, each part contains at most one delete bitmap.
+        /// A part has a delete bitmap if and only if the delete file is contained in the checksums.
+        /// A global DeleteBitmapCache is used to cache hot delete bitmaps.
+        // const_cast<IMergeTreeDataPart &>(*this).loadChecksumsIfNeed();
+        // if (!checksums.files.count(DELETE_BITMAP_FILE_NAME))
+        //     return nullptr; /// the part doesn't have a delete bitmap
+
+        // Stopwatch watch;
+        // auto cache = storage.getContext()->getDeleteBitmapCache();
+        // DeleteBitmapPtr bitmap;
+        // bool hit_cache = false;
+
+        // /// Data part's memory address is used as the cache key.
+        // auto addr = reinterpret_cast<uintptr_t>(this);
+        // String cache_key(reinterpret_cast<char *>(&addr), sizeof(addr));
+
+        // /// In order to prevent a data part from picking up a delete bitmap cached by
+        // /// another freed data part with the same memory address, cache is searched only if
+        // /// the part has inserted its delete bitmap into the cache before.
+        // if (is_delete_bitmap_cached)
+        // {
+        //     hit_cache = cache->lookup(cache_key, bitmap);
+        // }
+
+        // if (!hit_cache)
+        // {
+        //     bitmap = readDeleteFile(true);
+        //     if (!bitmap)
+        //         throw Exception("Get null bitmap for part " + name, ErrorCodes::LOGICAL_ERROR);
+
+        //     cache->insert(cache_key, bitmap);
+        //     if (!is_delete_bitmap_cached)
+        //     {
+        //         delete_rows = static_cast<UInt32>(bitmap->cardinality());
+        //         const_cast<IMergeTreeDataPart &>(*this).is_delete_bitmap_cached = true;
+        //     }
+        //     LOG_TRACE(storage.log, "part " + name + " loaded delete bitmap (cardinality=" + toString(delete_rows.load(std::memory_order_relaxed)) + ") in " +
+        //                            toString(watch.elapsedMilliseconds()) + " ms");
+        // }
+
+        // return bitmap;
+    }
+}
+
+DeleteBitmapPtr IMergeTreeDataPart::readDeleteFileWithVersion(UInt64 version, bool log_on_error) const
+{
+    String path = getDeleteFilePathWithVersion(version);
+    UInt8 format_version;
+    try
+    {
+        auto in = openForReading(volume->getDisk(), path);
+        readIntBinary(format_version, *in);
+        if (format_version != delete_file_format_version)
+            throw Exception("Unknown delete file version: " + toString(format_version), ErrorCodes::UNKNOWN_FORMAT_VERSION);
+        size_t buf_size;
+        readIntBinary(buf_size, *in);
+        PODArray<char> buf(buf_size);
+        in->read(buf.data(), buf_size);
+        Roaring bitmap = Roaring::read(buf.data());
+        return std::make_shared<Roaring>(std::move(bitmap));
+    }
+    catch (...)
+    {
+        if (log_on_error)
+            LOG_ERROR(storage.log, "Failed to load delete file {} : {}", path, DB::getCurrentExceptionMessage(false));
+        throw;
+    }
+}
+
+void IMergeTreeDataPart::loadChecksumsIfNeed()
+{
+    /// lock is required here to prevent from multi-thread problems when initialize checksums.
+    /// Eg: Part in cache may be used by multiple threads.
+
+    /// Use read lock to check empty first to avoid same table subquery dead lock.
+    /// Such as
+    ///   SELECT arrayJoin(retention4(10, '2020-04-22', '2020-04-25')(first_events, return_events)) FROM
+    ///     (SELECT * FROM (SELECT hash_uid, genArray(10, 1587484800, 86400)(server_time) AS first_events FROM test_func_retention4 where first_day GROUP BY hash_uid)
+    ///     LEFT JOIN (SELECT hash_uid, genArray(10, 1587484800, 86400)(server_time) AS return_events FROM test_func_retention4 GROUP BY hash_uid) USING hash_uid);
+    ///  In function `executeFetchColumns` the pipeline.streams are constructed.
+    ///  1. It will construct the left subquery first, the `MergeTreeDataSelectExecutor::readFromParts` will be called.
+    ///     This function will first call `loadChecksumsIfNeed`, then will construct `MergeTreeSelectBlockInputStream`, which will hold the read lock of `columns_lock`
+    ///  2. Then it will construct the right subquery, also the `MergeTreeDataSelectExecutor::readFromParts` will be called.
+    ///  In order to avoid dead lock in the second subquery's streams construction, we use read lock to check the checksums.empty()
+    if (unlikely(!checksum_loaded))
+    {
+        std::unique_lock<std::shared_mutex> load_checksum_lock(columns_lock);
+        if (!checksums.empty())
+        {
+            checksum_loaded = true;
+        }
+        else if (!checksum_loaded)
+        {
+            /// Memory should not be limited during ATTACH TABLE query.
+            /// This is already true at the server startup but must be also ensured for manual table ATTACH.
+            /// Motivation: memory for index is shared between queries - not belong to the query itself.
+            MemoryTracker::BlockerInThread temporarily_disable_memory_tracker;
+            loadChecksums(true);
+            checksum_loaded = true;
+        }
+    }
+}
+
+UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    {
+        throw Exception("getUniqueKeyIndex of " + storage.log_name + " which doesn't have unique key", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (numRowsRemovingDeletes() == 0)
+        return std::make_shared<UniqueKeyIndex>(); /// return empty index for empty part
+
+    if (uki_type == UkiType::UNKNOWN)
+    {
+        if (!storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method
+            || !storage.getSettings()->enable_disk_based_unique_key_index || !Poco::File(getFullPath() + UKI_FILE_NAME).exists())
+            const_cast<IMergeTreeDataPart &>(*this).uki_type = UkiType::MEMORY;
+        else
+        {
+            const_cast<IMergeTreeDataPart &>(*this).uki_type = UkiType::DISK;
+            String key = getMemoryAddress();
+            storage.unique_key_index_cache->remove(key);
+        }
+    }
+
+    if (uki_type == UkiType::MEMORY)
+    {
+        std::unique_lock lock(unique_index_mutex);
+        if (!memory_unique_index)
+            const_cast<IMergeTreeDataPart *>(this)->loadMemoryUniqueIndex(lock);
+        memory_unique_index->setAccessTime(time(nullptr));
+        return memory_unique_index;
+    }
+    else
+    {
+        if (!storage.unique_key_index_cache)
+        {
+            throw Exception("unique_key_index_cache of " + storage.log_name + " is nullptr", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        /// Data part's memory address is used as the cache key.
+        String key = getMemoryAddress();
+        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadDiskUniqueIndex(); };
+        return storage.unique_key_index_cache->getOrSet(key, std::move(load_func)).first;
+    }
+}
+
+bool IMergeTreeDataPart::getValueFromUniqueIndex(
+    const UniqueKeyIndexPtr & unique_key_index, const String & key, UInt32 & rowid, UInt64 * version, UInt8 * is_offline) const
+{
+    auto num_rows = numRowsRemovingDeletes();
+    if (num_rows == 0)
+        return false; /// all rows have been deleted
+
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    String version_slice;
+    size_t version_size = 0;
+    size_t version_type = 0;
+    if (version)
+    {
+        if (metadata_snapshot->version_type & metadata_snapshot->flag_partition_as_version)
+        {
+            version_size = 0;
+            version_type = 1;
+        }
+        else if (metadata_snapshot->version_type & metadata_snapshot->flag_explicit_version)
+        {
+            version_size = sizeof(*version);
+            version_type = 2;
+        }
+    }
+    if (is_offline && (metadata_snapshot->version_type & metadata_snapshot->flag_is_offline))
+    {
+        version_size = sizeof(*is_offline);
+        version_type = 3;
+    }
+
+    if (!unique_key_index->lookup(key, rowid, version_slice, version_size))
+        return false;
+    if (delete_bitmap && delete_bitmap->contains(rowid))
+        return false;
+
+    switch (version_type)
+    {
+        case 1:
+            *version = getVersionFromPartition();
+            break;
+        case 2:
+            memcpy(version, version_slice.data(), version_size);
+            break;
+        case 3:
+            memcpy(is_offline, version_slice.data(), version_size);
+            break;
+        default:
+            break;
+    }
+    return true;
+}
+}
+

@@ -1,13 +1,29 @@
 import sys
+import re
 
 _LOG_PREFIX = [
     "LOG_TRACE", "LOG_DEBUG", "LOG_INFO", "LOG_WARNING", "LOG_ERROR",
     "LOG_FATAL"
 ]
 
+def check_already_right(line):
+  line = line.strip()
+  assert line[-2:] == ");"
+
+  i, n = 0, len(line)
+  ans = 0
+  while i < n:
+    if i + 1 < n and line[i: i + 2] == "{}":
+      ans += 1
+      i += 2
+    else:
+      i += 1
+  # Not process format string has "{}" inside.
+  return ans > 0
 
 def line_starts_with_prefix(line):
   line = line.strip()
+
   for s in _LOG_PREFIX:
     n = len(s)
     if len(line) > n and line[0:n] == s:
@@ -61,9 +77,22 @@ class StringStream:
         self.i_ = i
         return self.get_next()
       else:
+        stk = []
         j = i
-        while j < n and ss[j] not in '+<':
+
+        while j < n:
+          if ss[j] == '(':
+            stk.append(j)
+          elif ss[j] == ')':
+            assert len(stk) > 0, "{}".format(ss)
+            stk.pop()
+          elif ss[j] == '+':
+            if len(stk) == 0:
+              break
+          elif ss[j] == '<':
+            break
           j += 1
+
         assert j - i + 1 > 0, "Wring input string {}".format(ss)
 
         self.i_ = j
@@ -164,6 +193,27 @@ def test_all():
   x = fmt_style(test5)
   assert x == 'LOG_WARNING(log_, "aaa+<>+: {}{} bbb", msg, formatSkippedMessage(args...));'
 
+  test6 = '''LOG_WARNING(log_, "a is {}, b is {}", a, b);'''
+  assert check_already_right(test6) == True
+  x = line_starts_with_prefix(test6)
+  assert x == True
+
+  test7 = '''LOG_WARNING(storage.log, "Path " + fullPath(disk, path_to_clone + relative_path) + " already exists. Will remove it and clone again.");'''
+  x = fmt_style(test7)
+  assert x == 'LOG_WARNING(storage.log, "Path {} already exists. Will remove it and clone again.", fullPath(disk, path_to_clone + relative_path));'
+
+  test8 = '''LOG_DEBUG(log, "aaa " + func(b + f(c, e + d)) + " ffff");'''
+  x = fmt_style(test8)
+  assert x == 'LOG_DEBUG(log, "aaa {} ffff", func(b + f(c, e + d)));'
+
+  test9 = '''LOG_WARNING(storage.log, "Path {} already exists. Will remove it and clone again.", fullPath(disk, path_to_clone + relative_path));'''
+  assert check_already_right(test9) == True
+
+  test10 = '''LOG_WARNING(log, "Error while deleting ZooKeeper path `" << path << "`: " + Coordination::errorMessage(rc) << ", ignoring.");'''
+  # print(test10)
+  x = fmt_style(test10)
+  # print(x)
+  assert x == 'LOG_WARNING(log, "Error while deleting ZooKeeper path `{}`: {}, ignoring.", path, Coordination::errorMessage(rc));'
 
 def main(file):
   print("Starting foramt file: {}".format(file))
@@ -181,7 +231,8 @@ def main(file):
       assert j < n, "Not a valid c/c++ file."
 
       r = "".join(x for x in rows[i:j + 1])
-      r = fmt_style(r)
+      if not check_already_right(r):
+        r = fmt_style(r)
       i = j
 
     after.append(r)
@@ -193,7 +244,7 @@ def main(file):
 
 
 if __name__ == "__main__":
-  # test_all()
+  test_all()
   assert len(sys.argv) >= 2, "Please give me a file to format."
   file = sys.argv[1]
   main(file)

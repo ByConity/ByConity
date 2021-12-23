@@ -1,12 +1,13 @@
 #pragma once
 
 #include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Common/ActionBlocker.h>
+#include <common/logger_useful.h>
 #include <common/types.h>
 
 #include <atomic>
@@ -86,5 +87,41 @@ private:
     EndpointMap endpoint_map;
     std::mutex mutex;
 };
+
+class InterserverIOEndpointHolder
+{
+public:
+    InterserverIOEndpointHolder(const String & name_, InterserverIOEndpointPtr endpoint_, InterserverIOHandler & handler_)
+        : name(name_), endpoint(std::move(endpoint_)), handler(handler_)
+    {
+        handler.addEndpoint(name, endpoint);
+    }
+
+    InterserverIOEndpointPtr getEndpoint()
+    {
+        return endpoint;
+    }
+
+    ~InterserverIOEndpointHolder()
+    try
+    {
+        handler.removeEndpointIfExists(name);
+        /// After destroying the object, `endpoint` can still live, since its ownership is acquired during the processing of the request,
+        /// see InterserverIOHTTPHandler.cpp
+    }
+    catch (...)
+    {
+        tryLogCurrentException("~InterserverIOEndpointHolder");
+    }
+
+    ActionBlocker & getBlocker() { return endpoint->blocker; }
+
+private:
+    String name;
+    InterserverIOEndpointPtr endpoint;
+    InterserverIOHandler & handler;
+};
+
+using InterserverIOEndpointHolderPtr = std::shared_ptr<InterserverIOEndpointHolder>;
 
 }

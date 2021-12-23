@@ -127,10 +127,26 @@ public:
     }
 
     void getStats(size_t & out_hits, size_t & out_misses) const
+
     {
         std::lock_guard lock(mutex);
         out_hits = hits;
         out_misses = misses;
+    }
+
+    /// FIXME (UNIQUE KEY): double check later
+    void remove(const Key & key)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto it = cells.find(key);
+        if (it == cells.end())
+            return;
+
+        const auto & cell = it->second;
+        current_size -= cell.size;
+        queue.erase(cell.queue_iterator);
+        cells.erase(it);
     }
 
     size_t weight() const
@@ -144,6 +160,8 @@ public:
         std::lock_guard lock(mutex);
         return cells.size();
     }
+
+    virtual bool shouldRemoveEldestEntry() const { return current_size > max_size; }
 
     size_t maxSize() const
     {
@@ -311,7 +329,7 @@ private:
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
-        while ((current_size > max_size) && (queue_size > 1))
+        while (shouldRemoveEldestEntry() && (queue_size > 1))
         {
             const Key & key = queue.front();
 

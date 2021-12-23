@@ -21,6 +21,7 @@ void FunctionNameNormalizer::visit(IAST * ast)
         visit(node_storage->partition_by);
         visit(node_storage->primary_key);
         visit(node_storage->order_by);
+        visit(node_storage->unique_key);
         visit(node_storage->sample_by);
         visit(node_storage->ttl_table);
         return;

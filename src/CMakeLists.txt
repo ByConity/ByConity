@@ -76,6 +76,7 @@ add_headers_and_sources(clickhouse_common_io Common/HashTable)
 add_headers_and_sources(clickhouse_common_io IO)
 add_headers_and_sources(clickhouse_common_io IO/S3)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
+add_headers_and_sources(dbms Storages/IndexFile)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -258,6 +259,9 @@ endmacro ()
 
 dbms_target_include_directories (PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
 target_include_directories (clickhouse_common_io PUBLIC "${ClickHouse_SOURCE_DIR}/src" "${ClickHouse_BINARY_DIR}/src")
+
+# FIXME (UNIQUE KEY): Find a better place to locate this
+target_include_directories(clickhouse_common_io PUBLIC "${SNAPPY_INCLUDE_DIR}") # uses some includes from core
 
 if (USE_EMBEDDED_COMPILER)
     dbms_target_link_libraries (PRIVATE ${REQUIRED_LLVM_LIBRARIES})

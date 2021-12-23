@@ -43,7 +43,6 @@ private:
 
 using HaMergeTreeReplicaEndpointPtr = std::shared_ptr<HaMergeTreeReplicaEndpoint>;
 
-/*
 class HaUniqueMergeTreeReplicaEndpoint : public HaDefaultReplicaEndpoint
 {
 public:
@@ -62,6 +61,5 @@ private:
 };
 
 using HaUniqueMergeTreeReplicaEndpointPtr = std::shared_ptr<HaUniqueMergeTreeReplicaEndpoint>;
-*/
 
 } // end of namespace DB

@@ -72,7 +72,7 @@ Block getBlockWithAllStreamData(const BlockInputStreamPtr & stream)
 bool isExtendedDefinitionStorage(const ASTPtr & storage_ast)
 {
     const auto & storage = storage_ast->as<ASTStorage &>();
-    return storage.partition_by || storage.order_by || storage.sample_by;
+    return storage.partition_by || storage.order_by || storage.sample_by || storage.unique_key;
 }
 
 ASTPtr extractPartitionKey(const ASTPtr & storage_ast)

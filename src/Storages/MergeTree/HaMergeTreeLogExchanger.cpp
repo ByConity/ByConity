@@ -480,40 +480,4 @@ Strings HaMergeTreeLogExchangerBase::getLostOrFailedReplicas() const
     return lost_replicas;
 }
 
-/*
-HaUniqueMergeTreeLogExchanger::HaUniqueMergeTreeLogExchanger(StorageHaMergeTree & storage_)
-    : HaMergeTreeLogExchangerBase(storage_, " (HaUniqueMergeTreeLogExchanger)")
-{
-}
-
-ManifestStore::LogEntries HaUniqueMergeTreeLogExchanger::getLogEntries(const String & replica_name, UInt64 from, UInt64 limit)
-{
-    std::lock_guard lock(client_mutex);
-    updateAllReplicasUnlocked(true, lock);
-    checkReplicaIsActive(replica_name, lock);
-    return connectUnlocked(replica_name, lock)->fetchManifestLogs(from, limit);
-}
-
-ManifestStore::Snapshot HaUniqueMergeTreeLogExchanger::getManifestSnapshot(const String & replica_name, UInt64 version)
-{
-    std::lock_guard lock(client_mutex);
-    updateAllReplicasUnlocked(true, lock);
-    checkReplicaIsActive(replica_name, lock);
-    return connectUnlocked(replica_name, lock)->getManifestSnapshot(version);
-}
-
-std::map<String, ManifestStatus> HaUniqueMergeTreeLogExchanger::getAllManifestStatus()
-{
-    std::lock_guard lock(client_mutex);
-
-    std::map<String, ManifestStatus> res;
-    requestUnlocked(lock, true, nullptr, [&res](HaMergeTreeReplicaClient & connection)
-    {
-        auto status = connection.getManifestStatus();
-        res.emplace(connection.getRemoteReplica(), status);
-    });
-    return res;
-}
-*/
-
 } // end of namespace DB

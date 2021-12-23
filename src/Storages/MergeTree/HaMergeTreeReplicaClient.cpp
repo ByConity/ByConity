@@ -125,8 +125,6 @@ LSNStatus HaMergeTreeReplicaClient::getLSNStatus()
     return lsn_status;
 }
 
-/// TODO
-#if 0
 ManifestStore::LogEntries HaMergeTreeReplicaClient::fetchManifestLogs(UInt64 from, UInt64 limit)
 {
     writeVarUInt(Protocol::HaClient::FetchManifestLogs, *out);
@@ -183,7 +181,6 @@ ManifestStore::Snapshot HaMergeTreeReplicaClient::getManifestSnapshot(UInt64 ver
     return res;
 }
 
-#endif
 
 GetMutationStatusResponse HaMergeTreeReplicaClient::getMutationStatus(const String & mutation_id)
 {

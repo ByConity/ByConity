@@ -60,6 +60,9 @@ public:
     void serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
     void deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const override;
     void serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const override;
+    bool supportMemComparableEncoding() const override;
+    void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
+    void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const override;
 
 private:
     template <typename ... Params>

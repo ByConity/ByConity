@@ -34,7 +34,6 @@ struct MaterializeMetadata
     String binlog_ignore_db;
     String executed_gtid_set;
 
-    size_t data_version = 1;
     size_t meta_version = 2;
     String binlog_checksum = "CRC32";
 

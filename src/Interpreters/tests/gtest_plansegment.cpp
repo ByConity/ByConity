@@ -10,7 +10,7 @@ using namespace DB;
 PlanSegmentPtr createPlanSegment()
 {
     PlanSegmentPtr plan_segment = std::make_unique<PlanSegment>();
-    
+
     PlanSegmentInputPtr left = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
     PlanSegmentInputPtr right = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
     PlanSegmentOutputPtr output = std::make_shared<PlanSegmentOutput>(PlanSegmentType::OUTPUT);
@@ -26,7 +26,7 @@ PlanSegmentPtr createPlanSegment()
 }
 
 TEST(PlanSegmentTest, PlanSegmentSerDer)
-{   
+{
     PlanSegmentPtr plan_segment = createPlanSegment();
 
     /**

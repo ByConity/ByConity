@@ -1,51 +1,29 @@
+#include <filesystem>
 #include <map>
-#include <set>
-#include <optional>
 #include <memory>
-#include <Poco/Mutex.h>
-#include <Poco/UUID.h>
-#include <Poco/Net/IPAddress.h>
-#include <Poco/Util/Application.h>
-#include <Common/Macros.h>
-#include <Common/escapeForFileName.h>
-#include <Common/setThreadName.h>
-#include <Common/Stopwatch.h>
-#include <Common/formatReadable.h>
-#include <Common/Throttler.h>
-#include <Common/thread_local_rng.h>
-#include <Common/FieldVisitorToString.h>
-#include <Coordination/KeeperStorageDispatcher.h>
-#include <Compression/ICompressionCodec.h>
-#include <Core/BackgroundSchedulePool.h>
-#include <Formats/FormatFactory.h>
-#include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <Databases/IDatabase.h>
-#include <Storages/IStorage.h>
-#include <Storages/MarkCache.h>
-#include <Storages/MergeTree/MergeList.h>
-#include <Storages/MergeTree/ReplicatedFetchList.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/CompressionCodecSelector.h>
-#include <Storages/StorageS3Settings.h>
-#include <Disks/DiskLocal.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <Interpreters/ActionLocksManager.h>
-#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Core/Settings.h>
-#include <Core/SettingsQuirks.h>
+#include <optional>
+#include <set>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
+#include <Access/Credentials.h>
 #include <Access/EnabledRolesInfo.h>
 #include <Access/EnabledRowPolicies.h>
-#include <Access/QuotaUsage.h>
-#include <Access/User.h>
-#include <Access/Credentials.h>
-#include <Access/SettingsProfile.h>
-#include <Access/SettingsConstraints.h>
 #include <Access/ExternalAuthenticators.h>
 #include <Access/GSSAcceptor.h>
+#include <Access/QuotaUsage.h>
+#include <Access/SettingsConstraints.h>
+#include <Access/SettingsProfile.h>
+#include <Access/User.h>
+#include <Compression/ICompressionCodec.h>
+#include <Coordination/KeeperStorageDispatcher.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Core/Settings.h>
+#include <Core/SettingsQuirks.h>
+#include <Databases/IDatabase.h>
 #include <Dictionaries/Embedded/GeoDictionariesLoader.h>
+#include <Disks/DiskLocal.h>
+#include <Formats/FormatFactory.h>
+#include <IO/MMappedFileCache.h>
 #include <Interpreters/EmbeddedDictionaries.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalModelsLoader.h>
@@ -62,24 +40,63 @@
 #include <Interpreters/DDLTask.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
-#include <IO/MMappedFileCache.h>
+#include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DDLTask.h>
+#include <Interpreters/DDLWorker.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/EmbeddedDictionaries.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Interpreters/ExternalModelsLoader.h>
+#include <Interpreters/HaReplicaHandler.h>
+#include <Interpreters/InterserverCredentials.h>
+#include <Interpreters/InterserverIOHandler.h>
+#include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/ProcessList.h>
+#include <Interpreters/SystemLog.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Common/StackTrace.h>
-#include <Common/Config/ConfigProcessor.h>
-#include <Common/Config/AbstractConfigurationComparison.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
-#include <Common/ShellCommand.h>
-#include <Common/TraceCollector.h>
-#include <common/logger_useful.h>
-#include <Common/RemoteHostFilter.h>
-#include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Storages/CompressionCodecSelector.h>
+#include <Storages/DiskUniqueKeyIndexCache.h>
+#include <Storages/IStorage.h>
+#include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
+#include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/MergeList.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <filesystem>
+#include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/ReplicatedFetchList.h>
+#include <Storages/StorageS3Settings.h>
+#include <TableFunctions/TableFunctionFactory.h>
+#include <Poco/Mutex.h>
+#include <Poco/Net/IPAddress.h>
+#include <Poco/UUID.h>
+#include <Poco/Util/Application.h>
+#include <Common/Config/AbstractConfigurationComparison.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/Macros.h>
+#include <Common/RemoteHostFilter.h>
+#include <Common/ShellCommand.h>
+#include <Common/StackTrace.h>
+#include <Common/Stopwatch.h>
+#include <Common/Throttler.h>
+#include <Common/TraceCollector.h>
+#include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/escapeForFileName.h>
+#include <Common/formatReadable.h>
+#include <Common/setThreadName.h>
+#include <Common/thread_local_rng.h>
+#include <common/logger_useful.h>
 
+#include <Storages/IndexFile/FilterPolicy.h>
+#include <Storages/IndexFile/IndexFileWriter.h>
 
 namespace fs = std::filesystem;
 
@@ -397,6 +414,8 @@ struct ContextSharedPart
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
 
+    mutable std::optional<BackgroundSchedulePool> unique_table_schedule_pool; /// A thread pool that can run different jobs in background (used for unique table)
+
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
@@ -425,6 +444,10 @@ struct ContextSharedPart
     std::shared_ptr<Clusters> clusters;
     ConfigurationPtr clusters_config;                        /// Stores updated configs
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
+
+    mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
+    mutable DiskUniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
+    mutable DiskUniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
     bool shutdown_called = false;
 
@@ -2852,4 +2875,31 @@ bool Context::isReadyForQuery() const
     return shared->ready_for_query;
 }
 
+void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+    if (shared->unique_key_index_block_cache)
+        throw Exception("Unique key index block cache has been already created", ErrorCodes::LOGICAL_ERROR);
+    shared->unique_key_index_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
+}
+
+DiskUniqueKeyIndexBlockCachePtr Context::getDiskUniqueKeyIndexBlockCache() const
+{
+    auto lock = getLock();
+    return shared->unique_key_index_block_cache;
+}
+
+void Context::setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size)
+{
+    auto lock = getLock();
+    if (shared->unique_key_index_cache)
+        throw Exception("Unique key index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+    shared->unique_key_index_cache = std::make_shared<DiskUniqueKeyIndexCache>(disk_uki_meta_cache_size, disk_uki_file_cache_size);
+}
+
+std::shared_ptr<DiskUniqueKeyIndexCache> Context::getDiskUniqueKeyIndexCache() const
+{
+    auto lock = getLock();
+    return shared->unique_key_index_cache;
+}
 }

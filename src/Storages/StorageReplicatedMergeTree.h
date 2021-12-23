@@ -676,7 +676,7 @@ private:
     void dropPart(const String & part_name, bool detach, ContextPtr query_context) override;
 
     // Partition helpers
-    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;
+    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & query) override;
     PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context) override;

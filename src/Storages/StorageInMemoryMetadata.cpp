@@ -8,6 +8,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
+#include <DataTypes/DataTypeFactory.h>
 
 
 namespace DB
@@ -32,11 +33,15 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     , primary_key(other.primary_key)
     , sorting_key(other.sorting_key)
     , sampling_key(other.sampling_key)
+    , unique_key(other.unique_key)
     , column_ttls_by_name(other.column_ttls_by_name)
     , table_ttl(other.table_ttl)
     , settings_changes(other.settings_changes ? other.settings_changes->clone() : nullptr)
     , select(other.select)
     , comment(other.comment)
+    , version_type(other.version_type)
+    , extra_column_name(other.extra_column_name)
+    , extra_column_size(other.extra_column_size)
 {
 }
 
@@ -52,6 +57,7 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
     partition_key = other.partition_key;
     primary_key = other.primary_key;
     sorting_key = other.sorting_key;
+    unique_key = other.unique_key;
     sampling_key = other.sampling_key;
     column_ttls_by_name = other.column_ttls_by_name;
     table_ttl = other.table_ttl;
@@ -61,6 +67,9 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
         settings_changes.reset();
     select = other.select;
     comment = other.comment;
+    version_type = other.version_type;
+    extra_column_name = other.extra_column_name;
+    extra_column_size = other.extra_column_size;
     return *this;
 }
 
@@ -117,6 +126,13 @@ void StorageInMemoryMetadata::setSelectQuery(const SelectQueryDescription & sele
 const ColumnsDescription & StorageInMemoryMetadata::getColumns() const
 {
     return columns;
+}
+
+ColumnsDescription StorageInMemoryMetadata::getColumnsWithRowid() const
+{
+    auto ans = columns;
+    ans.add(ColumnDescription(rowid_column_name, DataTypeFactory::instance().get("UInt32")));
+    return ans;
 }
 
 const IndicesDescription & StorageInMemoryMetadata::getSecondaryIndices() const
@@ -283,12 +299,18 @@ ColumnDependencies StorageInMemoryMetadata::getColumnDependencies(const NameSet 
 
 }
 
-Block StorageInMemoryMetadata::getSampleBlockNonMaterialized() const
+Block StorageInMemoryMetadata::getSampleBlockNonMaterialized(bool include_func_columns) const
 {
     Block res;
 
     for (const auto & column : getColumns().getOrdinary())
         res.insert({column.type->createColumn(), column.type, column.name});
+
+    if (include_func_columns)
+    {
+        for (const auto & column : getFuncColumns())
+            res.insert({column.type->createColumn(), column.type, column.name});
+    }
 
     return res;
 }
@@ -305,18 +327,25 @@ Block StorageInMemoryMetadata::getSampleBlockWithVirtuals(const NamesAndTypesLis
     return res;
 }
 
-Block StorageInMemoryMetadata::getSampleBlock() const
+Block StorageInMemoryMetadata::getSampleBlock(bool include_func_columns) const
 {
     Block res;
 
     for (const auto & column : getColumns().getAllPhysical())
         res.insert({column.type->createColumn(), column.type, column.name});
 
+    if (include_func_columns)
+    {
+        for (const auto & column : getFuncColumns())
+            res.insert({column.type->createColumn(), column.type, column.name});
+    }
+
     return res;
 }
 
 Block StorageInMemoryMetadata::getSampleBlockForColumns(
-    const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id) const
+    const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id,
+    bool include_rowid_column) const
 {
     Block res;
 
@@ -344,6 +373,15 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             throw Exception(
                 "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
                 ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+    }
+
+    if (include_rowid_column)
+    {
+        ColumnWithTypeAndName rowid_column;
+        rowid_column.name = rowid_column_name;
+        rowid_column.type = DataTypeFactory::instance().get("UInt32");
+        rowid_column.column = rowid_column.type->createColumn();
+        res.insert(rowid_column);
     }
 
     return res;
@@ -452,6 +490,38 @@ Names StorageInMemoryMetadata::getPrimaryKeyColumns() const
     return {};
 }
 
+const KeyDescription & StorageInMemoryMetadata::getUniqueKey() const
+{
+    return unique_key;
+}
+
+bool StorageInMemoryMetadata::isUniqueKeyDefined() const
+{
+    return unique_key.definition_ast != nullptr;
+}
+
+bool StorageInMemoryMetadata::hasUniqueKey() const
+{
+    return !unique_key.column_names.empty();
+}
+
+Names StorageInMemoryMetadata::getColumnsRequiredForUniqueKey() const
+{
+    if (hasUniqueKey())
+        return unique_key.expression->getRequiredColumns();
+    return {};
+}
+
+Names StorageInMemoryMetadata::getUniqueKeyColumns() const
+{
+    return unique_key.column_names;
+}
+
+ExpressionActionsPtr StorageInMemoryMetadata::getUniqueKeyExpression() const
+{
+    return unique_key.expression;
+}
+
 ASTPtr StorageInMemoryMetadata::getSettingsChanges() const
 {
     if (settings_changes)
@@ -518,11 +588,16 @@ void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTy
             "Empty list of columns queried. There are columns: {}", list_of_columns);
     }
 
+    const NamesAndTypesList & func_columns = getFuncColumns();
     const auto virtuals_map = getColumnsMap(virtuals);
     auto unique_names = initUniqueStrings();
 
     for (const auto & name : column_names)
     {
+        // ignore checking functional columns
+        if (func_columns.contains(name))
+            continue;
+
         bool has_column = getColumns().hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, name) || virtuals_map.count(name);
 
         if (!has_column)
@@ -545,9 +620,15 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
     const NamesAndTypesList & available_columns = getColumns().getAllPhysical();
     const auto columns_map = getColumnsMap(available_columns);
 
+    const NamesAndTypesList & func_columns = getFuncColumns();
     auto unique_names = initUniqueStrings();
+
     for (const NameAndTypePair & column : provided_columns)
     {
+        // ignore checking functional columns
+        if (func_columns.contains(column.name))
+            continue;
+
         auto it = columns_map.find(column.name);
         if (columns_map.end() == it)
             throw Exception(
@@ -577,9 +658,14 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
             "Empty list of columns queried. There are columns: " + listOfColumns(available_columns),
             ErrorCodes::EMPTY_LIST_OF_COLUMNS_QUERIED);
 
+    const NamesAndTypesList & func_columns = getFuncColumns();
     auto unique_names = initUniqueStrings();
     for (const String & name : column_names)
     {
+        // ignore checking functional columns
+        if (func_columns.contains(name))
+            continue;
+
         auto it = provided_columns_map.find(name);
         if (provided_columns_map.end() == it)
             continue;
@@ -610,8 +696,14 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
 
     block.checkNumberOfRows();
 
+    const NamesAndTypesList & func_columns = getFuncColumns();
+
     for (const auto & column : block)
     {
+        // ignore checking functional columns
+        if (func_columns.contains(column.name))
+            continue;
+
         if (names_in_block.count(column.name))
             throw Exception("Duplicate column " + column.name + " in block", ErrorCodes::DUPLICATE_COLUMN);
 

@@ -835,4 +835,18 @@ void SerializationLowCardinality::deserializeImpl(
     low_cardinality_column.insertFromFullColumn(*temp_column, 0);
 }
 
+bool SerializationLowCardinality::supportMemComparableEncoding() const
+{
+    return dictionary_type->getDefaultSerialization()->supportMemComparableEncoding();
+}
+
+void SerializationLowCardinality::serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+{
+    serializeImpl(column, row_num, &ISerialization::serializeMemComparable, ostr);
+}
+
+void SerializationLowCardinality::deserializeMemComparable(IColumn & column, ReadBuffer & istr) const
+{
+    deserializeImpl(column, &ISerialization::deserializeMemComparable, istr);
+}
 }

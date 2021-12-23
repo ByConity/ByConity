@@ -5,7 +5,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
 #include <Storages/StorageHaMergeTree.h>
-/// TODO: #include <Storages/StorageHaUniqueMergeTree.h>
+#include <Storages/StorageHaUniqueMergeTree.h>
 
 namespace CurrentMetrics
 {
@@ -223,11 +223,10 @@ void HaMergeTreeReplicaEndpoint::onGetMutationStatus(ReadBuffer & in, WriteBuffe
     out.next();
 }
 
-/*
 HaUniqueMergeTreeReplicaEndpoint::HaUniqueMergeTreeReplicaEndpoint(StorageHaUniqueMergeTree & storage_)
     : storage(storage_)
     , weak_storage(storage.shared_from_this())
-    , logger(&Poco::Logger::get("HaUniqueMergeTreeReplicaEndpoint (" + storage.getDatabaseName() + "." + storage.getTableName() + ")"))
+    , logger(&Poco::Logger::get("HaUniqueMergeTreeReplicaEndpoint (" + storage.getStorageID().database_name+ "." + storage.getStorageID().table_name + ")"))
 {
 }
 
@@ -300,6 +299,5 @@ void HaUniqueMergeTreeReplicaEndpoint::onGetManifestSnapshot(ReadBuffer & in, Wr
     writeStringBinary(snapshot.columns_str, out);
     out.next();
 }
-*/
 
 } // end of namespace DB

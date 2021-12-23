@@ -21,6 +21,17 @@ public:
         bool take_column_types_from_storage,
         bool quiet = false);
 
+    MergeTreeSequentialSource(
+        const MergeTreeData & storage_,
+        const StorageMetadataPtr & metadata_snapshot_,
+        MergeTreeData::DataPartPtr data_part_,
+        DeleteBitmapPtr delete_bitmap_,
+        Names columns_to_read_,
+        bool read_with_direct_io_,
+        bool take_column_types_from_storage,
+        bool quiet = false,
+        bool include_rowid_column_ = false);
+
     ~MergeTreeSequentialSource() override;
 
     String getName() const override { return "MergeTreeSequentialSource"; }
@@ -39,9 +50,11 @@ private:
 
     /// Data part will not be removed if the pointer owns it
     MergeTreeData::DataPartPtr data_part;
+    DeleteBitmapPtr delete_bitmap;
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
+    bool continue_reading = false;
 
     /// Should read using direct IO
     bool read_with_direct_io;
@@ -58,9 +71,16 @@ private:
     /// current row at which we stop reading
     size_t current_row = 0;
 
+    /// Should return an additional rowid column named `rowid_column_name`
+    bool include_rowid_column{false};
+
+    UInt64 index_granularity{0};
 private:
     /// Closes readers and unlock part locks
     void finish();
+    size_t currentMarkStart() const { return current_mark * index_granularity; }
+    size_t currentMarkEnd() const {
+        return std::min(data_part->index_granularity.getTotalRows(), (current_mark + 1) * index_granularity); }
 };
 
 }

@@ -73,7 +73,7 @@ public:
 
     Names getShufflekeys() const { return shuffle_keys; }
 
-    void setShufflekeys(const Names & keys) { shuffle_keys = keys; } 
+    void setShufflekeys(const Names & keys) { shuffle_keys = keys; }
 
     virtual void serialize(WriteBuffer & buf) const;
 
@@ -270,7 +270,7 @@ public:
 
     using Nodes = std::list<Node>;
 
-    void addNode(Node && node_) { 
+    void addNode(Node && node_) {
         nodes.push_back(std::move(node_));
         if (nodes.size() == 1)
             root = &nodes.back();

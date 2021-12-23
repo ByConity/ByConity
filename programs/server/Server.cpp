@@ -899,6 +899,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (mmap_cache_size)
         global_context->setMMappedFileCache(mmap_cache_size);
 
+    /// file cache size can limit the number of fd used by the cache. Otherwise, it will exceed the limit of the operating system. 0 means unlimited. default is 50000.
+    /// meta cache is used for the index and bloom blocks, it should be set to a large number to keep hit rate near 100%. default is 1GB
+    /// data cache is used for the data blocks, it's ok to have a lower hit cache than meta cache. default is 1GB
+    size_t disk_uki_file_cache_size = config().getUInt64("disk_uki_file_cache_size", 50000);
+    size_t disk_uki_meta_cache_size = config().getUInt64("disk_unique_key_index_meta_cache_size", 1073741824); /// 1GB
+    size_t disk_uki_data_cache_size = config().getUInt64("disk_unique_key_index_data_cache_size", 1073741824); /// 1GB
+    global_context->setDiskUniqueKeyIndexCache(disk_uki_meta_cache_size, disk_uki_file_cache_size);
+    global_context->setDiskUniqueKeyIndexBlockCache(disk_uki_data_cache_size);
+
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;
     size_t compiled_expression_cache_size = config().getUInt64("compiled_expression_cache_size", compiled_expression_cache_size_default);

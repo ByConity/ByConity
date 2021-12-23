@@ -5211,7 +5211,7 @@ void StorageReplicatedMergeTree::dropPart(const String & part_name, bool detach,
         waitForAllReplicasToProcessLogEntry(entry);
 }
 
-void StorageReplicatedMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
+void StorageReplicatedMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & /*query*/)
 {
     assertNotReadonly();
     if (!is_leader)

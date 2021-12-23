@@ -38,6 +38,10 @@ namespace zkutil { class ZooKeeper; }
 
 namespace DB
 {
+namespace IndexFile
+{
+    class Cache;
+}
 
 struct ContextSharedPart;
 class ContextAccess;
@@ -133,6 +137,10 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
+
+/// Used in unique table for caching unique key
+class DiskUniqueKeyIndexCache;
+using DiskUniqueKeyIndexBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
@@ -825,6 +833,14 @@ public:
 
     void setPipelineLogPath(const String & path) { pipeline_log_path = path; }
     String getPipelineLogpath() const { return pipeline_log_path; }
+
+    /// Create a memory cache of data blocks reading from unique key index files.
+    void setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes);
+    DiskUniqueKeyIndexBlockCachePtr getDiskUniqueKeyIndexBlockCache() const;
+
+    /// Create a cache of UniqueKeyIndex objects.
+    void setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size);
+    std::shared_ptr<DiskUniqueKeyIndexCache> getDiskUniqueKeyIndexCache() const;
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

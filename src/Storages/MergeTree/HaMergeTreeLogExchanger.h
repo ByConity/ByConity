@@ -8,7 +8,6 @@
 #include <Storages/MergeTree/HaConnectionMessages.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/LSNStatus.h>
-/// TODO: #include <Storages/MergeTree/ManifestStore.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 

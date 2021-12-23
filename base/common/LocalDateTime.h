@@ -91,6 +91,14 @@ public:
     LocalDateTime(const LocalDateTime &) noexcept = default;
     LocalDateTime & operator= (const LocalDateTime &) noexcept = default;
 
+
+    operator time_t() const
+    {
+        return m_year == 0
+            ? 0
+            : DateLUT::instance().makeDateTime(m_year, m_month, m_day, m_hour, m_minute, m_second);
+    }
+
     unsigned short year() const { return m_year; }
     unsigned char month() const { return m_month; }
     unsigned char day() const { return m_day; }

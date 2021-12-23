@@ -206,6 +206,12 @@ void MergeTreeRangeReader::Stream::toNextMark()
     offset_after_current_mark = 0;
 }
 
+size_t MergeTreeRangeReader::Stream::position() const
+{
+    size_t num_rows_before_current_mark = index_granularity->getMarkStartingRow(current_mark);
+    return num_rows_before_current_mark + offset_after_current_mark;
+}
+
 size_t MergeTreeRangeReader::Stream::read(Columns & columns, size_t num_rows, bool skip_remaining_rows_in_current_granule)
 {
     checkEnoughSpaceInCurrentGranule(num_rows);
@@ -522,11 +528,13 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     IMergeTreeReader * merge_tree_reader_,
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprInfo * prewhere_info_,
+    DeleteBitmapPtr delete_bitmap_,
     bool last_reader_in_chain_)
     : merge_tree_reader(merge_tree_reader_)
     , index_granularity(&(merge_tree_reader->data_part->index_granularity))
     , prev_reader(prev_reader_)
     , prewhere_info(prewhere_info_)
+    , delete_bitmap(delete_bitmap_)
     , last_reader_in_chain(last_reader_in_chain_)
     , is_initialized(true)
 {
@@ -739,7 +747,15 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     if (read_result.num_rows == 0)
         return read_result;
 
-    executePrewhereActionsAndFilterColumns(read_result);
+    if (prewhere_info)
+    {
+        executePrewhereActionsAndFilterColumns(read_result);
+    }
+    else if (!prev_reader && read_result.getFilter())
+    {
+        filterColumns(read_result.columns, read_result.getFilter()->getData());
+        read_result.num_rows = read_result.countBytesInResultFilter(read_result.getFilter()->getData());
+    }
 
     return read_result;
 }
@@ -749,6 +765,13 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 {
     ReadResult result;
     result.columns.resize(merge_tree_reader->getColumns().size());
+
+    ColumnUInt8::MutablePtr delete_filter_column;
+    bool delete_filter_always_true = true;
+    if (delete_bitmap)
+    {
+        delete_filter_column = ColumnUInt8::create(max_rows, 1);
+    }
 
     /// Stream is lazy. result.num_added_rows is the number of rows added to block which is not equal to
     /// result.num_rows_read until call to stream.finalize(). Also result.num_added_rows may be less than
@@ -774,9 +797,37 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
             auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
 
-            bool last = rows_to_read == space_left;
-            result.addRows(stream.read(result.columns, rows_to_read, !last));
-            result.addGranule(rows_to_read);
+            auto read_pos = stream.position();
+            auto read_end = read_pos + rows_to_read;
+            if (delete_bitmap && delete_bitmap->containsRange(read_pos, read_end))
+            {
+                /// all pending rows in current granule has been deleted, skip it
+                stream.skip(rows_to_read);
+                result.addGranule(0);
+            }
+            else
+            {
+                /// populate delete filter for this granule
+                if (delete_bitmap)
+                {
+                    UInt8 * filter_start = delete_filter_column->getData().data() + max_rows - space_left;
+                    auto iter = delete_bitmap->begin();
+                    auto end = delete_bitmap->end();
+                    iter.equalorlarger(read_pos);
+                    auto saved_iter = iter;
+                    while (iter != end && *iter < read_end)
+                    {
+                        filter_start[*iter - read_pos] = 0;
+                        iter++;
+                    }
+                    if (iter != saved_iter)
+                        delete_filter_always_true = false;
+                }
+
+                bool last = rows_to_read == space_left;
+                result.addRows(stream.read(result.columns, rows_to_read, !last));
+                result.addGranule(rows_to_read);
+            }
             space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
         }
     }
@@ -785,6 +836,14 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
 
     /// Last granule may be incomplete.
     result.adjustLastGranule();
+
+    if (delete_bitmap && !delete_filter_always_true)
+    {
+        /// filter size must match column size
+        delete_filter_column->getData().resize(result.numReadRows());
+        ColumnPtr filter_column = std::move(delete_filter_column);
+        result.setFilter(filter_column);
+    }
 
     return result;
 }

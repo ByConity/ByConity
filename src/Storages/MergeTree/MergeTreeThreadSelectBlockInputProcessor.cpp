@@ -3,10 +3,14 @@
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
 #include <Interpreters/Context.h>
 
-
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int MEMORY_LIMIT_EXCEEDED;
+    extern const int LOGICAL_ERROR;
+}
 
 MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcessor(
     const size_t thread_,
@@ -65,6 +69,13 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
 
     /// Allows pool to reduce number of threads in case of too slow reads.
     auto profile_callback = [this](ReadBufferFromFileBase::ProfileInfo info_) { pool->profileFeedback(info_); };
+
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        task->delete_bitmap = task->data_part->getDeleteBitmap();
+        if (!task->delete_bitmap)
+            throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
+    }
 
     if (!reader)
     {
