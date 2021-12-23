@@ -52,7 +52,7 @@ Strings deserializeStrings(ReadBuffer & buf)
 {
     size_t s_size;
     readBinary(s_size, buf);
-    
+
     Strings strings(s_size);
     for (size_t i = 0; i < s_size; ++i)
         readBinary(strings[i], buf);

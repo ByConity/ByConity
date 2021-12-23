@@ -4,6 +4,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
+#include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/Macros.h>
@@ -293,16 +294,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         */
 
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
-        || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
+        || args.storage_def->unique_key || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
         || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
 
-    if (args.engine_name == "UniqueMergeTree")
-    {
-        /// A fake unique merge tree used for unique table migration, changed it to MergeTree here
-        name_part = "";
-    }
+    // FIXME (UNIQUE KEY): alter engine support maybe
+    // if (args.engine_name == "UniqueMergeTree")
+    // {
+    //     /// A fake unique merge tree used for unique table migration, changed it to MergeTree here
+    //     name_part = "";
+    // }
 
     bool replicated = startsWith(name_part, "Replicated");
     if (replicated)
@@ -430,7 +432,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def)
+    if (is_extended_storage_def && merging_params.mode != MergeTreeData::MergingParams::Unique)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
@@ -642,7 +644,28 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     }
     else if (merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        /// TODO:
+        if (replicated)
+            throw Exception("ReplicatedUniqueMergeTree is not supported, use HaUniqueMergeTree instead", ErrorCodes::BAD_ARGUMENTS);
+        /// unique table is different from ordinary merge tree in many aspects, like merge algorithm, restoring using manifest, etc.
+        /// so it's non-trivial to implement UniqueMergeTree on top of StorageMergeTree.
+        if (!is_ha)
+            throw Exception("UniqueMergeTree is not supported, use HaUniqueMergeTree instead", ErrorCodes::BAD_ARGUMENTS);
+        if (!is_extended_storage_def)
+            throw Exception("HaUniqueMergeTree must be used with extended syntax.", ErrorCodes::BAD_ARGUMENTS);
+        if (engine_args.size() > 2)
+        {
+            if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
+                throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
+            /// besides choose an explicit column as version, we also support using `partition by` expression
+            /// as version for convenience and better performance
+            if (args.storage_def->partition_by && args.storage_def->partition_by->getColumnName() == engine_args.back()->getColumnName())
+                merging_params.version_column = MergeTreeData::MergingParams::partition_value_as_version;
+            else if (!tryGetIdentifierNameInto(engine_args.back(), merging_params.version_column))
+                throw Exception(
+                    "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                    ErrorCodes::BAD_ARGUMENTS);
+            ++arg_num;
+        }
     }
 
     String date_column_name;
@@ -677,6 +700,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 "You must provide an ORDER BY or PRIMARY KEY expression in the table definition. "
                 "If you don't want this table to be sorted, use ORDER BY/PRIMARY KEY tuple()",
                 ErrorCodes::BAD_ARGUMENTS);
+
+        if (args.storage_def->unique_key)
+            metadata.unique_key = KeyDescription::getKeyFromAST(
+                args.storage_def->unique_key->ptr(), metadata.columns, args.getContext());
 
         /// Get sorting key from engine arguments.
         ///
@@ -738,6 +765,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     }
     else
     {
+
         /// Syntax: *MergeTree(..., date, [sample_key], primary_key, index_granularity, ...)
         /// Get date:
         if (!tryGetIdentifierNameInto(engine_args[arg_num], date_column_name))
@@ -820,8 +848,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     {
         if (merging_params.mode == MergeTreeData::MergingParams::Unique)
         {
-            /// TODO:
-            throw Exception("NOT_IMPLEMENTED", ErrorCodes::NOT_IMPLEMENTED);
+            return StorageHaUniqueMergeTree::create(
+                zookeeper_path,
+                replica_name,
+                args.attach,
+                args.table_id,
+                args.relative_data_path,
+                metadata,
+                args.getContext(),
+                date_column_name,
+                merging_params,
+                std::move(storage_settings),
+                args.has_force_restore_data_flag);
         }
         else
         {
@@ -887,6 +925,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("HaMergeTree", create, features);
+    factory.registerStorage("HaUniqueMergeTree", create, features);
     factory.registerStorage("HaCollapsingMergeTree", create, features);
     factory.registerStorage("HaReplacingMergeTree", create, features);
     factory.registerStorage("HaAggregatingMergeTree", create, features);

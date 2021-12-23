@@ -1310,7 +1310,7 @@ void StorageMergeTree::dropPart(const String & part_name, bool detach, ContextPt
         dropPartsImpl({part}, detach);
 }
 
-void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr local_context)
+void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr local_context, const ASTPtr & /*query*/)
 {
     DataPartsVector parts_to_remove;
     /// New scope controls lifetime of merge_blocker.

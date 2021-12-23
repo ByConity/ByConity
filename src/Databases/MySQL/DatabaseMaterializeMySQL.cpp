@@ -13,6 +13,7 @@
 #    include <Databases/MySQL/MaterializeMySQLSyncThread.h>
 #    include <Parsers/ASTCreateQuery.h>
 #    include <Storages/StorageMaterializeMySQL.h>
+#    include <Storages/StorageHaUniqueMergeTree.h>
 #    include <Poco/Logger.h>
 #    include <Common/setThreadName.h>
 #    include <filesystem>
@@ -171,17 +172,39 @@ void DatabaseMaterializeMySQL<Base>::drop(ContextPtr context_)
 template<typename Base>
 StoragePtr DatabaseMaterializeMySQL<Base>::tryGetTable(const String & name, ContextPtr context_) const
 {
+    StoragePtr nested_storage = Base::tryGetTable(name, context_);
+    if (!nested_storage)
+        return {};
+
     if (!MaterializeMySQLSyncThread::isMySQLSyncThread())
-    {
-        StoragePtr nested_storage = Base::tryGetTable(name, context_);
-
-        if (!nested_storage)
-            return {};
-
         return std::make_shared<StorageMaterializeMySQL>(std::move(nested_storage), this);
-    }
 
-    return Base::tryGetTable(name, context_);
+    checkAndWaitUntilBecomingLeader(nested_storage);
+
+    return nested_storage;
+}
+
+template<typename Base>
+void DatabaseMaterializeMySQL<Base>::checkAndWaitUntilBecomingLeader(const StoragePtr & table) const
+{
+    const auto unique_table = dynamic_cast<const StorageHaUniqueMergeTree *>(table.get());
+    if (!unique_table)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Base table {} in MaterializeMySQL database is not unique table.", table->getName());
+    
+    if (unique_table->isLeader())
+        return;
+    Stopwatch watch;
+    while (true)
+    {
+        usleep(10);
+        if (unique_table->isLeader())
+            return;
+        if (watch.elapsedSeconds() > 10)
+        {
+            LOG_WARNING(&Poco::Logger::get(unique_table->getLogName()), "Materialized mysql table " + unique_table->getName() + " can not become leader after 10s");
+            return;
+        }
+    }
 }
 
 template <typename Base>
@@ -242,6 +265,12 @@ template<typename T> struct HelperRethrow { static constexpr auto v = &T::rethro
 void rethrowSyncExceptionIfNeed(const IDatabase * materialize_mysql_db)
 {
     castToMaterializeMySQLAndCallHelper<const IDatabase, HelperRethrow>(materialize_mysql_db);
+}
+
+template<typename T> struct HelperCheckSyncTable { static constexpr auto v = &T::shouldSyncTable; };
+bool checkIfShouldSyncTable(const DatabasePtr & materialize_mysql_db, const String & table_name)
+{
+    return castToMaterializeMySQLAndCallHelper<const IDatabase, HelperCheckSyncTable>(materialize_mysql_db.get(), table_name);
 }
 
 template class DatabaseMaterializeMySQL<DatabaseOrdinary>;

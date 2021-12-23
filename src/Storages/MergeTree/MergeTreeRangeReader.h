@@ -44,6 +44,7 @@ public:
         IMergeTreeReader * merge_tree_reader_,
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprInfo * prewhere_info_,
+        DeleteBitmapPtr delete_bitmap_,
         bool last_reader_in_chain_);
 
     MergeTreeRangeReader() = default;
@@ -117,6 +118,8 @@ public:
         size_t numPendingGranules() const { return last_mark - current_mark; }
         size_t numPendingRows() const;
         size_t currentMark() const { return current_mark; }
+
+        size_t position() const;
 
         size_t current_mark = 0;
         /// Invariant: offset_after_current_mark + skipped_rows_after_offset < index_granularity
@@ -237,6 +240,7 @@ private:
     const MergeTreeIndexGranularity * index_granularity = nullptr;
     MergeTreeRangeReader * prev_reader = nullptr; /// If not nullptr, read from prev_reader firstly.
     const PrewhereExprInfo * prewhere_info;
+    DeleteBitmapPtr delete_bitmap = nullptr; /// If not nullptr, rows in delete bitmap are removed
 
     Stream stream;
 

@@ -12,6 +12,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int MULTIPLE_STREAMS_REQUIRED;
+    extern const int NOT_IMPLEMENTED;
 }
 
 String ISerialization::Substream::toString() const
@@ -194,4 +195,13 @@ bool ISerialization::isSpecialCompressionAllowed(const SubstreamPath & path)
     return true;
 }
 
+void ISerialization::serializeMemComparable(const IColumn &, size_t, WriteBuffer &) const
+{
+    throw Exception("Serialization type doesn't support mem-comparable encoding", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void ISerialization::deserializeMemComparable(IColumn &, ReadBuffer &) const
+{
+    throw Exception("Serialization type doesn't support mem-comparable encoding", ErrorCodes::NOT_IMPLEMENTED);
+}
 }

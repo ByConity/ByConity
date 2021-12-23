@@ -40,9 +40,9 @@ void InterpreterDistributedStages::createPlanSegments()
 {
     /**
      * we collect all distributed tables and try to rewrite distributed query into local query because
-     * distributed query cannot generate a plan with ScanTable so that it hard to build distributed plan segment on this 
+     * distributed query cannot generate a plan with ScanTable so that it hard to build distributed plan segment on this
      * kind of plan.
-     * 
+     *
      * if there is any local table or there is no tables, we treat the query as original query so that it will
      * not be splited to several segments, instead it only has one segment and we will execute this segment in local server
      * as it original worked.
@@ -72,7 +72,7 @@ void InterpreterDistributedStages::createPlanSegments()
     query_plan.explainPlan(plan_str, {});
     LOG_DEBUG(log, "QUERY-PLAN-AFTER-EXCHANGE \n" + plan_str.str());
 
-    PlanSegmentContext plan_segment_context{.context = context, 
+    PlanSegmentContext plan_segment_context{.context = context,
                                             .query_plan = query_plan,
                                             .query_id = context->getCurrentQueryId(),
                                             .shard_number = query_data.cluster ? query_data.cluster->getShardCount() : 1,
@@ -91,7 +91,7 @@ BlockIO InterpreterDistributedStages::execute()
 PlanSegmentPtr MockPlanSegment(ContextPtr context)
 {
     PlanSegmentPtr plan_segment = std::make_unique<PlanSegment>();
-    
+
     PlanSegmentInputPtr left = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
     PlanSegmentInputPtr right = std::make_shared<PlanSegmentInput>(PlanSegmentType::EXCHANGE);
     PlanSegmentOutputPtr output = std::make_shared<PlanSegmentOutput>(PlanSegmentType::OUTPUT);
@@ -131,7 +131,7 @@ void MockSendPlanSegment(ContextPtr query_context)
                     node.host_name, node.port, node.default_database,
                     node.user, node.password, node.cluster, node.cluster_secret,
                     "MockSendPlanSegment", node.compression, node.secure);
-    
+
     const auto & settings = query_context->getSettingsRef();
     auto connection_timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
     connection->sendPlanSegment(connection_timeouts, plan_segment, &settings, &query_context->getClientInfo());

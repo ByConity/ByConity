@@ -352,10 +352,15 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     ReservationPtr reservation = data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true);
     VolumePtr volume = data.getStoragePolicy()->getVolume(0);
-
+    auto part_type = data.choosePartType(expected_size, block.rows());
+    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
+        part_type = MergeTreeDataPartType::WIDE;
+    }
    auto new_data_part = data.createPart(
        part_name,
-       data.choosePartType(expected_size, block.rows()),
+       part_type,
        new_part_info,
        createVolumeFromReservation(reservation, volume),
        TMP_PREFIX + part_name);

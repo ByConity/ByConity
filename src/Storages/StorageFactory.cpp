@@ -172,9 +172,9 @@ StoragePtr StorageFactory::get(
                     "SETTINGS clause",
                     [](StorageFeatures features) { return features.supports_settings; });
 
-            if (storage_def->partition_by || storage_def->primary_key || storage_def->order_by || storage_def->sample_by)
+            if (storage_def->partition_by || storage_def->primary_key || storage_def->order_by || storage_def->unique_key || storage_def->sample_by)
                 check_feature(
-                    "PARTITION_BY, PRIMARY_KEY, ORDER_BY or SAMPLE_BY clauses",
+                    "PARTITION_BY, PRIMARY_KEY, ORDER_BY or UNIQUE_KEY or SAMPLE_BY clauses",
                     [](StorageFeatures features) { return features.supports_sort_order; });
 
             if (storage_def->ttl_table || !columns.getColumnTTLs().empty())

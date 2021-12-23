@@ -271,6 +271,12 @@ template <> inline constexpr bool OverBigInt<UInt256> = true;
 template <> inline constexpr bool OverBigInt<Decimal128> = true;
 template <> inline constexpr bool OverBigInt<Decimal256> = true;
 
+template <typename T>
+constexpr bool IsNumberMemComparable = !OverBigInt<T>;
+template <> inline constexpr bool IsNumberMemComparable<Float32> = false;
+template <> inline constexpr bool IsNumberMemComparable<Float64> = false;
+
+
 inline constexpr const char * getTypeName(TypeIndex idx)
 {
     switch (idx)

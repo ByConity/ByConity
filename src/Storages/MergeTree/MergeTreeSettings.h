@@ -168,6 +168,10 @@ struct Settings;
     M(UInt64, unique_engine_scan_detach_interval, 5, "", 0) \
     M(UInt64, unique_engine_temp_table_wait_interval, 0, "", 0) \
     M(UInt64, unique_index_max_idle_seconds, 7200, "", 0) \
+    /** When enable disk_based_unique_key_index and unique key index file exists, use disk_based uki. Otherwise, use in-memory uki. \
+        Notice: this setting is under control of engine setting 'enable_disk_based_unique_key_index_method'.  \
+        That's, when 'enable_disk_based_unique_key_index_method' is false, this setting will not take effect. */           \
+    M(Bool, enable_disk_based_unique_key_index, true, "", 0)                                                  \
     /* HaUniqueMergeTree specific settings */                                                                 \
     M(UInt64, ha_unique_become_leader_timeout, 20 * 60, "", 0) \
     M(UInt64, ha_unique_update_log_sleep_ms, 5 * 1000, "", 0) \

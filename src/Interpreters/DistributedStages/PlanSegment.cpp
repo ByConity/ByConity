@@ -153,7 +153,7 @@ void PlanSegmentOutput::serialize(WriteBuffer & buf) const
 }
 
 void PlanSegmentOutput::deserialize(ReadBuffer & buf)
-{   
+{
     IPlanSegment::deserialize(buf);
     readBinary(shuffle_function_name, buf);
     readBinary(parallel_size, buf);
@@ -193,7 +193,7 @@ void PlanSegment::serialize(WriteBuffer & buf) const
 {
     writeBinary(segment_id, buf);
     writeBinary(query_id, buf);
-    
+
     query_plan.serialize(buf);
 
     writeBinary(inputs.size(), buf);
@@ -204,7 +204,7 @@ void PlanSegment::serialize(WriteBuffer & buf) const
         output->serialize(buf);
     else
         throw Exception("Cannot find output when serialize PlanSegment", ErrorCodes::LOGICAL_ERROR);
-    
+
     coordinator_address.serialize(buf);
     current_address.serialize(buf);
 
@@ -261,12 +261,12 @@ String PlanSegment::toString() const
     ostr << "output: " << "\n";
     if (output)
         ostr << output->toString(4) << "\n";
-    
+
     ostr << "coordinator_address: " << coordinator_address.toString() << "\n";
     ostr << "current_address: " << current_address.toString() << "\n";
     ostr << "cluster_name: " << cluster_name;
 
-    return ostr.str(); 
+    return ostr.str();
 }
 
 String PlanSegmentTree::toString() const

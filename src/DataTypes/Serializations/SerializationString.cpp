@@ -296,5 +296,76 @@ void SerializationString::deserializeTextCSV(IColumn & column, ReadBuffer & istr
     read(column, [&](ColumnString::Chars & data) { readCSVStringInto(data, istr, settings.csv); });
 }
 
+/// serializeMemComparable guarantees the encoded value is in ascending order for comparison,
+/// encoding with the following rule:
+///  [group1][marker1]...[groupN][markerN]
+///  group is 8 bytes slice which is padding with 0.
+///  marker is `0xFF - padding 0 count`
+/// for example:
+///   [] -> [0, 0, 0, 0, 0, 0, 0, 0, 247]
+///   [1, 2, 3] -> [1, 2, 3, 0, 0, 0, 0, 0, 250]
+///   [1, 2, 3, 0] -> [1, 2, 3, 0, 0, 0, 0, 0, 251]
+///   [1, 2, 3, 4, 5, 6, 7, 8] -> [1, 2, 3, 4, 5, 6, 7, 8, 255, 0, 0, 0, 0, 0, 0, 0, 0, 247]
+void SerializationString::serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+{
+    const StringRef & value = static_cast<const ColumnString &>(column).getDataAt(row_num);
+    size_t len = value.size;
+    for (size_t i = 0; i <= len; i += enc_group_size)
+    {
+        auto remain = len - i;
+        char pad_count = 0;
+        if (remain >= enc_group_size)
+            ostr.write(&value.data[i], enc_group_size);
+        else
+        {
+            pad_count = enc_group_size - remain;
+            ostr.write(&value.data[i], remain);
+            for (size_t j = pad_count; j > 0; j--)
+                writeChar(enc_pad, ostr);
+        }
 
+        char mark = enc_marker - pad_count;
+        writeChar(mark, ostr);
+    }
+}
+
+void SerializationString::deserializeMemComparable(IColumn & column, ReadBuffer & istr) const
+{
+    ColumnString & column_string = static_cast<ColumnString &>(column);
+    ColumnString::Chars & data = column_string.getChars();
+    ColumnString::Offsets & offsets = column_string.getOffsets();
+
+    size_t old_chars_size = data.size();
+    size_t offset = 0, tmp_size = 0;
+    String tmp;
+    try
+    {
+        while (true)
+        {
+            tmp.resize(tmp_size + enc_group_size + 1);
+            istr.readStrict(&(tmp.data()[tmp_size]), enc_group_size + 1);
+            char marker = tmp.data()[tmp_size + enc_group_size];
+            if (marker == enc_marker)
+                tmp_size += enc_group_size;
+            else
+            {
+                auto pad_count = enc_marker - marker;
+                tmp_size += enc_group_size - pad_count;
+                break;
+            }
+        }
+
+        offset = old_chars_size + tmp_size + 1;
+        data.resize(offset);
+        memcpy(reinterpret_cast<char *>(&data[old_chars_size]), tmp.data(), tmp_size);
+        data.back() = 0;
+    }
+    catch (...)
+    {
+        data.resize_assume_reserved(old_chars_size);
+        throw;
+    }
+
+    offsets.push_back(offset);
+}
 }

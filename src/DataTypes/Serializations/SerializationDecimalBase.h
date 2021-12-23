@@ -27,6 +27,10 @@ public:
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
     void deserializeBinary(IColumn & column, ReadBuffer & istr) const override;
     void deserializeBinaryBulk(IColumn & column, ReadBuffer & istr, size_t limit, double avg_value_size_hint) const override;
+
+    bool supportMemComparableEncoding() const override;
+    void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
+    void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const override;
 };
 
 }

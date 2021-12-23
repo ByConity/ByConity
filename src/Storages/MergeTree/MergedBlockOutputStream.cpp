@@ -3,6 +3,11 @@
 #include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
 
+#include <Interpreters/sortBlock.h>
+#include <Storages/IndexFile/FilterPolicy.h>
+#include <Storages/IndexFile/IndexFileWriter.h>
+#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
+#include <Common/Coding.h>
 
 namespace DB
 {
@@ -12,7 +17,6 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
 }
-
 
 MergedBlockOutputStream::MergedBlockOutputStream(
     const MergeTreeDataPartPtr & data_part,
@@ -50,8 +54,21 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     else
         writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique
+        && true /*storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method*/ // FIXME (UNIQUE KEY): not work, fix later
+        && storage.getSettings()->enable_disk_based_unique_key_index)
+    {
+        enable_disk_based_key_index = true;
 
-
+        if (auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get()); writer_wide)
+        {
+            writer_wide->setEnableDiskBasedKeyIndex(enable_disk_based_key_index);
+        }
+        else
+        {
+            throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
 }
 
 /// If data is pre-sorted.

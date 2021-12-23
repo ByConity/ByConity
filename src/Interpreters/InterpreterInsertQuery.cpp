@@ -72,17 +72,22 @@ Block InterpreterInsertQuery::getSampleBlock(
     const StoragePtr & table,
     const StorageMetadataPtr & metadata_snapshot) const
 {
-    Block table_sample_non_materialized = metadata_snapshot->getSampleBlockNonMaterialized();
     /// If the query does not include information about columns
     if (!query.columns)
     {
         if (no_destination)
             return metadata_snapshot->getSampleBlockWithVirtuals(table->getVirtuals());
         else
-            return table_sample_non_materialized;
+            return metadata_snapshot->getSampleBlockNonMaterialized();
     }
 
-    Block table_sample = metadata_snapshot->getSampleBlock();
+    Block table_sample_non_materialized;
+    if (no_destination)
+        table_sample_non_materialized = metadata_snapshot->getSampleBlockWithVirtuals(table->getVirtuals());
+    else
+        table_sample_non_materialized = metadata_snapshot->getSampleBlockNonMaterialized(/*include_func_columns*/ true);
+
+    Block table_sample = metadata_snapshot->getSampleBlock(/*include_func_columns*/ true);
 
     const auto columns_ast = processColumnTransformers(getContext()->getCurrentDatabase(), table, metadata_snapshot, query.columns);
 
