@@ -10,6 +10,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/ISimpleTransform.h>
 #include <Poco/Logger.h>
+#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
@@ -46,6 +47,8 @@ public:
         const ColumnNumbers & repartition_keys,
         ExecutableFunctionPtr repartition_func,
         const DataTypePtr & result_type);
+
+    static ExecutableFunctionPtr getDefaultRepartitionFunction(const ColumnsWithTypeAndName & arguments, ContextPtr context);
 
 protected:
     void transform(Chunk & chunk) override;

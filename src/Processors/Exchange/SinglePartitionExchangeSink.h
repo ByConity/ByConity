@@ -10,9 +10,9 @@
 namespace DB
 {
 /// Send data to single partititon. Usually used with RepartitionTransform and BufferedCopyTransform: 
-///                                                 ||-> SinglePartitionExchangeSink
-/// RepartitionTransform--> BufferedCopyTransform-->||-> SinglePartitionExchangeSink
-///                                                 ||-> SinglePartitionExchangeSink
+///                                                 ||-> SinglePartitionExchangeSink[partition 0]
+/// RepartitionTransform--> BufferedCopyTransform-->||-> SinglePartitionExchangeSink[partition 1]
+///                                                 ||-> SinglePartitionExchangeSink[partition 2]
 /// This pipeline can keep data order and maximize the parallelism.
 class SinglePartitionExchangeSink : public ISink
 {

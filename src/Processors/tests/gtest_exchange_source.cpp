@@ -17,14 +17,16 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/ResizeProcessor.h>
 #include <Processors/tests/gtest_utils.h>
-#include "Processors/LimitTransform.h"
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/LimitTransform.h>
 
 using namespace DB;
 namespace UnitTest
 {
 TEST(ExchangeSource, LocalNormalTest)
 {
-    LocalChannelOptions options{10, 1000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -35,8 +37,8 @@ TEST(ExchangeSource, LocalNormalTest)
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-
-    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver);
+    
+    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
     QueryPipeline pipeline;
 
     pipeline.init(Pipe(exchange_source));
@@ -66,7 +68,8 @@ TEST(ExchangeSource, LocalNormalTest)
 
 TEST(ExchangeSource, LocalSenderTimeoutTest)
 {
-    LocalChannelOptions options{10, 200};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -80,7 +83,7 @@ TEST(ExchangeSource, LocalSenderTimeoutTest)
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
-    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
     QueryPipeline pipeline;
 
     Pipe pipe;
@@ -102,7 +105,8 @@ TEST(ExchangeSource, LocalSenderTimeoutTest)
 
 TEST(ExchangeSource, LocalLimitTest)
 {
-    LocalChannelOptions options{10, 200};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -116,7 +120,7 @@ TEST(ExchangeSource, LocalLimitTest)
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
-    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
     QueryPipeline pipeline;
 
     Pipe pipe;

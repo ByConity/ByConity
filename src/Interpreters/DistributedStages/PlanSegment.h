@@ -106,6 +106,8 @@ public:
 
     void insertSourceAddress(const AddressInfos & address_infos) { source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end()); }
 
+    const AddressInfos & getSourceAddress() const { return source_addresses; }
+
     size_t getParallelIndex() const { return parallel_index; }
 
     void setParallelIndex(size_t parallel_index_) { parallel_index = parallel_index_;}
@@ -226,6 +228,8 @@ public:
     PlanSegmentPtr clone();
 
     void setContext(const ContextMutablePtr & context_) { context = context_; }
+
+    ContextPtr getContext() const { return context;}
 
     String toString() const;
 

@@ -527,6 +527,15 @@ class IColumn;
     M(Bool, allow_experimental_bigint_types, true, "Obsolete setting, does nothing.", 0) \
     M(HandleKafkaErrorMode, handle_kafka_error_mode, HandleKafkaErrorMode::DEFAULT, "Obsolete setting, does nothing.", 0) \
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
+    \
+    /** Exchange setttings */ \
+    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
+    M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
+    M(UInt64, exchange_stream_max_buf_size, 73400320, "Default 70M, -1 means no limit", 0) \
+    M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
+    M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
+    M(UInt64, exchange_output_parallel_size, 65505, "The num of exchange sink, ingoned if exchange need keep data order ", 0) \
+    M(Bool, exchange_enable_local_debug_mode, false, "Exchange data transfer through memory queue instead of network for debug", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */
 
 
@@ -605,10 +614,6 @@ class IColumn;
     \
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     \
-    M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
-    M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
-    M(UInt64, exchange_stream_max_buf_size, 73400320, "Default 70M, -1 means no limit", 0) \
-
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

@@ -1,20 +1,35 @@
-#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <memory>
+
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeRegistryCenter.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
+#include <Processors/Exchange/ExchangeSource.h>
+#include <Processors/Exchange/ExchangeUtils.h>
+#include <Processors/QueryPipeline.h>
+#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <Processors/QueryPlan/ISourceStep.h>
+#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 
 
 namespace DB
 {
-
-RemoteExchangeSourceStep::RemoteExchangeSourceStep(const PlanSegmentInputs & inputs_, DataStream input_stream_)
-: inputs(inputs_)
+namespace ErrorCodes
 {
-    input_streams.emplace_back(std::move(input_stream_));
-    output_stream = DataStream{.header = input_streams[0].header};
+    extern const int LOGICAL_ERROR;
 }
 
-QueryPipelinePtr RemoteExchangeSourceStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
+RemoteExchangeSourceStep::RemoteExchangeSourceStep(PlanSegmentInputs inputs_, DataStream input_stream_):ISourceStep(DataStream{.header = inputs_[0]->getHeader()}), 
+inputs(std::move(inputs_))
 {
-    return nullptr;
+    input_streams.emplace_back(std::move(input_stream_));
+    logger = &Poco::Logger::get("RemoteExchangeSourceStep");
 }
 
 void RemoteExchangeSourceStep::serialize(WriteBuffer & buf) const
@@ -22,7 +37,7 @@ void RemoteExchangeSourceStep::serialize(WriteBuffer & buf) const
     IQueryPlanStep::serializeImpl(buf);
 
     writeBinary(inputs.size(), buf);
-    for (auto & input : inputs)
+    for (const auto & input : inputs)
         input->serialize(buf);
 }
 
@@ -46,5 +61,72 @@ QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, Context
     step->setStepDescription(step_description);
     return step;
 }
+
+void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_){
+    plan_segment = plan_segment_;
+    plan_segment_id = plan_segment->getPlanSegmentId();
+    query_id = plan_segment->getQueryId();
+    coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+    context = plan_segment->getContext();
+    options = ExchangeUtils::getExchangeOptions(context);
+}
+
+void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & /*settings*/)
+{
+    if (!plan_segment)
+        throw Exception("Should setPlanSegment before initializePipeline!", ErrorCodes::LOGICAL_ERROR);
+
+    Pipe pipe;
+
+    const Block & header = getOutputStream().header;
+
+    for (const auto & input : inputs)
+    {
+        size_t write_plan_segment_id = input->getPlanSegmentId();
+        // should only have one SourceAddress
+        if (input->getSourceAddress().size() != 1)
+        {
+            throw Exception("Only surport one SourceAddress!", ErrorCodes::LOGICAL_ERROR);
+        }
+        assert(input->getSourceAddress().size() == 1);
+        const AddressInfo & write_address_info = input->getSourceAddress()[0];
+        size_t exchange_parallel_size = input->getExchangeParallelSize();
+
+        //TODO: hack logic for BROADCAST, we should remove this logic
+        if (input->getExchangeMode() == ExchangeMode::BROADCAST)
+            exchange_parallel_size = 1;
+
+        size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
+        
+        LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
+
+        for (size_t i = 0; i < exchange_parallel_size; ++i)
+        {
+            size_t partition_id = partition_id_start + i;
+            DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
+                query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
+            BroadcastReceiverPtr receiver;
+            if(context->getSettingsRef().exchange_enable_local_debug_mode){
+                LOG_DEBUG(logger, "Create local exchange source : {}", data_key->dump());
+                receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(*data_key, local_options);
+            }
+            else
+            {
+                LOG_DEBUG(logger, "Create remote exchange source : {}", data_key->dump());
+                receiver = BrpcExchangeRegistryCenter::getInstance().getOrCreateReceiver(
+                    data_key, extractExchangeHostPort(write_address_info), context, header);
+            }
+            auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
+            pipe.addSource(std::move(source));
+        }
+    }
+    pipeline.init(std::move(pipe));
+}
+
+
+void RemoteExchangeSourceStep::describePipeline(FormatSettings & /*settings*/) const {
+    //TODO
+};
+
 
 }

@@ -11,10 +11,10 @@
 
 namespace DB
 {
-class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, IBroadcastReceiver
+class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
-    BrpcRemoteBroadcastReceiver(DataTransKeyPtr transKey_, ContextPtr context_, Block & header_);
+    BrpcRemoteBroadcastReceiver(DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_);
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
@@ -28,6 +28,7 @@ public:
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
     DataTransKeyPtr trans_key;
+    String registry_address;
     ContextPtr context;
     Block header;
     // todo::aron add MemoryTracker here

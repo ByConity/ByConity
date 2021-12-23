@@ -28,16 +28,16 @@
 #include <Processors/ResizeProcessor.h>
 #include <Processors/tests/gtest_utils.h>
 #include <Common/tests/gtest_global_context.h>
-#include "Processors/Exchange/SinglePartitionExchangeSink.h"
-#include "Processors/Transforms/BufferedCopyTransform.h"
-#include "Processors/Transforms/CopyTransform.h"
+#include <Processors/Exchange/SinglePartitionExchangeSink.h>
+#include <Processors/Transforms/BufferedCopyTransform.h>
 
 using namespace DB;
 namespace UnitTest
 {
 TEST(BroadcastExchangeSink, LocalNormalTest)
 {
-    LocalChannelOptions options{10, 2000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -57,7 +57,7 @@ TEST(BroadcastExchangeSink, LocalNormalTest)
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
     auto exchange_sink = std::make_shared<BroadcastExchangeSink>(header, std::vector<BroadcastSenderPtr>{sink_sender});
     connect(exchange_source->getPort(), exchange_sink->getPort());
     Processors processors;
@@ -77,7 +77,8 @@ TEST(BroadcastExchangeSink, LocalNormalTest)
 
 TEST(LoadBalancedExchangeSink, LocalNormalTest)
 {
-    LocalChannelOptions options{10, 2000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -97,7 +98,7 @@ TEST(LoadBalancedExchangeSink, LocalNormalTest)
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
     auto exchange_sink = std::make_shared<LoadBalancedExchangeSink>(header, std::vector<BroadcastSenderPtr>{sink_sender});
     connect(exchange_source->getPort(), exchange_sink->getPort());
     Processors processors;
@@ -118,7 +119,8 @@ TEST(LoadBalancedExchangeSink, LocalNormalTest)
 
 TEST(MultiPartitionExchangeSink, LocalNormalTest)
 {
-    LocalChannelOptions options{10, 2000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -145,7 +147,7 @@ TEST(MultiPartitionExchangeSink, LocalNormalTest)
     }
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
-    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
     auto exchange_sink = std::make_shared<MultiPartitionExchangeSink>(
         header,
         std::vector<BroadcastSenderPtr>{sink_sender},
@@ -179,7 +181,8 @@ TEST(MultiPartitionExchangeSink, LocalNormalTest)
 
 TEST(SinglePartitionExchangeSink, LocalNormalTest)
 {
-    LocalChannelOptions options{10, 2000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -205,7 +208,7 @@ TEST(SinglePartitionExchangeSink, LocalNormalTest)
     }
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
-    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
     auto repartition_transform = std::make_shared<RepartitionTransform>(header, 1, ColumnNumbers{1, 2}, func);
     auto exchange_sink = std::make_shared<SinglePartitionExchangeSink>(header, sink_sender, 0, ExchangeOptions{1000, 0, 0});
     connect(exchange_source->getPort(), repartition_transform->getInputPort());
@@ -230,7 +233,8 @@ TEST(SinglePartitionExchangeSink, LocalNormalTest)
 
 TEST(SinglePartitionExchangeSink, PipelineTest)
 {
-    LocalChannelOptions options{10, 2000};
+    ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -260,10 +264,9 @@ TEST(SinglePartitionExchangeSink, PipelineTest)
     }
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
-    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver);
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
     auto repartition_transform = std::make_shared<RepartitionTransform>(header, 2, ColumnNumbers{1, 2}, func);
     auto buffer_copy_transform = std::make_shared<BufferedCopyTransform>(header, 2, 10);
-    // auto buffer_copy_transform = std::make_shared<CopyTransform>(header, 2);
 
     auto exchange_sink_1 = std::make_shared<SinglePartitionExchangeSink>(header, sink_sender_1, 0, ExchangeOptions{1000, 0, 0});
     auto exchange_sink_2 = std::make_shared<SinglePartitionExchangeSink>(header, sink_sender_2, 1, ExchangeOptions{1000, 0, 0});

@@ -16,6 +16,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
+#include "Interpreters/DistributedStages/PlanSegmentProcessList.h"
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -622,6 +623,10 @@ public:
     /// List all queries.
     ProcessList & getProcessList();
     const ProcessList & getProcessList() const;
+
+    /// List all plan segment queries;
+    PlanSegmentProcessList & getPlanSegmentProcessList();
+    const PlanSegmentProcessList & getPlanSegmentProcessList() const;
 
     MergeList & getMergeList();
     const MergeList & getMergeList() const;

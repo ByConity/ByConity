@@ -1,5 +1,7 @@
 #include "BrpcExchangeReceiverRegistryService.h"
 #include "BrpcExchangeRegistryCenter.h"
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
 
 namespace DB
 {
@@ -27,4 +29,5 @@ void BrpcExchangeReceiverRegistryService::registry(
     BrpcExchangeRegistryCenter::getInstance().submit(request->data_key(), sender_stream_id);
     LOG_TRACE(log, "BrpcExchangeReceiverRegistryService create stream_id-{}, data_key-{}", sender_stream_id, request->data_key());
 }
+
 }

@@ -6,6 +6,7 @@
 #include <Processors/Pipe.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Sources/SourceWithProgress.h>
+#include <Processors/Exchange/ExchangeOptions.h>
 
 
 namespace DB
@@ -14,7 +15,7 @@ namespace DB
 class ExchangeSource : public SourceWithProgress
 {
 public:
-    explicit ExchangeSource(Block header_, BroadcastReceiverPtr receiver_);
+    explicit ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_);
     ~ExchangeSource() override;
 
     IProcessor::Status prepare() override;
@@ -27,6 +28,8 @@ protected:
 
 private:
     BroadcastReceiverPtr receiver;
+    ExchangeOptions options;
+    bool inited = false;
     std::atomic<bool> was_query_canceled = false;
     std::atomic<bool> was_receiver_finished = false;
 };

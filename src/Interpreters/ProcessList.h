@@ -7,6 +7,7 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
 #include <Storages/IStorage_fwd.h>
+#include <bthread/mtx_cv_base.h>
 #include <Poco/Condition.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
@@ -15,12 +16,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
 
-#include <condition_variable>
 #include <list>
 #include <map>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 
@@ -102,7 +100,7 @@ protected:
     /// Be careful using it. For example, queries field of ProcessListForUser could be modified concurrently.
     const ProcessListForUser * getUserProcessList() const { return user_process_list; }
 
-    mutable std::mutex query_streams_mutex;
+    mutable bthread::Mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
     /// This declaration is compatible with notes about BlockIO::process_list_entry:
@@ -276,8 +274,8 @@ public:
 protected:
     friend class ProcessListEntry;
 
-    mutable std::mutex mutex;
-    mutable std::condition_variable have_space;        /// Number of currently running queries has become less than maximum.
+    mutable bthread::Mutex mutex;
+    mutable bthread::ConditionVariable have_space;        /// Number of currently running queries has become less than maximum.
 
     /// List of queries
     Container processes;

@@ -9,6 +9,9 @@ namespace DB
 
 class Context;
 
-BlockIO executePlanSegment(const PlanSegmentPtr & plan_segment, ContextMutablePtr context);
+BlockIO executePlanSegment(PlanSegmentPtr plan_segment, ContextMutablePtr context);
+    
 
+void executePlanSegment(PlanSegmentPtr plan_segment, ContextMutablePtr context, bool is_async);
+    
 }

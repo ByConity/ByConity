@@ -18,8 +18,8 @@ namespace ErrorCodes
     extern const int BRPC_EXCEPTION;
 }
 
-BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(DataTransKeyPtr transKey_, ContextPtr context_, Block & header_)
-    : trans_key(transKey_), context(context_), header(header_)
+BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_)
+    : trans_key(std::move(trans_key_)), registry_address(std::move(registry_address_)), context(std::move(context_)), header(std::move(header_))
 {
     data_key = trans_key->getKey();
 }
@@ -42,7 +42,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
         try
         {
             // FIXME: not register to coodinator adress
-            std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(trans_key->getCoordinatorAddress(), false);
+            std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(registry_address, false);
             Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
             brpc::Controller cntl;
             brpc::StreamOptions stream_options;
@@ -64,7 +64,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             LOG_DEBUG(
                 log,
                 "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}",
-                trans_key->getCoordinatorAddress(),
+                registry_address,
                 data_key,
                 stream_id);
             return;

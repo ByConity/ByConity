@@ -33,11 +33,10 @@ namespace ErrorCodes
  * 1-n, broadcast
  */
 BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
-    std::vector<String> & receiver_ids_, ContextPtr context_, Block & header_, DataTransKeyPtr trans_key_)
-    : receiver_ids(receiver_ids_)
-    , context(context_)
-    , header(header_)
-    , trans_key(trans_key_)
+    std::vector<DataTransKeyPtr> trans_keys_, ContextPtr context_, Block header_)
+    : trans_keys(std::move(trans_keys_))
+    , context(std::move(context_))
+    , header(std::move(header_))
     , registry_center(BrpcExchangeRegistryCenter::getInstance())
 {
 }
@@ -45,29 +44,28 @@ BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
 /**
  * 1-1, repartition
  */
-BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
-    String & receiver_id_, ContextPtr context_, Block & header_, DataTransKeyPtr trans_key_)
-    : receiver_ids(std::vector<String>{receiver_id_})
-    , context(context_)
-    , header(header_)
-    , trans_key(trans_key_)
+BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(DataTransKeyPtr trans_key_, ContextPtr context_, Block header_)
+    : trans_keys(std::vector<DataTransKeyPtr>{std::move(trans_key_)})
+    , context(std::move(context_))
+    , header(std::move(header_))
     , registry_center(BrpcExchangeRegistryCenter::getInstance())
 {
 }
 
 BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 {
-    for (const auto & id : receiver_ids)
+    for (const auto & key : trans_keys)
     {
-        registry_center.removeReceiver(id);
+        registry_center.removeReceiver(key->getKey());
     }
 }
 
 void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
 {
     size_t max_num = timeout_ms / 10;
-    for (const auto & id : receiver_ids)
+    for (const auto & trans_key : trans_keys)
     {
+        const auto & id = trans_key->getKey();
         // for each receiver_id check exists in registry_center
         size_t retry_count = 0;
         while (!registry_center.exist(id))
@@ -115,15 +113,15 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk)
         chunk_out.write(chunk);
     }
     const auto & buf = out.getFinishedBuf();
-    for (auto stream_id : sender_stream_ids)
+    for (size_t i = 0; i < sender_stream_ids.size(); ++i)
     {
-        sendIOBuffer(buf, stream_id);
+        sendIOBuffer(buf, sender_stream_ids[i], trans_keys[i]->getKey());
     }
     //TODO
     return BroadcastStatus(BroadcastStatusCode::RUNNING);
 }
 
-bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id)
+bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key)
 {
     if (io_buffer.size() > brpc::FLAGS_max_body_size)
         throw Exception(
@@ -155,7 +153,7 @@ bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::Strea
                 STREAM_WAIT_TIMEOUT_MS,
                 retry_count,
                 stream_id,
-                trans_key->getKey(),
+                data_key,
                 wait_res_code,
                 io_buffer.size());
         }
@@ -177,13 +175,13 @@ bool BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::Strea
 
     if (!success)
         throw Exception(
-            "write stream buffer fail,with data_key-" + trans_key->getKey() + ", size:" + std::to_string(io_buffer.size()),
+            "write stream buffer fail,with data_key-" + data_key + ", size:" + std::to_string(io_buffer.size()),
             ErrorCodes::BRPC_EXCEPTION);
     LOG_DEBUG(
         log,
         "Send exchange data size-{} M with data_key-{}, stream_id-{} retry times:{} cost:{} ms",
         io_buffer.size() / 1024.0 / 1024.0,
-        trans_key->getKey(),
+        data_key,
         stream_id,
         retry_count,
         s.elapsedMilliseconds());

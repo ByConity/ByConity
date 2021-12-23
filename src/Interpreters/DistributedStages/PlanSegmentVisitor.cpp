@@ -1,7 +1,6 @@
 #include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Processors/QueryPlan/ExchangeStep.h>
-#include <Processors/Sources/RemoteSource.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 namespace DB
@@ -40,7 +39,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeStep(QueryPlan::Node * node, 
 
         inputs.push_back(input);
     }
-
+    // FIXME
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
@@ -49,7 +48,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeStep(QueryPlan::Node * node, 
 
 PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size_t segment_id, PlanSegmentContext & plan_segment_context)
 {
-    /**
+    /**   
      * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed. 
      * More precisely, nodes that moved to sub_plan are deleted.
      */ 
