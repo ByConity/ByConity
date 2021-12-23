@@ -3,6 +3,7 @@
 #include <Core/Types.h>
 #include <Core/Block.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Interpreters/StorageID.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 
@@ -102,6 +103,10 @@ public:
 
     PlanSegmentInput() = default;
 
+    AddressInfos & getSourceAddresses() { return source_addresses; }
+
+    void clearSourceAddresses() { source_addresses.clear(); }
+
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
     void insertSourceAddress(const AddressInfos & address_infos) { source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end()); }
@@ -118,9 +123,14 @@ public:
 
     String toString(size_t indent = 0) const override;
 
+    std::pair<String, String> getStorageID() const { return storage_id; }
+
+    void setStorageID(std::pair<String, String> storage_id_) { storage_id = storage_id_;}
+
 private:
     size_t parallel_index = 0;
     AddressInfos source_addresses;
+    std::pair<String, String> storage_id;
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
@@ -233,6 +243,15 @@ public:
 
     String toString() const;
 
+    String getClusterName() const { return cluster_name; }
+
+    size_t getExchangeParallelSize() const { return exchange_parallel_size; }
+
+    void setExchangeParallelSize(size_t exchange_parallel_size_) { exchange_parallel_size = exchange_parallel_size_;}
+
+    size_t getParallelSize() const { return parallel; }
+
+    void setParallelSize(size_t parallel_size_) { parallel = parallel_size_; }
 private:
     size_t segment_id;
     String query_id;
@@ -244,6 +263,8 @@ private:
     AddressInfo coordinator_address;
     AddressInfo current_address;
     String cluster_name;
+    size_t parallel;
+    size_t exchange_parallel_size;
 
     ContextMutablePtr context;
 };

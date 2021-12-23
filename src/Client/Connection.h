@@ -94,10 +94,14 @@ public:
         const String & client_name_,
         Protocol::Compression compression_,
         Protocol::Secure secure_,
-        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0))
+        Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
+        UInt16 exchange_port_ = 0,
+        UInt16 exchange_status_port_ =0)
         :
         host(host_), port(port_), default_database(default_database_),
         user(user_), password(password_),
+        exchange_port(exchange_port_),
+        exchange_status_port(exchange_status_port_),
         cluster(cluster_),
         cluster_secret(cluster_secret_),
         client_name(client_name_),
@@ -142,6 +146,10 @@ public:
     const String & getHost() const;
     UInt16 getPort() const;
     const String & getDefaultDatabase() const;
+    const String & getUser() const;
+    const String & getPassword() const;
+    UInt16 getExchangePort() const;
+    UInt16 getExchangeStatusPort() const;
 
     Protocol::Compression getCompression() const { return compression; }
 
@@ -157,7 +165,7 @@ public:
 
     void sendPlanSegment(
         const ConnectionTimeouts & timeouts,
-        const PlanSegmentPtr & plan_segment,
+        const PlanSegment * plan_segment,
         const Settings * settings = nullptr,
         const ClientInfo * client_info = nullptr);
 
@@ -225,6 +233,8 @@ private:
     String default_database;
     String user;
     String password;
+    UInt16 exchange_port;
+    UInt16 exchange_status_port;
 
     /// For inter-server authorization
     String cluster;

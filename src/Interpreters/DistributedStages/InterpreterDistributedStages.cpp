@@ -6,6 +6,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/RewriteDistributedQueryVisitor.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -134,7 +135,7 @@ void MockSendPlanSegment(ContextPtr query_context)
 
     const auto & settings = query_context->getSettingsRef();
     auto connection_timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
-    connection->sendPlanSegment(connection_timeouts, plan_segment, &settings, &query_context->getClientInfo());
+    connection->sendPlanSegment(connection_timeouts, plan_segment.get(), &settings, &query_context->getClientInfo());
     connection->poll(1000);
     Packet packet = connection->receivePacket();
     LOG_TRACE(&Poco::Logger::get("MockSendPlanSegment"), "sendPlanSegmentToLocal finish:" + std::to_string(packet.type));
@@ -214,11 +215,28 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
      */
     //MockSendPlanSegment(context);
 
-    MockTestQuery(plan_segment_tree.get(), context);
-    // just for test plan 0
-    if (plan_segment_tree->getNodes().size() == 1)
+//    MockTestQuery(plan_segment_tree.get(), context);
+
+    PlanSegmentsStatusPtr scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getClientInfo().initial_query_id, plan_segment_tree.get(), context);
+
+    if (!scheduler_status)
+        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
+
+    Stopwatch s;
+    while (1)
     {
-        res = InterpreterPlanSegment(plan_segment_tree->getNodes().front().getPlanSegment(), context).execute();
+        if (context->getSettingsRef().max_execution_time.value.seconds() > 0 && s.elapsedSeconds() > context->getSettingsRef().max_execution_time.value.seconds())
+            throw Exception("Final stage not start", ErrorCodes::LOGICAL_ERROR);
+
+        if (scheduler_status->is_final_stage_start)
+        {
+            // just for test plan 0
+//            if (plan_segment_tree->getNodes().size() == 1)
+//            {
+                res = InterpreterPlanSegment(plan_segment_tree->getNodes().front().getPlanSegment(), context).execute();
+                break;
+//            }
+        }
     }
 
     return res;

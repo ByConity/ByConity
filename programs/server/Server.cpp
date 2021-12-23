@@ -503,6 +503,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
 
+    if (config().has("exchange_port") && config().has("exchange_status_port"))
+    {
+        global_context->setComplexQueryActive(true);
+    }
+
     bool has_zookeeper = config().has("zookeeper");
 
     zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });
@@ -1447,6 +1452,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 throw Exception("distributed_ddl.pool_size should be greater then 0", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
             global_context->setDDLWorker(std::make_unique<DDLWorker>(pool_size, ddl_zookeeper_path, global_context, &config(),
                                                                      "distributed_ddl", "DDLWorker", &CurrentMetrics::MaxDDLEntryID));
+        }
+
+        if (global_context->getComplexQueryActive())
+        {
+            global_context->setExchangePort(config().getInt("exchange_port"));
+            global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
         }
 
         for (auto & server : *servers)

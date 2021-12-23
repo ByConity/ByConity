@@ -113,6 +113,8 @@ using StoragePolicySelectorPtr = std::shared_ptr<const StoragePolicySelector>;
 struct PartUUIDs;
 using PartUUIDsPtr = std::shared_ptr<PartUUIDs>;
 class KeeperStorageDispatcher;
+class SegmentScheduler;
+using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -558,6 +560,15 @@ public:
     void setInterserverIOAddress(const String & host, UInt16 port);
     std::pair<String, UInt16> getInterserverIOAddress() const;
 
+    void setExchangePort(UInt16 port);
+    UInt16 getExchangePort() const;
+
+    void setExchangeStatusPort(UInt16 port);
+    UInt16 getExchangeStatusPort() const;
+
+    void setComplexQueryActive(bool active);
+    bool getComplexQueryActive();
+
     String getLocalHost() const;
 
     /// Credentials which server will use to communicate with others
@@ -635,6 +646,9 @@ public:
     /// List all plan segment queries;
     PlanSegmentProcessList & getPlanSegmentProcessList();
     const PlanSegmentProcessList & getPlanSegmentProcessList() const;
+
+    SegmentSchedulerPtr getSegmentScheduler();
+    SegmentSchedulerPtr getSegmentScheduler() const;
 
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
