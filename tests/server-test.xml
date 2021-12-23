@@ -14,6 +14,7 @@
     <listen_try>1</listen_try>
     <http_port>58123</http_port>
     <tcp_port>59000</tcp_port>
+    <ha_tcp_port>59001</ha_tcp_port>
     <https_port>58443</https_port>
     <tcp_port_secure>59440</tcp_port_secure>
     <interserver_http_port>59009</interserver_http_port>
@@ -117,7 +118,22 @@
         </test_shard_localhost_secure>
     </remote_servers>
     <include_from/>
-    <zookeeper incl="zookeeper-servers" optional="true" />
+    <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
+	<zookeeper>
+        <node index="1">
+           <host>10.21.152.228</host>
+           <port>12181</port>
+       </node>
+        <!-- <node>
+            <host>example2</host>
+            <port>2181</port>
+        </node>
+        <node>
+            <host>example3</host>
+            <port>2181</port>
+        </node> -->
+    </zookeeper>
+
     <macros incl="macros" optional="true" />
     <builtin_dictionaries_reload_interval>3600</builtin_dictionaries_reload_interval>
     <max_session_timeout>3600</max_session_timeout>

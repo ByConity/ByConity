@@ -72,6 +72,11 @@ void registerAggregateFunctionSlideMatchCount(AggregateFunctionFactory & factory
 void registerAggregateFunctionFrequency(AggregateFunctionFactory & factory);
 void registerAggregateFunctionPathSplit(AggregateFunctionFactory & factory);
 void registerAggregateFunctionPathCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapLogic(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapFromColumn(AggregateFunctionFactory &);
+void registerAggregateFunctionsBitmapColumnDiff(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitmapMaxLevel(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -164,6 +169,11 @@ void registerAggregateFunctions()
         registerWindowFunctions(factory);
 
         registerAggregateFunctionIntervalLengthSum(factory);
+        registerAggregateFunctionsBitmapFromColumn(factory);
+        registerAggregateFunctionsBitmapLogic(factory);
+        registerAggregateFunctionsBitmapColumnDiff(factory);
+        registerAggregateFunctionsBitmapExpressionCalculation(factory);
+        registerAggregateFunctionsBitmapMaxLevel(factory);
     }
 
     {

@@ -56,6 +56,18 @@ const Type * checkAndGetColumnConstData(const IColumn * column)
 }
 
 template <typename Type>
+const Type * checkAndGetColumnEvenIfConst(const IColumn * column)
+{
+    if (isColumnConst(*column))
+    {
+        const ColumnConst * res = checkAndGetColumnConst<Type>(column);
+        return static_cast<const Type *>(&res->getDataColumn());
+    }
+    else
+        return checkAndGetColumn<Type>(column);
+}
+
+template <typename Type>
 bool checkColumnConst(const IColumn * column)
 {
     return checkAndGetColumnConst<Type>(column);
