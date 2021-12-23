@@ -11,6 +11,7 @@ namespace DB
 {
 
 class ProcessListEntry;
+class PlanSegmentProcessListEntry;
 
 struct BlockIO
 {
@@ -24,6 +25,7 @@ struct BlockIO
     BlockIO & operator= (const BlockIO & rhs) = delete;
 
     std::shared_ptr<ProcessListEntry> process_list_entry;
+    std::shared_ptr<PlanSegmentProcessListEntry> plan_segment_process_entry;
 
     BlockOutputStreamPtr out;
     BlockInputStreamPtr in;

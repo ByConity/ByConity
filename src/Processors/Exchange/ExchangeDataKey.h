@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -21,23 +22,28 @@ public:
     {
     }
     ~ExchangeDataKey() override = default;
+
     String getKey() const override
     {
         return query_id + "_" + std::to_string(write_segment_id) + "_" + std::to_string(read_segment_id) + "_"
-            + std::to_string(parallel_index);
+            + std::to_string(parallel_index) + "@" + coordinator_address;
     }
 
 
     String dump() const override
     {
-        return "query_id:" + query_id + ", write_segment_id:" + std::to_string(write_segment_id)
-            + ", read_segment_id:" + std::to_string(read_segment_id) + ", parallel_index:" + std::to_string(parallel_index);
+        return fmt::format(
+            "ExchangeDataKey: [query_id: {}, write_segment_id: {}, read_segment_id: {}, parallel_index: {}, coordinator_address: {}]",
+            query_id,
+            write_segment_id,
+            read_segment_id,
+            parallel_index,
+            coordinator_address);
     }
 
-    String getCoordinatorAddress() const override
-    {
-        return coordinator_address;
-    }
+    inline const String & getQueryId() const { return query_id; }
+
+    inline const String & getCoordinatorAddress() const { return coordinator_address; }
 
 private:
     String query_id;

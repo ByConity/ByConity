@@ -312,7 +312,7 @@ void TCPHandler::runImpl()
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
             if (state.plan_segment)
-                state.io = executePlanSegment(state.plan_segment, query_context);
+                executePlanSegment(std::move(state.plan_segment), query_context, true);
             else
                 state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
 

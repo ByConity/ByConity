@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <optional>
 #include <variant>
 
@@ -10,6 +11,7 @@
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/Exception.h>
+#include "Processors/Exchange/ExchangeOptions.h"
 
 namespace DB
 {
@@ -18,8 +20,8 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_)
-    : SourceWithProgress(std::move(header_), false), receiver(std::move(receiver_))
+ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_)
+    : SourceWithProgress(std::move(header_), false), receiver(std::move(receiver_)), options(options_)
 {
 }
 
@@ -37,6 +39,10 @@ IProcessor::Status ExchangeSource::prepare()
 
 std::optional<Chunk> ExchangeSource::tryGenerate()
 {
+    if(!inited){
+        receiver->registerToSenders(std::max(options.exhcange_timeout_ms / 3, 1000u));
+        inited = true;
+    }
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 

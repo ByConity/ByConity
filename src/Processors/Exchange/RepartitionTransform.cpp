@@ -8,6 +8,8 @@
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <common/logger_useful.h>
+#include "Functions/FunctionFactory.h"
+#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
@@ -87,6 +89,13 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
         partition_row_idx_start_points[partition_index[i]]--;
     }
     return std::make_pair(std::move(repartition_selector), std::move(partition_row_idx_start_points));
+}
+
+ExecutableFunctionPtr RepartitionTransform::getDefaultRepartitionFunction(const ColumnsWithTypeAndName & arguments, ContextPtr context)
+{
+    FunctionOverloadResolverPtr func_builder = FunctionFactory::instance().get(REPARTITION_FUNC, context);
+    FunctionBasePtr function_base = func_builder->build(arguments);
+    return function_base->prepare(arguments);
 }
 
 const DataTypePtr RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE = std::make_shared<DataTypeUInt64>();

@@ -83,10 +83,10 @@ void start_brpc_server()
 
 void receiver1()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
     Block header = getHeader(TOTAL_SIZE_IN_BYTES / SIZE_OF_ROW_IN_BYTES);
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, getContext().context, header);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header);
     receiver->registerToSenders(20 * 1000);
     auto packet = receiver->recv(20 * 1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -98,10 +98,10 @@ void receiver1()
 
 void receiver2()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
     Block header = getHeader(TOTAL_SIZE_IN_BYTES / SIZE_OF_ROW_IN_BYTES);
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, getContext().context, header);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header);
     receiver->registerToSenders(20 * 1000);
     auto packet = receiver->recv(20 * 1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -113,8 +113,8 @@ void receiver2()
 
 TEST(Exchange, SendWithTwoReceivers)
 {
-    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "127.0.0.1:8001");
-    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "127.0.0.1:8001");
+    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
+    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
 
     auto origin_chunk = getChunkWithSize(SIZE_OF_ROW_IN_BYTES, TOTAL_ROW_NUM);
     auto header = getHeader(TOTAL_ROW_NUM);
@@ -124,9 +124,8 @@ TEST(Exchange, SendWithTwoReceivers)
 
     std::thread thread_receiver1(receiver1);
     std::thread thread_receiver2(receiver2);
-    std::vector<String> receiver_ids{receiver_data1->getKey(), receiver_data2->getKey()};
 
-    BrpcRemoteBroadcastSender sender(receiver_ids, getContext().context, header, receiver_data2);
+    BrpcRemoteBroadcastSender sender({receiver_data1, receiver_data2}, getContext().context, header);
     sender.waitAllReceiversReady(100 * 1000);
     sender.send(std::move(origin_chunk));
     thread_receiver1.join();

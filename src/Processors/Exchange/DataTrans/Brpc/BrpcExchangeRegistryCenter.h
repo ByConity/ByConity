@@ -3,6 +3,8 @@
 #include <Interpreters/Context.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
 #include <brpc/stream.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 
 namespace DB
 {
@@ -24,6 +26,12 @@ public:
     size_t size() { return receiver_id_to_sender.size(); }
 
     brpc::StreamId getSenderStreamId(const String & receiver_id_) { return receiver_id_to_sender.get(receiver_id_); }
+
+    //TODO return same sender for one data_key
+    BroadcastSenderPtr getOrCreateSender(std::vector<DataTransKeyPtr> trans_keys, ContextPtr context, Block header);
+
+    //TODO return same sender for certain data_key
+    BroadcastReceiverPtr getOrCreateReceiver(DataTransKeyPtr trans_key, String registry_address, ContextPtr context, Block header);
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcExchangeRegistryCenter");

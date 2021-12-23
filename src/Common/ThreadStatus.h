@@ -9,12 +9,11 @@
 #include <common/StringRef.h>
 
 #include <boost/noncopyable.hpp>
+#include <bthread/mtx_cv_base.h>
 
 #include <functional>
 #include <map>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 
 
 namespace Poco
@@ -52,7 +51,7 @@ using InternalTextLogsQueueWeakPtr = std::weak_ptr<InternalTextLogsQueue>;
 class ThreadGroupStatus
 {
 public:
-    mutable std::mutex mutex;
+    mutable bthread::Mutex mutex;
 
     ProfileEvents::Counters performance_counters{VariableContext::Process};
     MemoryTracker memory_tracker{VariableContext::Process};

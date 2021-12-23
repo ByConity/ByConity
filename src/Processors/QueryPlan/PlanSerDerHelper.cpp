@@ -30,7 +30,6 @@
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
-#include <Processors/Sources/RemoteSource.h>
 #include <Common/ClickHouseRevision.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
