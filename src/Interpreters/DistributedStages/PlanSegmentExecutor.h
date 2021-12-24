@@ -7,9 +7,9 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
-#include "Processors/Exchange/DataTrans/DataTrans_fwd.h"
-#include "Processors/Exchange/ExchangeOptions.h"
-#include "Processors/QueryPipeline.h"
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/QueryPipeline.h>
 
 namespace DB
 {
@@ -21,6 +21,8 @@ class PlanSegmentExecutor : private boost::noncopyable
 {
 public:
     explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_);
+    explicit PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_);
+
     void execute(std::shared_ptr<ThreadGroupStatus> thread_group = nullptr);
     BlockIO lazyExecute(bool add_output_processors = false);
 

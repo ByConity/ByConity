@@ -39,14 +39,15 @@ IProcessor::Status ExchangeSource::prepare()
 
 std::optional<Chunk> ExchangeSource::tryGenerate()
 {
-    if(!inited){
+    if (!inited)
+    {
         receiver->registerToSenders(std::max(options.exhcange_timeout_ms / 3, 1000u));
         inited = true;
     }
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 
-    RecvDataPacket packet = receiver->recv(0);
+    RecvDataPacket packet = receiver->recv(options.exhcange_timeout_ms / 2);
 
     if (std::holds_alternative<Chunk>(packet))
     {

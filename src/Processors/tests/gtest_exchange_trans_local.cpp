@@ -7,7 +7,7 @@
 
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/tests/gtest_utils.h>
+#include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 
 namespace UnitTest

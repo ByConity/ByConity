@@ -35,7 +35,7 @@ private:
     size_t segment_id;
 
 public:
-    explicit PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_) : parent(parent_), status(status_) { }
+    explicit PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, size_t segment_id_);
     ~PlanSegmentProcessListEntry();
     QueryStatus * operator->() { return status; }
     const QueryStatus * operator->() const { return status; }
@@ -43,7 +43,7 @@ public:
     const QueryStatus & get() const { return *status; }
 };
 
-/// List of currently executing query created from plan segment. 
+/// List of currently executing query created from plan segment.
 class PlanSegmentProcessList
 {
 public:
@@ -54,7 +54,7 @@ public:
 
     friend class PlanSegmentProcessListEntry;
 
-    EntryPtr insert(const PlanSegment & plan_segment, ContextMutablePtr query_context);
+    EntryPtr insert(const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coodinator_address = "");
 
@@ -62,7 +62,7 @@ private:
     std::unordered_map<String, PlanSegmentGroup> initail_query_to_groups;
     mutable bthread::Mutex mutex;
     mutable bthread::ConditionVariable remove_group;
-    Poco::Logger * logger;
+    Poco::Logger * logger = &Poco::Logger::get("PlanSegmentProcessList");
 };
 
 

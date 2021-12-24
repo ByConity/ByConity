@@ -17,7 +17,7 @@
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
-#include <Processors/tests/gtest_utils.h>
+#include <Processors/tests/gtest_processers_utils.h>
 #include <Common/tests/gtest_global_context.h>
 
 using namespace DB;

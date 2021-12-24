@@ -16,7 +16,7 @@
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/ResizeProcessor.h>
-#include <Processors/tests/gtest_utils.h>
+#include <Processors/tests/gtest_processers_utils.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/LimitTransform.h>
 

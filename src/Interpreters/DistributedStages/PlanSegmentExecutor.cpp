@@ -1,25 +1,27 @@
+#include <memory>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
-#include <Processors/Exchange/MultiPartitionExchangeSink.h>
-#include <Processors/Exchange/LoadBalancedExchangeSink.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeRegistryCenter.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/ExchangeUtils.h>
+#include <Processors/Exchange/LoadBalancedExchangeSink.h>
+#include <Processors/Exchange/MultiPartitionExchangeSink.h>
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include "common/logger_useful.h"
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
-#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeRegistryCenter.h>
-#include <Processors/Exchange/ExchangeOptions.h>
-#include <Processors/Exchange/ExchangeUtils.h>
 
 
 namespace DB
@@ -36,11 +38,16 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
     , plan_segment_output(plan_segment->getPlanSegmentOutput())
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
 {
-    const auto & settings = context->getSettingsRef();
-    options
-        = {.exhcange_timeout_ms = static_cast<UInt32>(settings.exchange_timeout_ms),
-           .send_threshold_in_bytes = settings.exchange_buffer_send_threshold_in_bytes,
-           .send_threshold_in_row_num = settings.exchange_buffer_send_threshold_in_row};
+    options = ExchangeUtils::getExchangeOptions(context);
+}
+
+PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_)
+    : context(std::move(context_))
+    , plan_segment(std::move(plan_segment_))
+    , plan_segment_output(plan_segment->getPlanSegmentOutput())
+    , options(std::move(options_))
+    , logger(&Poco::Logger::get("PlanSegmentExecutor"))
+{
 }
 
 void PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
@@ -62,7 +69,7 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool add_output_processors)
 {
     BlockIO res;
     // Will run as master query and already initialized
-    if(!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext() != context) 
+    if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext() != context)
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
 
     const String & query_id = plan_segment->getQueryId();
@@ -104,8 +111,12 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     else
     {
         // Running as slave query in a thread different from master query
-        if(CurrentThread::getGroup())
+        if (CurrentThread::getGroup())
             throw Exception("There is a query attacted to context", ErrorCodes::LOGICAL_ERROR);
+
+        if (CurrentThread::getQueryId() != plan_segment->getQueryId())
+            throw Exception("Not the same distributed query", ErrorCodes::LOGICAL_ERROR);
+
         CurrentThread::attachTo(thread_group);
     }
 
@@ -115,7 +126,15 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     auto pipeline_executor = pipeline->execute();
 
-    pipeline_executor->execute(pipeline->getNumThreads());
+    size_t num_threads = pipeline->getNumThreads();
+
+    LOG_TRACE(
+        logger,
+        "Runing plansegment id {}, segment: {} pipeline with {} threads",
+        plan_segment->getQueryId(),
+        plan_segment->getPlanSegmentId(),
+        num_threads);
+    pipeline_executor->execute(num_threads);
 }
 
 
@@ -124,6 +143,13 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
 
+    if (!add_output_processors)
+    {
+        return pipeline;
+    }
+    if (!plan_segment->getPlanSegmentOutput())
+        throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
+
     size_t exchange_parallel_size = plan_segment_output->getExchangeParallelSize();
     ExchangeMode exchange_mode = plan_segment_output->getExchangeMode();
     size_t write_plan_segment_id = plan_segment->getPlanSegmentId();
@@ -131,21 +157,17 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     String coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
 
     bool keep_order = plan_segment_output->needKeepOrder();
-    if (!add_output_processors)
-    {
-        return pipeline;
-    }
 
     if (exchange_mode == ExchangeMode::BROADCAST)
         exchange_parallel_size = 1;
 
     /// output partitions num = num of plan_segment * exchange size
     /// for example, if downstream plansegment size is 2 (parallel_id is 0 and 1) and exchange_parallel_size is 4
-    /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 1 to 8. 
+    /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 1 to 8.
     /// downstream plansegment and consumed partitions table:
     /// plansegment parallel_id :  partition id
     /// -----------------------------------------------
-    /// 0                       : 1,2,3,4  
+    /// 0                       : 1,2,3,4
     /// 1                       : 5,6,7,8
     size_t total_partition_num = plan_segment_output->getParallelSize() * exchange_parallel_size;
 
@@ -169,8 +191,6 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
             LOG_DEBUG(logger, "Create remote sender: {}", data_key->dump());
             sender = BrpcExchangeRegistryCenter::getInstance().getOrCreateSender(std::vector<DataTransKeyPtr>{data_key}, context, header);
         }
-        LOG_DEBUG(logger, "Create remote sender: {}", data_key->dump());
-        sender = BrpcExchangeRegistryCenter::getInstance().getOrCreateSender(std::vector<DataTransKeyPtr>{data_key}, context, header);
         senders.emplace_back(std::move(sender));
     }
 
@@ -208,12 +228,13 @@ void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline
     }
     else
     {
-        pipeline->setSinks([&, sink_options = options](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
+        LOG_TRACE(logger, "addRepartitionExchangeSink");
+        pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
             /// exchange sink only process StreamType::Main
             if (stream_type != QueryPipeline::StreamType::Main)
                 return nullptr; /// return nullptr means this sink will not be added;
             return std::make_shared<MultiPartitionExchangeSink>(
-                header, std::move(senders), repartition_func, std::move(argument_numbers), sink_options);
+                header, senders, repartition_func, argument_numbers, options);
         });
     }
 }
@@ -221,20 +242,19 @@ void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline
 void PlanSegmentExecutor::addBroadcastExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders)
 {
     pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-            if (stream_type != QueryPipeline::StreamType::Main)
-                return nullptr;
-            return std::make_shared<BroadcastExchangeSink>(header, std::move(senders));
-        });
+        if (stream_type != QueryPipeline::StreamType::Main)
+            return nullptr;
+        return std::make_shared<BroadcastExchangeSink>(header, senders);
+    });
 }
 
 void PlanSegmentExecutor::addLoadBalancedExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders)
 {
     pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-            if (stream_type != QueryPipeline::StreamType::Main)
-                return nullptr;
-            return std::make_shared<LoadBalancedExchangeSink>(header, std::move(senders));
-        });
-
+        if (stream_type != QueryPipeline::StreamType::Main)
+            return nullptr;
+        return std::make_shared<LoadBalancedExchangeSink>(header, senders);
+    });
 }
 
 

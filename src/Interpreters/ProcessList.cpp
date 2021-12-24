@@ -60,7 +60,7 @@ static bool isUnlimitedQuery(const IAST * ast)
 }
 
 
-ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context)
+ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force)
 {
     EntryPtr res;
 
@@ -138,7 +138,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
 
                 if (running_query != user_process_list->second.queries.end())
                 {
-                    if (!settings.replace_running_query)
+                    if (!force && !settings.replace_running_query)
                         throw Exception("Query with id = " + client_info.current_query_id + " is already running.",
                             ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
 

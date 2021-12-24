@@ -534,7 +534,7 @@ class IColumn;
     M(UInt64, exchange_stream_max_buf_size, 73400320, "Default 70M, -1 means no limit", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_bytes, 1000000, "The minimum bytes when exchange will flush send buffer ", 0) \
     M(UInt64, exchange_buffer_send_threshold_in_row, 65505, "The minimum row num when exchange will flush send buffer", 0) \
-    M(UInt64, exchange_output_parallel_size, 65505, "The num of exchange sink, ingoned if exchange need keep data order ", 0) \
+    M(UInt64, exchange_output_parallel_size, 16, "The num of exchange sink, ingoned if exchange need keep data order ", 0) \
     M(Bool, exchange_enable_local_debug_mode, false, "Exchange data transfer through memory queue instead of network for debug", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */
 

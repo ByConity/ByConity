@@ -12,7 +12,7 @@
 namespace DB
 {
 ExchangeBufferedSender::ExchangeBufferedSender(
-    const Block & header_, BroadcastSenderPtr sender_, UInt64 threshold_in_bytes_, UInt32 threshold_in_row_num_, UInt32 wait_receiver_timeout_ms_)
+    const Block & header_, BroadcastSenderPtr sender_, UInt64 threshold_in_bytes_, UInt64 threshold_in_row_num_, UInt32 wait_receiver_timeout_ms_)
     : header(header_)
     , column_num(header_.getColumns().size())
     , sender(sender_)

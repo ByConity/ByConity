@@ -8,8 +8,8 @@
 #include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
 #include <Processors/Chunk.h>
-#include <Processors/tests/gtest_utils.h>
-#include "common/types.h"
+#include <Processors/tests/gtest_processers_utils.h>
+#include <common/types.h>
 namespace UnitTest
 {
 using namespace DB;
