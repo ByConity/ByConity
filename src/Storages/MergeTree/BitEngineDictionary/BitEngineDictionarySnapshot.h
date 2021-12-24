@@ -30,6 +30,10 @@ public:
     BitEngineDictionarySnapshot & operator=(const BitEngineDictionarySnapshot & snapshot);
 
     UInt64 decodeNumber(UInt64 number);
+    BitMap64 decodeBitmap(const BitMap64 & bitmap);
+    ColumnPtr decodeColumn(const IColumn & column);
+    ColumnPtr decodeNonBitEngineColumn(const IColumn & column);
+
     bool empty() { return (!key_column_ptr || key_column_size == 0); }
     BitEngineDictioanryColumnPtr getKeyColumn() { return key_column_ptr; }
     BitEngineDictioanryColumnPtr getKeyColumn() const { return key_column_ptr; }

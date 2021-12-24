@@ -44,6 +44,14 @@ const ColumnConst * checkAndGetColumnConst(const IColumn * column)
     return res;
 }
 
+template <typename Type = ColumnConst>
+const ColumnConst * checkAndGetColumnConstWithoutCheck(const IColumn * column)
+{
+    if (!column || !isColumnConst(*column))
+        return {};
+    return static_cast<const ColumnConst *>(column);
+}
+
 template <typename Type>
 const Type * checkAndGetColumnConstData(const IColumn * column)
 {

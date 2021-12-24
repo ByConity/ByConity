@@ -1,6 +1,6 @@
 
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionarySnapshot.h>
-
+#include <Columns/ColumnBitMap64.h>
 
 namespace DB
 {
@@ -96,14 +96,66 @@ void BitEngineDictionarySnapshot::writeDataToBuffer(std::pair<UInt64, UInt64> & 
     LOG_TRACE(&Poco::Logger::get("BitEngineDictionarySnapshot"), "{} has writen {} bitengine_dict pairs, start={}", dict_name, rows, start_column_offset);
 }
 
-UInt64 BitEngineDictionarySnapshot::decodeNumber(UInt64 number)
+inline UInt64 BitEngineDictionarySnapshot::decodeNumber(UInt64 number)
 {
     auto pos = number - shard_base_offset;
     if (pos >= key_column_size)
         throw Exception("BitEngine cannot decode number " + std::to_string(number) + " because its position in snapshot is out of bound: "
-            + std::to_string(pos) + " >= " + std::to_string(key_column_size) + "(size). First check whether you have properly \
-            use distributed_perfect_shard settings. Second check whether snapshot is up-to-date", ErrorCodes::LOGICAL_ERROR);
+            + std::to_string(pos) + " >= " + std::to_string(key_column_size) + "(size). First check whether you have properly "
+            + "use distributed_perfect_shard settings. Second check whether snapshot is up-to-date", ErrorCodes::LOGICAL_ERROR);
     return key_column_ptr->getUInt(pos);
 }
+
+BitMap64 BitEngineDictionarySnapshot::decodeBitmap(const BitMap64 & bitmap)
+{
+    BitMap64 res_bitmap;
+    PODArray<UInt64> res_array;
+    res_array.reserve(4096);
+    size_t cnt = 0;
+
+    for (auto iter = bitmap.begin(); iter != bitmap.end(); ++iter)
+    {
+        UInt64 num = *iter;
+
+        res_array.push_back(decodeNumber(num));
+        if (++cnt == 4096)
+        {
+            res_bitmap.addMany(res_array.size(), res_array.data());
+            res_array.clear();
+            cnt = 0;
+        }
+    }
+    res_bitmap.addMany(cnt, res_array.data());
+    return res_bitmap;
+}
+
+/// ensure that the column is ColumnBitMap64
+ColumnPtr BitEngineDictionarySnapshot::decodeColumn(const IColumn & column)
+{
+    const auto & column_bitmap = dynamic_cast<const ColumnBitMap64 &>(column);
+    auto output_column = ColumnBitMap64::create();
+
+    for (size_t i  = 0; i < column_bitmap.size(); ++i)
+    {
+        const auto & bitmap = column_bitmap.getBitMapAt(i);
+        output_column->insert(decodeBitmap(bitmap));
+    }
+    return output_column;
+}
+
+/// ensure that the column is Numeric columns, it's designed for NativeInteger type.
+ColumnPtr BitEngineDictionarySnapshot::decodeNonBitEngineColumn(const IColumn & column)
+{
+    auto output_column = ColumnUInt64::create();
+
+    for (size_t i = 0; i < column.size(); ++i)
+    {
+        UInt64 num = column.getUInt(i);
+        output_column->insert(decodeNumber(num));
+    }
+
+    return output_column;
+}
+
 
 }
