@@ -16,6 +16,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include "Common/Exception.h"
 
 
 namespace DB
@@ -68,6 +69,8 @@ void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_){
     query_id = plan_segment->getQueryId();
     coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
     context = plan_segment->getContext();
+    if(!context)
+        throw Exception("Plan segment not set context", ErrorCodes::BAD_ARGUMENTS);
     options = ExchangeUtils::getExchangeOptions(context);
 }
 
@@ -83,13 +86,15 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     for (const auto & input : inputs)
     {
         size_t write_plan_segment_id = input->getPlanSegmentId();
-        // should only have one SourceAddress
-        if (input->getSourceAddress().size() != 1)
+        String write_address_info;
+        if (!options.local_debug_mode)
         {
-            throw Exception("Only surport one SourceAddress!", ErrorCodes::LOGICAL_ERROR);
+            /// should only have one SourceAddress
+            if(input->getSourceAddress().size() != 1){
+                throw Exception("Only surport one SourceAddress!", ErrorCodes::LOGICAL_ERROR);
+            }
+            write_address_info = extractExchangeHostPort(input->getSourceAddress()[0]);
         }
-        assert(input->getSourceAddress().size() == 1);
-        const AddressInfo & write_address_info = input->getSourceAddress()[0];
         size_t exchange_parallel_size = input->getExchangeParallelSize();
 
         //TODO: hack logic for BROADCAST, we should remove this logic
@@ -106,15 +111,14 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
                 query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
             BroadcastReceiverPtr receiver;
-            if(context->getSettingsRef().exchange_enable_local_debug_mode){
+            if(options.local_debug_mode){
                 LOG_DEBUG(logger, "Create local exchange source : {}", data_key->dump());
                 receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(*data_key, local_options);
             }
             else
             {
                 LOG_DEBUG(logger, "Create remote exchange source : {}", data_key->dump());
-                receiver = BrpcExchangeRegistryCenter::getInstance().getOrCreateReceiver(
-                    data_key, extractExchangeHostPort(write_address_info), context, header);
+                receiver = BrpcExchangeRegistryCenter::getInstance().getOrCreateReceiver(data_key, write_address_info, context, header);
             }
             auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
             pipe.addSource(std::move(source));

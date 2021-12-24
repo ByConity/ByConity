@@ -16,7 +16,7 @@ public:
         const Block & header,
         BroadcastSenderPtr sender_,
         UInt64 threshold_in_bytes,
-        UInt32 threshold_in_row_num,
+        UInt64 threshold_in_row_num,
         UInt32 wait_receiver_timeout_ms_ = 1000);
     void appendSelective(size_t column_idx, const IColumn & source, const IColumn::Selector & selector, size_t from, size_t length);
     void flush(bool force);
@@ -26,7 +26,7 @@ private:
     size_t column_num;
     BroadcastSenderPtr sender;
     UInt64 threshold_in_bytes;
-    UInt32 threshold_in_row_num;
+    UInt64 threshold_in_row_num;
     UInt32 wait_receiver_timeout_ms;
     MutableColumns partition_buffer;
     Poco::Logger * logger;
