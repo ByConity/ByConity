@@ -5,7 +5,7 @@ trigger:
     paths:
       - "docker/test/base/*"
       - "docker/test/stateless/*"
-      - "docker/test/stateful"
+      - "docker/test/stateful/*"
 jobs:
   build_test_base_image:
     name: Build Docker Image For bytehouse/clickhouse-test-base
