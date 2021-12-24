@@ -96,6 +96,8 @@ Cluster::Address::Address(
 {
     host_name = config.getString(config_prefix + ".host");
     port = static_cast<UInt16>(config.getInt(config_prefix + ".port"));
+    exchange_port = static_cast<UInt16>(config.getInt(config_prefix + ".exchange_port", 0));
+    exchange_status_port = static_cast<UInt16>(config.getInt(config_prefix + ".exchange_status_port", 0));
     if (config.has(config_prefix + ".user"))
         user_specified = true;
 
@@ -122,7 +124,9 @@ Cluster::Address::Address(
         bool secure_,
         Int64 priority_,
         UInt32 shard_index_,
-        UInt32 replica_index_)
+        UInt32 replica_index_,
+        UInt16 exchange_port_,
+        UInt16 exchange_status_port_)
     : user(user_)
     , password(password_)
 {
@@ -134,6 +138,8 @@ Cluster::Address::Address(
     is_local = isLocal(clickhouse_port);
     shard_index = shard_index_;
     replica_index = replica_index_;
+    exchange_port = exchange_port_;
+    exchange_status_port = exchange_status_port_;
 }
 
 

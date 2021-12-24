@@ -15,7 +15,9 @@ if(NOT USE_INTERNAL_SNAPPY_LIBRARY)
         message (${RECONFIGURE_MESSAGE_LEVEL} "Can't find system snappy library")
     endif()
 else ()
+    # FIXME (UNIQUE KEY): Let snappy "find snappy-stubs-public.h"
+    set(SNAPPY_INCLUDE_DIR "${ClickHouse_SOURCE_DIR}/contrib/snappy" "${ClickHouse_BINARY_DIR}/contrib/snappy" CACHE INTERNAL "")
     set(SNAPPY_LIBRARY snappy)
 endif()
 
-message (STATUS "Using snappy: ${SNAPPY_LIBRARY}")
+message(STATUS "Using snappy=${USE_SNAPPY}: ${SNAPPY_INCLUDE_DIR} : ${SNAPPY_LIBRARY}")

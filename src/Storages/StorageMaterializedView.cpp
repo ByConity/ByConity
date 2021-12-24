@@ -36,6 +36,7 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
+#include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
@@ -234,10 +235,20 @@ BlockOutputStreamPtr StorageMaterializedView::write(const ASTPtr & query, const 
     auto storage = getTargetTable();
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
 
-    auto metadata_snapshot = storage->getInMemoryMetadataPtr();
-    auto stream = storage->write(query, metadata_snapshot, local_context);
+    auto target_metadata_snapshot = storage->getInMemoryMetadataPtr();
+    auto view_metatdata_snapshot = getInMemoryMetadataPtr();
+    auto stream = storage->write(query, target_metadata_snapshot, local_context);
 
     stream->addTableLock(lock);
+
+    /// Actually we don't know structure of input blocks from query/table,
+    /// because some clients break insertion protocol (columns != header)
+    stream = std::make_shared<AddingDefaultBlockOutputStream>(
+        stream,
+        view_metatdata_snapshot->getSampleBlock(/*include_func_columns*/ true),
+        target_metadata_snapshot->getColumns(),
+        local_context);
+
     return stream;
 }
 
@@ -346,7 +357,7 @@ void StorageMaterializedView::checkMutationIsPossible(const MutationCommands & c
 }
 
 Pipe StorageMaterializedView::alterPartition(
-    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr local_context)
+    const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr local_context, const ASTPtr & /*query*/)
 {
     checkStatementCanBeForwarded();
     return getTargetTable()->alterPartition(metadata_snapshot, commands, local_context);

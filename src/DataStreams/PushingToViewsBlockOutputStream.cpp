@@ -100,10 +100,15 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             /// Insert only columns returned by select.
             auto list = std::make_shared<ASTExpressionList>();
             const auto & inner_table_columns = inner_metadata_snapshot->getColumns();
+            const auto & inner_table_func = inner_metadata_snapshot->getFuncColumns();
             for (const auto & column : header)
             {
                 /// But skip columns which storage doesn't have.
                 if (inner_table_columns.hasPhysical(column.name))
+                    list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
+
+                /// Also include the func columns
+                if (inner_table_func.contains(column.name))
                     list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
             }
 
@@ -138,7 +143,7 @@ Block PushingToViewsBlockOutputStream::getHeader() const
     /// If we don't write directly to the destination
     /// then expect that we're inserting with precalculated virtual columns
     if (output)
-        return metadata_snapshot->getSampleBlock();
+        return metadata_snapshot->getSampleBlock(/*include_func_columns*/ true);
     else
         return metadata_snapshot->getSampleBlockWithVirtuals(storage->getVirtuals());
 }

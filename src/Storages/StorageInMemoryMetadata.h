@@ -1,12 +1,13 @@
 #pragma once
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/ColumnDependency.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ConstraintsDescription.h>
 #include <Storages/IndicesDescription.h>
-#include <Storages/ProjectionsDescription.h>
 #include <Storages/KeyDescription.h>
+#include <Storages/ProjectionsDescription.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/TTLDescription.h>
 
@@ -38,6 +39,8 @@ struct StorageInMemoryMetadata
     KeyDescription sorting_key;
     /// SAMPLE BY expression. Supported for MergeTree only.
     KeyDescription sampling_key;
+    /// UNIQUE KEY expression. Supported for MergeTree only.
+    KeyDescription unique_key;
     /// Separate ttl expressions for columns
     TTLColumnsDescription column_ttls_by_name;
     /// TTL expressions for table (Move and Rows)
@@ -48,6 +51,13 @@ struct StorageInMemoryMetadata
     SelectQueryDescription select;
 
     String comment;
+
+    UInt8 version_type{0};
+    static constexpr UInt8 flag_explicit_version = 1 << 0;
+    static constexpr UInt8 flag_partition_as_version = 1 << 1;
+    static constexpr UInt8 flag_is_offline = 1 << 2;
+    String extra_column_name = "";
+    size_t extra_column_size = 0;
 
     StorageInMemoryMetadata() = default;
 
@@ -81,6 +91,8 @@ struct StorageInMemoryMetadata
     void setPrimaryKey(const KeyDescription & primary_key_);
     /// Set sampling key for storage (methods below, are just wrappers for this struct).
     void setSamplingKey(const KeyDescription & sampling_key_);
+    /// Set unique key for storage (methods below, are just wrappers for this struct).
+    void setUniqueKey(const KeyDescription & unique_key_);
 
     /// Set common table TTLs
     void setTableTTLs(const TTLTableDescription & table_ttl_);
@@ -97,6 +109,9 @@ struct StorageInMemoryMetadata
 
     /// Returns combined set of columns
     const ColumnsDescription & getColumns() const;
+
+    /// Returns combined set of columns and with a extra row id column
+    ColumnsDescription getColumnsWithRowid() const;
 
     /// Returns secondary indices
     const IndicesDescription & getSecondaryIndices() const;
@@ -146,11 +161,11 @@ struct StorageInMemoryMetadata
     /// indices, TTL expressions) if we update @updated_columns set of columns.
     ColumnDependencies getColumnDependencies(const NameSet & updated_columns) const;
 
-    /// Block with ordinary + materialized columns.
-    Block getSampleBlock() const;
+    /// Block with ordinary + materialized columns + functional columns(if include_func_columns is true).
+    Block getSampleBlock(bool include_func_columns = false) const;
 
-    /// Block with ordinary columns.
-    Block getSampleBlockNonMaterialized() const;
+    /// Block with ordinary columns + functional columns(if include_func_columns is true).
+    Block getSampleBlockNonMaterialized(bool include_func_columns = false) const;
 
     /// Block with ordinary + materialized + virtuals. Virtuals have to be
     /// explicitly specified, because they are part of Storage type, not
@@ -158,12 +173,37 @@ struct StorageInMemoryMetadata
     Block getSampleBlockWithVirtuals(const NamesAndTypesList & virtuals) const;
 
 
+    /// NOTE: (Unique Table Only), Reversed name for rowid column if need
+    static constexpr auto rowid_column_name = "_rowid_";
+
+    /// NOTE: (Unique Table Only), Reserved name for delete flag.
+    static constexpr auto delete_flag_column_name = "_delete_flag_";
+
+    /// Functional columns can not be specified by create query and can not be queried, but can be contained in insert query, including INSERT and INSERT SELECT operations.
+    NamesAndTypesList getFuncColumns() const
+    {
+        if (hasUniqueKey())
+        {
+            NamesAndTypesList res;
+            /// Add delete flag reserved column for HaUniqueMergeTree engine, this column can not specify by "create query" and can not be queried, but can be contained in insert query.
+            /// When the user specifies this column in the "insert query", it will be considered as a delete operation based on the unique key if the value of this column is true(not zero).
+            res.emplace_back(delete_flag_column_name, DataTypeFactory::instance().get("UInt8"));
+            return res;
+        }
+        else
+        {
+            return {};
+        }
+    }
+
     /// Block with ordinary + materialized + aliases + virtuals. Virtuals have
     /// to be explicitly specified, because they are part of Storage type, not
     /// Storage metadata. StorageID required only for more clear exception
     /// message.
     Block getSampleBlockForColumns(
-        const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty()) const;
+        const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty(),
+        bool include_rowid_column = false) const;
+
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;
     /// Returns ASTExpressionList of partition key expression for storage or nullptr if there is none.
@@ -217,6 +257,23 @@ struct StorageInMemoryMetadata
     /// Returns columns names in sorting key specified by. For example: 'a', 'x
     /// * y', 'toStartOfMonth(date)', etc.
     Names getPrimaryKeyColumns() const;
+
+    /// Returns structure with unique key.
+    const KeyDescription & getUniqueKey() const;
+    /// Returns ASTExpressionList of unique key expression for storage or nullptr if there is none.
+    ASTPtr getUniqueKeyAST() const { return primary_key.definition_ast; }
+    /// Storage has user-defined (in CREATE query) sorting key.
+    bool isUniqueKeyDefined() const;
+    /// Storage has unique key (maybe part of some other key). It means, that
+    /// it contains at least one column.
+    bool hasUniqueKey() const;
+    /// Returns column names that need to be read to calculate unique key.
+    Names getColumnsRequiredForUniqueKey() const;
+    /// Returns columns names in unique key specified by. For example: 'a', 'x
+    /// * y', 'toStartOfMonth(date)', etc.
+    Names getUniqueKeyColumns() const;
+    /// Returns the unique key expression
+    ExpressionActionsPtr getUniqueKeyExpression() const;
 
     /// Storage settings
     ASTPtr getSettingsChanges() const;

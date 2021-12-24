@@ -51,6 +51,8 @@ struct MergeTreeReadTask
     /// Used to save current range processing status
     MergeTreeRangeReader range_reader;
     MergeTreeRangeReader pre_range_reader;
+    /// delete bitmap for `data_part`, used to filter out deleted rows
+    DeleteBitmapPtr delete_bitmap;
 
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 

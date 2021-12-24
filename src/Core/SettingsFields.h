@@ -8,6 +8,7 @@
 #include <boost/range/adaptor/map.hpp>
 #include <chrono>
 #include <unordered_map>
+#include <set>
 #include <string_view>
 
 
@@ -453,6 +454,24 @@ struct SettingFieldCustom
 
     void writeBinary(WriteBuffer & out) const;
     void readBinary(ReadBuffer & in);
+};
+
+struct SettingFieldMultiRegexString
+{
+    std::set<String> value;
+    bool changed = false;
+
+    explicit SettingFieldMultiRegexString(const Field & f = {}) : value(parseStringToRegexSet(f.safeGet<const String &>())) { }
+    SettingFieldMultiRegexString & operator=(const Field & f);
+    explicit operator Field() const { return toString(); }
+
+    String toString() const;
+    void parseFromString(const String & str) { value = parseStringToRegexSet(str); }
+
+    void writeBinary(WriteBuffer & out) const;
+    void readBinary(ReadBuffer & in);
+
+    std::set<String> parseStringToRegexSet(String x);
 };
 
 }

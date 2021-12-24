@@ -140,9 +140,14 @@ void IStorage::read(
 }
 
 Pipe IStorage::alterPartition(
-    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */)
+    const StorageMetadataPtr & /* metadata_snapshot */, const PartitionCommands & /* commands */, ContextPtr /* context */, const ASTPtr & /*query*/)
 {
     throw Exception("Partition operations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void IStorage::alter(const AlterCommands & /* params */, ContextPtr /* context */, TableLockHolder &, const ASTPtr & /* query */)
+{
+    throw Exception("Operations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void IStorage::alter(const AlterCommands & params, ContextPtr context, TableLockHolder &)

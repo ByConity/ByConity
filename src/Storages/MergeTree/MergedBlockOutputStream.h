@@ -3,9 +3,9 @@
 #include <Storages/MergeTree/IMergedBlockOutputStream.h>
 #include <Columns/ColumnArray.h>
 
-
 namespace DB
 {
+class MergeTreeDataPartWriterWide;
 
 /** To write one part.
   * The data refers to one partition, and is written in one part.
@@ -51,6 +51,9 @@ private:
             NamesAndTypesList & part_columns,
             MergeTreeData::DataPart::Checksums & checksums,
             bool sync);
+
+    /// whether to generate unique key index for unique table
+    bool enable_disk_based_key_index = false;
 
 private:
     NamesAndTypesList columns_list;

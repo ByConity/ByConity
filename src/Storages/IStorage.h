@@ -405,6 +405,15 @@ public:
       */
     virtual void alter(const AlterCommands & params, ContextPtr context, TableLockHolder & alter_lock_holder);
 
+    /** ALTER tables in the form of column changes that do not affect the change
+      * to Storage or its parameters. Executes under alter lock (lockForAlter).
+      *
+      * Used by HaUniqueMergeTree engine, different from previous interface is that we add
+      * one extra `query` argument to keep the alter query ast since we need to forward the
+      * query to other replicas internally.
+      */
+    virtual void alter(const AlterCommands & params, ContextPtr context, TableLockHolder & alter_lock_holder, const ASTPtr & query);
+
     /** Checks that alter commands can be applied to storage. For example, columns can be modified,
       * or primary key can be changes, etc.
       */
@@ -417,11 +426,15 @@ public:
 
     /** ALTER tables with regard to its partitions.
       * Should handle locks for each command on its own.
+      *
+      * Use the last `query` argument to keep the alter query ast since we need to forward the
+      * query to other replicas internally by HaUniqueMergeTree engine.
       */
     virtual Pipe alterPartition(
         const StorageMetadataPtr & /* metadata_snapshot */,
         const PartitionCommands & /* commands */,
-        ContextPtr /* context */);
+        ContextPtr /* context */,
+        const ASTPtr & query = nullptr);
 
     /// Checks that partition commands can be applied to storage.
     virtual void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const;

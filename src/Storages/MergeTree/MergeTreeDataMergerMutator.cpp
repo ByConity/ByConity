@@ -907,7 +907,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     const Names & deduplicate_by_columns,
     const MergeTreeData::MergingParams & merging_params,
     const IMergeTreeDataPart * parent_part,
-    const String & prefix)
+    const String & prefix,
+    const ActionBlocker * unique_table_blocker)
 {
     const String tmp_prefix = parent_part ? prefix : "tmp_merge_";
 
@@ -1072,7 +1073,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     for (const auto & part : parts)
     {
         auto input = std::make_unique<MergeTreeSequentialSource>(
-            data, metadata_snapshot, part, merging_column_names, read_with_direct_io, true);
+            data, metadata_snapshot, part, future_part.getDeleteBitmap(part), merging_column_names, read_with_direct_io, true);
 
         input->setProgressCallback(
             MergeProgressCallback(merge_entry, watch_prev_elapsed, horizontal_stage_progress));
@@ -1113,6 +1114,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     switch (merging_params.mode)
     {
         case MergeTreeData::MergingParams::Ordinary:
+        case MergeTreeData::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
                 header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(), true, blocks_are_granules_size);
             break;
@@ -1150,9 +1152,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 header, pipes.size(), sort_description, merging_params.sign_column,
                 merge_block_size, rows_sources_write_buf.get(), blocks_are_granules_size);
             break;
-
-        case MergeTreeData::MergingParams::Unique:
-            throw Exception("NOT_IMPLEMENTED", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     QueryPipeline pipeline;
@@ -1197,7 +1196,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     {
         return merges_blocker.isCancelled()
             || (need_remove_expired_values && ttl_merges_blocker.isCancelled())
-            || merge_entry->is_cancelled.load(std::memory_order_relaxed);
+            || merge_entry->is_cancelled.load(std::memory_order_relaxed)
+            || (unique_table_blocker && unique_table_blocker->isCancelled());
     };
 
     Block block;
@@ -1338,8 +1338,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
 
     /// Print overall profiling info. NOTE: it may duplicates previous messages
     {
-        double elapsed_seconds = merge_entry->watch.elapsedSeconds();
-        LOG_DEBUG(log,
+        double elapsed_seconds = merge_entry->watch.elapsedSeconds(); LOG_DEBUG(log,
             "Merge sorted {} rows, containing {} columns ({} merged, {} gathered) in {} sec., {} rows/sec., {}/sec.",
             merge_entry->rows_read,
             all_column_names.size(),

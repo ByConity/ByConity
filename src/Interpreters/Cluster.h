@@ -81,6 +81,8 @@ public:
         UInt16 port;
         String user;
         String password;
+        UInt16 exchange_port;
+        UInt16 exchange_status_port;
 
         /// For inter-server authorization
         String cluster;
@@ -118,7 +120,9 @@ public:
             bool secure_ = false,
             Int64 priority_ = 1,
             UInt32 shard_index_ = 0,
-            UInt32 replica_index_ = 0);
+            UInt32 replica_index_ = 0,
+            UInt16 exchange_port_ = 0,
+            UInt16 exchange_status_port_ = 0);
 
         /// Returns 'escaped_host_name:port'
         String toString() const;

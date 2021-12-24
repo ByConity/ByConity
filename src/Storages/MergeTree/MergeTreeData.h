@@ -21,6 +21,7 @@
 #include <Storages/MergeTree/MergeTreePartsMover.h>
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
+#include <Storages/MergeTree/ManifestStore.h>
 #include <Interpreters/PartLog.h>
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Aggregator.h>
@@ -32,7 +33,6 @@
 #include <boost/multi_index/global_fun.hpp>
 #include <boost/range/iterator_range_core.hpp>
 
-
 namespace DB
 {
 
@@ -41,6 +41,7 @@ class MergeTreePartsMover;
 class MutationCommands;
 class Context;
 struct JobAndPool;
+class DiskUniqueKeyIndexCache;
 
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
@@ -64,6 +65,30 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
 }
+
+/// State of HaUniqueMergeTree table, valid state transfer includes
+/// * INIT -> NORMAL : when is_lost == 0
+/// * INIT -> BROKEN : when resetUniqueTableToVersion failed during startup
+/// * INIT -> REPAIR_MANIFEST : when is_lost == 1 and begin to recover
+/// * BROKEN -> REPAIR_MANIFEST : after set is_lost to 1 and begin to recover
+/// * REPAIR_MANIFEST -> REPAIR_DATA : when manifest is repaired and begin to recover data
+/// * REPAIR_MANIFEST -> REPAIRED : when manifest is repaired and no data to recover
+/// * REPAIR_DATA -> REPAIRED : when data is recovered
+/// * REPAIR_DATA -> REPAIR_MANIFEST : when some unrecoverable error happens
+/// * REPAIRED -> NORMAL : when is_lost is set to 0 and all bg threads are started
+/// * NORMAL -> BROKEN : when resetUniqueTableToVersion failed somehow
+/// Note: If you modifies the state transfer logic above, please update the state transfer table in `setUniqueTableState'
+enum class UniqueTableState
+{
+    INIT,
+    BROKEN,
+    REPAIR_MANIFEST,
+    REPAIR_DATA,
+    REPAIRED,
+    NORMAL
+};
+
+String toString(UniqueTableState state);
 
 
 /// Data structure for *MergeTree engines.
@@ -219,6 +244,65 @@ public:
     using DataPartsLock = std::unique_lock<std::mutex>;
     DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
 
+    using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
+    DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
+    {
+        DataPartsDeleteSnapshot res;
+        auto lock = lockParts();
+        for (auto & part : parts) {
+            res.insert({part, part->getDeleteBitmap()});
+        }
+        return res;
+    }
+
+    UniqueTableState getUniqueTableState() const { return unique_table_state; }
+    void setUniqueTableState(UniqueTableState new_state)
+    {
+        static std::set<std::pair<UniqueTableState, UniqueTableState>> valid_transfer {
+            { UniqueTableState::INIT, UniqueTableState::NORMAL },
+            { UniqueTableState::INIT, UniqueTableState::BROKEN },
+            { UniqueTableState::INIT, UniqueTableState::REPAIR_MANIFEST },
+            { UniqueTableState::BROKEN, UniqueTableState::REPAIR_MANIFEST },
+            { UniqueTableState::REPAIR_MANIFEST, UniqueTableState::REPAIR_DATA },
+            { UniqueTableState::REPAIR_MANIFEST, UniqueTableState::REPAIRED },
+            { UniqueTableState::REPAIR_DATA, UniqueTableState::REPAIRED },
+            { UniqueTableState::REPAIR_DATA, UniqueTableState::REPAIR_MANIFEST },
+            { UniqueTableState::REPAIRED, UniqueTableState::NORMAL },
+            { UniqueTableState::NORMAL, UniqueTableState::BROKEN }
+        };
+        if (valid_transfer.count({unique_table_state, new_state}) == 0)
+            throw Exception("Can't transfer from " + toString(unique_table_state) + " to " + toString(new_state) + " for " + log_name,
+                            ErrorCodes::LOGICAL_ERROR);
+        LOG_DEBUG(log, "Updated state from {} to {}", toString(unique_table_state), toString(new_state));
+        unique_table_state = new_state;
+    }
+
+    using UniqueKeySet = std::unordered_set<String>;
+    struct UniqueMergeState
+    {
+        String new_part_name;
+        ActionBlocker blocker; /// used to cancel running merge if needed
+        UniqueKeySet delete_buffer; /// hold key deleted during merge
+
+        bool isCancelled() const { return blocker.isCancelled(); }
+        void cancel()
+        {
+            blocker.cancelForever();
+            delete_buffer.clear();
+        }
+    };
+    using UniqueMergeStatePtr = std::shared_ptr<UniqueMergeState>;
+
+    /// For unique table: reset parts and delete bitmaps to the snapshot at the given version.
+    /// All parts and delete files in the snapshot should present,
+    /// otherwise exception is thrown and caller should set table state to broken
+    void resetUniqueTableToVersion(const DataPartsLock &, UInt64 version);
+
+    /// if true, uniqueness is only enforced at partition level instead of table level
+    bool unique_within_partition;
+    /// name of is_offline column, empty string if not specified
+    String is_offline_column;
+
     MergeTreeDataPartType choosePartType(size_t bytes_uncompressed, size_t rows_count) const;
     MergeTreeDataPartType choosePartTypeOnDisk(size_t bytes_uncompressed, size_t rows_count) const;
 
@@ -277,7 +361,87 @@ public:
         void clear() { precommitted_parts.clear(); }
     };
 
+    /// Used by UniqueMergeTree to update parts and delete bitmaps atomically
+    class SyncPartsTransaction : private boost::noncopyable
+    {
+    public:
+        SyncPartsTransaction(
+            MergeTreeData & data_, const DataPartsDeleteSnapshot & new_deletes_, UInt64 commit_version_)
+            : data(data_), new_deletes(new_deletes_), commit_version(commit_version_), new_part_txn(data_), committed(false) {}
+
+        ~SyncPartsTransaction()
+        {
+            if (!committed)
+                rollback();
+        }
+
+        /// pre-commit new part, return existing parts covered by the new part
+        DataPartsVector preCommit(MutableDataPartPtr & new_part);
+
+        /// commit new part and new deletes atomically
+        void commit();
+
+        /// rollback pre-committed new part and delete files for old parts
+        void rollback();
+
+    private:
+        friend class MergeTreeData;
+        MergeTreeData & data;
+        const DataPartsDeleteSnapshot & new_deletes;
+        UInt64 commit_version;
+        Transaction new_part_txn;
+        bool committed;
+    };
+
     using PathWithDisk = std::pair<String, DiskPtr>;
+
+    /// An object that stores the names of temporary files created in the part directory during ALTER of its
+    /// columns.
+    /// FIXME (UNIQUE KEY): Taken from the stable_v2, mainly for unique table to do alter
+    class AlterDataPartTransaction : private boost::noncopyable
+    {
+    public:
+        /// Renames temporary files, finishing the ALTER of the part.
+        void commit();
+
+        /// If commit() was not called, deletes temporary files, canceling the ALTER.
+        ~AlterDataPartTransaction();
+
+        const String & getPartName() const { return data_part->name; }
+
+        /// Review the changes before the commit.
+        const NamesAndTypesList & getNewColumns() const { return new_columns; }
+        const DataPart::Checksums & getNewChecksums() const { return new_checksums; }
+
+    private:
+        friend class MergeTreeData;
+
+        AlterDataPartTransaction(DataPartPtr data_part_) : data_part(data_part_) {}
+
+        void clear()
+        {
+            data_part = nullptr;
+        }
+
+        void innerCommit();
+
+        DataPartPtr data_part;
+        DataPartsLock alter_lock;
+
+        /// Ensure that the versions of the checksum have been set to the versions of the data part
+        DataPart::Checksums new_checksums;
+        NamesAndTypesList new_columns;
+        /// If the value is an empty string, the file is not temporary, and it must be deleted.
+        NameToNameMap rename_map;
+
+        /// Files need to add to part, we append this files to "data" file in remote storage.
+        Names add_files;
+
+        /// some file need be deleted
+        Names clear_files;
+    };
+
+    using AlterDataPartTransactionPtr = std::unique_ptr<AlterDataPartTransaction>;
 
     struct PartsTemporaryRename : private boost::noncopyable
     {
@@ -328,8 +492,12 @@ public:
         /// For Summing mode. If empty - columns_to_sum is determined automatically.
         Names columns_to_sum;
 
-        /// For Replacing and VersionedCollapsing mode. Can be empty for Replacing.
+        /// For Replacing/VersionedCollapsing/Unique mode. Can be empty for Replacing and Unique.
         String version_column;
+        /// For Unique mode, users can also use value of partition expr as version.
+        /// As a result, all rows inside a partition share the same version, removing
+        /// the cost to writing and reading an extra version column.
+        static constexpr auto partition_value_as_version = "__partition__";
 
         /// For Graphite mode.
         Graphite::Params graphite_params;
@@ -338,6 +506,9 @@ public:
         void check(const StorageInMemoryMetadata & metadata) const;
 
         String getModeName() const;
+
+        bool partitionValueAsVersion() const { return version_column == partition_value_as_version; }
+        bool hasExplicitVersionColumn() const { return !version_column.empty() && !partitionValueAsVersion(); }
     };
 
     /// Attach the table corresponding to the directory in full_path inside policy (must end with /), with the given columns.
@@ -400,7 +571,7 @@ public:
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand, ContextPtr, const StorageMetadataPtr & metadata_snapshot) const override;
 
     /// Load the set of data parts from disk. Call once - immediately after the object is created.
-    void loadDataParts(bool skip_sanity_checks);
+    void loadDataParts(bool skip_sanity_checks, bool attach = false);
 
     String getLogName() const { return log_name; }
 
@@ -524,6 +695,10 @@ public:
     /// Removes parts from data_parts, they should be in Deleting state
     void removePartsFinally(const DataPartsVector & parts);
 
+    /// Remove parts from data_parts with checking its state, this routine is
+    /// used in light weight detach.
+    void removePartsFinallyUnsafe(const DataPartsVector & parts, DataPartsLock * acquired_lock = nullptr);
+
     /// Delete irrelevant parts from memory and disk.
     /// If 'force' - don't wait for old_parts_lifetime.
     void clearOldPartsFromFilesystem(bool force = false);
@@ -627,7 +802,8 @@ public:
     Pipe alterPartition(
         const StorageMetadataPtr & metadata_snapshot,
         const PartitionCommands & commands,
-        ContextPtr query_context) override;
+        ContextPtr query_context,
+        const ASTPtr & query) override;
 
     size_t getColumnCompressedSize(const std::string & name) const
     {
@@ -853,6 +1029,14 @@ public:
         return replicated_sends_throttler;
     }
 
+    /// For unique table: perform unique index gc on all parts
+    void performUniqueIndexGc();
+    /// For unique table: delete old delete files that would never be used any more.
+    void clearOldDeleteFilesFromFilesystem();
+    /// For unique table: init version_type
+    void initVersionType();
+    /// For unique table: alter data part, manily used for removing column files from disk
+    AlterDataPartTransactionPtr alterDataPartForUniqueTable(const DataPartPtr & part, const NamesAndTypesList & new_columns);
     /// Get required partition vector with query info
     DataPartsVector getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr context);
 
@@ -980,6 +1164,28 @@ protected:
             throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
     }
 
+    /// unique table only
+    /// -----------------
+    UniqueTableState unique_table_state {UniqueTableState::INIT};
+    /// source of truth for active parts and the corresponding delete files,
+    /// used to achieve atomic updates of parts + delete files as well as
+    /// eventually consistency among replicas
+    ManifestStorePtr manifest_store;
+    /// an outdated part can be removed only if its removed version <= `unique_commit_version'.
+    /// when a version is considered committed depends on the actual implementation. E.g.,
+    /// for HaUniqueMergeTree, a version is committed only if all replicas have committed that version.
+    std::atomic<UInt64> unique_commit_version {0};
+    /// used to serialize write and merge
+    mutable std::mutex unique_write_mutex;
+    /// make sure only one thread can perform delete file gc at a time
+    mutable std::mutex delete_file_gc_mutex;
+
+    std::shared_ptr<DiskUniqueKeyIndexCache> unique_key_index_cache;
+
+    /// write lock for unique table to prevent concurrent insert & merge.
+    /// lock order: merge select lock -> table structure lock -> unique write lock
+    using UniqueWriteLock = std::unique_lock<std::mutex>;
+    UniqueWriteLock uniqueWriteLock() const { return UniqueWriteLock(unique_write_mutex); }
     /// Used to serialize calls to grabOldParts.
     std::mutex grab_old_parts_mutex;
     /// The same for clearOldTemporaryDirectories.
@@ -1027,8 +1233,8 @@ protected:
     virtual void dropPartNoWaitNoThrow(const String & part_name) = 0;
 
     virtual void dropPart(const String & part_name, bool detach, ContextPtr context) = 0;
-    virtual void dropPartition(const ASTPtr & partition, bool detach, ContextPtr context) = 0;
-    virtual void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context);
+    virtual void dropPartition(const ASTPtr & partition, bool detach, ContextPtr context, const ASTPtr & query) = 0;
+    virtual void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, const ASTPtr & query);
     virtual PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr context) = 0;
     virtual void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context) = 0;
     virtual void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context) = 0;

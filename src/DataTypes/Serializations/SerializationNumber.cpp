@@ -1,15 +1,16 @@
-#include <DataTypes/Serializations/SerializationNumber.h>
-#include <Columns/ColumnVector.h>
 #include <Columns/ColumnConst.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Common/NaNUtils.h>
-#include <Common/typeid_cast.h>
-#include <Common/assert_cast.h>
+#include <Columns/ColumnVector.h>
+#include <Core/Field.h>
+#include <DataTypes/Serializations/SerializationNumber.h>
 #include <Formats/FormatSettings.h>
 #include <Formats/ProtobufReader.h>
 #include <Formats/ProtobufWriter.h>
-#include <Core/Field.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Common/Endian.h>
+#include <Common/NaNUtils.h>
+#include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -151,6 +152,78 @@ void SerializationNumber<T>::deserializeBinaryBulk(IColumn & column, ReadBuffer 
     x.resize(initial_size + limit);
     size_t size = istr.readBig(reinterpret_cast<char*>(&x[initial_size]), sizeof(typename ColumnVector<T>::ValueType) * limit);
     x.resize(initial_size + size / sizeof(typename ColumnVector<T>::ValueType));
+}
+
+
+template <class T, bool condition>
+struct MemoryCompareWrapper;
+
+template <class T>
+struct MemoryCompareWrapper<T, true>
+{
+    using FieldType = T;
+
+    bool supportMemComparableEncoding() const { return true; }
+    void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+    {
+        const auto & value = assert_cast<const ColumnVector<T> &>(column).getData()[row_num];
+        using UnsignedType = typename std::make_unsigned<T>::type;
+        auto unsigned_value = static_cast<UnsignedType>(value);
+        /// flip sign bit for signed type
+        if constexpr (std::is_signed_v<T>)
+            unsigned_value ^= (1ull << (sizeof(T) * 8 - 1));
+        /// write in big-endian order
+        unsigned_value = Endian::big(unsigned_value);
+        writeBinary(unsigned_value, ostr);
+    }
+
+    void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const
+    {
+        using UnsignedType = typename std::make_unsigned<T>::type;
+        UnsignedType unsigned_value;
+        /// read a big endian value and convert to host endian
+        readBinary(unsigned_value, istr);
+        unsigned_value = Endian::big(unsigned_value);
+        /// flip sign bit for signed type
+        if constexpr (std::is_signed_v<T>)
+            unsigned_value ^= (1ull << (sizeof(T) * 8 - 1));
+        assert_cast<ColumnVector<T> &>(column).getData().push_back(FieldType(unsigned_value));
+    }
+};
+
+template <class T>
+struct MemoryCompareWrapper<T, false>
+{
+    bool supportMemComparableEncoding() const { return false; }
+    void serializeMemComparable(const IColumn & /*column*/, size_t /*row_num*/, WriteBuffer & /*ostr*/) const
+    {
+        throw Exception("serializeMemComparable is not supported.", ErrorCodes::LOGICAL_ERROR);
+    }
+    void deserializeMemComparable(IColumn & /*column*/, ReadBuffer & /*istr*/) const
+    {
+        throw Exception("DerializeMemComparable is not supported.", ErrorCodes::LOGICAL_ERROR);
+    }
+};
+
+template <typename T>
+bool SerializationNumber<T>::supportMemComparableEncoding() const
+{
+    MemoryCompareWrapper<T, IsNumberMemComparable<T>> wrapper;
+    return wrapper.supportMemComparableEncoding();
+}
+
+template <typename T>
+void SerializationNumber<T>::serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const
+{
+    MemoryCompareWrapper<T, IsNumberMemComparable<T>> wrapper;
+    return wrapper.serializeMemComparable(column, row_num, ostr);
+}
+
+template <typename T>
+void SerializationNumber<T>::deserializeMemComparable(IColumn & column, ReadBuffer & istr) const
+{
+    MemoryCompareWrapper<T, IsNumberMemComparable<T>> wrapper;
+    return wrapper.deserializeMemComparable(column, istr);
 }
 
 template class SerializationNumber<UInt8>;
