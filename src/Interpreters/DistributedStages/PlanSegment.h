@@ -3,15 +3,13 @@
 #include <Core/Types.h>
 #include <Core/Block.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
 
 namespace DB
 {
-
-class Context;
-using ContextMutablePtr = std::shared_ptr<Context>;
 
 /**
  * SOURCE means the plan is the leaf of a plan segment tree, i.g. TableScan Node.
@@ -123,14 +121,14 @@ public:
 
     String toString(size_t indent = 0) const override;
 
-    std::pair<String, String> getStorageID() const { return storage_id; }
+    StorageID getStorageID() const { return storage_id; }
 
-    void setStorageID(std::pair<String, String> storage_id_) { storage_id = storage_id_;}
+    void setStorageID(const StorageID & storage_id_) { storage_id = storage_id_;}
 
 private:
     size_t parallel_index = 0;
     AddressInfos source_addresses;
-    std::pair<String, String> storage_id;
+    StorageID storage_id = StorageID::createEmpty();
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
@@ -182,7 +180,7 @@ class PlanSegment
 public:
 
     PlanSegment() = default;
-    PlanSegment(const ContextMutablePtr & context_) : context(context_) {}
+    PlanSegment(const ContextPtr & context_);
     PlanSegment(PlanSegment && ) = default;
     PlanSegment & operator=(PlanSegment &&) = default;
 
@@ -205,7 +203,7 @@ public:
 
     void deserialize(ReadBuffer & buf);
 
-    static PlanSegmentPtr deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context);
+    static PlanSegmentPtr deserializePlanSegment(ReadBuffer & buf, ContextPtr context);
 
     size_t getPlanSegmentId() const { return segment_id; }
 
@@ -237,7 +235,7 @@ public:
 
     PlanSegmentPtr clone();
 
-    void setContext(const ContextMutablePtr & context_) { context = context_; }
+    void setContext(const ContextPtr & context_);
 
     ContextPtr getContext() const { return context;}
 

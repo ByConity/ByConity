@@ -230,12 +230,8 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 
         if (scheduler_status->is_final_stage_start)
         {
-            // just for test plan 0
-//            if (plan_segment_tree->getNodes().size() == 1)
-//            {
-                res = InterpreterPlanSegment(plan_segment_tree->getNodes().front().getPlanSegment(), context).execute();
-                break;
-//            }
+            res = InterpreterPlanSegment(plan_segment_tree->getRoot()->getPlanSegment(), context).execute();
+            break;
         }
     }
 

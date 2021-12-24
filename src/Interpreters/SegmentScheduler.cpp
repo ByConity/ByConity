@@ -924,7 +924,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                         "Logical error: source segment id(" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + ") input is not source",
                         ErrorCodes::LOGICAL_ERROR);
                 StoragePtr main_table_storage
-                    = DatabaseCatalog::instance().tryGetTable({segment_input_table->getStorageID().first, segment_input_table->getStorageID().second}, query_context);
+                    = DatabaseCatalog::instance().tryGetTable(segment_input_table->getStorageID(), query_context);
 
                 if (settings.prefer_localhost_replica && shard_info.isLocal())
                 {
@@ -935,9 +935,8 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                         {
                             LOG_WARNING(
                                 &Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
-                                "There is no table {}.{} on local replica of shard {}, will try remote replicas.",
-                                segment_input_table->getStorageID().first,
-                                segment_input_table->getStorageID().second,
+                                "There is no table {} on local replica of shard {}, will try remote replicas.",
+                                segment_input_table->getStorageID().getNameForLogs(),
                                 shard_info.shard_num);
 
                             auto try_results = get_try_results(shard_info, main_table_storage);
@@ -960,8 +959,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                             {
                                 throw Exception(
                                     "Logical error: can not find available source node for "
-                                        + segment_input_table->getStorageID().first + "."
-                                        + segment_input_table->getStorageID().second,
+                                        + segment_input_table->getStorageID().getNameForLogs(),
                                     ErrorCodes::LOGICAL_ERROR);
                             }
                         }
@@ -1140,8 +1138,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                     else
                     {
                         throw Exception(
-                            "Logical error: can not find available source node for " + main_table_storage->getStorageID().database_name
-                                + "." + main_table_storage->getStorageID().table_name,
+                            "Logical error: can not find available source node for " + main_table_storage->getStorageID().getNameForLogs(),
                             ErrorCodes::LOGICAL_ERROR);
                     }
                 }

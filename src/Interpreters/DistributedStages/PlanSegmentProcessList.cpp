@@ -68,6 +68,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
                 .segment_queries = {{plan_segment.getPlanSegmentId(), std::move(entry)}}};
             initail_query_to_groups.emplace(initial_query_id, std::move(segment_group));
             return res;
+            };
         }
         const auto emplace_res = segment_group_it->second.segment_queries.emplace(plan_segment.getPlanSegmentId(), std::move(entry));
         if (!emplace_res.second)

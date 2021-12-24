@@ -48,6 +48,9 @@ public:
     /**
      * Information for deserialize and reconstruct the plan.
      */
+
+    StorageID getStorageID() const { return storage_id; }
+
     void setDeserializeInfo(
         const SelectQueryInfo & query_info_,
         const Names & column_names_,

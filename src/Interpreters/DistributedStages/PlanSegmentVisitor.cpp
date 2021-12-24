@@ -39,7 +39,6 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeStep(QueryPlan::Node * node, 
 
         inputs.push_back(input);
     }
-    // FIXME
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}};
@@ -57,6 +56,9 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 
     auto plan_segment = std::make_unique<PlanSegment>(segment_id, plan_segment_context.query_id, plan_segment_context.cluster_name);
     plan_segment->setQueryPlan(std::move(sub_plan));
+    plan_segment->setContext(plan_segment_context.context);
+    plan_segment->setParallelSize(plan_segment_context.shard_number);
+    plan_segment->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
 
     PlanSegmentType output_type = segment_id == 0? PlanSegmentType::OUTPUT : PlanSegmentType::EXCHANGE;
     auto output = std::make_shared<PlanSegmentOutput>(plan_segment->getQueryPlan().getRoot()->step->getOutputStream().header, output_type);
@@ -112,7 +114,9 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
     }
     else if (auto * storage_step = dynamic_cast<ReadFromStorageStep *>(node->step.get()))
     {
-        return {std::make_shared<PlanSegmentInput>(storage_step->getOutputStream().header, PlanSegmentType::SOURCE)};
+        auto input = std::make_shared<PlanSegmentInput>(storage_step->getOutputStream().header, PlanSegmentType::SOURCE);
+        input->setStorageID(storage_step->getStorageID());
+        return {input};
     }
     else if (auto * merge_tree_step = dynamic_cast<ReadFromMergeTree *>(node->step.get()))
     {
