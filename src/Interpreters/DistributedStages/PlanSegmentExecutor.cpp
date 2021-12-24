@@ -195,7 +195,7 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     }
 
     if (!keep_order)
-        pipeline->resize(context->getSettingsRef().exchange_output_parallel_size, false, false);
+        pipeline->resize(context->getSettingsRef().exchange_output_parallel_size, false, true);
 
     if (exchange_mode == ExchangeMode::REPARTITION || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
         || exchange_mode == ExchangeMode::GATHER)

@@ -112,7 +112,8 @@ void PlanSegmentInput::serialize(WriteBuffer & buf) const
     for (auto & source_address : source_addresses)
         source_address.serialize(buf);
 
-    storage_id.serialize(buf);
+    if (type == PlanSegmentType::SOURCE)
+        storage_id.serialize(buf);
 }
 
 void PlanSegmentInput::deserialize(ReadBuffer & buf)
@@ -130,7 +131,8 @@ void PlanSegmentInput::deserialize(ReadBuffer & buf)
         source_addresses.push_back(address);
     }
 
-    storage_id = StorageID::deserialize(buf);
+    if (type == PlanSegmentType::SOURCE)
+        storage_id = StorageID::deserialize(buf);
 }
 
 String PlanSegmentInput::toString(size_t indent) const

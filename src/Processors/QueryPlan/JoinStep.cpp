@@ -62,8 +62,6 @@ void JoinStep::serialize(WriteBuffer & buf) const
     else
         writeBinary(false, buf);
 
-    // todo serialize join
-
     writeBinary(max_block_size, buf);
 }
 
@@ -75,7 +73,6 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
     DataStream left_stream = deserializeDataStream(buf);
     DataStream right_stream = deserializeDataStream(buf);
 
-    // todo deserialize join
     JoinPtr join = nullptr;
     bool has_join;
     readBinary(has_join, buf);
@@ -160,20 +157,48 @@ void FilledJoinStep::serialize(WriteBuffer & buf) const
 {
     IQueryPlanStep::serializeImpl(buf);
 
-    // todo serialize join
+    if (join)
+    {
+        writeBinary(true, buf);
+        serializeEnum(join->getType(), buf);
+        join->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
 
     writeBinary(max_block_size, buf);
 }
 
-QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr /*context*/)
+QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
     String step_description;
     readBinary(step_description, buf);
 
     DataStream input_stream = deserializeDataStream(buf);
 
-    // todo deserialize join
     JoinPtr join = nullptr;
+    bool has_join;
+    readBinary(has_join, buf);
+    if (has_join)
+    {
+        JoinType type;
+        deserializeEnum(type, buf);
+        switch(type)
+        {
+            case JoinType::Hash:
+                join = HashJoin::deserialize(buf, context);
+                break;
+            case JoinType::Merge:
+                join = MergeJoin::deserialize(buf, context);
+                break;
+            case JoinType::NestedLoop:
+                join = NestedLoopJoin::deserialize(buf, context);
+                break;
+            case JoinType::Switcher:
+                join = JoinSwitcher::deserialize(buf, context);
+                break;
+        }
+    }
 
     bool max_block_size;
     readBinary(max_block_size, buf);
