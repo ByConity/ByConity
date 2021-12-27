@@ -2,11 +2,13 @@
 
 #include "RpcClient.h"
 
-#include <mutex>
 #include <unordered_map>
 #include <Interpreters/Context.h>
 #include <boost/noncopyable.hpp>
 #include <brpc/channel.h>
+#include <bthread/mtx_cv_base.h>
+#include "Common/Brpc/BrpcApplication.h"
+#include "Common/Brpc/BrpcChannelConfigHolder.h"
 #include <common/logger_useful.h>
 
 namespace DB
@@ -34,7 +36,9 @@ public:
     {
         if (!connection_reuse)
         {
-            return std::make_shared<RpcClient>(host_port);
+            brpc::ChannelOptions channel_options = getChannelOptions();
+            LOG_TRACE(logger, "Get rpc client with option: {}", BrpcChannelConfigHolder::dumpConfig(channel_options));
+            return std::make_shared<RpcClient>(host_port, &channel_options);
         }
         else
         {
@@ -57,8 +61,27 @@ public:
     }
 
 private:
-    std::mutex mutex;
+    bthread::Mutex mutex;
     RpcClients clients;
+    Poco::Logger * logger;
+    std::shared_ptr<BrpcChannelConfigHolder> channel_config_holder;
+
+    inline brpc::ChannelOptions getChannelOptions(){
+        return channel_config_holder->queryConfig();
+    }
+
+    RpcClientFactory()
+    {
+        logger = & Poco::Logger::get("RpcClientFactory");
+        channel_config_holder = BrpcApplication::getInstance().getConfigHolderByType<BrpcChannelConfigHolder>();
+        auto reload_callback = [this](const brpc::ChannelOptions *, const brpc::ChannelOptions *)
+        {
+            LOG_INFO(this->logger, "Clear cached clients");
+            std::unique_lock lock(this->mutex);
+            this->clients.clear();
+        };
+        channel_config_holder->initReloadCallback(reload_callback);
+    }
 };
 
 }
