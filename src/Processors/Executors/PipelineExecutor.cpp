@@ -59,6 +59,20 @@ PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem)
 
         throw;
     }
+
+    if (process_list_element)
+    {
+        // Add the pipeline to the QueryStatus at the end to avoid issues if other things throw
+        // as that would leave the executor "linked"
+        process_list_element->addPipelineExecutor(this);
+    }
+}
+
+PipelineExecutor::~PipelineExecutor()
+{
+    if (process_list_element)
+        process_list_element->removePipelineExecutor(this);
+
 }
 
 void PipelineExecutor::addChildlessProcessorsToStack(Stack & stack)
@@ -393,6 +407,7 @@ void PipelineExecutor::finish()
 
 void PipelineExecutor::execute(size_t num_threads)
 {
+    checkTimeLimit();
     try
     {
         executeImpl(num_threads);
@@ -441,10 +456,33 @@ bool PipelineExecutor::executeStep(std::atomic_bool * yield_flag)
     return false;
 }
 
+bool PipelineExecutor::checkTimeLimitSoft()
+{
+    if (process_list_element)
+    {
+        bool continuing = process_list_element->checkTimeLimitSoft();
+        // We call cancel here so that all processors are notified and tasks waken up
+        // so that the "break" is faster and doesn't wait for long events
+        if (!continuing)
+            cancel();
+        return continuing;
+    }
+
+    return true;
+}
+
+bool PipelineExecutor::checkTimeLimit()
+{
+    bool continuing = checkTimeLimitSoft();
+    if (!continuing)
+        process_list_element->checkTimeLimit(); // Will throw if needed
+
+    return continuing;
+}
+
 void PipelineExecutor::finalizeExecution()
 {
-    if (process_list_element && process_list_element->isKilled())
-        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+    checkTimeLimit();
 
     if (cancelled)
         return;
@@ -596,6 +634,9 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
                 cancel();
 
             if (finished)
+                break;
+            
+            if (!checkTimeLimitSoft())
                 break;
 
 #ifndef NDEBUG

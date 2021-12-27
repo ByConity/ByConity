@@ -26,7 +26,7 @@ namespace UnitTest
 TEST(ExchangeSource, LocalNormalTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -69,7 +69,7 @@ TEST(ExchangeSource, LocalNormalTest)
 TEST(ExchangeSource, LocalSenderTimeoutTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -106,7 +106,7 @@ TEST(ExchangeSource, LocalSenderTimeoutTest)
 TEST(ExchangeSource, LocalLimitTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey datakey{"", 1, 1, 1, ""};
     BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
     BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
@@ -134,7 +134,7 @@ TEST(ExchangeSource, LocalLimitTest)
     Chunk pull_chunk;
     ASSERT_TRUE(executor.pull(pull_chunk));
     ASSERT_TRUE(pull_chunk.getNumRows() == 1);
-    ASSERT_TRUE(executor.pull(pull_chunk));
+    executor.pull(pull_chunk);
     ASSERT_FALSE(executor.pull(pull_chunk));
     executor.cancel();
 }

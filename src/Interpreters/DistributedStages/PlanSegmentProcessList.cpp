@@ -3,7 +3,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
 #include <Common/Exception.h>
-#include "Interpreters/DistributedStages/AddressInfo.h"
+#include <Interpreters/DistributedStages/AddressInfo.h>
 
 #include <memory>
 #include <mutex>
@@ -167,7 +167,7 @@ PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
                 segment_group.segment_queries.erase(segment_id);
                 LOG_TRACE(
                     parent.logger,
-                    "Remove segment {} for distributed query {} @ {} from PlanSegmentProcessList",
+                    "Remove segment {} for distributed query {}@{} from PlanSegmentProcessList",
                     segment_id,
                     inital_query_id,
                     segment_group.coordinator_address);
@@ -187,7 +187,7 @@ PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
         if (segment_group.segment_queries.empty())
         {
             LOG_TRACE(
-                parent.logger, "Remove segment group for distributed query {} @ {}", inital_query_id, segment_group.coordinator_address);
+                parent.logger, "Remove segment group for distributed query {}@{}", inital_query_id, segment_group.coordinator_address);
             parent.initail_query_to_groups.erase(segment_group_it);
             parent.remove_group.notify_all();
         }

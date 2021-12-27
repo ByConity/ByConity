@@ -61,7 +61,7 @@ TEST(RemoteExchangeSourceStep, InitializePipelineTest)
 
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0, .local_debug_mode = true};
     exchange_source_step.setExchangeOptions(exchange_options);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey datakey_1{plan_segment.getQueryId(), 1, 2, 1, coodinator_address_str};
     auto local_sender_1 = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey_1, options);
 

@@ -90,6 +90,11 @@ protected:
     /// Progress of output stream
     Progress progress_out;
 
+    /// Used to externally check for the query time limits
+    /// They are saved in the constructor to limit the overhead of each call to checkTimeLimit()
+    ExecutionSpeedLimits limits;
+    OverflowMode overflow_mode;
+
     QueryPriorities::Handle priority_handle;
 
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
@@ -100,6 +105,12 @@ protected:
     /// Be careful using it. For example, queries field of ProcessListForUser could be modified concurrently.
     const ProcessListForUser * getUserProcessList() const { return user_process_list; }
 
+    
+    mutable bthread::Mutex executors_mutex;
+
+    /// Array of PipelineExecutors to be cancelled when a cancelQuery is received
+    std::vector<PipelineExecutor *> executors;
+    
     mutable bthread::Mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
@@ -186,6 +197,17 @@ public:
     CancellationCode cancelQuery(bool kill);
 
     bool isKilled() const { return is_killed; }
+
+    /// Adds a pipeline to the QueryStatus
+    void addPipelineExecutor(PipelineExecutor * e);
+
+    /// Removes a pipeline to the QueryStatus
+    void removePipelineExecutor(PipelineExecutor * e);
+
+    /// Checks the query time limits (cancelled or timeout)
+    bool checkTimeLimit();
+    /// Same as checkTimeLimit but it never throws
+    [[nodiscard]] bool checkTimeLimitSoft();
 };
 
 

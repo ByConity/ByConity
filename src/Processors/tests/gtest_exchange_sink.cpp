@@ -37,7 +37,7 @@ namespace UnitTest
 TEST(BroadcastExchangeSink, LocalNormalTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -78,7 +78,7 @@ TEST(BroadcastExchangeSink, LocalNormalTest)
 TEST(LoadBalancedExchangeSink, LocalNormalTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -120,7 +120,7 @@ TEST(LoadBalancedExchangeSink, LocalNormalTest)
 TEST(MultiPartitionExchangeSink, LocalNormalTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -182,7 +182,7 @@ TEST(MultiPartitionExchangeSink, LocalNormalTest)
 TEST(SinglePartitionExchangeSink, LocalNormalTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);
@@ -234,7 +234,7 @@ TEST(SinglePartitionExchangeSink, LocalNormalTest)
 TEST(SinglePartitionExchangeSink, PipelineTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms=2000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
     ExchangeDataKey source_key{"", 1, 1, 1, ""};
     BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
     BroadcastReceiverPtr source_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(source_key, options);

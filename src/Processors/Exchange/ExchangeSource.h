@@ -32,6 +32,7 @@ private:
     bool inited = false;
     std::atomic<bool> was_query_canceled = false;
     std::atomic<bool> was_receiver_finished = false;
+    Poco::Logger * logger;
 };
 
 }

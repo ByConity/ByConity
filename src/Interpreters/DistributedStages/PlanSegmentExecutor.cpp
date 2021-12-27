@@ -18,10 +18,11 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
+#include <Interpreters/ProcessList.h>
 
 
 namespace DB
@@ -80,7 +81,10 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool add_output_processors)
 
     res.plan_segment_process_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
+    QueryStatus * query_status = & res.plan_segment_process_entry->get();
+    context->setProcessListElement(query_status);
     res.pipeline = std::move(*buildPipeline(add_output_processors));
+    res.pipeline.setProcessListElement(query_status);
 
     return res;
 }
@@ -123,6 +127,10 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
     QueryPipelinePtr pipeline = buildPipeline(true);
+
+    QueryStatus * query_status = &process_plan_segment_entry->get();
+    context->setProcessListElement(query_status);
+    pipeline->setProcessListElement(query_status);
 
     auto pipeline_executor = pipeline->execute();
 
@@ -171,6 +179,9 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     /// 1                       : 5,6,7,8
     size_t total_partition_num = plan_segment_output->getParallelSize() * exchange_parallel_size;
 
+    if(total_partition_num == 0)
+        throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
+
     const Block & header = plan_segment_output->getHeader();
     LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
 
@@ -183,7 +194,7 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
         BroadcastSenderPtr sender;
         if (options.local_debug_mode)
         {
-            LOG_DEBUG(logger, "Create local sender : {}", data_key->dump());
+            LOG_DEBUG(logger, "Create local sender: {}", data_key->dump());
             sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(*data_key, local_options);
         }
         else
@@ -195,7 +206,7 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     }
 
     if (!keep_order)
-        pipeline->resize(context->getSettingsRef().exchange_output_parallel_size, false, true);
+        pipeline->resize(context->getSettingsRef().exchange_output_parallel_size, false, false);
 
     if (exchange_mode == ExchangeMode::REPARTITION || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
         || exchange_mode == ExchangeMode::GATHER)
@@ -228,7 +239,6 @@ void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline
     }
     else
     {
-        LOG_TRACE(logger, "addRepartitionExchangeSink");
         pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
             /// exchange sink only process StreamType::Main
             if (stream_type != QueryPipeline::StreamType::Main)
