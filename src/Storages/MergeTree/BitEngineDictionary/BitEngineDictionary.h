@@ -133,7 +133,7 @@ public:
             }
             else
             {
-                if (std::is_same<S, ColumnUInt64::Container>::value)
+                if (std::is_same<R, ColumnUInt64::Container>::value)
                     res_array.push_back(std::numeric_limits<UInt64>::max());
                 lost_count++;
                 continue;

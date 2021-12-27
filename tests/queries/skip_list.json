@@ -112,7 +112,12 @@
         "02021_test_perfect_shard",
         "02021_test_perfect_shard_in",
         "02032_function_version_compare",
-        "00743_aggregation_finder_funnel_group"
+        "00743_aggregation_finder_funnel_group",
+        "01829_test_aggregation_bitmapMaxLevel",
+        "01829_test_aggregation_bitmapExpressionComputation_two_shards",
+        "01829_test_aggregation_bitmapExpressionComputation",
+        "01829_test_aggregation_bitmapColumnDiff",
+        "00829_bitmap64_function"
     ],
     "database-ordinary": [
         "00604_show_create_database",

@@ -38,6 +38,24 @@ struct BitEngineEncodeSettings
 
     Float64 getLossRate() const { return loss_rate; }
 
+    BitEngineEncodeSettings & bitengineOnlyRecode(bool value = false)
+    {
+        only_recode = value;
+        return *this;
+    }
+
+    BitEngineEncodeSettings & bitengineEncodeWithoutLock(bool value = false)
+    {
+        without_lock = value;
+        return *this;
+    }
+
+    BitEngineEncodeSettings & bitengineEncodeFastMode(bool value = false)
+    {
+        encode_fast_mode = value;
+        return *this;
+    }
+
     bool only_recode = false;
     bool without_lock = false;
     bool encode_fast_mode = false;
@@ -66,24 +84,6 @@ struct MergeTreeWriterSettings
         , blocks_are_granules_size(blocks_are_granules_size_)
         , bitengine_settings(global_settings, storage_settings)
     {
-    }
-
-    BitEngineEncodeSettings & bitengineOnlyRecode(bool value = false)
-    {
-        bitengine_settings.only_recode = value;
-        return bitengine_settings;
-    }
-
-    BitEngineEncodeSettings & bitengineEncodeWithoutLock(bool value = false)
-    {
-        bitengine_settings.without_lock = value;
-        return bitengine_settings;
-    }
-
-    BitEngineEncodeSettings & bitengineEncodeFastMode(bool value = false)
-    {
-        bitengine_settings.encode_fast_mode = value;
-        return bitengine_settings;
     }
 
     size_t min_compress_block_size;

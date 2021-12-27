@@ -26,6 +26,7 @@ class IncrementData;
 
 using BitEngineDataExchangerPtr = std::shared_ptr<BitEngineDataExchanger>;
 using BitEngineDictionaryPtr = std::shared_ptr<BitEngineDictionary>;
+using BitEngineDictionarySnapshotPtr = std::shared_ptr<BitEngineDictionarySnapshot>;
 
 class BitEngineDictionaryManager final : public BitEngineDictionaryManagerBase<BitEngineDictionaryPtr>
 {
@@ -33,6 +34,11 @@ public:
     BitEngineDictionaryManager(const String & db_tbl_, const String & disk_name_, const String & dict_path_, ContextPtr context);
     ~BitEngineDictionaryManager() override;
     BitEngineDictionaryPtr getBitEngineDictPtr(const String & column) override;
+
+    BitEngineDictionarySnapshot getDictSnapshot(const String & column_name);
+    BitEngineDictionarySnapshotPtr getDictSnapshotPtr(const String & column_name);
+    BitEngineDictionarySnapshotPtr tryGetUpdatedSnapshot(const String & column_name);
+    void updateSnapshots();
 
     void reload(const String & column_name) override;
     void flushDict() override;
@@ -43,8 +49,9 @@ public:
     void loadVersion();
     void flushVersion();
     size_t getVersion() const { return version; }
-    void updateSnapshots();
 
+    ColumnPtr decodeColumn(const IColumn & column, const String & dict_name);
+    ColumnPtr decodeNonBitEngineColumn(const IColumn & column, String & dict_name);
 
     IncrementOffset getIncrementOffset();
 //    IncrementOffset getEmptyIncrementOffset();
@@ -66,6 +73,18 @@ public:
     Status getStatus();
     std::map<String, UInt64> getAllDictColumnSize() override;
     void resetDict() { resetDictImpl(); } // used in repair mode where dicts in all replicas are corrupted.
+
+    struct RetrieveKey
+    {
+        template <typename T>
+        typename T::first_type operator()(T keyValuePair) const
+        {
+            return keyValuePair.first;
+        }
+    };
+
+    Strings getDictKeysVector();
+    String allDictNamesToString();
 
 //    MergeTreeData::AlterDataPartTransactionPtr
 //    recodeBitEnginePartInTransaction(const MergeTreeData::DataPartPtr & part,
@@ -89,7 +108,7 @@ private:
 
         String version_path;
         size_t version = 0;
-        std::map<String, BitEngineDictionarySnapshot> dict_snapshots;  // <column_name, bitengine_dictioanry>
+        std::unordered_map<String, BitEngineDictionarySnapshotPtr> dict_snapshots;  // <column_name, bitengine_dictioanry>
 
         // Lock for snapshots
         mutable RWLock snapshot_lock = RWLockImpl::create();

@@ -560,7 +560,7 @@ public:
             case Types::Decimal128: return get<DecimalField<Decimal128>>() == rhs.get<DecimalField<Decimal128>>();
             case Types::Decimal256: return get<DecimalField<Decimal256>>() == rhs.get<DecimalField<Decimal256>>();
             case Types::AggregateFunctionState:  return get<AggregateFunctionStateData>() == rhs.get<AggregateFunctionStateData>();
-            case Types::BitMap64: throw Exception("Not support", ErrorCodes::NOT_IMPLEMENTED);
+	        case Types::BitMap64: return get<BitMap64>() == rhs.get<BitMap64>();
         }
 
         throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);

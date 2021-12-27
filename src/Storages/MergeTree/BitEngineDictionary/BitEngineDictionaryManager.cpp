@@ -178,10 +178,10 @@ void BitEngineDictionaryManager::updateSnapshots()
         auto snapshot_it = dict_snapshots.find(dict_it.first);
         if (snapshot_it == dict_snapshots.end())
             dict_snapshots.emplace(dict_it.first,
-                                   BitEngineDictionarySnapshot(*(dict_it.second)));
+                                   std::make_shared<BitEngineDictionarySnapshot>(*(dict_it.second)));
         else if (dict_it.second->needUpdateSnapshot())
         {
-            snapshot_it->second.tryUpdateSnapshot<BitEngineDictionary>(*(dict_it.second));
+            snapshot_it->second->tryUpdateSnapshot<BitEngineDictionary>(*(dict_it.second));
             dict_it.second->resetUpdateSnapshot();
         }
     }
@@ -301,6 +301,60 @@ BitEngineDictionaryManager::Status BitEngineDictionaryManager::getStatus()
     return status;
 }
 
+BitEngineDictionarySnapshotPtr BitEngineDictionaryManager::tryGetUpdatedSnapshot(const String & column_name)
+{
+    auto manager_lock = getWriteLock();
+    auto dict_it = dict_containers.find(column_name);
+    if (dict_it == dict_containers.end())
+    {
+        throw Exception("Cannot find dict name: " + column_name + " in all dicts: " + allDictNamesToString(), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto snapshot_lock_ = writeLockForSnapshot();
+    auto snapshot_it = dict_snapshots.find(column_name);
+    if (snapshot_it == dict_snapshots.end())
+    {
+        snapshot_it = dict_snapshots.emplace(column_name,
+                                             std::make_shared<BitEngineDictionarySnapshot>(*(dict_it->second))).first;
+    }
+    else if (dict_it->second->needUpdateSnapshot())
+    {
+        snapshot_it->second->tryUpdateSnapshot<BitEngineDictionary>(*(dict_it->second));
+        dict_it->second->resetUpdateSnapshot();
+    }
+
+    return snapshot_it->second;
+}
+
+BitEngineDictionarySnapshotPtr BitEngineDictionaryManager::getDictSnapshotPtr(const String & column_name)
+{
+    return tryGetUpdatedSnapshot(column_name);
+}
+
+BitEngineDictionarySnapshot BitEngineDictionaryManager::getDictSnapshot(const String & column_name)
+{
+    return *tryGetUpdatedSnapshot(column_name);
+}
+
+ColumnPtr BitEngineDictionaryManager::decodeColumn(const IColumn & column, const String & dict_name)
+{
+    auto dict_snapshot = getDictSnapshotPtr(dict_name);
+    if (dict_snapshot->empty())
+        throw Exception("Got an empty dictionary for decoding bitmap, dict_name: " + dict_name, ErrorCodes::LOGICAL_ERROR);
+
+    return dict_snapshot->decodeColumn(column);
+}
+
+
+ColumnPtr BitEngineDictionaryManager::decodeNonBitEngineColumn(const IColumn & column, String & dict_name)
+{
+    auto dict_snapshot = getDictSnapshotPtr(dict_name);
+    if (dict_snapshot->empty())
+        throw Exception("Got an empty dictionary for decoding bitmap", ErrorCodes::LOGICAL_ERROR);
+
+    return dict_snapshot->decodeNonBitEngineColumn(column);
+}
+
 
 bool BitEngineDictionaryManager::checkEncodedPart(
     const MergeTreeData::DataPartPtr & part,
@@ -318,6 +372,32 @@ MergeTreeData::DataPartsVector BitEngineDictionaryManager::checkEncodedParts(
     // TODO (liuhaoqiang)
     return DB::MergeTreeData::DataPartsVector();
 }
+
+Strings BitEngineDictionaryManager::getDictKeysVector()
+{
+    Strings keys;
+    {
+        auto lock = getWriteLock();
+        transform(dict_containers.begin(), dict_containers.end(), back_inserter(keys), RetrieveKey());
+    }
+    return keys;
+}
+
+String BitEngineDictionaryManager::allDictNamesToString() {
+    Strings dicts = getDictKeysVector();
+    String res("[");
+    for (const auto & str :dicts)
+    {
+        res += str;
+        res += ", ";
+    }
+    res.resize(res.size()-2);
+    res += "]";
+    return res;
+}
+
+
+
 
 
 
