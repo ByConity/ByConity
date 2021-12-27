@@ -126,6 +126,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_codec{"CODEC"};
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
+    ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser;
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
@@ -175,6 +176,15 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         if (!type_parser.parse(pos, type, expected))
             return false;
     }
+
+    bool bitengine_encode{false};
+    bool inner_bitengine_encode{false};
+    do
+    {
+        inner_bitengine_encode = s_bitengine_encode.ignore(pos, expected);
+        if (bitengine_encode && inner_bitengine_encode)
+            return false;
+    } while (inner_bitengine_encode);
 
     Pos pos_before_specifier = pos;
     if (s_default.ignore(pos, expected) || s_materialized.ignore(pos, expected) || s_alias.ignore(pos, expected))
