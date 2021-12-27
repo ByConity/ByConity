@@ -1,5 +1,6 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeHelper.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -41,6 +42,36 @@ String NameAndTypePair::getSubcolumnName() const
         return "";
 
     return name.substr(*subcolumn_delimiter_position + 1, name.size() - *subcolumn_delimiter_position);
+}
+
+void NameAndTypePair::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    serializeDataType(type, buf);
+    serializeDataType(type_in_storage, buf);
+    if (subcolumn_delimiter_position)
+    {
+        writeBinary(true, buf);
+        writeBinary(subcolumn_delimiter_position.value(), buf);
+    }
+    else
+        writeBinary(false, buf);
+}
+
+void NameAndTypePair::deserialize(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    type = deserializeDataType(buf);
+    type_in_storage = deserializeDataType(buf);
+
+    bool has_size;
+    readBinary(has_size, buf);
+    if (has_size)
+    {
+        size_t subcolumn_tmp;
+        readBinary(subcolumn_tmp, buf);
+        subcolumn_delimiter_position = subcolumn_tmp;
+    }
 }
 
 void NamesAndTypesList::readText(ReadBuffer & buf)
@@ -204,4 +235,24 @@ std::optional<NameAndTypePair> NamesAndTypesList::tryGetByName(const std::string
     }
     return {};
 }
+
+void NamesAndTypesList::serialize(WriteBuffer & buf) const
+{
+    writeBinary(size(), buf);
+    for (auto & elem : *this)
+        elem.serialize(buf);
+}
+
+void NamesAndTypesList::deserialize(ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+    for (size_t i = 0; i < size; ++i)
+    {
+        NameAndTypePair pair;
+        pair.deserialize(buf);
+        this->push_back(pair);
+    }
+}
+
 }

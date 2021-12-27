@@ -531,6 +531,7 @@ class IColumn;
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
     \
     /** Exchange setttings */ \
+    M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
     M(Bool, exchange_enable_block_compress, true, "Whether enable exchange block compress ", 0) \
     M(UInt64, exchange_stream_max_buf_size, 73400320, "Default 70M, -1 means no limit", 0) \

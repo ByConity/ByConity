@@ -2,6 +2,10 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Interpreters/IJoin.h>
+#include <Interpreters/HashJoin.h>
+#include <Interpreters/MergeJoin.h>
+#include <Interpreters/NestedLoopJoin.h>
+#include <Interpreters/JoinSwitcher.h>
 
 namespace DB
 {
@@ -37,6 +41,69 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
 void JoinStep::describePipeline(FormatSettings & settings) const
 {
     IQueryPlanStep::describePipeline(processors, settings);
+}
+
+void JoinStep::serialize(WriteBuffer & buf) const
+{
+    writeBinary(step_description, buf);
+
+    if (input_streams.size() < 2)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input streams");
+
+    serializeDataStream(input_streams[0], buf);
+    serializeDataStream(input_streams[1], buf);
+
+    if (join)
+    {
+        writeBinary(true, buf);
+        serializeEnum(join->getType(), buf);
+        join->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    writeBinary(max_block_size, buf);
+}
+
+QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream left_stream = deserializeDataStream(buf);
+    DataStream right_stream = deserializeDataStream(buf);
+
+    JoinPtr join = nullptr;
+    bool has_join;
+    readBinary(has_join, buf);
+    if (has_join)
+    {
+        JoinType type;
+        deserializeEnum(type, buf);
+        switch(type)
+        {
+            case JoinType::Hash:
+                join = HashJoin::deserialize(buf, context);
+                break;
+            case JoinType::Merge:
+                join = MergeJoin::deserialize(buf, context);
+                break;
+            case JoinType::NestedLoop:
+                join = NestedLoopJoin::deserialize(buf, context);
+                break;
+            case JoinType::Switcher:
+                join = JoinSwitcher::deserialize(buf, context);
+                break;
+        }
+    }
+
+    size_t max_block_size;
+    readBinary(max_block_size, buf);
+    
+    auto step = std::make_unique<JoinStep>(left_stream, right_stream, std::move(join), max_block_size);
+
+    step->setStepDescription(step_description);
+    return step;
 }
 
 static ITransformingStep::Traits getStorageJoinTraits()
@@ -85,5 +152,62 @@ void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
         return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, counter);
     });
 }
+
+void FilledJoinStep::serialize(WriteBuffer & buf) const
+{
+    IQueryPlanStep::serializeImpl(buf);
+
+    if (join)
+    {
+        writeBinary(true, buf);
+        serializeEnum(join->getType(), buf);
+        join->serialize(buf);
+    }
+    else
+        writeBinary(false, buf);
+
+    writeBinary(max_block_size, buf);
+}
+
+QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    String step_description;
+    readBinary(step_description, buf);
+
+    DataStream input_stream = deserializeDataStream(buf);
+
+    JoinPtr join = nullptr;
+    bool has_join;
+    readBinary(has_join, buf);
+    if (has_join)
+    {
+        JoinType type;
+        deserializeEnum(type, buf);
+        switch(type)
+        {
+            case JoinType::Hash:
+                join = HashJoin::deserialize(buf, context);
+                break;
+            case JoinType::Merge:
+                join = MergeJoin::deserialize(buf, context);
+                break;
+            case JoinType::NestedLoop:
+                join = NestedLoopJoin::deserialize(buf, context);
+                break;
+            case JoinType::Switcher:
+                join = JoinSwitcher::deserialize(buf, context);
+                break;
+        }
+    }
+
+    bool max_block_size;
+    readBinary(max_block_size, buf);
+
+    auto step = std::make_unique<FilledJoinStep>(input_stream, std::move(join), max_block_size);
+
+    step->setStepDescription(step_description);
+    return step;
+}
+
 
 }

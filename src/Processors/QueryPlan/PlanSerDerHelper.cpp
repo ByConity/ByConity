@@ -37,6 +37,9 @@
 #include <DataTypes/DataTypeHelper.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Interpreters/ArrayJoinAction.h>
+#include <Interpreters/TableJoin.h>
+#include <Interpreters/JoinedTables.h>
+#include <Parsers/queryToString.h>
 
 namespace DB
 {

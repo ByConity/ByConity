@@ -17,6 +17,7 @@ struct ExchangeStepContext
 {
     ContextPtr context;
     QueryPlan & query_plan;
+    bool has_gathered = false;
 };
 
 class ExchangeStepVisitor : public StepVisitor<ExchangeStepResult, ExchangeStepContext>
@@ -28,10 +29,18 @@ public:
     ExchangeStepResult visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext &) override;
 
     ExchangeStepResult visitJoinStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
+
+    ExchangeStepResult visitLimitStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
+
+    ExchangeStepResult visitMergingSortedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
     
+    void addGather(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
+
 private:
 
     ExchangeStepResult visitChild(QueryPlan::Node * node, ExchangeStepContext & exchange_context);
+
+    void addExchange(QueryPlan::Node * node, ExchangeMode mode, const Partitioning & partition, ExchangeStepContext & exchange_context);
 
 };
 

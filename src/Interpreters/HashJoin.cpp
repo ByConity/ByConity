@@ -18,6 +18,7 @@
 #include <Interpreters/joinDispatch.h>
 #include <Interpreters/NullableUtils.h>
 #include <Interpreters/DictionaryReader.h>
+#include <Interpreters/Context.h>
 
 #include <Storages/StorageDictionary.h>
 
@@ -27,6 +28,8 @@
 #include <Core/ColumnNumbers.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
+
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -1562,6 +1565,20 @@ void HashJoin::reuseJoinedData(const HashJoin & join)
     {
         used_flags.reinit<kind_, strictness_>(map.getBufferSizeInCells(data->type) + 1);
     });
+}
+
+void HashJoin::serialize(WriteBuffer & buf) const
+{
+    table_join->serialize(buf);
+    serializeBlock(right_sample_block, buf);
+}
+
+JoinPtr HashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto table_join = TableJoin::deserialize(buf, context);
+    auto right_sample_block = deserializeBlock(buf);
+
+    return std::make_shared<HashJoin>(table_join, right_sample_block);
 }
 
 }

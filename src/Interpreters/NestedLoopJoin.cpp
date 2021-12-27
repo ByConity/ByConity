@@ -13,6 +13,8 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/NestedLoopJoin.h>
 #include <Interpreters/join_common.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
+
 
 namespace DB
 {
@@ -284,4 +286,19 @@ void NestedLoopJoin::joinImpl(
         left_block.setColumn(i, std::move(*new_block.findByName(column.name)));
     }
 }
+
+void NestedLoopJoin::serialize(WriteBuffer & buf) const
+{
+    table_join->serialize(buf);
+    serializeBlock(right_sample_block, buf);
+}
+
+JoinPtr NestedLoopJoin::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto table_join = TableJoin::deserialize(buf, context);
+    auto right_sample_block = deserializeBlock(buf);
+
+    return std::make_shared<NestedLoopJoin>(table_join, right_sample_block, context);
+}
+
 }

@@ -111,6 +111,9 @@ void PlanSegmentInput::serialize(WriteBuffer & buf) const
     writeBinary(source_addresses.size(), buf);
     for (auto & source_address : source_addresses)
         source_address.serialize(buf);
+
+    if (type == PlanSegmentType::SOURCE)
+        storage_id.serialize(buf);
 }
 
 void PlanSegmentInput::deserialize(ReadBuffer & buf)
@@ -127,6 +130,9 @@ void PlanSegmentInput::deserialize(ReadBuffer & buf)
         address.deserialize(buf);
         source_addresses.push_back(address);
     }
+
+    if (type == PlanSegmentType::SOURCE)
+        storage_id = StorageID::deserialize(buf);
 }
 
 String PlanSegmentInput::toString(size_t indent) const
@@ -136,6 +142,7 @@ String PlanSegmentInput::toString(size_t indent) const
 
     ostr << IPlanSegment::toString(indent) << "\n";
     ostr << indent_str << "parallel_index: " << parallel_index << "\n";
+    ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE ? storage_id.getNameForLogs() : "") << "\n";
     ostr << indent_str << "source_addresses: " << "\n";
     ostr << indent_str;
     for (auto & address : source_addresses)
@@ -172,6 +179,12 @@ String PlanSegmentOutput::toString(size_t indent) const
 
     return ostr.str();
 }
+
+PlanSegment::PlanSegment(const ContextPtr & context_) : context(Context::createCopy(context_)) {
+
+}
+
+void PlanSegment::setContext(const ContextPtr & context_) { context = Context::createCopy(context_); }
 
 void PlanSegment::setPlanSegmentToQueryPlan(QueryPlan::Node * node)
 {
@@ -240,7 +253,7 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(exchange_parallel_size, buf);
 }
 
-PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextMutablePtr context_)
+PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextPtr context_)
 {
     auto plan_segment = std::make_unique<PlanSegment>(context_);
     plan_segment->deserialize(buf);
@@ -268,7 +281,8 @@ String PlanSegment::toString() const
 
     ostr << "coordinator_address: " << coordinator_address.toString() << "\n";
     ostr << "current_address: " << current_address.toString() << "\n";
-    ostr << "cluster_name: " << cluster_name;
+    ostr << "cluster_name: " << cluster_name << "\n";
+    ostr << "parallel: " << parallel << ", exchange_parallel_size: " << exchange_parallel_size; 
 
     return ostr.str();
 }

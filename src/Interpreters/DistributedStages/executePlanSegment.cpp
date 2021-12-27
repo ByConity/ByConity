@@ -22,6 +22,8 @@ void executePlanSegment(PlanSegmentPtr plan_segment, ContextMutablePtr context, 
     if (!plan_segment)
         throw Exception("Cannot execute empty plan segment", ErrorCodes::LOGICAL_ERROR);
 
+    LOG_TRACE(&Poco::Logger::get("executePlanSegment"), "EXECUTE\n" + plan_segment->toString());
+
     auto execute_func = [&]() {
         PlanSegmentExecutor executor(std::move(plan_segment), std::move(context));
         executor.execute();

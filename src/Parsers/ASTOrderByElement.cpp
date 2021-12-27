@@ -1,5 +1,6 @@
 #include <Columns/Collator.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Common/SipHash.h>
 #include <IO/Operators.h>
 
@@ -56,6 +57,45 @@ void ASTOrderByElement::formatImpl(const FormatSettings & settings, FormatState 
             fill_step->formatImpl(settings, state, frame);
         }
     }
+}
+
+void ASTOrderByElement::serialize(WriteBuffer & buf) const
+{
+    writeBinary(direction, buf);
+    writeBinary(nulls_direction, buf);
+    writeBinary(nulls_direction_was_explicitly_specified, buf);
+
+    serializeAST(collation, buf);
+
+    writeBinary(with_fill, buf);
+    serializeAST(fill_from, buf);
+    serializeAST(fill_to, buf);
+    serializeAST(fill_step, buf);
+
+    serializeASTs(children, buf);
+}
+
+void ASTOrderByElement::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(direction, buf);
+    readBinary(nulls_direction, buf);
+    readBinary(nulls_direction_was_explicitly_specified, buf);
+
+    collation = deserializeAST(buf);
+
+    readBinary(with_fill, buf);
+    fill_from = deserializeAST(buf);
+    fill_to = deserializeAST(buf);
+    fill_step = deserializeAST(buf);
+
+    children = deserializeASTs(buf);
+}
+
+ASTPtr ASTOrderByElement::deserialize(ReadBuffer & buf)
+{
+    auto orde_by_element = std::make_shared<ASTOrderByElement>();
+    orde_by_element->deserializeImpl(buf);
+    return orde_by_element;
 }
 
 }

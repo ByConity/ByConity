@@ -292,6 +292,8 @@ std::shared_ptr<TableJoin> JoinedTables::makeTableJoin(const ASTSelectQuery & se
     auto settings = context->getSettingsRef();
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
 
+    table_join->setSelectQuery(std::make_unique<ASTSelectQuery>(select_query));
+
     const ASTTablesInSelectQueryElement * ast_join = select_query.join();
     const auto & table_to_join = ast_join->table_expression->as<ASTTableExpression &>();
 

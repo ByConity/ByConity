@@ -13,8 +13,8 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
-
 
 namespace DB
 {
@@ -1090,6 +1090,20 @@ void MergeJoin::RightBlockInfo::setUsed(size_t start, size_t length)
         for (size_t i = 0; i < length; ++i)
             (*used_bitmap)[start + i] = true;
     }
+}
+
+void MergeJoin::serialize(WriteBuffer & buf) const
+{
+    table_join->serialize(buf);
+    serializeBlock(right_sample_block, buf);
+}
+
+JoinPtr MergeJoin::deserialize(ReadBuffer & buf, ContextPtr context)
+{
+    auto table_join = TableJoin::deserialize(buf, context);
+    auto right_sample_block = deserializeBlock(buf);
+
+    return std::make_shared<MergeJoin>(table_join, right_sample_block);
 }
 
 }

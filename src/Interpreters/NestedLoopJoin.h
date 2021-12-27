@@ -26,6 +26,8 @@ class NestedLoopJoin : public IJoin
 public:
     NestedLoopJoin(std::shared_ptr<TableJoin> table_join_, const Block & right_sample_block_, const ContextPtr& context);
 
+    JoinType getType() const override { return JoinType::NestedLoop; }
+
     bool addJoinedBlock(const Block & block, bool check_limits = true) override;
     void joinBlock(Block &, ExtraBlockPtr & not_processed) override;
     void setTotals(const Block &) override;
@@ -33,6 +35,9 @@ public:
     const TableJoin & getTableJoin() const override { return *table_join; }
     size_t getTotalRowCount() const override;
     size_t getTotalByteCount() const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     Poco::Logger * log = &Poco::Logger::get("NestedLoopJoin");

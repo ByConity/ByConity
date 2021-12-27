@@ -86,6 +86,13 @@ ASTPtr createWithASTType(ASTType type, ReadBuffer & buf)
     }
 }
 
+void serializeAST(const IAST & ast, WriteBuffer & buf)
+{
+    writeBinary(true, buf);
+    writeBinary(UInt8(ast.getType()), buf);
+    ast.serialize(buf);
+}
+
 void serializeAST(const ASTPtr & ast, WriteBuffer & buf)
 {
     if (ast)
@@ -104,7 +111,7 @@ ASTPtr deserializeAST(ReadBuffer & buf)
     readBinary(has_ast, buf);
     if (has_ast)
     {
-        UInt8 read_type = 0;
+        UInt8 read_type;
         readBinary(read_type, buf);
         auto type = ASTType(read_type);
 
