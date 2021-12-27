@@ -22,6 +22,10 @@ public:
 
     ASTType getType() const override { return ASTType::ASTNameTypePair; }
 
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };

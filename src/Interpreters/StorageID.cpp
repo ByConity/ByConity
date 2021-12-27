@@ -1,4 +1,5 @@
 #include <Interpreters/StorageID.h>
+#include <Interpreters/Context.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Common/quoteString.h>
@@ -6,6 +7,7 @@
 #include <IO/ReadHelpers.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Poco/Util/AbstractConfiguration.h>
+#include <Storages/IStorage.h>
 
 namespace DB
 {
@@ -127,7 +129,7 @@ void StorageID::serialize(WriteBuffer & buffer) const
     writeBinary(uuid, buffer);
 }
 
-StorageID StorageID::deserialize(ReadBuffer & buffer)
+StorageID StorageID::deserialize(ReadBuffer & buffer, ContextPtr context)
 {
     String database_name;
     readBinary(database_name, buffer);
@@ -138,7 +140,11 @@ StorageID StorageID::deserialize(ReadBuffer & buffer)
     UUID uuid;
     readBinary(uuid, buffer);
 
-    return StorageID(database_name, table_name, uuid);
+    auto storage_id_recv = StorageID(database_name, table_name, uuid);
+    StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id_recv.database_name, storage_id_recv.table_name}, context);
+    if (storage)
+        storage_id_recv = storage->getStorageID();
+    return storage_id_recv;
 }
 
 }

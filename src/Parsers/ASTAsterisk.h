@@ -17,6 +17,10 @@ public:
     ASTPtr clone() const override;
     void appendColumnName(WriteBuffer & ostr) const override;
 
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
+
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 };

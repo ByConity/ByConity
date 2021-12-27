@@ -1,4 +1,5 @@
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 #include <Poco/String.h>
 #include <Common/SipHash.h>
@@ -83,6 +84,27 @@ void ASTFunctionWithKeyValueArguments::updateTreeHashImpl(SipHash & hash_state) 
     hash_state.update(name);
     hash_state.update(has_brackets);
     IAST::updateTreeHashImpl(hash_state);
+}
+
+void ASTFunctionWithKeyValueArguments::serialize(WriteBuffer & buf) const
+{
+    writeBinary(name, buf);
+    serializeAST(elements, buf);
+    writeBinary(has_brackets, buf);
+}
+
+void ASTFunctionWithKeyValueArguments::deserializeImpl(ReadBuffer & buf)
+{
+    readBinary(name, buf);
+    elements = deserializeASTWithChildren(children, buf);
+    readBinary(has_brackets, buf);
+}
+
+ASTPtr ASTFunctionWithKeyValueArguments::deserialize(ReadBuffer & buf)
+{
+    auto function = std::make_shared<ASTFunctionWithKeyValueArguments>();
+    function->deserializeImpl(buf);
+    return function;
 }
 
 }

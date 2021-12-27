@@ -42,7 +42,7 @@ void RemoteExchangeSourceStep::serialize(WriteBuffer & buf) const
         input->serialize(buf);
 }
 
-QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, ContextPtr)
+QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, ContextPtr context)
 {
     String step_description;
     readBinary(step_description, buf);
@@ -55,7 +55,7 @@ QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, Context
     for (size_t i = 0; i < input_size; ++i)
     {
         inputs[i] = std::make_shared<PlanSegmentInput>();
-        inputs[i]->deserialize(buf);
+        inputs[i]->deserialize(buf, context);
     }
 
     auto step = std::make_unique<RemoteExchangeSourceStep>(inputs, input_stream);

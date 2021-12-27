@@ -51,6 +51,7 @@ public:
     ConnectionPool(unsigned max_connections_,
             const String & host_,
             UInt16 port_,
+            
             const String & default_database_,
             const String & user_,
             const String & password_,
@@ -59,7 +60,9 @@ public:
             const String & client_name_,
             Protocol::Compression compression_,
             Protocol::Secure secure_,
-            Int64 priority_ = 1)
+            Int64 priority_ = 1,
+            UInt16 exchange_port_ = 0,
+            UInt16 exchange_status_port_ = 0)
        : Base(max_connections_,
         &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
         host(host_),
@@ -72,7 +75,9 @@ public:
         client_name(client_name_),
         compression(compression_),
         secure(secure_),
-        priority(priority_)
+        priority(priority_),
+        exchange_port(exchange_port_),
+        exchange_status_port(exchange_status_port_)
     {
     }
 
@@ -114,7 +119,9 @@ protected:
             host, port,
             default_database, user, password,
             cluster, cluster_secret,
-            client_name, compression, secure);
+            client_name, compression, secure,
+            Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
+            exchange_port, exchange_status_port);
     }
 
 private:
@@ -132,6 +139,8 @@ private:
     Protocol::Compression compression; /// Whether to compress data when interacting with the server.
     Protocol::Secure secure;           /// Whether to encrypt data when interacting with the server.
     Int64 priority;                    /// priority from <remote_servers>
+    UInt16 exchange_port;
+    UInt16 exchange_status_port;
 
 };
 

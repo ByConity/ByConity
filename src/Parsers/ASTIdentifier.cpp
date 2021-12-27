@@ -239,7 +239,12 @@ String ASTTableIdentifier::getDatabaseName() const
 
 void ASTTableIdentifier::resetTable(const String & database_name, const String & table_name)
 {
-    auto identifier = std::make_shared<ASTTableIdentifier>(database_name, table_name);
+    std::shared_ptr<ASTTableIdentifier> identifier;
+    if (database_name.empty())
+        identifier = std::make_shared<ASTTableIdentifier>(table_name);
+    else
+        identifier = std::make_shared<ASTTableIdentifier>(database_name, table_name);
+
     full_name.swap(identifier->full_name);
     name_parts.swap(identifier->name_parts);
     uuid = identifier->uuid;
@@ -255,14 +260,14 @@ void ASTTableIdentifier::serialize(WriteBuffer & buf) const
 {
     ASTIdentifier::serialize(buf);
 
-    writeBinary(uuid, buf);
+    //writeBinary(uuid, buf);
 }
 
 void ASTTableIdentifier::deserializeImpl(ReadBuffer & buf)
 {
     ASTIdentifier::deserializeImpl(buf);
 
-    readBinary(uuid, buf);
+    //readBinary(uuid, buf);
 }
 
 ASTPtr ASTTableIdentifier::deserialize(ReadBuffer & buf)
