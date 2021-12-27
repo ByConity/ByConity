@@ -10,7 +10,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/ISimpleTransform.h>
 #include <Poco/Logger.h>
-#include "Interpreters/Context_fwd.h"
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {

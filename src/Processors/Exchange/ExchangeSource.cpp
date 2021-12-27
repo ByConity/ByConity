@@ -10,8 +10,9 @@
 #include <Processors/Exchange/ExchangeSource.h>
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include "common/logger_useful.h"
 #include <Common/Exception.h>
-#include "Processors/Exchange/ExchangeOptions.h"
+#include <Processors/Exchange/ExchangeOptions.h>
 
 namespace DB
 {
@@ -21,7 +22,10 @@ namespace ErrorCodes
 }
 
 ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_)
-    : SourceWithProgress(std::move(header_), false), receiver(std::move(receiver_)), options(options_)
+    : SourceWithProgress(std::move(header_), false)
+    , receiver(std::move(receiver_))
+    , options(options_)
+    , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
 
@@ -68,6 +72,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
 void ExchangeSource::onCancel()
 {
+    LOG_TRACE(logger, "ExchangeSource onCancel");
     was_query_canceled = true;
     receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }

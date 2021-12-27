@@ -23,6 +23,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int LOGICAL_ERROR;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 
@@ -295,9 +296,15 @@ QueryStatus::QueryStatus(
     , priority_handle(std::move(priority_handle_))
     , num_queries_increment{CurrentMetrics::Query}
 {
+    auto settings = getContext()->getSettings();
+    limits.max_execution_time = settings.max_execution_time;
+    overflow_mode = settings.timeout_overflow_mode;
 }
 
-QueryStatus::~QueryStatus() = default;
+QueryStatus::~QueryStatus()
+{
+    assert(executors.empty());
+}
 
 void QueryStatus::setQueryStreams(const BlockIO & io)
 {
@@ -350,6 +357,22 @@ bool QueryStatus::tryGetQueryStreams(BlockInputStreamPtr & in, BlockOutputStream
 
 CancellationCode QueryStatus::cancelQuery(bool kill)
 {
+    {
+        std::lock_guard lock(executors_mutex);
+        if (!executors.empty())
+        {
+            if (is_killed.load())
+                return CancellationCode::CancelSent;
+
+            is_killed.store(true);
+
+            for (auto * e : executors)
+                e->cancel();
+
+            return CancellationCode::CancelSent;
+        }
+    }
+    
     /// Streams are destroyed, and ProcessListElement will be deleted from ProcessList soon. We need wait a little bit
     if (streamsAreReleased())
         return CancellationCode::CancelSent;
@@ -369,6 +392,36 @@ CancellationCode QueryStatus::cancelQuery(bool kill)
     /// Query is not even started
     is_killed.store(true);
     return CancellationCode::CancelSent;
+}
+
+void QueryStatus::addPipelineExecutor(PipelineExecutor * e)
+{
+    std::lock_guard lock(executors_mutex);
+    assert(std::find(executors.begin(), executors.end(), e) == executors.end());
+    executors.push_back(e);
+}
+
+void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
+{
+    std::lock_guard lock(executors_mutex);
+    assert(std::find(executors.begin(), executors.end(), e) != executors.end());
+    std::erase_if(executors, [e](PipelineExecutor * x) { return x == e; });
+}
+
+bool QueryStatus::checkTimeLimit()
+{
+    if (is_killed.load())
+        throw Exception("Query was cancelled", ErrorCodes::QUERY_WAS_CANCELLED);
+
+    return limits.checkTimeLimit(watch, overflow_mode);
+}
+
+bool QueryStatus::checkTimeLimitSoft()
+{
+    if (is_killed.load())
+        return false;
+
+    return limits.checkTimeLimit(watch, OverflowMode::BREAK);
 }
 
 

@@ -34,6 +34,9 @@ bool PullingPipelineExecutor::pull(Chunk & chunk)
     if (!executor)
         executor = pipeline.execute();
 
+    if (!executor->checkTimeLimitSoft())
+        return false;
+
     if (!executor->executeStep(&has_data_flag))
         return false;
 

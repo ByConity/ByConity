@@ -112,8 +112,8 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
 
     data->rethrowExceptionIfHas();
 
-    bool is_execution_finished = lazy_format ? lazy_format->isFinished()
-                                             : data->is_finished.load();
+    bool is_execution_finished
+        = !data->executor->checkTimeLimitSoft() || lazy_format ? lazy_format->isFinished() : data->is_finished.load();
 
     if (is_execution_finished)
     {
@@ -174,9 +174,8 @@ void PullingAsyncPipelineExecutor::cancel()
     if (data && !data->is_finished && data->executor)
         data->executor->cancel();
 
-    /// Finish lazy format. Otherwise thread.join() may hung.
-    if (lazy_format && !lazy_format->isFinished())
-        lazy_format->finish();
+    /// The following code is needed to rethrow exception from PipelineExecutor.
+    /// It could have been thrown from pull(), but we will not likely call it again.
 
     /// Join thread here to wait for possible exception.
     if (data && data->thread.joinable())
