@@ -45,7 +45,7 @@ QueryPlanStepPtr ReadFromStorageStep::deserialize(ReadBuffer & buffer, ContextPt
     String step_description;
     readBinary(step_description, buffer);
 
-    StorageID storage_id = StorageID::deserialize(buffer);
+    StorageID storage_id = StorageID::deserialize(buffer, context);
 
     SelectQueryInfo query_info;
     query_info.deserialize(buffer);
@@ -71,7 +71,7 @@ QueryPlanStepPtr ReadFromStorageStep::deserialize(ReadBuffer & buffer, ContextPt
     unsigned num_streams;
     readBinary(num_streams, buffer);
 
-    StoragePtr storage = DatabaseCatalog::instance().getTable(storage_id, context);
+    StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id.database_name, storage_id.table_name}, context);
 
     auto pipe = storage->read(column_names, 
                               storage->getInMemoryMetadataPtr(), 

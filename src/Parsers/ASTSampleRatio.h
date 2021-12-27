@@ -34,6 +34,9 @@ public:
     static String toString(Rational ratio);
 
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 }

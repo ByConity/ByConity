@@ -228,13 +228,17 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
 
 void IStorage::serialize(WriteBuffer & buf) const
 {
-    storage_id.serialize(buf);
+    writeBinary(storage_id.database_name, buf);
+    writeBinary(storage_id.table_name, buf);
 }
 
 StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
 {
-    StorageID storage_id = StorageID::deserialize(buf);
-    return DatabaseCatalog::instance().getTable(storage_id, context);
+    String database_name;
+    String table_name;
+    readBinary(database_name, buf);
+    readBinary(table_name, buf);
+    return DatabaseCatalog::instance().getTable({database_name, table_name}, context);
 }
 
 std::string PrewhereInfo::dump() const

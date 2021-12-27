@@ -29,6 +29,10 @@ public:
 
     ASTPtr clone() const override { return std::make_shared<ASTSettingsProfileElement>(*this); }
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 
 
@@ -50,5 +54,9 @@ public:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 
     void setUseInheritKeyword(bool use_inherit_keyword_);
+
+    void serialize(WriteBuffer & buf) const override;
+    void deserializeImpl(ReadBuffer & buf) override;
+    static ASTPtr deserialize(ReadBuffer & buf);
 };
 }

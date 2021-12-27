@@ -5,6 +5,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Core/QualifiedTableName.h>
 #include <Common/Exception.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace Poco
 {
@@ -97,7 +98,7 @@ struct StorageID
 
     void serialize(WriteBuffer & buffer) const;
 
-    static StorageID deserialize(ReadBuffer & buffer);
+    static StorageID deserialize(ReadBuffer & buffer, ContextPtr context);
 
 private:
     StorageID() = default;

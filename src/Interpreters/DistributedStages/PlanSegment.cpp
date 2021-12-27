@@ -60,7 +60,7 @@ void IPlanSegment::serialize(WriteBuffer & buf) const
         writeBinary(key, buf);
 }
 
-void IPlanSegment::deserialize(ReadBuffer & buf)
+void IPlanSegment::deserialize(ReadBuffer & buf, ContextPtr)
 {
     header = deserializeBlock(buf);
 
@@ -116,9 +116,9 @@ void PlanSegmentInput::serialize(WriteBuffer & buf) const
         storage_id.serialize(buf);
 }
 
-void PlanSegmentInput::deserialize(ReadBuffer & buf)
+void PlanSegmentInput::deserialize(ReadBuffer & buf, ContextPtr context)
 {
-    IPlanSegment::deserialize(buf);
+    IPlanSegment::deserialize(buf, context);
 
     readBinary(parallel_index, buf);
 
@@ -132,7 +132,7 @@ void PlanSegmentInput::deserialize(ReadBuffer & buf)
     }
 
     if (type == PlanSegmentType::SOURCE)
-        storage_id = StorageID::deserialize(buf);
+        storage_id = StorageID::deserialize(buf, context);
 }
 
 String PlanSegmentInput::toString(size_t indent) const
@@ -144,9 +144,8 @@ String PlanSegmentInput::toString(size_t indent) const
     ostr << indent_str << "parallel_index: " << parallel_index << "\n";
     ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE ? storage_id.getNameForLogs() : "") << "\n";
     ostr << indent_str << "source_addresses: " << "\n";
-    ostr << indent_str;
     for (auto & address : source_addresses)
-        ostr << address.toString() << "\n";
+        ostr << indent_str << indent_str << address.toString() << "\n";
 
     return ostr.str();
 }
@@ -159,9 +158,9 @@ void PlanSegmentOutput::serialize(WriteBuffer & buf) const
     writeBinary(keep_order, buf);
 }
 
-void PlanSegmentOutput::deserialize(ReadBuffer & buf)
+void PlanSegmentOutput::deserialize(ReadBuffer & buf, ContextPtr context)
 {
-    IPlanSegment::deserialize(buf);
+    IPlanSegment::deserialize(buf, context);
     readBinary(shuffle_function_name, buf);
     readBinary(parallel_size, buf);
     readBinary(keep_order, buf);
@@ -239,12 +238,12 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     for (size_t i = 0; i < input_size; ++i)
     {
         auto input = std::make_shared<PlanSegmentInput>();
-        input->deserialize(buf);
+        input->deserialize(buf, context);
         inputs.push_back(input);
     }
 
     output = std::make_shared<PlanSegmentOutput>();
-    output->deserialize(buf);
+    output->deserialize(buf, context);
     coordinator_address.deserialize(buf);
     current_address.deserialize(buf);
 

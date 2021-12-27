@@ -57,7 +57,7 @@ Block createBlock()
     column.name = "RES";
 
     DataTypePtr type = DataTypeFactory::instance().get("UInt8");
-    column.column = type->createColumnConst(1, Field("RES COLUMN"));
+    column.column = type->createColumnConst(1, Field(1));
     column.type = type;
 
     ColumnsWithTypeAndName columns;

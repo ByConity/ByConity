@@ -76,7 +76,7 @@ public:
 
     virtual void serialize(WriteBuffer & buf) const;
 
-    virtual void deserialize(ReadBuffer & buf);
+    virtual void deserialize(ReadBuffer & buf, ContextPtr);
 
     virtual String toString(size_t indent = 0) const;
 
@@ -117,7 +117,7 @@ public:
 
     void serialize(WriteBuffer & buf) const override;
 
-    void deserialize(ReadBuffer & buf) override;
+    void deserialize(ReadBuffer & buf, ContextPtr context) override;
 
     String toString(size_t indent = 0) const override;
 
@@ -155,7 +155,7 @@ public:
 
     void serialize(WriteBuffer & buf) const override;
 
-    void deserialize(ReadBuffer & buf) override;
+    void deserialize(ReadBuffer & buf, ContextPtr) override;
 
     String toString(size_t indent = 0) const override;
 

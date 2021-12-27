@@ -378,7 +378,7 @@ Cluster::Cluster(const Poco::Util::AbstractConfiguration & config,
                 address.default_database, address.user, address.password,
                 address.cluster, address.cluster_secret,
                 "server", address.compression,
-                address.secure, address.priority);
+                address.secure, address.priority, address.exchange_port, address.exchange_status_port);
 
             info.pool = std::make_shared<ConnectionPoolWithFailover>(
                 ConnectionPoolPtrs{pool}, settings.load_balancing);
@@ -451,7 +451,7 @@ Cluster::Cluster(const Poco::Util::AbstractConfiguration & config,
                     replica.default_database, replica.user, replica.password,
                     replica.cluster, replica.cluster_secret,
                     "server", replica.compression,
-                    replica.secure, replica.priority);
+                    replica.secure, replica.priority, replica.exchange_port, replica.exchange_status_port);
 
                 all_replicas_pools.emplace_back(replica_pool);
                 if (replica.is_local)
@@ -513,7 +513,7 @@ Cluster::Cluster(const Settings & settings, const std::vector<std::vector<String
                         replica.host_name, replica.port,
                         replica.default_database, replica.user, replica.password,
                         replica.cluster, replica.cluster_secret,
-                        "server", replica.compression, replica.secure, replica.priority);
+                        "server", replica.compression, replica.secure, replica.priority, replica.exchange_port, replica.exchange_status_port);
             all_replicas.emplace_back(replica_pool);
             if (replica.is_local && !treat_local_as_remote)
                 shard_local_addresses.push_back(replica);
@@ -624,7 +624,9 @@ Cluster::Cluster(Cluster::ReplicasAsShardsTag, const Cluster & from, const Setti
                 "server",
                 address.compression,
                 address.secure,
-                address.priority);
+                address.priority,
+                address.exchange_port,
+                address.exchange_status_port);
 
             info.pool = std::make_shared<ConnectionPoolWithFailover>(ConnectionPoolPtrs{pool}, settings.load_balancing);
             info.per_replica_pools = {std::move(pool)};
