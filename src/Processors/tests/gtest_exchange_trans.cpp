@@ -19,6 +19,8 @@
 #include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/server.h>
+#include <Poco/Util/MapConfiguration.h>
+#include <Common/Brpc/BrpcApplication.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/tests/gtest_global_context.h>
 
@@ -113,6 +115,8 @@ void receiver2()
 
 TEST(Exchange, SendWithTwoReceivers)
 {
+    Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
+    BrpcApplication::getInstance().initialize(*map_config);
     auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
     auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
 
