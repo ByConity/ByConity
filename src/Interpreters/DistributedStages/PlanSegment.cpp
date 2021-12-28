@@ -252,11 +252,21 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(exchange_parallel_size, buf);
 }
 
+/**
+ * update plansegemnt if 
+ * 1. a segment is deserialized 
+ * 2. before final segment executed on coordinator 
+ */
+void PlanSegment::update()
+{
+    setPlanSegmentToQueryPlan(query_plan.getRoot());
+}
+
 PlanSegmentPtr PlanSegment::deserializePlanSegment(ReadBuffer & buf, ContextPtr context_)
 {
     auto plan_segment = std::make_unique<PlanSegment>(context_);
     plan_segment->deserialize(buf);
-    plan_segment->setPlanSegmentToQueryPlan(plan_segment->getQueryPlan().getRoot());
+    plan_segment->update();
     return plan_segment;
 }
 
