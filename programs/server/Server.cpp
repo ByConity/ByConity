@@ -1,6 +1,8 @@
 #include "Server.h"
 
 #include <memory>
+#include <brpc/server.h>
+#include <google/protobuf/service.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -64,6 +66,7 @@
 #include <Common/Config/ConfigReloader.h>
 #include <Server/HTTPHandlerFactory.h>
 #include "MetricsTransmitter.h"
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <Common/StatusFile.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Server/HaTCPHandlerFactory.h>
@@ -76,6 +79,7 @@
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <filesystem>
+#include <Common/Brpc/BrpcApplication.h>
 
 
 #if !defined(ARCADIA_BUILD)
@@ -621,6 +625,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 #endif
 
+    // Init Brpc
+    BrpcApplication::getInstance().initialize(config());
+
     global_context->setRemoteHostFilter(config());
 
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
@@ -814,6 +821,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     formatReadableSizeWithBinarySuffix(memory_amount),
                     max_server_memory_usage_to_ram_ratio);
             }
+            BrpcApplication::getInstance().reloadConfig(*config);
 
             total_memory_tracker.setHardLimit(max_server_memory_usage);
             total_memory_tracker.setDescription("(total)");
@@ -936,7 +944,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     http_params->setKeepAliveTimeout(keep_alive_timeout);
 
     auto servers_to_start_before_tables = std::make_shared<std::vector<ProtocolServerAdapter>>();
-
+    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
+    std::vector<std::unique_ptr<::google::protobuf::Service>> rpc_services;
     std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
 
     bool listen_try = config().getBool("listen_try", false);
@@ -1035,6 +1044,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LOG_INFO(log, "Closed connections to servers for tables.");
 
             global_context->shutdownKeeperStorageDispatcher();
+        }
+
+        if (global_context->getComplexQueryActive())
+        {
+            for (auto & rpc_server : rpc_servers)
+                rpc_server->Stop(0);
+            LOG_INFO(log, "disconnect with rpc server");
         }
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
@@ -1514,6 +1530,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 forceShutdown();
             }
         });
+
+        if (global_context->getComplexQueryActive())
+        {
+            /// Brpc data trans registry service
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
+            if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
+            }
+            brpc::ServerOptions stream_options;
+            stream_options.idle_timeout_sec = -1;
+            if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
+                throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+            }
+            LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
+
+            /// TODO status service
+            
+        }
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
         for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
