@@ -1,6 +1,7 @@
 #include "BrpcRemoteBroadcastSender.h"
 #include "WriteBufferFromBrpcBuf.h"
 
+#include <atomic>
 #include <cerrno>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
@@ -62,27 +63,50 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 
 void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
 {
-    size_t max_num = timeout_ms / 10;
-    for (const auto & trans_key : trans_keys)
+    bool expected_ready_flag = false;
+    if (is_ready.compare_exchange_strong(expected_ready_flag, true, std::memory_order_relaxed, std::memory_order_relaxed))
     {
-        const auto & id = trans_key->getKey();
-        // for each receiver_id check exists in registry_center
-        size_t retry_count = 0;
-        while (!registry_center.exist(id))
+        size_t max_num = timeout_ms / 10;
+        for (const auto & trans_key : trans_keys)
         {
-            if (retry_count >= max_num)
+            const auto & id = trans_key->getKey();
+            // for each receiver_id check exists in registry_center
+            size_t retry_count = 0;
+            while (!registry_center.exist(id))
             {
-                throw DataTransException(
-                    "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+                if (retry_count >= max_num)
+                {
+                    throw DataTransException(
+                        "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+                }
+                retry_count++;
+                bthread_usleep(10 * 1000);
             }
-            retry_count++;
-            bthread_usleep(10 * 1000);
+            auto stream_id = registry_center.getSenderStreamId(id);
+            sender_stream_ids.push_back(stream_id);
+            LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
         }
-        auto stream_id = registry_center.getSenderStreamId(id);
-        sender_stream_ids.push_back(stream_id);
-        LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
     }
-    is_ready = true;
+    else
+    {
+        size_t max_num = timeout_ms / 10;
+        for (const auto & trans_key : trans_keys)
+        {
+            const auto & id = trans_key->getKey();
+            // for each receiver_id check exists in registry_center
+            size_t retry_count = 0;
+            while (!registry_center.exist(id))
+            {
+                if (retry_count >= max_num)
+                {
+                    throw DataTransException(
+                        "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+                }
+                retry_count++;
+                bthread_usleep(10 * 1000);
+            }
+        }
+    }
 }
 
 BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk)
