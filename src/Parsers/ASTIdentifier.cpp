@@ -214,8 +214,7 @@ ASTTableIdentifier::ASTTableIdentifier(const StorageID & table_id, std::vector<A
 }
 
 ASTTableIdentifier::ASTTableIdentifier(const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params)
-    : ASTIdentifier(database_name.empty() ? std::vector<String>{table_name} 
-                                          : std::vector<String>{database_name, table_name}, true, std::move(name_params))
+    : ASTIdentifier({database_name, table_name}, true, std::move(name_params))
 {
 }
 
