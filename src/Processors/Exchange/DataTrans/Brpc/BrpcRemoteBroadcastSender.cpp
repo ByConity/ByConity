@@ -63,48 +63,33 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 
 void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
 {
+    size_t max_num = timeout_ms / 10;
+    for (const auto & trans_key : trans_keys)
+    {
+        const auto & id = trans_key->getKey();
+        // for each receiver_id check exists in registry_center
+        size_t retry_count = 0;
+        while (!registry_center.exist(id))
+        {
+            if (retry_count >= max_num)
+            {
+                throw DataTransException(
+                    "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+            }
+            retry_count++;
+            bthread_usleep(10 * 1000);
+        }
+    }
+    
     bool expected_ready_flag = false;
     if (is_ready.compare_exchange_strong(expected_ready_flag, true, std::memory_order_relaxed, std::memory_order_relaxed))
     {
-        size_t max_num = timeout_ms / 10;
         for (const auto & trans_key : trans_keys)
         {
             const auto & id = trans_key->getKey();
-            // for each receiver_id check exists in registry_center
-            size_t retry_count = 0;
-            while (!registry_center.exist(id))
-            {
-                if (retry_count >= max_num)
-                {
-                    throw DataTransException(
-                        "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-                }
-                retry_count++;
-                bthread_usleep(10 * 1000);
-            }
             auto stream_id = registry_center.getSenderStreamId(id);
             sender_stream_ids.push_back(stream_id);
             LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
-        }
-    }
-    else
-    {
-        size_t max_num = timeout_ms / 10;
-        for (const auto & trans_key : trans_keys)
-        {
-            const auto & id = trans_key->getKey();
-            // for each receiver_id check exists in registry_center
-            size_t retry_count = 0;
-            while (!registry_center.exist(id))
-            {
-                if (retry_count >= max_num)
-                {
-                    throw DataTransException(
-                        "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-                }
-                retry_count++;
-                bthread_usleep(10 * 1000);
-            }
         }
     }
 }
