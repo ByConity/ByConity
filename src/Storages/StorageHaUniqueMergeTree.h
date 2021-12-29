@@ -92,7 +92,7 @@ public:
     ActionLock getActionLock(StorageActionBlockType action_type) override;
     bool createTableIfNotExists(const StorageMetadataPtr & metadata_snapshot);
     void createReplica(const StorageMetadataPtr & metadata_snapshot);
-    std::pair<time_t, time_t> getAbsoluteDelay(const String & pred = "") const;
+    time_t getAbsoluteDelay(const String & pred = "") const;
 
     /// Start to repair the replica by cloning logs and data from other replica.
     /// Pre-condition: is_lost == 1 and unique_table_state is REPAIR_MANIFEST

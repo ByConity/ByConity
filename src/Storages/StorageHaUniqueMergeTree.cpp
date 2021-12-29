@@ -546,10 +546,6 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
         }
     }
 
-    assertNotReadonly();
-    if (getUniqueTableState() != UniqueTableState::NORMAL)
-        throw Exception("Can't write to table of state " + toString(getUniqueTableState()), ErrorCodes::REPLICA_STATUS_CHANGED);
-
     /// TODO offline node handling
     return std::make_shared<HaUniqueMergeTreeBlockOutputStream>(
         *this, metadata_snapshot, query_context, query_context->getSettingsRef().max_partitions_per_insert_block);
@@ -948,34 +944,31 @@ HaMergeTreeAddress StorageHaUniqueMergeTree::getHaUniqueMergeTreeAddress() const
     return res;
 }
 
-std::pair<time_t, time_t> StorageHaUniqueMergeTree::getAbsoluteDelay([[maybe_unused]] const String & pred) const
+time_t StorageHaUniqueMergeTree::getAbsoluteDelay([[maybe_unused]] const String & pred) const
 {
-    /// not used for unique table
-    const time_t max_processed_delay = 0;
-
     /// leader always has no delay
     if (is_leader)
-        return {0, max_processed_delay};
+        return 0;
 
     time_t current_time = time(nullptr);
     /// TODO return maximum delay for offline node
 
     /// return maximum delay for abnormal replica
     if (unique_table_state != UniqueTableState::NORMAL)
-        return { current_time, max_processed_delay };
+        return current_time;
 
     /// if there are uncommitted logs in queue, use time since last commit as delay
     if (manifest_store->latestVersion() > manifest_store->commitVersion())
-        return { current_time - manifest_store->timeOfLastCommitLog(), max_processed_delay };
+        return current_time - manifest_store->timeOfLastCommitLog();
 
     /// if all local logs are committed and local logs are no more than 1 minute behind the leader,
     /// return no delay to allow follower node to share some query workload
     if (last_update_log_time.load(std::memory_order_relaxed) + 60 > current_time)
-        return {0, max_processed_delay};
+        return 0;
     /// if all local logs are committed but local logs may fall behind leader,
     /// use time since last commit as delay
     else
-        return { current_time - manifest_store->timeOfLastCommitLog(), max_processed_delay };
+        return current_time - manifest_store->timeOfLastCommitLog();
 }
 
 void StorageHaUniqueMergeTree::checkSessionIsNotExpired(zkutil::ZooKeeperPtr & zookeeper)
@@ -2345,7 +2338,7 @@ void StorageHaUniqueMergeTree::getStatus(Status & res, bool with_zk_fields)
     res.zookeeper_path = zookeeper_path;
     res.replica_name = replica_name;
     res.replica_path = replica_path;
-    res.absolute_delay = getAbsoluteDelay().first;
+    res.absolute_delay = getAbsoluteDelay();
     res.checkpoint_lsn = manifest_store->checkpointVersion();
     res.commit_lsn = manifest_store->commitVersion();
     res.latest_lsn = manifest_store->latestVersion();

@@ -24,6 +24,7 @@ namespace ErrorCodes
 //    extern const int KEEPER_EXCEPTION;
 //    extern const int TIMEOUT_EXCEEDED;
    extern const int NO_ACTIVE_REPLICAS;
+   extern const int REPLICA_STATUS_CHANGED;
 }
 
 HaUniqueMergeTreeBlockOutputStream::HaUniqueMergeTreeBlockOutputStream(
@@ -53,8 +54,9 @@ HaUniqueMergeTreeBlockOutputStream::HaUniqueMergeTreeBlockOutputStream(
             addr.table,
             allow_materialized ? metadata_snapshot_->getSampleBlock(true) : metadata_snapshot_->getSampleBlockNonMaterialized(true));
         auto query_str = queryToString(query);
-        auto & client_info = context->getClientInfo();
+
         /// FIXME (UNIQUE KEY): Handle the case where password may become empty
+        auto & client_info = context->getClientInfo();
         String user = client_info.current_user;
         String password;
         if (auto address = storage.findClusterAddress(addr); address)
@@ -69,6 +71,12 @@ HaUniqueMergeTreeBlockOutputStream::HaUniqueMergeTreeBlockOutputStream(
         const Settings & settings = context->getSettingsRef();
         auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
         remote_stream = std::make_shared<RemoteBlockOutputStream>(*remote_conn, timeouts, query_str, settings, client_info);
+    }
+    else
+    {
+        storage.assertNotReadonly();
+        if (storage.getUniqueTableState() != UniqueTableState::NORMAL)
+            throw Exception("Can't write to table of state " + toString(storage.getUniqueTableState()), ErrorCodes::REPLICA_STATUS_CHANGED);
     }
 }
 
@@ -118,6 +126,7 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
     /// all ZK operation below should use `zookeeper' saved here
     auto zookeeper = storage.getZooKeeper();
     storage.checkSessionIsNotExpired(zookeeper);
+
     if (!storage.is_leader)
         throw Exception("Can't write to " + storage.getLogName() + " because replica " + storage.replicaName() + " is not leader", ErrorCodes::READONLY);
 

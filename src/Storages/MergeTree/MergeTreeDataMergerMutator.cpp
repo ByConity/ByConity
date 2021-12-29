@@ -713,6 +713,8 @@ MergeTreeData::DataPartsVector MergeTreeDataMergerMutator::selectAllPartsFromPar
 static void extractMergingAndGatheringColumns(
     const NamesAndTypesList & storage_columns,
     const ExpressionActionsPtr & sorting_key_expr,
+    const ExpressionActionsPtr & unique_key_expr,
+    const String & extra_column_name,
     const IndicesDescription & indexes,
     const ProjectionsDescription & projections,
     const MergeTreeData::MergingParams & merging_params,
@@ -733,6 +735,21 @@ static void extractMergingAndGatheringColumns(
         Names projection_columns_vec = projection.required_columns;
         std::copy(projection_columns_vec.cbegin(), projection_columns_vec.cend(),
                   std::inserter(key_columns, key_columns.end()));
+    }
+
+    /// Force unique key columns and extra column for Unique mode,
+    /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
+    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        if (!unique_key_expr)
+            throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
+        Names index_columns_vec = unique_key_expr->getRequiredColumns();
+        std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(),
+                  std::inserter(key_columns, key_columns.end()));
+
+        /// also need version or is_offline column when building unique key index file
+        if (!extra_column_name.empty())
+            key_columns.insert(extra_column_name);
     }
 
     /// Force sign column for Collapsing mode
@@ -948,6 +965,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     extractMergingAndGatheringColumns(
         storage_columns,
         metadata_snapshot->getSortingKey().expression,
+        metadata_snapshot->getUniqueKey().expression,
+        metadata_snapshot->extra_column_name,
         metadata_snapshot->getSecondaryIndices(),
         metadata_snapshot->getProjections(),
         merging_params,
