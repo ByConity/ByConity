@@ -24,7 +24,6 @@ public:
     void pushException(const String & exception);
     void clearQueue() { queue->receive_queue->clear(); }
     Block getHeader() { return header; }
-    void setStatusCode(int32_t code) { status_code = static_cast<BroadcastStatusCode>(code); }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
@@ -37,7 +36,7 @@ private:
     ReceiveQueuePtr queue = std::make_unique<ReceiveQueue>();
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
-    BroadcastStatusCode status_code{RUNNING};
+    std::atomic<BroadcastStatus *> broadcast_status;
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;

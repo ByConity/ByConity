@@ -23,9 +23,9 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <brpc/server.h>
+#include <gtest/gtest.h>
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/Brpc/BrpcApplication.h>
-#include <gtest/gtest.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
@@ -35,7 +35,8 @@ using namespace UnitTest;
 
 using Clock = std::chrono::system_clock;
 
-class ExchangeRemoteTest: public ::testing::Test {
+class ExchangeRemoteTest : public ::testing::Test
+{
 protected:
     static std::shared_ptr<std::thread> thread_server;
     static void start_brpc_server()
@@ -64,20 +65,17 @@ protected:
         }
         LOG(INFO) << "start Server";
         sleep(10);
-        // server.RunUntilAskedToQuit();
     }
 
     static void SetUpTestCase()
     {
         UnitTest::initLogger();
+        Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
+        BrpcApplication::getInstance().initialize(*map_config);
         thread_server = std::make_shared<std::thread>(start_brpc_server);
     }
 
-    static void TearDownTestCase()
-    {
-        // server.Stop(1000);
-        thread_server->detach();
-    }
+    static void TearDownTestCase() { thread_server->detach(); }
 };
 
 std::shared_ptr<std::thread> ExchangeRemoteTest::thread_server = std::make_shared<std::thread>();
@@ -125,15 +123,11 @@ void receiver2()
 
 TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
 {
-    Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
-    BrpcApplication::getInstance().initialize(*map_config);
     auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
     auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
 
     auto origin_chunk = createUInt8Chunk(1000, 1, 7);
     auto header = getHeader(1);
-    // std::thread thread_server(start_brpc_server);
-    // sleep for a while waiting for server
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     std::thread thread_receiver1(receiver1);
@@ -144,8 +138,6 @@ TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
     sender.send(std::move(origin_chunk));
     thread_receiver1.join();
     thread_receiver2.join();
-    // server.Stop(1000);
-    // thread_server.detach();
 }
 
 TEST_F(ExchangeRemoteTest, SerDserChunk)
@@ -168,11 +160,10 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
     EXPECT_EQ(col->getUInt(1), 7);
 }
 
-void sender_thread(BrpcRemoteBroadcastSender & sender_, Chunk & chunk)
+void sender_thread(std::shared_ptr<BrpcRemoteBroadcastSender> sender_, Chunk chunk)
 {
-    sender_.waitAllReceiversReady(100 * 1000);
-    BroadcastStatus status = sender_.send(std::move(chunk));
-    // std::cout << "sender status " << status.code << "m:" << status.message << "ismodify:" << status.is_modifer;
+    sender_->waitAllReceiversReady(100 * 1000);
+    BroadcastStatus status = sender_->send(std::move(chunk));
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 }
 
@@ -181,16 +172,13 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000};
     auto header = getHeader(1);
     auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
-
-    // std::thread thread_server(start_brpc_server);
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     Chunk chunk = createUInt8Chunk(10, 1, 7);
     auto total_bytes = chunk.bytes();
 
-    BrpcRemoteBroadcastSender sender(data_key, getContext().context, header);
-
-    std::thread thread_sender(sender_thread, std::ref(sender), std::ref(chunk));
+    auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
+    std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
@@ -221,23 +209,24 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     }
 
     thread_sender.join();
-    // thread_server.detach();
     executor.cancel();
 }
 
-/*
 TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
     auto header = getHeader(1);
     auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
     Chunk chunk = createUInt8Chunk(10, 1, 8);
-    BrpcRemoteBroadcastSender sender(data_key, getContext().context, header);
-
+    auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
+    std::vector<std::thread> thread_senders;
+    std::vector<Chunk> chunks;
     for (int i = 0; i < 5; i++)
     {
         Chunk clone = chunk.clone();
-        std::thread thread_sender(sender_thread, std::ref(sender), std::ref(clone));
+        chunks.emplace_back(std::move(clone));
+        std::thread thread_sender(sender_thread, sender, std::move(chunks[i]));
+        thread_senders.push_back(std::move(thread_sender));
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -249,9 +238,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 
     Pipe pipe;
     pipe.addSource(exchange_source);
-
     pipe.addTransform(std::make_shared<LimitTransform>(exchange_source->getPort().getHeader(), 1, 0));
-
     pipeline.init(std::move(pipe));
 
     PullingAsyncPipelineExecutor executor(pipeline);
@@ -261,5 +248,8 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     ASSERT_TRUE(executor.pull(pull_chunk));
     ASSERT_FALSE(executor.pull(pull_chunk));
     executor.cancel();
+    for (auto & th : thread_senders)
+    {
+        th.join();
+    }
 }
-*/
