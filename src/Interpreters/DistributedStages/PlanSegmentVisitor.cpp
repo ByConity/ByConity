@@ -1,6 +1,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Processors/QueryPlan/ExchangeStep.h>
+#include <Processors/QueryPlan/ReadFromSourceStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 namespace DB
@@ -77,7 +78,7 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
 
     auto inputs = findInputs(plan_segment->getQueryPlan().getRoot());
     if (inputs.empty())
-        inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::SOURCE));
+        inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::UNKNOWN));
     for (auto & input : inputs)
         input->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
 
@@ -124,15 +125,11 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
     {
         return remote_step->getInput();
     }
-    else if (auto * storage_step = dynamic_cast<ReadFromStorageStep *>(node->step.get()))
+    else if (auto * source_step = dynamic_cast<ReadFromSourceStep *>(node->step.get()))
     {
-        auto input = std::make_shared<PlanSegmentInput>(storage_step->getOutputStream().header, PlanSegmentType::SOURCE);
-        input->setStorageID(storage_step->getStorageID());
+        auto input = std::make_shared<PlanSegmentInput>(source_step->getOutputStream().header, PlanSegmentType::SOURCE);
+        input->setStorageID(source_step->getStorageID());
         return {input};
-    }
-    else if (auto * merge_tree_step = dynamic_cast<ReadFromMergeTree *>(node->step.get()))
-    {
-        return {std::make_shared<PlanSegmentInput>(merge_tree_step->getOutputStream().header, PlanSegmentType::SOURCE)};
     }
     else
     {
@@ -170,7 +167,8 @@ void PlanSegmentSpliter::rewrite(QueryPlan & query_plan, PlanSegmentContext & pl
             /***
              * SOURCE input has no plan semgnet id and it shouldn't include any child.
              */
-            if (input->getPlanSegmentType() != PlanSegmentType::SOURCE)
+            if (input->getPlanSegmentType() != PlanSegmentType::SOURCE
+                && input->getPlanSegmentType() != PlanSegmentType::UNKNOWN)
             {
                 auto child_node = plan_mapping[input->getPlanSegmentId()];
                 node.children.push_back(child_node);

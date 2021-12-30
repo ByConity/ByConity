@@ -1538,8 +1538,9 @@ static void executeMergeAggregatedImpl(
     query_plan.addStep(std::move(merging_aggregated));
 }
 
-void InterpreterSelectQuery::addEmptySourceToQueryPlan(
-    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+Pipe InterpreterSelectQuery::generateNullSourcePipe(
+    const Block & source_header, const SelectQueryInfo & query_info
+)
 {
     Pipe pipe(std::make_shared<NullSource>(source_header));
 
@@ -1574,6 +1575,14 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
                 prewhere_info.prewhere_column_name, prewhere_info.remove_prewhere_column);
         });
     }
+
+    return pipe;
+}
+
+void InterpreterSelectQuery::addEmptySourceToQueryPlan(
+    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+{
+    Pipe pipe = generateNullSourcePipe(source_header, query_info);
 
     auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(std::move(pipe));
     read_from_pipe->setStepDescription("Read from NullSource");

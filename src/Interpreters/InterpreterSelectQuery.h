@@ -102,6 +102,9 @@ public:
 
     bool hasAggregation() const { return query_analyzer->hasAggregation(); }
 
+    static Pipe generateNullSourcePipe(
+        const Block & source_header, const SelectQueryInfo & query_info);
+
     static void addEmptySourceToQueryPlan(
         QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_);
 

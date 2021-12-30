@@ -31,8 +31,8 @@ private:
 class ReadFromStorageStep : public ReadFromPreparedSource
 {
 public:
-    ReadFromStorageStep(Pipe pipe_, String storage_name, StorageID storage_id_ = StorageID::createEmpty())
-        : ReadFromPreparedSource(std::move(pipe_)), storage_id(storage_id_)
+    ReadFromStorageStep(Pipe pipe_, String storage_name)
+        : ReadFromPreparedSource(std::move(pipe_))
     {
         setStepDescription(storage_name);
     }
@@ -41,36 +41,10 @@ public:
 
     Type getType() const override { return Type::ReadFromStorage; }
 
-    void serialize(WriteBuffer &) const override;
+    // void serialize(WriteBuffer &) const override;
 
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    // static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
-    /**
-     * Information for deserialize and reconstruct the plan.
-     */
-
-    StorageID getStorageID() const { return storage_id; }
-
-    void setDeserializeInfo(
-        const SelectQueryInfo & query_info_,
-        const Names & column_names_,
-        QueryProcessingStage::Enum processed_stage_,
-        size_t max_block_size_,
-        unsigned num_streams_
-    ){
-        query_info = query_info_;
-        column_names = column_names_;
-        processed_stage = processed_stage_;
-        max_block_size = max_block_size_;
-        num_streams = num_streams_;
-    }
-
-    StorageID storage_id;
-    SelectQueryInfo query_info;
-    Names column_names;
-    QueryProcessingStage::Enum processed_stage;
-    size_t max_block_size;
-    unsigned num_streams;
 };
 
 }
