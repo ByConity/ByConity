@@ -47,6 +47,8 @@ public:
         const String & subcolumn_name, const BaseSerializationGetter & base_serialization_getter) const override;
 
     const DataTypePtr & getNestedType() const { return nested_data_type; }
+
+    bool canBeMapKVType() const override { return nested_data_type->canBeMapKVType(); }
 private:
     SerializationPtr doGetDefaultSerialization() const override;
 

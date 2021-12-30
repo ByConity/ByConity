@@ -94,6 +94,25 @@ String FieldVisitorDump::operator() (const Map & x) const
     return wb.str();
 }
 
+String FieldVisitorDump::operator() (const ByteMap & x) const
+{
+    WriteBufferFromOwnString wb;
+
+    wb << "Map_{";
+    for (auto it = x.begin(); it != x.end(); ++it)
+    {
+        if (it != x.begin())
+            wb << ", ";
+        wb << applyVisitor(*this, it->first);
+        wb << ":";
+        wb << applyVisitor(*this, it->second);
+    }
+    wb << '}';
+
+    return wb.str();
+}
+
+
 String FieldVisitorDump::operator() (const AggregateFunctionStateData & x) const
 {
     WriteBufferFromOwnString wb;

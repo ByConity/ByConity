@@ -76,6 +76,7 @@ void registerDataTypeEnum(DataTypeFactory & factory);
 void registerDataTypeArray(DataTypeFactory & factory);
 void registerDataTypeTuple(DataTypeFactory & factory);
 void registerDataTypeMap(DataTypeFactory & factory);
+void registerDataTypeByteMap(DataTypeFactory & factory);
 void registerDataTypeNullable(DataTypeFactory & factory);
 void registerDataTypeNothing(DataTypeFactory & factory);
 void registerDataTypeUUID(DataTypeFactory & factory);

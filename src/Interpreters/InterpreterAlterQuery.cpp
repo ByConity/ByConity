@@ -360,6 +360,11 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_RENAME_COLUMN, database, table, column_name());
             break;
         }
+        case ASTAlterCommand::CLEAR_MAP_KEY:
+        {
+            required_access.emplace_back(AccessType::ALTER_CLEAR_MAP_KEY, database, table, column_name());
+            break;
+        }
         case ASTAlterCommand::NO_TYPE: break;
     }
 

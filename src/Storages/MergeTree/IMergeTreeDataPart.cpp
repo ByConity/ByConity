@@ -19,6 +19,8 @@
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/DiskUniqueKeyIndexCache.h>
@@ -175,6 +177,31 @@ void IMergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
     }
 }
 
+void IMergeTreeDataPart::loadVersions()
+{
+    String path = getFullPath() + "versions.txt";
+    Poco::File versions_file(path);
+    try {
+        if (versions_file.exists())
+        {
+            auto file = openForReading(volume->getDisk(), path);
+            if (versions->read(*file))
+            {
+                assertEOF(*file);
+            }
+        }
+        else
+        {
+            versions->enable_compact_map_data = false;
+        }
+    }
+    catch(...)
+    {
+        LOG_DEBUG(storage.log, "load versions fail in part " + name);
+
+        throw;
+    }
+}
 
 static void incrementStateMetric(IMergeTreeDataPart::State state)
 {
@@ -276,6 +303,7 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
+    , versions(std::make_shared<MergeTreeDataPartVersions>(storage.getSettings()))
     , part_type(part_type_)
     , parent_part(parent_part_)
 {
@@ -299,6 +327,7 @@ IMergeTreeDataPart::IMergeTreeDataPart(
     , volume(parent_part_ ? parent_part_->volume : volume_)
     , relative_path(relative_path_.value_or(name_))
     , index_granularity_info(storage_, part_type_)
+    , versions(std::make_shared<MergeTreeDataPartVersions>(storage.getSettings()))
     , part_type(part_type_)
     , parent_part(parent_part_)
 {
@@ -534,6 +563,14 @@ size_t IMergeTreeDataPart::getFileSizeOrZero(const String & file_name) const
     return checksum->second.file_size;
 }
 
+off_t IMergeTreeDataPart::getFileOffsetOrZero(const String & file_name) const
+{
+    auto checksum = checksums.files.find(file_name);
+    if (checksum == checksums.files.end())
+        return 0;
+    return checksum->second.file_offset;
+}
+
 String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(const StorageMetadataPtr & metadata_snapshot) const
 {
     const auto & storage_columns = metadata_snapshot->getColumns().getAllPhysical();
@@ -592,6 +629,9 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
     /// This is already true at the server startup but must be also ensured for manual table ATTACH.
     /// Motivation: memory for index is shared between queries - not belong to the query itself.
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+
+ 	// load versions before load checksum because loading checksum needs it to judge reading format.
+    loadVersions();
 
     loadUUID();
     loadColumns(require_columns_checksums);
@@ -761,7 +801,7 @@ CompressionCodecPtr IMergeTreeDataPart::detectDefaultCompressionCodec() const
             auto serialization = IDataType::getSerialization(part_column,
                 [&](const String & stream_name)
                 {
-                    return volume->getDisk()->exists(stream_name + IMergeTreeDataPart::DATA_FILE_EXTENSION);
+                    return volume->getDisk()->exists(stream_name + /*IMergeTreeDataPart::*/DATA_FILE_EXTENSION);
                 });
 
             String path_to_data_file;
@@ -842,6 +882,7 @@ void IMergeTreeDataPart::loadChecksums(bool require)
 
     if (volume->getDisk()->exists(path))
     {
+        checksums.versions = versions;
         auto buf = openForReading(volume->getDisk(), path);
         if (checksums.read(*buf))
         {
@@ -1218,10 +1259,28 @@ void IMergeTreeDataPart::remove() const
     #    pragma GCC diagnostic push
     #    pragma GCC diagnostic ignored "-Wunused-variable"
     #endif
+			NameSet file_set;
             for (const auto & [file, _] : checksums.files)
             {
-                if (projection_directories.find(file) == projection_directories.end())
-                    disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+                // @ByteMap
+                if (versions->enable_compact_map_data && isMapImplicitKey(file))
+                {
+                    /// When enable compact map data, all implicit column data of the same map column store in a file.
+                    /// Thus, we only need to remove the file once.
+                    String file_name = getColFileNameFromImplicitColFileName(file);
+                    if (file_set.count(file_name))
+                    {
+                        continue;
+                    }
+                    file_set.insert(file_name); 
+                    if (projection_directories.find(file_name) == projection_directories.end())
+                        disk->removeSharedFile(fs::path(to) / file_name, *keep_shared_data);
+                }
+				else
+				{
+					if (projection_directories.find(file) == projection_directories.end())
+						disk->removeSharedFile(fs::path(to) / file, *keep_shared_data);
+				}
             }
     #if !defined(__clang__)
     #    pragma GCC diagnostic pop
@@ -1270,8 +1329,27 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
     #    pragma GCC diagnostic push
     #    pragma GCC diagnostic ignored "-Wunused-variable"
     #endif
+			NameSet file_set;
             for (const auto & [file, _] : checksums.files)
-                disk->removeSharedFile(to + "/" + file, keep_shared_data);
+            {
+                // @ByteMap
+                if (versions->enable_compact_map_data && isMapImplicitKey(file))
+                {
+                    /// When enable compact map data, all implicit column data of the same map column store in a file.
+                    /// Thus, we only need to remove the file once.
+                    String file_name = getColFileNameFromImplicitColFileName(file);
+                    if (file_set.count(file_name))
+                    {
+                        continue;
+                    }
+                    file_set.insert(file_name);
+                    disk->removeSharedFile(to + "/" + file_name, keep_shared_data);
+                }
+				else
+				{
+                    disk->removeSharedFile(to + "/" + file, keep_shared_data);
+                }
+            }
     #if !defined(__clang__)
     #    pragma GCC diagnostic pop
     #endif

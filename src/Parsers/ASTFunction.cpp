@@ -405,6 +405,15 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 }
             }
 
+            if (!written && 0 == strcmp(name.c_str(), "mapElement"))
+            {
+                arguments->children[0]->formatImpl(settings, state, nested_need_parens);
+                settings.ostr << (settings.hilite ? hilite_operator : "") << '{' << (settings.hilite ? hilite_none : "");
+                arguments->children[1]->formatImpl(settings, state, nested_need_parens);
+                settings.ostr << (settings.hilite ? hilite_operator : "") << '}' << (settings.hilite ? hilite_none : "");
+                written = true;
+            }
+
             if (!written && 0 == strcmp(name.c_str(), "lambda"))
             {
                 /// Special case: one-element tuple in lhs of lambda is printed as its element.

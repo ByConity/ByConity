@@ -275,7 +275,8 @@ void StorageMergeTree::alter(
     String mutation_file_name;
     Int64 mutation_version = -1;
     commands.apply(new_metadata, local_context);
-
+    checkColumnsValidity(new_metadata.columns);
+    
     /// This alter can be performed at new_metadata level only
     if (commands.isSettingsAlter())
     {
@@ -939,6 +940,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         }
 
         size_t current_ast_elements = 0;
+        size_t mutation_version = 0;
         for (auto it = mutations_begin_it; it != mutations_end_it; ++it)
         {
             size_t commands_size = 0;
@@ -948,7 +950,8 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
                 if (command.type != MutationCommand::Type::DROP_COLUMN
                     && command.type != MutationCommand::Type::DROP_INDEX
                     && command.type != MutationCommand::Type::DROP_PROJECTION
-                    && command.type != MutationCommand::Type::RENAME_COLUMN)
+                    && command.type != MutationCommand::Type::RENAME_COLUMN
+                    && command.type != MutationCommand::Type::CLEAR_MAP_KEY)
                 {
                     commands_for_size_validation.push_back(command);
                 }
@@ -980,12 +983,13 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
 
             current_ast_elements += commands_size;
             commands.insert(commands.end(), it->second.commands.begin(), it->second.commands.end());
+            mutation_version = it->first;
         }
 
         if (!commands.empty())
         {
             auto new_part_info = part->info;
-            new_part_info.mutation = current_mutations_by_version.rbegin()->first;
+            new_part_info.mutation = mutation_version;
 
             future_part.parts.push_back(part);
             future_part.part_info = new_part_info;

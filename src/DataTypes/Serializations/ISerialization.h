@@ -71,6 +71,10 @@ public:
 
             SparseElements,
             SparseOffsets,
+
+            MapKeyElements,
+            MapValueElements,
+            MapSizes,
         };
         Type type;
 

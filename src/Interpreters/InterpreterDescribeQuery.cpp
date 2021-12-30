@@ -41,6 +41,9 @@ Block InterpreterDescribeQuery::getSampleBlock()
     col.name = "type";
     block.insert(col);
 
+    col.name = "flags";
+    block.insert(col);
+
     col.name = "default_type";
     block.insert(col);
 
@@ -92,31 +95,34 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
 
     for (const auto & column : columns)
     {
-        res_columns[0]->insert(column.name);
-        res_columns[1]->insert(column.type->getName());
+        size_t i = 0;
+        res_columns[i++]->insert(column.name);
+        res_columns[i++]->insert(column.type->getName());
+        res_columns[i++]->insert(/*String(column.type->isBloomSet() || column.type->isBitmapIndex()? "B" : "") +*/ String(column.type->isMapKVStore() ? "K" : ""));
+
 
         if (column.default_desc.expression)
         {
-            res_columns[2]->insert(toString(column.default_desc.kind));
-            res_columns[3]->insert(queryToString(column.default_desc.expression));
+            res_columns[i++]->insert(toString(column.default_desc.kind));
+            res_columns[i++]->insert(queryToString(column.default_desc.expression));
         }
         else
         {
-            res_columns[2]->insertDefault();
-            res_columns[3]->insertDefault();
+            res_columns[i++]->insertDefault();
+            res_columns[i++]->insertDefault();
         }
 
-        res_columns[4]->insert(column.comment);
+        res_columns[i++]->insert(column.comment);
 
         if (column.codec)
-            res_columns[5]->insert(queryToString(column.codec->as<ASTFunction>()->arguments));
+            res_columns[i++]->insert(queryToString(column.codec->as<ASTFunction>()->arguments));
         else
-            res_columns[5]->insertDefault();
+            res_columns[i++]->insertDefault();
 
         if (column.ttl)
-            res_columns[6]->insert(queryToString(column.ttl));
+            res_columns[i++]->insert(queryToString(column.ttl));
         else
-            res_columns[6]->insertDefault();
+            res_columns[i++]->insertDefault();
     }
 
     return std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));

@@ -31,13 +31,24 @@ private:
     /// Write block of rows into .bin file and marks in .mrk files
     void writeDataBlock(const Block & block, const Granules & granules);
 
+    /// all implicit column is written into different file against other columns who will be written into one file.
+    void writeAllImplicitColumnBlock(const Block & block, const Granules & granules);
+
+    /// Write data of one column.
+    /// Return how many marks were written and
+    /// how many rows were written for last mark
+    void writeColumn(
+        const NameAndTypePair & name_and_type,
+        const IColumn & column,
+        WrittenOffsetColumns & offset_columns,
+        const Granules & granules,
+        bool need_finalize = false) override;
+
     /// Write block of rows into .bin file and marks in .mrk files, primary index in .idx file
     /// and skip indices in their corresponding files.
     void writeDataBlockPrimaryIndexAndSkipIndices(const Block & block, const Granules & granules);
-
-    void addToChecksums(MergeTreeDataPartChecksums & checksums);
-
-    void addStreams(const NameAndTypePair & column, const ASTPtr & effective_codec_desc);
+    
+    Poco::Logger * getLogger() override { return log; } 
 
     Block header;
 
@@ -57,10 +68,6 @@ private:
 
     ColumnsBuffer columns_buffer;
 
-    /// hashing_buf -> compressed_buf -> plain_hashing -> plain_file
-    std::unique_ptr<WriteBufferFromFileBase> plain_file;
-    HashingWriteBuffer plain_hashing;
-
     /// Compressed stream which allows to write with codec.
     struct CompressedStream
     {
@@ -71,19 +78,52 @@ private:
             : compressed_buf(buf, codec)
             , hashing_buf(compressed_buf) {}
     };
-
     using CompressedStreamPtr = std::shared_ptr<CompressedStream>;
+    
+    struct CompactDataWriter
+    {
+        CompactDataWriter(
+            const DiskPtr & disk,
+            const String & part_path,
+            const String & marks_file_extension,
+            const MergeTreeWriterSettings & settings,
+            const CompressionCodecPtr default_codec);
 
-    /// Create compressed stream for every different codec. All streams write to
-    /// a single file on disk.
-    std::unordered_map<UInt64, CompressedStreamPtr> streams_by_codec;
+        void finalize();
 
-    /// Stream for each column's substreams path (look at addStreams).
-    std::unordered_map<String, CompressedStreamPtr> compressed_streams;
+        void sync() const;
 
-    /// marks -> marks_file
-    std::unique_ptr<WriteBufferFromFileBase> marks_file;
-    HashingWriteBuffer marks;
+        void addToChecksums(IMergeTreeDataPart::Checksums & checksums);
+
+        void addDataStreams(const NameAndTypePair & column, const ASTPtr & effective_codec_desc, SerializationsMap & serializations);
+
+        const CompressionCodecPtr default_codec;
+
+        String marks_file_extension;
+
+        /// hashing_buf -> compressed_buf -> plain_hashing -> plain_file
+        std::unique_ptr<WriteBufferFromFileBase> plain_file;
+        HashingWriteBuffer plain_hashing;
+
+        /// marks -> marks_file
+        std::unique_ptr<WriteBufferFromFileBase> marks_file;
+        HashingWriteBuffer marks;
+
+        /// Create compressed stream for every different codec. All streams write to
+        /// a single file on disk.
+        std::unordered_map<UInt64, CompressedStreamPtr> streams_by_codec;
+
+        /// Stream for each column's substreams path (look at addStreams).
+        std::unordered_map<String, CompressedStreamPtr> compressed_streams;
+
+    };
+
+    using CompactDataWriterPtr = std::unique_ptr<CompactDataWriter>;
+    /// add comment(lta)
+    CompactDataWriterPtr data_writer;
+
+    Poco::Logger * log;
+
 };
 
 }

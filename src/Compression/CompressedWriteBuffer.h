@@ -50,6 +50,9 @@ public:
     }
 
     ~CompressedWriteBuffer() override;
+
+    //@ByteMap
+    virtual void deepCopyTo(/*CompressedWriteBuffer*/BufferBase& target) const override;
 };
 
 }

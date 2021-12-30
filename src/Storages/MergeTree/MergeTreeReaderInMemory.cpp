@@ -2,7 +2,9 @@
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/MapHelpers.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnByteMap.h>
 
 namespace DB
 {
@@ -108,6 +110,63 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
                 auto mutable_column = res_columns[i]->assumeMutable();
                 mutable_column->insertRangeFrom(*block_column, total_rows_read, rows_to_read);
                 res_columns[i] = std::move(mutable_column);
+            }
+        } 
+        else if (isMapImplicitKey(name_type.name)) /// handle implicit key
+        {
+            auto & part_all_columns = part_in_memory->getColumns();
+            if (isMapImplicitKeyNotKV(name_type.name))
+            {
+                auto map_column_name = parseColNameFromImplicitName(name_type.name);
+                auto key_name = parseKeyFromImplicitMap(map_column_name, name_type.name);
+                auto map_column = std::find_if(part_all_columns.begin(), part_all_columns.end(), [&](auto & val) { return val.name == map_column_name; });
+                if (map_column != part_all_columns.end())
+                {
+                    auto block_column = getColumnFromBlock(part_in_memory->block, *map_column);
+                    const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(*block_column);
+                    res_columns[i] = column_map.getValueColumnByKey(key_name, rows_to_read);
+                }
+            }
+            else
+            {
+                auto map_column = std::find_if(part_all_columns.begin(), part_all_columns.end(), [&](auto & val) {
+                    return val.name + ".key" == name_type.name || val.name + ".value" == name_type.name;
+                });
+                if (map_column != part_all_columns.end())
+                {
+                    auto block_column = getColumnFromBlock(part_in_memory->block, *map_column);
+                    const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(*block_column);
+                    if (map_column->name + ".key" == name_type.name)
+                    {
+                        auto key_store_column = column_map.getKeyStorePtr();
+                        if (rows_to_read == part_rows)
+                            res_columns[i] = key_store_column;
+                        else
+                        {
+                            if (res_columns[i] == nullptr)
+                                res_columns[i] = name_type.type->createColumn();
+
+                            auto mutable_column = res_columns[i]->assumeMutable();
+                            mutable_column->insertRangeFrom(*key_store_column, total_rows_read, rows_to_read);
+                            res_columns[i] = std::move(mutable_column);
+                        }
+                    }
+                    else /// handle .value
+                    {
+                        auto value_store_column = column_map.getValueStorePtr();
+                        if (rows_to_read == part_rows)
+                            res_columns[i] = value_store_column;
+                        else
+                        {
+                            if (res_columns[i] == nullptr)
+                                res_columns[i] = name_type.type->createColumn();
+
+                            auto mutable_column = res_columns[i]->assumeMutable();
+                            mutable_column->insertRangeFrom(*value_store_column, total_rows_read, rows_to_read);
+                            res_columns[i] = std::move(mutable_column);
+                        }
+                    }
+                }
             }
         }
     }

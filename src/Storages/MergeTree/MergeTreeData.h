@@ -1040,6 +1040,8 @@ public:
     /// Get required partition vector with query info
     DataPartsVector getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr context);
 
+    void checkColumnsValidity(const ColumnsDescription & columns) const override;
+
     // bitengine dictionary mananger
     BitEngineDictionaryManagerPtr bitengine_dictionary_manager;
     inline bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }

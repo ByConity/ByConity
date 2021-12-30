@@ -321,6 +321,116 @@ void IMergeTreeReader::checkNumberOfColumns(size_t num_columns_to_read) const
                         "got " + toString(num_columns_to_read), ErrorCodes::LOGICAL_ERROR);
 }
 
+void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, [[maybe_unused]]const String & col_name,
+	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
+{
+    ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
+        String implicit_stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+
+        if (streams.count(implicit_stream_name))
+            return;
+
+        String col_stream_name;
+        if (data_part->versions->enable_compact_map_data)
+        {
+            col_stream_name = IDataType::getFileNameForStream(col_name, substream_path);
+        }
+        else
+        {
+            col_stream_name = implicit_stream_name;
+        }
+
+		//FIXME: data_part->getColumnsReadLock() 
+        bool data_file_exists = data_part->checksums.files.count(implicit_stream_name + DATA_FILE_EXTENSION);
+
+        /** If data file is missing then we will not try to open it.
+          * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.
+          */
+        if (!data_file_exists)
+            return;
+
+        streams.emplace(
+            implicit_stream_name,
+            std::make_unique<MergeTreeReaderStream>(
+                data_part->volume->getDisk(),
+                data_part->getFullRelativePath() + col_stream_name,
+                implicit_stream_name,
+                DATA_FILE_EXTENSION,
+                data_part->getMarksCount(),
+                all_mark_ranges,
+                settings,
+                mark_cache,
+                uncompressed_cache,
+                &data_part->index_granularity_info,
+                profile_callback,
+                clock_type,
+                data_part->getFileOffsetOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
+                data_part->getFileSizeOrZero(implicit_stream_name + DATA_FILE_EXTENSION),
+                data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name)),
+                data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(implicit_stream_name))));
+    };
+
+    auto serialization = data_part->getSerializationForColumn(name_and_type);
+    serialization->enumerateStreams(callback);
+    serializations.emplace(name_and_type.name, std::move(serialization));
+
+}
+
+
+void IMergeTreeReader::readData(
+    const NameAndTypePair & name_and_type, ColumnPtr & column,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+    ISerialization::SubstreamsCache & cache)
+{
+    auto get_stream_getter = [&](bool stream_for_prefix) -> ISerialization::InputStreamGetter
+    {
+        return [&, stream_for_prefix](const ISerialization::SubstreamPath & substream_path) -> ReadBuffer * //-V1047
+        {
+            /// If substream have already been read.
+            if (cache.count(ISerialization::getSubcolumnNameForStream(substream_path)))
+                return nullptr;
+
+            String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+            
+            auto it = streams.find(stream_name);
+            if (it == streams.end())
+                return nullptr;
+
+            MergeTreeReaderStream & stream = *it->second;
+
+            if (stream_for_prefix)
+            {
+                stream.seekToStart();
+                continue_reading = false;
+            }
+            else if (!continue_reading)
+                stream.seekToMark(from_mark);
+
+            return stream.data_buffer;
+        };
+    };
+
+    double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
+    ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
+    deserialize_settings.avg_value_size_hint = avg_value_size_hint;
+
+    const auto & name = name_and_type.name;
+    auto serialization = serializations[name];
+    
+    if (deserialize_binary_bulk_state_map.count(name) == 0)
+    {
+        deserialize_settings.getter = get_stream_getter(true);
+        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
+    }
+
+    deserialize_settings.getter = get_stream_getter(false);
+    deserialize_settings.continuous_reading = continue_reading;
+    auto & deserialize_state = deserialize_binary_bulk_state_map[name];
+
+    serialization->deserializeBinaryBulkWithMultipleStreams(column, max_rows_to_read, deserialize_settings, deserialize_state, &cache);
+    IDataType::updateAvgValueSizeHint(*column, avg_value_size_hint);
+}
+
 bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
 {
     if (isBitmap64(column.type)

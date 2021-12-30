@@ -26,6 +26,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_drop_column("DROP COLUMN");
     ParserKeyword s_clear_column("CLEAR COLUMN");
     ParserKeyword s_modify_column("MODIFY COLUMN");
+    ParserKeyword s_clear_map_key("CLEAR MAP KEY");
     ParserKeyword s_rename_column("RENAME COLUMN");
     ParserKeyword s_comment_column("COMMENT COLUMN");
     ParserKeyword s_modify_order_by("MODIFY ORDER BY");
@@ -126,6 +127,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserNameList values_p;
     ParserSelectWithUnionQuery select_p;
     ParserTTLExpressionList parser_ttl_list;
+    ParserList parser_map_key_list(std::make_unique<ParserStringLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
 
     // Optional CASCADING keyword for drop/detach partition
     if (s_cascading.ignore(pos, expected))
@@ -224,6 +226,26 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
 
             command->type = ASTAlterCommand::DROP_COLUMN;
+            command->detach = false;
+        }
+        else if (s_clear_map_key.ignore(pos, expected))
+        {
+            if (!parser_name.parse(pos, command->column, expected))
+                return false;
+
+            if (pos->type != TokenType::OpeningRoundBracket)
+                return false;
+            ++pos;
+
+            if (!parser_map_key_list.parse(pos, command->map_keys, expected))
+                return false;
+
+            if (pos->type != TokenType::ClosingRoundBracket)
+                return false;
+            ++pos;
+
+            command->type = ASTAlterCommand::CLEAR_MAP_KEY;
+
             command->detach = false;
         }
         else if (s_clear_column.ignore(pos, expected))

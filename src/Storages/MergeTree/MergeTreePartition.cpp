@@ -123,6 +123,12 @@ namespace
             for (const auto & elem : x)
                 applyVisitor(*this, elem);
         }
+
+        [[ noreturn ]] void operator() (const ByteMap & ) const
+        {
+            throw Exception("Map hash not implemented", ErrorCodes::NOT_IMPLEMENTED);
+        }
+
         void operator() (const DecimalField<Decimal32> & x) const
         {
             UInt8 type = Field::Types::Decimal32;

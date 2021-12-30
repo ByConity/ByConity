@@ -55,6 +55,7 @@ public:
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type);
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type, MutableColumnPtr && keys);
 
+    bool canBeMapKVType() const override { return dictionary_type->canBeMapKVType(); }
 private:
     SerializationPtr doGetDefaultSerialization() const override;
 

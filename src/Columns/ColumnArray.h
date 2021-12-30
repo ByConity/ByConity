@@ -94,6 +94,9 @@ public:
     ColumnPtr convertToFullColumnIfConst() const override;
     void getExtremes(Field & min, Field & max) const override;
 
+    /// Map support array key
+    bool canBeInsideNullable() const override { return true; }
+
     bool hasEqualOffsets(const ColumnArray & other) const;
 
     /** More efficient methods of manipulation */

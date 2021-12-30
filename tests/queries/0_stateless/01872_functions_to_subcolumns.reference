@@ -13,11 +13,11 @@ SELECT
     `arr.size0` != 0,
     empty(n)
 FROM t_func_to_subcolumns
-['foo','bar']	[1,2]
+['bar','foo']	[2,1]
 []	[]
 SELECT
-    `m.keys`,
-    `m.values`
+    mapKeys(m),
+    mapValues(m)
 FROM t_func_to_subcolumns
 1
 SELECT sum(NOT `n.null`)

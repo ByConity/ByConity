@@ -126,6 +126,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_codec{"CODEC"};
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
+    ParserKeyword s_kv{"KV"};
     ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser;
     ParserStringLiteral string_literal_parser;
@@ -177,15 +178,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             return false;
     }
 
-    bool bitengine_encode{false};
-    bool inner_bitengine_encode{false};
-    do
-    {
-        inner_bitengine_encode = s_bitengine_encode.ignore(pos, expected);
-        if (bitengine_encode && inner_bitengine_encode)
-            return false;
-    } while (inner_bitengine_encode);
-
     Pos pos_before_specifier = pos;
     if (s_default.ignore(pos, expected) || s_materialized.ignore(pos, expected) || s_alias.ignore(pos, expected))
     {
@@ -218,6 +210,61 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             return false;
     }
 
+
+    // Parse {COMPRESSION, SECURITY [ENCRYPT], BLOOM, KV, BitmapIndex}
+    // bool compression = false;
+    // bool security = false;
+    // bool encrypt = false;
+    // bool bloom = false;
+    bool kv = false;
+    bool bitengine_encode = false;
+    // bool bitmap_index = false;
+    // bool mark_bitmap_index = false;
+    // bool inner_compression =false;
+    // bool inner_security = false;
+    // bool inner_encrypt = false;
+    // bool inner_bloom = false;
+    bool inner_kv = false;
+    bool inner_bitengine_encode = false;
+    // bool inner_bitmap_index = false;
+    // bool inner_mark_bitmap_index = false;
+    do {
+    //     inner_compression = s_compression.ignore(pos, expected);
+    //     inner_security = s_security.ignore(pos, expected);
+    //     inner_encrypt = s_encrypt.ignore(pos, expected);
+    //     inner_bloom = s_bloom.ignore(pos, expected);
+        inner_kv = s_kv.ignore(pos, expected);
+        inner_bitengine_encode = s_bitengine_encode.ignore(pos, expected);
+        // inner_bitmap_index = s_bitmap_index.ignore(pos, expected);
+        // inner_mark_bitmap_index = s_mark_bitmap_index.ignore(pos, expected);
+        // // each setting can only appear once
+        // if (compression && inner_compression)
+        //     return false;
+        // if (security && inner_security)
+        //     return false;
+        // if (inner_encrypt && encrypt)
+        //     return false;
+        // if (bloom && inner_bloom)
+        //     return false;
+        if (kv && inner_kv)
+            return false;
+        if (bitengine_encode && inner_bitengine_encode)
+            return false;
+    //     if (bitmap_index && inner_bitmap_index)
+    //         return false;
+    //     if (mark_bitmap_index && inner_mark_bitmap_index)
+    //         return false;
+    //     compression |= inner_compression;
+    //     security |= inner_security;
+    //     encrypt |= inner_encrypt;
+    //     bloom |= inner_bloom;
+        kv |= inner_kv;
+        bitengine_encode |= inner_bitengine_encode;
+    //     bitmap_index |= inner_bitmap_index;
+    //     mark_bitmap_index |= inner_mark_bitmap_index;
+    } while (/*inner_compression || inner_security || inner_encrypt || inner_bloom ||*/ inner_kv || inner_bitengine_encode /*|| inner_bitmap_index*/);
+
+
     if (s_codec.ignore(pos, expected))
     {
         if (!codec_parser.parse(pos, codec_expression, expected))
@@ -246,6 +293,22 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         column_declaration->default_expression = default_expression;
         column_declaration->children.push_back(std::move(default_expression));
     }
+
+    // if (bloom) column_declaration->flags |= TYPE_BLOOM_FLAG;
+
+    // if (bitmap_index) column_declaration->flags |= TYPE_BITMAP_INDEX_FLAG;
+
+    // if (mark_bitmap_index) column_declaration->flags |= TYPE_MARK_BITMAP_INDEX_FALG;
+
+    // if (compression) column_declaration->flags |= TYPE_COMPRESSION_FLAG;
+
+    // if (security) column_declaration->flags |= TYPE_SECURITY_FLAG;
+
+    // if (encrypt) column_declaration->flags |= TYPE_ENCRYPT_FLAG;
+
+    if (kv) column_declaration->flags |= TYPE_MAP_KV_STORE_FLAG;
+
+    if (bitengine_encode) column_declaration->flags |= TYPE_BITENGINE_ENCODE_FLAG;
 
     if (comment_expression)
     {

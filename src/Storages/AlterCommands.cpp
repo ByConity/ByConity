@@ -345,6 +345,15 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.if_exists = command_ast->if_exists;
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::CLEAR_MAP_KEY;
+        command.column_name = command_ast->column->as<ASTIdentifier &>().name();
+        command.map_keys = command_ast->map_keys;
+        return command;
+    }
     else
         return {};
 }
@@ -492,6 +501,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         }
 
         metadata.secondary_indices.emplace(insert_it, IndexDescription::getIndexFromAST(index_decl, metadata.columns, context));
+    }
+    else if (type == CLEAR_MAP_KEY)
+    {
+        /// This have no relation to changing the list of columns.
     }
     else if (type == DROP_INDEX)
     {
@@ -724,7 +737,7 @@ bool AlterCommand::isRequireMutationStage(const StorageInMemoryMetadata & metada
     if (isRemovingProperty() || type == REMOVE_TTL)
         return false;
 
-    if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN)
+    if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN || type == CLEAR_MAP_KEY)
         return true;
 
     if (type != MODIFY_COLUMN || data_type == nullptr)
@@ -832,6 +845,12 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
         result.type = MutationCommand::Type::RENAME_COLUMN;
         result.column_name = column_name;
         result.rename_to = rename_to;
+    }
+    else if (type == CLEAR_MAP_KEY)
+    {
+        result.type = MutationCommand::Type::CLEAR_MAP_KEY;
+        result.column_name = column_name;
+        result.map_keys = map_keys;
     }
 
     result.ast = ast->clone();
@@ -995,7 +1014,8 @@ void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
         }
         else if (command.type == AlterCommand::DROP_COLUMN
                 || command.type == AlterCommand::COMMENT_COLUMN
-                || command.type == AlterCommand::RENAME_COLUMN)
+                || command.type == AlterCommand::RENAME_COLUMN
+                || command.type == AlterCommand::CLEAR_MAP_KEY)
         {
             if (!has_column && command.if_exists)
                 command.ignore = true;
@@ -1228,6 +1248,28 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
         else if (command.type == AlterCommand::REMOVE_TTL && !metadata.hasAnyTableTTL())
         {
             throw Exception{"Table doesn't have any table TTL expression, cannot remove", ErrorCodes::BAD_ARGUMENTS};
+        }
+        else if (command.type == AlterCommand::CLEAR_MAP_KEY)
+        {
+            if (!all_columns.has(command.column_name))
+            {
+                if (!command.if_exists)
+                    throw Exception("Wrong column name. Cannot find column " + command.column_name + " to clear map keys", ErrorCodes::ILLEGAL_COLUMN);
+            }
+            else
+            {
+                const auto & column = all_columns.get(command.column_name);
+                if (!column.type->isMap())
+                {
+                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName(),
+                            ErrorCodes::ILLEGAL_COLUMN);
+                }
+                else if (column.type->isMapKVStore())
+                {
+                    throw Exception("Not support clear keys on column " + command.column_name + " with type " + column.type->getName() + " KV store",
+                                    ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
         }
 
         /// Collect default expressions for MODIFY and ADD comands

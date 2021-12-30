@@ -24,6 +24,7 @@ StorageSystemParts::StorageSystemParts(const StorageID & table_id_)
         {"uuid",                                        std::make_shared<DataTypeUUID>()},
         {"part_type",                                   std::make_shared<DataTypeString>()},
         {"active",                                      std::make_shared<DataTypeUInt8>()},
+        {"compact_map",                                 std::make_shared<DataTypeUInt8>()},
         {"marks",                                       std::make_shared<DataTypeUInt64>()},
         {"rows",                                        std::make_shared<DataTypeUInt64>()},
         {"bytes_on_disk",                               std::make_shared<DataTypeUInt64>()},
@@ -119,6 +120,8 @@ void StorageSystemParts::processNextStorage(
             columns[res_index++]->insert(part->getTypeName());
         if (columns_mask[src_index++])
             columns[res_index++]->insert(part_state == State::Committed);
+        if (columns_mask[src_index++])
+            columns[res_index++]->insert(part->versions->enable_compact_map_data);
         if (columns_mask[src_index++])
             columns[res_index++]->insert(part->getMarksCount());
         if (columns_mask[src_index++])

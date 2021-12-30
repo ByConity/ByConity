@@ -65,6 +65,28 @@ void FieldVisitorWriteBinary::operator() (const Map & x, WriteBuffer & buf) cons
     }
 }
 
+// FIXME
+void FieldVisitorWriteBinary::operator() (const ByteMap & x, WriteBuffer & buf) const
+{
+    UInt8 ktype = Field::Types::Null;
+    UInt8 vtype = Field::Types::Null;
+ 
+    const size_t size = x.size();
+    if (size)
+    {
+        ktype = x.front().first.getType();
+        vtype = x.front().second.getType();
+    }
+    writeBinary(ktype, buf);
+    writeBinary(vtype, buf);
+    writeBinary(size, buf);
+    for (ByteMap::const_iterator it = x.begin(); it != x.end(); ++it)
+    {
+        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->first);
+        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->second);
+    }
+}
+
 void FieldVisitorWriteBinary::operator() (const BitMap64 & x, WriteBuffer & buf) const
 {
     const size_t bytes = x.getSizeInBytes();

@@ -440,6 +440,12 @@ elseif (OS_FREEBSD)
     include(cmake/freebsd/default_libs.cmake)
 endif ()
 
+# Determine whether to use community map implementation
+option (USE_COMMUNITY_MAP "Use clickhouse community map implmentation"  OFF)
+if (USE_COMMUNITY_MAP)
+    add_definitions(-DUSE_COMMUNITY_MAP)
+endif (USE_COMMUNITY_MAP)
+
 ######################################
 ### Add targets below this comment ###
 ######################################

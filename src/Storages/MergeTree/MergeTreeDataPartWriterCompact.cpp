@@ -1,5 +1,16 @@
 #include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Interpreters/Context.h>
+#include <Compression/CompressionFactory.h>
+#include <Compression/CompressedReadBufferFromFile.h>
+#include <DataTypes/Serializations/ISerialization.h>
+#include <DataTypes/Serializations/SerializationNullable.h>
+#include <DataTypes/MapHelpers.h>
+#include <Common/escapeForFileName.h>
+#include <Columns/ColumnByteMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Common/FieldVisitorToString.h>
 
 namespace DB
 {
@@ -7,6 +18,93 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+MergeTreeDataPartWriterCompact::CompactDataWriter::CompactDataWriter(
+    const DiskPtr & disk,
+    const String & part_path,
+    const String & marks_file_extension_,
+    const MergeTreeWriterSettings & settings,
+    const CompressionCodecPtr default_codec_)
+    : default_codec(default_codec_)
+    , marks_file_extension(marks_file_extension_)
+    , plain_file(disk->writeFile(
+          part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION, settings.max_compress_block_size, WriteMode::Rewrite))
+    , plain_hashing(*plain_file)
+    , marks_file(disk->writeFile(part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension, 4096, WriteMode::Rewrite))
+    , marks(*marks_file)
+{
+}
+
+void MergeTreeDataPartWriterCompact::CompactDataWriter::finalize()
+{
+    plain_file->next();
+    marks.next();
+
+    plain_file->finalize();
+    marks_file->finalize();
+}
+
+void MergeTreeDataPartWriterCompact::CompactDataWriter::sync() const
+{
+    plain_file->sync();
+    marks_file->sync();
+}
+
+void MergeTreeDataPartWriterCompact::CompactDataWriter::addToChecksums(IMergeTreeDataPart::Checksums & checksums)
+{
+    String data_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
+    String marks_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME +  marks_file_extension;
+
+    size_t uncompressed_size = 0;
+    CityHash_v1_0_2::uint128 uncompressed_hash{0, 0};
+
+    for (const auto & [_, stream] : streams_by_codec)
+    {
+        uncompressed_size += stream->hashing_buf.count();
+        auto stream_hash = stream->hashing_buf.getHash();
+        uncompressed_hash = CityHash_v1_0_2::CityHash128WithSeed(
+            reinterpret_cast<char *>(&stream_hash), sizeof(stream_hash), uncompressed_hash);
+    }
+
+    checksums.files[data_file_name].is_compressed = true;
+    checksums.files[data_file_name].uncompressed_size = uncompressed_size;
+    checksums.files[data_file_name].uncompressed_hash = uncompressed_hash;
+    checksums.files[data_file_name].file_size = plain_hashing.count();
+    checksums.files[data_file_name].file_hash = plain_hashing.getHash();
+
+    checksums.files[marks_file_name].file_size = marks.count();
+    checksums.files[marks_file_name].file_hash = marks.getHash();
+}
+
+void MergeTreeDataPartWriterCompact::CompactDataWriter::addDataStreams(
+    const NameAndTypePair & column, const ASTPtr & effective_codec_desc, SerializationsMap & serializations)
+{
+    IDataType::StreamCallbackWithType callback
+        = [&](const ISerialization::SubstreamPath & substream_path, const IDataType & substream_type) {
+              String stream_name = ISerialization::getFileNameForStream(column, substream_path);
+
+              /// Shared offsets for Nested type.
+              if (compressed_streams.count(stream_name))
+                  return;
+
+              CompressionCodecPtr compression_codec;
+
+              /// If we can use special codec than just get it
+              if (ISerialization::isSpecialCompressionAllowed(substream_path))
+                  compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, &substream_type, default_codec);
+              else /// otherwise return only generic codecs and don't use info about data_type
+                  compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
+
+              UInt64 codec_id = compression_codec->getHash();
+              auto & stream = streams_by_codec[codec_id];
+              if (!stream)
+                  stream = std::make_shared<CompressedStream>(plain_hashing, compression_codec);
+
+              compressed_streams.emplace(stream_name, stream);
+          };
+
+    column.type->enumerateStreams(serializations[column.name], callback);
 }
 
 MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
@@ -21,49 +119,24 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
     : MergeTreeDataPartWriterOnDisk(data_part_, columns_list_, metadata_snapshot_,
         indices_to_recalc_, marks_file_extension_,
         default_codec_, settings_, index_granularity_)
-    , plain_file(data_part->volume->getDisk()->writeFile(
-            part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION,
-            settings.max_compress_block_size,
-            WriteMode::Rewrite))
-    , plain_hashing(*plain_file)
-    , marks_file(data_part->volume->getDisk()->writeFile(
-        part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension_,
-        4096,
-        WriteMode::Rewrite))
-    , marks(*marks_file)
+	, log(&Poco::Logger::get(storage.getLogName() + " (WriterCompact)"))
 {
     const auto & storage_columns = metadata_snapshot->getColumns();
     for (const auto & column : columns_list)
-        addStreams(column, storage_columns.getCodecDescOrDefault(column.name, default_codec));
-}
-
-void MergeTreeDataPartWriterCompact::addStreams(const NameAndTypePair & column, const ASTPtr & effective_codec_desc)
-{
-    IDataType::StreamCallbackWithType callback = [&] (const ISerialization::SubstreamPath & substream_path, const IDataType & substream_type)
     {
-        String stream_name = ISerialization::getFileNameForStream(column, substream_path);
-
-        /// Shared offsets for Nested type.
-        if (compressed_streams.count(stream_name))
-            return;
-
-        CompressionCodecPtr compression_codec;
-
-        /// If we can use special codec than just get it
-        if (ISerialization::isSpecialCompressionAllowed(substream_path))
-            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, &substream_type, default_codec);
-        else /// otherwise return only generic codecs and don't use info about data_type
-            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
-
-        UInt64 codec_id = compression_codec->getHash();
-        auto & stream = streams_by_codec[codec_id];
-        if (!stream)
-            stream = std::make_shared<CompressedStream>(plain_hashing, compression_codec);
-
-        compressed_streams.emplace(stream_name, stream);
-    };
-
-    column.type->enumerateStreams(serializations[column.name], callback);
+        if (column.type->isMap() && !column.type->isMapKVStore())
+            continue;
+        else if (isMapImplicitKeyNotKV(column.name))
+            addByteMapStreams({column}, parseColNameFromImplicitName(column.name), default_codec->getFullCodecDesc());
+        else
+        {
+            if (!data_writer)
+            {
+                data_writer = std::make_unique<CompactDataWriter>(data_part->volume->getDisk(), part_path, marks_file_extension, settings, default_codec);
+            }
+            data_writer->addDataStreams(column, storage_columns.getCodecDescOrDefault(column.name, default_codec), serializations);
+        }
+    }
 }
 
 namespace
@@ -122,6 +195,39 @@ void writeColumnSingleGranule(
     serialization->serializeBinaryBulkStateSuffix(serialize_settings, state);
 }
 
+/**
+ * @note Just using for merge when handling map implicit column and enable compact map data.
+ * Due to ByteMap data should stored in separate files, thus we must use Vertical merge algorithm rather than Horizonal merge algorithm when enable_compact_map_date is true.
+ * In that way, all columns except for map column will belong to merged columns, others will belong to gathering columns.
+ * The block size read by these two type of stream reader may not be the same, and we need to make sure that all columns in one part have the same index granules, thus we need to handle the case.
+ * There are two ways to handle the case:
+ * 1. truncate the block to satisfy the condition just like the action in wide format writer.
+ * 2. accumulate the data until satisfy the condition.
+ * Due to compact format parts are usually small, thus picking up the second solution is also fine.
+ */
+bool checkGranuleValidityForImplicitColumn(
+    const NamesAndTypesList & columns, const MergeTreeIndexGranularity & index_granularity, size_t rows_in_buffer, size_t current_mark)
+{
+    if (columns.size() > 1 || !isMapImplicitKeyNotKV(columns.front().name))
+        return true;
+
+    if (current_mark >= index_granularity.getMarksCount())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Request to get granules from mark {} but index granularity size is {}", current_mark, index_granularity.getMarksCount());
+
+    size_t current_row = 0;
+    while (current_row < rows_in_buffer)
+    {
+        size_t expected_rows_in_mark = index_granularity.getMarkRows(current_mark);
+        size_t rows_left_in_block = rows_in_buffer - current_row;
+        if (rows_left_in_block < expected_rows_in_mark)
+            return false;
+
+        current_row += expected_rows_in_mark;
+        current_mark++;
+    }
+
+    return true;
+}
 }
 
 void MergeTreeDataPartWriterCompact::write(const Block & block, const IColumn::Permutation * permutation)
@@ -144,7 +250,7 @@ void MergeTreeDataPartWriterCompact::write(const Block & block, const IColumn::P
     size_t current_mark_rows = index_granularity.getMarkRows(getCurrentMark());
     size_t rows_in_buffer = columns_buffer.size();
 
-    if (rows_in_buffer >= current_mark_rows)
+    if (rows_in_buffer >= current_mark_rows && checkGranuleValidityForImplicitColumn(columns_list, index_granularity, rows_in_buffer, getCurrentMark()))
     {
         Block flushed_block = header.cloneWithColumns(columns_buffer.releaseColumns());
         auto granules_to_write = getGranulesToWrite(index_granularity, flushed_block.rows(), getCurrentMark(), /* last_block = */ false);
@@ -171,11 +277,16 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
 {
     for (const auto & granule : granules)
     {
-        data_written = true;
-
+        
         auto name_and_type = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
+            if ((name_and_type->type->isMap() && !name_and_type->type->isMapKVStore()) || isMapImplicitKeyNotKV(name_and_type->name))
+                continue;
+            if (!data_writer)
+                throw Exception("Compact data writer is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
+            data_written = true;
+            
             /// Tricky part, because we share compressed streams between different columns substreams.
             /// Compressed streams write data to the single file, but with different compression codecs.
             /// So we flush each stream (using next()) before using new one, because otherwise we will override
@@ -185,7 +296,7 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             {
                 String stream_name = ISerialization::getFileNameForStream(*name_and_type, substream_path);
 
-                auto & result_stream = compressed_streams[stream_name];
+                auto & result_stream = data_writer->compressed_streams[stream_name];
                 /// Write one compressed block per column in granule for more optimal reading.
                 if (prev_stream && prev_stream != result_stream)
                 {
@@ -200,8 +311,8 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             };
 
 
-            writeIntBinary(plain_hashing.count(), marks);
-            writeIntBinary(UInt64(0), marks);
+            writeIntBinary(data_writer->plain_hashing.count(), data_writer->marks);
+            writeIntBinary(UInt64(0), data_writer->marks);
 
             writeColumnSingleGranule(
                 block.getByName(name_and_type->name), serializations[name_and_type->name],
@@ -211,7 +322,35 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             prev_stream->hashing_buf.next(); //-V522
         }
 
-        writeIntBinary(granule.rows_to_write, marks);
+        if (data_writer)
+            writeIntBinary(granule.rows_to_write, data_writer->marks);
+    }
+
+    /// write all implicit map column
+    writeAllImplicitColumnBlock(block, granules);
+}
+
+void MergeTreeDataPartWriterCompact::writeAllImplicitColumnBlock(const Block & block, const Granules & granules)
+{
+    auto name_and_type = columns_list.begin();
+    auto offset_columns = WrittenOffsetColumns{}; /// Nested type will not be the map KV type, so don't need to handle offset column
+    for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
+    {
+        if ((!name_and_type->type->isMap() || name_and_type->type->isMapKVStore()) && !isMapImplicitKeyNotKV(name_and_type->name))
+            continue;
+        
+        const ColumnWithTypeAndName & column = block.getByName(name_and_type->name);
+        data_written = true;
+
+        if (name_and_type->type->isMap() && !name_and_type->type->isMapKVStore())
+        {
+            if (data_part->versions->enable_compact_map_data)
+                writeCompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);
+            else
+                writeUncompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);                
+        }
+        else /// handle implcit column directly
+            writeColumn(*name_and_type, *column.column, offset_columns, granules);
     }
 }
 
@@ -226,37 +365,85 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
             /// Correct last mark as it should contain exact amount of rows.
             index_granularity.popMark();
             index_granularity.appendMark(granules_to_write.back().rows_to_write);
+            granules_to_write.back().is_complete = true;
         }
         writeDataBlockPrimaryIndexAndSkipIndices(block, granules_to_write);
     }
 
 #ifndef NDEBUG
-    /// Offsets should be 0, because compressed block is written for every granule.
-    for (const auto & [_, stream] : streams_by_codec)
-        assert(stream->hashing_buf.offset() == 0);
+    if (data_writer)
+    {
+        /// Offsets should be 0, because compressed block is written for every granule.
+        for (const auto & [_, stream] : data_writer->streams_by_codec)
+            assert(stream->hashing_buf.offset() == 0);
+    }
 #endif
 
     if (with_final_mark && data_written)
     {
-        for (size_t i = 0; i < columns_list.size(); ++i)
+        ISerialization::SerializeBinaryBulkSettings serialize_settings;
+        WrittenOffsetColumns offset_columns; /// Nested type will not be the map KV type, so don't need to handle offset column
+    
+        auto name_and_type = columns_list.begin();
+        for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
-            writeIntBinary(plain_hashing.count(), marks);
-            writeIntBinary(UInt64(0), marks);
+            if (name_and_type->type->isMap() && !name_and_type->type->isMapKVStore())
+                continue;
+
+            if (isMapImplicitKeyNotKV(name_and_type->name))
+            {
+                if (!serialization_states.empty())
+                {
+                    serialize_settings.getter = createStreamGetter(*name_and_type, offset_columns);
+                    serializations[name_and_type->name]->serializeBinaryBulkStateSuffix(serialize_settings, serialization_states[name_and_type->name]);
+                }
+
+                writeFinalMark(*name_and_type, offset_columns, serialize_settings.path);
+            }
+            else
+            {
+                if (!data_writer)
+                    throw Exception("Compact data writer is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
+                writeIntBinary(data_writer->plain_hashing.count(), data_writer->marks);
+                writeIntBinary(UInt64(0), data_writer->marks);
+            }
         }
-        writeIntBinary(UInt64(0), marks);
+        if (data_writer)
+            writeIntBinary(UInt64(0), data_writer->marks);
+
+        // @ByteMap, process implicit columns deduced by ByteMap
+        for (auto & cl : implicit_columns_list)
+        {
+             if (!serialization_states.empty())
+            {
+                serialize_settings.getter = createStreamGetter(cl, offset_columns);
+                serializations[cl.name]->serializeBinaryBulkStateSuffix(serialize_settings, serialization_states[cl.name]);
+            }
+
+            writeFinalMark(cl, offset_columns, serialize_settings.path);
+        }   
     }
 
-    plain_file->next();
-    marks.next();
-    addToChecksums(checksums);
-
-    plain_file->finalize();
-    marks_file->finalize();
-    if (sync)
+    if (data_writer)
     {
-        plain_file->sync();
-        marks_file->sync();
+        data_writer->finalize();
+        data_writer->addToChecksums(checksums);
+
+        if (sync)
+            data_writer->sync();
     }
+
+    /// handle implicit column
+    for (auto & stream : column_streams)
+    {
+        stream.second->finalize();
+        stream.second->addToChecksums(checksums);
+        if (sync)
+            stream.second->sync();
+    }
+
+    column_streams.clear();
+    serialization_states.clear();
 }
 
 static void fillIndexGranularityImpl(
@@ -301,32 +488,6 @@ void MergeTreeDataPartWriterCompact::fillIndexGranularity(size_t index_granulari
         rows_in_block);
 }
 
-void MergeTreeDataPartWriterCompact::addToChecksums(MergeTreeDataPartChecksums & checksums)
-{
-    String data_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
-    String marks_file_name = MergeTreeDataPartCompact::DATA_FILE_NAME +  marks_file_extension;
-
-    size_t uncompressed_size = 0;
-    CityHash_v1_0_2::uint128 uncompressed_hash{0, 0};
-
-    for (const auto & [_, stream] : streams_by_codec)
-    {
-        uncompressed_size += stream->hashing_buf.count();
-        auto stream_hash = stream->hashing_buf.getHash();
-        uncompressed_hash = CityHash_v1_0_2::CityHash128WithSeed(
-            reinterpret_cast<char *>(&stream_hash), sizeof(stream_hash), uncompressed_hash);
-    }
-
-    checksums.files[data_file_name].is_compressed = true;
-    checksums.files[data_file_name].uncompressed_size = uncompressed_size;
-    checksums.files[data_file_name].uncompressed_hash = uncompressed_hash;
-    checksums.files[data_file_name].file_size = plain_hashing.count();
-    checksums.files[data_file_name].file_hash = plain_hashing.getHash();
-
-    checksums.files[marks_file_name].file_size = marks.count();
-    checksums.files[marks_file_name].file_hash = marks.getHash();
-}
-
 void MergeTreeDataPartWriterCompact::ColumnsBuffer::add(MutableColumns && columns)
 {
     if (accumulated_columns.empty())
@@ -365,4 +526,101 @@ void MergeTreeDataPartWriterCompact::finish(IMergeTreeDataPart::Checksums & chec
     finishSkipIndicesSerialization(checksums, sync);
 }
 
+/// Column must not be empty. (column.size() !== 0)
+void MergeTreeDataPartWriterCompact::writeColumn(
+    const NameAndTypePair & name_and_type,
+    const IColumn & column,
+    WrittenOffsetColumns & offset_columns,
+    const Granules & granules,
+    bool need_finalize)
+{
+    if (granules.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty granules for column {}, current mark {}", backQuoteIfNeed(name_and_type.name), getCurrentMark());
+
+    const auto & [name, type] = name_and_type;
+    auto [it, inserted] = serialization_states.emplace(name, nullptr);
+
+    if (inserted)
+    {
+        ISerialization::SerializeBinaryBulkSettings serialize_settings;
+        serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
+        serializations[name]->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
+    }
+
+    const auto & global_settings = storage.getContext()->getSettingsRef();
+    ISerialization::SerializeBinaryBulkSettings serialize_settings;
+    serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
+    serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
+    serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
+
+    // special code path for ByteMap data type in flatten model
+    if (type->isMap() && column.size() > 0 && !type->isMapKVStore()){
+
+        if (data_part->versions->enable_compact_map_data)
+        {
+            writeCompactedByteMapColumn(name_and_type, column, offset_columns, granules);
+        }
+        else
+        {
+            writeUncompactedByteMapColumn(name_and_type, column, offset_columns, granules);
+        }
+		return;
+    }
+
+    for (const auto & granule : granules)
+    {
+        data_written = true;
+
+        if (granule.mark_on_start)
+        {
+            if (last_non_written_marks.count(name))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "We have to add new mark for column, but already have non written mark. Current mark {}, total marks {}", getCurrentMark(), index_granularity.getMarksCount());
+            last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
+        }
+
+        writeSingleGranule(
+           name_and_type,
+           column,
+           offset_columns,
+           it->second,
+           serialize_settings,
+           granule
+        );
+
+        if (granule.is_complete)
+        {
+            auto marks_it = last_non_written_marks.find(name);
+            if (marks_it == last_non_written_marks.end())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
+
+            for (const auto & mark : marks_it->second)
+                flushMarkToFile(mark, index_granularity.getMarkRows(granule.mark_number));
+            last_non_written_marks.erase(marks_it);
+        }
+        else
+            throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    // When enable compact map data, it need to flush all data in the buffer to disk. Otherwise, the offset of the implicit column may be wrong.
+    if (need_finalize)
+    {
+        if (is_merge)
+            throw Exception("Can not finialize stream early in merge process.", ErrorCodes::LOGICAL_ERROR);
+        
+        // for compacted map, we need to handle final marks here
+        auto last_granule = granules.back();
+        if (!last_granule.is_complete)
+        {
+            throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
+        }
+     
+        bool write_final_mark = (with_final_mark && data_written);
+        if (write_final_mark)
+            writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
+
+        serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
+    }
 }
+
+}
+

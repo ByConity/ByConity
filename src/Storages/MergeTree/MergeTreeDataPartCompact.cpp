@@ -1,5 +1,7 @@
 #include "MergeTreeDataPartCompact.h"
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterCompact.h>
 
@@ -62,18 +64,38 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCompact::getWriter(
     const MergeTreeWriterSettings & writer_settings,
     const MergeTreeIndexGranularity & computed_index_granularity) const
 {
-    NamesAndTypesList ordered_columns_list;
-    std::copy_if(columns_list.begin(), columns_list.end(), std::back_inserter(ordered_columns_list),
-        [this](const auto & column) { return getColumnPosition(column.name) != std::nullopt; });
+    /// Handle implicit col when merging. Because it will use Vertical algorithm when there has map column and all map columns will in gathering column, each implicit map column will be handled one by one.
+    if (columns_list.size() == 1 && isMapImplicitKeyNotKV(columns_list.front().name))
+        return std::make_unique<MergeTreeDataPartWriterCompact>(
+            shared_from_this(),
+            columns_list,
+            metadata_snapshot,
+            indices_to_recalc,
+            index_granularity_info.marks_file_extension,
+            default_codec_,
+            writer_settings,
+            computed_index_granularity);
+    else
+    {
+        NamesAndTypesList ordered_columns_list;
+        std::copy_if(columns_list.begin(), columns_list.end(), std::back_inserter(ordered_columns_list), [this](const auto & column) {
+            return getColumnPosition(column.name) != std::nullopt;
+        });
 
-    /// Order of writing is important in compact format
-    ordered_columns_list.sort([this](const auto & lhs, const auto & rhs)
-        { return *getColumnPosition(lhs.name) < *getColumnPosition(rhs.name); });
+        /// Order of writing is important in compact format
+        ordered_columns_list.sort(
+            [this](const auto & lhs, const auto & rhs) { return *getColumnPosition(lhs.name) < *getColumnPosition(rhs.name); });
 
-    return std::make_unique<MergeTreeDataPartWriterCompact>(
-        shared_from_this(), ordered_columns_list, metadata_snapshot,
-        indices_to_recalc, index_granularity_info.marks_file_extension,
-        default_codec_, writer_settings, computed_index_granularity);
+        return std::make_unique<MergeTreeDataPartWriterCompact>(
+            shared_from_this(),
+            ordered_columns_list,
+            metadata_snapshot,
+            indices_to_recalc,
+            index_granularity_info.marks_file_extension,
+            default_codec_,
+            writer_settings,
+            computed_index_granularity);
+    }
 }
 
 
@@ -111,13 +133,13 @@ void MergeTreeDataPartCompact::loadIndexGranularity()
     while (!buffer->eof())
     {
         /// Skip offsets for columns
-        buffer->seek(columns.size() * sizeof(MarkInCompressedFile), SEEK_CUR);
+        buffer->seek(columns_without_bytemap_col_size * sizeof(MarkInCompressedFile), SEEK_CUR);
         size_t granularity;
         readIntBinary(granularity, *buffer);
         index_granularity.appendMark(granularity);
     }
 
-    if (index_granularity.getMarksCount() * index_granularity_info.getMarkSizeInBytes(columns.size()) != marks_file_size)
+    if (index_granularity.getMarksCount() * index_granularity_info.getMarkSizeInBytes(columns_without_bytemap_col_size) != marks_file_size)
         throw Exception("Cannot read all marks from file " + marks_file_path, ErrorCodes::CANNOT_READ_ALL_DATA);
 
     index_granularity.setInitialized();
@@ -132,6 +154,34 @@ bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) co
     auto mrk_checksum = checksums.files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
 
     return (bin_checksum != checksums.files.end() && mrk_checksum != checksums.files.end());
+}
+
+void MergeTreeDataPartCompact::setColumns(const NamesAndTypesList & new_columns)
+{
+    IMergeTreeDataPart::setColumns(new_columns);
+    columns_without_bytemap_col_size = 0;
+    column_name_to_position_without_map.clear();
+    column_name_to_position_without_map.reserve(new_columns.size());
+    size_t pos_without_map = 0;
+    for (const auto & column : columns)
+    {
+        if (!column.type->isMap() || column.type->isMapKVStore())
+        {
+            columns_without_bytemap_col_size++;
+            column_name_to_position_without_map.emplace(column.name, pos_without_map);
+            for (const auto & subcolumn : column.type->getSubcolumnNames())
+                column_name_to_position_without_map.emplace(Nested::concatenateName(column.name, subcolumn), pos_without_map);
+            ++pos_without_map;
+        }
+    }
+}
+
+std::optional<size_t> MergeTreeDataPartCompact::getColumnPositionWithoutMap(const String & column_name) const
+{ 
+    auto it = column_name_to_position_without_map.find(column_name);
+    if (it == column_name_to_position_without_map.end())
+        return {};
+    return it->second;
 }
 
 void MergeTreeDataPartCompact::checkConsistency(bool require_part_metadata) const

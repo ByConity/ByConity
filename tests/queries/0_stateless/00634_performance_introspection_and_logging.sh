@@ -40,8 +40,8 @@ $CLICKHOUSE_CLIENT $settings -q "SYSTEM FLUSH LOGS"
 $CLICKHOUSE_CLIENT $settings -q "
 WITH
     any(query_duration_ms*1000) AS duration,
-    sum(ProfileEvents['RealTimeMicroseconds']) AS threads_realtime,
-    sum(ProfileEvents['UserTimeMicroseconds'] + ProfileEvents['SystemTimeMicroseconds'] + ProfileEvents['OSIOWaitMicroseconds'] + ProfileEvents['OSCPUWaitMicroseconds']) AS threads_time_user_system_io
+    sum(ProfileEvents{'RealTimeMicroseconds'}) AS threads_realtime,
+    sum(ProfileEvents{'UserTimeMicroseconds'} + ProfileEvents{'SystemTimeMicroseconds'}) AS threads_time_user_system_io
 SELECT
     -- duration, threads_realtime, threads_time_user_system_io,
     threads_realtime >= 0.99 * duration,

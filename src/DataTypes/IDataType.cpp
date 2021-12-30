@@ -191,4 +191,59 @@ void IDataType::enumerateStreams(const SerializationPtr & serialization, const S
     }, path);
 }
 
+Field IDataType::stringToVisitorField(const String &) const
+{
+        throw Exception("stringToVisitorField not implemented for Data type" + getName(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+String IDataType::getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path)
+{
+    /// Sizes of arrays (elements of Nested type) are shared (all reside in single file).
+    String nested_table_name = Nested::extractTableName(column_name);
+
+    bool is_sizes_of_nested_type =
+        path.size() == 1    /// Nested structure may have arrays as nested elements (so effectively we have multidimensional arrays).
+                            /// Sizes of arrays are shared only at first level.
+        && path[0].type == ISerialization::Substream::ArraySizes
+        && nested_table_name != column_name;
+
+    size_t array_level = 0;
+    size_t null_level = 0;
+    String stream_name = escapeForFileName(is_sizes_of_nested_type ? nested_table_name : column_name);
+    for (const auto& elem : path)
+    {
+        if (elem.type == ISerialization::Substream::NullMap)
+            stream_name += ".null" + (null_level > 0 ? toString(null_level): "");
+        else if (elem.type == ISerialization::Substream::ArraySizes)
+            stream_name += ".size" + toString(array_level);
+        else if (elem.type == ISerialization::Substream::ArrayElements)
+            ++array_level;
+        else if (elem.type == ISerialization::Substream::NullableElements)
+            ++null_level;
+        else if (elem.type == ISerialization::Substream::TupleElement)
+        {
+            /// For compatibility reasons, we use %2E instead of dot.
+            /// Because nested data may be represented not by Array of Tuple,
+            ///  but by separate Array columns with names in a form of a.b,
+            ///  and name is encoded as a whole.
+            stream_name += "%2E" + escapeForFileName(elem.tuple_element_name);
+        }
+        else if (elem.type == ISerialization::Substream::MapKeyElements)
+        {
+            ++array_level;
+            stream_name += "%2Ekey";
+        }
+        else if (elem.type == ISerialization::Substream::MapValueElements)
+        {
+            ++array_level;
+            stream_name += "%2Evalue";
+        }
+        else if (elem.type == ISerialization::Substream::MapSizes)
+            stream_name += ".size" + toString(array_level);
+        else if (elem.type == ISerialization::Substream::DictionaryKeys)
+            stream_name += ".dict";
+    }
+    return stream_name;
+}
+
 }

@@ -29,11 +29,15 @@
 
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <IO/WriteHelpers.h>
+#include <IO/WriteBufferFromOStream.h>
 #include <Storages/IStorage.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Common/StringUtils/StringUtils.h>
 
 namespace DB
 {
@@ -788,6 +792,53 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     NameSet unknown_required_source_columns = required;
 
+    if (storage)
+    {
+		// @ByteMap: special handling map implicit column
+        for (auto it = unknown_required_source_columns.begin(); it != unknown_required_source_columns.end(); ++it)
+		{
+            if (isMapImplicitKeyNotKV(*it))
+            {
+                String map_name = parseColNameFromImplicitName(*it);
+                if (source_column_names.count(map_name))
+                {
+                    for (auto it2 = source_columns.begin(); it2 != source_columns.end(); ++it2)
+                    {
+                        if (it2->name == map_name && it2->type->isMap())
+                        {
+                            auto const & map_value_type = dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getValueType();
+                            if (map_value_type->lowCardinality())
+                                source_columns.emplace_back(*it, map_value_type);
+                            else
+                                source_columns.emplace_back(*it, makeNullable(map_value_type));
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (isMapImplicitKey(*it)) /// handle KV Store
+            {
+                // Look through all Map COLs to check if it matches its piece
+                for (auto it2 = source_columns.begin(); it2 != source_columns.end(); ++it2)
+                {
+                    if (it2->type->isMapKVStore())
+                    {
+                        if (*it == it2->name + ".key")
+                        {
+                            source_columns.emplace_back(*it, dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getKeyStoreType());
+                            break;
+                        }
+                        else if (*it == it2->name + ".value")
+                        {
+                            source_columns.emplace_back(*it, dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getValueStoreType());
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     for (NamesAndTypesList::iterator it = source_columns.begin(); it != source_columns.end();)
     {
         const String & column_name = it->name;
@@ -936,7 +987,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
             all_source_columns_set.insert(name);
     }
 
-    normalize(query, result.aliases, all_source_columns_set, select_options.ignore_alias, settings, /* allow_self_aliases = */ true);
+    normalize(query, result.aliases, all_source_columns_set, select_options.ignore_alias, settings, /* allow_self_aliases = */ true, this->getContext(), result.storage, result.metadata_snapshot);
 
     /// Remove unneeded columns according to 'required_result_columns'.
     /// Leave all selected columns in case of DISTINCT; columns that contain arrayJoin function inside.
@@ -1013,7 +1064,7 @@ TreeRewriterResultPtr TreeRewriter::analyze(
 
     TreeRewriterResult result(source_columns, storage, metadata_snapshot, false);
 
-    normalize(query, result.aliases, result.source_columns_set, false, settings, allow_self_aliases);
+    normalize(query, result.aliases, result.source_columns_set, false, settings, allow_self_aliases, this->getContext(), storage, metadata_snapshot);
 
     /// Executing scalar subqueries. Column defaults could be a scalar subquery.
     executeScalarSubqueries(query, getContext(), 0, result.scalars, false);
@@ -1042,7 +1093,7 @@ TreeRewriterResultPtr TreeRewriter::analyze(
 }
 
 void TreeRewriter::normalize(
-    ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, bool ignore_alias, const Settings & settings, bool allow_self_aliases)
+    ASTPtr & query, Aliases & aliases, const NameSet & source_columns_set, bool ignore_alias, const Settings & settings, bool allow_self_aliases, const ContextPtr& context_, ConstStoragePtr storage_, const StorageMetadataPtr & metadata_snapshot_)
 {
     CustomizeCountDistinctVisitor::Data data_count_distinct{settings.count_distinct_implementation};
     CustomizeCountDistinctVisitor(data_count_distinct).visit(query);
@@ -1102,7 +1153,8 @@ void TreeRewriter::normalize(
         FunctionNameNormalizer().visit(query.get());
 
     /// Common subexpression elimination. Rewrite rules.
-    QueryNormalizer::Data normalizer_data(aliases, source_columns_set, ignore_alias, settings, allow_self_aliases);
+	/// TODO: @qianlixiang rewrite_map_col
+    QueryNormalizer::Data normalizer_data(aliases, source_columns_set, ignore_alias, settings, allow_self_aliases, context_, storage_, metadata_snapshot_);
     QueryNormalizer(normalizer_data).visit(query);
 }
 

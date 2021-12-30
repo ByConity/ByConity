@@ -202,6 +202,10 @@ private:
     /// because we can apply renames that affects each other: x -> z, y -> x.
     static NameToNameVector collectFilesForRenames(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands_for_removes, const String & mrk_extension);
 
+    /// Collect necessary implicit files for clear map key commands.
+    /// If the part enables compact map data and all implicit keys of the map column has been removed, the compacted file need to remove too. 
+    static NameSet collectFilesForClearMapKey(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands);
+
     /// Files, that we don't need to remove and don't need to hardlink, for example columns.txt and checksums.txt.
     /// Because we will generate new versions of them after we perform mutation.
     static NameSet collectFilesToSkip(
@@ -265,6 +269,7 @@ private:
         const StorageMetadataPtr & metadata_snapshot,
         const MergeTreeIndices & skip_indices,
         const MergeTreeProjections & projections_to_build,
+        const MutationCommands & commands_for_removes,
         BlockInputStreamPtr mutating_stream,
         time_t time_of_mutation,
         const CompressionCodecPtr & compression_codec,

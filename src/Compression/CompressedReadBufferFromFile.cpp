@@ -17,6 +17,10 @@ namespace ErrorCodes
 
 bool CompressedReadBufferFromFile::nextImpl()
 {
+    /// TODO: handle hdfs case
+    if (/*(storage_type == StorageType::Hdfs ||*/ is_limit /*)*/ && file_in.getPosition() >= limit_offset_in_file)
+        return false;
+
     size_t size_decompressed = 0;
     size_t size_compressed_without_checksum;
     size_compressed = readCompressedData(size_decompressed, size_compressed_without_checksum, false);
@@ -36,8 +40,17 @@ bool CompressedReadBufferFromFile::nextImpl()
     return true;
 }
 
-CompressedReadBufferFromFile::CompressedReadBufferFromFile(std::unique_ptr<ReadBufferFromFileBase> buf, bool allow_different_codecs_)
-    : BufferWithOwnMemory<ReadBuffer>(0), p_file_in(std::move(buf)), file_in(*p_file_in)
+CompressedReadBufferFromFile::CompressedReadBufferFromFile(
+    std::unique_ptr<ReadBufferFromFileBase> buf,
+    bool allow_different_codecs_,
+    off_t file_offset_,
+    size_t file_size_,
+    bool is_limit_)
+    : BufferWithOwnMemory<ReadBuffer>(0)
+    , p_file_in(std::move(buf))
+    , file_in(*p_file_in)
+    , limit_offset_in_file(file_offset_ + file_size_)
+    , is_limit(is_limit_)
 {
     compressed_in = &file_in;
     allow_different_codecs = allow_different_codecs_;
@@ -51,10 +64,15 @@ CompressedReadBufferFromFile::CompressedReadBufferFromFile(
     size_t mmap_threshold,
     MMappedFileCache * mmap_cache,
     size_t buf_size,
-    bool allow_different_codecs_)
+    bool allow_different_codecs_,
+    off_t file_offset_,
+    size_t file_size_,
+    bool is_limit_)
     : BufferWithOwnMemory<ReadBuffer>(0)
     , p_file_in(createReadBufferFromFileBase(path, estimated_size, aio_threshold, mmap_threshold, mmap_cache, buf_size))
     , file_in(*p_file_in)
+    , limit_offset_in_file(file_offset_ + file_size_)
+    , is_limit(is_limit_)
 {
     compressed_in = &file_in;
     allow_different_codecs = allow_different_codecs_;
@@ -101,6 +119,10 @@ size_t CompressedReadBufferFromFile::readBig(char * to, size_t n)
     /// If you need to read more - we will, if possible, decompress at once to `to`.
     while (bytes_read < n)
     {
+        /// TODO: handle hdfs case
+        if (/*(storage_type == StorageType::Hdfs ||*/ is_limit /*)*/ && file_in.getPosition() >= limit_offset_in_file)
+            return bytes_read;
+
         size_t size_decompressed = 0;
         size_t size_compressed_without_checksum = 0;
 

@@ -28,6 +28,7 @@
 
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/executeDDLQueryOnCluster.h>
@@ -304,6 +305,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
         const char * pos = type_name.data();
         const char * end = pos + type_name.size();
         column_declaration->type = parseQuery(type_parser, pos, end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+        column_declaration->flags = column.type->getFlags();
         columns_list->children.emplace_back(column_declaration);
     }
 
@@ -324,7 +326,8 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, 
         const char * type_pos = type_name.data();
         const char * type_end = type_pos + type_name.size();
         column_declaration->type = parseQuery(type_parser, type_pos, type_end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-
+        column_declaration->flags = alias_column.type->getFlags();
+        
         column_declaration->default_specifier = "ALIAS";
 
         const auto & alias = alias_column.expression;
@@ -355,7 +358,8 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
         const char * type_name_pos = type_name.data();
         const char * type_name_end = type_name_pos + type_name.size();
         column_declaration->type = parseQuery(type_parser, type_name_pos, type_name_end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-
+        column_declaration->flags = column.type->getFlags();
+        
         if (column.default_desc.expression)
         {
             column_declaration->default_specifier = toString(column.default_desc.kind);
@@ -476,6 +480,9 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
             else
                 default_expr_list->children.emplace_back(setAlias(col_decl.default_expression->clone(), col_decl.name));
         }
+
+        // Set type flags based on information in AST
+        const_cast<IDataType*>(column_names_and_types.back().type.get())->setFlags(col_decl.flags);
     }
 
     Block defaults_sample_block;
@@ -1108,6 +1115,21 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             properties.columns,
             properties.constraints,
             false);
+    }
+
+    auto merge_tree_storage = dynamic_cast<MergeTreeData *>(res.get());
+    if (merge_tree_storage)
+    {
+        try
+        {
+            merge_tree_storage->checkColumnsValidity(properties.columns);
+        }
+        catch (...)
+        {
+            /// remove directory
+            merge_tree_storage->drop();
+            throw;
+        }
     }
 
     if (from_path && !res->storesDataOnDisk())

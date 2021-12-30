@@ -135,6 +135,7 @@ public:
 
     std::optional<NameAndTypePair> tryGetPhysical(const String & column_name) const;
     std::optional<NameAndTypePair> tryGetColumnOrSubcolumn(GetFlags flags, const String & column_name) const;
+    std::optional<NameAndTypePair> tryGetMapImplicitColumn(const String & column_name) const;
 
     ColumnDefaults getDefaults() const; /// TODO: remove
     bool hasDefault(const String & column_name) const;

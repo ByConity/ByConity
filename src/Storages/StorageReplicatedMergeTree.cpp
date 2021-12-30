@@ -4877,6 +4877,7 @@ void StorageReplicatedMergeTree::alter(
 
         StorageInMemoryMetadata future_metadata = *current_metadata;
         commands.apply(future_metadata, query_context);
+        checkColumnsValidity(future_metadata.columns);
 
         ReplicatedMergeTreeTableMetadata future_metadata_in_zk(*this, current_metadata);
         if (ast_to_str(future_metadata.sorting_key.definition_ast) != ast_to_str(current_metadata->sorting_key.definition_ast))

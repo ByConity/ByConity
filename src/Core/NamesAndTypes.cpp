@@ -90,9 +90,65 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
         readBackQuotedStringWithSQLStyle(column_name, buf);
         assertChar(' ', buf);
         readString(type_name, buf);
+        auto type = data_type_factory.get(type_name);
+        if (*buf.position() == '\n')
+        {
+            assertChar('\n', buf);
+            emplace_back(column_name, type);
+            continue;
+        }
+
+        assertChar('\t', buf);
+        // optional settings
+
+        String options;
+        readString(options, buf);
+
+        while (!options.empty())
+        {
+            // if(options == "COMPRESSION")
+            // {
+            //     const_cast<IDataType *>(type.get())->setFlags(TYPE_COMPRESSION_FLAG);
+            // }
+            // else if(options == "SECURITY")
+            // {
+            //     const_cast<IDataType *>(type.get())->setFlags(TYPE_SECURITY_FLAG);
+            // }
+            // else if (options == "BLOOM")
+            // {
+            //     const_cast<IDataType *>(type.get())->setFlags(TYPE_BLOOM_FLAG);
+            // }
+            // else if (options == "BitmapIndex")
+            // {
+            //     const_cast<IDataType *>(type.get())->setFlags(TYPE_BITMAP_INDEX_FLAG);
+            // }
+            // else if (options == "MarkBitmapIndex")
+            // {
+            //     const_cast<IDataType *>(type.get())->setFlags(TYPE_MARK_BITMAP_INDEX_FALG);
+            // }
+            // else 
+            if (options == "KV")
+            {
+                const_cast<IDataType *>(type.get())->setFlags(TYPE_MAP_KV_STORE_FLAG);
+            }
+            else if (options == "BitEngineEncode")
+            {
+                const_cast<IDataType *>(type.get())->setFlags(TYPE_BITENGINE_ENCODE_FLAG);
+            }
+            else
+            {
+                // TBD: ignore for now, or throw exception
+            }
+
+            if (*buf.position() == '\n')
+                break;
+
+            assertChar('\t', buf);
+            readString(options, buf);
+        }
         assertChar('\n', buf);
 
-        emplace_back(column_name, data_type_factory.get(type_name));
+        emplace_back(column_name, type);
     }
 
     assertEOF(buf);
@@ -108,6 +164,58 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
         writeBackQuotedString(it.name, buf);
         writeChar(' ', buf);
         writeString(it.type->getName(), buf);
+
+        UInt8 flag = it.type->getFlags();
+
+        while (flag)
+        {
+            // if (flag & TYPE_COMPRESSION_FLAG)
+            // {
+            //     writeChar('\t', buf);
+            //     writeString("COMPRESSION", buf);
+            //     flag ^= TYPE_COMPRESSION_FLAG;
+            // }
+            // else if (flag & TYPE_SECURITY_FLAG)
+            // {
+            //     writeChar('\t', buf);
+            //     writeString("SECURITY", buf);
+            //     flag ^= TYPE_SECURITY_FLAG;
+            // }
+            // else if (flag & TYPE_BLOOM_FLAG)
+            // {
+            //     writeChar('\t', buf);
+            //     writeString("BLOOM", buf);
+            //     flag ^= TYPE_BLOOM_FLAG;
+            // }
+            // else if (flag & TYPE_BITMAP_INDEX_FLAG)
+            // {
+            //     writeChar('\t', buf);
+            //     writeString("BitmapIndex", buf);
+            //     flag ^= TYPE_BITMAP_INDEX_FLAG;
+            // }
+            // else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
+            // {
+            //     writeChar('\t', buf);
+            //     writeString("MarkBitmapIndex", buf);
+            //     flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
+            // }
+            // else 
+            if (flag & TYPE_MAP_KV_STORE_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("KV", buf);
+                flag ^= TYPE_MAP_KV_STORE_FLAG;
+            }
+            else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("BitEngineEncode", buf);
+                flag ^= TYPE_BITENGINE_ENCODE_FLAG;
+            }
+            else
+                break;
+        }
+
         writeChar('\n', buf);
     }
 }

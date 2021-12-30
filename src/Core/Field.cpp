@@ -66,6 +66,9 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             DB::readBinary(value, buf);
             return value;
         }
+        case Field::Types::ByteMap: {
+            throw Exception("Map getBinaryValue should not invoked", ErrorCodes::NOT_IMPLEMENTED);
+        }
         case Field::Types::AggregateFunctionState: {
             AggregateFunctionStateData value;
             DB::readStringBinary(value.name, buf);
@@ -164,6 +167,49 @@ void writeBinary(const Map & x, WriteBuffer & buf)
 }
 
 void writeText(const Map & x, WriteBuffer & buf)
+{
+    writeFieldText(DB::Field(x), buf);
+}
+
+// ByteDance Map support
+void readBinary(ByteMap & x, ReadBuffer & buf)
+{
+    size_t size;
+    UInt8 ktype, vtype;
+    Field k, v;
+    DB::readBinary(ktype, buf);
+    DB::readBinary(vtype, buf);
+    DB::readBinary(size, buf);
+
+    for (size_t index = 0; index < size; ++index)
+    {
+        x.push_back(std::make_pair(getBinaryValue(ktype, buf),
+                                   getBinaryValue(vtype, buf)));
+    }
+}
+
+void writeBinary(const ByteMap & x, WriteBuffer & buf)
+{
+    UInt8 ktype = Field::Types::Null;
+    UInt8 vtype = Field::Types::Null;
+    size_t size = x.size();
+    if (size)
+    {
+        ktype = x.front().first.getType();
+        vtype = x.front().second.getType();
+    }
+    DB::writeBinary(ktype, buf);
+    DB::writeBinary(vtype, buf);
+    DB::writeBinary(size, buf);
+
+    for (ByteMap::const_iterator it = x.begin(); it != x.end(); ++it)
+    {
+        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->first);
+        Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, it->second);
+    }
+}
+
+void writeText(const ByteMap & x, WriteBuffer & buf)
 {
     writeFieldText(DB::Field(x), buf);
 }

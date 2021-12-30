@@ -434,6 +434,14 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO ";
         rename_to->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "CLEAR MAP KEY " << (settings.hilite ? hilite_none : "");
+        column->formatImpl(settings, state, frame);
+        settings.ostr << "(";
+        map_keys->formatImpl(settings, state, frame);
+        settings.ostr << ")";
+    }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }

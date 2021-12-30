@@ -84,6 +84,11 @@ void FieldVisitorHash::operator() (const Map & x) const
         applyVisitor(*this, elem);
 }
 
+void FieldVisitorHash::operator() ([[maybe_unused]] const ByteMap & x) const
+{
+    throw Exception("FieldVisitorHash Map type not implemented!", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 void FieldVisitorHash::operator() (const Array & x) const
 {
     UInt8 type = Field::Types::Array;

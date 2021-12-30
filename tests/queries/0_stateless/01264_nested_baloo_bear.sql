@@ -5,35 +5,35 @@ CREATE TABLE LOG_T
     `fingerprint` UInt64, 
     `fields` Nested(
     name LowCardinality(String), 
-    value String)
+    value_ String)
 )
 ENGINE = MergeTree
 ORDER BY fingerprint;
 
 SELECT
     fields.name,
-    fields.value
+    fields.value_
 FROM
 (
     SELECT
         fields.name,
-        fields.value
+        fields.value_
     FROM LOG_T
 )
-WHERE has(['node'], fields.value[indexOf(fields.name, 'ProcessName')]);
+WHERE has(['node'], fields.value_[indexOf(fields.name, 'ProcessName')]);
 
 INSERT INTO LOG_T VALUES (123, ['Hello', 'ProcessName'], ['World', 'node']);
 
 SELECT
     fields.name,
-    fields.value
+    fields.value_
 FROM
 (
     SELECT
         fields.name,
-        fields.value
+        fields.value_
     FROM LOG_T
 )
-WHERE has(['node'], fields.value[indexOf(fields.name, 'ProcessName')]);
+WHERE has(['node'], fields.value_[indexOf(fields.name, 'ProcessName')]);
 
 DROP TABLE LOG_T;

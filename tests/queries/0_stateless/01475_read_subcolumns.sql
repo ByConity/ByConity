@@ -47,14 +47,14 @@ SELECT '====map====';
 SET allow_experimental_map_type = 1;
 DROP TABLE IF EXISTS t_map;
 CREATE TABLE t_map (m Map(String, UInt32)) ENGINE = MergeTree ORDER BY tuple() SETTINGS min_bytes_for_wide_part = 0;
-INSERT INTO t_map VALUES (map('a', 1, 'b', 2)) (map('a', 3, 'c', 4)), (map('b', 5, 'c', 6));
+INSERT INTO t_map VALUES ({'a': 1, 'b': 2}) ({'a': 3, 'c': 4}), ({'b': 5, 'c': 6});
 
 --- will read 4 files: keys.bin, keys.mrk2, size0.bin, size0.mrk2
 SYSTEM DROP MARK CACHE;
-SELECT m.keys FROM t_map;
+SELECT mapKeys(m) FROM t_map;
 
 SYSTEM DROP MARK CACHE;
-SELECT m.values FROM t_map;
+SELECT mapValues(m) FROM t_map;
 
 SYSTEM FLUSH LOGS;
 SELECT ProfileEvents['FileOpen']

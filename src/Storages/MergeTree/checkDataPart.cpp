@@ -133,7 +133,7 @@ IMergeTreeDataPart::Checksums checkDataPart(
                 {
                     auto serialization = IDataType::getSerialization(projection_column, [&](const String & stream_name)
                     {
-                        return disk->exists(stream_name + IMergeTreeDataPart::DATA_FILE_EXTENSION);
+                        return disk->exists(stream_name + DATA_FILE_EXTENSION);
                     });
 
                     serialization->enumerateStreams(
@@ -212,7 +212,7 @@ IMergeTreeDataPart::Checksums checkDataPart(
             auto serialization = IDataType::getSerialization(column,
                 [&](const String & stream_name)
                 {
-                    return disk->exists(stream_name + IMergeTreeDataPart::DATA_FILE_EXTENSION);
+                    return disk->exists(stream_name + DATA_FILE_EXTENSION);
                 });
 
             serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
@@ -229,9 +229,17 @@ IMergeTreeDataPart::Checksums checkDataPart(
 
     /// Checksums from the rest files listed in checksums.txt. May be absent. If present, they are subsequently compared with the actual data checksums.
     IMergeTreeDataPart::Checksums checksums_txt;
+    IMergeTreeDataPart::Versions versions(std::make_shared<MergeTreeDataPartVersions>(false));
 
     if (require_checksums || disk->exists(fs::path(path) / "checksums.txt"))
     {
+        if (disk->exists(fs::path(path) / "versions.txt"))
+        {
+            auto buf = disk->readFile(fs::path(path) / "versions.txt");
+            versions->read(*buf);
+        }
+        checksums_txt.versions = versions;
+
         auto buf = disk->readFile(fs::path(path) / "checksums.txt");
         checksums_txt.read(*buf);
         assertEOF(*buf);

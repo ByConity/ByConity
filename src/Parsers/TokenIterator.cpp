@@ -6,18 +6,18 @@ namespace DB
 
 UnmatchedParentheses checkUnmatchedParentheses(TokenIterator begin)
 {
-    /// We have just two kind of parentheses: () and [].
+    /// We have just three kind of parentheses: (), [] and {}.
     UnmatchedParentheses stack;
 
     /// We have to iterate through all tokens until the end to avoid false positive "Unmatched parentheses" error
     /// when parser failed in the middle of the query.
     for (TokenIterator it = begin; it.isValid(); ++it)
     {
-        if (it->type == TokenType::OpeningRoundBracket || it->type == TokenType::OpeningSquareBracket)
+        if (it->type == TokenType::OpeningRoundBracket || it->type == TokenType::OpeningSquareBracket || it->type == TokenType::OpeningCurlyBrace)
         {
             stack.push_back(*it);
         }
-        else if (it->type == TokenType::ClosingRoundBracket || it->type == TokenType::ClosingSquareBracket)
+        else if (it->type == TokenType::ClosingRoundBracket || it->type == TokenType::ClosingSquareBracket || it->type == TokenType::ClosingCurlyBrace)
         {
             if (stack.empty())
             {
@@ -26,7 +26,8 @@ UnmatchedParentheses checkUnmatchedParentheses(TokenIterator begin)
                 return stack;
             }
             else if ((stack.back().type == TokenType::OpeningRoundBracket && it->type == TokenType::ClosingRoundBracket)
-                || (stack.back().type == TokenType::OpeningSquareBracket && it->type == TokenType::ClosingSquareBracket))
+                || (stack.back().type == TokenType::OpeningSquareBracket && it->type == TokenType::ClosingSquareBracket)
+				|| (stack.back().type == TokenType::OpeningCurlyBrace && it->type == TokenType::ClosingCurlyBrace))
             {
                 /// Valid match.
                 stack.pop_back();

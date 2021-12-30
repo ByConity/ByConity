@@ -1,6 +1,10 @@
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
+#include <Columns/ColumnByteMap.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
 
 namespace DB
@@ -13,6 +17,101 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
+MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
+    const MergeTreeData::DataPartPtr & data_part,
+    UncompressedCache * uncompressed_cache,
+    MarkCache * mark_cache,
+    const MergeTreeReaderSettings & settings,
+    const ColumnPositions & column_positions_,
+    const MarkRanges & all_mark_ranges,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
+    clockid_t clock_type_)
+    : marks_loader(
+        data_part->volume->getDisk(),
+        mark_cache,
+        data_part->index_granularity_info.getMarksFilePath(data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME),
+        MergeTreeDataPartCompact::DATA_FILE_NAME,
+        data_part->getMarksCount(),
+        data_part->index_granularity_info,
+        settings.save_marks_in_cache,
+        data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
+        data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
+        std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part)->getColumnsWithoutByteMapColSize())
+{
+    // Do not use max_read_buffer_size, but try to lower buffer size with maximal size of granule to avoid reading much data.
+    auto buffer_size = getReadBufferSize(data_part, marks_loader, column_positions_, all_mark_ranges);
+    if (!buffer_size || settings.max_read_buffer_size < buffer_size)
+        buffer_size = settings.max_read_buffer_size;
+    // auto buffer_size = settings.max_read_buffer_size;
+
+    const String full_data_path = data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
+    if (uncompressed_cache)
+    {
+        auto buffer = std::make_unique<CachedCompressedReadBuffer>(
+            fullPath(data_part->volume->getDisk(), full_data_path),
+            [&, full_data_path, buffer_size]() {
+                return data_part->volume->getDisk()->readFile(
+                    full_data_path,
+                    buffer_size,
+                    0,
+                    settings.min_bytes_to_use_direct_io,
+                    settings.min_bytes_to_use_mmap_io,
+                    settings.mmap_cache.get());
+            },
+            uncompressed_cache,
+            /* allow_different_codecs = */ true);
+
+        if (profile_callback_)
+            buffer->setProfileCallback(profile_callback_, clock_type_);
+
+        if (!settings.checksum_on_read)
+            buffer->disableChecksumming();
+
+        cached_buffer = std::move(buffer);
+        data_buffer = cached_buffer.get();
+    }
+    else
+    {
+        auto buffer = std::make_unique<CompressedReadBufferFromFile>(
+            data_part->volume->getDisk()->readFile(
+                full_data_path,
+                buffer_size,
+                0,
+                settings.min_bytes_to_use_direct_io,
+                settings.min_bytes_to_use_mmap_io,
+                settings.mmap_cache.get()),
+            /* allow_different_codecs = */ true);
+
+        if (profile_callback_)
+            buffer->setProfileCallback(profile_callback_, clock_type_);
+
+        if (!settings.checksum_on_read)
+            buffer->disableChecksumming();
+
+        non_cached_buffer = std::move(buffer);
+        data_buffer = non_cached_buffer.get();
+    }
+}
+
+void MergeTreeReaderCompact::CompactDataReader::seekToMark(size_t row_index, size_t column_index)
+{
+    MarkInCompressedFile mark = marks_loader.getMark(row_index, column_index);
+    try
+    {
+        if (cached_buffer)
+            cached_buffer->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+        if (non_cached_buffer)
+            non_cached_buffer->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+    }
+    catch (Exception & e)
+    {
+        /// Better diagnostics.
+        if (e.code() == ErrorCodes::ARGUMENT_OUT_OF_BOUND)
+            e.addMessage("(while seeking to mark (" + toString(row_index) + ", " + toString(column_index) + ")");
+
+        throw;
+    }
+}
 
 MergeTreeReaderCompact::MergeTreeReaderCompact(
     DataPartCompactPtr data_part_,
@@ -34,14 +133,6 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         std::move(mark_ranges_),
         std::move(settings_),
         std::move(avg_value_size_hints_))
-    , marks_loader(
-          data_part->volume->getDisk(),
-          mark_cache,
-          data_part->index_granularity_info.getMarksFilePath(data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME),
-          data_part->getMarksCount(),
-          data_part->index_granularity_info,
-          settings.save_marks_in_cache,
-          data_part->getColumns().size())
 {
     try
     {
@@ -50,11 +141,26 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         column_positions.resize(columns_num);
         read_only_offsets.resize(columns_num);
         auto name_and_type = columns.begin();
+        auto compact_part = std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part);
         for (size_t i = 0; i < columns_num; ++i, ++name_and_type)
         {
-            auto column_from_part = getColumnFromPart(*name_and_type);
+            NameAndTypePair column_from_part;
 
-            auto position = data_part->getColumnPosition(column_from_part.name);
+            if (isMapKV(name_and_type->name))
+            {
+                auto & part_all_columns = data_part->getColumns();
+                auto map_column = std::find_if(part_all_columns.begin(), part_all_columns.end(), [&](auto & val) {
+                    return val.name + ".key" == name_and_type->name || val.name + ".value" == name_and_type->name;
+                });
+                if (map_column == part_all_columns.end())
+                    throw Exception("Map column of map kv type doesn't exist.", ErrorCodes::LOGICAL_ERROR);
+                map_kv_to_origin_col[name_and_type->name] = *map_column;
+                column_from_part = getColumnFromPart(*map_column);
+            }
+            else
+                column_from_part = getColumnFromPart(*name_and_type);
+
+            auto position = compact_part->getColumnPositionWithoutMap(column_from_part.name);
             if (!position && typeid_cast<const DataTypeArray *>(column_from_part.type.get()))
             {
                 /// If array of Nested column is missing in part,
@@ -66,60 +172,69 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             column_positions[i] = std::move(position);
         }
 
-        /// Do not use max_read_buffer_size, but try to lower buffer size with maximal size of granule to avoid reading much data.
-        auto buffer_size = getReadBufferSize(data_part, marks_loader, column_positions, all_mark_ranges);
-        if (!buffer_size || settings.max_read_buffer_size < buffer_size)
-            buffer_size = settings.max_read_buffer_size;
-
-        const String full_data_path = data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
-        if (uncompressed_cache)
+        for (const NameAndTypePair & column : columns)
         {
-            auto buffer = std::make_unique<CachedCompressedReadBuffer>(
-                fullPath(data_part->volume->getDisk(), full_data_path),
-                [this, full_data_path, buffer_size]()
+            auto column_from_part = getColumnFromPart(column);
+            if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
+            {
+                // Scan the directory to get all implicit columns(stream) for the map type
+                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*column_from_part.type);
+                //auto& keyType = type_map.getKeyType();
+                auto& valueType = type_map.getValueType();
+
+                String keyName;
+                String implKeyName;
                 {
-                    return data_part->volume->getDisk()->readFile(
-                        full_data_path,
-                        buffer_size,
-                        0,
-                        settings.min_bytes_to_use_direct_io,
-                        settings.min_bytes_to_use_mmap_io,
-                        settings.mmap_cache.get());
-                },
-                uncompressed_cache,
-                /* allow_different_codecs = */ true);
+                    //auto data_lock = data_part->getColumnsReadLock();
+                    for (auto & file : data_part->checksums.files)
+                    {
+                        //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+                        const String & fileName = file.first;
+                        bool parseSuccess = parseKeyFromImplicitFileName(column.name, fileName, keyName);
 
-            if (profile_callback_)
-                buffer->setProfileCallback(profile_callback_, clock_type_);
+                        if (parseSuccess)
+                        {
+                            implKeyName = getImplicitFileNameForMapKey(column.name, keyName);
+                            // Special handing if implicit key is referenced too
+                            if (columns.contains(implKeyName))
+                            {
+                                dupImplicitKeys.insert(implKeyName);
+                            }
 
-            if (!settings.checksum_on_read)
-                buffer->disableChecksumming();
+                            if (type_map.valueTypeIsLC())
+                                addByteMapStreams({implKeyName, valueType}, column.name, profile_callback_, clock_type_);
+                            else
+                                addByteMapStreams({implKeyName, makeNullable(valueType)}, column.name, profile_callback_, clock_type_);
 
-            cached_buffer = std::move(buffer);
-            data_buffer = cached_buffer.get();
+                            mapColumnKeys.insert({column.name, keyName});
+                        }
+
+                        //TBD: it's possible that no relevant streams for MAP type column. Do we need any special handling??
+                    }
+                }
+            }
+            else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
+            {
+                addByteMapStreams({column.name, column.type}, parseColNameFromImplicitName(column.name), profile_callback_, clock_type_);
+            }
+            else
+            {
+                if (!data_reader)
+                {
+                    data_reader = std::make_unique<CompactDataReader>(
+                        data_part,
+                        uncompressed_cache,
+                        mark_cache,
+                        settings,
+                        column_positions,
+                        all_mark_ranges,
+                        profile_callback_,
+                        clock_type_);
+                }
+            }
         }
-        else
-        {
-            auto buffer =
-                std::make_unique<CompressedReadBufferFromFile>(
-                    data_part->volume->getDisk()->readFile(
-                        full_data_path,
-                        buffer_size,
-                        0,
-                        settings.min_bytes_to_use_direct_io,
-                        settings.min_bytes_to_use_mmap_io,
-                        settings.mmap_cache.get()),
-                    /* allow_different_codecs = */ true);
 
-            if (profile_callback_)
-                buffer->setProfileCallback(profile_callback_, clock_type_);
-
-            if (!settings.checksum_on_read)
-                buffer->disableChecksumming();
-
-            non_cached_buffer = std::move(buffer);
-            data_buffer = non_cached_buffer.get();
-        }
+        if (!dupImplicitKeys.empty()) names = columns.getNames();
     }
     catch (...)
     {
@@ -138,24 +253,38 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     checkNumberOfColumns(num_columns);
 
     MutableColumns mutable_columns(num_columns);
+    std::unordered_map<String, size_t> res_col_to_idx;
     auto column_it = columns.begin();
     for (size_t i = 0; i < num_columns; ++i, ++column_it)
     {
-        if (!column_positions[i])
-            continue;
+        const auto & [name, type] = getColumnFromPart(*column_it);
+        res_col_to_idx[name] = i;
 
-        if (res_columns[i] == nullptr)
-            res_columns[i] = getColumnFromPart(*column_it).type->createColumn();
+        // Each implicit map column is stored in a seperate file whose column_postition is nullptr.
+        if ((type->isMap() && !type->isMapKVStore()) || isMapImplicitKeyNotKV(name) || column_positions[i])
+        {
+            if (res_columns[i] == nullptr)
+                res_columns[i] = type->createColumn();
+        }
     }
 
+    auto sort_columns = columns;
+    if (!dupImplicitKeys.empty())
+        sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
+    
     while (read_rows < max_rows_to_read)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(from_mark);
 
-        auto name_and_type = columns.begin();
-        for (size_t pos = 0; pos < num_columns; ++pos, ++name_and_type)
+        std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+        auto name_and_type = sort_columns.begin();
+        for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
         {
             auto column_from_part = getColumnFromPart(*name_and_type);
+
+            const auto & [name, type] = column_from_part;
+            size_t pos = res_col_to_idx[name];
+
             if (!res_columns[pos])
                 continue;
 
@@ -163,13 +292,97 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
             {
                 auto & column = res_columns[pos];
                 size_t column_size_before_reading = column->size();
+                auto & cache = caches[column_from_part.getNameInStorage()];
 
-                readData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
+                if (type->isMap() && !type->isMapKVStore())
+                {
+                    // collect all the substreams based on map column's name and its keys substream.
+                    // and somehow construct runtime two implicit columns(key&value) representation.
+                    auto keysIter = mapColumnKeys.equal_range(name);
+                    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*type);
+                    auto & valueType = type_map.getValueType();
 
-                size_t read_rows_in_column = column->size() - column_size_before_reading;
-                if (read_rows_in_column < rows_to_read)
-                    throw Exception("Cannot read all data in MergeTreeReaderCompact. Rows read: " + toString(read_rows_in_column) +
-                        ". Rows expected: " + toString(rows_to_read) + ".", ErrorCodes::CANNOT_READ_ALL_DATA);
+                    DataTypePtr implValueType;
+                    if (type_map.valueTypeIsLC())
+                        implValueType = valueType;
+                    else
+                        implValueType = makeNullable(valueType);
+
+                    std::map<String, std::pair<size_t, const IColumn *>> implKeyValues;
+                    std::list<ColumnPtr> implKeyColHolder;
+                    String implKeyName;
+                    for (auto kit = keysIter.first; kit != keysIter.second; ++kit)
+                    {
+                        implKeyName = getImplicitFileNameForMapKey(name, kit->second);
+                        NameAndTypePair implicit_key_name_and_type{implKeyName, implValueType};
+                        cache = caches[implicit_key_name_and_type.getNameInStorage()];
+                        
+                        // If MAP implicit column and MAP column co-exist in columns, implicit column should
+                        // only read only once.
+                        if (dupImplicitKeys.count(implKeyName) !=0)
+                        {
+                            auto idx = res_col_to_idx[implKeyName];
+                            if (res_columns[idx] == nullptr)
+                                throw Exception("Column of implicit key " + implKeyName + " is nullptr.", ErrorCodes::LOGICAL_ERROR);
+                            implKeyValues[kit->second] = std::pair<size_t, const IColumn*>(column_size_before_reading, res_columns[idx].get());
+                            continue;
+                        }
+
+                        implKeyColHolder.push_back(implValueType->createColumn());
+                        auto& implValueColumn = implKeyColHolder.back();
+                        readData(implicit_key_name_and_type, 
+								 implValueColumn, from_mark, continue_reading, 
+							     rows_to_read, cache);
+                        implKeyValues[kit->second] = {0, &(*implValueColumn)};
+                    }
+
+                    // after reading all implicit values columns based files(built by keys), it's time to
+                    // construct runtime ColumnMap(keyColumn, valueColumn).
+                    dynamic_cast<ColumnByteMap*>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, implKeyValues);
+
+                }
+				else if (isMapImplicitKeyNotKV(name))
+                	readData(column_from_part, column, from_mark, continue_reading, rows_to_read, cache);
+                else
+                {
+                    if (!data_reader)            
+                        throw Exception("Compact data reader is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
+                    if (map_kv_to_origin_col.count(name_and_type->name))
+                    {
+                        auto map_col = map_kv_to_origin_col[name_and_type->name];
+                        ColumnPtr map_column = map_col.type->createColumn();
+                        readCompactData(map_col, map_column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
+                        const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(*map_column);
+                        if (map_col.name + ".key" == name_and_type->name)
+                        {
+                            auto key_store_column = column_map.getKeyStorePtr();
+                            if (column->empty())
+                                column = key_store_column;
+                            else
+                                column->assumeMutable()->insertRangeFrom(*key_store_column, 0, key_store_column->size());
+                        }
+                        else /// handle .value
+                        {
+                            auto value_store_column = column_map.getValueStorePtr();
+                            if (column->empty())
+                                column = value_store_column;
+                            else
+                                column->assumeMutable()->insertRangeFrom(*value_store_column, 0, value_store_column->size());
+                        }
+                    }
+                    else
+                        readCompactData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
+                }
+            
+                if (column->empty())
+                    column = nullptr;
+                else
+                {
+                    size_t read_rows_in_column = column->size() - column_size_before_reading;
+                    if (read_rows_in_column < rows_to_read)
+                        throw Exception("Cannot read all data in MergeTreeReaderCompact. Rows read: " + toString(read_rows_in_column) +
+                            ". Rows expected: " + toString(rows_to_read) + ".", ErrorCodes::CANNOT_READ_ALL_DATA);
+                }
             }
             catch (Exception & e)
             {
@@ -196,21 +409,21 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     return read_rows;
 }
 
-void MergeTreeReaderCompact::readData(
+void MergeTreeReaderCompact::readCompactData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
     size_t from_mark, size_t column_position, size_t rows_to_read, bool only_offsets)
 {
     const auto & [name, type] = name_and_type;
 
     if (!isContinuousReading(from_mark, column_position))
-        seekToMark(from_mark, column_position);
+        data_reader->seekToMark(from_mark, column_position);
 
     auto buffer_getter = [&](const ISerialization::SubstreamPath & substream_path) -> ReadBuffer *
     {
         if (only_offsets && (substream_path.size() != 1 || substream_path[0].type != ISerialization::Substream::ArraySizes))
             return nullptr;
 
-        return data_buffer;
+        return data_reader->data_buffer;
     };
 
     ISerialization::DeserializeBinaryBulkStatePtr state;
@@ -249,25 +462,21 @@ void MergeTreeReaderCompact::readData(
         last_read_granule.emplace(from_mark, column_position);
 }
 
-
-void MergeTreeReaderCompact::seekToMark(size_t row_index, size_t column_index)
+IMergeTreeReader::ColumnPosition MergeTreeReaderCompact::findColumnForOffsets(const String & column_name) const
 {
-    MarkInCompressedFile mark = marks_loader.getMark(row_index, column_index);
-    try
+    String table_name = Nested::extractTableName(column_name);
+    for (const auto & part_column : data_part->getColumns())
     {
-        if (cached_buffer)
-            cached_buffer->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
-        if (non_cached_buffer)
-            non_cached_buffer->seek(mark.offset_in_compressed_file, mark.offset_in_decompressed_block);
+        if (typeid_cast<const DataTypeArray *>(part_column.type.get()))
+        {
+            auto compact_part = std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part);
+            auto position = compact_part->getColumnPositionWithoutMap(part_column.name);
+            if (position && Nested::extractTableName(part_column.name) == table_name)
+                return position;
+        }
     }
-    catch (Exception & e)
-    {
-        /// Better diagnostics.
-        if (e.code() == ErrorCodes::ARGUMENT_OUT_OF_BOUND)
-            e.addMessage("(while seeking to mark (" + toString(row_index) + ", " + toString(column_index) + ")");
 
-        throw;
-    }
+    return {};
 }
 
 bool MergeTreeReaderCompact::isContinuousReading(size_t mark, size_t column_position)

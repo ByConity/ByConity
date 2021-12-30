@@ -5,6 +5,8 @@
 #include <Common/quoteString.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Core/ColumnWithTypeAndName.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
@@ -370,9 +372,33 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             res.insert({type->createColumn(), type, name});
         }
         else
-            throw Exception(
-                "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
-                ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+        {
+            bool found = false;
+            for (const auto & column_inner: getColumns())
+            {
+                if (column_inner.type->isMap() && column_inner.type->isMapKVStore())
+                {
+                    if (name == column_inner.name + ".key")
+                    {
+                        auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getKeyStoreType();
+                        res.insert({type->createColumn(), type, name});
+                        found = true;
+                        break;
+                    }
+                    else if (name == column_inner.name + ".value")
+                    {
+                        auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getValueStoreType();
+                        res.insert({type->createColumn(), type, name});
+                        found = true;
+                        break;
+                    }
+                }
+            }
+            if (!found)
+                throw Exception(
+                    "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
+                    ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
+        }
     }
 
     if (include_rowid_column)
@@ -594,6 +620,8 @@ void StorageInMemoryMetadata::check(const Names & column_names, const NamesAndTy
 
     for (const auto & name : column_names)
     {
+        if (isMapImplicitKey(name)) continue;
+
         // ignore checking functional columns
         if (func_columns.contains(name))
             continue;
@@ -625,6 +653,8 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns) 
 
     for (const NameAndTypePair & column : provided_columns)
     {
+        if (isMapImplicitKey(column.name)) continue;
+
         // ignore checking functional columns
         if (func_columns.contains(column.name))
             continue;
@@ -662,6 +692,8 @@ void StorageInMemoryMetadata::check(const NamesAndTypesList & provided_columns, 
     auto unique_names = initUniqueStrings();
     for (const String & name : column_names)
     {
+        if (isMapImplicitKey(name)) continue;
+
         // ignore checking functional columns
         if (func_columns.contains(name))
             continue;
@@ -700,6 +732,8 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
 
     for (const auto & column : block)
     {
+        if (isMapImplicitKey(column.name)) continue;
+
         // ignore checking functional columns
         if (func_columns.contains(column.name))
             continue;
@@ -732,5 +766,14 @@ void StorageInMemoryMetadata::check(const Block & block, bool need_all) const
     }
 }
 
+bool StorageInMemoryMetadata::hasMapColumn() const
+{
+    const NamesAndTypesList & available_columns = getColumns().getAllPhysical();
+    for (auto & column: available_columns)
+    {
+        if (column.type->isMap()) return true;
+    }
+    return false;
+}
 
 }

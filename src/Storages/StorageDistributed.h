@@ -55,6 +55,7 @@ public:
     StoragePolicyPtr getStoragePolicy() const override;
 
     bool isRemote() const override { return true; }
+    bool supportsMapImplicitColumn() const override { return true; }
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;

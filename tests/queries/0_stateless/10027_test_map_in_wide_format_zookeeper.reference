@@ -1,0 +1,45 @@
+set use_uncompressed_cache = 0 and write data in wide format
+
+select id, string_params, string_params{\'s1\'}, string_list_params from test.10027_test_map_in_wide_format_zookeeper1
+1000	{'s1':'s_v1','s2':'s_v2'}	s_v1	{'s_l1':['l_v1','l_v2','l_v3']}
+
+select id, int_params, int_params{\'i1\'}, int_list_params from test.10027_test_map_in_wide_format_zookeeper1
+1000	{'i1':1,'i2':2}	1	{'i_l1':[1,2,3],'i_l2':[4,5,6]}
+
+select name, part_type, compact_map from system.parts where table = \'10027_test_map_in_wide_format_zookeeper1\' and active = 1
+all_0_0_0	Wide	1
+
+select id, string_params, string_params{\'s1\'}, string_list_params from test.10027_test_map_in_wide_format_zookeeper2
+1000	{'s1':'s_v1','s2':'s_v2'}	s_v1	{'s_l1':['l_v1','l_v2','l_v3']}
+
+select id, int_params, int_params{\'i1\'}, int_list_params from test.10027_test_map_in_wide_format_zookeeper2
+1000	{'i1':1,'i2':2}	1	{'i_l1':[1,2,3],'i_l2':[4,5,6]}
+
+select name, part_type, compact_map from system.parts where table = \'10027_test_map_in_wide_format_zookeeper2\' and active = 1
+all_0_0_0	Wide	1
+--------------------------------------------------------------
+set use_uncompressed_cache = 1 and write data in wide format
+
+select id, string_params, string_params{\'s1\'}, string_list_params from test.10027_test_map_in_wide_format_zookeeper1
+1000	{'s1':'s_v1','s2':'s_v2'}	s_v1	{'s_l1':['l_v1','l_v2','l_v3']}
+1001	{'s3':'s_v3','s4':'s_v4'}	\N	{'s_l2':['l_v4','l_v5']}
+
+select id, int_params, int_params{\'i1\'}, int_list_params from test.10027_test_map_in_wide_format_zookeeper1
+1000	{'i1':1,'i2':2}	1	{'i_l1':[1,2,3],'i_l2':[4,5,6]}
+1001	{'i2':1,'i3':3}	\N	{'i_l3':[4,5,6,7]}
+
+select name, part_type, compact_map from system.parts where table = \'10027_test_map_in_wide_format_zookeeper1\' and active = 1
+all_0_0_0	Wide	1
+all_1_1_0	Wide	0
+
+select id, string_params, string_params{\'s1\'}, string_list_params from test.10027_test_map_in_wide_format_zookeeper2
+1000	{'s1':'s_v1','s2':'s_v2'}	s_v1	{'s_l1':['l_v1','l_v2','l_v3']}
+1001	{'s3':'s_v3','s4':'s_v4'}	\N	{'s_l2':['l_v4','l_v5']}
+
+select id, int_params, int_params{\'i1\'}, int_list_params from test.10027_test_map_in_wide_format_zookeeper2
+1000	{'i1':1,'i2':2}	1	{'i_l1':[1,2,3],'i_l2':[4,5,6]}
+1001	{'i2':1,'i3':3}	\N	{'i_l3':[4,5,6,7]}
+
+select name, part_type, compact_map from system.parts where table = \'10027_test_map_in_wide_format_zookeeper2\' and active = 1
+all_0_0_0	Wide	1
+all_1_1_0	Wide	0

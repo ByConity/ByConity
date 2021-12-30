@@ -37,7 +37,7 @@ public:
     std::string getId(const std::string & node_id) const override;
     void processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response) override;
 
-    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally);
+    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryPartList(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryExist(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryDeleteFiles(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);

@@ -36,8 +36,10 @@ public:
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
     bool canBeInsideLowCardinality() const override { return true; }
+    bool canBeMapKVType() const override { return true;}
 
     SerializationPtr doGetDefaultSerialization() const override;
+    Field stringToVisitorField(const String& ins) const override;
 };
 
 }
