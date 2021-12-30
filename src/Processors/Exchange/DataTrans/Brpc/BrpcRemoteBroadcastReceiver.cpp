@@ -2,10 +2,10 @@
 #include "BrpcExchangeRegistryCenter.h"
 #include "StreamHandler.h"
 
+#include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTransStruct.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
 #include <Protos/registry.pb.h>
@@ -18,8 +18,12 @@ namespace ErrorCodes
     extern const int BRPC_EXCEPTION;
 }
 
-BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_)
-    : trans_key(std::move(trans_key_)), registry_address(std::move(registry_address_)), context(std::move(context_)), header(std::move(header_))
+BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
+    DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_)
+    : trans_key(std::move(trans_key_))
+    , registry_address(std::move(registry_address_))
+    , context(std::move(context_))
+    , header(std::move(header_))
 {
     data_key = trans_key->getKey();
 }
@@ -62,11 +66,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             stub.registry(&cntl, &request, &response, nullptr);
             rpc_client->assertController(cntl);
             LOG_DEBUG(
-                log,
-                "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}",
-                registry_address,
-                data_key,
-                stream_id);
+                log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
             return;
         }
         catch (Exception & e)
@@ -104,23 +104,41 @@ void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
 }
 
-RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms)
+RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 {
-    RecvDataPacket res_packet;
     DataTransPacket brpc_data_packet;
     if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
-        throw Exception(
-            "Try pop receive queue for stream id-" + std::to_string(stream_id) + " timeout for " + std::to_string(timeout_ms) + " ms.",
-            ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-    if(!brpc_data_packet.exception.empty()){
-        return BroadcastStatus(BroadcastStatusCode::RECV_UNKNOWN_ERROR, true);
+    {
+        const auto error_msg
+            = "Try pop receive queue for stream id-" + std::to_string(stream_id) + " timeout for " + std::to_string(timeout_ms) + " ms.";
+        LOG_ERROR(log, error_msg);
+        return BroadcastStatus(BroadcastStatusCode::RECV_TIMEOUT, true, error_msg);
+    }
+    if (!brpc_data_packet.exception.empty())
+    {
+        LOG_ERROR(
+            log, "Try pop receive queue for stream id-" + std::to_string(stream_id) + " failed. Exception:" + brpc_data_packet.exception);
+        return BroadcastStatus(BroadcastStatusCode::RECV_UNKNOWN_ERROR, true, brpc_data_packet.exception);
+    }
+    if (brpc_data_packet.chunk.empty())
+    {
+        LOG_DEBUG(log, "Receive for stream id-{} finished, data_key-{}, status_code:{}.", stream_id, data_key, status_code);
+        return BroadcastStatus(status_code, true);
     }
 
     return RecvDataPacket(std::move(brpc_data_packet.chunk));
 }
 
-BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code, String message){
-    //TODO
-    return BroadcastStatus(status_code, true, message);
+BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
+{
+    if (status_code != RUNNING)
+    {
+        return BroadcastStatus(status_code, false);
+    }
+    else
+    {
+        brpc::StreamFinish(stream_id, status_code_);
+        return BroadcastStatus(status_code_, true, message);
+    }
 }
 }

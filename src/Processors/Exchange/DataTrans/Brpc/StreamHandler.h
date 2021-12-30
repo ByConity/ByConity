@@ -15,12 +15,13 @@ class StreamHandler : public brpc::StreamInputHandler
 public:
     StreamHandler(const ContextPtr & context_, BrpcRemoteBroadcastReceiverWeakPtr receiver_) : context(context_), receiver(receiver_) { }
 
-    int on_received_messages(brpc::StreamId id, butil::IOBuf * const * messages, size_t size) override;
+    int on_received_messages(brpc::StreamId id, butil::IOBuf * const * messages, size_t size) noexcept override;
 
     void on_idle_timeout(brpc::StreamId id) override;
 
     void on_closed(brpc::StreamId id) override;
 
+    void on_finished(brpc::StreamId id, int32_t finish_status_code) override;
 private:
     ContextPtr context;
     Poco::Logger * log = &Poco::Logger::get("StreamHandler");
