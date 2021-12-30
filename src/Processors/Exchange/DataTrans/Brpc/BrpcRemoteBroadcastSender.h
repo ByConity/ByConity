@@ -1,14 +1,16 @@
 #pragma once
 
-#include <atomic>
 #include "BrpcExchangeRegistryCenter.h"
 
+#include <atomic>
+#include <mutex>
 #include <Interpreters/Context.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTransStruct.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <brpc/stream.h>
+#include <bthread/mtx_cv_base.h>
 
 namespace DB
 {
@@ -33,5 +35,6 @@ private:
     BrpcExchangeRegistryCenter & registry_center;
     std::vector<brpc::StreamId> sender_stream_ids;
     std::atomic<bool> is_ready = false;
+    bthread::Mutex ready_mutex;
 };
 }

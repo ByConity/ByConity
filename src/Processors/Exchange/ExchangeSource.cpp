@@ -7,12 +7,13 @@
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
+#include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeSource.h>
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/Exception.h>
-#include <Processors/Exchange/ExchangeOptions.h>
+#include <Columns/ColumnsNumber.h>
 
 namespace DB
 {
@@ -55,9 +56,10 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
     if (std::holds_alternative<Chunk>(packet))
     {
-        return std::make_optional(std::move(std::get<Chunk>(packet)));
+        Chunk chunk = std::move(std::get<Chunk>(packet));
+        LOG_TRACE(logger, "Receive chunk with rows: {}", chunk.getNumRows());
+        return std::make_optional(std::move(chunk));
     }
-
     const auto & status = std::get<BroadcastStatus>(packet);
     was_receiver_finished = true;
 

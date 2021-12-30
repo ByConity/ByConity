@@ -17,6 +17,7 @@
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 #include <Common/Exception.h>
+#include "Processors/Sources/NullSource.h"
 
 
 namespace DB
@@ -124,12 +125,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
                         query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                     BroadcastReceiverPtr receiver;
-                    LOG_DEBUG(logger, "Create remote exchange source : {}", data_key->dump());
+                    LOG_DEBUG(logger, "Create remote exchange source : {}@{}", data_key->dump(), write_address_info);
                     receiver = BrpcExchangeRegistryCenter::getInstance().getOrCreateReceiver(data_key, write_address_info, context, header);
                     auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
                     pipe.addSource(std::move(source));
                 }
             }
+            pipe.addSource(std::make_shared<NullSource>(header));
         }
     }
     
