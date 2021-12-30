@@ -1,6 +1,6 @@
 # docker build -t yandex/clickhouse-stateful-test .
 ARG TAG=stable
-FROM hub.byted.org/bytehouse/clickhouse-test-base:${TAG}
+FROM hub.byted.org/bytehouse/clickhouse-stateless-test:${TAG}
 
 # set http proxy env
 ENV http_proxy=http://sys-proxy-rd-relay.byted.org:8118
@@ -23,4 +23,4 @@ ENV https_proxy=
 ENV no_proxy=
 
 COPY run.sh /
-CMD ["/bin/bash", "/run.sh"]
+# CMD ["/bin/bash", "/run.sh"]
