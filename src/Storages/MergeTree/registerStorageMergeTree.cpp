@@ -702,8 +702,12 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 ErrorCodes::BAD_ARGUMENTS);
 
         if (args.storage_def->unique_key)
+        {
+            if (args.engine_name != "HaUniqueMergeTree")
+                throw Exception("UNIQUE KEY is only applicable to HaUniqueMergeTree", ErrorCodes::BAD_ARGUMENTS);
             metadata.unique_key = KeyDescription::getKeyFromAST(
                 args.storage_def->unique_key->ptr(), metadata.columns, args.getContext());
+        }
 
         /// Get sorting key from engine arguments.
         ///
