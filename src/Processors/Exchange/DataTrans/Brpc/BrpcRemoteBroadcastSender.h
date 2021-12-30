@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include "BrpcExchangeRegistryCenter.h"
 
 #include <Interpreters/Context.h>
@@ -31,6 +32,6 @@ private:
     Block header;
     BrpcExchangeRegistryCenter & registry_center;
     std::vector<brpc::StreamId> sender_stream_ids;
-    bool is_ready = false;
+    std::atomic<bool> is_ready = false;
 };
 }

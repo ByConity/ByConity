@@ -57,17 +57,29 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
     auto plan_segment = std::make_unique<PlanSegment>(segment_id, plan_segment_context.query_id, plan_segment_context.cluster_name);
     plan_segment->setQueryPlan(std::move(sub_plan));
     plan_segment->setContext(plan_segment_context.context);
-    plan_segment->setParallelSize(plan_segment_context.shard_number);
     plan_segment->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
-
+    
     PlanSegmentType output_type = segment_id == 0? PlanSegmentType::OUTPUT : PlanSegmentType::EXCHANGE;
+
     auto output = std::make_shared<PlanSegmentOutput>(plan_segment->getQueryPlan().getRoot()->step->getOutputStream().header, output_type);
-    output->setParallelSize(plan_segment_context.shard_number);
+    if (output_type == PlanSegmentType::OUTPUT)
+    {
+        plan_segment->setParallelSize(1);
+        output->setParallelSize(1);
+    }
+    else
+    {
+        plan_segment->setParallelSize(plan_segment_context.shard_number);
+        output->setParallelSize(plan_segment_context.shard_number);
+    }
+    output->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
     plan_segment->setPlanSegmentOutput(output);
 
     auto inputs = findInputs(plan_segment->getQueryPlan().getRoot());
     if (inputs.empty())
         inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::SOURCE));
+    for (auto & input : inputs)
+        input->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
 
     plan_segment->appendPlanSegmentInputs(inputs);
 
@@ -165,6 +177,11 @@ void PlanSegmentSpliter::rewrite(QueryPlan & query_plan, PlanSegmentContext & pl
                 child_node->plan_segment->getPlanSegmentOutput()->setShufflekeys(input->getShufflekeys());
                 child_node->plan_segment->getPlanSegmentOutput()->setPlanSegmentId(node.plan_segment->getPlanSegmentId());
                 child_node->plan_segment->getPlanSegmentOutput()->setExchangeMode(input->getExchangeMode());
+                /**
+                 * If a output is a gather node, its parallel size is always 1 since we should gather all data.
+                 */
+                if (child_node->plan_segment->getPlanSegmentOutput()->getExchangeMode() == ExchangeMode::GATHER)
+                    child_node->plan_segment->getPlanSegmentOutput()->setParallelSize(1);
             }
         }
     }

@@ -1,3 +1,4 @@
+#include <memory>
 #include <string>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
@@ -24,19 +25,16 @@ void executePlanSegment(PlanSegmentPtr plan_segment, ContextMutablePtr context, 
 
     LOG_TRACE(&Poco::Logger::get("executePlanSegment"), "EXECUTE\n" + plan_segment->toString());
 
-    auto execute_func = [&]() {
-        PlanSegmentExecutor executor(std::move(plan_segment), std::move(context));
-        executor.execute();
-    };
+    auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment), std::move(context));
 
     if (is_async)
     {
-        ThreadFromGlobalPool async_thread(std::move(execute_func));
+        ThreadFromGlobalPool async_thread([executor = std::move(executor)]() { executor->execute(); });
         async_thread.detach();
         return;
     }
 
-    execute_func();
+    executor->execute();
 }
 
 }

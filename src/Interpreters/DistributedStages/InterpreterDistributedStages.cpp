@@ -230,8 +230,10 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 
         if (scheduler_status->is_final_stage_start)
         {
-            LOG_TRACE(log, "EXECUTE\n" + plan_segment_tree->getRoot()->getPlanSegment()->toString());
-            res = InterpreterPlanSegment(plan_segment_tree->getRoot()->getPlanSegment(), context).execute();
+            auto final_segment = plan_segment_tree->getRoot()->getPlanSegment();
+            final_segment->update();
+            LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
+            res = InterpreterPlanSegment(final_segment, context).execute();
             break;
         }
     }

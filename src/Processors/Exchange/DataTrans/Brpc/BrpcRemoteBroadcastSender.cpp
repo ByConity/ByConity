@@ -1,6 +1,7 @@
 #include "BrpcRemoteBroadcastSender.h"
 #include "WriteBufferFromBrpcBuf.h"
 
+#include <atomic>
 #include <cerrno>
 #include <Compression/CompressedWriteBuffer.h>
 #include <Compression/CompressionFactory.h>
@@ -78,11 +79,19 @@ void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
             retry_count++;
             bthread_usleep(10 * 1000);
         }
-        auto stream_id = registry_center.getSenderStreamId(id);
-        sender_stream_ids.push_back(stream_id);
-        LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
     }
-    is_ready = true;
+    
+    bool expected_ready_flag = false;
+    if (is_ready.compare_exchange_strong(expected_ready_flag, true, std::memory_order_relaxed, std::memory_order_relaxed))
+    {
+        for (const auto & trans_key : trans_keys)
+        {
+            const auto & id = trans_key->getKey();
+            auto stream_id = registry_center.getSenderStreamId(id);
+            sender_stream_ids.push_back(stream_id);
+            LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
+        }
+    }
 }
 
 BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk)

@@ -159,6 +159,7 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
         throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
 
     size_t exchange_parallel_size = plan_segment_output->getExchangeParallelSize();
+    size_t parallel_size = plan_segment_output->getParallelSize();
     ExchangeMode exchange_mode = plan_segment_output->getExchangeMode();
     size_t write_plan_segment_id = plan_segment->getPlanSegmentId();
     size_t read_plan_segment_id = plan_segment_output->getPlanSegmentId();
@@ -177,9 +178,9 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
     /// -----------------------------------------------
     /// 0                       : 1,2,3,4
     /// 1                       : 5,6,7,8
-    size_t total_partition_num = plan_segment_output->getParallelSize() * exchange_parallel_size;
+    size_t total_partition_num = exchange_parallel_size == 0 ? parallel_size : parallel_size * exchange_parallel_size;
 
-    if(total_partition_num == 0)
+    if (total_partition_num == 0)
         throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
 
     const Block & header = plan_segment_output->getHeader();

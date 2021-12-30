@@ -250,6 +250,9 @@ public:
     size_t getParallelSize() const { return parallel; }
 
     void setParallelSize(size_t parallel_size_) { parallel = parallel_size_; }
+
+    void update();
+
 private:
     size_t segment_id;
     String query_id;
