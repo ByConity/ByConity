@@ -225,6 +225,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     executor.cancel();
 }
 
+/*
 TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
@@ -261,3 +262,4 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     ASSERT_FALSE(executor.pull(pull_chunk));
     executor.cancel();
 }
+*/
