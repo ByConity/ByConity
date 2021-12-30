@@ -18,12 +18,13 @@ public:
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
-    RecvDataPacket recv(UInt32 timeout_ms) override;
-    BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
+    RecvDataPacket recv(UInt32 timeout_ms) noexcept override;
+    BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     void pushReceiveQueue(Chunk & chunk);
     void pushException(const String & exception);
     void clearQueue() { queue->receive_queue->clear(); }
     Block getHeader() { return header; }
+    void setStatusCode(int32_t code) { status_code = static_cast<BroadcastStatusCode>(code); }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
@@ -36,6 +37,7 @@ private:
     ReceiveQueuePtr queue = std::make_unique<ReceiveQueue>();
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
+    BroadcastStatusCode status_code{RUNNING};
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;

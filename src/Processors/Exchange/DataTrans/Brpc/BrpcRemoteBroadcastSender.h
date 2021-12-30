@@ -22,10 +22,10 @@ public:
     ~BrpcRemoteBroadcastSender() override;
 
     void waitAllReceiversReady(UInt32 timeout_ms) override;
-    BroadcastStatus send(Chunk chunk) override;
-    virtual BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
-
-    bool sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key);
+    BroadcastStatus send(Chunk chunk) noexcept override;
+    virtual BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
+    BroadcastStatus sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key);
+    butil::IOBuf serializeChunkToIoBuffer(Chunk chunk) const;
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastSender");
@@ -36,5 +36,6 @@ private:
     std::vector<brpc::StreamId> sender_stream_ids;
     std::atomic<bool> is_ready = false;
     bthread::Mutex ready_mutex;
+    std::atomic<BroadcastStatusCode> status_code{RUNNING};
 };
 }

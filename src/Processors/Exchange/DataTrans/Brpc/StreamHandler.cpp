@@ -16,7 +16,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size)
+int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size) noexcept
 {
     if (receiver.expired())
     {
@@ -40,7 +40,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
             Chunk chunk = chunk_in.readImpl();
             LOG_DEBUG(
                 log,
-                "StreamHandler::on_received_messages: StreamId-{} received exchange data successfully, io-buffer size{}, chunk rows:{}",
+                "StreamHandler::on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}, chunk rows:{}",
                 stream_id,
                 msg.size(),
                 chunk.getNumRows());
@@ -79,4 +79,25 @@ void StreamHandler::on_closed(brpc::StreamId stream_id)
         LOG_DEBUG(log, "StreamHandler::on_closed: StreamId-{} closed", stream_id);
     }
 }
+
+void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
+{
+    if (receiver.expired())
+    {
+        LOG_WARNING(log, "StreamHandler::on_finished receiver is expired.");
+    }
+    else
+    {
+        const auto ptr = receiver.lock();
+        if (finish_status_code != -1 && finish_status_code != 0)
+            ptr->clearQueue();
+
+        ptr->setStatusCode(finish_status_code);
+        Chunk empty = Chunk();
+        // push an empty as finish
+        ptr->pushReceiveQueue(empty);
+        LOG_DEBUG(log, "StreamHandler::on_finished: StreamId-{}, finish code:{]", id, finish_status_code);
+    }
+}
+
 }
