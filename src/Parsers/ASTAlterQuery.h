@@ -69,6 +69,8 @@ public:
         DELETE,
         UPDATE,
 
+        CLEAR_MAP_KEY,
+
         NO_TYPE,
 
         LIVE_VIEW_REFRESH,
@@ -155,6 +157,9 @@ public:
     /** In ALTER CHANNEL, ADD, DROP, SUSPEND, RESUME, REFRESH, MODIFY queries, the list of live views is stored here
      */
     ASTPtr values;
+
+    /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
+    ASTPtr map_keys;
 
     bool detach = false;        /// true for DETACH PARTITION
 

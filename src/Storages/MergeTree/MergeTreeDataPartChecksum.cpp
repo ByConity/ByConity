@@ -1,6 +1,7 @@
 #include "MergeTreeDataPartChecksum.h"
 #include <Common/SipHash.h>
 #include <Common/hex.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadBufferFromString.h>
@@ -84,6 +85,8 @@ void MergeTreeDataPartChecksums::checkSizes(const DiskPtr & disk, const String &
     for (const auto & it : files)
     {
         const String & name = it.first;
+        if (versions->enable_compact_map_data && isMapImplicitKeyNotKV(name))
+            continue;
         it.second.checkSize(disk, path + name);
     }
 }
@@ -176,6 +179,8 @@ bool MergeTreeDataPartChecksums::readV3(ReadBuffer & in)
         Checksum sum;
 
         readBinary(name, in);
+        if (versions->enable_compact_map_data)
+            readVarUInt(sum.file_offset, in);
         readVarUInt(sum.file_size, in);
         readPODBinary(sum.file_hash, in);
         readBinary(sum.is_compressed, in);
@@ -212,6 +217,8 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         const Checksum & sum = it.second;
 
         writeBinary(name, out);
+        if (versions->enable_compact_map_data)
+             writeVarUInt(sum.file_offset, out);
         writeVarUInt(sum.file_size, out);
         writePODBinary(sum.file_hash, out);
         writeBinary(sum.is_compressed, out);

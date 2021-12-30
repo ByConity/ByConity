@@ -4,7 +4,6 @@
 namespace DB
 {
 constexpr auto DATA_FILE_EXTENSION = ".bin";
-constexpr auto MARKS_FILE_EXTENSION = ".mrk";
 constexpr auto INDEX_FILE_EXTENSION = ".idx";
 
 constexpr auto BLOOM_FILTER_FILE_EXTENSION = ".bmf";

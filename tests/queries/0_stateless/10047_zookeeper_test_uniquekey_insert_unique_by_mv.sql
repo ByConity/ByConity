@@ -14,13 +14,13 @@ create materialized view test.VIEW_insert_unique_by_mv to test.insert_unique_by_
 
 insert into test.SOURCE_insert_unique_by_mv values (1, '2020-12-01', {'k1':11,'k2':21}), (2, '2020-12-02', {'k2':22,'k3':32});
 select sleep(3) format Null;
-select 'r1', d, id, params['k1'], params['k2'], params['k3'] from test.insert_unique_by_mv1 order by id;
+select 'r1', d, id, params{'k1'}, params{'k2'}, params{'k3'} from test.insert_unique_by_mv1 order by id;
 
 drop table test.VIEW_insert_unique_by_mv;
 create materialized view test.VIEW_insert_unique_by_mv to test.insert_unique_by_mv2 (id Int32, d Date, params Map(String, Int32)) as select c1 as id, c2 as d, c3 as params from test.SOURCE_insert_unique_by_mv;
 insert into test.SOURCE_insert_unique_by_mv values (2, '2020-12-03', {'k2':100}), (3, '2020-12-04', {'k1':13,'k2':23});
 select sleep(3) format Null;
-select 'r2', d, id, params['k1'], params['k2'], params['k3'] from test.insert_unique_by_mv2 order by id;
+select 'r2', d, id, params{'k1'}, params{'k2'}, params{'k3'} from test.insert_unique_by_mv2 order by id;
 
 drop table if exists test.SOURCE_insert_unique_by_mv;
 drop table if exists test.VIEW_insert_unique_by_mv;

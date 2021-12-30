@@ -81,6 +81,11 @@ const char * ParserTupleElementExpression::operators[] =
     nullptr
 };
 
+const char * ParserMapElementExpression::operators[] =
+{
+    "{", "mapElement",
+    nullptr
+};
 
 bool ParserList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -233,6 +238,15 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
                     return false;
                 ++pos;
             }
+
+            // Special handling mapElement function map[key]
+            if (0 == strcmp(it[0], "{"))
+            {
+                if (pos->type != TokenType::ClosingCurlyBrace)
+                    return false;
+                ++pos;
+            }
+
 
             /// Left associative operator chain is parsed as a tree: ((((1 + 1) + 1) + 1) + 1)...
             /// We must account it's depth - otherwise we may end up with stack overflow later - on destruction of AST.
@@ -560,6 +574,14 @@ bool ParserUnaryExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     return operator_parser.parse(pos, node, expected);
 }
 
+bool ParserMapElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserLeftAssociativeBinaryOperatorList{
+        operators,
+        std::make_unique<ParserCastExpression>(),
+        std::make_unique<ParserExpression>()
+       }.parse(pos, node, expected);
+}
 
 bool ParserCastExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -586,7 +608,8 @@ bool ParserArrayElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
-        std::make_unique<ParserCastExpression>(),
+        // std::make_unique<ParserCastExpression>(),
+        std::make_unique<ParserMapElementExpression>(),
         std::make_unique<ParserExpressionWithOptionalAlias>(false)
     }.parse(pos, node, expected);
 }

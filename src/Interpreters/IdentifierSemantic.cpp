@@ -141,6 +141,11 @@ bool IdentifierSemantic::canBeAlias(const ASTIdentifier & identifier)
     return identifier.semantic->can_be_alias;
 }
 
+bool IdentifierSemantic::isSpecial(const ASTIdentifier & identifier)
+{
+    return identifier.semantic->special;
+}
+
 void IdentifierSemantic::setMembership(ASTIdentifier & identifier, size_t table_pos)
 {
     identifier.semantic->membership = table_pos;

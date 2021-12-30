@@ -16,6 +16,8 @@
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Merges/MergingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
 #include <Processors/Merges/SummingSortedTransform.h>
@@ -33,6 +35,8 @@
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
 #include <Parsers/queryToString.h>
+#include <Columns/ColumnByteMap.h>
+#include <Common/FieldVisitorToString.h>
 
 #include <cmath>
 #include <ctime>
@@ -768,6 +772,34 @@ static void extractMergingAndGatheringColumns(
     }
 }
 
+static void handleCompactPartWithCompactMapCol(
+    MergeAlgorithm & merge_algorithm, 
+    NamesAndTypesList & gathering_columns, Names & gathering_column_names,
+    NamesAndTypesList & merging_columns, Names & merging_column_names)
+{
+    if (merge_algorithm != MergeAlgorithm::Vertical)
+        throw Exception("Merging part with compact map col must use vertical merge algorithm", ErrorCodes::LOGICAL_ERROR);
+
+    NamesAndTypesList copy_gathering_columns = gathering_columns;
+    gathering_columns.clear();
+    gathering_column_names.clear();
+
+    for (auto column = copy_gathering_columns.begin(); column != copy_gathering_columns.end(); ++column)
+    {
+        if (column->type->isMap() && !column->type->isMapKVStore())
+        {
+            gathering_columns.emplace_back(*column);
+            gathering_column_names.emplace_back(column->name);
+        }
+        else
+        {
+            merging_columns.emplace_back(*column);
+            merging_column_names.emplace_back(column->name);
+        }
+    }
+}
+
+
 /* Allow to compute more accurate progress statistics */
 class ColumnSizeEstimator
 {
@@ -1000,6 +1032,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     size_t sum_compressed_bytes_upper_bound = merge_entry->total_size_bytes_compressed;
     MergeAlgorithm chosen_merge_algorithm = chooseMergeAlgorithm(
         parts, sum_input_rows_upper_bound, gathering_columns, deduplicate, need_remove_expired_values, merging_params);
+
+    if (isCompactPart(new_data_part) && data_settings->enable_compact_map_data)
+        handleCompactPartWithCompactMapCol(chosen_merge_algorithm, gathering_columns, gathering_column_names, merging_columns, merging_column_names);
+    
     merge_entry->merge_algorithm.store(chosen_merge_algorithm, std::memory_order_relaxed);
 
     LOG_DEBUG(log, "Selected MergeAlgorithm: {}", toString(chosen_merge_algorithm));
@@ -1108,7 +1144,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     ProcessorPtr merged_transform;
 
     /// If merge is vertical we cannot calculate it
-    bool blocks_are_granules_size = (chosen_merge_algorithm == MergeAlgorithm::Vertical);
+    bool blocks_are_granules_size = (chosen_merge_algorithm == MergeAlgorithm::Vertical && !isCompactPart(new_data_part));
 
     UInt64 merge_block_size = data_settings->merge_max_block_size;
     switch (merging_params.mode)
@@ -1263,73 +1299,145 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         CompressedReadBufferFromFile rows_sources_read_buf(tmp_disk->readFile(fileName(rows_sources_file->path())));
         IMergedBlockOutputStream::WrittenOffsetColumns written_offset_columns;
 
-        for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size();
-            column_num < gathering_column_names_size;
-            ++column_num, ++it_name_and_type)
+        for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size(); column_num < gathering_column_names_size;
+             ++column_num, ++it_name_and_type)
         {
             const String & column_name = it_name_and_type->name;
+            const DataTypePtr & column_type = it_name_and_type->type;
             Names column_names{column_name};
             Float64 progress_before = merge_entry->progress.load(std::memory_order_relaxed);
 
             MergeStageProgress column_progress(progress_before, column_sizes->columnWeight(column_name));
-            for (size_t part_num = 0; part_num < parts.size(); ++part_num)
+            auto mergeFunc = [&](const Names & column_names_, const String & name_) {
+                for (size_t part_num = 0; part_num < parts.size(); ++part_num)
+                {
+                    auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
+                        data, metadata_snapshot, parts[part_num], column_names_, read_with_direct_io, true);
+
+                    column_part_source->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
+
+                    QueryPipeline column_part_pipeline;
+                    column_part_pipeline.init(Pipe(std::move(column_part_source)));
+                    column_part_pipeline.setMaxThreads(1);
+
+                    column_part_streams[part_num] = std::make_shared<PipelineExecutingBlockInputStream>(std::move(column_part_pipeline));
+                }
+
+                rows_sources_read_buf.seek(0, 0);
+                ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf);
+                
+                MergedColumnOnlyOutputStream column_to(
+                    new_data_part,
+                    metadata_snapshot,
+                    column_gathered_stream.getHeader(),
+                    compression_codec,
+                    /// we don't need to recalc indices here
+                    /// because all of them were already recalculated and written
+                    /// as key part of vertical merge
+                    std::vector<MergeTreeIndexPtr>{},
+                    &written_offset_columns,
+                    to.getIndexGranularity());
+
+                size_t column_elems_written = 0;
+
+                column_to.writePrefix();
+                while (!merges_blocker.isCancelled() && (block = column_gathered_stream.read()))
+                {
+                    column_elems_written += block.rows();
+                    column_to.write(block);
+                }
+
+                if (merges_blocker.isCancelled())
+                    throw Exception("Cancelled merging parts", ErrorCodes::ABORTED);
+
+                column_gathered_stream.readSuffix();
+                auto changed_checksums = column_to.writeSuffixAndGetChecksums(new_data_part, checksums_gathered_columns, need_sync);
+                checksums_gathered_columns.add(std::move(changed_checksums));
+
+                if (rows_written != column_elems_written)
+                {
+                    throw Exception(
+                        "Written " + toString(column_elems_written) + " elements of column " + column_name + ", but "
+                            + toString(rows_written) + " rows of PK columns",
+                        ErrorCodes::LOGICAL_ERROR);
+                }
+
+                /// NOTE: 'progress' is modified by single thread, but it may be concurrently read from MergeListElement::getInfo() (StorageSystemMerges).
+
+                merge_entry->columns_written += 1;
+                merge_entry->bytes_written_uncompressed += column_gathered_stream.getProfileInfo().bytes;
+                merge_entry->progress.store(progress_before + column_sizes->columnWeight(column_name), std::memory_order_relaxed);
+            };
+
+            // Merge Map:
+            // 1. isMapKVStore()
+            // Map is merged by both key & value column
+            // 2. !isMapKVStore()
+            // Map is merged column by column. Only the column who have keys will be written into
+            // files. In addition, there is no base implicit column. The lack of base column will not
+            // affect the horizontal merge and original vertical merge since this column will be constructed at runtime.
+            if (column_type->isMap())
             {
-                auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
-                    data, metadata_snapshot, parts[part_num], column_names, read_with_direct_io, true);
+                if (column_type->isMapKVStore())
+                {
+                    String key_column_name = column_name + ".key";
+                    Names key_column_names{key_column_name};
+                    mergeFunc(key_column_names, key_column_name);
+                    String value_column_name = column_name + ".value";
+                    Names value_column_names{value_column_name};
+                    mergeFunc(value_column_names, value_column_name);
+                }
+                else
+                {
+                    std::set<String> implicit_names;
+                    for (const auto & part : parts)
+                    {
+                        if (isInMemoryPart(part))
+                        {
+                            auto & memory_part = typeid_cast<const MergeTreeDataPartInMemory &>(*part);
+                            for (auto & column: memory_part.block)
+                            {
+                                if (column.type->isMap() && !column.type->isMapKVStore())
+                                {
+                                    auto & column_map_key = (typeid_cast<const ColumnByteMap &>(*column.column)).getKey();
+                                    for (size_t i = 0; i < column_map_key.size(); ++i)
+                                    {
+                                        auto key_name = applyVisitor(DB::FieldVisitorToString(), column_map_key[i]);
+                                        String implicit_name = getImplicitFileNameForMapKey(column.name, key_name);
+                                        implicit_names.insert(implicit_name);
+                                    }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            //auto data_lock = data_part->getColumnsReadLock();
+                            const auto & checksums = part->checksums;
+                            for (const auto & it : checksums.files)
+                            {
+                                String key_name;
+                                const auto & file_name = it.first;
+                                bool parse_success = parseKeyFromImplicitFileName(column_name, file_name, key_name);
+                                if (parse_success)
+                                {
+                                    String implicit_name = getImplicitFileNameForMapKey(column_name, key_name);
+                                    implicit_names.insert(implicit_name);
+                                }
+                            }
+                        }
+                    }
 
-                column_part_source->setProgressCallback(
-                    MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
-
-                QueryPipeline column_part_pipeline;
-                column_part_pipeline.init(Pipe(std::move(column_part_source)));
-                column_part_pipeline.setMaxThreads(1);
-
-                column_part_streams[part_num] =
-                        std::make_shared<PipelineExecutingBlockInputStream>(std::move(column_part_pipeline));
+                    for (const auto & name : implicit_names)
+                    {
+                        Names names{name};
+                        mergeFunc(names, name);
+                    }
+                }
             }
-
-            rows_sources_read_buf.seek(0, 0);
-            ColumnGathererStream column_gathered_stream(column_name, column_part_streams, rows_sources_read_buf);
-
-            MergedColumnOnlyOutputStream column_to(
-                new_data_part,
-                metadata_snapshot,
-                column_gathered_stream.getHeader(),
-                compression_codec,
-                /// we don't need to recalc indices here
-                /// because all of them were already recalculated and written
-                /// as key part of vertical merge
-                std::vector<MergeTreeIndexPtr>{},
-                &written_offset_columns,
-                to.getIndexGranularity());
-
-            size_t column_elems_written = 0;
-
-            column_to.writePrefix();
-            while (!merges_blocker.isCancelled() && (block = column_gathered_stream.read()))
+            else
             {
-                column_elems_written += block.rows();
-                column_to.write(block);
+                mergeFunc(column_names, column_name);
             }
-
-            if (merges_blocker.isCancelled())
-                throw Exception("Cancelled merging parts", ErrorCodes::ABORTED);
-
-            column_gathered_stream.readSuffix();
-            auto changed_checksums = column_to.writeSuffixAndGetChecksums(new_data_part, checksums_gathered_columns, need_sync);
-            checksums_gathered_columns.add(std::move(changed_checksums));
-
-            if (rows_written != column_elems_written)
-            {
-                throw Exception("Written " + toString(column_elems_written) + " elements of column " + column_name +
-                                ", but " + toString(rows_written) + " rows of PK columns", ErrorCodes::LOGICAL_ERROR);
-            }
-
-            /// NOTE: 'progress' is modified by single thread, but it may be concurrently read from MergeListElement::getInfo() (StorageSystemMerges).
-
-            merge_entry->columns_written += 1;
-            merge_entry->bytes_written_uncompressed += column_gathered_stream.getProfileInfo().bytes;
-            merge_entry->progress.store(progress_before + column_sizes->columnWeight(column_name), std::memory_order_relaxed);
         }
     }
 
@@ -1491,6 +1599,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     new_data_part->uuid = future_part.uuid;
     new_data_part->is_temp = true;
     new_data_part->ttl_infos = source_part->ttl_infos;
+    new_data_part->versions = source_part->versions;
 
     /// It shouldn't be changed by mutation.
     new_data_part->index_granularity_info = source_part->index_granularity_info;
@@ -1535,6 +1644,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
             metadata_snapshot,
             part_indices,
             part_projections,
+            for_file_renames,
             in,
             time_of_mutation,
             compression_codec,
@@ -1547,6 +1657,20 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
         /// no finalization required, because mutateAllPartColumns use
         /// MergedBlockOutputStream which finilaze all part fields itself
+
+        /// handle clear map key command for part whose type is not in-memory
+        if (!isInMemoryPart(new_data_part))
+        {
+            auto clear_map_key_files = collectFilesForClearMapKey(new_data_part, for_file_renames);
+            for (const auto & file : clear_map_key_files)
+            {
+                if (new_data_part->checksums.files.count(file))
+                    new_data_part->checksums.files.erase(file);
+                String destination = new_part_tmp_path + file;
+                disk->removeFileIfExists(destination);
+            }
+        }
+
     }
     else /// TODO: check that we modify only non-key columns in this case.
     {
@@ -1674,6 +1798,15 @@ MergeAlgorithm MergeTreeDataMergerMutator::chooseMergeAlgorithm(
 {
     const auto data_settings = data.getSettings();
 
+    if (data_settings->enable_compact_map_data)
+    {
+        for (auto column : gathering_columns)
+        {
+            if (column.type->isMap() && !column.type->isMapKVStore())
+                return MergeAlgorithm::Vertical;
+        }
+    }
+
     if (deduplicate)
         return MergeAlgorithm::Horizontal;
     if (data_settings->enable_vertical_merge_algorithm == 0)
@@ -1690,6 +1823,17 @@ MergeAlgorithm MergeTreeDataMergerMutator::chooseMergeAlgorithm(
         merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
         merging_params.mode == MergeTreeData::MergingParams::Replacing ||
         merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
+
+    // return MergeAlgorithm::Vertical if there is a map key since we cannot know how many keys in this column.
+    // If there are too many keys, it may exhaust all file handles.
+    if (is_supported_storage)
+    {
+        for (auto column : gathering_columns)
+        {
+            if (column.type->isMap() || column.type->lowCardinality())
+                return MergeAlgorithm::Vertical;
+        }
+    }
 
     bool enough_ordinary_cols = gathering_columns.size() >= data_settings->vertical_merge_algorithm_min_columns_to_activate;
 
@@ -1807,6 +1951,10 @@ void MergeTreeDataMergerMutator::splitMutationCommands(
                     mutated_columns.emplace(command.column_name);
                     part_columns.rename(command.column_name, command.rename_to);
                 }
+                else if (command.type == MutationCommand::Type::CLEAR_MAP_KEY)
+                {
+                    for_file_renames.push_back(command);
+                }
             }
         }
         /// If it's compact part, then we don't need to actually remove files
@@ -1854,6 +2002,62 @@ void MergeTreeDataMergerMutator::splitMutationCommands(
             }
         }
     }
+}
+
+NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands)
+{
+    NameSet clear_map_key_set;
+    for (const auto & command : commands)
+    {
+        if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
+            continue;
+        auto files = source_part->checksums.files; 
+
+        /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+        NameSet file_set;
+
+        /// Remove all files of the implicit key name
+        for (const auto & mapKeyAst : command.map_keys->children)
+        {
+            const auto & key = typeid_cast<const ASTLiteral &>(*mapKeyAst).value.get<std::string>();
+            String implicitKeyName = getImplicitFileNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
+            for (const auto & [file, _] : source_part->checksums.files)
+            {
+                if (startsWith(file, implicitKeyName))    
+                {
+                    if (source_part->versions->enable_compact_map_data)
+                    {
+                        String file_name = getColFileNameFromImplicitColFileName(file);
+                        if (!file_set.count(file_name))
+                            file_set.insert(file_name);
+                    }
+                    files.erase(file);
+                    clear_map_key_set.emplace(file);
+                }
+            }
+        }
+        if (source_part->versions->enable_compact_map_data)
+        {
+            /// Check if all implicit keys of the map column have removed
+            bool has_other_implicit_column = false;
+            for (const auto & [file, _]: files)
+            {
+                if (startsWith(file, String("__" + command.column_name + "__")))
+                {
+                    has_other_implicit_column = true;
+                    break;
+                }
+            }
+            if (!has_other_implicit_column)
+            {
+                for (String file: file_set)
+                {
+                    clear_map_key_set.emplace(file);
+                }
+            }
+        }
+    }
+    return clear_map_key_set;
 }
 
 
@@ -1908,6 +2112,35 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             {
                 auto serialization = source_part->getSerializationForColumn(*column);
                 serialization->enumerateStreams(callback);
+                if (column->type->isMap() && !column->type->isMapKVStore())
+                {
+                    auto map_key_prefix = genMapKeyFilePrefix(command.column_name);
+                    auto map_base_prefix = genMapBaseFilePrefix(command.column_name);
+
+                    /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+                    NameSet file_set;
+                    for (const auto & [file, _] : source_part->checksums.files)
+                    {
+                        if (startsWith(file, map_key_prefix))
+                        {
+                            if (source_part->versions->enable_compact_map_data)
+                            {
+                                String file_name = getColFileNameFromImplicitColFileName(file);
+                                if (!file_set.count(file_name))
+                                    file_set.insert(file_name);
+                            }
+                            rename_vector.emplace_back(file, "");
+                        }
+                        else if (startsWith(file, map_base_prefix))
+                            rename_vector.emplace_back(file, "");
+                    }
+                    
+                    if (source_part->versions->enable_compact_map_data)
+                    {
+                        for (String file: file_set)
+                            rename_vector.emplace_back(file, "");
+                    }
+                }
             }
         }
         else if (command.type == MutationCommand::Type::RENAME_COLUMN)
@@ -1936,6 +2169,10 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             }
         }
     }
+
+    auto clear_map_key_set = collectFilesForClearMapKey(source_part, commands_for_removes);
+    for (const auto & name : clear_map_key_set)
+        rename_vector.emplace_back(name, "");
 
     return rename_vector;
 }
@@ -2379,6 +2616,7 @@ void MergeTreeDataMergerMutator::mutateAllPartColumns(
     const StorageMetadataPtr & metadata_snapshot,
     const MergeTreeIndices & skip_indices,
     const MergeTreeProjections & projections_to_build,
+    const MutationCommands & commands_for_removes,
     BlockInputStreamPtr mutating_stream,
     time_t time_of_mutation,
     const CompressionCodecPtr & compression_codec,
@@ -2426,6 +2664,32 @@ void MergeTreeDataMergerMutator::mutateAllPartColumns(
 
     new_data_part->minmax_idx = std::move(minmax_idx);
     mutating_stream->readSuffix();
+
+    /// handle clear map key commands for in-memory part
+    auto part_in_memory = asInMemoryPart(new_data_part);
+    if (part_in_memory)
+    {
+        for (const auto & command : commands_for_removes)
+        {
+            if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
+                continue;
+
+            auto & block = part_in_memory->block;
+            auto map_column = dynamic_cast<ColumnByteMap *>(block.getByName(command.column_name).column->assumeMutable().get());
+
+            if (map_column)
+            {
+                NameSet clear_map_keys;
+                for (const auto & mapKeyAst : command.map_keys->children)
+                {
+                    const auto & key = typeid_cast<const ASTLiteral &>(*mapKeyAst).value.get<std::string>();
+                    clear_map_keys.emplace(key);
+                }
+                map_column->removeKeys(clear_map_keys);
+            }
+        }
+    }
+
     out.writeSuffixAndFinalizePart(new_data_part, need_sync);
 }
 
@@ -2517,6 +2781,7 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
     {
         /// Write file with checksums.
         auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
+        new_data_part->checksums.versions = new_data_part->versions;
         new_data_part->checksums.write(*out_checksums);
     } /// close fd
 

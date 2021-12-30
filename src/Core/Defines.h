@@ -128,3 +128,7 @@
 
 /// Max depth of hierarchical dictionary
 #define DBMS_HIERARCHICAL_DICTIONARY_MAX_DEPTH 1000
+
+// The file name in ext4 system has a maximum of 255 characters
+// 255 - strlen(".null.bin") - 1
+#define DBMS_MAX_FILE_NAME_LENGTH 245

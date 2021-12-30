@@ -42,6 +42,7 @@ struct AlterCommand
         MODIFY_QUERY,
         RENAME_COLUMN,
         REMOVE_TTL,
+        CLEAR_MAP_KEY,
     };
 
     /// Which property user wants to remove from column
@@ -136,6 +137,9 @@ struct AlterCommand
 
     /// Target column name
     String rename_to;
+
+    /// For CLEAR MAP KEYS
+    ASTPtr map_keys;
 
     /// What to remove from column (or TTL)
     RemoveProperty to_remove = RemoveProperty::NO_PROPERTY;

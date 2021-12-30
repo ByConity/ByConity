@@ -55,4 +55,17 @@ CompressedWriteBuffer::~CompressedWriteBuffer()
     next();
 }
 
+void CompressedWriteBuffer::deepCopyTo(/*CompressedWriteBuffer*/BufferBase& target) const
+{
+    // call base class
+    CompressedWriteBuffer &explicitTarget = dynamic_cast<CompressedWriteBuffer&>(target);
+    BufferWithOwnMemory<WriteBuffer>::deepCopyTo(explicitTarget);
+    out.deepCopyTo(explicitTarget.out);
+
+    // ignore compression setting, TODO, sanity check they should be the same
+
+    //Copy compressed_buffer
+    explicitTarget.compressed_buffer.assign(compressed_buffer.begin(), compressed_buffer.end());
+}
+
 }

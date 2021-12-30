@@ -62,7 +62,20 @@ public:
 
     ~MergeTreeDataPartCompact() override;
 
+    size_t getColumnsWithoutByteMapColSize() const { return columns_without_bytemap_col_size; }
+
+    void setColumns(const NamesAndTypesList & new_columns) override;
+
+    /// Due to all columns except for ByteMap columns are written into one file. It's necessary to hold the column position without ByteMap column.
+    std::optional<size_t> getColumnPositionWithoutMap(const String & column_name) const;
+
 private:
+
+    size_t columns_without_bytemap_col_size;
+
+    /// In compact parts order of columns without map col is necessary, only valid for compact part.
+    NameToNumber column_name_to_position_without_map;
+
     void checkConsistency(bool require_part_metadata) const override;
 
     /// Loads marks index granularity into memory

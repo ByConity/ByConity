@@ -6,6 +6,7 @@
 #include <Disks/IDisk.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
+#include <Storages/MergeTree/MergeTreeDataPartVersions.h>
 
 
 class SipHash;
@@ -19,6 +20,7 @@ struct MergeTreeDataPartChecksum
 {
     using uint128 = CityHash_v1_0_2::uint128;
 
+    UInt64 file_offset {};
     UInt64 file_size {};
     uint128 file_hash {};
 
@@ -46,8 +48,11 @@ struct MergeTreeDataPartChecksums
 
     /// The order is important.
     using FileChecksums = std::map<String, Checksum>;
+    using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
     FileChecksums files;
 
+    Versions versions = std::make_shared<MergeTreeDataPartVersions>(false);
+    
     void addFile(const String & file_name, UInt64 file_size, Checksum::uint128 file_hash);
 
     void add(MergeTreeDataPartChecksums && rhs_checksums);

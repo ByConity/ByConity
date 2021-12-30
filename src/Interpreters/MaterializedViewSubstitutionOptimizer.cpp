@@ -11,7 +11,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Common/TypePromotion.h>
-#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <boost/rational.hpp>
 #include <Parsers/ASTSampleRatio.h>
@@ -232,10 +232,9 @@ namespace DB
                 auto new_name = alias.empty() ? select_col_match->second->name() : alias;
                 identifier->setShortName(new_name);
 
-                /// TODO: compatible with map column
-//                // after rewrite a implicit map column, we should reset the flag.
-//                if (!isMapImpliciteKey(identifier->name))
-//                    identifier->is_implicit_map_key = false;
+               // after rewrite a implicit map column, we should reset the flag.
+               if (!isMapImplicitKey(identifier->name()))
+                   identifier->is_implicit_map_key = false;
 
                 result.cost += recursion_level;
             }

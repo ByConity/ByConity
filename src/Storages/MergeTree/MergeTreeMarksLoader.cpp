@@ -12,20 +12,27 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
     extern const int CORRUPTED_DATA;
     extern const int LOGICAL_ERROR;
+    extern const int CANNOT_SEEK_THROUGH_FILE;
 }
 
 MergeTreeMarksLoader::MergeTreeMarksLoader(
     DiskPtr disk_,
     MarkCache * mark_cache_,
     const String & mrk_path_,
+    const String & stream_name_,
     size_t marks_count_,
     const MergeTreeIndexGranularityInfo & index_granularity_info_,
     bool save_marks_in_cache_,
+    off_t mark_file_offset_,
+    size_t mark_file_size_,
     size_t columns_in_mark_)
     : disk(std::move(disk_))
     , mark_cache(mark_cache_)
     , mrk_path(mrk_path_)
+    , stream_name(stream_name_)
     , marks_count(marks_count_)
+    , mark_file_offset(mark_file_offset_)
+    , mark_file_size(mark_file_size_)
     , index_granularity_info(index_granularity_info_)
     , save_marks_in_cache(save_marks_in_cache_)
     , columns_in_mark(columns_in_mark_) {}
@@ -49,13 +56,12 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     /// Memory for marks must not be accounted as memory usage for query, because they are stored in shared cache.
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker;
 
-    size_t file_size = disk->getFileSize(mrk_path);
     size_t mark_size = index_granularity_info.getMarkSizeInBytes(columns_in_mark);
     size_t expected_file_size = mark_size * marks_count;
 
-    if (expected_file_size != file_size)
+    if (expected_file_size != mark_file_size)
         throw Exception(
-            "Bad size of marks file '" + fullPath(disk, mrk_path) + "': " + std::to_string(file_size) + ", must be: " + std::to_string(expected_file_size),
+            "Bad size of marks file '" + fullPath(disk, mrk_path) + "' for stream '" + stream_name + "': " + std::to_string(mark_file_size) + ", must be: " + std::to_string(expected_file_size),
             ErrorCodes::CORRUPTED_DATA);
 
     auto res = std::make_shared<MarksInCompressedFile>(marks_count * columns_in_mark);
@@ -63,25 +69,32 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     if (!index_granularity_info.is_adaptive)
     {
         /// Read directly to marks.
-        auto buffer = disk->readFile(mrk_path, file_size);
-        buffer->readStrict(reinterpret_cast<char *>(res->data()), file_size);
+        auto buffer = disk->readFile(mrk_path, mark_file_size);
+        if (buffer->seek(mark_file_offset) != mark_file_offset)
+            throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
-        if (!buffer->eof())
+        if (buffer->eof() || buffer->buffer().size() != mark_file_size)
             throw Exception("Cannot read all marks from file " + mrk_path + ", eof: " + std::to_string(buffer->eof())
-            + ", buffer size: " + std::to_string(buffer->buffer().size()) + ", file size: " + std::to_string(file_size), ErrorCodes::CANNOT_READ_ALL_DATA);
+            + ", buffer size: " + std::to_string(buffer->buffer().size()) + ", file size: " + std::to_string(mark_file_size), ErrorCodes::CANNOT_READ_ALL_DATA);
+
+        buffer->readStrict(reinterpret_cast<char *>(res->data()), mark_file_size);
     }
     else
     {
-        auto buffer = disk->readFile(mrk_path, file_size);
+        auto buffer = disk->readFile(mrk_path, mark_file_size);
+        if (buffer->seek(mark_file_offset) != mark_file_offset)
+            throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+
         size_t i = 0;
-        while (!buffer->eof())
+        off_t limit_offset_in_file = mark_file_offset + mark_file_size;
+        while (buffer->getPosition() < limit_offset_in_file)
         {
             res->read(*buffer, i * columns_in_mark, columns_in_mark);
             buffer->seek(sizeof(size_t), SEEK_CUR);
             ++i;
         }
 
-        if (i * mark_size != file_size)
+        if (i * mark_size != mark_file_size)
             throw Exception("Cannot read all marks from file " + mrk_path, ErrorCodes::CANNOT_READ_ALL_DATA);
     }
     res->protect();
@@ -90,9 +103,10 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 
 void MergeTreeMarksLoader::loadMarks()
 {
+    String mrk_name = index_granularity_info.getMarksFilePath(stream_name);
     if (mark_cache)
     {
-        auto key = mark_cache->hash(mrk_path);
+        auto key = mark_cache->hash(mrk_path + mrk_name);
         if (save_marks_in_cache)
         {
             auto callback = [this]{ return loadMarksImpl(); };
@@ -109,7 +123,7 @@ void MergeTreeMarksLoader::loadMarks()
         marks = loadMarksImpl();
 
     if (!marks)
-        throw Exception("Failed to load marks: " + mrk_path, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Failed to load marks: " + mrk_name + " from path:" + mrk_path, ErrorCodes::LOGICAL_ERROR);
 }
 
 }

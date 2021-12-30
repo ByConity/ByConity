@@ -14,8 +14,11 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/NetException.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include <IO/LimitReadBuffer.h>
 #include <common/scope_guard.h>
 #include <Parsers/parseQuery.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/MapHelpers.h>
 
 #include <Poco/File.h>
 #include <Poco/Net/HTTPRequest.h>
@@ -166,8 +169,7 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuff
 
     if (qtype == "FetchPart")
     {
-        bool incrementally = params.get("fetch_part_incrementally", "false") == "true";
-        processQueryPart(params, body, out, response, incrementally);
+        processQueryPart(params, body, out, response);
     }
     else if (qtype == "FetchList")
     {
@@ -188,7 +190,7 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuff
 }
 
 void Service::processQueryPart(
-    const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally)
+    const HTMLForm & params, [[maybe_unused]]ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response)
 {
     int client_protocol_version = parse<int>(params.get("client_protocol_version", "0"));
 
@@ -215,10 +217,6 @@ void Service::processQueryPart(
 
     /// We pretend to work as older server version, to be sure that client will correctly process our version
     response.addCookie({"server_protocol_version", toString(std::min(client_protocol_version, REPLICATION_PROTOCOL_VERSION_WITH_PARTS_PROJECTION))});
-    if (incrementally)
-    {
-        response.addCookie({"fetch_part_incrementally", "true"});
-    }
 
     ++total_sends;
     SCOPE_EXIT({--total_sends;});
@@ -450,21 +448,60 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
         }
     }
 
+    // receiver needs to know the parameter
+    bool enable_compact_map_data = part->versions->enable_compact_map_data;
+    
     writeBinary(checksums.files.size(), out);
-    for (const auto & it : checksums.files)
+    writeBoolText(enable_compact_map_data, out);
+    
+    using pair = std::pair<String, MergeTreeDataPartChecksum>;
+    std::vector<pair> checksumsVector;
+
+    for (auto it = checksums.files.begin(); it != checksums.files.end(); it++)
+        checksumsVector.emplace_back(*it);
+
+    if (enable_compact_map_data)
+    {
+        // when enabling compact map data, it needs to sort the checksum.files, because all implicit columns of a map column need to transfer by order.
+        sort(checksumsVector.begin(), checksumsVector.end(), [](const pair &x, const pair &y) -> int {
+            return x.second.file_offset < y.second.file_offset;
+        });
+    }
+
+    for (const auto & it : checksumsVector)
     {
         String file_name = it.first;
+        String path;
+        UInt64 size;
 
-        String path = fs::path(part->getFullRelativePath()) / file_name;
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        {
+            path = fs::path(part->getFullRelativePath()) / getColFileNameFromImplicitColFileName(file_name);
+            size = it.second.file_size;
+        }
+        else
+        {
+            path = fs::path(part->getFullRelativePath()) / file_name;
+            size = disk->getFileSize(path);
+        }
 
-        UInt64 size = disk->getFileSize(path);
-
-        writeStringBinary(it.first, out);
+        writeStringBinary(file_name, out);
         writeBinary(size, out);
 
-        auto file_in = disk->readFile(path);
         HashingWriteBuffer hashing_out(out);
-        copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
+        {
+            UInt64 offset = it.second.file_offset;
+            auto file_in = disk->readFile(path);
+            file_in->seek(offset);
+            LimitReadBuffer limit_file_in(*file_in, size, false);
+            copyDataWithThrottler(limit_file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        }
+        else
+        {
+            auto file_in = disk->readFile(path);
+            copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
+        }
 
         if (blocker.isCancelled())
             throw Exception("Transferring part to replica was cancelled", ErrorCodes::ABORTED);
@@ -1019,13 +1056,25 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
     size_t files;
     readBinary(files, in);
 
+    bool enable_compact_map_data;
+    readBoolText(enable_compact_map_data, in);
+
     for (size_t i = 0; i < files; ++i)
     {
-        String file_name;
+        String stream_name;
         UInt64 file_size;
 
-        readStringBinary(file_name, in);
+        readStringBinary(stream_name, in);
         readBinary(file_size, in);
+
+        // When enable compact map data and the stream is implicit column, the file stream need to append.
+        bool need_append = false;
+        String file_name = stream_name;
+        if (enable_compact_map_data && isMapImplicitKeyNotKV(stream_name))
+        {
+            need_append = true;
+            file_name = getColFileNameFromImplicitColFileName(stream_name);
+        }
 
         /// File must be inside "absolute_part_path" directory.
         /// Otherwise malicious ClickHouse replica may force us to write to arbitrary path.
@@ -1035,7 +1084,8 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
                 " This may happen if we are trying to download part from malicious replica or logical error.",
                 ErrorCodes::INSECURE_PATH);
 
-        auto file_out = disk->writeFile(fs::path(part_download_path) / file_name);
+        auto file_out = disk->writeFile(
+            fs::path(part_download_path) / file_name, DBMS_DEFAULT_BUFFER_SIZE, need_append ? WriteMode::Append : WriteMode::Rewrite);
         HashingWriteBuffer hashing_out(*file_out);
         copyDataWithThrottler(in, hashing_out, file_size, blocker.getCounter(), throttler);
 
@@ -1052,13 +1102,13 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         readPODBinary(expected_hash, in);
 
         if (expected_hash != hashing_out.getHash())
-            throw Exception("Checksum mismatch for file " + fullPath(disk, (fs::path(part_download_path) / file_name).string()) + " transferred from " + replica_path,
+            throw Exception("Checksum mismatch for file " + fullPath(disk, (fs::path(part_download_path) / stream_name).string()) + " transferred from " + replica_path,
                 ErrorCodes::CHECKSUM_DOESNT_MATCH);
 
-        if (file_name != "checksums.txt" &&
-            file_name != "columns.txt" &&
-            file_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME)
-            checksums.addFile(file_name, file_size, expected_hash);
+        if (stream_name != "checksums.txt" &&
+            stream_name != "columns.txt" &&
+            stream_name != IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME)
+            checksums.addFile(stream_name, file_size, expected_hash);
 
         if (sync)
             hashing_out.sync();

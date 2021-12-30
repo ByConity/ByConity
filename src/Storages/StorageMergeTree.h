@@ -37,6 +37,7 @@ public:
     bool supportsParallelInsert() const override { return true; }
 
     bool supportsIndexForIn() const override { return true; }
+    bool supportsMapImplicitColumn() const override { return true; }
 
     Pipe read(
         const Names & column_names,

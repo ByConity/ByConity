@@ -17,6 +17,7 @@ class IMergeTreeReader : private boost::noncopyable
 {
 public:
     using ValueSizeMap = std::map<std::string, double>;
+	using MapColumnKeys = std::multimap<std::string, std::string>;
     using DeserializeBinaryBulkStateMap = std::map<std::string, ISerialization::DeserializeBinaryBulkStatePtr>;
 
     IMergeTreeReader(
@@ -67,6 +68,14 @@ protected:
 
     void checkNumberOfColumns(size_t num_columns_to_read) const;
 
+    void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
+
+    void readData(
+        const NameAndTypePair & name_and_type, ColumnPtr & column,
+        size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+        ISerialization::SubstreamsCache & cache);
+
     /// avg_value_size_hints are used to reduce the number of reallocations when creating columns of variable size.
     ValueSizeMap avg_value_size_hints;
     /// Stores states for IDataType::deserializeBinaryBulk
@@ -75,6 +84,12 @@ protected:
     /// Columns that are read.
     NamesAndTypesList columns;
     NamesAndTypesList part_columns;
+
+	//TODO whether we will move it to ReaderWide class
+    /// Map ColumnMap to its keys sub columns
+    MapColumnKeys mapColumnKeys;
+    std::set<String> dupImplicitKeys;
+    Names names; // only initialized if duplicate implicit key exit
 
     UncompressedCache * uncompressed_cache;
     MarkCache * mark_cache;
@@ -86,7 +101,13 @@ protected:
     MarkRanges all_mark_ranges;
 
     using ColumnPosition = std::optional<size_t>;
-    ColumnPosition findColumnForOffsets(const String & column_name) const;
+    virtual ColumnPosition findColumnForOffsets(const String & column_name) const;
+
+    using FileStreams = std::map<std::string, std::unique_ptr<MergeTreeReaderStream>>;
+    using Serializations = std::map<std::string, SerializationPtr>;
+
+    FileStreams streams;
+    Serializations serializations;
 
     friend class MergeTreeRangeReader::DelayedStream;
 

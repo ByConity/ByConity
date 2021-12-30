@@ -1158,6 +1158,7 @@ void StorageHaMergeTree::alter(
 
     StorageInMemoryMetadata future_metadata = *current_metadata;
     commands.apply(future_metadata, query_context);
+    checkColumnsValidity(future_metadata.columns);
 
     HaMergeTreeTableMetadata future_metadata_in_zk(*this, current_metadata);
     compareAndUpdateMetadata(*current_metadata, future_metadata, future_metadata_in_zk);
@@ -1905,8 +1906,7 @@ bool StorageHaMergeTree::fetchPartHeuristically(
     const String & part_name,
     const String & backup_replica,
     bool to_detached,
-    size_t quorum,
-    bool incrementally)
+    size_t quorum)
 {
     bool all_success = false;
     auto candidate_replicas = log_exchanger.findActiveContainingPart(part_name, all_success);
@@ -1961,8 +1961,7 @@ bool StorageHaMergeTree::fetchPartHeuristically(
         zookeeper_path + "/replicas/" + replica_to_fetch,
         to_detached,
         quorum,
-        false, // to_repair
-        incrementally);
+        false); // to_repair
 }
 
 bool StorageHaMergeTree::fetchPart(
@@ -1971,8 +1970,7 @@ bool StorageHaMergeTree::fetchPart(
     const String & source_replica_path,
     bool to_detached,
     size_t quorum,
-    bool,
-    bool incrementally)
+    bool)
 {
     std::unique_ptr<FetchingPartToExecutingEntrySet::Handle> handle;
     if (executing_set)
@@ -2306,9 +2304,7 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
                 new_part_name,
                 entry.source_replica,
                 false, /// detached
-                0, /// quorum
-                0);
-                /// TODO: getContext()->getSettingsRef().enable_fetch_part_incrementally);
+                0); /// quorum
             return true;
         }
         catch (Exception & e)

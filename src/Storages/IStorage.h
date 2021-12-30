@@ -126,6 +126,10 @@ public:
     /// Returns true if the storage supports parallel insert.
     virtual bool supportsParallelInsert() const { return false; }
 
+    /// Return true if the storage use MAP flattened model. i.e. MergeTree for now
+    virtual bool supportsMapImplicitColumn() const { return false; }
+
+
     /// Returns true if the storage supports deduplication of inserted data blocks.
     virtual bool supportsDeduplication() const { return false; }
 
@@ -184,6 +188,9 @@ public:
     Names getAllRegisteredNames() const override;
 
     NameDependencies getDependentViewsByColumn(ContextPtr context) const;
+
+    /// Check whether column names and data types are valid. If not, throw Exception.
+    virtual void checkColumnsValidity([[maybe_unused]] const ColumnsDescription & columns) const {}
 
 protected:
     /// Returns whether the column is virtual - by default all columns are real.

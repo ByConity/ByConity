@@ -21,6 +21,6 @@ d
 a
 x
 a	b	['b','c']
-d	e	[]
+d	e	\N
 a	b	['b','c']
 x	\N	['y','z']

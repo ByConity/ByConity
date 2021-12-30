@@ -37,6 +37,7 @@ struct MutationCommand
         DROP_PROJECTION,
         MATERIALIZE_TTL,
         RENAME_COLUMN,
+        CLEAR_MAP_KEY,
     };
 
     Type type = EMPTY;
@@ -53,6 +54,9 @@ struct MutationCommand
 
     /// For MATERIALIZE INDEX, UPDATE and DELETE.
     ASTPtr partition;
+
+    /// For CLEAR MAP KEYS
+    ASTPtr map_keys;
 
     /// For reads, drops and etc.
     String column_name;

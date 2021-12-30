@@ -8,7 +8,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/MapHelpers.h>
 #include <Formats/FormatFactory.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
@@ -939,6 +941,45 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
             required_parts.emplace_back(part);
     }
     return required_parts;
+}
+
+void MergeTreeData::checkColumnsValidity(const ColumnsDescription & columns) const
+{
+    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
+
+    for (auto & column: columns.getAll())
+    {
+        /// check func columns
+        for (auto & [name, type]: func_columns)
+        {
+            if (name == column.name)
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        /// block implicit key name for MergeTree family
+        if (isMapImplicitKey(column.name))
+            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
+
+        if (column.type && column.type->isMap())
+        {
+            /// The name of map column should not contain "__", which is convenient for extracting map column name from a implicit column name.
+            if (column.name.find("__") != String::npos)
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " whose type is Map contains reserved word \"__\"", ErrorCodes::ILLEGAL_COLUMN);
+
+            /// The name of map column should not end with '_', which is convenient for extracting map column name from a implicit column name.
+            if (endsWith(column.name, "_"))
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " whose type is Map can not end with char \'_\'", ErrorCodes::ILLEGAL_COLUMN);
+
+            if (storage_settings.get()->enable_compact_map_data)
+            {
+                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
+                if (type_map.valueTypeIsLC())
+                {
+                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+        }
+    }
 }
 
 String MergeTreeData::MergingParams::getModeName() const
@@ -5172,7 +5213,7 @@ bool MergeTreeData::partsContainSameProjections(const DataPartPtr & left, const 
     return true;
 }
 
-bool MergeTreeData::canUsePolymorphicParts(const MergeTreeSettings & settings, String * out_reason) const
+bool MergeTreeData::canUsePolymorphicParts([[maybe_unused]]const MergeTreeSettings & settings, [[maybe_unused]]String * out_reason) const
 {
     if (!canUseAdaptiveGranularity())
     {
@@ -5608,6 +5649,36 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
                         transaction->rename_map[file_name + mark_ext] = "";
                     }
                 });
+            }
+
+            /// remove implicit column file and base column file if necessary
+            if (column.type->isMap() && !column.type->isMapKVStore())
+            {
+                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+                NameSet file_set;
+                auto map_key_prefix = genMapKeyFilePrefix(column.name);
+                auto map_base_prefix = genMapBaseFilePrefix(column.name);
+
+                for (const auto & [file, _]: part->checksums.files)
+                {
+                    if (startsWith(file, map_key_prefix))
+                    {
+                        if (part->versions->enable_compact_map_data)
+                        {
+                            String file_name = getColFileNameFromImplicitColFileName(file);
+                            if (!file_set.count(file_name))
+                                file_set.insert(file_name);
+                        }
+                        transaction->rename_map[file] = "";
+                    }
+                    else if (startsWith(file, map_base_prefix))
+                        transaction->rename_map[file] = "";
+                }
+                if (part->versions->enable_compact_map_data)
+                {
+                    for (String file: file_set)
+                        transaction->rename_map[file] = "";
+                }
             }
         }
     }

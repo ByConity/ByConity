@@ -115,8 +115,15 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     if (columns.empty())
         throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 
-    /// We can use any column, it doesn't matter
-    std::string marks_file_path = index_granularity_info.getMarksFilePath(full_path + getFileNameForColumn(columns.front()));
+    /// We can use any column except for ByteMap column whose data file may not exist.
+    std::string marks_file_path;
+    for (auto & column: columns)
+    {
+        if (column.type->isMap() && !column.type->isMapKVStore())
+            continue;
+        marks_file_path = index_granularity_info.getMarksFilePath(full_path + getFileNameForColumn(column));
+        break;
+    }
     if (!volume->getDisk()->exists(marks_file_path))
         throw Exception("Marks file '" + fullPath(volume->getDisk(), marks_file_path) + "' doesn't exist", ErrorCodes::NO_FILE_IN_DATA_PART);
 
@@ -161,6 +168,10 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
         {
             for (const NameAndTypePair & name_type : columns)
             {
+                //@ByteMap
+                if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+                    continue;
+            
                 auto serialization = getSerializationForColumn(name_type);
                 serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
                 {
@@ -184,6 +195,10 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
         std::optional<UInt64> marks_size;
         for (const NameAndTypePair & name_type : columns)
         {
+            //@ByteMap
+            if (name_type.type->isMap() && !name_type.type->isMapKVStore())
+                continue;
+            
             auto serialization = IDataType::getSerialization(name_type,
                 [&](const String & stream_name)
                 {

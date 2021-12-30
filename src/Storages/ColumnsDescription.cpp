@@ -20,6 +20,9 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeNested.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/MapHelpers.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
@@ -74,6 +77,61 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
         DB::writeText(DB::toString(default_desc.kind), buf);
         writeChar('\t', buf);
         writeEscapedString(queryToString(default_desc.expression), buf);
+    }
+
+    UInt8 flag = type->getFlags();
+
+    while (flag)
+    {
+        // if (flag & TYPE_COMPRESSION_FLAG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("COMPRESSION", buf);
+        //     flag ^= TYPE_COMPRESSION_FLAG;
+        // }
+        // else if (flag & TYPE_SECURITY_FLAG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("SECURITY", buf);
+        //     flag ^= TYPE_SECURITY_FLAG;
+        // }
+        // else if (flag & TYPE_ENCRYPT_FLAG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("ENCRYPT", buf);
+        //     flag ^= TYPE_ENCRYPT_FLAG;
+        // }
+        // else if (flag & TYPE_BLOOM_FLAG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("BLOOM", buf);
+        //     flag ^= TYPE_BLOOM_FLAG;
+        // }
+        // else if (flag & TYPE_BITMAP_INDEX_FLAG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("BitmapIndex", buf);
+        //     flag ^= TYPE_BITMAP_INDEX_FLAG;
+        // }
+        // else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
+        // {
+        //     writeChar('\t', buf);
+        //     DB::writeText("MarkBitmapIndex", buf);
+        //     flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
+        // }
+        // else 
+        if (flag & TYPE_MAP_KV_STORE_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("KV", buf);
+            flag ^= TYPE_MAP_KV_STORE_FLAG;
+        }
+        else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BitEngineEncode", buf);
+            flag ^= TYPE_BITENGINE_ENCODE_FLAG;
+        }
     }
 
     if (!comment.empty())
@@ -413,6 +471,12 @@ NamesAndTypesList ColumnsDescription::getByNames(GetFlags flags, const Names & n
                 continue;
             }
         }
+        //@ByteMap
+        else if (auto impl = tryGetMapImplicitColumn(name))
+        {
+            res.push_back(*impl);
+            continue;
+        }
         else if (with_subcolumns)
         {
             auto jt = subcolumns.get<0>().find(name);
@@ -448,6 +512,39 @@ Names ColumnsDescription::getNamesOfPhysical() const
     return ret;
 }
 
+std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const String & column_name) const
+{
+    if (isMapImplicitKey(column_name))
+    {
+        auto ordinary_columns = getOrdinary();
+        for (auto & nt : ordinary_columns)
+        {
+            if (nt.type->isMap() && startsWith(column_name, String("__") + nt.name + "__"))
+            {
+                auto const & map_value_type = dynamic_cast<const DataTypeByteMap *>(nt.type.get())->getValueType();
+                if (map_value_type->lowCardinality())
+                    return NameAndTypePair(column_name, map_value_type);
+                else
+                    return NameAndTypePair(column_name, makeNullable(map_value_type));
+            }
+            else if (nt.type->isMapKVStore())
+            {
+                if (column_name == nt.name + ".key")
+                {
+                    auto key_store_type = typeid_cast<const DataTypeByteMap &>(*nt.type).getKeyStoreType();
+                    return NameAndTypePair(column_name, key_store_type);
+                }
+                else if (column_name == nt.name + ".value")
+                {
+                    auto value_store_type = typeid_cast<const DataTypeByteMap &>(*nt.type).getValueStoreType();
+                    return NameAndTypePair(column_name, value_store_type);
+                }
+            }
+        }
+    }
+    return {};
+}
+
 std::optional<NameAndTypePair> ColumnsDescription::tryGetColumnOrSubcolumn(GetFlags flags, const String & column_name) const
 {
     auto it = columns.get<1>().find(column_name);
@@ -457,6 +554,8 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetColumnOrSubcolumn(GetFl
     auto jt = subcolumns.get<0>().find(column_name);
     if (jt != subcolumns.get<0>().end())
         return *jt;
+    if (auto res = tryGetMapImplicitColumn(column_name))
+        return res;
 
     return {};
 }
@@ -499,6 +598,9 @@ bool ColumnsDescription::hasPhysical(const String & column_name) const
 bool ColumnsDescription::hasColumnOrSubcolumn(GetFlags flags, const String & column_name) const
 {
     auto it = columns.get<1>().find(column_name);
+    // @ByteMap
+    if (tryGetMapImplicitColumn(column_name)) return true;
+
     return (it != columns.get<1>().end()
         && (defaultKindToGetFlag(it->default_desc.kind) & flags))
             || hasSubcolumn(column_name);

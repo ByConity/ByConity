@@ -67,13 +67,13 @@ SELECT day1 = '2020-01-04' FROM test_table PREWHERE day1 = '2020-01-04'  WHERE d
 
 
 ALTER TABLE test_table add column array Array(UInt8) default [1, 2, 3];
-ALTER TABLE test_table add column struct.key Array(UInt8) default [2, 4, 6], add column struct.value Array(UInt8) alias array;
+ALTER TABLE test_table add column struct.key1 Array(UInt8) default [2, 4, 6], add column struct.value_ Array(UInt8) alias array;
 
 
 SELECT 'array-join';
 set max_rows_to_read = 10;
 SELECT count() == 10 FROM test_table WHERE day = '2020-01-01';
-SELECT sum(struct.key) == 30, sum(struct.value) == 30 FROM (SELECT struct.key, struct.value FROM test_table array join struct WHERE day = '2020-01-01');
+SELECT sum(struct.key1) == 30, sum(struct.value_) == 30 FROM (SELECT struct.key1, struct.value_ FROM test_table array join struct WHERE day = '2020-01-01');
 
 
 SELECT 'lambda';

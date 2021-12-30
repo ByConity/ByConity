@@ -55,6 +55,14 @@ void run(String part_path, String date_column, String dest_path)
 
     ReadBufferFromFile checksums_in(old_part_path_str + "checksums.txt", 4096);
     MergeTreeDataPartChecksums checksums;
+    String versions_path = old_part_path_str + "versions.txt";
+    Poco::File versions_file(versions_path);
+    if (versions_file.exists())
+    {
+        ReadBufferFromFile versions_in(versions_path, 4096);
+
+        checksums.versions->read(versions_in);
+    }
     checksums.read(checksums_in);
 
     auto date_col_checksum_it = checksums.files.find(date_column + ".bin");
@@ -97,6 +105,7 @@ void run(String part_path, String date_column, String dest_path)
 
     Poco::File(new_tmp_part_path_str + "checksums.txt").setWriteable();
     WriteBufferFromFile checksums_out(new_tmp_part_path_str + "checksums.txt", 4096);
+    /// already set versions before
     checksums.write(checksums_out);
     checksums_in.close();
     checksums_out.close();

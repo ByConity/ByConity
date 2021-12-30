@@ -149,6 +149,15 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         return res;
     }
+    else if (parse_alter_commands && command->type == ASTAlterCommand::CLEAR_MAP_KEY)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = MutationCommand::Type::CLEAR_MAP_KEY;
+        res.column_name = getIdentifierName(command->column);
+        res.map_keys = command->map_keys;
+        return res;
+    }
     return {};
 }
 

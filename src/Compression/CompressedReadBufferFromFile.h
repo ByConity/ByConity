@@ -27,14 +27,30 @@ private:
     ReadBufferFromFileBase & file_in;
     size_t size_compressed = 0;
 
+    const off_t limit_offset_in_file;
+    bool is_limit = false;
+
     bool nextImpl() override;
 
 public:
-    CompressedReadBufferFromFile(std::unique_ptr<ReadBufferFromFileBase> buf, bool allow_different_codecs_ = false);
+    CompressedReadBufferFromFile(
+        std::unique_ptr<ReadBufferFromFileBase> buf,
+        bool allow_different_codecs_ = false,
+        off_t file_offset_ = 0,
+        size_t file_size_ = 0,
+        bool is_limit_ = false);
 
     CompressedReadBufferFromFile(
-        const std::string & path, size_t estimated_size, size_t aio_threshold, size_t mmap_threshold, MMappedFileCache * mmap_cache,
-        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE, bool allow_different_codecs_ = false);
+        const std::string & path,
+        size_t estimated_size,
+        size_t aio_threshold,
+        size_t mmap_threshold,
+        MMappedFileCache * mmap_cache,
+        size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
+        bool allow_different_codecs_ = false,
+        off_t file_offset_ = 0,
+        size_t file_size_ = 0,
+        bool is_limit_ = false);
 
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 

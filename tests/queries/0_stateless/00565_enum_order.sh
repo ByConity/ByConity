@@ -24,8 +24,8 @@ CREATE TABLE `test_log` (
     db String,
     type String,
     operation Enum8('INSERT'=1, 'UPDATE'=2, 'DELETE'=3),
-    old_fields Nested(name String, value String, is_null Enum8('true'=1, 'false'=0)),
-    new_fields Nested(name String, value String, is_null Enum8('true'=1, 'false'=0)),
+    old_fields Nested(name String, value_ String, is_null Enum8('true'=1, 'false'=0)),
+    new_fields Nested(name String, value_ String, is_null Enum8('true'=1, 'false'=0)),
     record_source_type Int8,
     record_source_timestamp DateTime,
     deleted Enum8('true'=1, 'false'=0)
@@ -39,7 +39,7 @@ EOF
 DATA='2018-01-01\t2018-01-01 03:00:00\tclient:1-\tserveruuid:0\t0\t0\t0\t\t\ttest\ttest\tINSERT\t[]\t[]\t[]\t[]\t[]\t[]\t1\t2018-02-02 15:54:10\tfalse\n'
 QUERY='INSERT INTO "test_log"("date", "datetime", "path", "gtid", "query_serial", "row_serial",
     "reqid", "method", "service", "db", "type", "operation", "old_fields"."name",
-    "old_fields"."value", "old_fields"."is_null", "new_fields"."name", "new_fields"."value",
+    "old_fields"."value_", "old_fields"."is_null", "new_fields"."name", "new_fields"."value_",
     "new_fields"."is_null", "record_source_type", "record_source_timestamp", "deleted") FORMAT TabSeparated'
 QUERY="$(tr -d '\n' <<<"$QUERY")"
 echo "$QUERY"

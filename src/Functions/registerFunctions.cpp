@@ -11,6 +11,7 @@ void registerFunctionsArithmetic(FunctionFactory &);
 void registerFunctionsArray(FunctionFactory &);
 void registerFunctionsTuple(FunctionFactory &);
 void registerFunctionsMap(FunctionFactory &);
+void registerFunctionsByteMap(FunctionFactory &);
 void registerFunctionsBitmap(FunctionFactory &);
 void registerFunctionsBitEngine(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
@@ -70,7 +71,11 @@ void registerFunctions()
     registerFunctionsArithmetic(factory);
     registerFunctionsArray(factory);
     registerFunctionsTuple(factory);
+#ifdef USE_COMMUNITY_MAP
     registerFunctionsMap(factory);
+#else
+    registerFunctionsByteMap(factory);
+#endif
 #if !defined(ARCADIA_BUILD)
     registerFunctionsBitmap(factory);
     registerFunctionsBitEngine(factory);

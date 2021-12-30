@@ -15,7 +15,9 @@
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Storages/MergeTree/MergeTreeDataPartTTLInfo.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
+#include <Storages/MergeTree/MergeTreeDataPartVersions.h>
 #include <Storages/MergeTree/KeyCondition.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 #include <Storages/UniqueKeyIndex.h>
 #include <Poco/Path.h>
@@ -59,7 +61,7 @@ const String uki_file_name = "unique_key.idx";
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
 {
 public:
-    static constexpr auto DATA_FILE_EXTENSION = ".bin";
+    //static constexpr auto DATA_FILE_EXTENSION = ".bin";
 
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
@@ -73,6 +75,7 @@ public:
 
     using Type = MergeTreeDataPartType;
 
+    using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
 
     IMergeTreeDataPart(
         const MergeTreeData & storage_,
@@ -112,7 +115,7 @@ public:
     virtual bool isStoredOnDisk() const = 0;
 
     virtual bool supportsVerticalMerge() const { return false; }
-
+    
     /// NOTE: Returns zeros if column files are not found in checksums.
     /// Otherwise return information about column size on disk.
     ColumnSize getColumnSize(const String & column_name, const IDataType & /* type */) const;
@@ -132,7 +135,7 @@ public:
 
     String getTypeName() const { return getType().toString(); }
 
-    void setColumns(const NamesAndTypesList & new_columns);
+    virtual void setColumns(const NamesAndTypesList & new_columns);
 
     const NamesAndTypesList & getColumns() const { return columns; }
 
@@ -316,6 +319,8 @@ public:
 
     MinMaxIndex minmax_idx;
 
+	Versions versions;
+
     Checksums checksums;
 
     /// Columns with values, that all have been zeroed by expired ttl
@@ -332,6 +337,7 @@ public:
     void setBytesOnDisk(UInt64 bytes_on_disk_) { bytes_on_disk = bytes_on_disk_; }
 
     size_t getFileSizeOrZero(const String & file_name) const;
+    off_t getFileOffsetOrZero(const String & file_name) const;
 
     /// Returns path to part dir relatively to disk mount point
     String getFullRelativePath() const;
@@ -602,6 +608,9 @@ private:
 
     /// Reads columns names and types from columns.txt
     void loadColumns(bool require);
+
+    /// If versions.txt exists, reads versions from it
+    void loadVersions();
 
     /// If checksums.txt exists, reads file's checksums (and sizes) from it
     void loadChecksums(bool require);

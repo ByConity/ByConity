@@ -1,6 +1,7 @@
 #include <DataTypes/FieldToDataType.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -145,6 +146,19 @@ DataTypePtr FieldToDataType::operator() (const Map & map) const
     }
 
     return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
+}
+
+DataTypePtr FieldToDataType::operator() (const ByteMap & map) const
+{
+    DataTypePtr keyType, valueType;
+
+    if (map.empty())
+        throw Exception("Cannot infer type of empty map", ErrorCodes::EMPTY_DATA_PASSED);
+
+    keyType = applyVisitor(FieldToDataType(), map[0].first);
+    valueType = applyVisitor(FieldToDataType(), map[0].second);
+
+    return std::make_shared<DataTypeByteMap>(keyType, valueType);
 }
 
 DataTypePtr FieldToDataType::operator() (const AggregateFunctionStateData & x) const

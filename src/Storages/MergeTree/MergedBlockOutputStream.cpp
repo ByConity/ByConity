@@ -187,6 +187,18 @@ void MergedBlockOutputStream::finalizePartOnDisk(
         }
     }
 
+    {
+        /// Write a file with versions
+        auto out = volume->getDisk()->writeFile(fs::path(part_path) / "versions.txt", 4096);
+        HashingWriteBuffer out_hashing(*out);
+        new_part->versions->write(out_hashing);
+        checksums.files["versions.txt"].file_size = out_hashing.count();
+        checksums.files["versions.txt"].file_hash = out_hashing.getHash();
+        out->finalize();
+        if (sync)
+            out->sync();
+    }
+
     if (!new_part->ttl_infos.empty())
     {
         /// Write a file with ttl infos in json format.
@@ -226,6 +238,7 @@ void MergedBlockOutputStream::finalizePartOnDisk(
     {
         /// Write file with checksums.
         auto out = volume->getDisk()->writeFile(fs::path(part_path) / "checksums.txt", 4096);
+        checksums.versions = new_part->versions;
         checksums.write(*out);
         out->finalize();
         if (sync)

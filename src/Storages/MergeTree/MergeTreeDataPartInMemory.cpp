@@ -123,7 +123,12 @@ IMergeTreeDataPart::Checksum MergeTreeDataPartInMemory::calculateBlockChecksum()
     SipHash hash;
     IMergeTreeDataPart::Checksum checksum;
     for (const auto & column : block)
+    {
+        /// TODO(lta): check if it's correct to skip
+        if (column.type->isMap() || column.type->isMapKVStore())
+            continue;
         column.column->updateHashFast(hash);
+    }
 
     checksum.uncompressed_size = block.bytes();
     hash.get128(checksum.uncompressed_hash);

@@ -5,6 +5,7 @@
 #include <Interpreters/StorageID.h>
 #include <Parsers/queryToString.h>
 #include <IO/Operators.h>
+#include <DataTypes/MapHelpers.h>
 
 
 namespace DB
@@ -124,6 +125,16 @@ void ASTIdentifier::formatImplWithoutAlias(const FormatSettings & settings, Form
             else
                 format_element(name_parts[i]);
         }
+    }
+    else if (is_implicit_map_key)
+    {
+        //print __c__k as c{k}
+        String mapCol;
+        parseMapFromImplName(name(), mapCol);
+        settings.ostr << (settings.hilite ? hilite_identifier : "");
+        settings.writeIdentifier(mapCol);
+        settings.ostr << "{"<< name().substr(4 + mapCol.length()) <<"}";
+        settings.ostr << (settings.hilite ? hilite_none : "");
     }
     else
     {
