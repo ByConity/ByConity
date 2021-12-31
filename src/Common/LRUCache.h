@@ -2,12 +2,18 @@
 
 #include <unordered_map>
 #include <list>
+#include <set>
 #include <memory>
 #include <chrono>
 #include <mutex>
 #include <atomic>
 
+#include <Core/Types.h>
 #include <common/logger_useful.h>
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/member.hpp>
 
 
 namespace DB
@@ -19,6 +25,108 @@ struct TrivialWeightFunction
     size_t operator()(const T &) const
     {
         return 1;
+    }
+};
+
+// CacheContainer is a key-value structure. It used as the first level key-value mapping of two-level LRU cache.
+// Ths container has name-Key pair, where name is the first level key, Key is the first level value and second level key.
+// A name may has multiple Keys, and a Key belongs to multiple names.
+template<typename Key>
+class CacheContainer
+{
+    struct name_tag{};
+    struct key_tag{};
+
+    using CacheIndex = std::pair<String, Key>;
+
+    using CacheIndexes = boost::multi_index_container<
+        CacheIndex,
+        boost::multi_index::indexed_by<boost::multi_index::ordered_non_unique<boost::multi_index::tag<name_tag>,
+                                                                              boost::multi_index::member<CacheIndex, String, &CacheIndex::first>>,
+                                       boost::multi_index::ordered_non_unique<boost::multi_index::tag<key_tag>,
+                                                                              boost::multi_index::member<CacheIndex, Key, &CacheIndex::second>>>>;
+
+private:
+    CacheIndexes indexes;
+    std::mutex mutex;
+
+public:
+    // name-Key pairs in CacheContainer
+    // Get the name contained in CacheContainer by a key
+    // If there is no such key, return empty set
+    std::set<String> getNames(const Key & key)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto & key_index = indexes.template get<key_tag>();
+        auto it = key_index.equal_range(key);
+        if (it.first == it.second)
+            return std::set<String>();
+
+        std::set<String> ret;
+        for (auto pos = it.first; pos != it.second; pos++)
+            ret.insert((*pos).first);
+        return ret;
+    }
+
+    // name-Key pairs in CacheContainer
+    // Get keys contained in CacheContainer by a name
+    // If there is no such a key, return empty set.
+    std::set<Key> getKeys(const String & name)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto & name_index = indexes.template get<name_tag>();
+        auto it = name_index.equal_range(name);
+        if (it.first == it.second)
+            return std::set<Key>();
+
+        std::set<Key> ret;
+        for (auto pos = it.first; pos != it.second; pos++)
+            ret.insert((*pos).second);
+        return ret;
+    }
+
+    // name-Key pairs in CacheContainer
+    // Insert name-Key pairs into CacheContainer
+    // A name may has multiple Keys, and a Key belongs to multiple names
+    void insert(const String & name, const Key & key)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        indexes.insert({name, key});
+    }
+
+    // remove all name-key pairs in CacheContainer by Key
+    void remove(const Key & key)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto & key_index = indexes.template get<key_tag>();
+        auto it = key_index.equal_range(key);
+        if (it.first == it.second)
+            return;
+
+        key_index.erase(it.first, it.second);
+    }
+
+    // remove all name-key pairs in CacheContainer by name
+    void drop(const String & name)
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        auto & name_index = indexes.template get<name_tag>();
+        auto it = name_index.equal_range(name);
+        if (it.frist == it.second)
+            return;
+
+        name_index.erase(it.first, it.second);
+    }
+
+    void drop()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        indexes.template get<key_tag>().clear();
     }
 };
 
@@ -147,6 +255,10 @@ public:
         current_size -= cell.size;
         queue.erase(cell.queue_iterator);
         cells.erase(it);
+
+        //sync inner_container if it exists
+        if (inner_container)
+            inner_container->remove(key);
     }
 
     size_t weight() const
@@ -184,6 +296,12 @@ public:
 protected:
     using LRUQueue = std::list<Key>;
     using LRUQueueIterator = typename LRUQueue::iterator;
+
+    // A inner container, which can be used as the first level key-value mapping if
+    // we construct a two-level LRU cache.
+    // For example, in queryCache, inner_container contains (database:table, query_key) pairs.
+    // In the meantime, LRUCache itself contains a (query_key, query_result) pairs.
+    std::unique_ptr<CacheContainer<Key>> inner_container = nullptr;
 
     struct Cell
     {

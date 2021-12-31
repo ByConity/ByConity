@@ -10,6 +10,7 @@
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <queue>
 
 
 namespace DB
@@ -59,6 +60,31 @@ ASTPtr ASTSelectQuery::clone() const
 #undef CLONE
 
     return res;
+}
+
+void ASTSelectQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & has_table_functions) const
+{
+    // BFS ASTSelectQuery and get all Tables;
+    std::queue<const IAST*> q;
+    q.push(this);
+    while (!q.empty())
+    {
+        auto & n = q.front();
+        for (auto& c : n->children)
+        {
+            q.push(c.get());
+        }
+
+        if (const ASTTableExpression* tbl = typeid_cast<const ASTTableExpression *>(n))
+        {
+            if (tbl->database_and_table_name)
+                all_tables.push_back(tbl->database_and_table_name);
+            else if (tbl->table_function)
+                has_table_functions = true;
+        }
+
+        q.pop();
+    }
 }
 
 

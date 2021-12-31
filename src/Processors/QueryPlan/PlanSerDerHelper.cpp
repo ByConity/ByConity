@@ -30,6 +30,7 @@
 #include <Processors/QueryPlan/TotalsHavingStep.h>
 #include <Processors/QueryPlan/UnionStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
+#include <Processors/QueryPlan/QueryCacheStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 #include <Common/ClickHouseRevision.h>
 #include <DataStreams/NativeBlockOutputStream.h>

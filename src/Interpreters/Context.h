@@ -71,6 +71,7 @@ class MMappedFileCache;
 class UncompressedCache;
 class ProcessList;
 class QueryStatus;
+class QueryCache;
 class Macros;
 struct Progress;
 class Clusters;
@@ -688,6 +689,13 @@ public:
     void setMarkCache(size_t cache_size_in_bytes);
     std::shared_ptr<MarkCache> getMarkCache() const;
     void dropMarkCache() const;
+
+    /// Create a cache of queries of specified size. This can be done only once.
+    void setQueryCache(size_t cache_size_in_bytes);
+    std::shared_ptr<QueryCache> getQueryCache() const;
+    void dropQueryCache() const;
+    void dropQueryCache(const String & name) const;
+    void dropQueryCache(const String & database, const String & table) const;
 
     /// Create a cache of mapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     void setMMappedFileCache(size_t cache_size_in_num_entries);

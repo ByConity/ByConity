@@ -101,6 +101,7 @@ public:
         M(Offset) \
         M(PartialSorting) \
         M(PlanSegmentSource) \
+        M(QueryCache) \
         M(ReadFromStorage) \
         M(ReadNothing) \
         M(RemoteExchangeSource) \
