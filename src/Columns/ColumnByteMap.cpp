@@ -112,7 +112,10 @@ void ColumnByteMap::insertFrom(const IColumn & src_, size_t n)
 
 void ColumnByteMap::insertDefault()
 {
-    getOffsets().push_back(getOffsets().back());
+    /// NOTE 1: We can use back() even if the array is empty (due to zero -1th element in PODArray).
+    /// NOTE 2: We cannot use reference in push_back, because reference get invalidated if array is reallocated.
+    auto last_offset = getOffsets().back();
+    getOffsets().push_back(last_offset);
 }
 
 void ColumnByteMap::popBack(size_t n)
