@@ -12,7 +12,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/ReadFromSourceStep.h>
+#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/AlterCommands.h>
 
@@ -138,7 +138,7 @@ void IStorage::read(
         //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
         auto header = (query_info.projection ? query_info.projection->desc->metadata : metadata_snapshot)
                           ->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
-        auto read_step = std::make_unique<ReadFromSourceStep>(header,
+        auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
                                                               getStorageID(), 
                                                               query_info,
                                                               column_names,

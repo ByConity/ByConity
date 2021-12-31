@@ -1,4 +1,4 @@
-#include <Processors/QueryPlan/ReadFromSourceStep.h>
+#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Processors/QueryPipeline.h>
@@ -16,7 +16,7 @@
 namespace DB
 {
 
-ReadFromSourceStep::ReadFromSourceStep(Block header_,
+PlanSegmentSourceStep::PlanSegmentSourceStep(Block header_,
                                        StorageID storage_id_, 
                                        const SelectQueryInfo & query_info_,
                                        const Names & column_names_,
@@ -35,14 +35,14 @@ ReadFromSourceStep::ReadFromSourceStep(Block header_,
 {
 }
 
-void ReadFromSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
+void PlanSegmentSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     auto step = generateStep();
     if (auto * source = dynamic_cast<ISourceStep *>(step.get()))
         source->initializePipeline(pipeline, settings);
 }
 
-QueryPlanStepPtr ReadFromSourceStep::generateStep()
+QueryPlanStepPtr PlanSegmentSourceStep::generateStep()
 {
     StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id.database_name, storage_id.table_name}, context);
 
@@ -66,7 +66,7 @@ QueryPlanStepPtr ReadFromSourceStep::generateStep()
         return std::make_unique<ReadFromStorageStep>(std::move(pipe), step_description);
 }
 
-void ReadFromSourceStep::serialize(WriteBuffer & buffer) const
+void PlanSegmentSourceStep::serialize(WriteBuffer & buffer) const
 {
     writeBinary(step_description, buffer);
     serializeBlock(output_stream->header, buffer);
@@ -79,7 +79,7 @@ void ReadFromSourceStep::serialize(WriteBuffer & buffer) const
     writeBinary(num_streams, buffer);
 }
 
-QueryPlanStepPtr ReadFromSourceStep::deserialize(ReadBuffer & buffer, ContextPtr context)
+QueryPlanStepPtr PlanSegmentSourceStep::deserialize(ReadBuffer & buffer, ContextPtr context)
 {
     String step_description;
     readBinary(step_description, buffer);
@@ -112,7 +112,7 @@ QueryPlanStepPtr ReadFromSourceStep::deserialize(ReadBuffer & buffer, ContextPtr
     unsigned num_streams;
     readBinary(num_streams, buffer);
 
-    auto source_step = std::make_unique<ReadFromSourceStep>(header,
+    auto source_step = std::make_unique<PlanSegmentSourceStep>(header,
                                                             storage_id,
                                                             query_info,
                                                             column_names,

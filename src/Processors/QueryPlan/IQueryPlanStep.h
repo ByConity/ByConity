@@ -100,7 +100,7 @@ public:
         M(MergingSorted) \
         M(Offset) \
         M(PartialSorting) \
-        M(ReadFromSource) \
+        M(PlanSegmentSource) \
         M(ReadFromStorage) \
         M(ReadNothing) \
         M(RemoteExchangeSource) \

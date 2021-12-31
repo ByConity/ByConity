@@ -21,7 +21,7 @@
 #include <Processors/QueryPlan/MergingSortedStep.h>
 #include <Processors/QueryPlan/OffsetStep.h>
 #include <Processors/QueryPlan/PartialSortingStep.h>
-#include <Processors/QueryPlan/ReadFromSourceStep.h>
+#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/ReadNothingStep.h>

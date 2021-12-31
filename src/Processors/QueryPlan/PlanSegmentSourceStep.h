@@ -9,10 +9,10 @@
 namespace DB
 {
 
-class ReadFromSourceStep : public ISourceStep
+class PlanSegmentSourceStep : public ISourceStep
 {
 public:
-    explicit ReadFromSourceStep(Block header_,
+    explicit PlanSegmentSourceStep(Block header_,
                                 StorageID storage_id_, 
                                 const SelectQueryInfo & query_info_,
                                 const Names & column_names_,
@@ -21,9 +21,9 @@ public:
                                 unsigned num_streams_,
                                 ContextPtr context_ = nullptr);
 
-    String getName() const override { return "ReadFromSourceStep"; }
+    String getName() const override { return "PlanSegmentSourceStep"; }
 
-    Type getType() const override { return Type::ReadFromSource; }
+    Type getType() const override { return Type::PlanSegmentSource; }
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 

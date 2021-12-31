@@ -1,7 +1,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Processors/QueryPlan/ExchangeStep.h>
-#include <Processors/QueryPlan/ReadFromSourceStep.h>
+#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 
 namespace DB
@@ -125,7 +125,7 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
     {
         return remote_step->getInput();
     }
-    else if (auto * source_step = dynamic_cast<ReadFromSourceStep *>(node->step.get()))
+    else if (auto * source_step = dynamic_cast<PlanSegmentSourceStep *>(node->step.get()))
     {
         auto input = std::make_shared<PlanSegmentInput>(source_step->getOutputStream().header, PlanSegmentType::SOURCE);
         input->setStorageID(source_step->getStorageID());
