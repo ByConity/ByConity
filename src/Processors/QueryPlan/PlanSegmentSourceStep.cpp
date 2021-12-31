@@ -82,16 +82,14 @@ void PlanSegmentSourceStep::serialize(WriteBuffer & buffer) const
 QueryPlanStepPtr PlanSegmentSourceStep::deserialize(ReadBuffer & buffer, ContextPtr context)
 {
     String step_description;
-    readBinary(step_description, buffer);
-
-    auto header = deserializeBlock(buffer);
-
-    StorageID storage_id = StorageID::deserialize(buffer, context);
-
     SelectQueryInfo query_info;
+
+    readBinary(step_description, buffer);
+    auto header = deserializeBlock(buffer);
+    StorageID storage_id = StorageID::deserialize(buffer, context);
     query_info.deserialize(buffer);
 
-    std::cout<<" << ReadFromSource: " << queryToString(query_info.query) << std::endl;
+    //std::cout<<" << ReadFromSource: " << queryToString(query_info.query) << std::endl;
 
     /**
      * reconstuct query level info based on query
@@ -100,26 +98,25 @@ QueryPlanStepPtr PlanSegmentSourceStep::deserialize(ReadBuffer & buffer, Context
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, context, options.distributedStages());
     query_info = interpreter->getQueryInfo();
 
-    Names column_names = deserializeStrings(buffer);
 
     UInt8 binary_stage;
+    size_t max_block_size;
+    unsigned num_streams;
+
+    Names column_names = deserializeStrings(buffer);
     readBinary(binary_stage, buffer);
     auto processed_stage = QueryProcessingStage::Enum(binary_stage);
-
-    size_t max_block_size;
     readBinary(max_block_size, buffer);
-
-    unsigned num_streams;
     readBinary(num_streams, buffer);
 
     auto source_step = std::make_unique<PlanSegmentSourceStep>(header,
-                                                            storage_id,
-                                                            query_info,
-                                                            column_names,
-                                                            processed_stage,
-                                                            max_block_size,
-                                                            num_streams,
-                                                            context);
+                                                               storage_id,
+                                                               query_info,
+                                                               column_names,
+                                                               processed_stage,
+                                                               max_block_size,
+                                                               num_streams,
+                                                               context);
 
     return source_step->generateStep();
 }

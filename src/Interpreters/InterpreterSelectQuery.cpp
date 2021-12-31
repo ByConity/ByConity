@@ -2019,11 +2019,17 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 }
             }
 
-            if (query_info.projection)
-                query_info.projection->input_order_info
-                    = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
-            else
-                query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            /**
+             * For distributed stages mode, local information about sorting is useless since we need gather data from remote nodes.
+             */
+            if (!options.distributed_stages)
+            {
+                if (query_info.projection)
+                    query_info.projection->input_order_info
+                        = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
+                else
+                    query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            }
         }
 
         StreamLocalLimits limits;
