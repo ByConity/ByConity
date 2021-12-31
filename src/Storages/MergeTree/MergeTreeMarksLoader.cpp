@@ -42,11 +42,9 @@ const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, siz
     if (!marks)
         loadMarks();
 
-#ifndef NDEBUG
     if (column_index >= columns_in_mark)
         throw Exception("Column index: " + toString(column_index)
             + " is out of range [0, " + toString(columns_in_mark) + ")", ErrorCodes::LOGICAL_ERROR);
-#endif
 
     return (*marks)[row_index * columns_in_mark + column_index];
 }
