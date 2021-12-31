@@ -142,6 +142,8 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
         read_only_offsets.resize(columns_num);
         auto name_and_type = columns.begin();
         auto compact_part = std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part);
+        if (!compact_part)
+            throw Exception("Can not convert part into MergeTreeDataPartCompact in MergeTreeReaderCompact.", ErrorCodes::LOGICAL_ERROR);
         for (size_t i = 0; i < columns_num; ++i, ++name_and_type)
         {
             NameAndTypePair column_from_part;
@@ -470,6 +472,8 @@ IMergeTreeReader::ColumnPosition MergeTreeReaderCompact::findColumnForOffsets(co
         if (typeid_cast<const DataTypeArray *>(part_column.type.get()))
         {
             auto compact_part = std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part);
+            if (!compact_part)
+                throw Exception("Can not convert part into MergeTreeDataPartCompact in MergeTreeReaderCompact.", ErrorCodes::LOGICAL_ERROR);
             auto position = compact_part->getColumnPositionWithoutMap(part_column.name);
             if (position && Nested::extractTableName(part_column.name) == table_name)
                 return position;
@@ -546,7 +550,10 @@ size_t MergeTreeReaderCompact::getReadBufferSize(
     size_t columns_num = column_positions.size();
     size_t file_size = part->getFileSizeOrZero(MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION);
 
-    MarksCounter counter(part->getMarksCount(), part->getColumns().size());
+    auto compact_part = std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(part);
+    if (!compact_part)
+        throw Exception("Can not convert part into MergeTreeDataPartCompact in MergeTreeReaderCompact.", ErrorCodes::LOGICAL_ERROR);
+    MarksCounter counter(part->getMarksCount(), compact_part->getColumnsWithoutByteMapColSize());
 
     for (const auto & mark_range : mark_ranges)
     {
