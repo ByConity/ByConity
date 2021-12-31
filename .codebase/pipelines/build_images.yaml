@@ -5,6 +5,7 @@ trigger:
     paths:
       - "docker/test/base/*"
       - "docker/test/stateless/*"
+      - "docker/test/stateful/*"
 jobs:
   build_test_base_image:
     name: Build Docker Image For bytehouse/clickhouse-test-base
@@ -27,6 +28,15 @@ jobs:
           dockerfile: Dockerfile
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-stateful-test
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/stateful
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
           build-args:
             - TAG=stable
     services:

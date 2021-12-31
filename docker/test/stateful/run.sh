@@ -2,14 +2,20 @@
 
 set -e -x
 
-dpkg -i package_folder/clickhouse-common-static_*.deb;
-dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
-dpkg -i package_folder/clickhouse-server_*.deb
-dpkg -i package_folder/clickhouse-client_*.deb
-dpkg -i package_folder/clickhouse-test_*.deb
+# dpkg -i package_folder/clickhouse-common-static_*.deb;
+# dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
+# dpkg -i package_folder/clickhouse-server_*.deb
+# dpkg -i package_folder/clickhouse-client_*.deb
+# dpkg -i package_folder/clickhouse-test_*.deb
+clickhouse/bin/clickhouse install
+cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
+cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # install test configs
 /usr/share/clickhouse-test/config/install.sh
+
+# prepare test_output directory
+mkdir -p test_output
 
 function start()
 {
@@ -31,7 +37,7 @@ function start()
         --mysql_port 29004 --postgresql_port 29005 \
         --keeper_server.tcp_port 29181 --keeper_server.server_id 3
     fi
-
+    sudo clickhouse start
     counter=0
     until clickhouse-client --query "SELECT 1"
     do
@@ -56,7 +62,7 @@ chmod 777 -R /var/lib/clickhouse
 clickhouse-client --query "SHOW DATABASES"
 
 clickhouse-client --query "ATTACH DATABASE datasets ENGINE = Ordinary"
-service clickhouse-server restart
+#service clickhouse-server restart
 
 # Wait for server to start accepting connections
 for _ in {1..120}; do

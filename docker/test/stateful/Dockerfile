@@ -1,5 +1,11 @@
 # docker build -t yandex/clickhouse-stateful-test .
-FROM yandex/clickhouse-stateless-test
+ARG TAG=stable
+FROM hub.byted.org/bytehouse/clickhouse-stateless-test:${TAG}
+
+# set http proxy env
+ENV http_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV https_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV no_proxy=.byted.org
 
 RUN apt-get update -y \
     && env DEBIAN_FRONTEND=noninteractive \
@@ -11,5 +17,10 @@ COPY s3downloader /s3downloader
 
 ENV DATASETS="hits visits"
 
+# unset http proxy env
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
+
 COPY run.sh /
-CMD ["/bin/bash", "/run.sh"]
+# CMD ["/bin/bash", "/run.sh"]
