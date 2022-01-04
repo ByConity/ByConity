@@ -179,10 +179,9 @@ void IMergeTreeDataPart::MinMaxIndex::merge(const MinMaxIndex & other)
 
 void IMergeTreeDataPart::loadVersions()
 {
-    String path = getFullPath() + "versions.txt";
-    Poco::File versions_file(path);
+    String path = fs::path(getFullRelativePath()) / "versions.txt";
     try {
-        if (versions_file.exists())
+        if (volume->getDisk()->exists(path))
         {
             auto file = openForReading(volume->getDisk(), path);
             if (versions->read(*file))
