@@ -44,7 +44,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
                 stream_id,
                 msg.size(),
                 chunk.getNumRows());
-            receiver_ptr->pushReceiveQueue(chunk);            
+            receiver_ptr->pushReceiveQueue(chunk);
         }
     }
     catch (...)
@@ -92,7 +92,8 @@ void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
         if (finish_status_code != -1 && finish_status_code != 0)
             ptr->clearQueue();
 
-        ptr->setStatusCode(finish_status_code);
+
+        ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
         Chunk empty = Chunk();
         // push an empty as finish
         ptr->pushReceiveQueue(empty);

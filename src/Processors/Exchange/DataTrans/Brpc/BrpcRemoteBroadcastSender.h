@@ -36,6 +36,6 @@ private:
     std::vector<brpc::StreamId> sender_stream_ids;
     std::atomic<bool> is_ready = false;
     bthread::Mutex ready_mutex;
-    std::atomic<BroadcastStatusCode> status_code{RUNNING};
+    std::atomic<BroadcastStatus *> broadcast_status;
 };
 }

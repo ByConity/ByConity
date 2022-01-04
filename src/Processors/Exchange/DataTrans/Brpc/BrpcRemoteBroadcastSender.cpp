@@ -40,6 +40,7 @@ BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(std::vector<DataTransKeyPtr
     , header(std::move(header_))
     , registry_center(BrpcExchangeRegistryCenter::getInstance())
 {
+    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
 }
 
 /**
@@ -51,13 +52,22 @@ BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(DataTransKeyPtr trans_key_,
     , header(std::move(header_))
     , registry_center(BrpcExchangeRegistryCenter::getInstance())
 {
+    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
 }
 
 BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 {
-    for (const auto & key : trans_keys)
+    try
     {
-        registry_center.removeReceiver(key->getKey());
+        delete broadcast_status.load(std::memory_order_relaxed);
+        for (const auto & key : trans_keys)
+        {
+            registry_center.removeReceiver(key->getKey());
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
     }
 }
 
@@ -95,9 +105,10 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
 {
     try
     {
-        auto curr_status = status_code.load(std::memory_order_relaxed);
-        if (curr_status != RUNNING)
-            return BroadcastStatus(curr_status, false);
+        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+        if (current_status_ptr->code != RUNNING)
+            return *current_status_ptr;
+
         if (!is_ready)
         {
             LOG_ERROR(log, "Call wait_all_receivers_ready() before sending chunk.");
@@ -116,12 +127,8 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
     catch (...)
     {
         String exception_str = getCurrentExceptionMessage(true);
-        auto curr = status_code.load(std::memory_order_relaxed);
-        if (status_code.compare_exchange_strong(
-                curr, BroadcastStatusCode::SEND_UNKNOWN_ERROR, std::memory_order_relaxed, std::memory_order_relaxed))
-            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, true, exception_str);
-        else
-            return BroadcastStatus(curr, false, exception_str);
+        BroadcastStatus current_status = finish(BroadcastStatusCode::SEND_UNKNOWN_ERROR, exception_str);
+        return current_status;
     }
 }
 
@@ -200,7 +207,8 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
         else if (std::to_string(rect_code).starts_with('9'))
         {
             LOG_INFO(log, "Stream-{} write receive finish request, finish code:{}, data_key-{}", stream_id, rect_code, data_key);
-            return BroadcastStatus(static_cast<BroadcastStatusCode>(rect_code), true);
+            auto current_status = finish(static_cast<BroadcastStatusCode>(rect_code), "BrpcRemoteBroadcastSender::sendIOBuffer");
+            return current_status;
         }
         else
         {
@@ -213,9 +221,13 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
     }
 
     if (!success)
-        throw Exception(
-            "Write stream-" + std::to_string(stream_id) + " fail, with data_key-" + data_key + ", size:" + std::to_string(io_buffer.size()),
-            ErrorCodes::BRPC_EXCEPTION);
+    {
+        const auto msg = "Write stream-" + std::to_string(stream_id) + " fail, with data_key-" + data_key
+            + ", size:" + std::to_string(io_buffer.size());
+        LOG_ERROR(log, msg);
+        auto current_status = finish(SEND_TIMEOUT, msg);
+        return current_status;
+    }
     LOG_DEBUG(
         log,
         "Send exchange data size-{} M with data_key-{}, stream-{} retry times:{} cost:{} ms",
@@ -229,15 +241,33 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
 
 BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_code_, String message)
 {
-    auto curr = status_code.load(std::memory_order_relaxed);
-    if (curr != RUNNING)
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
     {
-        return BroadcastStatus(status_code, false, message);
+        LOG_WARNING(
+            log,
+            "Broadcast sender-{} finished and status can't be changed to {} any more. Current status: {}",
+            trans_keys[0]->getKey(),
+            status_code_,
+            current_status_ptr->code);
+        return *current_status_ptr;
     }
     else
     {
-        if (status_code.compare_exchange_strong(curr, status_code, std::memory_order_relaxed, std::memory_order_relaxed))
+        BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code_, false, message);
+        if (broadcast_status.compare_exchange_strong(
+                current_status_ptr, new_status_ptr, std::memory_order_relaxed, std::memory_order_relaxed))
         {
+            LOG_INFO(
+                log,
+                "Broadcast sender-{} BroadcastStatus from {} to {} with message: {}",
+                trans_keys[0]->getKey(),
+                current_status_ptr->code,
+                new_status_ptr->code,
+                new_status_ptr->message);
+            delete current_status_ptr;
+            auto res = *new_status_ptr;
+            res.is_modifer = true;
             int code = 0;
             for (auto stream_id : sender_stream_ids)
             {
@@ -246,13 +276,16 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
                     code = ret_code;
             }
             if (code != 0)
-                return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, message);
+                return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastSender::finish");
             else
                 return BroadcastStatus(status_code_, true, message);
         }
         else
         {
-            return BroadcastStatus(curr, false, message);
+            LOG_WARNING(
+                log, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
+            delete new_status_ptr;
+            return *current_status_ptr;
         }
     }
 }
