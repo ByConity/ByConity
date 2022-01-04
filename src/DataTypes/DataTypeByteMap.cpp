@@ -78,7 +78,7 @@ MutableColumnPtr DataTypeByteMap::createColumn() const
 
 Field DataTypeByteMap::getDefault() const
 {
-    return Map();
+    return ByteMap();
 }
 
 bool DataTypeByteMap::equals(const IDataType & rhs) const
