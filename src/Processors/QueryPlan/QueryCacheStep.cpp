@@ -86,8 +86,8 @@ void QueryCacheStep::init()
         if (query_cache)
         {
             UInt128 key = QueryCache::hash(*query_key);
-            query_result = query_cache->get(key);
-            if (!query_result)
+            auto result = query_cache->get(key);
+            if (!result)
             {
                 query_result = std::make_shared<QueryResult>();
                 ProfileEvents::increment(ProfileEvents::QueryCacheMisses);
@@ -95,6 +95,7 @@ void QueryCacheStep::init()
             else
             {
                 hit_query_cache = true;
+                query_result = result->clone();
                 ProfileEvents::increment(ProfileEvents::QueryCacheHits);
             }
         }
@@ -139,7 +140,7 @@ void QueryCacheStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
 
 void QueryCacheStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
 {
-    pipeline.init(Pipe(std::make_shared<SourceFromQueryCache>(getOutputStream().header, query_cache, query_key, query_result)));
+    pipeline.init(Pipe(std::make_shared<SourceFromQueryCache>(getOutputStream().header, query_result)));
 }
 
 void QueryCacheStep::checkDeterministic(const ASTPtr & node)

@@ -32,7 +32,7 @@ public:
     bool needDropCache() const { return can_drop_cache; }
     void dropCache();
 
-    bool hitCache() { return hit_query_cache; }
+    bool hitCache() const { return hit_query_cache; }
 
     void serialize(WriteBuffer &) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);

@@ -9,6 +9,7 @@
 #include <Core/Settings.h>
 #include <Core/QueryProcessingStage.h>
 #include <IO/WriteBufferFromString.h>
+#include <queue>
 
 
 namespace ProfileEvents
@@ -40,26 +41,51 @@ struct QueryKey
     }
 };
 
+struct QueryResult;
+using QueryResultPtr = std::shared_ptr<QueryResult>;
+
 struct QueryResult
 {
-    Chunk result;
+    std::queue<ChunkPtr> result;
+    size_t bytes = 0;
 
     QueryResult()= default;
 
-    void addResult(const Chunk & block);
+    void addResult(Chunk & chunk)
+    {
+        bytes += chunk.bytes();
+        auto chunk_ptr = std::make_shared<Chunk>(chunk.clone());
+        result.push(chunk_ptr);
+    }
+
+    Chunk getChunk()
+    {
+        if (result.empty())
+            return Chunk();
+
+        auto res = result.front();
+        result.pop();
+        bytes -= res->bytes();
+
+        return res->clone();
+    }
+
+    QueryResultPtr clone() const
+    {
+        QueryResultPtr res = std::make_shared<QueryResult>();
+        res->result = result;
+        res->bytes = bytes;
+        return res;
+    }
 };
 
 using QueryKeyPtr = std::shared_ptr<QueryKey>;
-using QueryResultPtr = std::shared_ptr<QueryResult>;
 
 struct QueryWeightFunction
 {
     size_t operator()(const QueryResult & query_result) const
     {
-        if (query_result.result)
-            return query_result.result.bytes();
-        else
-            return 0;
+        return query_result.bytes;
     }
 };
 
