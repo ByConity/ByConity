@@ -6,10 +6,6 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTOptimizeQuery.h>
-#include <Parsers/ASTRenameQuery.h>
 #include <Functions/IFunction.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Functions/FunctionFactory.h>
@@ -79,29 +75,29 @@ QueryCacheStep::QueryCacheStep(const DataStream & input_stream_,
 
 void QueryCacheStep::init()
 {
-    if (context->getSettings().enable_query_cache && isViableQuery())
+    is_valid_query = checkViableQuery();
+    if (!context->getSettings().enable_query_cache || !is_valid_query)
+        return;
+
+    query_cache = context->getQueryCache();
+    auto key = std::make_shared<QueryKey>(queryToString(query_ptr), context->getSettings(), stage);
+    if (query_cache)
     {
-        query_cache = context->getQueryCache();
-        query_key = std::make_shared<QueryKey>(queryToString(query_ptr), context->getSettings(), stage);
-        if (query_cache)
+        query_key = QueryCache::hash(*key);
+        auto result = query_cache->get(query_key);
+
+        if (result && checkCacheTime(result->update_time))
         {
-            UInt128 key = QueryCache::hash(*query_key);
-            auto result = query_cache->get(key);
-            if (!result)
-            {
-                query_result = std::make_shared<QueryResult>();
-                ProfileEvents::increment(ProfileEvents::QueryCacheMisses);
-            }
-            else
-            {
-                hit_query_cache = true;
-                query_result = result->clone();
-                ProfileEvents::increment(ProfileEvents::QueryCacheHits);
-            }
+            query_result = result->clone();
+            hit_query_cache = true;
+            ProfileEvents::increment(ProfileEvents::QueryCacheHits);
+        }
+        else
+        {
+            query_result = std::make_shared<QueryResult>();
+            ProfileEvents::increment(ProfileEvents::QueryCacheMisses);
         }
     }
-
-    can_drop_cache = canDropQueryCache();
 }
 
 QueryPipelinePtr QueryCacheStep::updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings)
@@ -134,7 +130,7 @@ void QueryCacheStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
                                     if (stream_type != QueryPipeline::StreamType::Main)
                                         return nullptr;
 
-                                    return std::make_shared<QueryCacheTransform>(header, query_cache, query_key, query_result, ref_db_and_table);
+                                    return std::make_shared<QueryCacheTransform>(header, query_cache, query_key, query_result, ref_db_and_table, latest_time);
                                 });
 }
 
@@ -165,7 +161,12 @@ void QueryCacheStep::checkDeterministic(const ASTPtr & node)
         checkDeterministic(child);
 }
 
-bool QueryCacheStep::isViableQuery()
+bool QueryCacheStep::checkCacheTime(UInt64 cache_time) const
+{
+    return latest_time <= cache_time;
+}
+
+bool QueryCacheStep::checkViableQuery()
 {
     if (!query_ptr)
         return false;
@@ -175,25 +176,15 @@ bool QueryCacheStep::isViableQuery()
     if (!query)
         return false;
 
-    // Get query in lower case
-    String low_query = Poco::toLower(queryToString(query_ptr));
-    size_t pos = 0;
-    parseSlowQuery(low_query, pos);
-    if (pos != std::string::npos)
-        low_query = low_query.substr(pos);
-
-    if (startsWith(low_query, "select") && low_query.find("system.") != std::string::npos)
-        return false;
-
-    std::vector<ASTPtr> all_base_tables;
+    std::vector<ASTPtr> tables;
     bool dummy = false;
-    query->collectAllTables(all_base_tables, dummy);
+    query->collectAllTables(tables, dummy);
 
     // If there is no target table, do not use query cache
-    if (all_base_tables.empty())
+    if (tables.empty())
         return false;
 
-    for (auto & table : all_base_tables)
+    for (auto & table : tables)
     {
         auto target_table_id = context->resolveStorageID(table);
         auto storage_table = DatabaseCatalog::instance().tryGetTable(target_table_id, context);
@@ -201,96 +192,24 @@ bool QueryCacheStep::isViableQuery()
         if (!storage_table)
             continue;
 
-        auto * mater_tree_data = dynamic_cast<MergeTreeData *>(storage_table.get());
-        if (!mater_tree_data)
-            return false;
-
         String database = target_table_id.database_name;
         if (database.empty())
             database = context->getCurrentDatabase();
 
+        if (database == "system")
+            return false;
+
+        auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage_table.get());
+        if (!merge_tree_data)
+            return false;
+
         // Add db and table into ref_db_and_table from which we can drop specific queries
         updateRefDatabaseAndTable(database, target_table_id.table_name);
+        updateLastedTime(storage_table->getTableUpdateTime());
     }
 
     checkDeterministic(query_ptr);
     return is_deterministic;
-}
-
-template <typename T>
-bool QueryCacheStep::analyzeQuery()
-{
-    if (!query_ptr)
-        return false;
-
-    const T * query = typeid_cast<T *>(query_ptr.get());
-    if (!query)
-        return false;
-
-    String database = query->database;
-    if (database.empty())
-        database = context->getCurrentDatabase();
-    updateRefDatabaseAndTable(database, query->table);
-    return true;
-}
-
-template <>
-bool QueryCacheStep::analyzeQuery<ASTInsertQuery>()
-{
-    if (!query_ptr)
-        return false;
-
-    const ASTInsertQuery * query = typeid_cast<ASTInsertQuery *>(query_ptr.get());
-    if (!query)
-        return false;
-
-    String database = query->table_id.database_name;
-    if (database.empty())
-        database = context->getCurrentDatabase();
-    updateRefDatabaseAndTable(database, query->table_id.table_name);
-    return true;
-}
-
-bool QueryCacheStep::canDropQueryCache()
-{
-    if (!query_ptr)
-        return false;
-
-    if (analyzeQuery<ASTInsertQuery>()
-        || analyzeQuery<ASTAlterQuery>()
-        || analyzeQuery<ASTDropQuery>()
-        || analyzeQuery<ASTCreateQuery>()
-        || analyzeQuery<ASTOptimizeQuery>())
-        return true;
-
-    const ASTRenameQuery * rename_query = typeid_cast<ASTRenameQuery *>(query_ptr.get());
-
-    if (!rename_query)
-        return false;
-
-    for (const auto & elem : rename_query->elements)
-    {
-        String from_database = elem.from.database;
-        if (from_database.empty())
-            from_database = context->getCurrentDatabase();
-        updateRefDatabaseAndTable(from_database, elem.from.table);
-
-        String to_database = elem.to.database;
-        if (to_database.empty())
-            to_database = context->getCurrentDatabase();
-        updateRefDatabaseAndTable(to_database, elem.to.table);
-    }
-
-    return true;
-}
-
-void QueryCacheStep::dropCache()
-{
-    if (!can_drop_cache)
-        return;
-
-    for (const auto & name : ref_db_and_table)
-        context->dropQueryCache(name);
 }
 
 void QueryCacheStep::serialize(WriteBuffer &) const

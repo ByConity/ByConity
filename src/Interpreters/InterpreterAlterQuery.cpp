@@ -112,6 +112,7 @@ BlockIO InterpreterAlterQuery::execute()
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());
+        table->setUpdateTimeNow();
     }
 
     if (!partition_commands.empty())
@@ -120,6 +121,7 @@ BlockIO InterpreterAlterQuery::execute()
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext(), query_ptr);
         if (!partition_commands_pipe.empty())
             res.pipeline.init(std::move(partition_commands_pipe));
+        table->setUpdateTimeNow();
     }
 
     if (!live_view_commands.empty())
@@ -135,6 +137,7 @@ BlockIO InterpreterAlterQuery::execute()
                     break;
             }
         }
+        table->setUpdateTimeNow();
     }
 
     if (!alter_commands.empty())
@@ -152,6 +155,7 @@ BlockIO InterpreterAlterQuery::execute()
         {
             table->alter(alter_commands, getContext(), alter_lock);
         }
+        table->setUpdateTimeNow();
     }
 
     return res;

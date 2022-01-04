@@ -556,10 +556,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             res = interpreter->execute();
         }
 
-        auto query_cache_step = std::make_unique<QueryCacheStep>(DataStream(), ast, context, QueryProcessingStage::Complete);
-        if (query_cache_step && query_cache_step->needDropCache())
-            query_cache_step->dropCache();
-
         QueryPipeline & pipeline = res.pipeline;
         bool use_processors = pipeline.initialized();
 

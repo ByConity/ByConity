@@ -70,7 +70,7 @@ void ASTSelectQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & ha
     while (!q.empty())
     {
         auto & n = q.front();
-        for (auto& c : n->children)
+        for (const auto& c : n->children)
         {
             q.push(c.get());
         }

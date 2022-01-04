@@ -716,9 +716,7 @@ void HaMergeTreeLogManager::markLogEntriesExecuted(const LogEntry::Vec & execute
     }
     markLogEntriesExecuted(lsns);
     if (need_update_time)
-    {
-        /// TODO: storage.set_update_time_now();
-    }
+        storage.setUpdateTimeNow();
 }
 
 UInt64 HaMergeTreeLogManager::calcUpdatedLSNUnsafe()

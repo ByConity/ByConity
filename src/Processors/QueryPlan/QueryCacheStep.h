@@ -25,13 +25,10 @@ public:
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &);
 
     void checkDeterministic(const ASTPtr & node);
-    bool isViableQuery();
+    bool checkViableQuery();
+    bool isValidQuery() const { return is_valid_query; }
 
-    template <typename T> bool analyzeQuery();
-    bool canDropQueryCache();
-    bool needDropCache() const { return can_drop_cache; }
-    void dropCache();
-
+    inline bool checkCacheTime(UInt64 cache_time) const;
     bool hitCache() const { return hit_query_cache; }
 
     void serialize(WriteBuffer &) const override;
@@ -44,13 +41,14 @@ private:
     const ContextPtr context;
 
     QueryCachePtr query_cache = nullptr;
-    QueryKeyPtr query_key = nullptr;
+    UInt128 query_key;
     QueryResultPtr query_result = nullptr;
 
     std::set<String> ref_db_and_table;
+    UInt64 latest_time;
 
     bool is_deterministic = true;
-    bool can_drop_cache = false;
+    bool is_valid_query = true;
     bool hit_query_cache = false;
     QueryProcessingStage::Enum stage;
 
@@ -59,6 +57,11 @@ private:
     void updateRefDatabaseAndTable(const String & database, const String & table)
     {
         ref_db_and_table.insert(database + "." + table);
+    }
+
+    inline void updateLastedTime(UInt64 time)
+    {
+        latest_time = std::max(latest_time, time);
     }
 };
 

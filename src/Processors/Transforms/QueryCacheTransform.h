@@ -17,9 +17,10 @@ class QueryCacheTransform : public ISimpleTransform
 public:
     QueryCacheTransform(const Block & header,
                         const QueryCachePtr & query_cache_,
-                        const QueryKeyPtr & query_key_,
+                        const UInt128 & query_key_,
                         const QueryResultPtr & query_result_,
-                        const std::set<String> & ref_db_and_table_);
+                        const std::set<String> & ref_db_and_table_,
+                        UInt64 update_time_);
 
     ~QueryCacheTransform() override;
 
@@ -32,9 +33,10 @@ protected:
 
 private:
     QueryCachePtr query_cache = nullptr;
-    QueryKeyPtr query_key = nullptr;
+    UInt128 query_key;
     QueryResultPtr query_result = nullptr;
     std::set<String> ref_db_and_table;
+    UInt64 update_time;
 
 };
 

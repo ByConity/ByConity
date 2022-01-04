@@ -1144,6 +1144,8 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     if (from_path)
         res->rename(actual_data_path, {create.database, create.table, create.uuid});
 
+    res->setUpdateTimeNow();
+
     /// We must call "startup" and "shutdown" while holding DDLGuard.
     /// Because otherwise method "shutdown" (from InterpreterDropQuery) can be called before startup
     /// (in case when table was created and instantly dropped before started up)

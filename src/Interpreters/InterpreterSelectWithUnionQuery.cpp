@@ -313,16 +313,15 @@ void InterpreterSelectWithUnionQuery::checkQueryCache(QueryPlan & query_plan)
     auto query_cache_step = std::make_unique<QueryCacheStep>(query_plan.getCurrentDataStream(), query_ptr, context, options.to_stage);
     query_cache_step->setStepDescription("QUERY CACHE");
 
+    if (!query_cache_step->isValidQuery())
+        return;
+
     if (query_cache_step->hitCache())
     {
         QueryPlan empty_query_plan;
         query_plan = std::move(empty_query_plan);
     }
     query_plan.addStep(std::move(query_cache_step));
-
-    WriteBufferFromOwnString plan_str;
-    query_plan.explainPlan(plan_str, {});
-    std::cout << "After checking query cache: \n" << plan_str.str() << std::endl;
 }
 
 BlockIO InterpreterSelectWithUnionQuery::execute()

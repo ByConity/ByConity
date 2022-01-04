@@ -521,6 +521,14 @@ public:
 
     std::atomic<bool> is_dropped{false};
 
+    virtual void setUpdateTimeNow()
+    {
+        UInt64 now_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        update_time.store(now_time, std::memory_order_relaxed);
+    }
+    virtual void setUpdateTime(UInt64 update_time_) { update_time.store(update_time_, std::memory_order_relaxed); }
+    virtual UInt64 getTableUpdateTime() const { return update_time.load(std::memory_order_relaxed); }
+
     /// Does table support index for IN sections
     virtual bool supportsIndexForIn() const { return false; }
 
@@ -592,6 +600,8 @@ public:
     static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context); 
 
 private:
+    std::atomic<UInt64> update_time{0};
+
     /// Lock required for alter queries (lockForAlter). Always taken for write
     /// (actually can be replaced with std::mutex, but for consistency we use
     /// RWLock). Allows to execute only one simultaneous alter query. Also it

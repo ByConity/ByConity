@@ -46,10 +46,16 @@ using QueryResultPtr = std::shared_ptr<QueryResult>;
 
 struct QueryResult
 {
+    UInt64 update_time;
     std::queue<ChunkPtr> result;
     size_t bytes = 0;
 
     QueryResult()= default;
+
+    inline void setUpdateTime(UInt64 time)
+    {
+        update_time = time;
+    }
 
     void addResult(Chunk & chunk)
     {
