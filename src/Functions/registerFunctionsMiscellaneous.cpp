@@ -10,6 +10,7 @@ class FunctionFactory;
 void registerFunctionCurrentDatabase(FunctionFactory &);
 void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionHostName(FunctionFactory &);
+void registerFunctionHost(FunctionFactory &);
 void registerFunctionFQDN(FunctionFactory &);
 void registerFunctionVisibleWidth(FunctionFactory &);
 void registerFunctionToTypeName(FunctionFactory &);
@@ -84,6 +85,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionCurrentDatabase(factory);
     registerFunctionCurrentUser(factory);
     registerFunctionHostName(factory);
+    registerFunctionHost(factory);
     registerFunctionFQDN(factory);
     registerFunctionVisibleWidth(factory);
     registerFunctionToTypeName(factory);
