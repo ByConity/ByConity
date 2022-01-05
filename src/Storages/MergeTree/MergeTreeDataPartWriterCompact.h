@@ -89,6 +89,8 @@ private:
             const MergeTreeWriterSettings & settings,
             const CompressionCodecPtr default_codec);
 
+        void next();
+
         void finalize();
 
         void sync() const;
