@@ -36,11 +36,14 @@ MergeTreeDataPartWriterCompact::CompactDataWriter::CompactDataWriter(
 {
 }
 
+void MergeTreeDataPartWriterCompact::CompactDataWriter::next()
+{
+    plain_hashing.next();
+    marks.next();
+}
+
 void MergeTreeDataPartWriterCompact::CompactDataWriter::finalize()
 {
-    plain_file->next();
-    marks.next();
-
     plain_file->finalize();
     marks_file->finalize();
 }
@@ -426,8 +429,9 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
 
     if (data_writer)
     {
-        data_writer->finalize();
+        data_writer->next();
         data_writer->addToChecksums(checksums);
+        data_writer->finalize();
 
         if (sync)
             data_writer->sync();
