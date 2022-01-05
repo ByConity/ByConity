@@ -6,6 +6,7 @@
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
 #include <Interpreters/AggregateDescription.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <memory>
 
@@ -58,6 +59,9 @@ struct PrewhereInfo
             : prewhere_actions(std::move(prewhere_actions_)), prewhere_column_name(std::move(prewhere_column_name_)) {}
 
     std::string dump() const;
+
+    void serialize(WriteBuffer & buf) const;
+    static PrewhereInfoPtr deserialize(ReadBuffer & buf, ContextPtr context);
 };
 
 /// Helper struct to store all the information about the filter expression.

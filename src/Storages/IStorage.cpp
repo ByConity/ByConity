@@ -12,6 +12,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
+#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/AlterCommands.h>
 
@@ -116,8 +117,7 @@ void IStorage::read(
     }
     else
     {
-        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName(), getStorageID());
-        read_step->setDeserializeInfo(query_info, column_names, processed_stage, max_block_size, num_streams);
+        auto read_step = std::make_unique<ReadFromStorageStep>(std::move(pipe), getName());
         query_plan.addStep(std::move(read_step));
     }
 }
@@ -134,7 +134,20 @@ void IStorage::read(
     bool distributed_stages)
 {
     if (distributed_stages)
-        IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+    {
+        //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+        auto header = (query_info.projection ? query_info.projection->desc->metadata : metadata_snapshot)
+                          ->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+        auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
+                                                              getStorageID(), 
+                                                              query_info,
+                                                              column_names,
+                                                              processed_stage,
+                                                              max_block_size,
+                                                              num_streams,
+                                                              context);
+        query_plan.addStep(std::move(read_step));
+    }
     else
         throw Exception("Shouldn't call this read function if it is not a distributed stage query", ErrorCodes::LOGICAL_ERROR);
 }

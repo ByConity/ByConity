@@ -81,6 +81,10 @@
     -->
     <tcp_port>9000</tcp_port>
 
+    <!-- port for exchange and its status -->
+    <exchange_port>9300</exchange_port>
+    <exchange_status_port>9400</exchange_status_port>
+
     <!-- Compatibility with MySQL protocol.
          ClickHouse will pretend to be MySQL for applications connecting to this port.
     -->
@@ -620,6 +624,8 @@
                 <replica>
                     <host>localhost</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                     <!-- Optional. Priority of the replica for load_balancing. Default: 1 (less value has more priority). -->
                     <!-- <priority>1</priority> -->
                 </replica>

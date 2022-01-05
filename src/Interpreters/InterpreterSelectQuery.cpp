@@ -1538,8 +1538,9 @@ static void executeMergeAggregatedImpl(
     query_plan.addStep(std::move(merging_aggregated));
 }
 
-void InterpreterSelectQuery::addEmptySourceToQueryPlan(
-    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+Pipe InterpreterSelectQuery::generateNullSourcePipe(
+    const Block & source_header, const SelectQueryInfo & query_info
+)
 {
     Pipe pipe(std::make_shared<NullSource>(source_header));
 
@@ -1574,6 +1575,14 @@ void InterpreterSelectQuery::addEmptySourceToQueryPlan(
                 prewhere_info.prewhere_column_name, prewhere_info.remove_prewhere_column);
         });
     }
+
+    return pipe;
+}
+
+void InterpreterSelectQuery::addEmptySourceToQueryPlan(
+    QueryPlan & query_plan, const Block & source_header, const SelectQueryInfo & query_info, ContextPtr context_)
+{
+    Pipe pipe = generateNullSourcePipe(source_header, query_info);
 
     auto read_from_pipe = std::make_unique<ReadFromPreparedSource>(std::move(pipe));
     read_from_pipe->setStepDescription("Read from NullSource");
@@ -2010,11 +2019,17 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 }
             }
 
-            if (query_info.projection)
-                query_info.projection->input_order_info
-                    = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
-            else
-                query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            /**
+             * For distributed stages mode, local information about sorting is useless since we need gather data from remote nodes.
+             */
+            if (!options.distributed_stages)
+            {
+                if (query_info.projection)
+                    query_info.projection->input_order_info
+                        = query_info.projection->order_optimizer->getInputOrder(query_info.projection->desc->metadata, context);
+                else
+                    query_info.input_order_info = query_info.order_optimizer->getInputOrder(metadata_snapshot, context);
+            }
         }
 
         StreamLocalLimits limits;

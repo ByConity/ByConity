@@ -100,6 +100,7 @@ public:
         M(MergingSorted) \
         M(Offset) \
         M(PartialSorting) \
+        M(PlanSegmentSource) \
         M(ReadFromStorage) \
         M(ReadNothing) \
         M(RemoteExchangeSource) \
@@ -117,6 +118,7 @@ public:
         APPLY_STEP_TYPES(ENUM_DEF) UNDEFINED,
         ReadFromMergeTree,
         ReadFromPreparedSource,
+        NullSource,
     };
 
     #undef ENUM_DEF
