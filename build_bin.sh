@@ -19,11 +19,22 @@ mkdir -p output
 
 git config http.postBuffer 524288000
 git submodule sync
+git config --global http.sslVerify "false"
 http_proxy=http://sys-proxy-rd-relay.byted.org:8118 https_proxy=http://sys-proxy-rd-relay.byted.org:8118 no_proxy=.byted.org git submodule update --init --recursive
 
 export CMAKE_BUILD_TYPE=${CUSTOM_CMAKE_BUILD_TYPE:-RelWithDebInfo}
 export CMAKE_FLAGS="-DCMAKE_INSTALL_PREFIX=../output -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DUSE_BYTEDANCE_RDKAFKA=${CUSTOM_USE_BYTEDANCE_RDKAFKA:-1} ${CMAKE_FLAGS}"
 
-rm -rf build && mkdir build && cd build && cmake ../ ${CMAKE_FLAGS} && ninja
-ninja install
+rm -rf build && mkdir build && cd build
+
+source /etc/os-release
+if [ "$NAME" == "CentOS Linux" ] && [ "$VERSION_ID" == "7" ] && hash scl 2>/dev/null; then
+    echo "Found Centos 7 and scl"
+    scl enable devtoolset-9 "CC=clang CXX=clang++ cmake3 ${CMAKE_FLAGS} -DCMAKE_MAKE_PROGRAM:FILEPATH=/usr/bin/ninja ../"
+    scl enable devtoolset-9 "ninja"
+    scl enable devtoolset-9 "ninja install"
+else
+    cmake ../ ${CMAKE_FLAGS} && ninja
+    ninja install
+fi
 
