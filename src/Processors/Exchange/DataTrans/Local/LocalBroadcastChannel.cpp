@@ -3,19 +3,20 @@
 #include <optional>
 #include <string>
 #include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include "Processors/Exchange/DataTrans/BroadcastSenderProxy.h"
 
 namespace DB
 {
-LocalBroadcastChannel::LocalBroadcastChannel(const DataTransKey & data_key_, LocalChannelOptions options_)
-    : data_key_id(data_key_.getKey())
-    , options(options_)
+LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_)
+    : data_key(std::move(data_key_))
+    , options(std::move(options_))
     , receive_queue(options_.queue_size)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
 {
@@ -38,7 +39,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     }
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
-        "Receive from channel " + data_key_id + " timeout after ms: " + std::to_string(total_timeout_ms));
+        "Receive from channel " + data_key->getKey() + " timeout after ms: " + std::to_string(total_timeout_ms));
     return current_status;
 }
 
@@ -55,7 +56,7 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     }
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
-        "Send to channel " + data_key_id + " timeout after ms: " + std::to_string(options.max_timeout_ms));
+        "Send to channel " + data_key->getKey() + " timeout after ms: " + std::to_string(options.max_timeout_ms));
     return current_status;
 }
 
@@ -68,7 +69,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         LOG_WARNING(
             logger,
             "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
-            data_key_id,
+            data_key->getKey(),
             status_code,
             current_status_ptr->code);
         return *current_status_ptr;
@@ -82,7 +83,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         LOG_INFO(
             logger,
             "{} BroadcastStatus from {} to {} with message: {}",
-            data_key_id,
+            data_key->getKey(),
             current_status_ptr->code,
             new_status_ptr->code,
             new_status_ptr->message);
@@ -100,16 +101,29 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
     }
 }
 
-void LocalBroadcastChannel::registerToSenders(UInt32 /*timeout_ms*/)
+void LocalBroadcastChannel::registerToSenders(UInt32 timeout_ms)
 {
+    auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+
+    sender_proxy->waitAccept(timeout_ms);
+    sender_proxy->becomeRealSender(shared_from_this());
 }
+
+void LocalBroadcastChannel::merge(IBroadcastSender &&)
+{
+    throw Exception("insertRangeSelective is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+String LocalBroadcastChannel::getName() const
+{
+    return "Local: " + data_key->getKey();
+};
 
 LocalBroadcastChannel::~LocalBroadcastChannel()
 {
     try
     {
         delete broadcast_status.load(std::memory_order_relaxed);
-        LocalBroadcastRegistry::getInstance().clearChannel(data_key_id);
     }
     catch (...)
     {

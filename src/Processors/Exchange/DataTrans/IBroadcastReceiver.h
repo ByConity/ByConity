@@ -14,6 +14,7 @@ public:
     virtual void registerToSenders(UInt32 timeout_ms) = 0;
     virtual RecvDataPacket recv(UInt32 timeout_ms) = 0;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code_, String message) = 0;
+    virtual String getName() const = 0;
     virtual ~IBroadcastReceiver() = default;
 };
 

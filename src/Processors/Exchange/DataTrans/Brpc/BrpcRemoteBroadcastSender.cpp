@@ -32,26 +32,14 @@ namespace ErrorCodes
 }
 
 /**
- * 1-n, broadcast
+ * 1-1 sender, to make 1-n sener, merge n 1-1 sender
  */
-BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(std::vector<DataTransKeyPtr> trans_keys_, ContextPtr context_, Block header_)
-    : trans_keys(std::move(trans_keys_))
-    , context(std::move(context_))
-    , header(std::move(header_))
-    , registry_center(BrpcExchangeRegistryCenter::getInstance())
+BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
+    DataTransKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_)
+    : context(std::move(context_)), header(std::move(header_))
 {
-    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
-}
-
-/**
- * 1-1, repartition
- */
-BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(DataTransKeyPtr trans_key_, ContextPtr context_, Block header_)
-    : trans_keys(std::vector<DataTransKeyPtr>{std::move(trans_key_)})
-    , context(std::move(context_))
-    , header(std::move(header_))
-    , registry_center(BrpcExchangeRegistryCenter::getInstance())
-{
+    trans_keys.emplace_back(std::move(trans_key_));
+    sender_stream_ids.push_back(stream_id);
     broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
 }
 
@@ -60,45 +48,16 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
     try
     {
         delete broadcast_status.load(std::memory_order_relaxed);
-        for (const auto & key : trans_keys)
+        
+        for (brpc::StreamId sender_stream_id : sender_stream_ids)
         {
-            registry_center.removeReceiver(key->getKey());
+            brpc::StreamClose(sender_stream_id);
         }
     }
     catch (...)
     {
         tryLogCurrentException(log);
     }
-}
-
-void BrpcRemoteBroadcastSender::waitAllReceiversReady(UInt32 timeout_ms)
-{
-    size_t max_num = timeout_ms / 10;
-
-    std::lock_guard lock(ready_mutex);
-    if (is_ready.load(std::memory_order_acquire))
-        return;
-
-    for (const auto & trans_key : trans_keys)
-    {
-        const auto & id = trans_key->getKey();
-        // for each receiver_id check exists in registry_center
-        size_t retry_count = 0;
-        while (!registry_center.exist(id))
-        {
-            if (retry_count >= max_num)
-            {
-                throw DataTransException(
-                    "Wait for receiver id-" + id + " registering timeout.", ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-            }
-            retry_count++;
-            bthread_usleep(10 * 1000);
-        }
-        auto stream_id = registry_center.getSenderStreamId(id);
-        sender_stream_ids.push_back(stream_id);
-        LOG_DEBUG(log, "Receiver-{} is ready, stream-id is {}", id, stream_id);
-    }
-    is_ready.store(true, std::memory_order_release);
 }
 
 BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
@@ -108,12 +67,6 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
         BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
         if (current_status_ptr->code != RUNNING)
             return *current_status_ptr;
-
-        if (!is_ready)
-        {
-            LOG_ERROR(log, "Call wait_all_receivers_ready() before sending chunk.");
-            return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY);
-        }
 
         const auto buf = serializeChunkToIoBuffer(std::move(chunk));
         for (size_t i = 0; i < sender_stream_ids.size(); ++i)
@@ -289,4 +242,21 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         }
     }
 }
+
+void BrpcRemoteBroadcastSender::merge(IBroadcastSender && /*sender*/)
+{
+    //TODO
+}
+
+
+String BrpcRemoteBroadcastSender::getName() const
+{
+    String name = "BrpcSender with keys:";
+    for (const auto & trans_key : trans_keys)
+    {
+        name += trans_key->getKey() + "\n";
+    }
+    return name;
+}
+
 }

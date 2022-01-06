@@ -3,10 +3,13 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeRegistryCenter.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
@@ -16,8 +19,8 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <Processors/Sources/NullSource.h>
 #include <Common/Exception.h>
-#include "Processors/Sources/NullSource.h"
 
 
 namespace DB
@@ -70,6 +73,7 @@ void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
     plan_segment_id = plan_segment->getPlanSegmentId();
     query_id = plan_segment->getQueryId();
     coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+    read_address_info = plan_segment->getCurrentAddress();
     context = plan_segment->getContext();
     if (!context)
         throw Exception("Plan segment not set context", ErrorCodes::BAD_ARGUMENTS);
@@ -95,46 +99,39 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             exchange_parallel_size = 1;
 
         size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
-        if (options.local_debug_mode)
-        {
-            LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
+        LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
+        if (input->getSourceAddress().empty())
+            throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
 
+        for (const auto & source_address : input->getSourceAddress())
+        {
+            auto write_address_info = extractExchangeHostPort(source_address);
             for (size_t i = 0; i < exchange_parallel_size; ++i)
             {
                 size_t partition_id = partition_id_start + i;
                 DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
                     query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                 BroadcastReceiverPtr receiver;
-                LOG_DEBUG(logger, "Create local exchange source : {}", data_key->dump());
-                receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(*data_key, local_options);
+                if (!options.force_remote_mode && ExchangeUtils::isLocalExchange(read_address_info, source_address))
+                {
+                    LOG_DEBUG(logger, "Create local exchange source : {}@{}", data_key->dump(), write_address_info);
+                    auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options);
+                    receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
+                }
+                else
+                {
+                    LOG_DEBUG(logger, "Create remote exchange source : {}@{}", data_key->dump(), write_address_info);
+                    receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
+                        std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), write_address_info, context, header));
+                }
+
                 auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
                 pipe.addSource(std::move(source));
             }
         }
-        else
-        {
-            if (input->getSourceAddress().empty())
-                throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
-
-            for (const auto & source_address : input->getSourceAddress())
-            {
-                const auto & write_address_info = extractExchangeHostPort(source_address);
-                for (size_t i = 0; i < exchange_parallel_size; ++i)
-                {
-                    size_t partition_id = partition_id_start + i;
-                    DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
-                        query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
-                    BroadcastReceiverPtr receiver;
-                    LOG_DEBUG(logger, "Create remote exchange source : {}@{}", data_key->dump(), write_address_info);
-                    receiver = BrpcExchangeRegistryCenter::getInstance().getOrCreateReceiver(data_key, write_address_info, context, header);
-                    auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
-                    pipe.addSource(std::move(source));
-                }
-            }
-            pipe.addSource(std::make_shared<NullSource>(header));
-        }
+        pipe.addSource(std::make_shared<NullSource>(header));
     }
-    
+
     pipeline.init(std::move(pipe));
 }
 

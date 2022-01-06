@@ -1,11 +1,21 @@
 #pragma once
 
+#include <memory>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Common/Allocator.h>
+#include <Common/Exception.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
+#include <absl/strings/str_split.h>
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+}
 class ExchangeUtils
 {
 public:
@@ -13,7 +23,8 @@ public:
     {
         return static_cast<bool>(
             (read_address_info.getHostName() == "localhost" && read_address_info.getPort() == 0)
-            || read_address_info.toString() == write_address_info.toString());
+            || (write_address_info.getHostName() == "localhost" && write_address_info.getPort() == 0)
+            || read_address_info == write_address_info);
     }
 
     static inline ExchangeOptions getExchangeOptions(const ContextPtr & context)
@@ -23,7 +34,15 @@ public:
             .exhcange_timeout_ms = static_cast<UInt32>(settings.exchange_timeout_ms),
             .send_threshold_in_bytes = settings.exchange_buffer_send_threshold_in_bytes,
             .send_threshold_in_row_num = settings.exchange_buffer_send_threshold_in_row,
-            .local_debug_mode = settings.exchange_enable_local_debug_mode};
+            .force_remote_mode = settings.exchange_enable_force_remote_mode};
+    }
+
+    static inline DataTransKeyPtr parseDataKey(const String & key_str)
+    {
+        std::vector<std::string> elements = absl::StrSplit(key_str, '_');
+        if (elements.size() != 5)
+            throw Exception("key_str must have 5 elements ", ErrorCodes::BAD_ARGUMENTS);
+        return std::make_shared<ExchangeDataKey>(elements[0], elements[1], elements[2], elements[3], elements[4]);
     }
 };
 

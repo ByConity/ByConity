@@ -8,7 +8,7 @@ struct ExchangeOptions
     UInt32 exhcange_timeout_ms;
     UInt64 send_threshold_in_bytes;
     UInt64 send_threshold_in_row_num;
-    bool local_debug_mode = false;
+    bool force_remote_mode = false;
 };
 
 }

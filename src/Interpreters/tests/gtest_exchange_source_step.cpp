@@ -5,9 +5,11 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
@@ -25,7 +27,7 @@ using namespace DB;
 
 namespace UnitTest
 {
-TEST(RemoteExchangeSourceStep, InitializePipelineTest)
+TEST(ExchangeSourceStep, InitializePipelineTest)
 {
     initLogger();
     const auto & context = getContext().context;
@@ -39,18 +41,20 @@ TEST(RemoteExchangeSourceStep, InitializePipelineTest)
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
     AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
     plan_segment.setCoordinatorAddress(coodinator_address);
-
+    plan_segment.setCurrentAddress(local_address);
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
     PlanSegmentInputs inputs;
     for (int i = 1; i <= 2; ++i)
     {
-        auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::SOURCE);
+        auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
         input->setParallelIndex(i);
         input->setExchangeParallelSize(1);
         input->setPlanSegmentId(1);
+        input->insertSourceAddress(local_address);
         inputs.push_back(input);
     }
 
@@ -59,25 +63,39 @@ TEST(RemoteExchangeSourceStep, InitializePipelineTest)
     RemoteExchangeSourceStep exchange_source_step(inputs, datastream);
     exchange_source_step.setPlanSegment(&plan_segment);
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0, .local_debug_mode = true};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};
     exchange_source_step.setExchangeOptions(exchange_options);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey datakey_1{plan_segment.getQueryId(), 1, 2, 1, coodinator_address_str};
-    auto local_sender_1 = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey_1, options);
 
-    ExchangeDataKey datakey_2{plan_segment.getQueryId(), 1, 2, 2, coodinator_address_str};
-    auto local_sender_2 = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey_2, options);
-    Chunk chunk = createUInt8Chunk(10, 1, 8);
-    auto total_bytes = chunk.bytes();
+    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr local_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_1);
+    local_sender_1->accept(context, header);
 
-    BroadcastStatus status = local_sender_1->send(std::move(chunk));
-    ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 2, coodinator_address_str);
+    BroadcastSenderProxyPtr local_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_2);
+    local_sender_2->accept(context, header);
 
     QueryPipeline pipeline;
     exchange_source_step.initializePipeline(pipeline, BuildQueryPipelineSettings::fromContext(context));
 
+    Chunk chunk = createUInt8Chunk(10, 1, 8);
+    auto total_bytes = chunk.bytes();
+
+    auto sender_func = [&]() {
+        local_sender_1->send(chunk.clone());
+        local_sender_2->send(chunk.clone());
+    };
+
+    ThreadFromGlobalPool thread(std::move(sender_func));
+    SCOPE_EXIT({
+        if (thread.joinable())
+            thread.join();
+    });
+
     PullingAsyncPipelineExecutor executor(pipeline);
     Chunk pull_chunk;
+    ASSERT_TRUE(executor.pull(pull_chunk));
+    ASSERT_TRUE(pull_chunk.getNumRows() == 10);
+    ASSERT_TRUE(pull_chunk.bytes() == total_bytes);
     ASSERT_TRUE(executor.pull(pull_chunk));
     ASSERT_TRUE(pull_chunk.getNumRows() == 10);
     ASSERT_TRUE(pull_chunk.bytes() == total_bytes);

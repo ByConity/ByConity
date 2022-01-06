@@ -6,6 +6,8 @@
 #include <Compression/CompressedReadBuffer.h>
 #include <Core/Block.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
@@ -93,7 +95,7 @@ static Block getHeader(size_t column_num)
 
 void receiver1()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header);
@@ -108,7 +110,7 @@ void receiver1()
 
 void receiver2()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "localhost:6666");
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header);
@@ -123,8 +125,8 @@ void receiver2()
 
 TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
 {
-    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
-    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "");
+    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
+    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "localhost:6666");
 
     auto origin_chunk = createUInt8Chunk(1000, 1, 7);
     auto header = getHeader(1);
@@ -133,9 +135,13 @@ TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
     std::thread thread_receiver1(receiver1);
     std::thread thread_receiver2(receiver2);
 
-    BrpcRemoteBroadcastSender sender({receiver_data1, receiver_data2}, getContext().context, header);
-    sender.waitAllReceiversReady(100 * 1000);
-    sender.send(std::move(origin_chunk));
+    auto sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(receiver_data1);
+    auto sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(receiver_data2);
+    sender_1->accept(getContext().context, header);
+    sender_2->accept(getContext().context, header);
+    sender_1->send(origin_chunk.clone());
+    sender_2->send(origin_chunk.clone());
+
     thread_receiver1.join();
     thread_receiver2.join();
 }
@@ -160,10 +166,9 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
     EXPECT_EQ(col->getUInt(1), 7);
 }
 
-void sender_thread(std::shared_ptr<BrpcRemoteBroadcastSender> sender_, Chunk chunk)
+void sender_thread(BroadcastSenderProxyPtr sender, Chunk chunk)
 {
-    sender_->waitAllReceiversReady(100 * 1000);
-    BroadcastStatus status = sender_->send(std::move(chunk));
+    BroadcastStatus status = sender->send(std::move(chunk));
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 }
 
@@ -171,13 +176,14 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
     Chunk chunk = createUInt8Chunk(10, 1, 7);
     auto total_bytes = chunk.bytes();
 
-    auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
+    auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    sender->accept(getContext().context, header);
     std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -216,9 +222,11 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
     Chunk chunk = createUInt8Chunk(10, 1, 8);
-    auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
+    // auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
+    auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    sender->accept(getContext().context, header);
     std::vector<std::thread> thread_senders;
     std::vector<Chunk> chunks;
     for (int i = 0; i < 5; i++)

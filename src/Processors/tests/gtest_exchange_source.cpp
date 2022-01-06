@@ -1,14 +1,17 @@
 #include <memory>
 #include <gtest/gtest.h>
 
+#include <Common/tests/gtest_utils.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeSource.h>
@@ -25,11 +28,17 @@ namespace UnitTest
 {
 TEST(ExchangeSource, LocalNormalTest)
 {
-    ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
+    initLogger();
+    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
+
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    local_sender->accept(getContext().context, Block());
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
+    local_receiver->registerToSenders(options.max_timeout_ms);
+
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();
 
@@ -69,10 +78,14 @@ TEST(ExchangeSource, LocalNormalTest)
 TEST(ExchangeSource, LocalSenderTimeoutTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
+
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
+    local_sender->accept(getContext().context, Block());
+    local_receiver->registerToSenders(options.max_timeout_ms);
     Chunk chunk = createUInt8Chunk(10, 1, 8);
 
     for (int i = 0; i < 5; i++)
@@ -107,9 +120,12 @@ TEST(ExchangeSource, LocalLimitTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
+    local_sender->accept(getContext().context, Block());
+    local_receiver->registerToSenders(options.max_timeout_ms);
     Chunk chunk = createUInt8Chunk(10, 1, 8);
 
     for (int i = 0; i < 5; i++)
