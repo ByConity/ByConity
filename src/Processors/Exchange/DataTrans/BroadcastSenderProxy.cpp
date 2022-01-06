@@ -53,7 +53,7 @@ BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
 BroadcastStatus BroadcastSenderProxy::finish(BroadcastStatusCode status_code, String message)
 {
     if (!has_real_sender.load(std::memory_order_relaxed))
-        return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY);
+        waitBecomeRealSender(5000);
     return real_sender->finish(status_code, message);
 }
 
@@ -75,7 +75,7 @@ void BroadcastSenderProxy::waitAccept(UInt32 timeout_ms)
         return;
 
     if (!wait_accept.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return this->header.operator bool(); }))
-        throw Exception("Wait accept timeout for {} " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
+        throw Exception("Wait accept timeout for " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
 }
 
 void BroadcastSenderProxy::accept(ContextPtr context_, Block header_)

@@ -37,11 +37,11 @@ public:
             .force_remote_mode = settings.exchange_enable_force_remote_mode};
     }
 
-    static inline DataTransKeyPtr parseDataKey(const String & key_str)
+    static inline DataTransKeyPtr parseDataKey(const String & key_str) noexcept
     {
         std::vector<std::string> elements = absl::StrSplit(key_str, '_');
         if (elements.size() != 5)
-            throw Exception("key_str must have 5 elements ", ErrorCodes::BAD_ARGUMENTS);
+            return DataTransKeyPtr();
         return std::make_shared<ExchangeDataKey>(elements[0], elements[1], elements[2], elements[3], elements[4]);
     }
 };

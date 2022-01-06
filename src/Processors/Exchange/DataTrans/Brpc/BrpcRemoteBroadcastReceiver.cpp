@@ -54,7 +54,6 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     {
         try
         {
-            // FIXME: not register to coodinator adress
             std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(registry_address, false);
             Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
             brpc::Controller cntl;
@@ -63,6 +62,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             stream_options.max_buf_size = stream_max_buf_size_bytes;
             stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
             cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
+            // FIXME we should close stream at any situation
             if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
                 throw Exception("Fail to create stream for data_key-" + data_key, ErrorCodes::BRPC_EXCEPTION);
 
@@ -84,8 +84,10 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             {
                 retry_times++;
                 LOG_WARNING(log, "Catch brpc exception when registering to sender:{} retrying:{}", e.message(), retry_times);
-                if (s.elapsedMilliseconds() >= timeout_ms)
+                if (s.elapsedMilliseconds() >= timeout_ms || retry_times > 3)
                     throw e;
+                else
+                    bthread_usleep(10000L);
             }
             else
             {
@@ -126,7 +128,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
         const auto error_msg
             = "Try pop receive queue for stream id-" + std::to_string(stream_id) + " timeout for " + std::to_string(timeout_ms) + " ms.";
         LOG_ERROR(log, error_msg);
-        BroadcastStatus current_status = finish(BroadcastStatusCode::SEND_TIMEOUT, error_msg);
+        BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
     }
     if (!brpc_data_packet.exception.empty())
@@ -177,6 +179,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
             delete current_status_ptr;
             auto res = *new_status_ptr;
             res.is_modifer = true;
+            //FIXME: we should check return code, since receiver finish status may be changed by sender.
             brpc::StreamFinish(stream_id, status_code_);
             return res;
         }
