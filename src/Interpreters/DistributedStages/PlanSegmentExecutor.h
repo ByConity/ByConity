@@ -28,7 +28,8 @@ public:
 
 protected:
     void doExecute(std::shared_ptr<ThreadGroupStatus> thread_group);
-    QueryPipelinePtr buildPipeline(bool add_output_processors);
+    QueryPipelinePtr buildPipeline();
+    void buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
 
 private:
     ContextMutablePtr context;

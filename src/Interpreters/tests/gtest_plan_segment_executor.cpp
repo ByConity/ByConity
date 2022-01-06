@@ -8,10 +8,12 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/QueryPlan/IQueryPlanStep.h>
@@ -37,17 +39,29 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .local_debug_mode = true};
+
+    arguments.push_back(header.getByPosition(1));
+    arguments.push_back(header.getByPosition(2));
+    auto func = createRepartitionFunction(getContext().context, arguments);
+
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
+
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey source_key{query_id, 1, 2, 1, coodinator_address_str};
-    BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
 
-    ExchangeDataKey sink_key{query_id, 2, 3, 1, coodinator_address_str};
-    BroadcastReceiverPtr sink_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(sink_key, options);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
+    source_sender->accept(context, header);
+
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
+    sink_sender->becomeRealSender(sink_channel);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
@@ -55,6 +69,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     input->setParallelIndex(1);
     input->setExchangeParallelSize(1);
     input->setPlanSegmentId(1);
+    input->insertSourceAddress(local_address);
     inputs.push_back(input);
 
     auto output = std::make_shared<PlanSegmentOutput>(header, PlanSegmentType::EXCHANGE);
@@ -67,7 +82,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     plan_segment.setQueryId(query_id);
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
-
+    plan_segment.setCurrentAddress(local_address);
     plan_segment.setCoordinatorAddress(coodinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
@@ -77,25 +92,28 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     exchange_source_step->setPlanSegment(&plan_segment);
     exchange_source_step->setExchangeOptions(exchange_options);
 
-    arguments.push_back(header.getByPosition(1));
-    arguments.push_back(header.getByPosition(2));
-    auto func = createRepartitionFunction(getContext().context, arguments);
-    auto total_bytes = chunk.bytes();
+    auto sender_func = [&]() {
+        for (int i = 0; i < 5; i++)
+        {
+            BroadcastStatus status = source_sender->send(chunk.clone());
+            ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+        }
+        source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
+    };
 
-    for (int i = 0; i < 5; i++)
-    {
-        BroadcastStatus status = source_sender->send(chunk.clone());
-        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
-    }
-
-    source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
-
+    ThreadFromGlobalPool thread(std::move(sender_func));
+    SCOPE_EXIT({
+        if (thread.joinable())
+            thread.join();
+    });
+    
     QueryPlan query_plan;
     QueryPlan::Node remote_node{.step = std::move(exchange_source_step), .children = {}};
     query_plan.addRoot(std::move(remote_node));
     plan_segment.setQueryPlan(std::move(query_plan));
     PlanSegmentExecutor executor(std::make_unique<PlanSegment>(std::move(plan_segment)), context, exchange_options);
     executor.execute();
+    
 
     for (int i = 0; i < 5; i++)
     {
@@ -103,7 +121,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
         ASSERT_TRUE(std::holds_alternative<Chunk>(recv_res));
         Chunk & recv_chunk = std::get<Chunk>(recv_res);
         ASSERT_TRUE(recv_chunk.getNumRows() == rows);
-        ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
+        ASSERT_TRUE(recv_chunk.bytes() == chunk.bytes());
     }
 }
 
@@ -117,17 +135,24 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .local_debug_mode = true};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey source_key{query_id, 1, 2, 1, coodinator_address_str};
-    BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
+    AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    ExchangeDataKey sink_key{query_id, 2, 3, 1, coodinator_address_str};
-    BroadcastReceiverPtr sink_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(sink_key, options);
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
+    source_sender->accept(context, header);
+
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
+    sink_sender->becomeRealSender(sink_channel);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
@@ -135,6 +160,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     input->setParallelIndex(1);
     input->setExchangeParallelSize(1);
     input->setPlanSegmentId(1);
+    input->insertSourceAddress(local_address);
     inputs.push_back(input);
 
     auto output = std::make_shared<PlanSegmentOutput>(header, PlanSegmentType::EXCHANGE);
@@ -147,7 +173,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     plan_segment.setQueryId(query_id);
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
-
+    plan_segment.setCurrentAddress(local_address);
     plan_segment.setCoordinatorAddress(coodinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
@@ -203,17 +229,24 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 10000, .local_debug_mode = true};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
+
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    ExchangeDataKey source_key{query_id, 1, 2, 1, coodinator_address_str};
-    BroadcastSenderPtr source_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(source_key, options);
 
-    ExchangeDataKey sink_key{query_id, 2, 3, 1, coodinator_address_str};
-    BroadcastReceiverPtr sink_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(sink_key, options);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
+    source_sender->accept(context, header);
+
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
+    sink_sender->becomeRealSender(sink_channel);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
@@ -221,6 +254,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     input->setParallelIndex(1);
     input->setExchangeParallelSize(1);
     input->setPlanSegmentId(1);
+    input->insertSourceAddress(local_address);
     inputs.push_back(input);
 
     auto output = std::make_shared<PlanSegmentOutput>(header, PlanSegmentType::EXCHANGE);
@@ -233,7 +267,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     plan_segment.setQueryId(query_id);
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
-
+    plan_segment.setCurrentAddress(local_address);
     plan_segment.setCoordinatorAddress(coodinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
@@ -248,19 +282,12 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     auto func = createRepartitionFunction(getContext().context, arguments);
     auto total_bytes = chunk.bytes();
 
-    for (int i = 0; i < 2; i++)
-    {
-        BroadcastStatus status = source_sender->send(chunk.clone());
-        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
-    }
-
     QueryPlan query_plan;
     QueryPlan::Node remote_node{.step = std::move(exchange_source_step), .children = {}};
     query_plan.addRoot(std::move(remote_node));
     plan_segment.setQueryPlan(std::move(query_plan));
     // buffer will flush when row_num reached to send_threshold_in_row_num
     PlanSegmentExecutor executor(std::make_unique<PlanSegment>(std::move(plan_segment)), context, exchange_options);
-    // PlanSegmentExecutor executor(std::make_unique<PlanSegment>(std::move(plan_segment)), context);
 
     auto execute_func = [&]() { executor.execute(); };
 
@@ -270,6 +297,12 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
             thread.join();
     });
 
+    for (int i = 0; i < 5; i++)
+    {
+        BroadcastStatus status = source_sender->send(chunk.clone());
+        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+    }
+    
     for (int i = 0; i < 2; i++)
     {
         RecvDataPacket recv_res = sink_receiver->recv(5000);
@@ -280,8 +313,15 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     }
 
     CancellationCode code = CancellationCode::NotFound;
+    int max_time = 100;
     for (; code == CancellationCode::NotFound; code = context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id))
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        max_time--;
+        if(max_time < 0)
+            break;
+    }
+        
     ASSERT_TRUE(code == CancellationCode::CancelSent);
 
     RecvDataPacket recv_res = sink_receiver->recv(5000);

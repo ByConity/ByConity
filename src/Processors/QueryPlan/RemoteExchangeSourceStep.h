@@ -2,6 +2,7 @@
 
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <Poco/Logger.h>
+#include "Interpreters/DistributedStages/AddressInfo.h"
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 
@@ -41,6 +42,7 @@ private:
     size_t plan_segment_id;
     String query_id;
     String coordinator_address;
+    AddressInfo read_address_info;
     ContextPtr context;
     ExchangeOptions options;
 };

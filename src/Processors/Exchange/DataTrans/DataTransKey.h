@@ -1,8 +1,8 @@
 #pragma once
 
-#include <common/types.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -16,4 +16,3 @@ public:
 
 using DataTransKeyPtr = std::shared_ptr<DataTransKey>;
 }
-

@@ -20,6 +20,7 @@ public:
     void registerToSenders(UInt32 timeout_ms) override;
     RecvDataPacket recv(UInt32 timeout_ms) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
+    String getName() const override;
     void pushReceiveQueue(Chunk & chunk);
     void pushException(const String & exception);
     void clearQueue() { queue->receive_queue->clear(); }

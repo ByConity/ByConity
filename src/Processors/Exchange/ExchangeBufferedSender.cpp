@@ -12,13 +12,12 @@
 namespace DB
 {
 ExchangeBufferedSender::ExchangeBufferedSender(
-    const Block & header_, BroadcastSenderPtr sender_, UInt64 threshold_in_bytes_, UInt64 threshold_in_row_num_, UInt32 wait_receiver_timeout_ms_)
+    const Block & header_, BroadcastSenderPtr sender_, UInt64 threshold_in_bytes_, UInt64 threshold_in_row_num_)
     : header(header_)
     , column_num(header_.getColumns().size())
     , sender(sender_)
     , threshold_in_bytes(threshold_in_bytes_)
     , threshold_in_row_num(threshold_in_row_num_)
-    , wait_receiver_timeout_ms(wait_receiver_timeout_ms_)
     , logger(&Poco::Logger::get("ExchangeBufferedSender"))
 {
     resetBuffer();
@@ -39,11 +38,6 @@ void ExchangeBufferedSender::flush(bool force)
 
     LOG_TRACE(logger, "flush buffer, force: {}, row: {}", force, rows);
 
-    if (!is_receivers_ready)
-    {
-        sender->waitAllReceiversReady(wait_receiver_timeout_ms);
-        is_receivers_ready = true;
-    }
     Chunk chunk(std::move(partition_buffer), rows);
     sendAndCheckReturnStatus(*sender, std::move(chunk));
     resetBuffer();

@@ -4,9 +4,11 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/ProcessList.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeRegistryCenter.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
@@ -18,11 +20,11 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
-#include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
-#include <Interpreters/ProcessList.h>
+#include <common/logger_useful.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 
 
 namespace DB
@@ -66,7 +68,7 @@ void PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
     //TODO notify segment scheduler with finished or exception status.
 }
 
-BlockIO PlanSegmentExecutor::lazyExecute(bool add_output_processors)
+BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
     BlockIO res;
     // Will run as master query and already initialized
@@ -83,7 +85,7 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool add_output_processors)
 
     QueryStatus * query_status = & res.plan_segment_process_entry->get();
     context->setProcessListElement(query_status);
-    res.pipeline = std::move(*buildPipeline(add_output_processors));
+    res.pipeline = std::move(*buildPipeline());
     res.pipeline.setProcessListElement(query_status);
 
     return res;
@@ -126,7 +128,9 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     PlanSegmentProcessList::EntryPtr process_plan_segment_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
-    QueryPipelinePtr pipeline = buildPipeline(true);
+    QueryPipelinePtr pipeline;
+    BroadcastSenderPtrs senders;
+    buildPipeline(pipeline, senders);
 
     QueryStatus * query_status = &process_plan_segment_entry->get();
     context->setProcessListElement(query_status);
@@ -143,18 +147,22 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         plan_segment->getPlanSegmentId(),
         num_threads);
     pipeline_executor->execute(num_threads);
+
+    for (const auto & sender : senders)
+        sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Pipeline execute finish");
 }
 
-
-QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
+QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
-    QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
+    return plan_segment->getQueryPlan().buildQueryPipeline(
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+}
+
+void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders)
+{
+    pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
 
-    if (!add_output_processors)
-    {
-        return pipeline;
-    }
     if (!plan_segment->getPlanSegmentOutput())
         throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
 
@@ -184,25 +192,14 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
         throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
 
     const Block & header = plan_segment_output->getHeader();
-    LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
 
-    BroadcastSenderPtrs senders;
     for (size_t i = 0; i < total_partition_num; i++)
     {
         size_t partition_id = i + 1;
         auto data_key = std::make_shared<ExchangeDataKey>(
             plan_segment->getQueryId(), write_plan_segment_id, read_plan_segment_id, partition_id, coordinator_address);
-        BroadcastSenderPtr sender;
-        if (options.local_debug_mode)
-        {
-            LOG_DEBUG(logger, "Create local sender: {}", data_key->dump());
-            sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(*data_key, local_options);
-        }
-        else
-        {
-            LOG_DEBUG(logger, "Create remote sender: {}", data_key->dump());
-            sender = BrpcExchangeRegistryCenter::getInstance().getOrCreateSender(std::vector<DataTransKeyPtr>{data_key}, context, header);
-        }
+        BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+        sender->accept(context, header);
         senders.emplace_back(std::move(sender));
     }
 
@@ -218,8 +215,6 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline(bool add_output_processors)
         addBroadcastExchangeSink(pipeline, senders);
     else
         throw Exception("Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)), ErrorCodes::LOGICAL_ERROR);
-
-    return pipeline;
 }
 
 void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders, bool keep_order)

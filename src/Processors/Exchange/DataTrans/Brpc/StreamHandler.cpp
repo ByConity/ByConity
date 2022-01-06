@@ -97,7 +97,7 @@ void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
         Chunk empty = Chunk();
         // push an empty as finish
         ptr->pushReceiveQueue(empty);
-        LOG_DEBUG(log, "StreamHandler::on_finished: StreamId-{}, finish code:{]", id, finish_status_code);
+        LOG_DEBUG(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, ptr->getName(), finish_status_code);
     }
 }
 

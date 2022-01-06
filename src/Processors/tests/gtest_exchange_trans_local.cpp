@@ -1,39 +1,46 @@
+#include <memory>
+#include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
-#include <Processors/Exchange/DataTrans/Local/LocalBroadcastRegistry.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
-
-#include <Processors/Chunk.h>
-#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
+#include <Common/tests/gtest_utils.h>
 
 namespace UnitTest
 {
 using namespace DB;
 
-TEST(LocalBroadcast, LocalBroadcastRegistryTest)
+TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
 {
+    initLogger();
     LocalChannelOptions options{10, 1000};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
-    ASSERT_TRUE(LocalBroadcastRegistry::getInstance().countChannel() == 1);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    local_sender->becomeRealSender(channel);
+
+    ASSERT_TRUE(BroadcastSenderProxyRegistry::instance().countProxies() == 1);
 
     local_sender.reset();
-    local_receiver.reset();
-    ASSERT_TRUE(LocalBroadcastRegistry::getInstance().countChannel() == 0);
+    ASSERT_TRUE(BroadcastSenderProxyRegistry::instance().countProxies() == 0);
 }
 
 
-TEST(LocalBroadcast, NormalSendRecvTest)
+TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 {
     LocalChannelOptions options{10, 1000};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    local_sender->becomeRealSender(channel);
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
+
     Chunk chunk = createUInt8Chunk(10, 10, 8);
     auto total_bytes = chunk.bytes();
     BroadcastStatus status = local_sender->send(std::move(chunk));
@@ -46,12 +53,14 @@ TEST(LocalBroadcast, NormalSendRecvTest)
     ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
 }
 
-TEST(LocalBroadcast, SendTimeoutTest)
+TEST(ExchangeLocalBroadcast, SendTimeoutTest)
 {
     LocalChannelOptions options{1, 200};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    local_sender->becomeRealSender(channel);
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
 
     Chunk chunk = createUInt8Chunk(10, 10, 8);
     BroadcastStatus status = local_sender->send(chunk.clone());
@@ -61,13 +70,14 @@ TEST(LocalBroadcast, SendTimeoutTest)
     ASSERT_TRUE(timeout_status.is_modifer == true);
 }
 
-TEST(LocalBroadcast, AllSendDoneTest)
+TEST(ExchangeLocalBroadcast, AllSendDoneTest)
 {
     LocalChannelOptions options{10, 1000};
-    ExchangeDataKey datakey{"", 1, 1, 1, ""};
-
-    BroadcastSenderPtr local_sender = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsSender(datakey, options);
-    BroadcastReceiverPtr local_receiver = LocalBroadcastRegistry::getInstance().getOrCreateChannelAsReceiver(datakey, options);
+    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
+    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+    local_sender->becomeRealSender(channel);
+    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
 
     Chunk chunk = createUInt8Chunk(10, 10, 8);
     auto total_bytes = chunk.bytes();

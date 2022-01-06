@@ -1,5 +1,4 @@
 #include "BrpcRemoteBroadcastReceiver.h"
-#include "BrpcExchangeRegistryCenter.h"
 #include "StreamHandler.h"
 
 #include <Processors/Exchange/DataTrans/DataTransException.h>
@@ -16,6 +15,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int BRPC_EXCEPTION;
+    extern const int DISTRIBUTE_STAGE_QUERY_EXCEPTION;
 }
 
 BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
@@ -188,5 +188,10 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
             return *current_status_ptr;
         }
     }
+}
+
+String BrpcRemoteBroadcastReceiver::getName() const
+{
+    return "BrpcReciver[" +  trans_key->getKey() +"]@" + registry_address;
 }
 }
