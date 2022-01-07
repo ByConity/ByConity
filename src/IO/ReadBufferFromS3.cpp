@@ -49,6 +49,10 @@ bool ReadBufferFromS3::nextImpl()
 
     if (!impl)
         impl = initialize();
+    else
+        // Sync position in ReadBufferFromS3 to impl, otherwise assertion in impl->next
+        // may fail
+        impl->position() = pos;
 
     for (size_t attempt = 0; attempt < max_single_read_retries; ++attempt)
     {
