@@ -478,7 +478,7 @@ size_t HaUniqueMergeTreeBlockOutputStream::removeDupKeys(Block & block, ColumnWi
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Filter size {} doesn't match block size {}", filter.size(), block_size);
 
     auto unique_key_expr = metadata_snapshot->getUniqueKeyExpression();
-    auto unique_key_names = metadata_snapshot->getColumnsRequiredForUniqueKey();
+    auto unique_key_names = metadata_snapshot->getUniqueKeyColumns();
     unique_key_expr->execute(block);
 
     ColumnsWithTypeAndName keys;
