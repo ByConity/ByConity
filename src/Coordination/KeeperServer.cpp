@@ -232,7 +232,7 @@ void KeeperServer::forceRecovery()
     raft_instance->update_params(params);
 }
 
-void KeeperServer::launchRaftServer(/*bool enable_ipv6*/)
+void KeeperServer::launchRaftServer(bool enable_ipv6)
 {
     nuraft::raft_params params;
     params.heart_beat_interval_
@@ -279,7 +279,7 @@ void KeeperServer::launchRaftServer(/*bool enable_ipv6*/)
 
     nuraft::ptr<nuraft::logger> logger = nuraft::cs_new<LoggerWrapper>("RaftInstance", coordination_settings->raft_logs_level);
     asio_service = nuraft::cs_new<nuraft::asio_service>(asio_opts, logger);
-    asio_listener = asio_service->create_rpc_listener(state_manager->getPort(), logger);
+    asio_listener = asio_service->create_rpc_listener(state_manager->getPort(), logger, enable_ipv6);
 
     if (!asio_listener)
         return;
@@ -305,7 +305,7 @@ void KeeperServer::launchRaftServer(/*bool enable_ipv6*/)
         throw Exception(ErrorCodes::RAFT_ERROR, "Cannot allocate RAFT instance");
 }
 
-void KeeperServer::startup(const Poco::Util::AbstractConfiguration & config, bool /*enable_ipv6*/)
+void KeeperServer::startup(const Poco::Util::AbstractConfiguration & config, bool enable_ipv6)
 {
     state_machine->init();
 
@@ -315,7 +315,7 @@ void KeeperServer::startup(const Poco::Util::AbstractConfiguration & config, boo
 
     last_local_config = state_manager->parseServersConfiguration(config, true).cluster_config;
 
-    launchRaftServer(/*enable_ipv6*/);
+    launchRaftServer(enable_ipv6);
 }
 
 void KeeperServer::shutdownRaftServer()

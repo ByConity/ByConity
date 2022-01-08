@@ -55,7 +55,7 @@ private:
 
     /// Almost copy-paste from nuraft::launcher, but with separated server init and start
     /// Allows to avoid race conditions.
-    void launchRaftServer(/*bool enable_ipv6*/);
+    void launchRaftServer(bool enable_ipv6);
 
     void shutdownRaftServer();
 
