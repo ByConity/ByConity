@@ -1,8 +1,8 @@
+#include "NativeChunkOutputStream.h"
 #include <Compression/CompressedWriteBuffer.h>
 #include <Core/Block.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include "NativeChunkOutputStream.h"
 #include <IO/VarInt.h>
 #include <Common/typeid_cast.h>
 
@@ -43,6 +43,18 @@ static void writeData(const IDataType & type, const ColumnPtr & column, WriteBuf
 
 void NativeChunkOutputStream::write(const Chunk & chunk)
 {
+    /// chunk info
+    auto chunk_info = chunk.getChunkInfo();
+    if (chunk_info)
+    {
+        writeVarUInt(1, ostr);
+        writeVarUInt(static_cast<UInt8>(chunk_info->getType()), ostr);
+        chunk_info->write(ostr);
+    }
+    else
+    {
+        writeVarUInt(0, ostr);
+    }
     /// Dimensions
     size_t columns = chunk.getNumColumns();
     size_t rows = chunk.getNumRows();

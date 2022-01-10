@@ -6,11 +6,34 @@
 namespace DB
 {
 
+class ReadBuffer;
+class WriteBuffer;
+
 class ChunkInfo
 {
 public:
+    enum class Type
+    {
+        Any = 0,
+        AggregatedArenasChunkInfo = 1,
+        AggregatedChunkInfo = 2,
+        ChunkMissingValues = 3,
+        ChunksToMerge = 4,
+        RepartitionChunkInfo = 5,
+        SelectorInfo = 6
+    };
+
     virtual ~ChunkInfo() = default;
     ChunkInfo() = default;
+
+    /// Write the values in binary form.
+    virtual void write(WriteBuffer & /*out*/) const { }
+
+    /// Read the values in binary form.
+    virtual void read(ReadBuffer & /*in*/) const { }
+
+    /// used for indicating
+    virtual Type getType() const { return Type::Any; }
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

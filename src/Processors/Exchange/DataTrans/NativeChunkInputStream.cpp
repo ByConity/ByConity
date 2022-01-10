@@ -1,10 +1,9 @@
 #include "NativeChunkInputStream.h"
 
-#include <Compression/CompressedReadBufferFromFile.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <IO/ReadHelpers.h>
-#include <IO/VarInt.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/typeid_cast.h>
 
 namespace DB
@@ -50,6 +49,21 @@ Chunk NativeChunkInputStream::readImpl()
         return res;
     }
 
+    /// chunk info
+    UInt8 has_chunk_info;
+    readVarUInt(has_chunk_info, istr);
+    if (has_chunk_info == 1)
+    {
+        UInt8 chunk_info_type;
+        readVarUInt(chunk_info_type, istr);
+        // todo:: current we only support AggregatedChunkInfo
+        if (chunk_info_type == static_cast<UInt8>(ChunkInfo::Type::AggregatedChunkInfo))
+        {
+            auto chunk_info = std::make_shared<AggregatedChunkInfo>();
+            chunk_info->read(istr);
+            res.setChunkInfo(chunk_info);
+        }
+    }
     /// Dimensions
     size_t col_num = 0;
     size_t row_num = 0;
