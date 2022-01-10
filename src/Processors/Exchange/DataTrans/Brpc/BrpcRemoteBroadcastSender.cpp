@@ -48,7 +48,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
     try
     {
         delete broadcast_status.load(std::memory_order_relaxed);
-        
+
         for (brpc::StreamId sender_stream_id : sender_stream_ids)
         {
             brpc::StreamClose(sender_stream_id);
@@ -220,6 +220,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
                 new_status_ptr->message);
             delete current_status_ptr;
             auto res = *new_status_ptr;
+            /// FIXME: If sender finish status has bean changed by receiver, is_modifer should be false
             res.is_modifer = true;
             int code = 0;
             for (auto stream_id : sender_stream_ids)

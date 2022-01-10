@@ -5,6 +5,8 @@
 #include <IO/ReadHelpers.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <brpc/stream.h>
 
 #include <memory>
@@ -18,12 +20,12 @@ namespace ErrorCodes
 
 int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size) noexcept
 {
-    if (receiver.expired())
+    BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
+    if (!receiver_ptr)
     {
         LOG_WARNING(log, "StreamHandler::on_received_messages receiver is expired.");
         return 0;
     }
-    auto receiver_ptr = receiver.lock();
     try
     {
         auto header = receiver_ptr->getHeader();
@@ -69,35 +71,44 @@ void StreamHandler::on_idle_timeout(brpc::StreamId id)
 
 void StreamHandler::on_closed(brpc::StreamId stream_id)
 {
-    if (receiver.expired())
+    BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
+    if (!receiver_ptr)
     {
         LOG_WARNING(log, "StreamHandler::on_closed receiver is expired.");
     }
     else
     {
-        receiver.lock()->clearQueue();
-        LOG_DEBUG(log, "StreamHandler::on_closed: StreamId-{} closed", stream_id);
+        /// Try close receiver gracefully
+        auto res = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Finish in StreamHandler");
+        if (res.is_modifer || res.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+        {
+            Chunk empty = Chunk();
+            // push an empty as finish
+            receiver_ptr->pushReceiveQueue(empty);
+        }
+        LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
     }
 }
 
 void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
 {
-    if (receiver.expired())
+    BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
+    if (!receiver_ptr)
     {
         LOG_WARNING(log, "StreamHandler::on_finished receiver is expired.");
     }
     else
     {
-        const auto ptr = receiver.lock();
-        if (finish_status_code != -1 && finish_status_code != 0)
-            ptr->clearQueue();
+        ///Only care about finish status which need close receiver immediately
+        if (finish_status_code <= 0)
+            return;
 
-
-        ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
+        receiver_ptr->clearQueue();
+        receiver_ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
         Chunk empty = Chunk();
         // push an empty as finish
-        ptr->pushReceiveQueue(empty);
-        LOG_DEBUG(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, ptr->getName(), finish_status_code);
+        receiver_ptr->pushReceiveQueue(empty);
+        LOG_DEBUG(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, receiver_ptr->getName(), finish_status_code);
     }
 }
 
