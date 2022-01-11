@@ -133,15 +133,14 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
     }
     else
     {
+        PlanSegmentInputs inputs;
         for (auto & child : node->children)
         {
-            auto input = findInputs(child);
-            if (!input.empty())
-                return input;
+            auto sub_input = findInputs(child);
+            inputs.insert(inputs.end(), sub_input.begin(), sub_input.end());            
         }
+        return inputs;
     }
-
-    return {};
 }
 
 void PlanSegmentSpliter::rewrite(QueryPlan & query_plan, PlanSegmentContext & plan_segment_context)

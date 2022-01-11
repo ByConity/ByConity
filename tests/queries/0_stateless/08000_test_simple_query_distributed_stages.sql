@@ -14,10 +14,6 @@ insert into test.test_simple_local select '2022-01-01', number, 'a' from numbers
 select id from test.test_simple limit 10;
 select id from test.test_simple order by id limit 10;
 
-alter table test.test_simple_local drop partition id '2022-01-01';
-
-insert into test.test_simple_local select '2022-01-01', number, 'a' from numbers(1);
-
 select * from test.test_simple;
 
 drop table if exists test.test_simple;

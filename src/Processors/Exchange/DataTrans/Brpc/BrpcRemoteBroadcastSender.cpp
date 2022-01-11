@@ -197,7 +197,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
     {
-        LOG_WARNING(
+        LOG_TRACE(
             log,
             "Broadcast sender-{} finished and status can't be changed to {} any more. Current status: {}",
             trans_keys[0]->getKey(),
