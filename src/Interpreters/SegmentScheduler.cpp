@@ -344,7 +344,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 bool is_inputs_ready = true;
                 for (auto & segment_input : it->second->getPlanSegmentInputs())
                 {
-                    if (!segment_input)
+                    if (segment_input->getPlanSegmentType() == PlanSegmentType::SOURCE)
                     {
                         // segment has more than one input which one is table
                         continue;

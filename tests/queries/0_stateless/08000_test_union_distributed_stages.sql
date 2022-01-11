@@ -31,5 +31,9 @@ select * from (select * from (select a.id from test.test_union as a join test.te
     union all 
     (select a.id from test.test_union as a join test.test_union as b on a.id = b.id)) as c join test.test_union as d on c.id = d.id;
 
+select j from (select i as j from (select a.id as i from test.test_union as a join test.test_union as b on a.id = b.id)
+    union all 
+    (select a.id from test.test_union as a join test.test_union as b on a.id = b.id)) as c join test.test_union as d on c.j = d.id;
+
 drop table if exists test.test_union;
 drop table if exists test.test_union_local;
