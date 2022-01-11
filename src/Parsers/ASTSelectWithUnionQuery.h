@@ -19,6 +19,8 @@ public:
 
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
+    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
+
     enum class Mode
     {
         Unspecified,

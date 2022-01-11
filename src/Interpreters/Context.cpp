@@ -66,6 +66,7 @@
 #include <Storages/DiskUniqueKeyIndexCache.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
+#include <Processors/QueryCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeList.h>
@@ -401,6 +402,7 @@ struct ContextSharedPart
     AccessControlManager access_control_manager;
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
+    mutable QueryCachePtr query_cache;                      /// Cache of queries' results.
     mutable MMappedFileCachePtr mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list;                               /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
@@ -1602,6 +1604,44 @@ void Context::dropMarkCache() const
     auto lock = getLock();
     if (shared->mark_cache)
         shared->mark_cache->reset();
+}
+
+void Context::setQueryCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+
+    if (shared->query_cache)
+        throw Exception("Query cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->query_cache = std::make_shared<QueryCache>(cache_size_in_bytes);
+}
+
+QueryCachePtr Context::getQueryCache() const
+{
+    auto lock = getLock();
+    return shared->query_cache;
+}
+
+void Context::dropQueryCache() const
+{
+    auto lock = getLock();
+    if (shared->query_cache)
+        shared->query_cache->reset();
+}
+
+void Context::dropQueryCache(const String & name) const
+{
+    auto lock = getLock();
+    if (shared->query_cache)
+        shared->query_cache->dropQueryCache(name);
+}
+
+void Context::dropQueryCache(const String & database, const String & table) const
+{
+    String name = database + "." + table;
+    auto lock = getLock();
+    if (shared->query_cache)
+        shared->query_cache->dropQueryCache(name);
 }
 
 

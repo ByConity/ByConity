@@ -108,6 +108,7 @@ private:
 };
 
 using Chunks = std::vector<Chunk>;
+using ChunkPtr = std::shared_ptr<Chunk>;
 
 /// Extension to support delayed defaults. AddingDefaultsProcessor uses it to replace missing values with column defaults.
 class ChunkMissingValues : public ChunkInfo

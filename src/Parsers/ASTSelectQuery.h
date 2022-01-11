@@ -42,6 +42,8 @@ public:
 
     ASTPtr clone() const override;
 
+    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
+
     bool distinct = false;
     bool group_by_with_totals = false;
     bool group_by_with_rollup = false;

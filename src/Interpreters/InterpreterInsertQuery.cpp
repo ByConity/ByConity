@@ -370,6 +370,7 @@ BlockIO InterpreterInsertQuery::execute()
             res.pipeline.addStorageHolder(inner_table);
     }
 
+    table->setUpdateTimeNow();
     return res;
 }
 
