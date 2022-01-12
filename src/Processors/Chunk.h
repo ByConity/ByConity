@@ -34,6 +34,15 @@ public:
 
     /// used for indicating
     virtual Type getType() const { return Type::Any; }
+    
+    virtual bool isEqual(const ChunkInfo & rhs) const { return this == &rhs; }
+
+protected:
+    friend bool operator==(const ChunkInfo & lhs, const ChunkInfo & rhs)
+    {
+        return typeid(lhs) == typeid(rhs) // Allow compare only instances of the same dynamic type
+            && lhs.isEqual(rhs);
+    }
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

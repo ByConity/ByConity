@@ -35,6 +35,12 @@ public:
     }
 
     Type getType() const override { return Type::AggregatedChunkInfo; }
+
+    virtual bool isEqual(const ChunkInfo & rhs) const override
+    {
+        const auto & other = static_cast<const AggregatedChunkInfo &>(rhs);
+        return is_overflows == other.is_overflows && bucket_num == other.bucket_num;
+    }
 };
 
 class IBlockInputStream;

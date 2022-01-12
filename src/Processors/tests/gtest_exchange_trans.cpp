@@ -45,8 +45,7 @@ protected:
     static void start_brpc_server()
     {
         static brpc::Server server;
-        const auto & context = getContext().context;
-        BrpcExchangeReceiverRegistryService service_impl(context->getSettingsRef().exchange_stream_max_buf_size);
+        BrpcExchangeReceiverRegistryService service_impl(73400320);
 
         // Add the service into server. Notice the second parameter, because the
         // service is put on stack, we don't want server to delete it, otherwise

@@ -38,6 +38,21 @@ MultiPartitionExchangeSink::MultiPartitionExchangeSink(
 
 void MultiPartitionExchangeSink::consume(Chunk chunk)
 {
+    if (partition_num == 1)
+    {
+        buffered_senders[0].sendThrough(std::move(chunk));
+        return;
+    }
+    const auto & chunk_info = chunk.getChunkInfo();
+    if (!buffered_senders[0].compareBufferChunkInfo(chunk_info))
+    {
+        for (size_t i = 0; i < partition_num; ++i)
+        {
+            buffered_senders[i].updateBufferChunkInfo(chunk_info);
+        }
+    }
+
+
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
     std::tie(partition_selector, partition_start_points) = RepartitionTransform::doRepartition(
@@ -55,12 +70,12 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
             buffered_senders[j].appendSelective(i, *columns[i], partition_selector, from, length);
         }
     }
-    
+
     for(size_t i = 0; i < partition_num ; ++i)
     {  
         buffered_senders[i].flush(false);
     }
-    
+
 }
 
 void MultiPartitionExchangeSink::onFinish()

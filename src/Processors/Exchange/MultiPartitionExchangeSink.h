@@ -6,6 +6,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/IProcessor.h>
 #include <Processors/ISink.h>
+#include "Processors/Chunk.h"
 
 namespace DB
 {

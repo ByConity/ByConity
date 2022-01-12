@@ -74,48 +74,6 @@ TEST(ExchangeSource, LocalNormalTest)
     
 }
 
-
-TEST(ExchangeSource, LocalSenderTimeoutTest)
-{
-    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
-
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
-    BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-    BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
-    local_sender->accept(getContext().context, Block());
-    local_receiver->registerToSenders(options.max_timeout_ms);
-    Chunk chunk = createUInt8Chunk(10, 1, 8);
-
-    for (int i = 0; i < 5; i++)
-    {
-        BroadcastStatus status = local_sender->send(chunk.clone());
-        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
-    }
-
-    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
-
-    auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), local_receiver, exchange_options);
-    QueryPipeline pipeline;
-
-    Pipe pipe;
-    pipe.addSource(exchange_source);
-
-    pipe.addTransform(std::make_shared<LimitTransform>(exchange_source->getPort().getHeader(), 1, 0));
-
-    pipeline.init(std::move(pipe));
-
-    PullingAsyncPipelineExecutor executor(pipeline);
-    Chunk pull_chunk;
-    ASSERT_TRUE(executor.pull(pull_chunk));
-    ASSERT_TRUE(pull_chunk.getNumRows() == 1);
-    ASSERT_TRUE(executor.pull(pull_chunk));
-    ASSERT_FALSE(executor.pull(pull_chunk));
-    executor.cancel();
-}
-
-
 TEST(ExchangeSource, LocalLimitTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
