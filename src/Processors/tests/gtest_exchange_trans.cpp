@@ -23,6 +23,7 @@
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/LimitTransform.h>
 #include <Processors/QueryPipeline.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <brpc/server.h>
 #include <gtest/gtest.h>
@@ -44,8 +45,7 @@ protected:
     static void start_brpc_server()
     {
         static brpc::Server server;
-        const auto & context = getContext().context;
-        BrpcExchangeReceiverRegistryService service_impl(context->getSettingsRef().exchange_stream_max_buf_size);
+        BrpcExchangeReceiverRegistryService service_impl(73400320);
 
         // Add the service into server. Notice the second parameter, because the
         // service is put on stack, we don't want server to delete it, otherwise
@@ -151,7 +151,10 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
     // ser
     auto origin_chunk = createUInt8Chunk(1000, 1, 7);
     auto header = getHeader(1);
-
+    auto chunk_info = std::make_shared<AggregatedChunkInfo>();
+    chunk_info->is_overflows = true;
+    chunk_info->bucket_num = 99;
+    origin_chunk.setChunkInfo(chunk_info);
     WriteBufferFromBrpcBuf out;
     NativeChunkOutputStream block_out(out, ClickHouseRevision::getVersionRevision(), header, false);
     block_out.write(origin_chunk);
@@ -162,6 +165,10 @@ TEST_F(ExchangeRemoteTest, SerDserChunk)
     NativeChunkInputStream chunk_in(read_buffer, header);
     Chunk chunk = chunk_in.readImpl();
     EXPECT_EQ(chunk.getNumRows(), 1000);
+    const auto dser_chunk_info = std::dynamic_pointer_cast<const AggregatedChunkInfo>(chunk.getChunkInfo());
+    EXPECT_TRUE(dser_chunk_info);
+    EXPECT_EQ(dser_chunk_info->is_overflows, true);
+    EXPECT_EQ(dser_chunk_info->bucket_num, 99);
     auto col = chunk.getColumns().at(0);
     EXPECT_EQ(col->getUInt(1), 7);
 }

@@ -8,6 +8,7 @@
 #include <Processors/Exchange/ExchangeHelpers.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <Processors/Chunk.h>
 
 namespace DB
 {
@@ -38,9 +39,28 @@ void ExchangeBufferedSender::flush(bool force)
 
     LOG_TRACE(logger, "flush buffer, force: {}, row: {}", force, rows);
 
-    Chunk chunk(std::move(partition_buffer), rows);
+    Chunk chunk(std::move(partition_buffer), rows, std::move(current_chunk_info));
+    current_chunk_info = ChunkInfoPtr();
+
     sendAndCheckReturnStatus(*sender, std::move(chunk));
     resetBuffer();
+}
+
+bool ExchangeBufferedSender::compareBufferChunkInfo(const ChunkInfoPtr & chunk_info) const
+{
+    return ((current_chunk_info && chunk_info && *current_chunk_info == *chunk_info) || (!current_chunk_info && !chunk_info));
+}
+
+
+void ExchangeBufferedSender::updateBufferChunkInfo(ChunkInfoPtr chunk_info)
+{
+    flush(true);
+    current_chunk_info = std::move(chunk_info);
+}
+
+void ExchangeBufferedSender::sendThrough(Chunk chunk)
+{
+    sendAndCheckReturnStatus(*sender, std::move(chunk));
 }
 
 void ExchangeBufferedSender::resetBuffer()

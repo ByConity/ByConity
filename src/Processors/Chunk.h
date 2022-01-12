@@ -6,11 +6,43 @@
 namespace DB
 {
 
+class ReadBuffer;
+class WriteBuffer;
+
 class ChunkInfo
 {
 public:
+    enum class Type
+    {
+        Any = 0,
+        AggregatedArenasChunkInfo = 1,
+        AggregatedChunkInfo = 2,
+        ChunkMissingValues = 3,
+        ChunksToMerge = 4,
+        RepartitionChunkInfo = 5,
+        SelectorInfo = 6
+    };
+
     virtual ~ChunkInfo() = default;
     ChunkInfo() = default;
+
+    /// Write the values in binary form.
+    virtual void write(WriteBuffer & /*out*/) const { }
+
+    /// Read the values in binary form.
+    virtual void read(ReadBuffer & /*in*/) const { }
+
+    /// used for indicating
+    virtual Type getType() const { return Type::Any; }
+    
+    virtual bool isEqual(const ChunkInfo & rhs) const { return this == &rhs; }
+
+protected:
+    friend bool operator==(const ChunkInfo & lhs, const ChunkInfo & rhs)
+    {
+        return typeid(lhs) == typeid(rhs) // Allow compare only instances of the same dynamic type
+            && lhs.isEqual(rhs);
+    }
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;
