@@ -25,6 +25,7 @@ namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int BAD_ARGUMENTS;
+    extern const int TYPE_MISMATCH;
 }
 
 
@@ -150,6 +151,25 @@ void TableFunctionRemote::parseArguments(const ASTPtr & ast_function, ContextPtr
         }
     }
 
+    std::set<UInt64> replica_nums;
+    if (name == "cluster" && sharding_key)
+    {
+        if (const auto * lit = sharding_key->as<ASTLiteral>())
+        {
+            if (lit && lit->value.getType() == Field::Types::UInt64)
+            {
+                replica_nums.emplace(safeGet<const UInt64 &>(lit->value));
+            }
+            else if (lit && lit->value.getType() == Field::Types::Tuple)
+            {
+                auto replicas = lit->value.safeGet<Tuple>();
+
+                for (auto replica : replicas)
+                    replica_nums.emplace(safeGet<const UInt64 &>(replica));
+            }
+        }
+    }
+
     if (arg_num < args.size())
         throw Exception(help_message, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
@@ -160,6 +180,40 @@ void TableFunctionRemote::parseArguments(const ASTPtr & ast_function, ContextPtr
             cluster = context->getCluster(cluster_name);
         else
             cluster = context->getCluster(cluster_name)->getClusterWithReplicasAsShards(context->getSettings());
+
+        if (name == "cluster" && !replica_nums.empty() && *replica_nums.begin() != 0)
+        {
+            auto shard_addresses = cluster->getShardsAddresses();
+            std::vector<std::vector<String>> names; // get name of # replica
+
+            // Duplicate host_name will be removed to avoid sending to same host multiple times
+            std::set<String> uniq_names;
+            bool set_name_pass_word = false;
+            for (auto& address : shard_addresses)
+            {
+                for (auto replica_num : replica_nums)
+                {
+                    if (replica_num > address.size() || replica_num <= 0)
+                        continue;
+
+                    uniq_names.insert(address[replica_num - 1].readableString());
+                    if (!set_name_pass_word)
+                    {
+                        username = address[replica_num - 1].user;
+                        password = address[replica_num - 1].password;
+                        set_name_pass_word = true;
+                    }
+                }
+            }
+
+            for (const auto& uniq_name : uniq_names)
+                names.push_back({uniq_name});
+
+            if (names.empty())
+                throw Exception("Shard list of specified replica_num is empty", ErrorCodes::BAD_ARGUMENTS);
+
+            cluster = std::make_shared<Cluster>(context->getSettings(), names, username, password, context->getTCPPort(), false);
+        }
     }
     else
     {
