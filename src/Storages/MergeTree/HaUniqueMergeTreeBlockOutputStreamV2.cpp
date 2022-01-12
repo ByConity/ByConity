@@ -1,0 +1,564 @@
+#include "HaUniqueMergeTreeBlockOutputStreamV2.h"
+
+#include <Storages/StorageHaUniqueMergeTree.h>
+
+// for reading rows from storage
+#include <DataStreams/IBlockStream_fwd.h>
+#include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Processors/Pipe.h>
+#include <Processors/QueryPipeline.h>
+#include <Storages/MergeTree/MergeTreeSequentialSource.h>
+
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int BAD_ARGUMENTS;
+    extern const int LOGICAL_ERROR;
+    extern const int READONLY;
+    extern const int UNEXPECTED_ZOOKEEPER_ERROR;
+}
+
+namespace
+{
+bool filterIsAlwaysTrue(const IColumn::Filter & filter)
+{
+    /// TODO: there should be faster SIMD way to implement this
+    for (size_t i = 0, size = filter.size(); i < size; ++i)
+        if (filter[i] == 0)
+            return false;
+    return true;
+}
+
+bool filterIsAlwaysFalse(const IColumn::Filter & filter)
+{
+    /// TODO: there should be faster SIMD way to implement this
+    for (size_t i = 0, size = filter.size(); i < size; ++i)
+        if (filter[i] == 1)
+            return false;
+    return true;
+}
+
+/// Search `key' in `parts'.
+/// If found, return index of the part containing the key and set rowid and version(optional) for the key.
+/// Otherwise return -1.
+int searchPartForKey(
+    const MergeTreeData::DataPartsVector & parts,
+    const UniqueKeyIndicesVector & indices,
+    const String & key,
+    UInt32 & rowid,
+    UInt64 & version)
+{
+    if (parts.size() != indices.size())
+        throw Exception(
+            "Parts number " + toString(parts.size()) + " is not equal to indices number " + toString(indices.size()),
+            ErrorCodes::LOGICAL_ERROR);
+    for (int i = parts.size() - 1; i >= 0; --i)
+    {
+        auto & part = parts[i];
+        auto & index = indices[i];
+        if (part->getValueFromUniqueIndex(index, key, rowid, &version))
+            return i;
+    }
+    return -1;
+}
+
+struct BlockUniqueKeyComparator
+{
+    const ColumnsWithTypeAndName & keys;
+    explicit BlockUniqueKeyComparator(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
+
+    bool operator()(size_t lhs, size_t rhs) const
+    {
+        for (auto & key : keys)
+        {
+            int cmp = key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1);
+            if (cmp < 0)
+                return true;
+            if (cmp > 0)
+                return false;
+        }
+        return false;
+    }
+};
+
+PaddedPODArray<UInt32> getRowidPermutation(const PaddedPODArray<UInt32> & xs)
+{
+    PaddedPODArray<UInt32> perm;
+    perm.resize(xs.size());
+    for (UInt32 i = 0; i < xs.size(); ++i)
+        perm[i] = i;
+    std::sort(perm.begin(), perm.end(), [&xs](UInt32 lhs, UInt32 rhs) { return xs[lhs] < xs[rhs]; });
+    return perm;
+}
+
+PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, const PaddedPODArray<UInt32> & perm)
+{
+    PaddedPODArray<UInt32> res;
+    res.resize(rowids.size());
+    for (size_t i = 0; i < res.size(); ++i)
+        res[i] = rowids[perm[i]];
+    return res;
+}
+
+} /// anonymous namespace
+
+HaUniqueMergeTreeBlockOutputStreamV2::HaUniqueMergeTreeBlockOutputStreamV2(
+    StorageHaUniqueMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, ContextPtr context_, size_t max_parts_per_block_)
+        : storage(storage_)
+        , metadata_snapshot(metadata_snapshot_)
+        , context(context_), max_parts_per_block(max_parts_per_block_)
+        , log(&Logger::get(storage.getLogName() + " (BlockOutputStream)"))
+{}
+
+Block HaUniqueMergeTreeBlockOutputStreamV2::getHeader() const
+{
+    return metadata_snapshot->getSampleBlock();
+}
+
+void HaUniqueMergeTreeBlockOutputStreamV2::writePrefix()
+{
+    storage.delayInsertOrThrowIfNeeded();
+}
+
+void HaUniqueMergeTreeBlockOutputStreamV2::write(const Block & block)
+{
+    const auto & settings = storage.getSettings();
+    if (settings->disable_block_output)
+    {
+        return;
+    }
+
+    if (!block)
+        return;
+
+    /// in order to abort the operation when we lose leadership (zk session expired),
+    /// all ZK operation below should use `zookeeper' saved here
+    auto zookeeper = storage.getZooKeeper();
+    storage.checkSessionIsNotExpired(zookeeper);
+
+    if (!storage.is_leader)
+        throw Exception("Can't write to " + storage.getLogName() + " because replica " + storage.replicaName() + " is not leader", ErrorCodes::READONLY);
+
+    storage.delayInsertOrThrowIfNeeded();
+    metadata_snapshot->check(block, true);
+
+    auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
+
+    /// unique table doesn't support concurrent write
+    /// TODO:
+    /// 1. support table level unique
+    /// 2. move part write out of insert lock
+    auto lock = storage.uniqueWriteLock();
+
+    for (auto & current_block : part_blocks)
+    {
+        Stopwatch watch;
+        LOG_DEBUG(log, "Wrote block with {} rows", current_block.block.rows());
+
+        MergeTreePartition partition(current_block.partition);
+        /// parts that could get modified
+        MergeTreeData::DataPartsVector existing_parts = storage.getDataPartsVectorInPartition(MergeTreeData::DataPartState::Committed, partition.getID(storage));
+
+        MergeTreeData::MutableDataPartPtr part = nullptr;
+        try
+        {
+            PartsWithDeleteRows parts_with_deletes;
+            DeletesOnMergingParts deletes_on_merging_parts;
+            if (processPartitionBlock(current_block, existing_parts, parts_with_deletes, deletes_on_merging_parts))
+            {
+                LOG_DEBUG(log, "All rows in block are filtered, no new part will be generated.");
+                if (parts_with_deletes.size() == 0)
+                    continue;
+            }
+            else
+            {
+                if (current_block.block.has(StorageInMemoryMetadata::delete_flag_column_name))
+                    throw Exception(
+                        "HaUniqueMergeTree engine tries to write the delete flag column to disk which is just a func column and should not be written to disk.",
+                        ErrorCodes::LOGICAL_ERROR);
+                part = storage.writer.writeTempPart(current_block, metadata_snapshot, context);
+                UInt64 block_number = storage.allocateBlockNumberDirect(zookeeper);
+                part->info.min_block = block_number;
+                part->info.max_block = block_number;
+                part->info.level = 0;
+                part->name = part->getNewName(part->info);
+            }
+
+            /// generate new delete bitmaps
+            MergeTreeData::DataPartsVector old_parts;
+            for (auto & part_with_delete : parts_with_deletes)
+                old_parts.push_back(part_with_delete.first);
+            MergeTreeData::DataPartsDeleteSnapshot old_deletes = storage.getLatestDeleteSnapshot(old_parts);
+            MergeTreeData::DataPartsDeleteSnapshot new_deletes;
+
+            /// if part is nullptr, it means that this insert operation just deletes some rows with the help of _delete_flag_ column.
+            if (part)
+            {
+                /// add empty delete bitmap for new part
+                new_deletes.insert({part, std::make_shared<Roaring>()});
+            }
+
+            size_t deleted_row_size = 0;
+            for (auto & part_with_delete : parts_with_deletes)
+            {
+                deleted_row_size += part_with_delete.second.cardinality();
+                auto new_bitmap = std::make_unique<Roaring>();
+                DeleteBitmapPtr old_bitmap = old_deletes[part_with_delete.first];
+                if (old_bitmap)
+                    *new_bitmap = *old_bitmap; // copy old delete bitmap
+                *new_bitmap |= part_with_delete.second;
+
+                DeleteBitmapPtr bitmap(std::move(new_bitmap));
+                new_deletes.insert({part_with_delete.first, bitmap});
+            }
+
+            {
+                /// make sure only one thread can allocate new lsn and write to manifest at a time,
+                /// so that new log's prev_version matches latest log version
+                auto manifest_lock = storage.manifest_store->writeLock();
+
+                /// allocate LSN
+                Coordination::Requests ops;
+                auto [lsn, set_lsn_request] = storage.allocLSNAndMakeSetRequest(zookeeper);
+                ops.emplace_back(std::move(set_lsn_request));
+
+                /// pre-commit new part and delete files
+                for (auto & new_delete : new_deletes)
+                    new_delete.first->writeDeleteFileWithVersion(new_delete.second, lsn);
+                MergeTreeData::SyncPartsTransaction local_txn(storage, new_deletes, lsn);
+                if (part)
+                    local_txn.preCommit(part);
+
+                /// update /latest_lsn
+                Coordination::Responses responses;
+                auto multi_code = zookeeper->tryMultiNoThrow(ops, responses);
+                if (multi_code != Coordination::Error::ZOK)
+                {
+                    local_txn.rollback();
+                    String errmsg = "Unexpected ZK error while adding block for LSN " + toString(lsn) + " : "
+                                    + Coordination::errorMessage(multi_code);
+                    if (Coordination::isUserError(multi_code))
+                    {
+                        String failed_op_path = zkutil::KeeperMultiException(multi_code, ops, responses).getPathForFirstFailedOp();
+                        throw Exception(errmsg + ", path " + failed_op_path, ErrorCodes::UNEXPECTED_ZOOKEEPER_ERROR);
+                    }
+                    else
+                    {
+                        throw Exception(errmsg, ErrorCodes::UNEXPECTED_ZOOKEEPER_ERROR);
+                    }
+                }
+
+                /// write and commit manifest log
+                ManifestLogEntry log_entry;
+                log_entry.type = ManifestLogEntry::SYNC_PARTS;
+                log_entry.version = lsn;
+                log_entry.prev_version = storage.manifest_store->latestVersion();
+                log_entry.source_replica = storage.replica_name;
+                if (part)
+                    log_entry.added_parts.push_back(part->name);
+                for (auto & entry : parts_with_deletes)
+                    log_entry.updated_parts.push_back(entry.first->name);
+                try
+                {
+                    storage.manifest_store->append(manifest_lock, log_entry, /*commit=*/true);
+                    local_txn.commit();
+                    if (part)
+                        LOG_DEBUG(log, "Wrote committed part {} and updated {} rows at version {} in {} ms", part->name, deleted_row_size, lsn, watch.elapsedMilliseconds());
+                    else
+                        LOG_DEBUG(log, "Deleted {} rows at version {} in {} ms", deleted_row_size, lsn, watch.elapsedMilliseconds());
+                    /// Only after commit, we can append cached keys to merging part's delete buffer
+                    for (auto & entry : deletes_on_merging_parts)
+                    {
+                        auto & merge_state = entry.second.first;
+                        auto & cached_keys = entry.second.second;
+                        merge_state->delete_buffer.insert(cached_keys.begin(), cached_keys.end());
+                        cached_keys.clear();
+                    }
+                    for (auto & entry : parts_with_deletes)
+                        const_cast<IMergeTreeDataPart &>(*entry.first).gcUniqueIndexIfNeeded();
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(__PRETTY_FUNCTION__);
+                    local_txn.rollback();
+                    throw;
+                }
+            }
+            if (part)
+                PartLog::addNewPart(storage.getContext(), part, watch.elapsed(), ExecutionStatus(0));
+        }
+        catch (...)
+        {
+            if (part)
+                PartLog::addNewPart(storage.getContext(), part, watch.elapsed(), ExecutionStatus::fromCurrentException(__PRETTY_FUNCTION__));
+            throw;
+        }
+    }
+}
+
+size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColumn::Filter & filter)
+{
+    auto block_size = block.rows();
+    size_t num_filtered = 0;
+    if (block_size != filter.size())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Filter size {} doesn't match block size {}", filter.size(), block_size);
+
+    auto unique_key_names = metadata_snapshot->getUniqueKeyColumns();
+    metadata_snapshot->getUniqueKeyExpression()->execute(block);
+
+    PaddedPODArray<UInt32> replace_from_indexes, replace_to_indexes;
+
+    ColumnsWithTypeAndName keys;
+    for (auto & name : unique_key_names)
+        keys.emplace_back(block.getByName(name));
+    BlockUniqueKeyComparator comparator(keys);
+    /// first rowid of key -> rowid of the highest version of the same key
+    std::map<size_t, size_t, decltype(comparator)> index(comparator);
+
+    /// if there are duplicated keys, only keep the highest version for each key
+    for (size_t rowid = 0; rowid < block_size; ++rowid)
+    {
+        if (auto it = index.find(rowid); it != index.end())
+        {
+            /// When there is no explict version column, use rowid as version number,
+            /// Otherwise use value from version column
+            size_t old_pos = it->second;
+            replace_from_indexes.push_back(UInt32(rowid));
+            replace_to_indexes.push_back(UInt32(old_pos));
+            size_t new_pos = rowid;
+            filter[old_pos] = 0;
+            it->second = new_pos;
+            num_filtered++;
+        }
+        else
+        {
+            index[rowid] = rowid;
+        }
+    }
+    index.clear();
+
+    if (num_filtered)
+    {
+        NameSet non_updatable_columns;
+        for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
+            non_updatable_columns.insert(name);
+        for (auto & name : metadata_snapshot->getUniqueKeyColumns())
+            non_updatable_columns.insert(name);
+
+        for (auto & col : block)
+        {
+            if (non_updatable_columns.count(col.name))
+                continue;
+
+            ColumnPtr is_default_col = col.column->selectDefault();
+            const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
+
+            /// all values are non-default, nothing to replace
+            if (filterIsAlwaysFalse(is_default_filter))
+                continue;
+
+            /// when column[replace_from_indexes[i]] is default value, update to column[replace_to_indexes[i]]
+            ColumnPtr new_column = col.column->replaceFrom(
+                replace_from_indexes, *col.column, &replace_to_indexes,
+                filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter);
+            col.column = std::move(new_column);
+        }
+    }
+
+    return num_filtered;
+}
+
+void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromStorage(
+    const MergeTreeData::DataPartPtr & part,
+    RowidPairs & rowid_pairs,
+    Block & to_block,
+    PaddedPODArray<UInt32> & to_block_rowids)
+{
+    if (rowid_pairs.empty())
+        return;
+
+    /// sort by part_rowid so that we can read part sequentially
+    std::sort(rowid_pairs.begin(), rowid_pairs.end(), [](auto & lhs, auto & rhs) { return lhs.part_rowid < rhs.part_rowid; });
+
+    DeleteBitmapPtr delete_bitmap (new Roaring);
+    for (auto & pair : rowid_pairs)
+        const_cast<Roaring &>(*delete_bitmap).add(pair.part_rowid);
+    const_cast<Roaring &>(*delete_bitmap).flip(0, part->rows_count);
+
+    Names read_columns = metadata_snapshot->getColumns().getNamesOfPhysical();
+    auto source = std::make_unique<MergeTreeSequentialSource>(
+            storage, metadata_snapshot, part,
+            delete_bitmap,
+            read_columns,
+            /*direct_io=*/ false,
+            /*take_column_types_from_storage=*/true,
+            /*quite=*/false);
+    Pipes pipes;
+    pipes.emplace_back(Pipe(std::move(source)));
+
+    QueryPipeline pipeline;
+    pipeline.init(Pipe::unitePipes(std::move(pipes)));
+    pipeline.setMaxThreads(1);
+
+    BlockInputStreamPtr input = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+    input->readPrefix();
+    while (const Block block = input->read())
+    {
+        if (!blocksHaveEqualStructure(to_block, block))
+            throw Exception("Block structure mismatch", ErrorCodes::LOGICAL_ERROR);
+
+        for (size_t i = 0, size = to_block.columns(); i < size; ++i)
+        {
+            const auto source_column = block.getByPosition(i).column;
+            auto mutable_column = IColumn::mutate(std::move(to_block.getByPosition(i).column));
+            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+
+            to_block.getByPosition(i).column = std::move(mutable_column);
+        }
+    }
+    input->readSuffix();
+
+    for (auto & pair : rowid_pairs)
+        to_block_rowids.push_back(pair.block_rowid);
+}
+
+/// TODO:
+/// - support version column
+/// - support delete flag
+bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
+    BlockWithPartition & block_with_partition,
+    const MergeTreeData::DataPartsVector & existing_parts,
+    PartsWithDeleteRows & parts_with_deletes,
+    DeletesOnMergingParts & deletes_on_merging_parts)
+{
+    auto & block = block_with_partition.block;
+
+    size_t block_size = block.rows();
+    IColumn::Filter filter(block_size, 1);
+    size_t num_filtered = removeDupKeys(block, filter);
+
+    auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
+    UniqueKeyIndicesVector key_indices(existing_parts.size());
+    for (size_t i = 0; i < existing_parts.size(); ++i)
+    {
+        key_indices[i] = existing_parts[i]->getUniqueKeyIndex();
+    }
+
+    PartRowidPairs part_rowid_pairs {existing_parts.size()};
+
+    auto process_row_deletion = [this, &parts_with_deletes, &deletes_on_merging_parts](
+        const MergeTreeData::DataPartPtr & part_with_key, UInt32 part_rowid, const String & key)
+    {
+        /// mark delete existing row with the same key
+        parts_with_deletes[part_with_key].add(part_rowid);
+
+        /// if part is under merge, need to cache deleted key temporarily so that merge task can remove them later
+        if (auto merge_it = storage.running_merge_states.find(part_with_key); merge_it != storage.running_merge_states.end())
+        {
+            auto & merge_state = merge_it->second;
+            if (merge_state->isCancelled())
+                return;
+            auto & pair = deletes_on_merging_parts[merge_state->new_part_name];
+            if (merge_state->delete_buffer.size() + pair.second.size() < storage.getSettings()->max_delete_buffer_size_per_merge)
+            {
+                if (pair.first == nullptr)
+                    pair.first = merge_state;
+                pair.second.insert(key);
+            }
+            else
+            {
+                LOG_INFO(log, "Cancel merge of {} because delete buffer size exceeds limit", merge_state->new_part_name);
+                merge_state->cancel();
+                deletes_on_merging_parts.erase(merge_state->new_part_name);
+            }
+        }
+    };
+
+    for (size_t rowid = 0; rowid < block_size; ++rowid) {
+        if (filter[rowid] == 0)
+            continue;
+        WriteBufferFromOwnString buf;
+        for (auto & col_name : unique_key_column_names)
+        {
+            auto & col = block.getByName(col_name);
+            auto serialization = col.type->getDefaultSerialization();
+            serialization->serializeBinary(*col.column, rowid, buf);
+        }
+        String & key = buf.str();
+
+        /// search key in existing parts
+        UInt32 part_rowid = 0;
+        UInt64 part_version = 0;
+        int part_index = searchPartForKey(existing_parts, key_indices, key, part_rowid, part_version);
+        if (part_index < 0)
+        {
+            continue;
+        }
+        part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid)});
+        process_row_deletion(existing_parts[part_index], part_rowid, key);
+    }
+
+    if (block_size == num_filtered)
+        return true; /// all filtered
+
+    Block columns_from_storage = metadata_snapshot->getSampleBlock();
+    PaddedPODArray<UInt32> block_rowids;
+
+    for (size_t i = 0; i < part_rowid_pairs.size(); ++i)
+    {
+        if (part_rowid_pairs[i].empty())
+            continue;
+        readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);
+    }
+
+    if (!block_rowids.empty())
+    {
+        PaddedPODArray<UInt32> replace_to_indexes = getRowidPermutation(block_rowids);
+        PaddedPODArray<UInt32> replace_from_indexes = permuteRowids(block_rowids, replace_to_indexes);
+
+        NameSet non_updatable_columns;
+        for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
+            non_updatable_columns.insert(name);
+        for (auto & name : metadata_snapshot->getUniqueKeyColumns())
+            non_updatable_columns.insert(name);
+
+        for (auto & col : block)
+        {
+            if (non_updatable_columns.count(col.name))
+                continue;
+
+            ColumnPtr is_default_col = col.column->selectDefault();
+            const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
+
+            /// all values are non-default, nothing to replace
+            if (filterIsAlwaysFalse(is_default_filter))
+                continue;
+
+            ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
+            ColumnPtr new_column = col.column->replaceFrom(
+                replace_from_indexes, *column_from_storage, &replace_to_indexes,
+                filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter);
+            col.column = std::move(new_column);
+        }
+    }
+
+    /// remove column not in header, including func columns
+    auto header_block = getHeader();
+    for (auto & col_name : block.getNames())
+        if (!header_block.has(col_name))
+            block.erase(col_name);
+
+    if (num_filtered > 0)
+    {
+        ssize_t new_size_hint = block_size - num_filtered;
+        for (size_t i = 0; i < block.columns(); ++i) {
+            ColumnWithTypeAndName & col = block.getByPosition(i);
+            col.column = col.column->filter(filter, new_size_hint);
+        }
+    }
+    return false;
+}
+
+} // namespace DB

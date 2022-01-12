@@ -341,6 +341,25 @@ public:
     /// TODO: interface decoupled from ColumnGathererStream that allows non-generic specializations.
     virtual void gather(ColumnGathererStream & gatherer_stream) = 0;
 
+    /// Compare the whole column with the default value.
+    /// Returns a ColumnUInt8::Ptr that denotes whether the i-th element is default value (1) or not (0).
+    virtual Ptr selectDefault() const
+    {
+        throw Exception("Method selectDefault is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    /// Return a new column that replace values at `indexes` with values in `rhs`.
+    /// When `rhs_indexes` and `filter` is null, column[indexes[i]] is replaced with rhs[i].
+    /// When `rhs_indexes` is not null, column[indexes[i]] is replaced with rhs[rhs_indexes[i]] instead.
+    /// When `filter` is not null, the i-th element is not replaced when filter[i] is 0.
+    virtual Ptr replaceFrom(
+        const PaddedPODArray<UInt32> & /*indexes*/,
+        const IColumn & /*rhs*/, const PaddedPODArray<UInt32> * /*rhs_indexes*/,
+        const Filter * /*filter*/) const
+    {
+        throw Exception("Method replaceFrom is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /** Computes minimum and maximum element of the column.
       * In addition to numeric types, the function is completely implemented for Date and DateTime.
       * For strings and arrays function should return default value.
@@ -490,6 +509,18 @@ protected:
                          PaddedPODArray<UInt64> * row_indexes,
                          PaddedPODArray<Int8> & compare_results,
                          int direction, int nan_direction_hint) const;
+
+    template <typename Derived, bool has_rhs_indexes, bool has_filter>
+    Ptr replaceFromImpl(
+        const PaddedPODArray<UInt32> & indexes,
+        const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+        const Filter * filter) const;
+
+    template <typename Derived>
+    Ptr doReplaceFrom(
+        const PaddedPODArray<UInt32> & indexes,
+        const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+        const Filter * filter) const;
 
     template <typename Derived>
     bool hasEqualValuesImpl() const;

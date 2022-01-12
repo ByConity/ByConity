@@ -168,6 +168,7 @@ protected:
 
 private:
     friend class HaUniqueMergeTreeBlockOutputStream;
+    friend class HaUniqueMergeTreeBlockOutputStreamV2;
     friend class HaUniqueMergeTreeCleanupThread;
     friend class HaUniqueMergeTreeReplicaEndpoint;
     friend class HaUniqueMergeTreeRestartingThread;

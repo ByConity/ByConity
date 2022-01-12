@@ -147,7 +147,7 @@ void ColumnString::insertRangeSelective(const IColumn & src, const Selector & se
     const ColumnString & src_concrete = static_cast<const ColumnString &>(src);
     const Offsets & src_offsets = src_concrete.getOffsets();
     auto * src_data_start = src_concrete.chars.data();
-    
+
     Offsets & cur_offsets = getOffsets();
 
     if (length == 0)
@@ -165,7 +165,7 @@ void ColumnString::insertRangeSelective(const IColumn & src, const Selector & se
     chars.resize(new_chars_size);
 
     size_t cur_offset = cur_offsets[old_offset_size - 1];
-    
+
     auto * cur_chars_start = chars.data(); // realloc memory is not allowed in the following
     for (size_t i = 0; i < length; ++i)
     {
@@ -537,7 +537,6 @@ void ColumnString::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
 }
-
 
 void ColumnString::reserve(size_t n)
 {

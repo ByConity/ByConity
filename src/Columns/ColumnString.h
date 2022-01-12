@@ -209,7 +209,7 @@ public:
     }
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
-    
+
     void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;
 
     ColumnPtr filter(const Filter & filt, ssize_t result_size_hint) const override;
@@ -266,6 +266,14 @@ public:
     }
 
     void gather(ColumnGathererStream & gatherer_stream) override;
+
+    ColumnPtr replaceFrom(
+        const PaddedPODArray<UInt32> & indexes,
+        const IColumn & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+        const Filter * filter) const override
+    {
+        return doReplaceFrom<ColumnString>(indexes, assert_cast<const ColumnString &>(rhs), rhs_indexes, filter);
+    }
 
     ColumnPtr compress() const override;
 

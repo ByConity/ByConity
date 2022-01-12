@@ -524,6 +524,8 @@ class IColumn;
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     \
+    /** Settings for Unique Table */ \
+    M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \

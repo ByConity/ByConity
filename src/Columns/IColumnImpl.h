@@ -127,6 +127,87 @@ void IColumn::doCompareColumn(const Derived & rhs, size_t rhs_row_num,
     }
 }
 
+template <typename Derived, bool has_rhs_indexes, bool has_filter>
+IColumn::Ptr IColumn::replaceFromImpl(
+    const PaddedPODArray<UInt32> & indexes,
+    const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+    const Filter * filter) const
+{
+    size_t num_rows = size();
+    if constexpr (has_rhs_indexes)
+    {
+        if (indexes.size() != rhs_indexes->size())
+            throw Exception(
+                    "Size of indexes: " + std::to_string(indexes.size()) + " doesn't match rhs_indexes: " + std::to_string(rhs_indexes->size()),
+                    ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+    }
+    else
+    {
+        if (indexes.size() != rhs.size())
+            throw Exception(
+                    "Size of indexes: " + std::to_string(indexes.size()) + " doesn't match rhs: " + std::to_string(rhs.size()),
+                    ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    }
+    if constexpr (has_filter)
+    {
+        if (num_rows != filter->size())
+            throw Exception(
+                    "Size of filter: " + std::to_string(filter->size()) + " doesn't match num_rows: " + std::to_string(num_rows),
+                    ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+    }
+
+    if (indexes.empty())
+        return getPtr();
+
+    MutablePtr res = cloneEmpty();
+    res->reserve(num_rows);
+
+    size_t start = 0;
+    for (size_t i = 0; i < indexes.size(); ++i)
+    {
+        const size_t index = indexes[i];
+        if (start < index)
+        {
+            static_cast<Derived &>(*res).insertRangeFrom(*this, start, index - start);
+            start = index;
+        }
+        if constexpr (has_filter)
+        {
+            if ((*filter)[start] == 0)
+                continue;
+        }
+        if constexpr (has_rhs_indexes)
+            static_cast<Derived &>(*res).insertFrom(rhs, (*rhs_indexes)[i]);
+        else
+            static_cast<Derived &>(*res).insertFrom(rhs, i);
+    }
+
+    return res;
+}
+
+template <typename Derived>
+IColumn::Ptr IColumn::doReplaceFrom(
+    const PaddedPODArray<UInt32> & indexes,
+    const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+    const Filter * filter) const
+{
+    if (rhs_indexes)
+    {
+        if (filter)
+            return replaceFromImpl<Derived, true, true>(indexes, rhs, rhs_indexes, filter);
+        else
+            return replaceFromImpl<Derived, true, false>(indexes, rhs, rhs_indexes, filter);
+    }
+    else
+    {
+        if (filter)
+            return replaceFromImpl<Derived, false, true>(indexes, rhs, rhs_indexes, filter);
+        else
+            return replaceFromImpl<Derived, false, false>(indexes, rhs, rhs_indexes, filter);
+    }
+}
+
 template <typename Derived>
 bool IColumn::hasEqualValuesImpl() const
 {

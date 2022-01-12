@@ -14,6 +14,7 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/HaUniqueMergeTreeBlockOutputStream.h>
+#include <Storages/MergeTree/HaUniqueMergeTreeBlockOutputStreamV2.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
@@ -526,10 +527,11 @@ void StorageHaUniqueMergeTree::assertNotReadonly() const
 
 BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
+    const auto & query_settings = query_context->getSettingsRef();
     /// mainly used for tests and for create temporary table to delay inserts until leader is selected
     auto settings = getSettings();
     auto wait_timeout = std::max(
-        query_context->getSettingsRef().max_insert_wait_seconds_for_unique_table_leader, settings->unique_engine_temp_table_wait_interval);
+        query_settings.max_insert_wait_seconds_for_unique_table_leader, settings->unique_engine_temp_table_wait_interval);
     if (wait_timeout > 0)
     {
         LOG_DEBUG(log, "Wait until leader election for {} seconds.", wait_timeout);
@@ -550,8 +552,12 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
     }
 
     /// TODO offline node handling
+    if (query_settings.enable_unique_partial_update)
+        return std::make_shared<HaUniqueMergeTreeBlockOutputStreamV2>(
+            *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block);
+
     return std::make_shared<HaUniqueMergeTreeBlockOutputStream>(
-        *this, metadata_snapshot, query_context, query_context->getSettingsRef().max_partitions_per_insert_block);
+        *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block);
 }
 
 void StorageHaUniqueMergeTree::drop()
