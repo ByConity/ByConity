@@ -1962,9 +1962,14 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
         /// TTLWorker(lock, zookeeper);
         auto table_lock = lockForShare(RWLockImpl::NO_QUERY, getSettings()->lock_acquire_timeout_for_background_operations);
 
-        auto can_merge = [this] (const DataPartPtr & left, const DataPartPtr & right, bool)
+        auto can_merge = [this] (const DataPartPtr & left, const DataPartPtr & right, String *) -> bool
         {
-            return !parts_under_merge.count(left) && !parts_under_merge.count(right);
+            if (!left)
+                return !parts_under_merge.count(right);
+            else if (right)
+                return !parts_under_merge.count(left) && !parts_under_merge.count(right);
+            else
+                return false;
         };
         SelectPartsDecision selected = SelectPartsDecision::NOTHING_TO_MERGE;
         if (partition_id.empty())
