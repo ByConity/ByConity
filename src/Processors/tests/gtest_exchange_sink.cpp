@@ -134,10 +134,8 @@ TEST(ExchangeSink, LoadBalancedExchangeSinkTest)
 
 TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
 {
-
     auto context = getContext().context;
     const size_t rows = 100;
-    const size_t send_threshold_in_row_num = rows * 2;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
@@ -176,7 +174,7 @@ TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
         std::vector<BroadcastSenderPtr>{sink_sender},
         func,
         ColumnNumbers{1, 2},
-        ExchangeOptions{1000, 100000000, send_threshold_in_row_num});
+        ExchangeOptions{1000, 100000000, rows});
     connect(exchange_source->getPort(), exchange_sink->getPort());
     Processors processors;
     processors.emplace_back(std::move(exchange_source));
@@ -184,22 +182,14 @@ TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
     PipelineExecutor executor(processors);
     executor.execute(2);
 
-    // buffer will flush when row_num reached to send_threshold_in_row_num
-    for (int i = 0; i < 2; i++)
+    for (int i = 0; i < 5; i++)
     {
         RecvDataPacket recv_res = sink_receiver->recv(2000);
         ASSERT_TRUE(std::holds_alternative<Chunk>(recv_res));
         Chunk & recv_chunk = std::get<Chunk>(recv_res);
-        ASSERT_TRUE(recv_chunk.getNumRows() == send_threshold_in_row_num);
-        ASSERT_TRUE(recv_chunk.bytes() == total_bytes * 2);
+        ASSERT_TRUE(recv_chunk.getNumRows() == rows);
+        ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
     }
-
-    // Sink flush last buffer when finishing.
-    RecvDataPacket recv_res = sink_receiver->recv(2000);
-    ASSERT_TRUE(std::holds_alternative<Chunk>(recv_res));
-    Chunk & recv_chunk = std::get<Chunk>(recv_res);
-    ASSERT_TRUE(recv_chunk.getNumRows() == 100);
-    ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
 }
 
 TEST(ExchangeSink, SinglePartitionExchangeSinkNormalTest)
