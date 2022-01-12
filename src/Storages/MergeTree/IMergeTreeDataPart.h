@@ -20,6 +20,7 @@
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 
 #include <Storages/UniqueKeyIndex.h>
+#include <Storages/UniqueRowStore.h>
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
 #include <common/types.h>
@@ -481,6 +482,8 @@ public:
     /// If uki type is "UNKNOWN", change it to either "MEMORY" or "DISK" depending on whether uki file exists.
     UniqueKeyIndexPtr getUniqueKeyIndex() const;
 
+    UniqueRowStorePtr getUniqueRowStore() const;
+
     /// If `key' is found, return true and set its corresponding `rowid' and optional `version' and `is_offline'.
     /// Otherwise return false.
     bool getValueFromUniqueIndex(
@@ -501,7 +504,7 @@ public:
     std::atomic<size_t> unique_index_size{0};
     std::atomic<size_t> unique_index_memory_size{0};
     /// type of unique key index
-    UkiType uki_type = UkiType::UNKNOWN;
+    mutable UkiType uki_type = UkiType::UNKNOWN;
 
     // FIXME (UNIQUE KEY): Put this into metainfo leter
     mutable std::mutex unique_index_mutex;
@@ -554,6 +557,9 @@ public:
 
     /// Return disk unique key index (corresponding to unique_key.idx) if the part has unique key.
     DiskUniqueKeyIndexPtr loadDiskUniqueIndex();
+
+    /// Return unique row store (corresponding to row_store.data) if the part has unique key.
+    UniqueRowStorePtr loadUniqueRowStore();
 
     String ALWAYS_INLINE getMemoryAddress() const
     {

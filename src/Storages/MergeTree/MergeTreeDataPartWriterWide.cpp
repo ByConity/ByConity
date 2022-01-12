@@ -100,6 +100,7 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         index_granularity_)
     , log(&Poco::Logger::get(storage.getLogName() + " (WriterWide)"))
 {
+    init();
     const auto & columns = metadata_snapshot->getColumns();
     for (const auto & it : columns_list)
     {
@@ -110,6 +111,22 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
             addByteMapStreams({it}, parseColNameFromImplicitName(it.name), default_codec->getFullCodecDesc());
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
+    }
+}
+
+void MergeTreeDataPartWriterWide::init()
+{
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        if (true /*storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method*/ // FIXME (UNIQUE KEY): not work, fix later
+            && storage.getSettings()->enable_disk_based_unique_key_index)
+        {
+            enable_disk_based_key_index = true;
+        }
+        if (storage.getSettings()->enable_unique_partial_update && storage.getSettings()->enable_unique_row_store)
+        {
+            enable_unique_row_store = true;
+        }
     }
 }
 
@@ -277,7 +294,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 opts.create_if_missing = true;
                 opts.error_if_exists = true;
                 opts.write_buffer_size = 16 << 20; /// 16MB
-                temp_unique_key_index_dir = data_part->getFullPath() + "TEMP_unique_key_index";
+                temp_unique_key_index_dir = fullPath(data_part->volume->getDisk(), part_path + "TEMP_unique_key_index");
                 auto status = rocksdb::DB::Open(opts, temp_unique_key_index_dir, &temp_unique_key_index);
                 if (!status.ok())
                     throw Exception("Can't create temp unique key index at " + temp_unique_key_index_dir, ErrorCodes::LOGICAL_ERROR);
@@ -292,8 +309,59 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
             writeToTempUniqueKeyIndex(unique_key_block, /*first_rid=*/rows_count, *temp_unique_key_index);
         }
     }
+    writeRowStoreIfNeed(block, permutation);
 
     rows_count += rows;
+}
+
+void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation)
+{
+    /// When it's under merge status, it'll generate row store later via merging all origin row stores directly.
+    if (!enable_unique_row_store || is_merge)
+        return;
+    
+    Stopwatch timer;
+    LOG_DEBUG(log, "Start to write row store for part {}, rows {}.", data_part->name, block.rows());
+    
+    auto disk = data_part->volume->getDisk();
+    String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
+    IndexFile::Options options;
+    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
+    IndexFile::IndexFileWriter row_store_writer(options);
+    auto status = row_store_writer.Open(row_store_file);
+    if (!status.ok())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", row_store_file, status.ToString());
+
+    size_t rows = block.rows();
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// handle key, mem comparable
+        size_t row = Endian::big(i);
+        WriteBufferFromOwnString row_buf;
+        writeBinary(row, row_buf);
+        String key = row_buf.str();
+        size_t correct_row = i;
+        if (permutation)
+            correct_row = (*permutation)[i];
+        if (correct_row >= rows)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", i, correct_row, rows);
+
+        /// handle value
+        WriteBufferFromOwnString val_buf;
+        for (auto & col : block)
+            serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
+        String val = val_buf.str();
+
+        /// insert item
+        status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
+        if (!status.ok())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
+    }
+
+    status = row_store_writer.Finish(&unique_row_store_file_info);
+    if (!status.ok())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
+    LOG_DEBUG(log, "Finish writing row store for part {}, rows {}, cost {} ms.", data_part->name, block.rows(), timer.elapsedMilliseconds());
 }
 
 /// Column must not be empty. (column.size() !== 0)
@@ -680,6 +748,13 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
             checksums.files[UKI_FILE_NAME].file_hash = file_info.file_hash;
         }
     }
+
+    /// The checksum of unique row store has already handled in merge status, we can not set the value in the case.
+    if (enable_unique_row_store && !is_merge)
+    {
+        checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
+        checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
+    }
 }
 
 static void fillIndexGranularityImpl(
@@ -830,7 +905,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
         return;
 
     /// write unique_key -> rowid mappings to key index file
-    String unique_key_index_file = data_part->getFullPath() + UKI_FILE_NAME;
+    String unique_key_index_file = fullPath(data_part->volume->getDisk(), part_path + UKI_FILE_NAME);
     IndexFile::Options options;
     options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
     IndexFile::IndexFileWriter index_writer(options);

@@ -24,7 +24,7 @@
 #include <DataTypes/MapHelpers.h>
 
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
-#include <Storages/DiskUniqueKeyIndexCache.h>
+#include <Storages/DiskUniqueIndexFileCache.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -385,6 +385,10 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
 {
     decrementStateMetric(state);
     decrementTypeMetric(part_type);
+
+    /// clear cache
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique && storage.unique_row_store_cache)
+        storage.unique_row_store_cache->remove(getMemoryAddress());
 }
 
 String IMergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) const
@@ -1958,6 +1962,12 @@ DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
     return std::make_shared<DiskUniqueKeyIndex>(getFullPath() + UKI_FILE_NAME, storage.getContext()->getDiskUniqueKeyIndexBlockCache());
 }
 
+UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
+{
+    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    return std::make_shared<UniqueRowStore>(getFullPath() + UNIQUE_ROW_STORE_DATA_NAME, storage.getContext()->getDiskUniqueRowStoreBlockCache());
+}
+
 UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
 {
     if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
@@ -2301,10 +2311,10 @@ UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
     {
         if (!storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method
             || !storage.getSettings()->enable_disk_based_unique_key_index || !Poco::File(getFullPath() + UKI_FILE_NAME).exists())
-            const_cast<IMergeTreeDataPart &>(*this).uki_type = UkiType::MEMORY;
+            uki_type = UkiType::MEMORY;
         else
         {
-            const_cast<IMergeTreeDataPart &>(*this).uki_type = UkiType::DISK;
+            uki_type = UkiType::DISK;
             String key = getMemoryAddress();
             storage.unique_key_index_cache->remove(key);
         }
@@ -2330,6 +2340,24 @@ UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
         auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadDiskUniqueIndex(); };
         return storage.unique_key_index_cache->getOrSet(key, std::move(load_func)).first;
     }
+}
+
+UniqueRowStorePtr IMergeTreeDataPart::getUniqueRowStore() const
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "getUniqueRowStore of {} which doesn't have unique key", storage.log_name);
+    }
+
+    if (!storage.unique_row_store_cache)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unique_row_store_cache of {} is nullptr", storage.log_name);
+    }
+
+    /// Data part's memory address is used as the cache key.
+    String key = getMemoryAddress();
+    auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadUniqueRowStore(); };
+    return storage.unique_row_store_cache->getOrSet(key, std::move(load_func)).first;
 }
 
 bool IMergeTreeDataPart::getValueFromUniqueIndex(

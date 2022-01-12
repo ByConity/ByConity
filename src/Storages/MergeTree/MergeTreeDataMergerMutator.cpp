@@ -11,6 +11,10 @@
 #include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
+#include <Storages/IndexFile/FilterPolicy.h>
+#include <Storages/IndexFile/IndexFileWriter.h>
+#include <Storages/IndexFile/Comparator.h>
+#include <Storages/IndexFile/Iterator.h>
 #include <Storages/PartLinker.h>
 #include <DataStreams/TTLBlockInputStream.h>
 #include <DataStreams/DistinctSortedBlockInputStream.h>
@@ -36,6 +40,7 @@
 #include <Common/interpolate.h>
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
+#include <Common/Endian.h>
 #include <Parsers/queryToString.h>
 #include <Columns/ColumnByteMap.h>
 #include <Common/FieldVisitorToString.h>
@@ -69,7 +74,11 @@ namespace ErrorCodes
     extern const int DIRECTORY_ALREADY_EXISTS;
     extern const int LOGICAL_ERROR;
     extern const int ABORTED;
+    extern const int CANNOT_OPEN_FILE;
 }
+
+using IndexFileIteratorPtr = std::unique_ptr<IndexFile::Iterator>;
+using IndexFileIterators = std::vector<IndexFileIteratorPtr>;
 
 /// Do not start to merge parts, if free space is less than sum size of parts times specified coefficient.
 /// This value is chosen to not allow big merges to eat all free space. Thus allowing small merges to proceed.
@@ -169,9 +178,14 @@ void FutureMergedMutatedPart::updatePath(const MergeTreeData & storage, const Re
     path = storage.getFullPathOnDisk(reservation->getDisk()) + name + "/";
 }
 
-MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size_)
-    : data(data_), background_pool_size(background_pool_size_), log(&Poco::Logger::get(data.getLogName() + " (MergerMutator)"))
+MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size_, bool build_part_id_mapping_)
+    : data(data_)
+    , background_pool_size(background_pool_size_)
+    , log(&Poco::Logger::get(data.getLogName() + " (MergerMutator)"))
+    , build_part_id_mapping(build_part_id_mapping_)
 {
+    if (build_part_id_mapping && data.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Part id mapping is only supported for Unique mode, got {}", data.merging_params.getModeName());
 }
 
 
@@ -1174,13 +1188,27 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     /// If merge is vertical we cannot calculate it
     bool blocks_are_granules_size = (chosen_merge_algorithm == MergeAlgorithm::Vertical && !isCompactPart(new_data_part));
 
+    MergingSortedAlgorithm::PartIdMappingCallback part_id_mapping_cb;
+    PartIdMapping part_id_mapping;
+    if (build_part_id_mapping)
+    {
+        part_id_mapping_cb = [&](size_t part_index, size_t nrows)
+        {
+            for (size_t i = 0; i < nrows; ++i)
+            {
+                part_id_mapping.push_back(part_index);
+            }
+        };
+    }
+
     UInt64 merge_block_size = data_settings->merge_max_block_size;
     switch (merging_params.mode)
     {
         case MergeTreeData::MergingParams::Ordinary:
         case MergeTreeData::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
-                header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(), true, blocks_are_granules_size);
+                header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(), 
+                true, blocks_are_granules_size, /*have_all_inputs*/true, /*part_id_mapping_cb*/part_id_mapping_cb);
             break;
 
         case MergeTreeData::MergingParams::Collapsing:
@@ -1248,7 +1276,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         merging_columns,
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
         compression_codec,
-        blocks_are_granules_size};
+        blocks_are_granules_size,
+        true};
 
     merged_stream->readPrefix();
     to.writePrefix();
@@ -1297,7 +1326,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         throw Exception("Cancelled merging parts with expired TTL", ErrorCodes::ABORTED);
 
     bool need_sync = needSyncPart(sum_input_rows_upper_bound, sum_compressed_bytes_upper_bound, *data_settings);
-    MergeTreeData::DataPart::Checksums checksums_gathered_columns;
+    MergeTreeData::DataPart::Checksums additional_column_checksums;
 
     /// Gather ordinary columns
     if (chosen_merge_algorithm == MergeAlgorithm::Vertical)
@@ -1377,7 +1406,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                     /// as key part of vertical merge
                     std::vector<MergeTreeIndexPtr>{},
                     &written_offset_columns,
-                    to.getIndexGranularity());
+                    to.getIndexGranularity(),
+                    nullptr,
+                    true);
 
                 size_t column_elems_written = 0;
 
@@ -1392,8 +1423,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                     throw Exception("Cancelled merging parts", ErrorCodes::ABORTED);
 
                 column_gathered_stream.readSuffix();
-                auto changed_checksums = column_to.writeSuffixAndGetChecksums(new_data_part, checksums_gathered_columns, need_sync);
-                checksums_gathered_columns.add(std::move(changed_checksums));
+                auto changed_checksums = column_to.writeSuffixAndGetChecksums(new_data_part, additional_column_checksums, need_sync);
+                additional_column_checksums.add(std::move(changed_checksums));
 
                 if (rows_written != column_elems_written)
                 {
@@ -1556,14 +1587,108 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         new_data_part->addProjectionPart(projection.name, std::move(merged_projection_part));
     }
 
+    /// merge row store if necessary
+    if (build_part_id_mapping)
+    {
+        if (part_id_mapping.size() != to.getRowsCount())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Row counts do not match. Part id mapping size: {}, merged part rows count: {}",
+                part_id_mapping.size(),
+                to.getRowsCount());
+        mergeRowStoreIntoNewPart(future_part, part_id_mapping, new_data_part, additional_column_checksums);
+    }
+
     if (chosen_merge_algorithm != MergeAlgorithm::Vertical)
-        to.writeSuffixAndFinalizePart(new_data_part, need_sync);
+        to.writeSuffixAndFinalizePart(new_data_part, need_sync, nullptr, &additional_column_checksums);
     else
-        to.writeSuffixAndFinalizePart(new_data_part, need_sync, &storage_columns, &checksums_gathered_columns);
+        to.writeSuffixAndFinalizePart(new_data_part, need_sync, &storage_columns, &additional_column_checksums);
 
     return new_data_part;
 }
 
+void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
+        const FutureMergedMutatedPart & future_part,
+        const PartIdMapping & part_id_mapping,
+        const MergeTreeData::MutableDataPartPtr & new_part,
+        MergeTreeData::DataPart::Checksums & checksum)
+{
+    if (!data.getSettings()->enable_unique_partial_update || !data.getSettings()->enable_unique_row_store)
+        throw Exception("Merge row store when disable unique row store.", ErrorCodes::LOGICAL_ERROR);
+    
+    const MergeTreeData::DataPartsVector & parts = future_part.parts;
+    Stopwatch timer;
+    LOG_DEBUG(log, "Start to merge row store for part {}, old parts: {}.", new_part->name, parts.size());
+
+    /// 1. get row store iterator of old parts
+    UniqueRowStoreVector row_store_holders;
+    row_store_holders.reserve(parts.size());
+    for (auto & part : parts)
+        row_store_holders.push_back(part->getUniqueRowStore());
+    IndexFileIterators row_store_iters;
+    row_store_iters.reserve(parts.size());
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        IndexFile::ReadOptions opts;
+        opts.fill_cache = false;
+        auto delete_bitmap = future_part.getDeleteBitmap(parts[i]);
+        if (!delete_bitmap->isEmpty())
+        {
+            opts.select_predicate = [bitmap = std::move(delete_bitmap)](const Slice & key, const Slice &)
+            {
+                /// handle mem comparable of key
+                size_t rowid;
+                ReadBufferFromMemory buffer(key.data(), sizeof(size_t));
+                readBinary(rowid, buffer);
+                rowid = Endian::big(rowid);
+                /// TODO: handle corrupt data in a better way.
+                /// E.g., make select_predicate return Status in order to propogate the error to the client
+                return !bitmap->contains(rowid);
+            };
+        }
+        row_store_iters.push_back(row_store_holders[i]->new_iterator(opts));
+    }
+
+    /// 2. get row store of new part
+    auto disk = new_part->volume->getDisk();
+    String row_store_file = fullPath(disk, new_part->getFullRelativePath() + UNIQUE_ROW_STORE_DATA_NAME);
+    IndexFile::Options options;
+    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
+    IndexFile::IndexFileWriter row_store_writer(options);
+    auto status = row_store_writer.Open(row_store_file);
+    if (!status.ok())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", row_store_file, status.ToString());
+
+    /// 3. merge row store
+    for (auto & iter: row_store_iters)
+        iter->SeekToFirst();
+    for (size_t i = 0; i < part_id_mapping.size(); ++i)
+    {
+        size_t part_id = part_id_mapping[i];
+        if (!row_store_iters[part_id]->Valid())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store iterator is not valid when merging row stores for part {}, old parts {}.", new_part->name, parts.size());
+        
+        /// handle key, mem comparable
+        size_t row = Endian::big(i);
+        WriteBufferFromOwnString row_buf;
+        writeBinary(row, row_buf);
+        String key = row_buf.str();
+        status = row_store_writer.Add(Slice(key.data(), key.size()), row_store_iters[part_id]->value());
+        if (!status.ok())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
+        row_store_iters[part_id]->Next();
+    }
+
+    IndexFile::IndexFileInfo unique_row_store_file_info;
+    status = row_store_writer.Finish(&unique_row_store_file_info);
+    if (!status.ok())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
+    LOG_DEBUG(log, "Finish merging row store for part {}, old parts: {}, cost {} ms.", new_part->name, parts.size(), timer.elapsedMilliseconds());
+    
+    /// 4. add checksum
+    checksum.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
+    checksum.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
+}
 
 MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTemporaryPart(
     const FutureMergedMutatedPart & future_part,

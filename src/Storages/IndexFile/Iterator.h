@@ -50,6 +50,12 @@ public:
     // REQUIRES: Valid()
     virtual void Next() = 0;
 
+    /// Move forward to the first key in the source that is at or past target.
+    /// If found, the iterator is Valid() after the call and exact_match is set to whether it's an exact match.
+    /// Otherwise, the iterator is !Valid() after the call.
+    /// REQUIRES: Valid() && target > key()
+    virtual void NextUntil(const Slice & target, bool & exact_match) = 0;
+
     // Moves to the previous entry in the source.  After this call, Valid() is
     // true iff the iterator was not positioned at the first entry in source.
     // REQUIRES: Valid()

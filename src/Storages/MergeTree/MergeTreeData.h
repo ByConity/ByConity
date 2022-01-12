@@ -43,6 +43,7 @@ class MutationCommands;
 class Context;
 struct JobAndPool;
 class DiskUniqueKeyIndexCache;
+class DiskUniqueRowStoreCache;
 
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
@@ -1248,6 +1249,7 @@ protected:
     mutable std::mutex delete_file_gc_mutex;
 
     std::shared_ptr<DiskUniqueKeyIndexCache> unique_key_index_cache;
+    std::shared_ptr<DiskUniqueRowStoreCache> unique_row_store_cache;
 
     /// write lock for unique table to prevent concurrent insert & merge.
     /// lock order: merge select lock -> table structure lock -> unique write lock

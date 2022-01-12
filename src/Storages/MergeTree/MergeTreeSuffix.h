@@ -30,6 +30,8 @@ constexpr auto KLL_FILE_EXTENSION = ".kll";
 
 constexpr auto UKI_FILE_NAME = "unique_key.idx";   /// name of unique key index file
 
+constexpr auto UNIQUE_ROW_STORE_DATA_NAME = "row_store.data"; /// name of row store data file
+
 bool isEngineReservedWord(const String & column);
 
 /// Type `ONLY_SOURCE` is used in encoding and select, it's **DEFAULT** type

@@ -20,7 +20,8 @@ public:
         WriteBuffer * out_row_sources_buf_ = nullptr,
         bool quiet_ = false,
         bool use_average_block_sizes = false,
-        bool have_all_inputs_ = true);
+        bool have_all_inputs_ = true,
+        MergingSortedAlgorithm::PartIdMappingCallback part_id_mapping_cb_ = nullptr);
 
     String getName() const override { return "MergingSortedTransform"; }
 

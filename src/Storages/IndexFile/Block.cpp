@@ -225,6 +225,65 @@ public:
         }
     }
 
+    void NextUntil(const Slice & target, bool & exact_match) override
+    {
+        assert(Compare(key(), target) < 0);
+
+        /// First linear search in the current restart group
+        uint32_t limit = restarts_;
+        if (restart_index_ + 1 < num_restarts_)
+            limit = GetRestartPoint(restart_index_ + 1);
+
+        if (LinearSearchInGroup(target, exact_match, limit))
+            return; /// found entry >= target
+
+        if (!Valid())
+            return; /// no such entry in this block
+
+        /// now we moved to a new restart group and key() is the first key in that group
+        int cmp = Compare(key(), target);
+        if (cmp >= 0)
+        {
+            exact_match = (cmp == 0);
+            return;
+        }
+
+        /// key() < target.
+        /// Before linear search, first check next restart key to see if we can skip the current group
+        uint32_t current_restart_index = restart_index_;
+        while (current_restart_index + 1 < num_restarts_)
+        {
+            Slice next_restart_key = KeyAtRestartPoint(current_restart_index + 1);
+            if (next_restart_key.empty())
+            {
+                CorruptionError();
+                return;
+            }
+            cmp = Compare(next_restart_key, target);
+            if (cmp < 0)
+            {
+                current_restart_index++;
+            }
+            else if (cmp > 0)
+            {
+                break;
+            }
+            else
+            {
+                SeekToRestartPoint(current_restart_index + 1);
+                ParseNextKey();
+                exact_match = true;
+                return;
+            }
+        }
+
+        if (current_restart_index > restart_index_)
+        {
+            SeekToRestartPoint(current_restart_index);
+        }
+        LinearSearchInGroup(target, exact_match, restarts_);
+    }
+
     void SeekToFirst() override
     {
         SeekToRestartPoint(0);
@@ -241,6 +300,34 @@ public:
     }
 
 private:
+
+    // return empty slice on error
+    Slice KeyAtRestartPoint(uint32_t restart_array_index)
+    {
+        uint32_t region_offset = GetRestartPoint(restart_array_index);
+        uint32_t shared, non_shared, value_length;
+        const char * key_ptr = DecodeEntry(data_ + region_offset, data_ + restarts_, &shared, &non_shared, &value_length);
+        if (key_ptr == nullptr || (shared != 0))
+        {
+            return {};
+        }
+        return {key_ptr, non_shared};
+    }
+
+    bool LinearSearchInGroup(const Slice & target, bool & exact_match, uint32_t limit)
+    {
+        while (ParseNextKey() && current_ < limit)
+        {
+            int cmp = Compare(key(), target);
+            if (cmp >= 0)
+            {
+                exact_match = (cmp == 0);
+                return true;
+            }
+        }
+        return false;
+    }
+
     void CorruptionError()
     {
         current_ = restarts_;

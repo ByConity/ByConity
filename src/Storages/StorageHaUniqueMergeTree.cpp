@@ -155,7 +155,10 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     , replica_path(zookeeper_path + "/replicas/" + replica_name_)
     , reader(*this)
     , writer(*this)
-    , merger_mutator(*this, getContext()->getSettingsRef().background_pool_size)
+    , merger_mutator(
+          *this,
+          getContext()->getSettingsRef().background_pool_size,
+          /*build_part_id_mapping*/getSettings()->enable_unique_partial_update && getSettings()->enable_unique_row_store)
     , log_exchanger(*this)
     , fetcher(*this)
     , alter_thread(*this)

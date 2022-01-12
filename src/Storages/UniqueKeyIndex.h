@@ -85,7 +85,7 @@ class DiskUniqueKeyIndex : public UniqueKeyIndex
 {
 public:
     /// created from local file located at "file_path".
-    DiskUniqueKeyIndex(const String & file_path, DiskUniqueKeyIndexBlockCachePtr block_cache);
+    DiskUniqueKeyIndex(const String & file_path, IndexFileBlockCachePtr block_cache);
 
     bool lookup(const String & key, UInt32 & rowid, String & version, size_t version_size) override;
 

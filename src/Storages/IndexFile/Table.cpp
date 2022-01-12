@@ -12,6 +12,8 @@
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/Format.h>
 #include <Storages/IndexFile/Options.h>
+#include <Storages/IndexFile/SelectIterator.h>
+#include <Storages/IndexFile/TwoLevelIterator.h>
 #include <Common/Coding.h>
 
 #include <memory>
@@ -230,6 +232,11 @@ Iterator * Table::BlockReader(void * arg, const ReadOptions & options, const Sli
     if (block != nullptr)
     {
         iter = block->NewIterator(table->rep_->options.comparator);
+        if (options.select_predicate)
+        {
+            iter = NewSelectIterator(iter, options.select_predicate);
+        }
+
         if (cache_handle == nullptr)
         {
             iter->RegisterCleanup(&DeleteBlock, block, nullptr);
@@ -244,6 +251,12 @@ Iterator * Table::BlockReader(void * arg, const ReadOptions & options, const Sli
         iter = NewErrorIterator(s);
     }
     return iter;
+}
+
+Iterator * Table::NewIterator(const ReadOptions & options) const
+{
+    return NewTwoLevelIterator(
+        rep_->options.comparator, rep_->index_block->NewIterator(rep_->options.comparator), &Table::BlockReader, const_cast<Table *>(this), options);
 }
 
 Status Table::Get(const ReadOptions & options, const Slice & k, std::string * value)

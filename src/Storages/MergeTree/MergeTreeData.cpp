@@ -178,6 +178,7 @@ MergeTreeData::MergeTreeData(
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     , parts_mover(this)
     , unique_key_index_cache(context_->getDiskUniqueKeyIndexCache())
+    , unique_row_store_cache(context_->getDiskUniqueRowStoreCache())
     , replicated_fetches_throttler(std::make_shared<Throttler>(
           getSettings()->max_replicated_fetches_network_bandwidth, getContext()->getReplicatedFetchesThrottler()))
     , replicated_sends_throttler(

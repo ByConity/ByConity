@@ -25,7 +25,7 @@ bool MemoryUniqueKeyIndex::lookup(const String & key, UInt32 & rowid, String & v
     return true;
 }
 
-DiskUniqueKeyIndex::DiskUniqueKeyIndex(const String & file_path, DiskUniqueKeyIndexBlockCachePtr block_cache)
+DiskUniqueKeyIndex::DiskUniqueKeyIndex(const String & file_path, IndexFileBlockCachePtr block_cache)
 {
     IndexFile::Options options;
     options.block_cache = std::move(block_cache);

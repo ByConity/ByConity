@@ -48,6 +48,14 @@ Status IndexFileReader::Get(const ReadOptions & options, const Slice & key, Stri
     return rep->table_reader->Get(options, key, value);
 }
 
+Status IndexFileReader::NewIterator(const ReadOptions & options, std::unique_ptr<Iterator> * out)
+{
+    if (!rep->table_reader)
+        return Status::InvalidArgument("File is not opened");
+    (*out).reset(rep->table_reader->NewIterator(options));
+    return Status::OK();
+}
+
 size_t IndexFileReader::ResidentMemoryUsage() const
 {
     size_t res = sizeof(Rep);

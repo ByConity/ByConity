@@ -22,7 +22,8 @@ public:
         const MergeTreeIndices & indices_to_recalc_,
         WrittenOffsetColumns * offset_columns_ = nullptr,
         const MergeTreeIndexGranularity & index_granularity = {},
-        const MergeTreeIndexGranularityInfo * index_granularity_info_ = nullptr);
+        const MergeTreeIndexGranularityInfo * index_granularity_info_ = nullptr,
+        bool is_merge = false);
 
     MergedColumnOnlyOutputStream(
         const MergeTreeDataPartPtr & data_part,

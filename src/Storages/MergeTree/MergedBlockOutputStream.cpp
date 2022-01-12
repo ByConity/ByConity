@@ -24,7 +24,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     const NamesAndTypesList & columns_list_,
     const MergeTreeIndices & skip_indices,
     CompressionCodecPtr default_codec_,
-    bool blocks_are_granules_size)
+    bool blocks_are_granules_size,
+    bool is_merge)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , columns_list(columns_list_)
     , default_codec(default_codec_)
@@ -54,20 +55,12 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     else
         writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique
-        && true /*storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method*/ // FIXME (UNIQUE KEY): not work, fix later
-        && storage.getSettings()->enable_disk_based_unique_key_index)
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        enable_disk_based_key_index = true;
-
-        if (auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get()); writer_wide)
-        {
-            writer_wide->setEnableDiskBasedKeyIndex(enable_disk_based_key_index);
-        }
-        else
-        {
+        auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get()); 
+        if (!writer_wide)
             throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
-        }
+        writer_wide->setMergeStatus(is_merge);
     }
 }
 
