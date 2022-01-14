@@ -328,6 +328,13 @@ def get_server_pid(server_tcp_port):
             print("Cannot get server pid with {}, got {}: {}".format(cmd, output, e))
     return None # most likely server dead
 
+def is_selected_suite(selected_suite_names, suite):
+    if selected_suite_names == None:
+        return True
+    for selected_suite_name in selected_suite_names:
+        if selected_suite_name in suite:
+            return True
+    return False
 
 def colored(text, args, color=None, on_color=None, attrs=None):
     if termcolor and (sys.stdout.isatty() or args.force_color):
@@ -892,6 +899,8 @@ def main(args):
             if 'stateful' in suite and args.no_stateful:
                 print("Won't run stateful tests because they were manually disabled.")
                 continue
+            if is_selected_suite(args.run, suite) == False:
+                continue
 
             # Reverse sort order: we want run newest test first.
             # And not reverse subtests
@@ -1106,6 +1115,7 @@ if __name__ == '__main__':
     group=parser.add_mutually_exclusive_group(required=False)
     group.add_argument('--shard', action='store_true', default=None, dest='shard', help='Run sharding related tests (required to clickhouse-server listen 127.0.0.2 127.0.0.3)')
     group.add_argument('--no-shard', action='store_false', default=None, dest='shard', help='Do not run shard related tests')
+    parser.add_argument('--run', required=False, default=None, nargs='+', help='name of suites to be executed')
 
     args = parser.parse_args()
 
