@@ -40,6 +40,7 @@ jobs:
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run FuntionalStatelessTest
         commands:
+          - cp /home/code/docker/test/stateless/run.sh run.sh
           - cd /
           - /bin/bash run.sh
       - name: Upload Artifact
@@ -79,6 +80,7 @@ jobs:
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run FuntionalStatefulTest
         commands:
+          - cp /home/code/docker/test/stateful/run.sh run.sh
           - cd /
           - /bin/bash run.sh
       - name: Upload Artifact
