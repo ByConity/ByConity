@@ -3,18 +3,20 @@
 #include <memory>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/DataTrans/IBroadcastSender.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <absl/strings/str_split.h>
 #include <Common/Allocator.h>
 #include <Common/Exception.h>
-#include <Processors/Exchange/DataTrans/DataTransKey.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
-#include <absl/strings/str_split.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 class ExchangeUtils
 {
@@ -43,6 +45,41 @@ public:
         if (elements.size() != 5)
             return DataTransKeyPtr();
         return std::make_shared<ExchangeDataKey>(elements[0], elements[1], elements[2], elements[3], elements[4]);
+    }
+
+    static inline BroadcastStatus sendAndCheckReturnStatus(IBroadcastSender & sender, Chunk chunk)
+    {
+        BroadcastStatus status = sender.send(std::move(chunk));
+        if (status.is_modifer && status.code > 0)
+        {
+            throw Exception(
+                String(typeid(sender).name()) + " fail to send data: " + status.message + " code: " + std::to_string(status.code),
+                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+        }
+        return status;
+    }
+
+    static inline void mergeSenders(BroadcastSenderPtrs & senders)
+    {
+        BroadcastSenderPtrs senders_to_merge;
+        for (auto it = senders.begin(); it != senders.end();)
+        {
+            if ((*it)->getType() == BroadcastSenderType::Brpc)
+            {
+                senders_to_merge.emplace_back(std::move(*it));
+                it = senders.erase(it);
+            }
+            else
+                it++;
+        }
+        if (senders_to_merge.empty())
+            return;
+        auto & merged_sender = senders_to_merge[0];
+        for (size_t i = 1; i < senders_to_merge.size(); ++i)
+        {
+            merged_sender->merge(std::move(*senders_to_merge[i]));
+        }
+        senders.emplace_back(std::move(merged_sender));
     }
 };
 

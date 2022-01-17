@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <common/types.h>
@@ -15,4 +16,5 @@ public:
 };
 
 using DataTransKeyPtr = std::shared_ptr<DataTransKey>;
+using DataTransKeyPtrs = std::vector<DataTransKeyPtr>;
 }

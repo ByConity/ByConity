@@ -1,4 +1,5 @@
 #include <memory>
+#include <string>
 
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -112,11 +113,21 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 DataTransKeyPtr data_key = std::make_shared<ExchangeDataKey>(
                     query_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                 BroadcastReceiverPtr receiver;
-                if (!options.force_remote_mode && ExchangeUtils::isLocalExchange(read_address_info, source_address))
+                if (ExchangeUtils::isLocalExchange(read_address_info, source_address))
                 {
-                    LOG_DEBUG(logger, "Create local exchange source : {}@{}", data_key->dump(), write_address_info);
-                    auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options);
-                    receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
+                    if (!options.force_remote_mode)
+                    {
+                        LOG_DEBUG(logger, "Create local exchange source : {}@{}", data_key->dump(), write_address_info);
+                        auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options);
+                        receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
+                    }
+                    else
+                    {
+                        String localhost_address = context->getLocalHost() + ":" + std::to_string(context->getExchangePort());
+                        LOG_DEBUG(logger, "Force local exchange use remote source : {}@{}", data_key->dump(), localhost_address);
+                        receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
+                            std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), localhost_address, context, header));
+                    }
                 }
                 else
                 {

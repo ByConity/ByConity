@@ -37,7 +37,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         if (stream_id != brpc::INVALID_STREAM_ID)
         {
             brpc::StreamClose(stream_id);
-            LOG_TRACE(log, "Stream {} Close", stream_id);
+            LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, data_key, registry_address);
         }
     }
     catch (...)
@@ -64,10 +64,10 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
             // FIXME we should close stream at any situation
             if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
-                throw Exception("Fail to create stream for data_key-" + data_key, ErrorCodes::BRPC_EXCEPTION);
+                throw Exception("Fail to create stream for " + getName(), ErrorCodes::BRPC_EXCEPTION);
 
             if (stream_id == brpc::INVALID_STREAM_ID)
-                throw Exception("Stream id is invalid for data_key-" + data_key, ErrorCodes::BRPC_EXCEPTION);
+                throw Exception("Stream id is invalid for " + getName(), ErrorCodes::BRPC_EXCEPTION);
 
             Protos::RegistryRequest request;
             Protos::RegistryResponse response;
@@ -102,7 +102,7 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)
 {
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
         throw Exception(
-            "Push exchange data to receiver for stream id-" + std::to_string(stream_id) + " timeout for "
+            "Push exchange data to receiver for " + getName() + " timeout for "
                 + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
 }
@@ -111,7 +111,7 @@ void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
 {
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, exception))
         throw Exception(
-            "Push exchange exception to receiver for stream id-" + std::to_string(stream_id) + " timeout",
+            "Push exchange exception to receiver for " + getName() + " timeout",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
 }
 
@@ -126,7 +126,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
     {
         const auto error_msg
-            = "Try pop receive queue for stream id-" + std::to_string(stream_id) + " timeout for " + std::to_string(timeout_ms) + " ms.";
+            = "Try pop receive queue for " + getName() +  " timeout for " + std::to_string(timeout_ms) + " ms.";
         LOG_ERROR(log, error_msg);
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
@@ -134,7 +134,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     if (!brpc_data_packet.exception.empty())
     {
         const auto & error_msg
-            = "Try pop receive queue for stream id-" + std::to_string(stream_id) + " failed. Exception:" + brpc_data_packet.exception;
+            = "Try pop receive queue for " + getName() + " failed. Exception:" + brpc_data_packet.exception;
         LOG_ERROR(log, error_msg);
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, error_msg);
         return std::move(current_status);
@@ -143,7 +143,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     if (brpc_data_packet.chunk.empty())
     {
         auto * status = broadcast_status.load(std::memory_order_relaxed);
-        LOG_DEBUG(log, "Receive for stream id-{} finished, data_key-{}, status_code:{}.", stream_id, data_key, status->code);
+        LOG_DEBUG(log, "Receive for stream id: {} finished, name: {}, status_code: {}.", stream_id, getName(), status->code);
         return *status;
     }
 
@@ -158,7 +158,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
         LOG_TRACE(
             log,
             "Broadcast receiver {} finished and status can't be changed to {} any more. Current status: {}",
-            data_key,
+            getName(),
             status_code_,
             current_status_ptr->code);
         return *current_status_ptr;
@@ -172,7 +172,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
             LOG_INFO(
                 log,
                 "{} BroadcastStatus from {} to {} with message: {}",
-                data_key,
+                getName(),
                 current_status_ptr->code,
                 new_status_ptr->code,
                 new_status_ptr->message);

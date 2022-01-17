@@ -81,7 +81,6 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 void MultiPartitionExchangeSink::onFinish()
 {
     LOG_TRACE(logger, "MultiPartitionExchangeSink finish");
-    was_finished = true;
     for(size_t i = 0; i < partition_num ; ++i)
         buffered_senders[i].flush(true);
 }
@@ -89,11 +88,8 @@ void MultiPartitionExchangeSink::onFinish()
 void MultiPartitionExchangeSink::onCancel()
 {
     LOG_TRACE(logger, "MultiPartitionExchangeSink cancel");
-    if (!was_finished)
-    {
-        for (BroadcastSenderPtr & sender : partition_senders)
-            sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
-    }
+    for (BroadcastSenderPtr & sender : partition_senders)
+        sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
 }
 
 }

@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 #include <unordered_map>
+#include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
@@ -17,6 +18,8 @@ namespace DB
 {
 class BroadcastSenderProxy;
 using BroadcastSenderProxyPtr = std::shared_ptr<BroadcastSenderProxy>;
+using BroadcastSenderProxyPtrs = std::vector<BroadcastSenderProxyPtr>;
+
 class BroadcastSenderProxyRegistry final : private boost::noncopyable
 {
 public:

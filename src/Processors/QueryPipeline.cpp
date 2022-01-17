@@ -103,10 +103,10 @@ void QueryPipeline::addTransform(ProcessorPtr transform, InputPort * totals, Inp
     pipe.addTransform(std::move(transform), totals, extremes);
 }
 
-void QueryPipeline::transform(const Transformer & transformer)
+void QueryPipeline::transform(const Transformer & transformer, size_t sink_num)
 {
     checkInitializedAndNotCompleted();
-    pipe.transform(transformer);
+    pipe.transform(transformer, sink_num);
 }
 
 void QueryPipeline::setSinks(const Pipe::ProcessorGetterWithStreamKind & getter)

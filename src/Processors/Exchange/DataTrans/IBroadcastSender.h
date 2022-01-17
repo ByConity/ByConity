@@ -8,12 +8,22 @@
 
 namespace DB
 {
+
+enum class BroadcastSenderType
+{
+    Local = 0,
+    Brpc
+};
 class IBroadcastSender
 {
 public:
     virtual BroadcastStatus send(Chunk chunk) = 0;
-    virtual void merge(IBroadcastSender && /*sender*/) = 0;
+
+    /// Merge sender to get 1:N sender and can avoid duplicated serialization when send chunk
+    virtual void merge(IBroadcastSender && sender) = 0;
+
     virtual String getName() const = 0;
+    virtual BroadcastSenderType getType() = 0;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code_, String message) = 0;
     virtual ~IBroadcastSender() = default;
 };

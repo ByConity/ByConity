@@ -3,8 +3,9 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <Core/Block.h>
 #include <DataTypes/IDataType.h>
-#include <Interpreters/Context_fwd.h>
+#include <Interpreters/Context.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -25,7 +26,7 @@ namespace ErrorCodes
 }
 
 BroadcastSenderProxy::BroadcastSenderProxy(DataTransKeyPtr data_key_)
-    : data_key(std::move(data_key_)), logger(&Poco::Logger::get("BroadcastSenderProxy"))
+    : data_key(std::move(data_key_)), wait_timeout_ms(5000), logger(&Poco::Logger::get("BroadcastSenderProxy"))
 {
 }
 
@@ -45,7 +46,7 @@ BroadcastSenderProxy::~BroadcastSenderProxy()
 BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
 {
     if (!has_real_sender.load(std::memory_order_relaxed))
-        waitBecomeRealSender(5000);
+        waitBecomeRealSender(wait_timeout_ms);
     return real_sender->send(std::move(chunk));
 }
 
@@ -53,13 +54,30 @@ BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
 BroadcastStatus BroadcastSenderProxy::finish(BroadcastStatusCode status_code, String message)
 {
     if (!has_real_sender.load(std::memory_order_relaxed))
-        waitBecomeRealSender(5000);
+        waitBecomeRealSender(wait_timeout_ms);
     return real_sender->finish(status_code, message);
 }
 
 void BroadcastSenderProxy::merge(IBroadcastSender && sender)
 {
-    real_sender->merge(std::move(sender));
+    if (!has_real_sender.load(std::memory_order_relaxed))
+        waitBecomeRealSender(wait_timeout_ms);
+
+    BroadcastSenderProxy * other = dynamic_cast<BroadcastSenderProxy *>(&sender);
+    if (!other)
+        real_sender->merge(std::move(sender));
+    else
+    {
+        if (!other->has_real_sender)
+            throw Exception("Can't merge proxy has no real sender " + data_key->dump(), ErrorCodes::LOGICAL_ERROR);
+
+        real_sender->merge(std::move(*other->real_sender));
+        other->has_real_sender.store(false, std::memory_order_relaxed);
+        
+        std::unique_lock lock(other->mutex);
+        other->context = ContextPtr();
+        other->header = Block();
+    }
 }
 
 String BroadcastSenderProxy::getName() const
@@ -85,6 +103,7 @@ void BroadcastSenderProxy::accept(ContextPtr context_, Block header_)
         throw Exception("Can't call accept twice for {} " + data_key->dump(), ErrorCodes::LOGICAL_ERROR);
     context = std::move(context_);
     header = std::move(header_);
+    wait_timeout_ms = context->getSettingsRef().exchange_timeout_ms;
     wait_accept.notify_all();
 }
 
@@ -111,6 +130,13 @@ void BroadcastSenderProxy::waitBecomeRealSender(UInt32 timeout_ms)
         return;
     if (!wait_become_real.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return this->real_sender.operator bool(); }))
         throw Exception("Wait become real sender timeout for {} " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
+}
+
+BroadcastSenderType BroadcastSenderProxy::getType()
+{
+    if (!has_real_sender.load(std::memory_order_relaxed))
+        waitBecomeRealSender(wait_timeout_ms);
+    return real_sender->getType();
 }
 
 ContextPtr BroadcastSenderProxy::getContext() const

@@ -40,7 +40,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
-            LOG_DEBUG(
+            LOG_TRACE(
                 log,
                 "StreamHandler::on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}, chunk rows:{}",
                 stream_id,

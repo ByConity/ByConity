@@ -1,7 +1,9 @@
 #pragma once
+#include <atomic>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/IProcessor.h>
 #include <Processors/ISink.h>
+#include <bthread/mtx_cv_base.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -23,7 +25,8 @@ protected:
 private:
     BroadcastSenderPtrs senders;
     Poco::Logger * logger;
-    std::atomic<bool> was_finished = false;
+    std::atomic_bool senders_are_merged = false;
+    mutable bthread::Mutex senders_mutex;
 };
 
 }

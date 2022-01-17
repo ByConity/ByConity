@@ -3,10 +3,11 @@
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
-#include <Processors/Exchange/ExchangeUtils.h>
-#include <common/scope_guard.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <brpc/stream.h>
+#include <Common/Exception.h>
+#include <common/scope_guard.h>
 
 namespace DB
 {
@@ -32,25 +33,14 @@ void BrpcExchangeReceiverRegistryService::registry(
             try
             {
                 auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-                sender_proxy->waitAccept(cntl->timeout_ms());
                 auto real_sender = std::dynamic_pointer_cast<IBroadcastSender>(std::make_shared<BrpcRemoteBroadcastSender>(
                     std::move(data_key), sender_stream_id, sender_proxy->getContext(), sender_proxy->getHeader()));
                 sender_proxy->becomeRealSender(std::move(real_sender));
             }
-            catch (const Exception & e)
-            {
-                brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed for {} by exception: {}", data_key->getKey(), e.displayText());
-            }
-            catch (const std::exception & e)
-            {
-                brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed for {} by exception: {}", data_key->getKey(), e.what());
-            }
             catch (...)
             {
                 brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed for {} by unknown error", data_key->getKey());
+                LOG_ERROR(log, "Create stream failed for {} by exception: {}", data_key->getKey(), getCurrentExceptionMessage(false));
             }
         }
     });
@@ -73,6 +63,18 @@ void BrpcExchangeReceiverRegistryService::registry(
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
         return;
+    }
+    try
+    {
+        auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+        sender_proxy->waitAccept(std::max(cntl->timeout_ms() - 500, 1000l));
+    }
+    catch (...)
+    {
+        brpc::StreamClose(sender_stream_id);
+        String error_msg = "Create stream for " + request->data_key() + " failed by exception: " + getCurrentExceptionMessage(false);
+        LOG_ERROR(log, error_msg);
+        cntl->SetFailed(error_msg);
     }
 }
 

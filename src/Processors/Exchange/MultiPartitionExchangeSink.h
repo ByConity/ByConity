@@ -40,7 +40,6 @@ private:
     size_t column_num;
     ExecutableFunctionPtr repartition_func;
     const ColumnNumbers repartition_keys;
-    std::atomic<bool> was_finished = false;
     ExchangeOptions options;
     ExchangeBufferedSenders buffered_senders;
     Poco::Logger * logger;
