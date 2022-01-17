@@ -26,13 +26,13 @@ void MergingAggregatedTransform::consume(Chunk chunk)
     total_input_rows += chunk.getNumRows();
     ++total_input_blocks;
 
-    // const auto & info = chunk.getChunkInfo();
-    // if (!info)
-    //     throw Exception("Chunk info was not set for chunk in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
+    const auto & info = chunk.getChunkInfo();
+    if (!info)
+        throw Exception("Chunk info was not set for chunk in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
 
-    // const auto * agg_info = typeid_cast<const AggregatedChunkInfo *>(info.get());
-    // if (!agg_info)
-    //     throw Exception("Chunk should have AggregatedChunkInfo in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
+    const auto * agg_info = typeid_cast<const AggregatedChunkInfo *>(info.get());
+    if (!agg_info)
+        throw Exception("Chunk should have AggregatedChunkInfo in MergingAggregatedTransform.", ErrorCodes::LOGICAL_ERROR);
 
     /** If the remote servers used a two-level aggregation method,
       *  then blocks will contain information about the number of the bucket.
@@ -41,12 +41,10 @@ void MergingAggregatedTransform::consume(Chunk chunk)
       */
 
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.getColumns());
-    // block.info.is_overflows = agg_info->is_overflows;
-    // block.info.bucket_num = agg_info->bucket_num;
-    block.info.is_overflows = 0;
-    block.info.bucket_num = -1;
+    block.info.is_overflows = agg_info->is_overflows;
+    block.info.bucket_num = agg_info->bucket_num;
 
-    bucket_to_blocks[-1].emplace_back(std::move(block));
+    bucket_to_blocks[agg_info->bucket_num].emplace_back(std::move(block));
 }
 
 Chunk MergingAggregatedTransform::generate()
