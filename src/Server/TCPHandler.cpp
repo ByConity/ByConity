@@ -1361,6 +1361,9 @@ void TCPHandler::receivePlanSegment()
     const Settings & settings = query_context->getSettingsRef();
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
 
+    if (!query_context->hasQueryContext())
+        query_context->makeQueryContext();
+
     state.plan_segment = PlanSegment::deserializePlanSegment(*in, query_context);
 }
 

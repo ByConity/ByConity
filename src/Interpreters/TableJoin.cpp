@@ -613,7 +613,6 @@ void TableJoin::deserializeImpl(ReadBuffer & buf, ContextPtr context)
 std::shared_ptr<TableJoin> TableJoin::deserialize(ReadBuffer & buf, ContextPtr context)
 {
     ASTPtr select_query = ASTSelectQuery::deserialize(buf);
-    std::cout<<" <<<<<< deserializeTableJoin: " << queryToString(select_query) << std::endl;
     if (const auto * query = select_query->as<ASTSelectQuery>())
     {
         JoinedTables joined_tables(context, *query);

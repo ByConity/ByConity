@@ -66,7 +66,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
     {
-        LOG_WARNING(
+        LOG_TRACE(
             logger,
             "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
             data_key->getKey(),
