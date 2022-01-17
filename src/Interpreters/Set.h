@@ -70,6 +70,9 @@ public:
     bool areTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
     void checkTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
 
+    // void serialize(WriteBuffer & buf) const;
+    // void deserialize(ReadBuffer & buf);
+
 private:
     size_t keys_size = 0;
     Sizes key_sizes;
