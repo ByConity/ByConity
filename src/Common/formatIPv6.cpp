@@ -1,7 +1,9 @@
+#include <Common/Exception.h>
 #include <Common/formatIPv6.h>
 #include <Common/hex.h>
 #include <Common/StringUtils/StringUtils.h>
 
+#include <Poco/Net/IPAddress.h>
 #include <common/range.h>
 #include <array>
 #include <algorithm>
@@ -157,6 +159,22 @@ void formatIPv6(const unsigned char * src, char *& dst, uint8_t zeroed_tail_byte
         *dst++ = ':';
 
     *dst++ = '\0';
+}
+
+std::string normalizeHost(const std::string & host)
+{
+    try
+    {
+        Poco::Net::IPAddress addr(host);
+        /// For ipv6
+        if (addr.family() == Poco::Net::AddressFamily::IPv6)
+            return "[" + host + "]";
+        return host;
+    }
+    catch (...)
+    {
+        throw Exception("Cann't parse the ip: " + host, ErrorCodes::BAD_ARGUMENTS);
+    }
 }
 
 }

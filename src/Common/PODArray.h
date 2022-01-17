@@ -216,6 +216,14 @@ public:
 
     void clear() { c_end = c_start; }
 
+    void deep_clear()
+    {
+        dealloc();
+        c_start = null;
+        c_end = null;
+        c_end_of_storage = null;
+    }
+
     template <typename ... TAllocatorParams>
 #if defined(__clang__)
     ALWAYS_INLINE /// Better performance in clang build, worse performance in gcc build.

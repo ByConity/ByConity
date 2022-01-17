@@ -5,6 +5,9 @@
 #if USE_HDFS
 #include <Common/ShellCommand.h>
 #include <Common/Exception.h>
+#include <Common/formatIPv6.h>
+#include <consul/bridge.h>
+#include <random>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <common/logger_useful.h>
@@ -44,9 +47,9 @@ void HDFSBuilderWrapper::loadFromConfig(const Poco::Util::AbstractConfiguration 
             need_kinit = true;
             hadoop_kerberos_principal = config.getString(key_path);
 
-#if USE_INTERNAL_HDFS3_LIBRARY
-            hdfsBuilderSetPrincipal(hdfs_builder, hadoop_kerberos_principal.c_str());
-#endif
+// #if USE_INTERNAL_HDFS3_LIBRARY
+//             hdfsBuilderSetPrincipal(hdfs_builder, hadoop_kerberos_principal.c_str());
+// #endif
 
             continue;
         }
@@ -190,6 +193,64 @@ HDFSFSPtr createHDFSFS(hdfsBuilder * builder)
 
     return fs;
 }
+
+std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
+{
+    std::vector<cpputil::consul::ServiceEndpoint> nnproxys = cpputil::consul::lookup_name(nnproxy);
+    if (nnproxys.size() == 0)
+        throw Exception("No available nnproxy", ErrorCodes::NETWORK_ERROR);
+    std::vector<cpputil::consul::ServiceEndpoint> sample;
+    int numRetry = 3;
+    while (1)
+    {
+        std::sample(nnproxys.begin(), nnproxys.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
+        if (!sample.empty() && numRetry-- > 0)
+        {
+            if (brokenNNs.isBrokenNN(sample[0].host)) continue;
+        }
+        break;
+    }
+    std::string host{};
+    size_t port{};
+    for (auto service : sample)
+    {
+        host = service.host;
+        port = service.port;
+    }
+
+    host = normalizeHost(host);
+
+    return {host, port};
+};
+
+HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const std::string hdfs_user, const std::string nnproxy)
+{
+    auto host = uri.getHost();
+    auto port = uri.getPort();
+
+    if (host.empty() || port == 0)
+    {
+        std::tie(host, port) = getNameNodeNNProxy(nnproxy);
+    }
+    else
+    {
+        host = normalizeHost(host);
+    }
+
+    HDFSBuilderPtr builder(hdfsNewBuilder());
+    if (builder == nullptr)
+        throw Exception("Unable to create builder to connect to HDFS: " + uri.toString() + " " + std::string(hdfsGetLastError()),
+            ErrorCodes::NETWORK_ERROR);
+    hdfsBuilderConfSetStr(builder.get(), "input.read.timeout", "60000"); // 1 min
+    hdfsBuilderConfSetStr(builder.get(), "input.write.timeout", "60000"); // 1 min
+    hdfsBuilderConfSetStr(builder.get(), "input.connect.timeout", "60000"); // 1 min
+
+    hdfsBuilderSetNameNode(builder.get(), host.c_str());
+    hdfsBuilderSetNameNodePort(builder.get(), port);
+    hdfsBuilderSetUserName(builder.get(), hdfs_user.c_str());
+    return builder;
+}
+
 
 }
 

@@ -22,6 +22,15 @@ namespace DB
 
 namespace detail
 {
+
+    struct HDFSBuilderDeleter
+    {
+        void operator()(hdfsBuilder * builder_ptr)
+        {
+            hdfsFreeBuilder(builder_ptr);
+        }
+    };
+
     struct HDFSFsDeleter
     {
         void operator()(hdfsFS fs_ptr)
@@ -92,8 +101,63 @@ private:
     bool need_kinit{false};
 };
 
+using HDFSBuilderPtr = std::unique_ptr<hdfsBuilder, detail::HDFSBuilderDeleter>;
 using HDFSFSPtr = std::unique_ptr<std::remove_pointer_t<hdfsFS>, detail::HDFSFsDeleter>;
 
+/**
+ * Bytedance hdfs related
+ */
+std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy);
+HDFSBuilderPtr createHDFSBuilder(const Poco::URI & hdfs_uri, const std::string hdfs_user = "clickhouse", const std::string = "nnproxy");
+
+/**
+ * Set of know broken HDFS name node with ttl info
+ */
+class TTLBrokenNameNodes
+{
+public:
+    using TTLNameNode = std::pair<std::string, time_t>;
+    // default ttl is two hours
+    TTLBrokenNameNodes(size_t ttl_ = 7200):ttl(ttl_){}
+
+    std::mutex nnMutex;
+
+    void insert(const std::string& namenode)
+    {
+        std::unique_lock lock(nnMutex);
+        time_t current_time = time(nullptr);
+        // pop out node while ttl expired
+        auto it = nns.find(namenode);
+        if (it == nns.end())
+        {
+            nns.emplace(namenode, current_time);
+        }
+        else
+        {
+            it->second = current_time;
+        }
+    }
+
+    bool isBrokenNN(const std::string& namenode)
+    {
+        std::unique_lock lock(nnMutex);
+        time_t current_time = time(nullptr);
+        auto it = nns.find(namenode);
+        if (it == nns.end()) return false;
+        if (it->second + time_t(ttl) > current_time)
+        {
+            nns.erase(it);
+            return false;
+        }
+        return true;
+    }
+
+private:
+    size_t ttl;
+    std::unordered_map<std::string, time_t>  nns;
+};
+
+static TTLBrokenNameNodes brokenNNs; // NameNode blacklist
 
 // set read/connect timeout, default value in libhdfs3 is about 1 hour, and too large
 /// TODO Allow to tune from query Settings.

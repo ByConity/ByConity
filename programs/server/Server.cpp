@@ -56,6 +56,7 @@
 #include <Access/AccessControlManager.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Functions/registerFunctions.h>
 #include <TableFunctions/registerTableFunctions.h>
@@ -925,6 +926,32 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t disk_uki_data_cache_size = config().getUInt64("disk_unique_key_index_data_cache_size", 1073741824); /// 1GB
     global_context->setDiskUniqueKeyIndexCache(disk_uki_meta_cache_size, disk_uki_file_cache_size);
     global_context->setDiskUniqueKeyIndexBlockCache(disk_uki_data_cache_size);
+
+#if USE_HDFS
+    /// Init hdfs user
+    std::string hdfs_user = config().getString("hdfs_user", "clickhouse");
+    global_context->setHdfsUser(hdfs_user);
+    std::string hdfs_nnproxy = config().getString("hdfs_nnproxy", "nnproxy");
+    global_context->setHdfsNNProxy(hdfs_nnproxy);
+
+    /// Init HDFS3 client config path
+    std::string hdfs_config = config().getString("hdfs3_config", "");
+    if (!hdfs_config.empty())
+    {
+        setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
+    }
+
+    /// TODO: @pengxindong
+    /// register default hdfs file system
+    // if (has_hdfs_path)
+    // {
+    //     const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
+    //     const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
+    //     const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
+    //     registerDefaultHdfsFileSystem(hdfs_user, hdfs_nnproxy, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    // }
+
+#endif
 
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;

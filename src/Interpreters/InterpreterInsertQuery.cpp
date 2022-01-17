@@ -8,8 +8,12 @@
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
+#include <DataStreams/SquashingBlockInputStream.h>
+#include <DataStreams/UnionBlockInputStream.h>
+#include <DataStreams/OwningBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/SnappyReadBuffer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Parsers/ASTFunction.h>
@@ -22,6 +26,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
 #include <Interpreters/QueryLog.h>
@@ -321,6 +326,125 @@ BlockIO InterpreterInsertQuery::execute()
     if (is_distributed_insert_select)
     {
         /// Pipeline was already built.
+    }
+    else if (query.in_file)
+    {
+        // read data stream from in_file, and copy it to out
+        // Special handling in_file based on url type:
+        String uristr = typeid_cast<const ASTLiteral &>(*query.in_file).value.safeGet<String>();
+        // create Datastream based on Format:
+        String format = query.format;
+        if (format.empty())
+            format = getContext()->getDefaultFormat();
+
+        // Assume no query and fragment in uri, todo, add sanity check
+        String fuzzyFileNames;
+        String uriPrefix = uristr.substr(0, uristr.find_last_of('/'));
+        if (uriPrefix.length() == uristr.length())
+        {
+            fuzzyFileNames = uristr;
+            uriPrefix.clear();
+        }
+        else
+        {
+            uriPrefix += "/";
+            fuzzyFileNames = uristr.substr(uriPrefix.length());
+        }
+
+        Poco::URI uri(uriPrefix);
+        String scheme = uri.getScheme();
+
+        BlockInputStreams inputs;
+        // For HDFS inputs with fuzzname, let ReadBufferFromByteHDFS to handle multiple files
+#if USE_HDFS
+        if (scheme == "hdfs")
+        {
+            std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(uristr, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
+            // snappy compression suport
+            if (endsWith(uristr, "snappy"))
+            {
+                if (settings.snappy_format_blocked)
+                {
+                    read_buf = std::make_unique<SnappyReadBuffer<true> >(std::move(read_buf));
+                }
+                else
+                {
+                    read_buf = std::make_unique<SnappyReadBuffer<false> >(std::move(read_buf));
+                }
+            }
+            inputs.emplace_back(
+                std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                    getContext()->getInputFormat(format, *read_buf,
+                                           out_streams.at(0)->getHeader(), // sample_block
+                                           settings.max_insert_block_size),
+                    std::move(read_buf)));
+        }
+        else
+#endif
+        {
+            std::vector<String> fuzzyNameList = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',' , 100/* hard coded max files */);
+            std::vector<std::vector<String> > fileNames;
+            for(auto fuzzyName : fuzzyNameList)
+                fileNames.push_back(parseDescription(fuzzyName, 0, fuzzyName.length(), '|', 100));
+
+            for (auto & vecNames : fileNames)
+            {
+                for (auto & name: vecNames)
+                {
+                    std::unique_ptr<ReadBuffer> read_buf = nullptr;
+
+                    if (scheme.empty() || scheme == "file")
+                    {
+                        read_buf = std::make_unique<ReadBufferFromFile>(Poco::URI(uriPrefix + name).getPath());
+                    }
+#if USE_HDFS
+                    else if (scheme == "hdfs")
+                    {
+                        read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
+                    }
+#endif
+                    else
+                    {
+                        throw Exception("URI scheme " + scheme + " is not supported with insert statement yet", ErrorCodes::NOT_IMPLEMENTED);
+                    }
+
+                    // snappy compression suport
+                    if (endsWith(name, "snappy"))
+                    {
+                        if (settings.snappy_format_blocked)
+                        {
+                            read_buf = std::make_unique<SnappyReadBuffer<true> >(std::move(read_buf));
+                        }
+                        else
+                        {
+                            read_buf = std::make_unique<SnappyReadBuffer<false> >(std::move(read_buf));
+                        }
+                    }
+                    inputs.emplace_back(
+                            std::make_shared<OwningBlockInputStream<ReadBuffer>>(
+                                getContext()->getInputFormat(format, *read_buf,
+                                    out_streams.at(0)->getHeader(), // sample_block
+                                    settings.max_insert_block_size),
+                                std::move(read_buf)));
+                }
+            }
+        }
+
+        if (inputs.size() == 0)
+            throw Exception("Inputs interpreter error", ErrorCodes::LOGICAL_ERROR);
+
+        auto stream = inputs[0];
+        if (inputs.size() > 1)
+        {
+            // Squash is used to generate larger(less part to merge later)
+            stream = std::make_shared<SquashingBlockInputStream>(
+               std::make_shared<UnionBlockInputStream>(inputs, nullptr, settings.max_distributed_connections),
+               settings.min_insert_block_size_rows,
+               settings.min_insert_block_size_bytes);
+        }
+
+        res.in = std::make_shared<NullAndDoCopyBlockInputStream>(stream, out_streams.at(0));
+        res.out = nullptr;
     }
     else if (query.select || query.watch)
     {
