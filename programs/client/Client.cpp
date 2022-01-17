@@ -1632,7 +1632,7 @@ private:
                 insert->tryFindInputFunction(input_function);
 
             /// INSERT query for which data transfer is needed (not an INSERT SELECT or input()) is processed separately.
-            if (insert && (!insert->select || input_function) && !insert->watch)
+            if (insert && (!insert->select || input_function) && !insert->watch && !insert->in_file)
             {
                 if (input_function && insert->format.empty())
                     throw Exception("FORMAT must be specified for function input()", ErrorCodes::INVALID_USAGE_OF_INPUT);
@@ -1756,7 +1756,7 @@ private:
     void processInsertQuery()
     {
         const auto parsed_insert_query = parsed_query->as<ASTInsertQuery &>();
-        if (!parsed_insert_query.data && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
+        if (!parsed_insert_query.data && !parsed_insert_query.in_file && (is_interactive || (!stdin_is_a_tty && std_in.eof())))
             throw Exception("No data to insert", ErrorCodes::NO_DATA_TO_INSERT);
 
         connection->sendQuery(

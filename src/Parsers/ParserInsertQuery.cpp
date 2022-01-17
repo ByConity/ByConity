@@ -34,6 +34,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_select("SELECT");
     ParserKeyword s_watch("WATCH");
     ParserKeyword s_with("WITH");
+    ParserKeyword s_infile("INFILE");
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
@@ -47,6 +48,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr select;
     ASTPtr watch;
     ASTPtr table_function;
+    ASTPtr in_file;
     ASTPtr settings_ast;
     /// Insertion data
     const char * data = nullptr;
@@ -95,6 +97,12 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (!name_p.parse(pos, format, expected))
             return false;
+
+        if (s_infile.ignore(pos, expected))
+        {
+            if (!ParserStringLiteral().parse(pos, in_file, expected))
+                return false;
+        }
     }
     else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
@@ -104,6 +112,11 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         /// FORMAT section is expected if we have input() in SELECT part
         if (s_format.ignore(pos, expected) && !name_p.parse(pos, format, expected))
+            return false;
+    }
+    else if (s_infile.ignore(pos, expected))
+    {
+        if (!ParserStringLiteral().parse(pos, in_file, expected))
             return false;
     }
     else if (s_watch.ignore(pos, expected))
@@ -136,7 +149,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
 
 
-    if (format)
+    if (!in_file && format)
     {
         Pos last_token = pos;
         --last_token;
@@ -185,6 +198,10 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->settings_ast = settings_ast;
     query->data = data != end ? data : nullptr;
     query->end = end;
+    query->in_file = in_file;
+
+    if (in_file)
+        query->data = nullptr;
 
     if (columns)
         query->children.push_back(columns);

@@ -347,6 +347,14 @@ public:
     void setReadyForQuery();
     bool isReadyForQuery() const;
 
+        /// HDFS user
+    void setHdfsUser(const String & name);
+    String getHdfsUser() const;
+
+    /// HDFS nnproxy
+    void setHdfsNNProxy(const String & name);
+    String getHdfsNNProxy() const;
+
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
     /// Global application configuration settings.

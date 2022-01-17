@@ -388,6 +388,9 @@ struct ContextSharedPart
     String tmp_path;                                        /// Path to the temporary files that occur when processing the request.
     mutable VolumePtr tmp_volume;                           /// Volume for the the temporary files that occur when processing the request.
 
+    String hdfsUser; // libhdfs3 user name
+    String hdfsNNProxy; // libhdfs3 namenode proxy
+
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -2971,6 +2974,26 @@ void Context::setReadyForQuery()
 bool Context::isReadyForQuery() const
 {
     return shared->ready_for_query;
+}
+
+void Context::setHdfsUser(const String & name)
+{
+    shared->hdfsUser = name;
+}
+
+String Context::getHdfsUser() const
+{
+    return shared->hdfsUser;
+}
+
+void Context::setHdfsNNProxy(const String & name)
+{
+    shared->hdfsNNProxy = name;
+}
+
+String Context::getHdfsNNProxy() const
+{
+    return shared->hdfsNNProxy;
 }
 
 void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)

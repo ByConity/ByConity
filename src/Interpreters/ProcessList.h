@@ -312,6 +312,9 @@ protected:
     /// Limit network bandwidth for all users
     ThrottlerPtr total_network_throttler;
 
+    /// Limit network bandwidth for hdfs download
+    ThrottlerPtr hdfs_download_network_throttler;
+
     /// Call under lock. Finds process with specified current_user and current_query_id.
     QueryStatus * tryGetProcessListElement(const String & current_query_id, const String & current_user);
 
@@ -344,6 +347,8 @@ public:
     CancellationCode sendCancelToQuery(const String & current_query_id, const String & current_user, bool kill = false);
 
     void killAllQueries();
+
+    ThrottlerPtr getHDFSDownloadThrottler() const { return hdfs_download_network_throttler; }
 };
 
 }
