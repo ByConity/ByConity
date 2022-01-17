@@ -5,7 +5,7 @@
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeBufferedSender.h>
-#include <Processors/Exchange/ExchangeHelpers.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include <Processors/Chunk.h>
@@ -42,7 +42,7 @@ void ExchangeBufferedSender::flush(bool force)
     Chunk chunk(std::move(partition_buffer), rows, std::move(current_chunk_info));
     current_chunk_info = ChunkInfoPtr();
 
-    sendAndCheckReturnStatus(*sender, std::move(chunk));
+    ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
     resetBuffer();
 }
 
@@ -60,7 +60,7 @@ void ExchangeBufferedSender::updateBufferChunkInfo(ChunkInfoPtr chunk_info)
 
 void ExchangeBufferedSender::sendThrough(Chunk chunk)
 {
-    sendAndCheckReturnStatus(*sender, std::move(chunk));
+    ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
 }
 
 void ExchangeBufferedSender::resetBuffer()

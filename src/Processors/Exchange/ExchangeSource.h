@@ -19,7 +19,7 @@ public:
     ~ExchangeSource() override;
 
     IProcessor::Status prepare() override;
-    String getName() const override { return "ExchangeSource"; }
+    String getName() const override;
     void onUpdatePorts() override;
 
 protected:

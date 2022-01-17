@@ -764,7 +764,7 @@ void Pipe::setOutputFormat(ProcessorPtr output)
     header.clear();
 }
 
-void Pipe::transform(const Transformer & transformer)
+void Pipe::transform(const Transformer & transformer, size_t sink_num)
 {
     if (output_ports.empty())
         throw Exception("Cannot transform empty Pipe.", ErrorCodes::LOGICAL_ERROR);
@@ -818,19 +818,28 @@ void Pipe::transform(const Transformer & transformer)
         }
     }
 
-    if (output_ports.empty())
+    if (output_ports.empty() && sink_num == 0)
         throw Exception("Transformation of Pipe is not valid because processors don't have any "
                         "not-connected output ports", ErrorCodes::LOGICAL_ERROR);
+    if (sink_num > 0 && !output_ports.empty())
+    {
+        throw Exception(
+            "Transformation of Pipe is not valid because processors have not-connected output ports and providing sinks",
+            ErrorCodes::LOGICAL_ERROR);
+    }
 
-    header = output_ports.front()->getHeader();
-    for (size_t i = 1; i < output_ports.size(); ++i)
-        assertBlocksHaveEqualStructure(header, output_ports[i]->getHeader(), "Pipe");
+    if (!output_ports.empty())
+    {
+        header = output_ports.front()->getHeader();
+        for (size_t i = 1; i < output_ports.size(); ++i)
+            assertBlocksHaveEqualStructure(header, output_ports[i]->getHeader(), "Pipe");
 
-    if (totals_port)
-        assertBlocksHaveEqualStructure(header, totals_port->getHeader(), "Pipes");
+        if (totals_port)
+            assertBlocksHaveEqualStructure(header, totals_port->getHeader(), "Pipes");
 
-    if (extremes_port)
-        assertBlocksHaveEqualStructure(header, extremes_port->getHeader(), "Pipes");
+        if (extremes_port)
+            assertBlocksHaveEqualStructure(header, extremes_port->getHeader(), "Pipes");
+    }
 
     if (collected_processors)
     {
@@ -840,7 +849,7 @@ void Pipe::transform(const Transformer & transformer)
 
     processors.insert(processors.end(), new_processors.begin(), new_processors.end());
 
-    max_parallel_streams = std::max<size_t>(max_parallel_streams, output_ports.size());
+    max_parallel_streams = std::max<size_t>(max_parallel_streams, std::max(output_ports.size(), sink_num));
 }
 
 void Pipe::setLimits(const StreamLocalLimits & limits)

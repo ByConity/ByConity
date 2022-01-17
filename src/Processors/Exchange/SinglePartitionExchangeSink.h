@@ -34,7 +34,6 @@ private:
     BroadcastSenderPtr sender;
     size_t partition_id;
     size_t column_num;
-    std::atomic<bool> was_finished = false;
     ExchangeOptions options;
     ExchangeBufferedSender buffered_sender;
     Poco::Logger * logger;

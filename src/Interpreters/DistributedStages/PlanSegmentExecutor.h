@@ -38,11 +38,12 @@ private:
     ExchangeOptions options;
     Poco::Logger * logger;
 
-    void addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders, bool keep_order);
+    void addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders, bool keep_order);
 
-    void addBroadcastExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders);
+    void addBroadcastExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
 
-    void addLoadBalancedExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs senders);
+    void addLoadBalancedExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders);
+
 };
 
 }

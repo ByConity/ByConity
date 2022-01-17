@@ -39,7 +39,6 @@ private:
     BroadcastSenderPtrs senders;
     LoadBalanceSelectorPtr partition_selector;
     Poco::Logger * logger;
-    std::atomic<bool> was_finished = false;
 };
 
 }

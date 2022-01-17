@@ -39,8 +39,9 @@ void RepartitionTransform::transform(Chunk & chunk)
 
     std::tie(partition_selector, partition_start_points)
         = doRepartition(partition_num, chunk, getInputPort().getHeader(), {}, repartition_func, REPARTITION_FUNC_RESULT_TYPE);
-    ChunkInfoPtr repartion_info = std::make_shared<RepartitionChunkInfo>(std::move(partition_selector), std::move(partition_start_points));
-    chunk.setChunkInfo(repartion_info);
+    ChunkInfoPtr repartion_info = std::make_shared<RepartitionChunkInfo>(
+        std::move(partition_selector), std::move(partition_start_points), std::move(chunk.getChunkInfo()));
+    chunk.setChunkInfo(std::move(repartion_info));
 }
 
 std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> RepartitionTransform::doRepartition(

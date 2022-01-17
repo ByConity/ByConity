@@ -22,7 +22,7 @@ public:
     BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
     void merge(IBroadcastSender && /*sender*/) override;
     String getName() const override;
-
+    BroadcastSenderType getType() override;
     void accept(ContextPtr context_, Block header_);
     void waitAccept(UInt32 /*timeout_ms*/);
 
@@ -46,6 +46,8 @@ private:
     ContextPtr context;
     Block header;
     BroadcastSenderPtr real_sender;
+
+    UInt32 wait_timeout_ms;
 
     Poco::Logger * logger;
 };

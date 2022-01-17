@@ -94,7 +94,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
     }
     else
     {
-        LOG_WARNING(
+        LOG_TRACE(
             logger, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
         delete new_status_ptr;
         return *current_status_ptr;

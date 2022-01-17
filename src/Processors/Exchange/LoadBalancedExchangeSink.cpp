@@ -6,7 +6,7 @@
 #include <common/types.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
-#include <Processors/Exchange/ExchangeHelpers.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 
 namespace DB
@@ -39,23 +39,19 @@ LoadBalancedExchangeSink::~LoadBalancedExchangeSink() = default;
 
 void LoadBalancedExchangeSink::consume(Chunk chunk)
 {
-    sendAndCheckReturnStatus(*senders[partition_selector->selectNext()], std::move(chunk));
+    ExchangeUtils::sendAndCheckReturnStatus(*senders[partition_selector->selectNext()], std::move(chunk));
 }
 
 void LoadBalancedExchangeSink::onFinish()
 {
     LOG_TRACE(logger, "LoadBalancedExchangeSink finish");
-    was_finished = true;
 }
 
 void LoadBalancedExchangeSink::onCancel()
 {
     LOG_TRACE(logger, "LoadBalancedExchangeSink cancel");
-    if (!was_finished)
-    {
-        for (const BroadcastSenderPtr & sender : senders)
-            sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
-    }
+    for (const BroadcastSenderPtr & sender : senders)
+        sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
 }
 
 }

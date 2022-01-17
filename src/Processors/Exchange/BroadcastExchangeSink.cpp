@@ -3,7 +3,7 @@
 
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
-#include <Processors/Exchange/ExchangeHelpers.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Processors/ISink.h>
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -22,26 +22,25 @@ BroadcastExchangeSink::~BroadcastExchangeSink() = default;
 
 void BroadcastExchangeSink::consume(Chunk chunk)
 {
-    for (auto & sender: senders)
+    for (size_t i = 0; i < senders.size() - 1; ++i)
     {
-        sendAndCheckReturnStatus(*sender, chunk.clone());
+        ExchangeUtils::sendAndCheckReturnStatus(*senders[i], chunk.clone());
     }
+    ExchangeUtils::sendAndCheckReturnStatus(*senders.back(), std::move(chunk));
 }
 
 void BroadcastExchangeSink::onFinish()
 {
     LOG_TRACE(logger, "BroadcastExchangeSink finish");
-    was_finished = true;
 }
 
 void BroadcastExchangeSink::onCancel()
 {
     LOG_TRACE(logger, "BroadcastExchangeSink cancel");
-    if (!was_finished)
+
+    for (auto & sender : senders)
     {
-        for(auto & sender: senders){
-            sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
-        }
+        sender->finish(BroadcastStatusCode::SEND_CANCELLED, "Cancelled by pipeline");
     }
 }
 

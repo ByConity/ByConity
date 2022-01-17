@@ -32,6 +32,11 @@ ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, Ex
 
 ExchangeSource::~ExchangeSource() = default;
 
+String ExchangeSource::getName() const
+{
+    return "ExchangeSource: " + receiver->getName();
+}
+
 IProcessor::Status ExchangeSource::prepare()
 {
     const auto & status = SourceWithProgress::prepare();
@@ -57,7 +62,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     if (std::holds_alternative<Chunk>(packet))
     {
         Chunk chunk = std::move(std::get<Chunk>(packet));
-        LOG_TRACE(logger, "Receive chunk with rows: {}", chunk.getNumRows());
+        LOG_TRACE(logger, "{} receive chunk with rows: {}", getName(), chunk.getNumRows());
         return std::make_optional(std::move(chunk));
     }
     const auto & status = std::get<BroadcastStatus>(packet);
@@ -66,7 +71,8 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     if (status.is_modifer && status.code > 0)
     {
         throw Exception(
-            "Fail to receive data: " + status.message + " code: " + std::to_string(status.code), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+            getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
+            ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 
     return std::nullopt;
@@ -74,7 +80,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
 void ExchangeSource::onCancel()
 {
-    LOG_TRACE(logger, "ExchangeSource onCancel");
+    LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
     was_query_canceled = true;
     receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }

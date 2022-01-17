@@ -21,14 +21,17 @@ public:
 
     BroadcastStatus send(Chunk chunk) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
-    void merge(IBroadcastSender && /*sender*/) override;
+
+    /// Merge another BrpcRemoteBroadcastSender to this sender, to simplify code, we assume that there is no member method is called concurrently
+    void merge(IBroadcastSender && sender) override;
     String getName() const override;
+    BroadcastSenderType getType() override { return BroadcastSenderType::Brpc; }
     BroadcastStatus sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key);
     butil::IOBuf serializeChunkToIoBuffer(Chunk chunk) const;
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastSender");
-    std::vector<DataTransKeyPtr> trans_keys;
+    DataTransKeyPtrs trans_keys;
     ContextPtr context;
     Block header;
     std::vector<brpc::StreamId> sender_stream_ids;

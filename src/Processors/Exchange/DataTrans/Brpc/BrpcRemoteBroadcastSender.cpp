@@ -14,6 +14,7 @@
 #include <brpc/protocol.h>
 #include <brpc/stream.h>
 #include <bthread/bthread.h>
+#include <Common/Exception.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
@@ -51,7 +52,8 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 
         for (brpc::StreamId sender_stream_id : sender_stream_ids)
         {
-            brpc::StreamClose(sender_stream_id);
+            if(sender_stream_id != brpc::INVALID_STREAM_ID)
+                brpc::StreamClose(sender_stream_id);
         }
     }
     catch (...)
@@ -181,10 +183,10 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
         auto current_status = finish(SEND_TIMEOUT, msg);
         return current_status;
     }
-    LOG_DEBUG(
+    LOG_TRACE(
         log,
-        "Send exchange data size-{} M with data_key-{}, stream-{} retry times:{} cost:{} ms",
-        io_buffer.size() / 1024.0 / 1024.0,
+        "Send exchange data size-{} KB with data_key-{}, stream-{} retry times:{} cost:{} ms",
+        io_buffer.size() / 1024.0,
         data_key,
         stream_id,
         retry_count,
@@ -236,7 +238,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         }
         else
         {
-            LOG_WARNING(
+            LOG_TRACE(
                 log, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
             delete new_status_ptr;
             return *current_status_ptr;
@@ -244,9 +246,16 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
     }
 }
 
-void BrpcRemoteBroadcastSender::merge(IBroadcastSender && /*sender*/)
+void BrpcRemoteBroadcastSender::merge(IBroadcastSender && sender)
 {
-    //TODO
+    BrpcRemoteBroadcastSender * other = dynamic_cast<BrpcRemoteBroadcastSender *>(&sender);
+    if (!other)
+        throw Exception("Sender to merge is not BrpcRemoteBroadcastSender", ErrorCodes::LOGICAL_ERROR);
+    trans_keys.insert(
+        trans_keys.end(), std::make_move_iterator(other->trans_keys.begin()), std::make_move_iterator(other->trans_keys.end()));
+    other->trans_keys.clear();
+    sender_stream_ids.insert(sender_stream_ids.end(), other->sender_stream_ids.begin(), other->sender_stream_ids.end());
+    other->sender_stream_ids.clear();
 }
 
 
