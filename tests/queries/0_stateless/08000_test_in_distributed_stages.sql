@@ -5,6 +5,7 @@ create table test.test_in_local (p_date Date, id Int32, event String) engine = M
 create table test.test_in as test.test_in_local engine = Distributed(test_shard_localhost, test, test_in_local, rand());
 
 set enable_distributed_stages = 1;
+set exchange_enable_force_remote_mode = 1;
 
 insert into test.test_in_local select '2022-01-01', number, 'a' from numbers(3);
 

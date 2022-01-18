@@ -5,6 +5,7 @@ create table test.test_multi_join_local (p_date Date, id Int32, event String) en
 create table test.test_multi_join as test.test_multi_join_local engine = Distributed(test_shard_localhost, test, test_multi_join_local, rand());
 
 set enable_distributed_stages = 1;
+set exchange_enable_force_remote_mode = 1;
 
 select id from test.test_multi_join limit 10;
 select id from test.test_multi_join order by id limit 10;

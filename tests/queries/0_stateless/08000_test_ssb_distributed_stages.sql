@@ -32,6 +32,7 @@ CREATE TABLE ssb.supplier as ssb.supplier_local ENGINE = Distributed(test_shard_
 
 use ssb;
 set enable_distributed_stages = 1;
+set exchange_enable_force_remote_mode = 1;
 
 --Q1.1
 SELECT SUM(LO_EXTENDEDPRICE * LO_DISCOUNT) AS REVENUE

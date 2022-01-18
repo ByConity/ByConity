@@ -5,6 +5,7 @@ create table test.test_subquery_local (p_date Date, id Int32, event String) engi
 create table test.test_subquery as test.test_subquery_local engine = Distributed(test_shard_localhost, test, test_subquery_local, rand());
 
 set enable_distributed_stages = 1;
+set exchange_enable_force_remote_mode = 1;
 
 select id from test.test_subquery limit 10;
 select id from test.test_subquery order by id limit 10;
