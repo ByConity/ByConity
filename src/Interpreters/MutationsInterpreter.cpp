@@ -292,6 +292,9 @@ static NameSet getKeyColumns(const StoragePtr & storage, const StorageMetadataPt
 
     for (const String & col : metadata_snapshot->getColumnsRequiredForSortingKey())
         key_columns.insert(col);
+
+    for (const String & col : metadata_snapshot->getColumnsRequiredForUniqueKey())
+        key_columns.insert(col);
     /// We don't process sample_by_ast separately because it must be among the primary key columns.
 
     if (!merge_tree_data->merging_params.sign_column.empty())

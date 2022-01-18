@@ -52,7 +52,7 @@ struct MutationCommand
     String index_name;
     String projection_name;
 
-    /// For MATERIALIZE INDEX, UPDATE and DELETE.
+    /// For MATERIALIZE INDEX, UPDATE and DELETE/FASTDELETE.
     ASTPtr partition;
 
     /// For CLEAR MAP KEYS
@@ -68,6 +68,9 @@ struct MutationCommand
     /// Column rename_to
     String rename_to;
 
+    /// For FASTDELETE columns
+    ASTPtr columns;
+
     /// If parse_alter_commands, than consider more Alter commands as mutation commands
     static std::optional<MutationCommand> parse(ASTAlterCommand * command, bool parse_alter_commands = false);
 };
@@ -82,6 +85,8 @@ public:
 
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);
+
+    bool isFastDelete() const;
 };
 
 }

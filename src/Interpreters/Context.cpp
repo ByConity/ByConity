@@ -3020,6 +3020,20 @@ String Context::getHdfsNNProxy() const
     return shared->hdfsNNProxy;
 }
 
+void Context::setDeleteBitmapCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+    if (shared->delete_bitmap_cache)
+        throw Exception("Delete bitmap cache has been already created", ErrorCodes::LOGICAL_ERROR);
+    shared->delete_bitmap_cache = std::make_shared<DeleteBitmapCache>(cache_size_in_bytes);
+}
+
+DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
+{
+    auto lock = getLock();
+    return shared->delete_bitmap_cache;
+}
+
 void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
 {
     auto lock = getLock();

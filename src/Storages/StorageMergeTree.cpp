@@ -943,6 +943,8 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
 
         size_t current_ast_elements = 0;
         size_t mutation_version = 0;
+        /// multiple commands can be scheduled to execute at once, except for fastdelete
+        /// TODO: support executing fastdelete together with other commands
         for (auto it = mutations_begin_it; it != mutations_end_it; ++it)
         {
             size_t commands_size = 0;
@@ -983,9 +985,17 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
             if (current_ast_elements + commands_size >= max_ast_elements)
                 break;
 
+            /// executing fast delete with other commands at once is not supported right now
+            const bool is_fastdelete = it->second.commands.isFastDelete();
+            if (is_fastdelete && !commands.empty())
+                break;
+
             current_ast_elements += commands_size;
             commands.insert(commands.end(), it->second.commands.begin(), it->second.commands.end());
             mutation_version = it->first;
+
+            if (is_fastdelete)
+                break;
         }
 
         if (!commands.empty())

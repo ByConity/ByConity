@@ -2182,9 +2182,15 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 }
 
 
-void MergeTreeData::checkMutationIsPossible(const MutationCommands & /*commands*/, const Settings & /*settings*/) const
+void MergeTreeData::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
 {
-    /// Some validation will be added
+    int num_fast_deletes = 0;
+    for (auto & command : commands)
+        num_fast_deletes += command.type == MutationCommand::Type::FAST_DELETE;
+    if (num_fast_deletes > 1)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute multiple FASTDELETE commands");
+    if (num_fast_deletes && commands.size() != 1)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE with other commands");
 }
 
 MergeTreeDataPartType MergeTreeData::choosePartType(size_t bytes_uncompressed, size_t rows_count) const

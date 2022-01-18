@@ -67,6 +67,11 @@ ASTPtr ASTAlterCommand::clone() const
         res->rename_to = rename_to->clone();
         res->children.push_back(res->rename_to);
     }
+    if (columns)
+    {
+        res->columns = columns->clone();
+        res->children.push_back(res->columns);
+    }
 
     return res;
 }
@@ -371,6 +376,22 @@ void ASTAlterCommand::formatImpl(
         }
 
         settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::FAST_DELETE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FASTDELETE " << (settings.hilite ? hilite_none : "");
+        if (columns)
+        {
+            columns->formatImpl(settings, state, frame);
+            settings.ostr << settings.nl_or_ws;
+        }
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "WHERE " << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
     }
     else if (type == ASTAlterCommand::UPDATE)

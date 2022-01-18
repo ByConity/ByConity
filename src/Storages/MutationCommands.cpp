@@ -38,6 +38,16 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         return res;
     }
+    else if (command->type == ASTAlterCommand::FAST_DELETE)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = FAST_DELETE;
+        res.predicate = command->predicate;
+        res.partition = command->partition;
+        res.columns = command->columns;
+        return res;
+    }
     else if (command->type == ASTAlterCommand::UPDATE)
     {
         MutationCommand res;
@@ -201,6 +211,11 @@ void MutationCommands::readText(ReadBuffer & in)
             throw Exception("Unknown mutation command type: " + DB::toString<int>(command_ast->type), ErrorCodes::UNKNOWN_MUTATION_COMMAND);
         push_back(std::move(*command));
     }
+}
+
+bool MutationCommands::isFastDelete() const
+{
+    return std::all_of(begin(), end(), [](const MutationCommand & c) { return c.type == MutationCommand::Type::FAST_DELETE; });
 }
 
 }
