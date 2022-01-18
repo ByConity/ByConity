@@ -88,5 +88,6 @@ void registerDataTypeDomainIPv4AndIPv6(DataTypeFactory & factory);
 void registerDataTypeDomainSimpleAggregateFunction(DataTypeFactory & factory);
 void registerDataTypeDomainGeo(DataTypeFactory & factory);
 void registerDataTypeBitMap64(DataTypeFactory & factory);
+void registerDataTypeSet(DataTypeFactory & factory);
 
 }

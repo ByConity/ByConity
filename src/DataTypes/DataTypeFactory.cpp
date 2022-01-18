@@ -210,6 +210,7 @@ DataTypeFactory::DataTypeFactory()
     registerDataTypeDomainIPv4AndIPv6(*this);
     registerDataTypeDomainSimpleAggregateFunction(*this);
     registerDataTypeDomainGeo(*this);
+    registerDataTypeSet(*this);
 #ifdef USE_COMMUNITY_MAP
     registerDataTypeMap(*this);
 #else

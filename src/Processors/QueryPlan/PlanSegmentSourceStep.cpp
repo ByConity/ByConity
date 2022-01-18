@@ -33,6 +33,8 @@ PlanSegmentSourceStep::PlanSegmentSourceStep(Block header_,
     , num_streams(num_streams_)
     , context(std::move(context_))
 {
+    // std::cout<<" PlanSegmentSourceStep header: " << header_.dumpStructure() << std::endl;
+    // std::cout<<" PlanSegmentSourceStep processed_stage: " << QueryProcessingStage::toString(processed_stage) << std::endl;
 }
 
 void PlanSegmentSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)

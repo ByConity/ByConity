@@ -20,7 +20,8 @@ class Context;
 class IFunctionBase;
 using FunctionBasePtr = std::shared_ptr<IFunctionBase>;
 
-
+class Set;
+using SetPtr = std::shared_ptr<Set>;
 /** Data structure for implementation of IN expression.
   */
 class Set
@@ -70,8 +71,9 @@ public:
     bool areTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
     void checkTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
 
-    // void serialize(WriteBuffer & buf) const;
-    // void deserialize(ReadBuffer & buf);
+    void serialize(WriteBuffer & buf) const;
+    void deserializeImpl(ReadBuffer & buf);
+    static SetPtr deserialize(ReadBuffer & buf);
 
 private:
     size_t keys_size = 0;
@@ -115,6 +117,9 @@ private:
 
     /// Check if set contains all the data.
     bool is_created = false;
+
+    /// local header for distributed stages.
+    Block local_header;
 
     /// If in the left part columns contains the same types as the elements of the set.
     void executeOrdinary(
@@ -169,7 +174,6 @@ private:
         ConstNullMapPtr null_map) const;
 };
 
-using SetPtr = std::shared_ptr<Set>;
 using ConstSetPtr = std::shared_ptr<const Set>;
 using Sets = std::vector<SetPtr>;
 
