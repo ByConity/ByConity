@@ -130,6 +130,13 @@ inline void readStringBinary(std::string & s, ReadBuffer & buf, size_t MAX_STRIN
     buf.readStrict(s.data(), size);
 }
 
+inline void readStringRefBinary(StringRef & s, ReadBuffer & buf, size_t MAX_STRING_SIZE = DEFAULT_MAX_STRING_SIZE)
+{
+    String original_str;
+    readStringBinary(original_str, buf, MAX_STRING_SIZE);
+
+    s = StringRef(original_str.data(), original_str.size());
+}
 
 inline StringRef readStringBinaryInto(Arena & arena, ReadBuffer & buf)
 {
@@ -885,6 +892,7 @@ inline void readBinary(Decimal64 & x, ReadBuffer & buf) { readPODBinary(x, buf);
 inline void readBinary(Decimal128 & x, ReadBuffer & buf) { readPODBinary(x, buf); }
 inline void readBinary(Decimal256 & x, ReadBuffer & buf) { readPODBinary(x.value, buf); }
 inline void readBinary(LocalDate & x, ReadBuffer & buf) { readPODBinary(x, buf); }
+inline void readBinary(StringRef & x, ReadBuffer & buf) { readStringRefBinary(x, buf); }
 inline void readBinary(PairInt64 & x, ReadBuffer & buf)
 {
     readBinary(x.low, buf);

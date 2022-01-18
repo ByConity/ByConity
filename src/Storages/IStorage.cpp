@@ -9,6 +9,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/getHeaderForProcessingStage.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
@@ -136,8 +137,7 @@ void IStorage::read(
     if (distributed_stages)
     {
         //IStorage::read(query_plan, column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
-        auto header = (query_info.projection ? query_info.projection->desc->metadata : metadata_snapshot)
-                          ->getSampleBlockForColumns(column_names, getVirtuals(), getStorageID());
+        auto header = getHeaderForProcessingStage(*this, column_names, metadata_snapshot, query_info, context, processed_stage);
         auto read_step = std::make_unique<PlanSegmentSourceStep>(header,
                                                               getStorageID(), 
                                                               query_info,

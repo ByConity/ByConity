@@ -217,7 +217,15 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 
 //    MockTestQuery(plan_segment_tree.get(), context);
 
-    PlanSegmentsStatusPtr scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getClientInfo().initial_query_id, plan_segment_tree.get(), context);
+    PlanSegmentsStatusPtr scheduler_status;
+    
+    if (plan_segment_tree->getNodes().size() > 1)
+        scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getClientInfo().initial_query_id, plan_segment_tree.get(), context);
+    else
+    {
+        scheduler_status = std::make_shared<PlanSegmentsStatus>();
+        scheduler_status->is_final_stage_start = true;
+    }
 
     if (!scheduler_status)
         throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);

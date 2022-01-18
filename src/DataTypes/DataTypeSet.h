@@ -1,8 +1,8 @@
 #pragma once
 
 #include <DataTypes/IDataTypeDummy.h>
+#include <DataTypes/Serializations/SerializationSet.h>
 #include <Columns/ColumnSet.h>
-
 
 namespace DB
 {
@@ -24,6 +24,8 @@ public:
 
     // Used only for debugging, making it DUMPABLE
     Field getDefault() const override { return Tuple(); }
+
+    SerializationPtr doGetDefaultSerialization() const override { return std::make_shared<SerializationSet>(); }
 };
 
 }

@@ -434,7 +434,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             }
         }
 
-        if (query.prewhere() && query.where())
+        if (query.prewhere() && query.where() && !options.distributed_stages)
         {
             /// Filter block in WHERE instead to get better performance
             query.setExpression(
@@ -578,10 +578,11 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     }
 
     LOG_TRACE(log, "query: " + queryToString(query));
-    std::ostringstream ostr;
-    for (auto & c : required_columns)
-        ostr << c << ", ";
-    LOG_TRACE(log, "required_columns: " + ostr.str());
+    // std::ostringstream ostr;
+    // for (auto & c : required_columns)
+    //     ostr << c << ", ";
+    // LOG_TRACE(log, "required_columns: " + ostr.str());
+    // LOG_TRACE(log, "result_header: " + result_header.dumpStructure());
     /// Blocks used in expression analysis contains size 1 const columns for constant folding and
     ///  null non-const columns to avoid useless memory allocations. However, a valid block sample
     ///  requires all columns to be of size 0, thus we need to sanitize the block here.

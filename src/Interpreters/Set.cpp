@@ -16,6 +16,8 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 
+#include <Processors/QueryPlan/PlanSerDerHelper.h>
+
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
@@ -23,6 +25,9 @@
 #include <Interpreters/sortBlock.h>
 #include <Interpreters/castColumn.h>
 #include <Interpreters/Context.h>
+
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <Storages/MergeTree/KeyCondition.h>
 
@@ -107,6 +112,8 @@ void Set::setHeader(const Block & header)
 
     if (!data.empty())
         return;
+
+    local_header = header;
 
     keys_size = header.columns();
     ColumnRawPtrs key_columns;
@@ -401,6 +408,65 @@ void Set::checkTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) c
                         + other_type->getName() + " on the left, "
                         + data_types[set_type_idx]->getName() + " on the right", ErrorCodes::TYPE_MISMATCH);
 }
+
+void Set::serialize(WriteBuffer & buf) const
+{
+
+    limits.serialize(buf);
+    writeBinary(fill_set_elements, buf);
+    writeBinary(transform_null_in, buf);
+
+    serializeBlock(local_header, buf);
+
+    switch (data.type)
+    {
+        case SetVariants::Type::EMPTY:
+            break;
+#define M(NAME) \
+        case SetVariants::Type::NAME: \
+            data.NAME->data.write(buf); \
+            break;
+    APPLY_FOR_SET_VARIANTS(M)
+#undef M
+    }
+
+    writeBinary(is_created, buf);
+}
+
+void Set::deserializeImpl(ReadBuffer & buf)
+{
+    auto header = deserializeBlock(buf);
+    setHeader(header);
+
+    switch (data.type)
+    {
+        case SetVariants::Type::EMPTY:
+            break;
+#define M(NAME) \
+        case SetVariants::Type::NAME: \
+            data.NAME->data.read(buf); \
+            break;
+    APPLY_FOR_SET_VARIANTS(M)
+#undef M
+    }
+
+    readBinary(is_created, buf);
+}
+
+SetPtr Set::deserialize(ReadBuffer & buf)
+{
+    SizeLimits limits;
+    bool fill_set_elements_tmp;
+    bool transform_null_in_tmp;
+    limits.deserialize(buf);
+    readBinary(fill_set_elements_tmp, buf);
+    readBinary(transform_null_in_tmp, buf);
+
+    auto set = std::make_shared<Set>(limits, fill_set_elements_tmp, transform_null_in_tmp);
+    set->deserializeImpl(buf);
+    return set;
+}
+
 
 MergeTreeSetIndex::MergeTreeSetIndex(const Columns & set_elements, std::vector<KeyTuplePositionMapping> && index_mapping_)
     : indexes_mapping(std::move(index_mapping_))
