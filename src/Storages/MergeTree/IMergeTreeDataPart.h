@@ -482,7 +482,8 @@ public:
     /// If uki type is "UNKNOWN", change it to either "MEMORY" or "DISK" depending on whether uki file exists.
     UniqueKeyIndexPtr getUniqueKeyIndex() const;
 
-    UniqueRowStorePtr getUniqueRowStore() const;
+    /// If row store file exists, return row store. Otherwise, return nullptr.
+    UniqueRowStorePtr tryGetUniqueRowStore() const;
 
     /// If `key' is found, return true and set its corresponding `rowid' and optional `version' and `is_offline'.
     /// Otherwise return false.

@@ -1607,6 +1607,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     return new_data_part;
 }
 
+/// FIXME: merge row store with parts who don't have row store
 void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
         const FutureMergedMutatedPart & future_part,
         const PartIdMapping & part_id_mapping,
@@ -1624,7 +1625,13 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
     UniqueRowStoreVector row_store_holders;
     row_store_holders.reserve(parts.size());
     for (auto & part : parts)
-        row_store_holders.push_back(part->getUniqueRowStore());
+    {
+        UniqueRowStorePtr row_store = part->tryGetUniqueRowStore();
+        /// TODO(lta): suport merge row store with parts who don't have row store
+        if (!row_store)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Row store of part {} is not exists, not support to merge row store with old version part.", part->name);
+        row_store_holders.push_back(row_store);
+    }
     IndexFileIterators row_store_iters;
     row_store_iters.reserve(parts.size());
     for (size_t i = 0; i < parts.size(); ++i)

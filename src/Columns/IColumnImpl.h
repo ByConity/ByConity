@@ -163,25 +163,28 @@ IColumn::Ptr IColumn::replaceFromImpl(
     MutablePtr res = cloneEmpty();
     res->reserve(num_rows);
 
-    size_t start = 0;
+    size_t pos = 0;
     for (size_t i = 0; i < indexes.size(); ++i)
     {
         const size_t index = indexes[i];
-        if (start < index)
+        if (pos < index)
         {
-            static_cast<Derived &>(*res).insertRangeFrom(*this, start, index - start);
-            start = index;
+            static_cast<Derived &>(*res).insertRangeFrom(*this, pos, index - pos);
+            pos = index;
         }
         if constexpr (has_filter)
         {
-            if ((*filter)[start] == 0)
+            if ((*filter)[pos] == 0)
                 continue;
         }
         if constexpr (has_rhs_indexes)
             static_cast<Derived &>(*res).insertFrom(rhs, (*rhs_indexes)[i]);
         else
             static_cast<Derived &>(*res).insertFrom(rhs, i);
+        ++pos;
     }
+    if (pos < num_rows)
+        static_cast<Derived &>(*res).insertRangeFrom(*this, pos, num_rows - pos);
 
     return res;
 }

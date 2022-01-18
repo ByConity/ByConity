@@ -1913,7 +1913,7 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
             {
                 auto & col = block.getByName(column_name);
                 auto serialization = col.type->getDefaultSerialization();
-                serialization->serializeBinary(*col.column, i, buf);
+                serialization->serializeMemComparable(*col.column, i, buf);
             }
             String & key = buf.str();
 
@@ -2342,17 +2342,21 @@ UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
     }
 }
 
-UniqueRowStorePtr IMergeTreeDataPart::getUniqueRowStore() const
+UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
 {
     if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
     {
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "getUniqueRowStore of {} which doesn't have unique key", storage.log_name);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "tryGetUniqueRowStore of {} which doesn't have unique key", storage.log_name);
     }
 
     if (!storage.unique_row_store_cache)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "unique_row_store_cache of {} is nullptr", storage.log_name);
     }
+
+    /// handle the case that parts of old versions which don't have row store file
+    if (!Poco::File(getFullPath() + UNIQUE_ROW_STORE_DATA_NAME).exists())
+        return nullptr;
 
     /// Data part's memory address is used as the cache key.
     String key = getMemoryAddress();

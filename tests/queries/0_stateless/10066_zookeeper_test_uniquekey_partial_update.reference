@@ -1,0 +1,44 @@
+insert with normal mode, using default value
+select replica 1
+1	0	6
+2	0	8
+select replica 2
+1	0	6
+2	0	8
+after merge, insert with normal mode
+select replica 1
+1	4	0
+2	6	0
+select replica 2
+1	4	0
+2	6	0
+
+insert with partial update mode, disable unique row store
+select replica 1
+1	2	6
+2	3	8
+select replica 2
+1	2	6
+2	3	8
+after merge, insert with partial update mode, disable unique row store
+select replica 1
+1	4	6
+2	6	8
+select replica 2
+1	4	6
+2	6	8
+
+insert with partial update mode, enable unique row store
+select replica 1
+1	2	6
+2	3	8
+select replica 2
+1	2	6
+2	3	8
+after merge, insert with partial update mode, enable unique row store
+select replica 1
+1	4	6
+2	6	8
+select replica 2
+1	4	6
+2	6	8

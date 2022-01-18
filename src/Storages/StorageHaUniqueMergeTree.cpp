@@ -552,7 +552,7 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
     }
 
     /// TODO offline node handling
-    if (query_settings.enable_unique_partial_update)
+    if (query_settings.enable_unique_partial_update && settings->enable_unique_partial_update)
         return std::make_shared<HaUniqueMergeTreeBlockOutputStreamV2>(
             *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block);
 

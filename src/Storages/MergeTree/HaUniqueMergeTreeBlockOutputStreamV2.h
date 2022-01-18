@@ -28,6 +28,7 @@ public:
     Block getHeader() const override;
     void writePrefix() override;
     void write(const Block & block) override;
+    void writeSuffix() override;
 
 private:
     size_t removeDupKeys(Block & block, IColumn::Filter & filter);
@@ -42,6 +43,9 @@ private:
 
     void readColumnsFromStorage(const MergeTreeData::DataPartPtr & part, RowidPairs & rowid_pairs,
         Block & to_block, PaddedPODArray<UInt32> & to_block_rowids);
+
+    void readColumnsFromRowStore(const MergeTreeData::DataPartPtr & part, RowidPairs & rowid_pairs,
+        Block & to_block, PaddedPODArray<UInt32> & to_block_rowids, const UniqueRowStorePtr & row_store);
 
     /// existing part -> rowid bitmap of new deletes
     using PartsWithDeleteRows = std::map<MergeTreeData::DataPartPtr, Roaring, MergeTreeData::LessDataPart>;
@@ -59,8 +63,14 @@ private:
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
     size_t max_parts_per_block;
+    bool allow_materialized;
     using Logger = Poco::Logger;
     Logger * log;
+    bool need_forward;
+    /// useful only in forward-to-leader mode (need_forward == true)
+    String leader_name;
+    ConnectionPtr remote_conn;
+    BlockOutputStreamPtr remote_stream;
 };
 
 }

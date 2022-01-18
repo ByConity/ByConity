@@ -585,7 +585,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
         {
             auto & col = block.getByName(col_name);
             auto serialization = col.type->getDefaultSerialization();
-            serialization->serializeBinary(*col.column, rowid, buf);
+            serialization->serializeMemComparable(*col.column, rowid, buf);
         }
         String & key = buf.str();
 

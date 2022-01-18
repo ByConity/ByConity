@@ -1107,6 +1107,9 @@ bool StorageHaKafka::streamToViews(const Names & /*required_column_names*/, size
     auto consume_context = Context::createCopy(getContext());
     consume_context->makeQueryContext();
     consume_context->setSetting("min_insert_block_size_rows", UInt64(1));
+    /// judge whether to use partial update mode for unique table
+    bool is_unique_table = table->getName() == "HaUniqueMergeTree";
+    consume_context->setSetting("enable_unique_partial_update", is_unique_table && settings.enable_unique_partial_update);
     consume_context->applySettingsChanges(settings_adjustments);
 
     try

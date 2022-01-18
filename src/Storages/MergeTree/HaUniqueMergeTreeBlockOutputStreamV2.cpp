@@ -4,10 +4,14 @@
 
 // for reading rows from storage
 #include <DataStreams/IBlockStream_fwd.h>
+#include <DataStreams/RemoteBlockOutputStream.h>
+#include <Parsers/queryToString.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <Processors/Pipe.h>
 #include <Processors/QueryPipeline.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include <Storages/IndexFile/Iterator.h>
+#include <Common/Endian.h>
 
 
 namespace DB
@@ -18,6 +22,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int READONLY;
     extern const int UNEXPECTED_ZOOKEEPER_ERROR;
+    extern const int REPLICA_STATUS_CHANGED;
 }
 
 namespace
@@ -104,13 +109,60 @@ PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, cons
 
 } /// anonymous namespace
 
+using IndexFileIteratorPtr = std::unique_ptr<IndexFile::Iterator>;
+
 HaUniqueMergeTreeBlockOutputStreamV2::HaUniqueMergeTreeBlockOutputStreamV2(
     StorageHaUniqueMergeTree & storage_, const StorageMetadataPtr & metadata_snapshot_, ContextPtr context_, size_t max_parts_per_block_)
         : storage(storage_)
         , metadata_snapshot(metadata_snapshot_)
         , context(context_), max_parts_per_block(max_parts_per_block_)
+        , allow_materialized(context->getSettingsRef().insert_allow_materialized_columns)
         , log(&Logger::get(storage.getLogName() + " (BlockOutputStream)"))
-{}
+        , need_forward(!storage.is_leader)
+{
+    if (need_forward)
+    {
+        HaMergeTreeAddress addr;
+        leader_name = storage.getCachedLeader(&addr);
+        /// cached leader info may be outdated. We should never forward to ourself.
+        if (leader_name.empty() || leader_name == storage.replica_name)
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            throw Exception("Can't forward write because leader is unknown right now", ErrorCodes::READONLY);
+        }
+
+        /// if materialized columns are not allowed in INSERT, we should exclude them in the forward request.
+        /// (note that materialized columns will be computed by AddingDefaultBlockOutputStream in this case)
+        ASTPtr query = RemoteBlockOutputStream::createInsertToRemoteTableQuery(
+            addr.database,
+            addr.table,
+            allow_materialized ? metadata_snapshot_->getSampleBlock(true) : metadata_snapshot_->getSampleBlockNonMaterialized(true));
+        auto query_str = queryToString(query);
+
+        /// FIXME (UNIQUE KEY): Handle the case where password may become empty
+        auto & client_info = context->getClientInfo();
+        String user = client_info.current_user;
+        String password;
+        if (auto address = storage.findClusterAddress(addr); address)
+        {
+            user = address->user;
+            password = address->password;
+        }
+
+        remote_conn = std::make_shared<Connection>(
+            addr.host, addr.queries_port, storage.getStorageID().database_name, user, password,
+            "", "", "RemoteConnection" , Protocol::Compression::Enable, Protocol::Secure::Disable);
+        const Settings & settings = context->getSettingsRef();
+        auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
+        remote_stream = std::make_shared<RemoteBlockOutputStream>(*remote_conn, timeouts, query_str, settings, client_info);
+    }
+    else
+    {
+        storage.assertNotReadonly();
+        if (storage.getUniqueTableState() != UniqueTableState::NORMAL)
+            throw Exception("Can't write to table of state " + toString(storage.getUniqueTableState()), ErrorCodes::REPLICA_STATUS_CHANGED);
+    }
+}
 
 Block HaUniqueMergeTreeBlockOutputStreamV2::getHeader() const
 {
@@ -119,7 +171,10 @@ Block HaUniqueMergeTreeBlockOutputStreamV2::getHeader() const
 
 void HaUniqueMergeTreeBlockOutputStreamV2::writePrefix()
 {
-    storage.delayInsertOrThrowIfNeeded();
+    if (remote_stream)
+        remote_stream->writePrefix();
+    else
+        storage.delayInsertOrThrowIfNeeded();
 }
 
 void HaUniqueMergeTreeBlockOutputStreamV2::write(const Block & block)
@@ -132,6 +187,20 @@ void HaUniqueMergeTreeBlockOutputStreamV2::write(const Block & block)
 
     if (!block)
         return;
+
+    if (remote_stream)
+    {
+        /// RemoteBlockOutputStream::write requires block structure to be the same with its header.
+        /// If block comes from materialized view, the order of columns could be different from the header.
+        /// therefore we prepare a new block to
+        /// 1. re-order columns according to the header
+        /// 2. remove materialized columns when allow_materialized == false
+        auto required_columns = remote_stream->getHeader().getNamesAndTypesList();
+        Block new_block;
+        for (auto & column : required_columns)
+            new_block.insert(block.getByName(column.name));
+        return remote_stream->write(new_block);
+    }
 
     /// in order to abort the operation when we lose leadership (zk session expired),
     /// all ZK operation below should use `zookeeper' saved here
@@ -298,6 +367,12 @@ void HaUniqueMergeTreeBlockOutputStreamV2::write(const Block & block)
     }
 }
 
+void HaUniqueMergeTreeBlockOutputStreamV2::writeSuffix()
+{
+    if (remote_stream)
+        remote_stream->writeSuffix();
+}
+
 size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColumn::Filter & filter)
 {
     auto block_size = block.rows();
@@ -379,6 +454,7 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromStorage(
     if (rowid_pairs.empty())
         return;
 
+    Stopwatch timer;
     /// sort by part_rowid so that we can read part sequentially
     std::sort(rowid_pairs.begin(), rowid_pairs.end(), [](auto & lhs, auto & rhs) { return lhs.part_rowid < rhs.part_rowid; });
 
@@ -422,6 +498,98 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromStorage(
 
     for (auto & pair : rowid_pairs)
         to_block_rowids.push_back(pair.block_rowid);
+
+    LOG_DEBUG(log, "Query for {} rows in data part {} from storage, cost {} ms", rowid_pairs.size(), part->name, timer.elapsedMilliseconds());
+}
+
+void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
+    const MergeTreeData::DataPartPtr & part,
+    RowidPairs & rowid_pairs,
+    Block & to_block,
+    PaddedPODArray<UInt32> & to_block_rowids,
+    const UniqueRowStorePtr & row_store)
+{
+    if (rowid_pairs.empty())
+        return;
+
+    Stopwatch timer;
+    /// sort by part_rowid so that we can read row store sequentially
+    std::sort(rowid_pairs.begin(), rowid_pairs.end(), [](auto & lhs, auto & rhs) { return lhs.part_rowid < rhs.part_rowid; });
+
+    DeleteBitmapPtr delete_bitmap (new Roaring);
+    for (auto & pair : rowid_pairs)
+        const_cast<Roaring &>(*delete_bitmap).add(pair.part_rowid);
+    const_cast<Roaring &>(*delete_bitmap).flip(0, part->rows_count);
+
+    IndexFile::ReadOptions opts;
+    opts.fill_cache = true;
+    IndexFileIteratorPtr iter;
+    if (!delete_bitmap->isEmpty())
+    {
+        opts.select_predicate = [bitmap = std::move(delete_bitmap)](const Slice & key, const Slice &)
+        {
+            /// handle mem comparable of key
+            size_t rowid;
+            ReadBufferFromMemory buffer(key.data(), sizeof(size_t));
+            readBinary(rowid, buffer);
+            rowid = Endian::big(rowid);
+            /// TODO: handle corrupt data in a better way.
+            /// E.g., make select_predicate return Status in order to propogate the error to the client
+            return !bitmap->contains(rowid);
+        };
+    }
+    iter = row_store->new_iterator(opts);
+    iter->SeekToFirst();
+
+    const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
+    for (auto & pair : rowid_pairs)
+    {
+        size_t row = pair.part_rowid;
+        row = Endian::big(row);
+        WriteBufferFromOwnString row_buf;
+        writeBinary(row, row_buf);
+        String key = row_buf.str();
+
+        /// method 1
+        // iter->Seek(key);
+        // if (!iter->Valid() || IndexFile::BytewiseComparator()->Compare(key, iter->key()) != 0)
+        // {
+        //     throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row {} from row store in data part {}", pair.part_rowid, part->name);
+        // }
+
+        /// method 2
+        bool exact_match = false;
+        int cmp = comparator->Compare(key, iter->key());
+        if (cmp > 0)
+            iter->NextUntil(key, exact_match);
+        else if (cmp == 0)
+            exact_match = true;
+        
+        if (!exact_match)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row {} from row store in data part {}", pair.part_rowid, part->name);
+
+        std::vector<SerializationPtr> serializations;
+        /// TODO(lta): check serializations
+        for (const auto & column: to_block.getNamesAndTypesList())
+            serializations.emplace_back(column.type->getDefaultSerialization());
+
+        /// TODO(lta): check if metadata is match
+        Slice value = iter->value();
+        ReadBufferFromMemory buffer(value.data(), value.size());
+        for (size_t i = 0, size = to_block.columns(); i < size; ++i)
+        {
+            /// TODO(lta): more effecient impl
+            auto mutable_column = IColumn::mutate(std::move(to_block.getByPosition(i).column));
+            Field val;
+            serializations[i]->deserializeBinary(val, buffer);
+            mutable_column->insert(val);
+
+            to_block.getByPosition(i).column = std::move(mutable_column);
+        }
+
+        to_block_rowids.push_back(pair.block_rowid);
+    }
+    LOG_DEBUG(log, "Query for {} rows in data part {} from row store, cost {} ms", rowid_pairs.size(), part->name, timer.elapsedMilliseconds());
 }
 
 /// TODO:
@@ -484,7 +652,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         {
             auto & col = block.getByName(col_name);
             auto serialization = col.type->getDefaultSerialization();
-            serialization->serializeBinary(*col.column, rowid, buf);
+            serialization->serializeMemComparable(*col.column, rowid, buf);
         }
         String & key = buf.str();
 
@@ -496,6 +664,8 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         {
             continue;
         }
+
+        /// TODO(lta): optimize(skip non partial update row)
         part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid)});
         process_row_deletion(existing_parts[part_index], part_rowid, key);
     }
@@ -510,7 +680,12 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     {
         if (part_rowid_pairs[i].empty())
             continue;
-        readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);
+        
+        UniqueRowStorePtr row_store = existing_parts[i]->tryGetUniqueRowStore();
+        if (row_store)
+            readColumnsFromRowStore(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids, row_store);
+        else
+            readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);
     }
 
     if (!block_rowids.empty())
@@ -526,7 +701,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
 
         for (auto & col : block)
         {
-            if (non_updatable_columns.count(col.name))
+            if (non_updatable_columns.count(col.name) || col.name == StorageInMemoryMetadata::delete_flag_column_name)
                 continue;
 
             ColumnPtr is_default_col = col.column->selectDefault();
