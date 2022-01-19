@@ -20,6 +20,8 @@
 #cmakedefine VERSION_DATE @VERSION_DATE@
 #cmakedefine VERSION_SCM "@VERSION_SCM@"
 
+#cmakedefine KERNEL_VERSION "@KERNEL_VERSION@"
+
 #if defined(VERSION_MAJOR)
 #define DBMS_VERSION_MAJOR VERSION_MAJOR
 #else

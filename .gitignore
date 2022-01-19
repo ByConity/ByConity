@@ -142,6 +142,9 @@ website/package-lock.json
 
 *.iml
 
+package.json
+package-lock.json
+
 # data store
 /programs/server/data
 /programs/server/metadata

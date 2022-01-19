@@ -1,0 +1,44 @@
+{{#each releases}}
+    {{#if href}}
+        ## [{{title}}]({{href}}){{#if tag}} - {{isoDate}}{{/if}}
+    {{else}}
+        ## {{title}}{{#if tag}} - {{isoDate}}{{/if}}
+    {{/if}}
+
+    {{#if summary}}
+        {{summary}}
+    {{/if}}
+
+    {{#commit-list merges heading='### Features in MRs' message='^feat\([A-Z]+-(\d+)\)!?:'}}
+        - {{message}} ({{href}})
+    {{/commit-list}}
+
+    {{#commit-list merges heading='### Features in MRs' message='^feat\([a-z]+@(\d+)\)!?:'}}
+        - {{message}} ({{href}})
+    {{/commit-list}}
+
+    {{#commit-list commits heading='### Features in Commits' message='^feat\([A-Z]+-(\d+)\)!?:'}}
+        - {{subject}} [`{{shorthash}}`]({{href}})
+    {{/commit-list}}
+
+    {{#commit-list commits heading='### Features in Commits' message='^feat\([a-z]+@(\d+)\)!?:'}}
+        - {{subject}} [`{{shorthash}}`]({{href}})
+    {{/commit-list}}
+
+    {{#commit-list merges heading='### Fixes in MRs' message='^fix\([A-Z]+-(\d+)\)!?:'}}
+        - {{message}} ({{href}})
+    {{/commit-list}}
+
+    {{#commit-list merges heading='### Fixes in MRs' message='^fix\([a-z]+@(\d+)\)!?:'}}
+        - {{message}} ({{href}})
+    {{/commit-list}}
+
+    {{#commit-list commits heading='### Fixes in Commits' message='^fix\([A-Z]+-(\d+)\)!?:'}}
+        - {{subject}} [`{{shorthash}}`]({{href}})
+    {{/commit-list}}
+
+    {{#commit-list commits heading='### Fixes in Commits' message='^fix\([a-z]+@(\d+)\)!?:'}}
+        - {{subject}} [`{{shorthash}}`]({{href}})
+    {{/commit-list}}
+
+{{/each}}

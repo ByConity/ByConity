@@ -5,14 +5,18 @@ set -x
 
 export PATH=`echo $PATH | sed -e 's/:\/opt\/tiger\/typhoon-blade//'`
 
+python3 ./utils/bytedance-versions/check_scm_version.py ./utils/bytedance-versions/CE.VERSION
+
 auto_git_hash=`git rev-parse HEAD`
 sed -i -- "s/VERSION_GITHASH .*)/VERSION_GITHASH $auto_git_hash)/g;" cmake/version.cmake
 
 if [ -n "$BUILD_VERSION" ]; then
-    SEMVER_VERSION="2.0.0"
-    PRODUCT_NAME="vc"
+    PRODUCT_NAME=`cat utils/bytedance-versions/PRODUCT_NAME`
+    SEMVER_VERSION=`cat utils/bytedance-versions/CE.VERSION`
+    KERNEL_VERSION=`uname -v`
 
     sed -i -- "s/VERSION_SCM .*)/VERSION_SCM $PRODUCT_NAME-$SEMVER_VERSION\/$BUILD_VERSION)/g;" cmake/version.cmake
+    sed -i -- "s/KERNEL_VERSION .*/KERNEL_VERSION \"$KERNEL_VERSION\")/g;" cmake/version.cmake
     # GENERATE tag
     curl -I -u wujian.1415:d47698a25104dbb0fd6a98888b5e2c9e "https://old-ci.byted.org/job/ch_debian_tag/buildWithParameters?token=WvgP5dE5KieAMqtcubn2&BUILD_VERSION=${BUILD_VERSION}&BUILD_BASE_COMMIT_HASH=${BUILD_BASE_COMMIT_HASH}"
 fi

@@ -1,0 +1,26 @@
+{
+    "plugins": {
+        "@release-it/bumper": {
+            "in": {
+                "file": "utils/bytedance-versions/CE.VERSION",
+                "type": "text/plain"
+            },
+            "out": {
+                "file": "utils/bytedance-versions/CE.VERSION",
+                "type": "text/plain"
+            }
+        }
+    },
+    "git": {
+        "commitMessage": "chore: release ce-${version}",
+        "tagName": "ce-${version}"
+    },
+    "hooks": {
+        "after:release":[
+            "npx auto-changelog --prepend -o CHANGELOG.CE.md --template utils/bytedance-versions/auto-changelog.hbs --merge-url https://code.byted.org/dp/ClickHouse/merge_requests/{id} --tag-pattern 'ce-\\d+\\.\\d+\\.\\d+' --starting-version ce-${version}",
+            "python3 utils/bytedance-versions/prune-changelog.py CHANGELOG.CE.md",
+            "git add CHANGELOG.CE.md && git commit -m 'update CHANGELOG.CE.md for ce-${version}'",
+            "git tag -d ce-${version} && git tag ce-${version}"
+        ]
+    }
+}
