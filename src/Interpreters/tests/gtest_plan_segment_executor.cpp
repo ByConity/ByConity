@@ -44,7 +44,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     arguments.push_back(header.getByPosition(2));
     auto func = createRepartitionFunction(getContext().context, arguments);
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);

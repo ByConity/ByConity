@@ -1,12 +1,16 @@
 #include <set>
 #include <time.h>
 #include <Client/Connection.h>
-#include <IO/MemoryReadWriteBuffer.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Parsers/queryToString.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
+#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
@@ -102,9 +106,27 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
         }
 
         /// send cancel query rpc request to all executor except exception original executor
-        // TODO dongyifeng add logic when get status rpc is merged
+        cancelPlanSegmentsFromWorker(query_id, dag_ptr);
     }
     return CancellationCode::CancelSent;
+}
+
+void SegmentScheduler::cancelPlanSegmentsFromWorker(const String & query_id, const DAGGraphPtr dag_ptr)
+{
+    for (const auto & addr: dag_ptr->plan_send_addresses)
+    {
+        auto address = extractExchangeStatusHostPort(addr);
+        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address, false);
+        Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
+        brpc::Controller cntl;
+        Protos::CancelQueryRequest request;
+        Protos::CancelQueryResponse response;
+        request.set_query_id(query_id);
+        request.set_coodinator_address(address);
+        manager.cancelQuery(&cntl, &request, &response, nullptr);
+        rpc_client->assertController(cntl);
+        LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}, ret_code-{}", query_id, extractExchangeHostPort(addr), response.ret_code());
+    }
 }
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)
@@ -143,6 +165,25 @@ String SegmentScheduler::getCurrentDispatchStatus(const String & query_id)
     return status;
 }
 
+void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment_status)
+{
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto query_iter = segment_status_map.find(segment_status.query_id);
+    if (query_iter == segment_status_map.end())
+        segment_status_map[segment_status.query_id] = {};
+
+    auto segment_iter = segment_status_map[segment_status.query_id].find(segment_status.segment_id);
+    if (segment_iter == segment_status_map[segment_status.query_id].end())
+        segment_status_map[segment_status.query_id][segment_status.segment_id] = std::make_shared<RuntimeSegmentsStatus>();
+
+    RuntimeSegmentsStatusPtr status = segment_status_map[segment_status.query_id][segment_status.segment_id];
+    status->query_id = segment_status.query_id;
+    status->segment_id = segment_status.segment_id;
+    status->is_succeed = segment_status.is_succeed;
+    status->is_canceled = segment_status.is_canceled;
+    status->message = segment_status.message;
+    status->code = segment_status.code;
+}
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
 {

@@ -1,20 +1,21 @@
 #pragma once
 
-#include <Core/Types.h>
+#include <unordered_set>
 #include <Core/Block.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/Cluster.h>
+#include <Core/Types.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/CancellationCode.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Parsers/IAST_fwd.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <Common/Stopwatch.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
-#include <unordered_set>
+#include <Common/Stopwatch.h>
 
 #define TASK_ASSIGN_DEBUG
 
@@ -23,17 +24,18 @@ namespace DB
 
 struct PlanSegmentsStatus
 {
-    /// <segment_id, <host_name:port, status>>
     //TODO dongyifeng add when PlanSegmentInfo is merged
-//    std::map<size_t, std::map<String, PlanSegmentInfoPtr>> segment_status_map;
     volatile bool is_final_stage_start = false;
     std::atomic<bool> is_cancel{false};
     String exception;
 };
 
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
+using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
 using Source = std::vector<size_t>;
+// <query_id, <segment_id, status>>
+using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
 
 struct DAGGraph {
     DAGGraph(){}
@@ -65,6 +67,8 @@ struct DAGGraph {
     mutable bthread::Mutex status_mutex;
 };
 
+using DAGGraphPtr = std::shared_ptr<DAGGraph>;
+
 class SegmentScheduler
 {
 public:
@@ -78,7 +82,7 @@ public:
     CancellationCode cancelPlanSegments(const String & query_id, const String & exception, const String & origin_host_name, std::shared_ptr<DAGGraph> dag_graph_ptr = nullptr);
 
 //    void receivePlanSegmentStatus(const String & query_id);
-//    void updatePlanSegmentStatus(std::shared_ptr<DAGGraph> dag_graph_ptr, const PlanSegmentInfo & segment_status);
+    void cancelPlanSegmentsFromWorker(const String & query_id, const DAGGraphPtr dag_ptr);
 
     bool finishPlanSegments(const String & query_id);
 
@@ -87,10 +91,13 @@ public:
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 
     String getCurrentDispatchStatus(const String & query_id);
+    void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
     mutable bthread::Mutex mutex;
+    mutable bthread::Mutex segment_status_mutex;
+    mutable SegmentStatusMap segment_status_map;
     Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
