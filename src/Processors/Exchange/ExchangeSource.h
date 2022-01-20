@@ -15,7 +15,8 @@ namespace DB
 class ExchangeSource : public SourceWithProgress
 {
 public:
-    explicit ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_);
+    ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_);
+    ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_, bool throw_on_other_segment_error_);
     ~ExchangeSource() override;
 
     IProcessor::Status prepare() override;
@@ -29,6 +30,7 @@ protected:
 private:
     BroadcastReceiverPtr receiver;
     ExchangeOptions options;
+    bool throw_on_other_segment_error;
     bool inited = false;
     std::atomic<bool> was_query_canceled = false;
     std::atomic<bool> was_receiver_finished = false;
