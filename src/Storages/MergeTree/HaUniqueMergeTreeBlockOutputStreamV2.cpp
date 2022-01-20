@@ -523,22 +523,7 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
 
     IndexFile::ReadOptions opts;
     opts.fill_cache = true;
-    IndexFileIteratorPtr iter;
-    if (!delete_bitmap->isEmpty())
-    {
-        opts.select_predicate = [bitmap = std::move(delete_bitmap)](const Slice & key, const Slice &)
-        {
-            /// handle mem comparable of key
-            size_t rowid;
-            ReadBufferFromMemory buffer(key.data(), sizeof(size_t));
-            readBinary(rowid, buffer);
-            rowid = Endian::big(rowid);
-            /// TODO: handle corrupt data in a better way.
-            /// E.g., make select_predicate return Status in order to propogate the error to the client
-            return !bitmap->contains(rowid);
-        };
-    }
-    iter = row_store->new_iterator(opts);
+    IndexFileIteratorPtr iter = row_store->new_iterator(opts);
     iter->SeekToFirst();
 
     const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
@@ -552,7 +537,7 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
 
         /// method 1
         // iter->Seek(key);
-        // if (!iter->Valid() || IndexFile::BytewiseComparator()->Compare(key, iter->key()) != 0)
+        // if (!iter->Valid() || comparator->Compare(key, iter->key()) != 0)
         // {
         //     throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row {} from row store in data part {}", pair.part_rowid, part->name);
         // }

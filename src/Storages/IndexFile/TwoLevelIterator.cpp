@@ -147,7 +147,7 @@ namespace
                     data_iter_.Seek(target);
                     if (data_iter_.Valid())
                     {
-                        exact_match = Compare(data_iter_.key(), target);
+                        exact_match = Compare(data_iter_.key(), target) == 0;
                     }
                 // }
                 // else
