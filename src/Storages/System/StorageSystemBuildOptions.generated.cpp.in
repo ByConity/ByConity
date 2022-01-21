@@ -51,6 +51,7 @@ const char * auto_config_build[]
     "USE_LDAP", "@USE_LDAP@",
     "TZDATA_VERSION", "@TZDATA_VERSION@",
     "USE_KRB5", "@USE_KRB5@",
+    "USE_BYTEDANCE_RDKAFKA", "@USE_BYTEDANCE_RDKAFKA@",
 
     nullptr, nullptr
 };
