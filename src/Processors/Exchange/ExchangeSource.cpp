@@ -26,6 +26,16 @@ ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, Ex
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
+    , throw_on_other_segment_error(false)
+    , logger(&Poco::Logger::get("ExchangeSource"))
+{
+}
+
+ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_, bool throw_on_other_segment_error_)
+    : SourceWithProgress(std::move(header_), false)
+    , receiver(std::move(receiver_))
+    , options(options_)
+    , throw_on_other_segment_error(throw_on_other_segment_error_)
     , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
@@ -68,11 +78,13 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     const auto & status = std::get<BroadcastStatus>(packet);
     was_receiver_finished = true;
 
-    if (status.is_modifer && status.code > 0)
+    if (status.code > BroadcastStatusCode::RECV_REACH_LIMIT)
     {
-        throw Exception(
-            getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
-            ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+        //TODO fetch specific exception message from plan segment schedule
+        if (throw_on_other_segment_error || status.is_modifer)
+            throw Exception(
+                getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
+                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     }
 
     return std::nullopt;

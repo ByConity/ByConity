@@ -3,6 +3,7 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -22,7 +23,6 @@
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
 #include <Processors/Sources/NullSource.h>
 #include <Common/Exception.h>
-
 
 namespace DB
 {
@@ -103,7 +103,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
         if (input->getSourceAddress().empty())
             throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
-
+        bool is_final_plan_segment = (input->getExchangeMode() == ExchangeMode::GATHER);
         for (const auto & source_address : input->getSourceAddress())
         {
             auto write_address_info = extractExchangeHostPort(source_address);
@@ -135,8 +135,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
                         std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), write_address_info, context, header));
                 }
-
-                auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options);
+                auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options, is_final_plan_segment);
                 pipe.addSource(std::move(source));
             }
         }

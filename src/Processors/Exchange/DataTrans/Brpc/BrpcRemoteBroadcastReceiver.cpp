@@ -8,6 +8,7 @@
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
 #include <Protos/registry.pb.h>
+#include <brpc/stream.h>
 
 namespace DB
 {
@@ -62,7 +63,6 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             stream_options.max_buf_size = stream_max_buf_size_bytes;
             stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
             cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
-            // FIXME we should close stream at any situation
             if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
                 throw Exception("Fail to create stream for " + getName(), ErrorCodes::BRPC_EXCEPTION);
 
@@ -73,6 +73,17 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
             Protos::RegistryResponse response;
             request.set_data_key(trans_key->getKey());
             stub.registry(&cntl, &request, &response, nullptr);
+            // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
+            if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
+            {
+                LOG_INFO(
+                    log,
+                    "Receiver register sender successfully but sender already finished, host-{} , data_key-{}, stream_id-{}",
+                    registry_address,
+                    data_key,
+                    stream_id);
+                return;
+            }
             rpc_client->assertController(cntl);
             LOG_DEBUG(
                 log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
@@ -87,7 +98,15 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
                 if (s.elapsedMilliseconds() >= timeout_ms || retry_times > 3)
                     throw e;
                 else
+                {
+                    // we should close failed stream at any situation
+                    if (stream_id != brpc::INVALID_STREAM_ID)
+                    {
+                        brpc::StreamClose(stream_id);
+                        stream_id = brpc::INVALID_STREAM_ID;
+                    }
                     bthread_usleep(10000L);
+                }
             }
             else
             {
