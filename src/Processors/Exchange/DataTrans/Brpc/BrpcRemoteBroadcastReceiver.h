@@ -37,7 +37,6 @@ private:
     ReceiveQueuePtr queue = std::make_unique<ReceiveQueue>();
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
-    std::atomic<BroadcastStatus *> broadcast_status;
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;

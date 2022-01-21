@@ -41,15 +41,12 @@ BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
 {
     trans_keys.emplace_back(std::move(trans_key_));
     sender_stream_ids.push_back(stream_id);
-    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
 }
 
 BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
 {
     try
     {
-        delete broadcast_status.load(std::memory_order_relaxed);
-
         for (brpc::StreamId sender_stream_id : sender_stream_ids)
         {
             if(sender_stream_id != brpc::INVALID_STREAM_ID)
@@ -66,9 +63,12 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
 {
     try
     {
-        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-        if (current_status_ptr->code != RUNNING)
-            return *current_status_ptr;
+        for (auto id : sender_stream_ids)
+        {
+            int code = brpc::StreamFinishedCode(id);
+            if (code != 0)
+                return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastSender::send has been finished");
+        }
 
         const auto buf = serializeChunkToIoBuffer(std::move(chunk));
         for (size_t i = 0; i < sender_stream_ids.size(); ++i)
@@ -196,54 +196,19 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
 
 BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_code_, String message)
 {
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
+    int code = 0;
+    for (auto stream_id : sender_stream_ids)
     {
-        LOG_TRACE(
-            log,
-            "Broadcast sender-{} finished and status can't be changed to {} any more. Current status: {}",
-            trans_keys[0]->getKey(),
-            status_code_,
-            current_status_ptr->code);
-        return *current_status_ptr;
+        int actual_status_code = status_code_;
+        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_);
+        // already has been changed
+        if (ret_code != 0)
+            code = actual_status_code;
     }
+    if (code != status_code_)
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastSender::finish, already has been finished");
     else
-    {
-        BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code_, false, message);
-        if (broadcast_status.compare_exchange_strong(
-                current_status_ptr, new_status_ptr, std::memory_order_relaxed, std::memory_order_relaxed))
-        {
-            LOG_INFO(
-                log,
-                "Broadcast sender-{} BroadcastStatus from {} to {} with message: {}",
-                trans_keys[0]->getKey(),
-                current_status_ptr->code,
-                new_status_ptr->code,
-                new_status_ptr->message);
-            delete current_status_ptr;
-            auto res = *new_status_ptr;
-            /// FIXME: If sender finish status has bean changed by receiver, is_modifer should be false
-            res.is_modifer = true;
-            int code = 0;
-            for (auto stream_id : sender_stream_ids)
-            {
-                int ret_code = brpc::StreamFinish(stream_id, status_code_);
-                if (ret_code != 0)
-                    code = ret_code;
-            }
-            if (code != 0)
-                return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastSender::finish");
-            else
-                return BroadcastStatus(status_code_, true, message);
-        }
-        else
-        {
-            LOG_TRACE(
-                log, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
-            delete new_status_ptr;
-            return *current_status_ptr;
-        }
-    }
+        return BroadcastStatus(status_code_, true, message);
 }
 
 void BrpcRemoteBroadcastSender::merge(IBroadcastSender && sender)
