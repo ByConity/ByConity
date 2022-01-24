@@ -51,7 +51,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -142,7 +142,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -236,7 +236,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);

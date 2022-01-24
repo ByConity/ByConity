@@ -31,7 +31,7 @@ TEST(ExchangeSource, LocalNormalTest)
     initLogger();
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
 
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
@@ -77,7 +77,7 @@ TEST(ExchangeSource, LocalNormalTest)
 TEST(ExchangeSource, LocalLimitTest)
 {
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options);
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);

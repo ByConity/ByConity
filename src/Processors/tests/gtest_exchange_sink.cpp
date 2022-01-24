@@ -40,7 +40,7 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     auto context = getContext().context;
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};   
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -88,7 +88,7 @@ TEST(ExchangeSink, LoadBalancedExchangeSinkTest)
     auto context = getContext().context;
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -139,7 +139,7 @@ TEST(ExchangeSink, MultiPartitionExchangeSinkTest)
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -199,7 +199,7 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkNormalTest)
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -259,7 +259,7 @@ TEST(ExchangeSink, SinglePartitionExchangeSinkPipelineTest)
     Block header = block.cloneEmpty();
 
     ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms, 1};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
