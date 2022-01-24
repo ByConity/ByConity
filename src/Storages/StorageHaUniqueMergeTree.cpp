@@ -1951,7 +1951,7 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
     /// NOTE ttl work will also be done in MergeTreeDataMergeMutator class, see selectPartsToMerge for more detail.
 
     /// Phase 1: select parts to merge.
-    FutureMergedMutatedPart future_part(merging_params);
+    FutureMergedMutatedPart future_part;
     {
         auto lock = mergeSelectLock(/*acquire=*/false);
         if (aggressive)
