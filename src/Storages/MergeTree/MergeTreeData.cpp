@@ -993,13 +993,16 @@ void MergeTreeData::checkColumnsValidity(const ColumnsDescription & columns) con
 
         if (column.type && column.type->isMap())
         {
-            /// The name of map column should not contain "__", which is convenient for extracting map column name from a implicit column name.
-            if (column.name.find("__") != String::npos)
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " whose type is Map contains reserved word \"__\"", ErrorCodes::ILLEGAL_COLUMN);
-
-            /// The name of map column should not end with '_', which is convenient for extracting map column name from a implicit column name.
-            if (endsWith(column.name, "_"))
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " whose type is Map can not end with char \'_\'", ErrorCodes::ILLEGAL_COLUMN);
+            auto escape_name = escapeForFileName(column.name + getMapSeparator());
+            auto pos = escape_name.find(getMapSeparator());
+            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
+            if (pos + getMapSeparator().size() != escape_name.size())
+                throw Exception(
+                    ErrorCodes::ILLEGAL_COLUMN,
+                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
+                    backQuoteIfNeed(column.name),
+                    backQuoteIfNeed(escape_name),
+                    getMapSeparator());
 
             if (storage_settings.get()->enable_compact_map_data)
             {
@@ -6340,7 +6343,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
                     {
                         if (part->versions->enable_compact_map_data)
                         {
-                            String file_name = getColFileNameFromImplicitColFileName(file);
+                            String file_name = getMapFileNameFromImplicitFileName(file);
                             if (!file_set.count(file_name))
                                 file_set.insert(file_name);
                         }

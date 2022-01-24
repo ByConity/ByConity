@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS funnel_time_test;
 CREATE TABLE funnel_time_test
 (

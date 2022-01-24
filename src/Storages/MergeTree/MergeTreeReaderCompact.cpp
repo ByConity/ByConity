@@ -190,31 +190,30 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
                 //auto& keyType = type_map.getKeyType();
                 auto& valueType = type_map.getValueType();
 
-                String keyName;
-                String implKeyName;
+                String key_name;
+                String impl_key_name;
                 {
                     //auto data_lock = data_part->getColumnsReadLock();
                     for (auto & file : data_part->getChecksums()->files)
                     {
                         //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
-                        const String & fileName = file.first;
-                        bool parseSuccess = parseKeyFromImplicitFileName(column.name, fileName, keyName);
-
-                        if (parseSuccess)
+                        const String & file_name = file.first;
+                        if (isMapImplicitDataFileNameOfSpecialMapName(file_name, column.name))
                         {
-                            implKeyName = getImplicitFileNameForMapKey(column.name, keyName);
+                            key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
+                            impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
                             // Special handing if implicit key is referenced too
-                            if (columns.contains(implKeyName))
+                            if (columns.contains(impl_key_name))
                             {
-                                dupImplicitKeys.insert(implKeyName);
+                                dup_implicit_keys.insert(impl_key_name);
                             }
 
                             if (type_map.valueTypeIsLC())
-                                addByteMapStreams({implKeyName, valueType}, column.name, profile_callback_, clock_type_);
+                                addByteMapStreams({impl_key_name, valueType}, column.name, profile_callback_, clock_type_);
                             else
-                                addByteMapStreams({implKeyName, makeNullable(valueType)}, column.name, profile_callback_, clock_type_);
+                                addByteMapStreams({impl_key_name, makeNullable(valueType)}, column.name, profile_callback_, clock_type_);
 
-                            mapColumnKeys.insert({column.name, keyName});
+                            map_column_keys.insert({column.name, key_name});
                         }
 
                         //TBD: it's possible that no relevant streams for MAP type column. Do we need any special handling??
@@ -223,7 +222,7 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             }
             else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
             {
-                addByteMapStreams({column.name, column.type}, parseColNameFromImplicitName(column.name), profile_callback_, clock_type_);
+                addByteMapStreams({column.name, column.type}, parseMapNameFromImplicitColName(column.name), profile_callback_, clock_type_);
             }
             else
             {
@@ -242,7 +241,7 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             }
         }
 
-        if (!dupImplicitKeys.empty()) names = columns.getNames();
+        if (!dup_implicit_keys.empty()) names = columns.getNames();
     }
     catch (...)
     {
@@ -277,7 +276,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     }
 
     auto sort_columns = columns;
-    if (!dupImplicitKeys.empty())
+    if (!dup_implicit_keys.empty())
         sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
     while (read_rows < max_rows_to_read)
@@ -315,7 +314,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                 {
                     // collect all the substreams based on map column's name and its keys substream.
                     // and somehow construct runtime two implicit columns(key&value) representation.
-                    auto keysIter = mapColumnKeys.equal_range(name);
+                    auto keysIter = map_column_keys.equal_range(name);
                     const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*type);
                     auto & valueType = type_map.getValueType();
 
@@ -327,20 +326,20 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
 
                     std::map<String, std::pair<size_t, const IColumn *>> implKeyValues;
                     std::list<ColumnPtr> implKeyColHolder;
-                    String implKeyName;
+                    String impl_key_name;
                     for (auto kit = keysIter.first; kit != keysIter.second; ++kit)
                     {
-                        implKeyName = getImplicitFileNameForMapKey(name, kit->second);
-                        NameAndTypePair implicit_key_name_and_type{implKeyName, implValueType};
+                        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
+                        NameAndTypePair implicit_key_name_and_type{impl_key_name, implValueType};
                         cache = caches[implicit_key_name_and_type.getNameInStorage()];
 
                         // If MAP implicit column and MAP column co-exist in columns, implicit column should
                         // only read only once.
-                        if (dupImplicitKeys.count(implKeyName) !=0)
+                        if (dup_implicit_keys.count(impl_key_name) !=0)
                         {
-                            auto idx = res_col_to_idx[implKeyName];
+                            auto idx = res_col_to_idx[impl_key_name];
                             if (res_columns[idx] == nullptr)
-                                throw Exception("Column of implicit key " + implKeyName + " is nullptr.", ErrorCodes::LOGICAL_ERROR);
+                                throw Exception("Column of implicit key " + impl_key_name + " is nullptr.", ErrorCodes::LOGICAL_ERROR);
                             implKeyValues[kit->second] = std::pair<size_t, const IColumn*>(column_size_before_reading, res_columns[idx].get());
                             continue;
                         }

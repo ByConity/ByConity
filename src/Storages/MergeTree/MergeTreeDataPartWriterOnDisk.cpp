@@ -588,7 +588,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     // We should construct or build WriteBuffer(ColumnStream) based on unique keys
     for (auto & k_n : key_name_map)
     {
-        String implicitStreamName = getImplicitFileNameForMapKey(name, k_n.second);
+        String implicitStreamName = getImplicitColNameForMapKey(name, k_n.second);
 
         if (escapeForFileName(implicitStreamName).size() > DBMS_MAX_FILE_NAME_LENGTH)
         {
@@ -658,7 +658,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     {
         if (!blockKeyNames.count(ek))
         {
-            String  streamName = getImplicitFileNameForMapKey(name, ek);
+            String  streamName = getImplicitColNameForMapKey(name, ek);
 
     		auto [it2, inserted2] = serialization_states.emplace(streamName, nullptr);
 			serializations.emplace(streamName, nullValSerial);
@@ -777,7 +777,7 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
 
     for (auto & k_n : key_name_map)
     {
-        String implicitStreamName = getImplicitFileNameForMapKey(name, k_n.second);
+        String implicitStreamName = getImplicitColNameForMapKey(name, k_n.second);
 
         if (escapeForFileName(implicitStreamName).size() > DBMS_MAX_FILE_NAME_LENGTH)
         {

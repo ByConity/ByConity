@@ -85,18 +85,5 @@ public:
     SerializationPtr doGetDefaultSerialization() const override;
 };
 
-bool parseKeyFromImplicitFileName(const String& mapCol,
-                                  const String& dataFileName,
-                                  String & implicitKeyName);
-
-bool isImplicitDataFileNameOfSpecificMapCol(const String& mapCol,
-                                        const String& dataFileName);
-
-String parseColNameFromImplicitName(const String& implicitColumnName);
-
-String getColFileNameFromImplicitColFileName(const String & impliciteColFileName);
-
-String parseKeyFromImplicitMap(const String & map_column, const String & implicit_column);
-
 ColumnPtr mapOffsetsToSizes(const IColumn & column);
 }

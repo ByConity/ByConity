@@ -547,7 +547,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
 
         if (enable_compact_map_data && isMapImplicitKeyNotKV(file_name))
         {
-            path = fs::path(part->getFullRelativePath()) / getColFileNameFromImplicitColFileName(file_name);
+            path = fs::path(part->getFullRelativePath()) / getMapFileNameFromImplicitFileName(file_name);
             size = it.second.file_size;
         }
         else
@@ -1193,7 +1193,7 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
         if (enable_compact_map_data && isMapImplicitKeyNotKV(stream_name))
         {
             need_append = true;
-            file_name = getColFileNameFromImplicitColFileName(stream_name);
+            file_name = getMapFileNameFromImplicitFileName(stream_name);
         }
 
         /// File must be inside "absolute_part_path" directory.

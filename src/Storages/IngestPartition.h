@@ -70,7 +70,6 @@ private:
                                                     const Names & all_columns_with_partition_key);    
     
     // ------ Utilities for Ingest partition -------
-    String getMapKey(const String & map_col_name, const String & map_implicit_name);
     std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & data, const String & col_name);
     void writeNewPart(const StorageInMemoryMetadata & data, const IngestPartition::IngestSources & src_blocks, BlockOutputStreamPtr & output, Names & column_names);
     void checkIngestColumns(const StorageInMemoryMetadata & data, bool & has_map_implicite_key);

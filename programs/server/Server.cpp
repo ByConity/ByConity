@@ -84,6 +84,7 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
+#include <DataTypes/MapHelpers.h>
 
 
 #if !defined(ARCADIA_BUILD)
@@ -890,6 +891,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     auto & access_control = global_context->getAccessControlManager();
     if (config().has("custom_settings_prefixes"))
         access_control.setCustomSettingsPrefixes(config().getString("custom_settings_prefixes"));
+
+    /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
+    checkAndSetMapSeparator(config().getString("map_separator", "__"));
 
     /// Initialize access storages.
     access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });

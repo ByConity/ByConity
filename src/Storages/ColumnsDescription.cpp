@@ -535,7 +535,7 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const
         auto ordinary_columns = getOrdinary();
         for (auto & nt : ordinary_columns)
         {
-            if (nt.type->isMap() && startsWith(column_name, String("__") + nt.name + "__"))
+            if (nt.type->isMap() && startsWith(column_name, getMapSeparator() + nt.name + getMapSeparator()))
             {
                 auto const & map_value_type = dynamic_cast<const DataTypeByteMap *>(nt.type.get())->getValueType();
                 if (map_value_type->lowCardinality())

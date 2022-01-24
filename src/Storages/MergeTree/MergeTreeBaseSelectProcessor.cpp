@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 
 
@@ -306,7 +307,7 @@ static void injectVirtualColumnsImpl(
                     NameSet key_set;
                     for (auto & [file, _] : task->data_part->getChecksums()->files)
                     {
-                        if (startsWith(file, "__") && std::string::npos == file.find("_base."))
+                        if (startsWith(file, getMapSeparator()) && !isMapBaseFile(file))
                             key_set.insert(unescapeForFileName(file));
                     }
 

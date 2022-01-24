@@ -316,7 +316,7 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineRead
     NamesAndTypesList res;
     for (const String & name : names)
     {
-//        if (startsWith(name, "__") && !support_double_underline_name)
+//        if (isMapImplicitKeyNotKV(name) && !support_double_underline_name)
 //        {
 //            String mapColName;
 //            bool parseSuccess = parseMapFromImplName(name, mapColName);

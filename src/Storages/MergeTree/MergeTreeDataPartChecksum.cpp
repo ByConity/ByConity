@@ -124,7 +124,7 @@ Strings MergeTreeDataPartChecksums::collectFilesForMapColumnNotKV(const String &
         {
             if (versions->enable_compact_map_data)
             {
-                String file_name = getColFileNameFromImplicitColFileName(file);
+                String file_name = getMapFileNameFromImplicitFileName(file);
                 compact_file_set.insert(file_name);
             }
             res.emplace_back(file);
