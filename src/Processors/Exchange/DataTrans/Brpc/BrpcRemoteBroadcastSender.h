@@ -35,6 +35,5 @@ private:
     ContextPtr context;
     Block header;
     std::vector<brpc::StreamId> sender_stream_ids;
-    std::atomic<BroadcastStatus *> broadcast_status;
 };
 }

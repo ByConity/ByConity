@@ -26,7 +26,6 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     , context(std::move(context_))
     , header(std::move(header_))
 {
-    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
     data_key = trans_key->getKey();
 }
 
@@ -34,7 +33,6 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
 {
     try
     {
-        delete broadcast_status.load(std::memory_order_relaxed);
         if (stream_id != brpc::INVALID_STREAM_ID)
         {
             brpc::StreamClose(stream_id);
@@ -137,10 +135,10 @@ void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 {
     DataTransPacket brpc_data_packet;
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    int stream_finished_code = brpc::StreamFinishedCode(stream_id);
     /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
-    if (current_status_ptr->code > 0 || (current_status_ptr->code < 0 && queue->receive_queue->size() == 0))
-        return *current_status_ptr;
+    if (stream_finished_code > 0 || (stream_finished_code < 0 && queue->receive_queue->size() == 0))
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(stream_finished_code), false, "BrpcRemoteBroadcastReceiver::recv");
 
     if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
     {
@@ -161,9 +159,9 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     // receive a empty chunk means StreamHandler::on_finished is called and the receive is done.
     if (brpc_data_packet.chunk.empty())
     {
-        auto * status = broadcast_status.load(std::memory_order_relaxed);
-        LOG_DEBUG(log, "Receive for stream id: {} finished, name: {}, status_code: {}.", stream_id, getName(), status->code);
-        return *status;
+        auto code = brpc::StreamFinishedCode(stream_id);
+        LOG_DEBUG(log, "Receive for stream id: {} finished, name: {}, status_code: {}.", stream_id, getName(), code);
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastReceiver::recv done");
     }
 
     return RecvDataPacket(std::move(brpc_data_packet.chunk));
@@ -171,45 +169,12 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 
 BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
 {
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
-    {
-        LOG_TRACE(
-            log,
-            "Broadcast receiver {} finished and status can't be changed to {} any more. Current status: {}",
-            getName(),
-            status_code_,
-            current_status_ptr->code);
-        return *current_status_ptr;
-    }
+    int actual_status_code = status_code_;
+    int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_);
+    if (ret_code != 0)
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "BrpcRemoteBroadcastReceiver::finish, already has been finished");
     else
-    {
-        BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code_, false, message);
-        if (broadcast_status.compare_exchange_strong(
-                current_status_ptr, new_status_ptr, std::memory_order_relaxed, std::memory_order_relaxed))
-        {
-            LOG_INFO(
-                log,
-                "{} BroadcastStatus from {} to {} with message: {}",
-                getName(),
-                current_status_ptr->code,
-                new_status_ptr->code,
-                new_status_ptr->message);
-            delete current_status_ptr;
-            auto res = *new_status_ptr;
-            res.is_modifer = true;
-            //FIXME: we should check return code, since receiver finish status may be changed by sender.
-            brpc::StreamFinish(stream_id, status_code_);
-            return res;
-        }
-        else
-        {
-            LOG_WARNING(
-                log, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
-            delete new_status_ptr;
-            return *current_status_ptr;
-        }
-    }
+        return BroadcastStatus(status_code_, true, message);
 }
 
 String BrpcRemoteBroadcastReceiver::getName() const
