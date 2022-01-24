@@ -10,7 +10,7 @@
 #include <Poco/Logger.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include "Processors/Exchange/DataTrans/BroadcastSenderProxy.h"
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 
 namespace DB
 {
@@ -25,35 +25,35 @@ LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalCha
 
 RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 {
-    UInt32 total_timeout_ms = timeout_ms == 0 ? options.max_timeout_ms : timeout_ms;
     Chunk recv_chunk;
-    for (UInt32 elapsed_time_ms = 0; elapsed_time_ms < total_timeout_ms; elapsed_time_ms += options.poll_span_ms)
-    {
-        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-        /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
-        if (current_status_ptr->code > 0 || (current_status_ptr->code < 0 && receive_queue.size() == 0))
-            return *current_status_ptr;
 
-        if (receive_queue.tryPop(recv_chunk, options.poll_span_ms)) //NOLINT
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
+    if (current_status_ptr->code > 0 || (current_status_ptr->code < 0 && receive_queue.size() == 0))
+        return *current_status_ptr;
+
+    if (receive_queue.tryPop(recv_chunk, timeout_ms))
+    {
+        if (recv_chunk)
             return RecvDataPacket(std::move(recv_chunk));
+        else
+            return RecvDataPacket(*broadcast_status.load(std::memory_order_relaxed));
     }
+
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
-        "Receive from channel " + data_key->getKey() + " timeout after ms: " + std::to_string(total_timeout_ms));
+        "Receive from channel " + data_key->getKey() + " timeout after ms: " + std::to_string(timeout_ms));
     return current_status;
 }
 
 
 BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 {
-    for (UInt32 elapsed_time_ms = 0; elapsed_time_ms < options.max_timeout_ms; elapsed_time_ms += options.poll_span_ms)
-    {
-        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-        if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
-            return *broadcast_status.load(std::memory_order_relaxed);
-        if (receive_queue.tryEmplace(options.poll_span_ms, std::move(chunk))) //NOLINT
-            return BroadcastStatus{BroadcastStatusCode::RUNNING};
-    }
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
+        return *broadcast_status.load(std::memory_order_relaxed);
+    if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
+        return *broadcast_status.load(std::memory_order_relaxed);
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
         "Send to channel " + data_key->getKey() + " timeout after ms: " + std::to_string(options.max_timeout_ms));
@@ -88,6 +88,12 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
             new_status_ptr->code,
             new_status_ptr->message);
         delete current_status_ptr;
+        if (new_status_ptr->code > 0)
+        {
+            receive_queue.clear();
+        }
+        /// Send empty chunk as finish signal, it doesn't matter if tryEmplace timeout
+        receive_queue.tryEmplace(options.max_timeout_ms, Chunk());
         auto res = *new_status_ptr;
         res.is_modifer = true;
         return res;
@@ -111,7 +117,7 @@ void LocalBroadcastChannel::registerToSenders(UInt32 timeout_ms)
 
 void LocalBroadcastChannel::merge(IBroadcastSender &&)
 {
-    throw Exception("insertRangeSelective is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception("merge is not implemented for LocalBroadcastChannel", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 String LocalBroadcastChannel::getName() const
