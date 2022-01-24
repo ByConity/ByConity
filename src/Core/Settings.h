@@ -514,6 +514,7 @@ class IColumn;
     /** Complex query settings **/\
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
     \
     /** Settings used for BITENGINE */ \
     M(Bool, decode_bitengine_bitmap, false, "Whether to decode bitmap column if it is encoded.", 0) \

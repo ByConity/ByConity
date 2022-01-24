@@ -156,9 +156,6 @@ void checkPlan(PlanSegment * lhs, PlanSegment * rhs)
     auto lhs_str = lhs->toString();
     auto rhs_str = rhs->toString();
 
-    // std::cout<<" <<< lhs:\n" << lhs_str << std::endl;
-    // std::cout<<" <<< rhs:\n" << rhs_str << std::endl;
-
     if(lhs_str != rhs_str)
         throw Exception("checkPlan failed", ErrorCodes::LOGICAL_ERROR);
 }
@@ -206,16 +203,7 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 {
     BlockIO res;
 
-    // PlanSegment * plan_segment = plan_segment_tree->getRoot()->getPlanSegment();
-    // res = InterpreterPlanSegment(plan_segment, context).execute();
     LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
-
-    /***
-     * Mock a connection and plan segment to test
-     */
-    //MockSendPlanSegment(context);
-
-//    MockTestQuery(plan_segment_tree.get(), context);
 
     PlanSegmentsStatusPtr scheduler_status;
     
@@ -241,6 +229,10 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
             auto final_segment = plan_segment_tree->getRoot()->getPlanSegment();
             final_segment->update();
             LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
+
+            if (context->getSettingsRef().debug_plan_generation)
+                break;
+            
             res = InterpreterPlanSegment(final_segment, context).execute();
             break;
         }
