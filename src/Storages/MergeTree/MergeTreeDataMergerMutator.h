@@ -35,13 +35,10 @@ struct FutureMergedMutatedPart
     MergeType merge_type = MergeType::REGULAR;
     /// for unique table: hold snapshot of delete bitmap for each input part
     MergeTreeData::DataPartsDeleteSnapshot delete_snapshot;
-    /// To determine how to get delete bitmap
-    MergeTreeData::MergingParams merging_params;
 
     const MergeTreePartition & getPartition() const { return parts.front()->partition; }
 
     FutureMergedMutatedPart() = default;
-    explicit FutureMergedMutatedPart(const MergeTreeData::MergingParams & merging_params_) : merging_params(merging_params_) {}
     explicit FutureMergedMutatedPart(MergeTreeData::DataPartsVector parts_)
     {
         assign(std::move(parts_));
@@ -58,7 +55,7 @@ struct FutureMergedMutatedPart
     void updatePath(const MergeTreeData & storage, const ReservationPtr & reservation);
     DeleteBitmapPtr getDeleteBitmap(const MergeTreeData::DataPartPtr & part) const
     {
-        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+        if (!delete_snapshot.empty())
         {
             if (auto it = delete_snapshot.find(part); it != delete_snapshot.end())
                 return it->second;
@@ -203,7 +200,7 @@ private:
     static NameToNameVector collectFilesForRenames(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands_for_removes, const String & mrk_extension);
 
     /// Collect necessary implicit files for clear map key commands.
-    /// If the part enables compact map data and all implicit keys of the map column has been removed, the compacted file need to remove too. 
+    /// If the part enables compact map data and all implicit keys of the map column has been removed, the compacted file need to remove too.
     static NameSet collectFilesForClearMapKey(MergeTreeData::DataPartPtr source_part, const MutationCommands & commands);
 
     /// Files, that we don't need to remove and don't need to hardlink, for example columns.txt and checksums.txt.
