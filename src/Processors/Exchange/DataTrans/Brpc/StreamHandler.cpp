@@ -23,7 +23,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
     BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
     if (!receiver_ptr)
     {
-        LOG_WARNING(log, "StreamHandler::on_received_messages receiver is expired.");
+        LOG_WARNING(log, "on_received_messages receiver is expired.");
         return 0;
     }
     try
@@ -42,7 +42,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
             Chunk chunk = chunk_in.readImpl();
             LOG_TRACE(
                 log,
-                "StreamHandler::on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}, chunk rows:{}",
+                "on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}, chunk rows:{}",
                 stream_id,
                 msg.size(),
                 chunk.getNumRows());
@@ -58,7 +58,7 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
         }
         catch (...)
         {
-            LOG_WARNING(log, "StreamHandler::on_received_messages:pushReceiveQueue exception happen-" + getCurrentExceptionMessage(true));
+            LOG_WARNING(log, "on_received_messages:pushReceiveQueue exception happen-" + getCurrentExceptionMessage(true));
         }
     }
     return 0;
@@ -66,49 +66,70 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
 
 void StreamHandler::on_idle_timeout(brpc::StreamId id)
 {
-    LOG_WARNING(log, "StreamHandler::StreamId-{} idle timeout.", id);
+    try
+    {
+        LOG_WARNING(log, "StreamId-{} idle timeout.", id);
+    }
+    catch (...)
+    {
+        LOG_WARNING(log, "on_received_messages:on_idle_timeout exception happen-" + getCurrentExceptionMessage(true));
+    }
 }
 
 void StreamHandler::on_closed(brpc::StreamId stream_id)
 {
-    BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
-    if (!receiver_ptr)
+    try
     {
-        LOG_WARNING(log, "StreamHandler::on_closed receiver is expired.");
-    }
-    else
-    {
-        /// Try close receiver gracefully
-        auto res = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Finish in StreamHandler");
-        if (res.is_modifer || res.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+        BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
+        if (!receiver_ptr)
         {
-            Chunk empty = Chunk();
-            // push an empty as finish
-            receiver_ptr->pushReceiveQueue(empty);
+            LOG_WARNING(log, "on_closed receiver is expired.");
         }
-        LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
+        else
+        {
+            /// Try close receiver gracefully
+            auto res = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Finish in StreamHandler");
+            if (res.is_modifer || res.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+            {
+                Chunk empty = Chunk();
+                // push an empty as finish
+                receiver_ptr->pushReceiveQueue(empty);
+            }
+            LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
+        }
+    }
+    catch (...)
+    {
+        LOG_WARNING(log, "on_closed exception happen-" + getCurrentExceptionMessage(true));
     }
 }
 
 void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
 {
-    BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
-    if (!receiver_ptr)
+    try
     {
-        LOG_WARNING(log, "StreamHandler::on_finished receiver is expired.");
-    }
-    else
-    {
-        ///Only care about finish status which need close receiver immediately
-        if (finish_status_code <= 0)
-            return;
+        BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
+        if (!receiver_ptr)
+        {
+            LOG_WARNING(log, "on_finished receiver is expired.");
+        }
+        else
+        {
+            ///Only care about finish status which need close receiver immediately
+            if (finish_status_code <= 0)
+                return;
 
-        receiver_ptr->clearQueue();
-        receiver_ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
-        Chunk empty = Chunk();
-        // push an empty as finish
-        receiver_ptr->pushReceiveQueue(empty);
-        LOG_DEBUG(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, receiver_ptr->getName(), finish_status_code);
+            receiver_ptr->clearQueue();
+            receiver_ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
+            Chunk empty = Chunk();
+            // push an empty as finish
+            receiver_ptr->pushReceiveQueue(empty);
+            LOG_DEBUG(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, receiver_ptr->getName(), finish_status_code);
+        }
+    }
+    catch (...)
+    {
+        LOG_WARNING(log, "on_finished exception happen-" + getCurrentExceptionMessage(true));
     }
 }
 
