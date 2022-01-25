@@ -91,15 +91,15 @@ QueryPlanStepPtr PlanSegmentSourceStep::deserialize(ReadBuffer & buffer, Context
     StorageID storage_id = StorageID::deserialize(buffer, context);
     query_info.deserialize(buffer);
 
-    //std::cout<<" << ReadFromSource: " << queryToString(query_info.query) << std::endl;
+    // std::cout<<" << ReadFromSource: " << queryToString(query_info.query) << std::endl;
 
     /**
      * reconstuct query level info based on query
      */
     SelectQueryOptions options;
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, context, options.distributedStages());
+    interpreter->execute();
     query_info = interpreter->getQueryInfo();
-
 
     UInt8 binary_stage;
     size_t max_block_size;

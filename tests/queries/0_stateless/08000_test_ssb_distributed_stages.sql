@@ -12,7 +12,30 @@ drop table if exists ssb.dates_local;
 drop table if exists ssb.lineorder_flat_local;
 drop table if exists ssb.supplier_local;
 
-CREATE TABLE ssb.lineorder_local (`LO_ORDERKEY` UInt32, `LO_LINENUMBER` UInt8, `LO_CUSTKEY` UInt32, `LO_PARTKEY` UInt32, `LO_SUPPKEY` UInt32, `LO_ORDERDATE` UInt32, `LO_ORDERPRIORITY` LowCardinality(String), `LO_SHIPPRIORITY` UInt8, `LO_QUANTITY` UInt8, `LO_EXTENDEDPRICE` UInt32, `LO_ORDTOTALPRICE` UInt32, `LO_DISCOUNT` UInt8, `LO_REVENUE` UInt32, `LO_SUPPLYCOST` UInt32, `LO_TAX` UInt8, `LO_COMMITDATE` UInt32, `LO_SHIPMODE` LowCardinality(String)) ENGINE = MergeTree ORDER BY (LO_ORDERDATE, LO_ORDERKEY) SETTINGS index_granularity = 8192;
+-- CREATE TABLE ssb.lineorder_local (`LO_ORDERKEY` UInt32, `LO_LINENUMBER` UInt8, `LO_CUSTKEY` UInt32, `LO_PARTKEY` UInt32, `LO_SUPPKEY` UInt32, `LO_ORDERDATE` Date, `LO_ORDERPRIORITY` LowCardinality(String), `LO_SHIPPRIORITY` UInt8, `LO_QUANTITY` UInt8, `LO_EXTENDEDPRICE` UInt32, `LO_ORDTOTALPRICE` UInt32, `LO_DISCOUNT` UInt8, `LO_REVENUE` UInt32, `LO_SUPPLYCOST` UInt32, `LO_TAX` UInt8, `LO_COMMITDATE` UInt32, `LO_SHIPMODE` LowCardinality(String)) ENGINE = MergeTree ORDER BY (LO_ORDERDATE, LO_ORDERKEY) SETTINGS index_granularity = 8192;
+
+CREATE TABLE ssb.lineorder_local
+(
+    LO_ORDERKEY             UInt32,
+    LO_LINENUMBER           UInt8,
+    LO_CUSTKEY              UInt32,
+    LO_PARTKEY              UInt32,
+    LO_SUPPKEY              UInt32,
+    LO_ORDERDATE            Date,
+    LO_ORDERPRIORITY        LowCardinality(String),
+    LO_SHIPPRIORITY         UInt8,
+    LO_QUANTITY             UInt8,
+    LO_EXTENDEDPRICE        UInt32,
+    LO_ORDTOTALPRICE        UInt32,
+    LO_DISCOUNT             UInt8,
+    LO_REVENUE              UInt32,
+    LO_SUPPLYCOST           UInt32,
+    LO_TAX                  UInt8,
+    LO_COMMITDATE           Date,
+    LO_SHIPMODE             LowCardinality(String)
+)
+ENGINE = MergeTree PARTITION BY toYear(LO_ORDERDATE) ORDER BY (LO_ORDERDATE, LO_ORDERKEY);
+
 CREATE TABLE ssb.lineorder as ssb.lineorder_local ENGINE = Distributed(test_shard_localhost, ssb, lineorder_local, rand());
 
 CREATE TABLE ssb.customer_local (`C_CUSTKEY` UInt32, `C_NAME` String, `C_ADDRESS` String, `C_CITY` LowCardinality(String), `C_NATION` LowCardinality(String), `C_REGION` LowCardinality(String), `C_PHONE` FixedString(15), `C_MKTSEGMENT` LowCardinality(String)) ENGINE = MergeTree ORDER BY C_CUSTKEY SETTINGS index_granularity = 8192;
@@ -21,7 +44,7 @@ CREATE TABLE ssb.customer as ssb.customer_local ENGINE = Distributed(test_shard_
 CREATE TABLE ssb.part_local (`P_PARTKEY` UInt32, `P_NAME` String, `P_MFGR` LowCardinality(String), `P_CATEGORY` LowCardinality(String), `P_BRAND` LowCardinality(String), `P_COLOR` LowCardinality(String), `P_TYPE` LowCardinality(String), `P_SIZE` UInt8, `P_CONTAINER` LowCardinality(String)) ENGINE = MergeTree ORDER BY P_PARTKEY SETTINGS index_granularity = 8192;
 CREATE TABLE ssb.part as ssb.part_local ENGINE = Distributed(test_shard_localhost, ssb, part_local, rand());
 
-CREATE TABLE ssb.dates_local (`D_DATEKEY` UInt32, `D_DATE` String, `D_DAYOFWEEK` String, `D_MONTH` String, `D_YEAR` UInt32, `D_YEARMONTHNUM` UInt32, `D_YEARMONTH` String, `D_DAYNUMINWEEK` UInt32, `D_DAYNUMINMONTH` UInt32, `D_DAYNUMINYEAR` UInt32, `D_MONTHNUMINYEAR` UInt32, `D_WEEKNUMINYEAR` UInt32, `D_SELLINGSEASON` String, `D_LASTDAYINWEEKFL` UInt32, `D_LASTDAYINMONTHFL` UInt32, `D_HOLIDAYFL` UInt32, `D_WEEKDAYFL` UInt32) ENGINE = MergeTree ORDER BY D_DATEKEY SETTINGS index_granularity = 8192;
+CREATE TABLE ssb.dates_local (`D_DATEKEY` Date, `D_DATE` String, `D_DAYOFWEEK` String, `D_MONTH` String, `D_YEAR` UInt32, `D_YEARMONTHNUM` UInt32, `D_YEARMONTH` String, `D_DAYNUMINWEEK` UInt32, `D_DAYNUMINMONTH` UInt32, `D_DAYNUMINYEAR` UInt32, `D_MONTHNUMINYEAR` UInt32, `D_WEEKNUMINYEAR` UInt32, `D_SELLINGSEASON` String, `D_LASTDAYINWEEKFL` UInt32, `D_LASTDAYINMONTHFL` UInt32, `D_HOLIDAYFL` UInt32, `D_WEEKDAYFL` UInt32) ENGINE = MergeTree ORDER BY D_DATEKEY SETTINGS index_granularity = 8192;
 CREATE TABLE ssb.dates as ssb.dates_local ENGINE = Distributed(test_shard_localhost, ssb, dates_local, rand());
 
 CREATE TABLE ssb.lineorder_flat_local (`LO_ORDERKEY` UInt32, `LO_LINENUMBER` UInt8, `LO_CUSTKEY` UInt32, `LO_PARTKEY` UInt32, `LO_SUPPKEY` UInt32, `LO_ORDERDATE` UInt32, `LO_ORDERPRIORITY` LowCardinality(String), `LO_SHIPPRIORITY` UInt8, `LO_QUANTITY` UInt8, `LO_EXTENDEDPRICE` UInt32, `LO_ORDTOTALPRICE` UInt32, `LO_DISCOUNT` UInt8, `LO_REVENUE` UInt32, `LO_SUPPLYCOST` UInt32, `LO_TAX` UInt8, `LO_COMMITDATE` UInt32, `LO_SHIPMODE` LowCardinality(String), `C_NAME` String, `C_ADDRESS` String, `C_CITY` LowCardinality(String), `C_NATION` LowCardinality(String), `C_REGION` LowCardinality(String), `C_PHONE` FixedString(15), `C_MKTSEGMENT` LowCardinality(String), `S_NAME` String, `S_ADDRESS` String, `S_CITY` LowCardinality(String), `S_NATION` LowCardinality(String), `S_REGION` LowCardinality(String), `S_PHONE` String, `P_NAME` String, `P_MFGR` LowCardinality(String), `P_CATEGORY` LowCardinality(String), `P_BRAND` LowCardinality(String), `P_COLOR` LowCardinality(String), `P_TYPE` LowCardinality(String), `P_SIZE` UInt8, `P_CONTAINER` LowCardinality(String)) ENGINE = MergeTree PARTITION BY toInt64(LO_ORDERDATE / 10000) ORDER BY (LO_ORDERDATE, LO_ORDERKEY) SETTINGS index_granularity = 8192;
@@ -38,6 +61,14 @@ set exchange_enable_force_remote_mode = 1;
 SELECT SUM(LO_EXTENDEDPRICE * LO_DISCOUNT) AS REVENUE
 FROM lineorder_flat
 WHERE LO_ORDERDATE >= 19930101 AND LO_ORDERDATE <= 19931231 AND LO_DISCOUNT BETWEEN 1 AND 3 AND LO_QUANTITY < 25;
+
+SELECT SUM(LO_EXTENDEDPRICE * LO_DISCOUNT) AS REVENUE
+FROM lineorder
+WHERE LO_ORDERDATE >= '1993-01-01' AND LO_ORDERDATE <= '1993-12-31' AND LO_DISCOUNT BETWEEN 1 AND 3 AND LO_QUANTITY < 25;
+
+SELECT count() AS REVENUE
+FROM lineorder
+WHERE LO_ORDERDATE >= '1993-01-01' AND LO_ORDERDATE <= '1993-12-31' AND LO_DISCOUNT BETWEEN 1 AND 3 AND LO_QUANTITY < 25 settings enable_distributed_stages = 1;
 
 SELECT SUM(LO_EXTENDEDPRICE * LO_DISCOUNT) AS REVENUE FROM lineorder_flat WHERE LO_ORDERDATE >= 19940101 AND LO_ORDERDATE <= 19940131 AND LO_DISCOUNT BETWEEN 4 AND 6 AND LO_QUANTITY BETWEEN 26 AND 35;
 

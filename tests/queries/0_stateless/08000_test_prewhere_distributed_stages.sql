@@ -4,7 +4,7 @@ drop table if exists test.test_prewhere_local;
 create table test.test_prewhere_local (p_date Date, id Int32, event String) engine = MergeTree partition by p_date order by id;
 create table test.test_prewhere as test.test_prewhere_local engine = Distributed(test_shard_localhost, test, test_prewhere_local, rand());
 
-set enable_distributed_stages = 0;
+set enable_distributed_stages = 1;
 
 insert into test.test_prewhere_local select '2022-01-01', number, 'a' from numbers(3);
 

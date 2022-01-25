@@ -434,7 +434,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             }
         }
 
-        if (query.prewhere() && query.where() && !options.distributed_stages)
+        if (query.prewhere() && query.where())
         {
             /// Filter block in WHERE instead to get better performance
             query.setExpression(
