@@ -135,6 +135,18 @@ ColumnLowCardinality::ColumnLowCardinality(MutableColumnPtr && column_unique_, M
     // idx.check(getDictionary().size());
 }
 
+ColumnPtr ColumnLowCardinality::convertToFullColumn() const
+{
+    const ColumnPtr & nested_column = getDictionary().getNestedColumn();
+    // if nested column only has two element and first one is 0 and second is 1, we can return index column directly
+    if (nested_column->getDataType() == TypeIndex::UInt8 && nested_column->getDataType() == getIndexes().getDataType()
+        && nested_column->size() == 2 && nested_column->get64(0) == 0 && nested_column->get64(1) == 1)
+    {
+        return getIndexes().getPtr();
+    }
+    return nested_column->index(getIndexes(), 0);
+}
+
 void ColumnLowCardinality::insert(const Field & x)
 {
     compactIfSharedDictionary();
