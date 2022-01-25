@@ -10,7 +10,7 @@ SELECT 1, * FROM merge_tree;
 ALTER TABLE merge_tree DROP PARTITION 20200102;
 SELECT 3, * FROM merge_tree;
 
-ALTER TABLE merge_tree DROP PARTITION '20200102'; -- { serverError 38 }
+ALTER TABLE merge_tree DROP PARTITION '20200102';
 SELECT 4, * FROM merge_tree;
 
 ALTER TABLE merge_tree DROP PARTITION '2020-01-02';
