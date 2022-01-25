@@ -21,7 +21,7 @@ public:
         brpc::ClosureGuard done_guard(done);
         auto mutable_context = Context::createCopy(context);
         auto cancel_code
-            = mutable_context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coodinator_address());
+            = mutable_context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coordinator_address());
         response->set_ret_code(std::to_string(static_cast<int>(cancel_code)));
     }
 

@@ -3,6 +3,7 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <Processors/QueryPipeline.h>
+#include <Interpreters/SegmentScheduler.h>
 
 namespace DB
 {

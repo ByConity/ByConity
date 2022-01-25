@@ -79,14 +79,16 @@ public:
                                              ContextPtr query_context);
 
     CancellationCode cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context);
-    CancellationCode cancelPlanSegments(const String & query_id, const String & exception, const String & origin_host_name, std::shared_ptr<DAGGraph> dag_graph_ptr = nullptr);
+    CancellationCode cancelPlanSegments(
+        const String & query_id,
+        const String & exception,
+        const String & origin_host_name,
+        ContextPtr query_context,
+        std::shared_ptr<DAGGraph> dag_graph_ptr = nullptr);
 
-//    void receivePlanSegmentStatus(const String & query_id);
-    void cancelPlanSegmentsFromWorker(const String & query_id, const DAGGraphPtr dag_ptr);
+    void cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context);
 
     bool finishPlanSegments(const String & query_id);
-
-//    void logPlanSegmentStatus(Context & context, const String & query_id);
 
     AddressInfos getWorkerAddress(const String & query_id, size_t segment_id);
 

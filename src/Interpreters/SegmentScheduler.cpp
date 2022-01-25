@@ -69,11 +69,11 @@ CancellationCode
 SegmentScheduler::cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context)
 {
     String coordinator_host = query_context->getLocalHost();
-    return cancelPlanSegments(query_id, exception, coordinator_host);
+    return cancelPlanSegments(query_id, exception, coordinator_host, query_context);
 }
 
 CancellationCode SegmentScheduler::cancelPlanSegments(
-    const String & query_id, const String & exception, const String & origin_host_name, std::shared_ptr<DAGGraph> dag_graph_ptr)
+    const String & query_id, const String & exception, const String & origin_host_name, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
     std::shared_ptr<DAGGraph> dag_ptr;
 
@@ -106,13 +106,14 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
         }
 
         /// send cancel query rpc request to all executor except exception original executor
-        cancelPlanSegmentsFromWorker(query_id, dag_ptr);
+        cancelWorkerPlanSegments(query_id, dag_ptr, query_context);
     }
     return CancellationCode::CancelSent;
 }
 
-void SegmentScheduler::cancelPlanSegmentsFromWorker(const String & query_id, const DAGGraphPtr dag_ptr)
+void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context)
 {
+    String coordinator_host = query_context->getLocalHost();
     for (const auto & addr: dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
@@ -122,7 +123,7 @@ void SegmentScheduler::cancelPlanSegmentsFromWorker(const String & query_id, con
         Protos::CancelQueryRequest request;
         Protos::CancelQueryResponse response;
         request.set_query_id(query_id);
-        request.set_coodinator_address(address);
+        request.set_coordinator_address(coordinator_host);
         manager.cancelQuery(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
         LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}, ret_code-{}", query_id, extractExchangeHostPort(addr), response.ret_code());
@@ -135,6 +136,10 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     auto query_map_ite = query_map.find(query_id);
     if (query_map_ite != query_map.end())
         query_map.erase(query_map_ite);
+
+    auto seg_status_map_ite = segment_status_map.find(query_id);
+    if (seg_status_map_ite != segment_status_map.end())
+        segment_status_map.erase(seg_status_map_ite);
     return true;
 }
 
@@ -529,12 +534,12 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
     }
     catch (const Exception & e)
     {
-        this->cancelPlanSegments(query_id, "receive exception during scheduler:" + e.message(), "coordinator", dag_graph_ptr);
+        this->cancelPlanSegments(query_id, "receive exception during scheduler:" + e.message(), "coordinator", query_context, dag_graph_ptr);
         e.rethrow();
     }
     catch (...)
     {
-        this->cancelPlanSegments(query_id, "receive unknown exception during scheduler", "coordinator", dag_graph_ptr);
+        this->cancelPlanSegments(query_id, "receive unknown exception during scheduler", "coordinator", query_context, dag_graph_ptr);
         throw;
     }
     return true;

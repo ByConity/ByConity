@@ -5,7 +5,7 @@ option cc_generic_services = true;
 
 message CancelQueryRequest {
   required string query_id = 1;
-  optional string coodinator_address = 2;
+  optional string coordinator_address = 2;
 };
 
 message CancelQueryResponse {
