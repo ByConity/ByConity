@@ -1,4 +1,5 @@
 #include <chrono>
+#include <memory>
 #include <thread>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/DistributedStages/InterpreterPlanSegment.h>
@@ -17,6 +18,8 @@
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Client/Connection.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 
 namespace DB
 {
@@ -26,9 +29,9 @@ namespace ErrorCodes
     extern const int UNKNOWN_PACKET_FROM_SERVER;
 }
 
-InterpreterDistributedStages::InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextPtr context_)
+InterpreterDistributedStages::InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : query_ptr(query_ptr_->clone())
-    , context(Context::createCopy(context_))
+    , context(std::move(context_))
     , log(&Poco::Logger::get("InterpreterDistributedStages"))
     , plan_segment_tree(std::make_unique<PlanSegmentTree>())
 {
@@ -226,14 +229,13 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 
         if (scheduler_status->is_final_stage_start)
         {
-            auto final_segment = plan_segment_tree->getRoot()->getPlanSegment();
+            auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
             final_segment->update();
             LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
 
             if (context->getSettingsRef().debug_plan_generation)
-                break;
-            
-            res = InterpreterPlanSegment(final_segment, context).execute();
+                break;            
+            res = DB::executePlanSegment(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
             break;
         }
     }

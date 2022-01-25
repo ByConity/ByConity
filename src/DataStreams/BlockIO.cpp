@@ -43,6 +43,7 @@ void BlockIO::reset()
     if (process_list_entry)
         process_list_entry->get().releaseQueryStreams();
     pipeline.reset();
+    plan_segment_process_entry.reset();
     process_list_entry.reset();
 
     /// TODO Do we need also reset callbacks? In which order?
@@ -57,6 +58,7 @@ BlockIO & BlockIO::operator= (BlockIO && rhs)
     reset();
 
     process_list_entry      = std::move(rhs.process_list_entry);
+    plan_segment_process_entry = std::move(rhs.plan_segment_process_entry);
     in                      = std::move(rhs.in);
     out                     = std::move(rhs.out);
     pipeline                = std::move(rhs.pipeline);

@@ -27,7 +27,7 @@ struct DistributedStagesSettings
 class InterpreterDistributedStages : public IInterpreter
 {
 public:
-    InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextPtr context_);
+    InterpreterDistributedStages(const ASTPtr & query_ptr_, ContextMutablePtr context_);
 
     void createPlanSegments();
 

@@ -502,7 +502,7 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
          if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
             throw Exception("Only SELECT is supported for EXPLAIN query", ErrorCodes::INCORRECT_QUERY);
 
-        auto interpreter = std::make_unique<InterpreterDistributedStages>(ast.getExplainedQuery(), getContext());
+        auto interpreter = std::make_unique<InterpreterDistributedStages>(ast.getExplainedQuery(), Context::createCopy(getContext()));
         auto * plan_segment_tree = interpreter->getPlanSegmentTree();
         if (plan_segment_tree)
              buf << plan_segment_tree->toString();
