@@ -1243,8 +1243,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 Poco::Net::ServerSocket socket;
                 auto address = socketBindListen(socket, listen_host, port);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
+                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
                 servers_to_start_before_tables->emplace_back(
                     port_name,
                     std::make_unique<Poco::Net::TCPServer>(
@@ -1259,8 +1259,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_SSL
                 Poco::Net::SecureServerSocket socket;
                 auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
+                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
                 servers_to_start_before_tables->emplace_back(
                     secure_port_name,
                     std::make_unique<Poco::Net::TCPServer>(

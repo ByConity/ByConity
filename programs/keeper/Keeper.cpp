@@ -328,8 +328,6 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    const Settings & settings = global_context->getSettingsRef();
-
     std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
 
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
@@ -371,8 +369,8 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
         {
             Poco::Net::ServerSocket socket;
             auto address = socketBindListen(socket, listen_host, port);
-            socket.setReceiveTimeout(settings.receive_timeout);
-            socket.setSendTimeout(settings.send_timeout);
+            socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+            socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 port_name,
                 std::make_unique<Poco::Net::TCPServer>(
@@ -387,8 +385,8 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
 #if USE_SSL
             Poco::Net::SecureServerSocket socket;
             auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-            socket.setReceiveTimeout(settings.receive_timeout);
-            socket.setSendTimeout(settings.send_timeout);
+            socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+            socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 secure_port_name,
                 std::make_unique<Poco::Net::TCPServer>(
