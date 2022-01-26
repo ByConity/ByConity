@@ -19,3 +19,4 @@
 #cmakedefine01 CLICKHOUSE_SPLIT_BINARY
 #cmakedefine01 USE_RDKAFKA
 #cmakedefine01 USE_BYTEDANCE_RDKAFKA
+#cmakedefine01 USE_BREAKPAD

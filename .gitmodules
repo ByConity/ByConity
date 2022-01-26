@@ -241,3 +241,6 @@
 [submodule "contrib/boost"]
 	path = contrib/boost
 	url = https://github.com/ClickHouse-Extras/boost.git
+[submodule "contrib/breakpad"]
+	path = contrib/breakpad
+	url = git@code.byted.org:dp/breakpad.git
