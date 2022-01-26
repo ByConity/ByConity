@@ -137,7 +137,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     DataTransPacket brpc_data_packet;
     int stream_finished_code = brpc::StreamFinishedCode(stream_id);
     /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
-    if (stream_finished_code > 0 || (stream_finished_code < 0 && queue->receive_queue->size() == 0))
+    if (stream_finished_code > 0)
         return BroadcastStatus(static_cast<BroadcastStatusCode>(stream_finished_code), false, "BrpcRemoteBroadcastReceiver::recv");
 
     if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
