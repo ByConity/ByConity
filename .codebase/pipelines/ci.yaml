@@ -40,8 +40,8 @@ jobs:
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run FuntionalStatelessTest
         commands:
-          - cp /home/code/docker/test/stateless/run.sh run.sh
           - cd /
+          - cp /home/code/docker/test/stateless/run.sh run.sh
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
@@ -80,8 +80,8 @@ jobs:
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run FuntionalStatefulTest
         commands:
-          - cp /home/code/docker/test/stateful/run.sh run.sh
           - cd /
+          - cp /home/code/docker/test/stateful/run.sh run.sh
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
@@ -120,6 +120,7 @@ jobs:
         - name: Run CertificateStatefullTest
           commands:
             - cd /
+            - cp /home/code/docker/test/certificate/run.sh run.sh
             - /bin/bash run.sh
         - name: Upload Artifact
           uses: actions/upload-artifact
