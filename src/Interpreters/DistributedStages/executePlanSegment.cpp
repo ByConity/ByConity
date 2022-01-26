@@ -25,6 +25,9 @@ void executePlanSegment(PlanSegmentPtr plan_segment, ContextMutablePtr context, 
 
     //LOG_TRACE(&Poco::Logger::get("executePlanSegment"), "EXECUTE\n" + plan_segment->toString());
 
+    if (context->getSettingsRef().debug_plan_generation)
+        return;
+    
     auto executor = std::make_shared<PlanSegmentExecutor>(std::move(plan_segment), std::move(context));
 
     if (is_async)
