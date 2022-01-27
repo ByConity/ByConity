@@ -21,7 +21,6 @@ public:
 
     IProcessor::Status prepare() override;
     String getName() const override;
-    void onUpdatePorts() override;
 
 protected:
     std::optional<Chunk> tryGenerate() override;
@@ -31,9 +30,9 @@ private:
     BroadcastReceiverPtr receiver;
     ExchangeOptions options;
     bool throw_on_other_segment_error;
-    bool inited = false;
-    std::atomic<bool> was_query_canceled = false;
-    std::atomic<bool> was_receiver_finished = false;
+    std::atomic<bool> inited {false};
+    std::atomic<bool> was_query_canceled {false};
+    std::atomic<bool> was_receiver_finished {false};
     Poco::Logger * logger;
 };
 

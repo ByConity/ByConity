@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <atomic>
 #include <optional>
 #include <variant>
 
@@ -52,22 +53,23 @@ IProcessor::Status ExchangeSource::prepare()
     const auto & status = SourceWithProgress::prepare();
     if (status == Status::Finished)
     {
-        receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
+        if (inited.load(std::memory_order_relaxed))
+            receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
     }
     return status;
 }
 
 std::optional<Chunk> ExchangeSource::tryGenerate()
 {
-    if (!inited)
+    if (!inited.load(std::memory_order_relaxed))
     {
         receiver->registerToSenders(std::max(options.exhcange_timeout_ms / 3, 1000u));
-        inited = true;
+        inited.store(true, std::memory_order_relaxed);
     }
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 
-    RecvDataPacket packet = receiver->recv(options.exhcange_timeout_ms / 2);
+    RecvDataPacket packet = receiver->recv(options.exhcange_timeout_ms);
 
     if (std::holds_alternative<Chunk>(packet))
     {
@@ -94,16 +96,8 @@ void ExchangeSource::onCancel()
 {
     LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
     was_query_canceled = true;
-    receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
-}
-
-void ExchangeSource::onUpdatePorts()
-{
-    if (getPort().isFinished())
-    {
-        was_receiver_finished = true;
-        receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
-    }
+    if(inited.load(std::memory_order_relaxed))
+        receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }
 
 }
