@@ -145,7 +145,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         pipeline->setMaxThreads(max_threads);
     size_t num_threads = pipeline->getNumThreads();
 
-    LOG_TRACE(
+    LOG_DEBUG(
         logger,
         "Runing plansegment id {}, segment: {} pipeline with {} threads",
         plan_segment->getQueryId(),
@@ -207,7 +207,8 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         sender->accept(context, header);
         senders.emplace_back(std::move(sender));
     }
-
+    
+    pipeline->setMaxThreads(pipeline->getNumThreads());
     if (!keep_order)
         pipeline->resize(context->getSettingsRef().exchange_unordered_output_parallel_size, false, false);
 

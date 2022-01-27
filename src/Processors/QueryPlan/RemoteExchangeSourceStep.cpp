@@ -21,7 +21,6 @@
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/ISourceStep.h>
 #include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
-#include <Processors/Sources/NullSource.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -90,6 +89,8 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 
     const Block & header = getOutputStream().header;
 
+    size_t source_num = 0;
+
     for (const auto & input : inputs)
     {
         size_t write_plan_segment_id = input->getPlanSegmentId();
@@ -137,12 +138,14 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 }
                 auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options, is_final_plan_segment);
                 pipe.addSource(std::move(source));
+                source_num++;
             }
         }
-        pipe.addSource(std::make_shared<NullSource>(header));
     }
 
     pipeline.init(std::move(pipe));
+    LOG_DEBUG(logger, "Total exchange source : {}", source_num);
+    pipeline.setMinThreads(source_num + 1);
 }
 
 
