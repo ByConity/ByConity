@@ -211,7 +211,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     if (!keep_order)
         pipeline->resize(context->getSettingsRef().exchange_unordered_output_parallel_size, false, false);
 
-    LOG_DEBUG(logger, "plan segment {} add broadcast sink with {} senders", plan_segment->getPlanSegmentId(), senders.size());
+    LOG_DEBUG(logger, "plan segment {} add {} senders", plan_segment->getPlanSegmentId(), senders.size());
 
     if (senders.empty())
         throw Exception("Plan segment has no exchange sender!", ErrorCodes::LOGICAL_ERROR);
