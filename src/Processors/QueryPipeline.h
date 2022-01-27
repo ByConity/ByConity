@@ -138,11 +138,14 @@ public:
         if (max_threads) //-V1051
             num_threads = std::min(num_threads, max_threads);
 
-        return std::max<size_t>(1, num_threads);
+        return std::max<size_t>(min_threads, num_threads);
     }
 
     /// Set upper limit for the recommend number of threads
     void setMaxThreads(size_t max_threads_) { max_threads = max_threads_; }
+
+    /// Set lower limit for the number of threads
+    void setMinThreads(size_t min_threads_) { min_threads = min_threads_; }
 
     /// Update upper limit for the recommend number of threads
     void limitMaxThreads(size_t max_threads_)
@@ -162,6 +165,9 @@ private:
     /// Limit on the number of threads. Zero means no limit.
     /// Sometimes, more streams are created then the number of threads for more optimal execution.
     size_t max_threads = 0;
+
+    /// Limit on the minimum number of threads.
+    size_t min_threads = 1;
 
     QueryStatus * process_list_element = nullptr;
 
