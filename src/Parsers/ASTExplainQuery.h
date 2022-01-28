@@ -19,6 +19,7 @@ public:
         QueryPipeline, /// 'EXPLAIN PIPELINE ...'
         MaterializedView, /// 'EXPLAIN VIEW SELECT ...'
         QueryElement, /// 'EXPLAIN ELEMENT ...'
+        PlanSegment, /// 'EXPLAIN PLANSEGMENT ...'
     };
 
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
@@ -82,6 +83,7 @@ private:
             case QueryPipeline: return "EXPLAIN PIPELINE";
             case MaterializedView: return "EXPLAIN VIEW";
             case QueryElement: return "EXPLAIN ELEMENT";
+            case PlanSegment: return "EXPLAIN PLANSEGMENT";
         }
 
         __builtin_unreachable();

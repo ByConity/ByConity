@@ -6,6 +6,7 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/predicateExpressionsUtils.h>
 #include <Formats/FormatFactory.h>
@@ -495,6 +496,16 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         elementWhere(where, buf);
         elementGroupBy(select_query.groupBy(), buf);
         buf << "}";
+    }
+    else if (ast.getKind() == ASTExplainQuery::PlanSegment)
+    {
+         if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
+            throw Exception("Only SELECT is supported for EXPLAIN query", ErrorCodes::INCORRECT_QUERY);
+
+        auto interpreter = std::make_unique<InterpreterDistributedStages>(ast.getExplainedQuery(), getContext());
+        auto * plan_segment_tree = interpreter->getPlanSegmentTree();
+        if (plan_segment_tree)
+             buf << plan_segment_tree->toString();
     }
 
     if (single_line)

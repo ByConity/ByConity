@@ -465,7 +465,7 @@ static void explainPipelineStep(IQueryPlanStep & step, IQueryPlanStep::FormatSet
         settings.offset += settings.indent;
 }
 
-void QueryPlan::explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options)
+void QueryPlan::explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options) const
 {
     checkInitialized();
 
