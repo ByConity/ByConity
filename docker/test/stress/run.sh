@@ -4,11 +4,17 @@
 
 set -x
 
-dpkg -i package_folder/clickhouse-common-static_*.deb
-dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
-dpkg -i package_folder/clickhouse-server_*.deb
-dpkg -i package_folder/clickhouse-client_*.deb
-dpkg -i package_folder/clickhouse-test_*.deb
+# dpkg -i package_folder/clickhouse-common-static_*.deb
+# dpkg -i package_folder/clickhouse-common-static-dbg_*.deb
+# dpkg -i package_folder/clickhouse-server_*.deb
+# dpkg -i package_folder/clickhouse-client_*.deb
+# dpkg -i package_folder/clickhouse-test_*.deb
+clickhouse/bin/clickhouse install
+cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
+cp -r clickhouse/share/clickhouse-test /usr/share/
+
+# prepare test_output directory
+mkdir -p test_output
 
 function configure()
 {
@@ -95,8 +101,8 @@ chmod 777 -R /var/lib/clickhouse
 clickhouse-client --query "ATTACH DATABASE IF NOT EXISTS datasets ENGINE = Ordinary"
 clickhouse-client --query "CREATE DATABASE IF NOT EXISTS test"
 
-stop
-start
+# stop
+# start
 
 clickhouse-client --query "SHOW TABLES FROM datasets"
 clickhouse-client --query "SHOW TABLES FROM test"
@@ -108,8 +114,8 @@ clickhouse-client --query "SHOW TABLES FROM test"
     && echo -e 'Test script exit code\tOK' >> /test_output/test_results.tsv \
     || echo -e 'Test script failed\tFAIL' >> /test_output/test_results.tsv
 
-stop
-start
+# stop
+# start
 
 clickhouse-client --query "SELECT 'Server successfully started', 'OK'" >> /test_output/test_results.tsv \
                        || echo -e 'Server failed to start\tFAIL' >> /test_output/test_results.tsv
@@ -118,40 +124,45 @@ clickhouse-client --query "SELECT 'Server successfully started', 'OK'" >> /test_
 [ -f /var/log/clickhouse-server/stderr.log ] || echo -e "Stderr log does not exist\tFAIL"
 
 # Print Fatal log messages to stdout
-zgrep -Fa " <Fatal> " /var/log/clickhouse-server/clickhouse-server.log
+zgrep -Fa " <Fatal> " /var/log/clickhouse-server/clickhouse-server.log*
 
 # Grep logs for sanitizer asserts, crashes and other critical errors
 
 # Sanitizer asserts
 zgrep -Fa "==================" /var/log/clickhouse-server/stderr.log >> /test_output/tmp
 zgrep -Fa "WARNING" /var/log/clickhouse-server/stderr.log >> /test_output/tmp
-zgrep -Fav "ASan doesn't fully support makecontext/swapcontext functions" > /dev/null \
+zgrep -Fav "ASan doesn't fully support makecontext/swapcontext functions" /test_output/tmp > /dev/null \
     && echo -e 'Sanitizer assert (in stderr.log)\tFAIL' >> /test_output/test_results.tsv \
     || echo -e 'No sanitizer asserts\tOK' >> /test_output/test_results.tsv
 rm -f /test_output/tmp
 
 # OOM
-zgrep -Fa " <Fatal> Application: Child process was terminated by signal 9" /var/log/clickhouse-server/clickhouse-server.log > /dev/null \
+zgrep -Fa " <Fatal> Application: Child process was terminated by signal 9" /var/log/clickhouse-server/clickhouse-server.log* > /dev/null \
     && echo -e 'OOM killer (or signal 9) in clickhouse-server.log\tFAIL' >> /test_output/test_results.tsv \
     || echo -e 'No OOM messages in clickhouse-server.log\tOK' >> /test_output/test_results.tsv
 
 # Logical errors
-zgrep -Fa "Code: 49, e.displayText() = DB::Exception:" /var/log/clickhouse-server/clickhouse-server.log > /dev/null \
-    && echo -e 'Logical error thrown (see clickhouse-server.log)\tFAIL' >> /test_output/test_results.tsv \
-    || echo -e 'No logical errors\tOK' >> /test_output/test_results.tsv
+# zgrep -Fa "Code: 49, e.displayText() = DB::Exception:" /var/log/clickhouse-server/clickhouse-server.log* > /dev/null \
+#     && echo -e 'Logical error thrown (see clickhouse-server.log)\tFAIL' >> /test_output/test_results.tsv \
+#     || echo -e 'No logical errors\tOK' >> /test_output/test_results.tsv
 
 # Crash
-zgrep -Fa "########################################" /var/log/clickhouse-server/clickhouse-server.log > /dev/null \
+zgrep -Fa "########################################" /var/log/clickhouse-server/clickhouse-server.log* > /dev/null \
     && echo -e 'Killed by signal (in clickhouse-server.log)\tFAIL' >> /test_output/test_results.tsv \
     || echo -e 'Not crashed\tOK' >> /test_output/test_results.tsv
 
 # It also checks for crash without stacktrace (printed by watchdog)
-zgrep -Fa " <Fatal> " /var/log/clickhouse-server/clickhouse-server.log > /dev/null \
+zgrep -Fa " <Fatal> " /var/log/clickhouse-server/clickhouse-server.log* > /dev/null \
     && echo -e 'Fatal message in clickhouse-server.log\tFAIL' >> /test_output/test_results.tsv \
     || echo -e 'No fatal messages in clickhouse-server.log\tOK' >> /test_output/test_results.tsv
 
 zgrep -Fa "########################################" /test_output/* > /dev/null \
     && echo -e 'Killed by signal (output files)\tFAIL' >> /test_output/test_results.tsv
+
+# Core dump
+# zgrep -Fa "BaseDaemon" /var/log/clickhouse-server/clickhouse-server.log* > /dev/null \
+#     && echo -e 'Core Dump exist (see clickhouse-server.log)\tFAIL' >> /test_output/test_results.tsv \
+#     || echo -e 'No Core dump/errors\tOK' >> /test_output/test_results.tsv
 
 # Put logs into /test_output/
 for log_file in /var/log/clickhouse-server/clickhouse-server.log*
@@ -167,3 +178,6 @@ tar -chf /test_output/trace_log_dump.tar /var/lib/clickhouse/data/system/trace_l
 # Write check result into check_status.tsv
 clickhouse-local --structure "test String, res String" -q "SELECT 'failure', test FROM table WHERE res != 'OK' order by (lower(test) like '%hung%') LIMIT 1" < /test_output/test_results.tsv > /test_output/check_status.tsv
 [ -s /test_output/check_status.tsv ] || echo -e "success\tNo errors found" > /test_output/check_status.tsv
+
+cat /test_output/test_results.tsv
+#grep -a "BaseDaemon" /var/log/clickhouse-server/clickhouse-server.log*

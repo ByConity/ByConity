@@ -140,7 +140,22 @@
         "01829_test_aggregation_bitmapExpressionComputation_two_shards",
         "01829_test_aggregation_bitmapExpressionComputation",
         "01829_test_aggregation_bitmapColumnDiff",
-        "00829_bitmap64_function"
+        "00829_bitmap64_function",
+
+        //StressTest skiplist
+        "08000_scalar_query_distributed_stages",
+        "10060_zookeeper_test_uniquekey_unique_merge",
+        "10061_zookeeper_test_uniquekey_alter_engine_table_level",
+        "10065_zookeeper_test_uniquekey_vertical_merge",
+        "10044_zookeeper_test_uniquekey_unique_merge_tree_optimize",
+        "10062_any_left_noteq_nestloop_join",
+        "10062_any_left_nestloop_join",
+        "00145_aggregate_functions_statistics",
+        "01594_too_low_memory_limits",
+        "10033_zookeeper_test_uniquekey_partition_level_unique",
+        "08000_test_multi_join_distributed_stages",
+        "08000_test_in_distributed_stages",
+        "08000_test_join_distributed_stages"
     ],
     "database-ordinary": [
         "00604_show_create_database",
