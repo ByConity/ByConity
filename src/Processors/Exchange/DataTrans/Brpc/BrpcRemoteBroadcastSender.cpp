@@ -139,7 +139,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
             int wait_res_code = brpc::StreamWait(stream_id, &timeout);
             if (wait_res_code == EINVAL)
                 throw Exception("Stream-" + std::to_string(stream_id) + " is closed, data_key-" + data_key, ErrorCodes::BRPC_EXCEPTION);
-            LOG_DEBUG(
+            LOG_TRACE(
                 log,
                 "Stream write buffer full wait for {} ms,  retry count-{}, stream_id-{} ,with data_key-{} wait res code:{} size:{} ",
                 STREAM_WAIT_TIMEOUT_MS,
@@ -155,7 +155,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
                 ErrorCodes::BRPC_EXCEPTION);
         else if (rect_code == 1011) //EOVERCROWDED   | 1011 | The server is overcrowded
         {
-            bthread_usleep(50 * 1000);
+            bthread_usleep(1000 * 1000);
             LOG_WARNING(
                 log, "Stream-{} write buffer error rect_code:{}, server is overcrowded, data_key-{}", stream_id, rect_code, data_key);
         }

@@ -9,6 +9,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 namespace DB
 {
@@ -49,7 +50,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
                 need_replace = true;
                 for (auto & segment_query : segment_group_it->second.segment_queries)
                 {
-                    (*segment_query.second)->cancelQuery(true);
+                    segment_query.second.second->cancelQuery(true);
                 }
             }
         }
@@ -68,6 +69,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
         entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
         query_status = &entry->get();
     }
+    auto segment_element = std::make_pair(std::move(entry), query_status);
     auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, query_status, plan_segment.getPlanSegmentId());
     
     std::unique_lock lock(mutex);
@@ -94,7 +96,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
         PlanSegmentGroup segment_group{
             .coordinator_address = extractExchangeStatusHostPort(plan_segment.getCoordinatorAddress()),
             .initial_query_start_time_ms = initial_query_start_time_ms,
-            .segment_queries = {{plan_segment.getPlanSegmentId(), std::move(entry)}}};
+            .segment_queries = {{plan_segment.getPlanSegmentId(), std::move(segment_element)}}};
         initail_query_to_groups.emplace(initial_query_id, std::move(segment_group));
         return res;
     }
@@ -106,7 +108,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
             ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
     }
 
-    const auto emplace_res = segment_group_it->second.segment_queries.emplace(plan_segment.getPlanSegmentId(), std::move(entry));
+    const auto emplace_res = segment_group_it->second.segment_queries.emplace(std::make_pair(plan_segment.getPlanSegmentId(), std::move(segment_element)));
     if (!emplace_res.second)
     {
         throw Exception("Exsited segment_id: " + segment_id_str + " for query: " + initial_query_id, ErrorCodes::LOGICAL_ERROR);
@@ -115,32 +117,27 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
 }
 
 
-CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String & initial_query_id, String coodinator_address)
+CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address)
 {
-    std::vector<ProcessList::EntryPtr> need_cancalled_queries;
+    std::lock_guard lock(mutex);
+    auto segment_group_it = initail_query_to_groups.find(initial_query_id);
+    if (segment_group_it != initail_query_to_groups.end())
     {
-        std::lock_guard lock(mutex);
-        auto segment_group_it = initail_query_to_groups.find(initial_query_id);
-        if (segment_group_it != initail_query_to_groups.end())
+        if (!coordinator_address.empty() && segment_group_it->second.coordinator_address != coordinator_address)
         {
-            if (!coodinator_address.empty() && segment_group_it->second.coordinator_address != coodinator_address)
-            {
-                return CancellationCode::CancelCannotBeSent;
-            }
+            return CancellationCode::CancelCannotBeSent;
+        }
+        if(segment_group_it->second.segment_queries.empty())
+        {
+            return CancellationCode::NotFound;
+        }
 
-            for (auto & segment_query : segment_group_it->second.segment_queries)
-            {
-                need_cancalled_queries.push_back(segment_query.second);
-            }
+        for (auto & segment_query : segment_group_it->second.segment_queries)
+        {
+            segment_query.second.second->cancelQuery(true);
         }
     }
 
-    if (need_cancalled_queries.empty())
-    {
-        return CancellationCode::NotFound;
-    }
-    for (auto & query : need_cancalled_queries)
-        query->get().cancelQuery(true);
     return CancellationCode::CancelSent;
 }
 
@@ -168,9 +165,9 @@ PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
 
         if (auto running_query = segment_group.segment_queries.find(segment_id); running_query != segment_group.segment_queries.end())
         {
-            if (running_query->second && &running_query->second->get() == status)
+            if (running_query->second.second == status)
             {
-                found_entry = std::move(running_query->second);
+                found_entry = std::move(running_query->second.first);
 
                 segment_group.segment_queries.erase(segment_id);
                 LOG_TRACE(

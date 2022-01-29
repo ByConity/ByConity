@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <unordered_map>
+#include <utility>
 
 namespace DB
 {
@@ -22,7 +23,8 @@ struct PlanSegmentGroup
 {
     String coordinator_address;
     Decimal64 initial_query_start_time_ms;
-    using SegmentIdToElement = std::unordered_map<size_t, std::shared_ptr<ProcessListEntry>>;
+    using SegmentElement = std::pair<std::shared_ptr<ProcessListEntry>, QueryStatus *>;
+    using SegmentIdToElement = std::unordered_map<size_t, SegmentElement>;
     SegmentIdToElement segment_queries;
 };
 
@@ -56,7 +58,7 @@ public:
 
     EntryPtr insert(const PlanSegment & plan_segment, ContextMutablePtr query_context, bool force = false);
 
-    CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coodinator_address = "");
+    CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 
 private:
     std::unordered_map<String, PlanSegmentGroup> initail_query_to_groups;

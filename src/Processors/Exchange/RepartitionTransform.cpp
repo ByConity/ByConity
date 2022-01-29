@@ -70,7 +70,7 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
     PartitionStartPoints partition_row_idx_start_points(partition_num + 1, 0);
 
     IColumn::Selector repartition_selector(input_rows_count, 0);
-    std::vector<size_t> partition_index(input_rows_count, 0);
+    PODArrayWithStackMemory<UInt32, 32> partition_index(input_rows_count, 0);
 
     for (size_t i = 0; i < input_rows_count; ++i)
         partition_index[i] = hash_result->get64(i) % partition_num;

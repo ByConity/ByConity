@@ -49,6 +49,7 @@ TEST(PlanSegmentProcessList, InsertTest)
 {
     initLogger();
     const auto & context = getContext().context;
+    context->setProcessListElement(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
@@ -59,16 +60,16 @@ TEST(PlanSegmentProcessList, InsertTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment_processlist.insert(plan_segment, context);
 }
 
 TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
 {
-    Poco::Logger::root().setLevel("trace");
-    Poco::Logger::root().setChannel(Poco::AutoPtr<Poco::ConsoleChannel>(new Poco::ConsoleChannel()));
+    initLogger();
     const auto & context = getContext().context;
+    context->setProcessListElement(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
@@ -79,8 +80,8 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
     auto async_func = [to_release_entry = std::move(plan_segment_process_entry)]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -98,6 +99,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
 TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
 {
     const auto & context = getContext().context;
+    context->setProcessListElement(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
@@ -108,8 +110,8 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     auto plan_segment_process_entry = plan_segment_processlist.insert(plan_segment, context);
 
     auto async_func = [&, to_release_entry = std::move(plan_segment_process_entry)]() {
