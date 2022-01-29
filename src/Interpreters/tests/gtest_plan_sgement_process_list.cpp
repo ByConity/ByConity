@@ -3,6 +3,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <Processors/QueryPlan/ReadNothingStep.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
 #include <common/scope_guard.h>
@@ -10,10 +13,37 @@
 #include <Common/tests/gtest_utils.h>
 
 
+
 using namespace DB;
 
 namespace UnitTest
 {
+
+Block createBlock()
+{
+    ColumnWithTypeAndName column;
+    column.name = "RES";
+
+    DataTypePtr type = DataTypeFactory::instance().get("UInt8");
+    column.column = type->createColumnConst(1, Field(1));
+    column.type = type;
+
+    ColumnsWithTypeAndName columns;
+    columns.push_back(column);
+
+    return Block(columns);
+}
+
+QueryPlan generateEmptyPlan()
+{
+    QueryPlan plan;
+
+    Block block = createBlock();
+    auto step = std::make_unique<ReadNothingStep>(block);
+    plan.addStep(std::move(step));
+
+    return plan;
+}
 
 TEST(PlanSegmentProcessList, InsertTest)
 {
@@ -24,6 +54,7 @@ TEST(PlanSegmentProcessList, InsertTest)
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
+    plan_segment.setQueryPlan(generateEmptyPlan());
 
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
@@ -43,6 +74,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
+    plan_segment.setQueryPlan(generateEmptyPlan());
 
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
@@ -71,6 +103,7 @@ TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("PlanSegmentProcessList_test");
     plan_segment.setPlanSegmentId(0);
+    plan_segment.setQueryPlan(generateEmptyPlan());
 
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
