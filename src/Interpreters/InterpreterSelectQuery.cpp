@@ -2114,7 +2114,11 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
     auto where_step = std::make_unique<FilterStep>(
         query_plan.getCurrentDataStream(), expression, getSelectQuery().where()->getColumnName(), remove_filter);
 
-    where_step->setStepDescription("WHERE");
+    String filter_description;
+    if (options.distributed_stages)
+        filter_description = ": " + getSelectQuery().where()->getColumnName();
+    
+    where_step->setStepDescription("WHERE" + filter_description);
     query_plan.addStep(std::move(where_step));
 }
 

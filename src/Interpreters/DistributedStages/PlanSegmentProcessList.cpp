@@ -2,8 +2,9 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
-#include <Common/Exception.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
+#include <IO/WriteBufferFromString.h>
+#include <Common/Exception.h>
 
 #include <memory>
 #include <mutex>
@@ -52,9 +53,14 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
         }
     }
 
+    WriteBufferFromOwnString pipeline_buffer;
+    QueryPlan::ExplainPlanOptions options;
+    plan_segment.getQueryPlan().explainPlan(pipeline_buffer, options);
+    String pipeline_string = pipeline_buffer.str();
+
     if (need_cancalled_queries.empty())
     {
-        ProcessList::EntryPtr entry = query_context->getProcessList().insert("segment: " + segment_id_str, nullptr, query_context, force);
+        ProcessList::EntryPtr entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
         auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, &entry->get(), plan_segment.getPlanSegmentId());
 
         std::lock_guard lock(mutex);
@@ -80,7 +86,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
     for (auto & query : need_cancalled_queries)
         query->cancelQuery(true);
 
-    ProcessList::EntryPtr entry = query_context->getProcessList().insert("segment: " + segment_id_str, nullptr, query_context, force);
+    ProcessList::EntryPtr entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
     auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, &entry->get(), plan_segment.getPlanSegmentId());
     {
         std::unique_lock lock(mutex);

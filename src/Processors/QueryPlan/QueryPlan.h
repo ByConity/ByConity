@@ -85,7 +85,7 @@ public:
 
     JSONBuilder::ItemPtr explainPlan(const ExplainPlanOptions & options);
     void explainPlan(WriteBuffer & buffer, const ExplainPlanOptions & options) const;
-    void explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options);
+    void explainPipeline(WriteBuffer & buffer, const ExplainPipelineOptions & options) const;
 
     /// Set upper limit for the recommend number of threads. Will be applied to the newly-created pipelines.
     /// TODO: make it in a better way.

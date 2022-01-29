@@ -146,6 +146,7 @@ void IStorage::read(
                                                               max_block_size,
                                                               num_streams,
                                                               context);
+        read_step->setStepDescription(getStorageID().getNameForLogs());
         query_plan.addStep(std::move(read_step));
     }
     else
