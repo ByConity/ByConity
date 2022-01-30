@@ -1,86 +1,87 @@
 #include "Server.h"
 
+#include <filesystem>
 #include <memory>
+#include <errno.h>
+#include <pwd.h>
+#include <unistd.h>
+#include <Access/AccessControlManager.h>
+#include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Dictionaries/registerDictionaries.h>
+#include <Disks/registerDisks.h>
+#include <Formats/registerFormats.h>
+#include <Functions/registerFunctions.h>
+#include <IO/HTTPCommon.h>
+#include <IO/UseSSL.h>
+#include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/DDLWorker.h>
+#include <Interpreters/DNSCacheUpdater.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Interpreters/ExternalDictionariesLoader.h>
+#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
+#include <Interpreters/ExternalModelsLoader.h>
+#include <Interpreters/InterserverCredentials.h>
+#include <Interpreters/JIT/CompiledExpressionCache.h>
+#include <Interpreters/ProcessList.h>
+#include <Interpreters/loadMetadata.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <Server/HTTP/HTTPServer.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/HaTCPHandlerFactory.h>
+#include <Server/MySQLHandlerFactory.h>
+#include <Server/PostgreSQLHandlerFactory.h>
+#include <Server/ProtocolServerAdapter.h>
+#include <Server/TCPHandlerFactory.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/StorageReplicatedMergeTree.h>
+#include <Storages/System/attachSystemTables.h>
+#include <Storages/registerStorages.h>
+#include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <google/protobuf/service.h>
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <errno.h>
-#include <pwd.h>
-#include <unistd.h>
-#include <Poco/Version.h>
 #include <Poco/DirectoryIterator.h>
+#include <Poco/Environment.h>
 #include <Poco/Net/HTTPServer.h>
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
-#include <Poco/Environment.h>
-#include <common/scope_guard.h>
-#include <common/defines.h>
-#include <common/logger_useful.h>
-#include <common/phdr_cache.h>
-#include <common/ErrorHandlers.h>
-#include <common/getMemoryAmount.h>
-#include <common/errnoToString.h>
-#include <common/coverage.h>
+#include <Poco/Version.h>
+#include <Common/Brpc/BrpcApplication.h>
 #include <Common/ClickHouseRevision.h>
-#include <Common/DNSResolver.h>
+#include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DNSResolver.h>
+#include <Common/Elf.h>
 #include <Common/Macros.h>
+#include <Common/SensitiveDataMasker.h>
+#include <Common/StatusFile.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
-#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
-#include <common/getFQDNOrHostName.h>
-#include <Common/getMultipleKeysFromConfig.h>
-#include <Common/getNumberOfPhysicalCPUCores.h>
-#include <Common/getExecutablePath.h>
+#include <Common/TLDListsHolder.h>
+#include <Common/ThreadFuzzer.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/ThreadStatus.h>
-#include <Common/getMappedArea.h>
-#include <Common/remapExecutable.h>
-#include <Common/TLDListsHolder.h>
-#include <IO/HTTPCommon.h>
-#include <IO/UseSSL.h>
-#include <Interpreters/AsynchronousMetrics.h>
-#include <Interpreters/DDLWorker.h>
-#include <Interpreters/ExternalDictionariesLoader.h>
-#include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/ProcessList.h>
-#include <Interpreters/loadMetadata.h>
-#include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/DNSCacheUpdater.h>
-#include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Interpreters/InterserverCredentials.h>
-#include <Interpreters/JIT/CompiledExpressionCache.h>
-#include <Access/AccessControlManager.h>
-#include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/System/attachSystemTables.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Functions/registerFunctions.h>
-#include <TableFunctions/registerTableFunctions.h>
-#include <Formats/registerFormats.h>
-#include <Storages/registerStorages.h>
-#include <Dictionaries/registerDictionaries.h>
-#include <Disks/registerDisks.h>
-#include <Common/Config/ConfigReloader.h>
-#include <Server/HTTPHandlerFactory.h>
-#include "MetricsTransmitter.h"
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
-#include <Common/StatusFile.h>
-#include <Server/TCPHandlerFactory.h>
-#include <Server/HaTCPHandlerFactory.h>
-#include <Common/SensitiveDataMasker.h>
-#include <Common/ThreadFuzzer.h>
+#include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/ZooKeeper/ZooKeeperNodeCache.h>
+#include <Common/getExecutablePath.h>
 #include <Common/getHashOfLoadedBinary.h>
-#include <Common/Elf.h>
-#include <Server/MySQLHandlerFactory.h>
-#include <Server/PostgreSQLHandlerFactory.h>
-#include <Server/ProtocolServerAdapter.h>
-#include <Server/HTTP/HTTPServer.h>
-#include <filesystem>
-#include <Common/Brpc/BrpcApplication.h>
+#include <Common/getMappedArea.h>
+#include <Common/getMultipleKeysFromConfig.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/remapExecutable.h>
+#include <common/ErrorHandlers.h>
+#include <common/coverage.h>
+#include <common/defines.h>
+#include <common/errnoToString.h>
+#include <common/getFQDNOrHostName.h>
+#include <common/getMemoryAmount.h>
+#include <common/logger_useful.h>
+#include <common/phdr_cache.h>
+#include <common/scope_guard.h>
+#include "MetricsTransmitter.h"
 
 
 #if !defined(ARCADIA_BUILD)
@@ -1567,16 +1568,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             /// Brpc data trans registry service
             rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
             rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
+            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
             if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
                 throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
+            }
+            if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
             }
             brpc::ServerOptions stream_options;
             stream_options.idle_timeout_sec = -1;
             if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
                 throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
             }
+            if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &stream_options) != 0) {
+                throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+            }
             LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
+            LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
 
             /// TODO status service
             

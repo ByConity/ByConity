@@ -698,12 +698,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 element.profile_counters = std::move(info.profile_counters);
             };
 
+            auto query_id = CurrentThread::getQueryId().toString();
             /// Also make possible for caller to log successful query finish and exception during execution.
             auto finish_callback = [elem, context, ast,
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 status_info_to_query_log
+                 status_info_to_query_log,
+                 query_id
             ]
                 (IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline * query_pipeline) mutable
             {
@@ -817,13 +819,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                     opentelemetry_span_log->add(span);
                 }
+
+                // cancel coordinator itself
+                context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
+                SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+                scheduler->finishPlanSegments(query_id);
             };
 
             auto exception_callback = [elem, context, ast,
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 quota(quota), status_info_to_query_log] () mutable
+                 quota(quota), status_info_to_query_log, query_id] () mutable
             {
                 if (quota)
                     quota->used(Quota::ERRORS, 1, /* check_exceeded = */ false);
@@ -873,6 +880,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
                 }
 
+                context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
+                SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+                scheduler->finishPlanSegments(query_id);
             };
 
             res.finish_callback = std::move(finish_callback);

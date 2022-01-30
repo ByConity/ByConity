@@ -3,31 +3,34 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
+#include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
+#include <Processors/Exchange/DataTrans/RpcClientFactory.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <Processors/Exchange/LoadBalancedExchangeSink.h>
 #include <Processors/Exchange/MultiPartitionExchangeSink.h>
 #include <Processors/Exchange/RepartitionTransform.h>
+#include <Processors/Exchange/SinglePartitionExchangeSink.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/QueryPlan.h>
+#include <Processors/Transforms/BufferedCopyTransform.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
 #include <common/logger_useful.h>
-#include <Processors/Exchange/SinglePartitionExchangeSink.h>
-#include <Processors/Transforms/BufferedCopyTransform.h>
-#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-
 
 namespace DB
 {
@@ -35,6 +38,7 @@ namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
+    extern const int QUERY_WAS_CANCELLED;
 }
 
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
@@ -55,16 +59,25 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
 {
 }
 
-void PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
+RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)
 {
     LOG_DEBUG(logger, "execute PlanSegment:\n" + plan_segment->toString());
     try
     {
         doExecute(std::move(thread_group));
+        RuntimeSegmentsStatus status(plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), true, false, "execute success", 0);
+        sendSegmentStatus(status);
+        return status;
     }
     catch (...)
     {
+        RuntimeSegmentsStatus status(
+            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), -1);
         tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+        if (getCurrentExceptionCode() == ErrorCodes::QUERY_WAS_CANCELLED)
+            status.is_canceled = true;
+        sendSegmentStatus(status);
+        return status;
     }
 
     //TODO notify segment scheduler with finished or exception status.
@@ -303,5 +316,35 @@ void PlanSegmentExecutor::addLoadBalancedExchangeSink(QueryPipelinePtr & pipelin
             return nullptr;
         return std::make_shared<LoadBalancedExchangeSink>(header, senders);
     });
+}
+
+void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept
+{
+    try
+    {
+        if (!options.need_send_plan_segment_status)
+            return;
+        auto address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+
+        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address, false);
+        Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
+        brpc::Controller cntl;
+        Protos::SendPlanSegmentStatusRequest request;
+        Protos::SendPlanSegmentStatusResponse response;
+        request.set_query_id(status.query_id);
+        request.set_segment_id(status.segment_id);
+        request.set_is_succeed(status.is_succeed);
+        request.set_is_canceled(status.is_canceled);
+        request.set_code(status.code);
+        request.set_message(status.message);
+
+        manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
+        rpc_client->assertController(cntl);
+        LOG_TRACE(logger, "PlanSegment-{} send status to coordinator successfully, query id-{}.", request.segment_id(), request.query_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 }

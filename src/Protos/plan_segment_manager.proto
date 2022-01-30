@@ -1,0 +1,34 @@
+syntax = "proto2";
+package DB.Protos;
+
+option cc_generic_services = true;
+
+message CancelQueryRequest {
+  required string query_id = 1;
+  optional string coordinator_address = 2;
+};
+
+message CancelQueryResponse {
+  required string ret_code = 1;
+  optional string message = 2;
+};
+
+message SendPlanSegmentStatusRequest {
+  required string query_id = 1;
+  required int32 segment_id = 2;
+  required bool is_succeed = 3;
+  required bool is_canceled = 4;
+  required int32 code = 5;
+  optional string message = 6;
+}
+
+message SendPlanSegmentStatusResponse {
+  optional string message = 1;
+}
+
+service PlanSegmentManagerService {
+
+  rpc cancelQuery(CancelQueryRequest) returns (CancelQueryResponse);
+
+  rpc sendPlanSegmentStatus(SendPlanSegmentStatusRequest) returns (SendPlanSegmentStatusResponse);
+};

@@ -1,4 +1,4 @@
-protobuf_generate_cpp(dbms_proto_srcs dbms_proto_headers registry.proto)
+protobuf_generate_cpp(dbms_proto_srcs dbms_proto_headers registry.proto plan_segment_manager.proto)
 
 # Disable clang-tidy for protobuf-generated *.pb.h and *.pb.cpp files.
 set (CMAKE_CXX_CLANG_TIDY "")
