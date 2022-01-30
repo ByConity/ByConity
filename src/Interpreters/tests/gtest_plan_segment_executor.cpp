@@ -33,6 +33,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
 {
     initLogger();
     const auto & context = getContext().context;
+    context->setProcessListElement(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
@@ -47,17 +48,17 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
+    auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coordinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coordinator_address_str);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
     sink_sender->becomeRealSender(sink_channel);
@@ -83,7 +84,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
     plan_segment.setCurrentAddress(local_address);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
 
@@ -129,6 +130,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
 {
     initLogger();
     const auto context = Context::createCopy(getContext().context);
+    context->setProcessListElement(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
@@ -138,17 +140,17 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
 
     const String query_id = "PlanSegmentExecutor_test";
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
-    auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coordinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coordinator_address_str);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
     sink_sender->becomeRealSender(sink_channel);
@@ -174,7 +176,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
     plan_segment.setCurrentAddress(local_address);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
 
@@ -223,6 +225,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
 {
     initLogger();
     const auto context = Context::createCopy(getContext().context);
+    context->setProcessListElement(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
@@ -232,17 +235,17 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
 
     const String query_id = "PlanSegmentExecutor_test";
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
+    auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coodinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 2, 1, coordinator_address_str);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coodinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 3, 1, coordinator_address_str);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
     sink_sender->becomeRealSender(sink_channel);
@@ -268,7 +271,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     plan_segment.setPlanSegmentId(2);
     plan_segment.setContext(context);
     plan_segment.setCurrentAddress(local_address);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
 

@@ -87,21 +87,12 @@ BlockIO PlanSegmentExecutor::lazyExecute(bool /*add_output_processors*/)
 {
     BlockIO res;
     // Will run as master query and already initialized
-    if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext() != context)
+    if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
         throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
-
-    const String & query_id = plan_segment->getQueryId();
-    const String & segment_id = std::to_string(plan_segment->getPlanSegmentId());
-    //TODO: query_id should set by scheduler
-    context->getClientInfo().initial_query_id = query_id;
-    context->getClientInfo().current_query_id = query_id + "_" + segment_id;
 
     res.plan_segment_process_entry = context->getPlanSegmentProcessList().insert(*plan_segment, context);
 
-    QueryStatus * query_status = & res.plan_segment_process_entry->get();
-    context->setProcessListElement(query_status);
     res.pipeline = std::move(*buildPipeline());
-    res.pipeline.setProcessListElement(query_status);
 
     return res;
 }
@@ -125,7 +116,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         else
         {
             // Running as master query and already initialized
-            if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext() != context)
+            if (!CurrentThread::get().getQueryContext() || CurrentThread::get().getQueryContext().get() != context.get())
                 throw Exception("context not match", ErrorCodes::LOGICAL_ERROR);
         }
     }

@@ -47,72 +47,41 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
 
 void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 {
-    Stopwatch s;
-    size_t retry_times = 0;
-    while (s.elapsedMilliseconds() < timeout_ms)
+    std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(registry_address, false);
+    Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
+    brpc::Controller cntl;
+    brpc::StreamOptions stream_options;
+    const auto stream_max_buf_size_bytes = -1;
+    stream_options.max_buf_size = stream_max_buf_size_bytes;
+    stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
+    if (timeout_ms == 0)
+        cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
+    else
+        cntl.set_timeout_ms(timeout_ms);
+    cntl.set_max_retry(3);
+    if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
+        throw Exception("Fail to create stream for " + getName(), ErrorCodes::BRPC_EXCEPTION);
+
+    if (stream_id == brpc::INVALID_STREAM_ID)
+        throw Exception("Stream id is invalid for " + getName(), ErrorCodes::BRPC_EXCEPTION);
+
+    Protos::RegistryRequest request;
+    Protos::RegistryResponse response;
+    request.set_data_key(trans_key->getKey());
+    stub.registry(&cntl, &request, &response, nullptr);
+    // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
+    if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
     {
-        try
-        {
-            std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(registry_address, false);
-            Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
-            brpc::Controller cntl;
-            brpc::StreamOptions stream_options;
-            const auto stream_max_buf_size_bytes = -1;
-            stream_options.max_buf_size = stream_max_buf_size_bytes;
-            stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
-            cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
-            if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
-                throw Exception("Fail to create stream for " + getName(), ErrorCodes::BRPC_EXCEPTION);
-
-            if (stream_id == brpc::INVALID_STREAM_ID)
-                throw Exception("Stream id is invalid for " + getName(), ErrorCodes::BRPC_EXCEPTION);
-
-            Protos::RegistryRequest request;
-            Protos::RegistryResponse response;
-            request.set_data_key(trans_key->getKey());
-            stub.registry(&cntl, &request, &response, nullptr);
-            // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
-            if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
-            {
-                LOG_INFO(
-                    log,
-                    "Receiver register sender successfully but sender already finished, host-{} , data_key-{}, stream_id-{}",
-                    registry_address,
-                    data_key,
-                    stream_id);
-                return;
-            }
-            rpc_client->assertController(cntl);
-            LOG_DEBUG(
-                log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
-            return;
-        }
-        catch (Exception & e)
-        {
-            if (e.code() == ErrorCodes::BRPC_EXCEPTION)
-            {
-                retry_times++;
-                LOG_WARNING(log, "Catch brpc exception when registering to sender:{} retrying:{}", e.message(), retry_times);
-                if (s.elapsedMilliseconds() >= timeout_ms || retry_times > 3)
-                    throw e;
-                else
-                {
-                    // we should close failed stream at any situation
-                    if (stream_id != brpc::INVALID_STREAM_ID)
-                    {
-                        brpc::StreamClose(stream_id);
-                        stream_id = brpc::INVALID_STREAM_ID;
-                    }
-                    bthread_usleep(10000L);
-                }
-            }
-            else
-            {
-                LOG_WARNING(log, "Catch other exception when registering to sender:{}", e.message());
-                throw e;
-            }
-        }
+        LOG_INFO(
+            log,
+            "Receiver register sender successfully but sender already finished, host-{} , data_key-{}, stream_id-{}",
+            registry_address,
+            data_key,
+            stream_id);
+        return;
     }
+    rpc_client->assertController(cntl);
+    LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
 }
 
 void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)

@@ -40,10 +40,10 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     client_info.current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     client_info.current_user = "test";
     client_info.initial_query_id = plan_segment.getQueryId();
-    AddressInfo coodinator_address("localhost", 8888, "test", "123456", 9999, 6666);
+    AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
-    auto coodinator_address_str = extractExchangeStatusHostPort(coodinator_address);
-    plan_segment.setCoordinatorAddress(coodinator_address);
+    auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
+    plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment.setCurrentAddress(local_address);
     Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
 
@@ -66,11 +66,11 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};
     exchange_source_step.setExchangeOptions(exchange_options);
 
-    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 1, coodinator_address_str);
+    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 1, coordinator_address_str);
     BroadcastSenderProxyPtr local_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_1);
     local_sender_1->accept(context, header);
 
-    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 2, coodinator_address_str);
+    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, 2, coordinator_address_str);
     BroadcastSenderProxyPtr local_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_2);
     local_sender_2->accept(context, header);
 
