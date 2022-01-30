@@ -66,12 +66,13 @@ void BrpcExchangeReceiverRegistryService::registry(
         String error_msg = "Create stream for " + request->data_key() + " failed by exception: " + getCurrentExceptionMessage(false);
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
+        return;
     }
     
     if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
     {
         sender_stream_id = brpc::INVALID_STREAM_ID;
-        String error_msg = "Fail to accept stream for data_key-" + request->data_key() + " failed";
+        String error_msg = "Fail to accept stream for data_key-" + request->data_key();
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
         return;

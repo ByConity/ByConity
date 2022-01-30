@@ -2,14 +2,14 @@
 #include <memory>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/IProcessor.h>
-#include <Processors/ISink.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Poco/Logger.h>
 #include <common/types.h>
 
 namespace DB
 {
 /// Sink which send data to ExchangeSource with LoadBalanceSelector.
-class LoadBalancedExchangeSink : public ISink
+class LoadBalancedExchangeSink : public IExchangeSink
 {
 public:
     class LoadBalanceSelector : private boost::noncopyable

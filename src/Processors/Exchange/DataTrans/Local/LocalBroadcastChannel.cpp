@@ -3,14 +3,15 @@
 #include <optional>
 #include <string>
 #include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Poco/Logger.h>
+#include <Common/CurrentMemoryTracker.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
-#include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 
 namespace DB
 {
@@ -35,7 +36,10 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     if (receive_queue.tryPop(recv_chunk, timeout_ms))
     {
         if (recv_chunk)
+        {
+            CurrentMemoryTracker::alloc(recv_chunk.allocatedBytes());
             return RecvDataPacket(std::move(recv_chunk));
+        }
         else
             return RecvDataPacket(*broadcast_status.load(std::memory_order_relaxed));
     }
@@ -52,8 +56,13 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
         return *broadcast_status.load(std::memory_order_relaxed);
+    auto bytes = chunk.allocatedBytes();
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
+    {
+        CurrentMemoryTracker::free(bytes);
         return *broadcast_status.load(std::memory_order_relaxed);
+    }
+
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
         "Send to channel " + data_key->getKey() + " timeout after ms: " + std::to_string(options.max_timeout_ms));

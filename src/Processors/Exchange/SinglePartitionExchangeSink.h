@@ -1,11 +1,11 @@
 #pragma once
-#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Exchange/ExchangeOptions.h>
-#include <Processors/IProcessor.h>
-#include <Processors/ISink.h>
-#include <Functions/IFunction.h>
 #include <Core/ColumnNumbers.h>
+#include <Functions/IFunction.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeBufferedSender.h>
+#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/IExchangeSink.h>
+#include <Processors/IProcessor.h>
 
 namespace DB
 {
@@ -14,7 +14,7 @@ namespace DB
 /// RepartitionTransform--> BufferedCopyTransform-->||-> SinglePartitionExchangeSink[partition 1]
 ///                                                 ||-> SinglePartitionExchangeSink[partition 2]
 /// This pipeline can keep data order and maximize the parallelism.
-class SinglePartitionExchangeSink : public ISink
+class SinglePartitionExchangeSink : public IExchangeSink
 {
 public:
     explicit SinglePartitionExchangeSink(Block header_, 

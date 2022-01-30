@@ -6,7 +6,6 @@
 #include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Chunk.h>
-#include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <boost/noncopyable.hpp>

@@ -2,7 +2,7 @@
 #include <atomic>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/IProcessor.h>
-#include <Processors/ISink.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <bthread/mtx_cv_base.h>
 #include <Poco/Logger.h>
 
@@ -10,7 +10,7 @@ namespace DB
 {
 
 /// Sink which broadcast data to ExchangeSource.
-class BroadcastExchangeSink : public ISink
+class BroadcastExchangeSink : public IExchangeSink
 {
 public:
     explicit BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_);

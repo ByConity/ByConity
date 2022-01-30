@@ -63,7 +63,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 {
     if (!inited.load(std::memory_order_relaxed))
     {
-        receiver->registerToSenders(std::max(options.exhcange_timeout_ms / 3, 1000u));
+        receiver->registerToSenders(std::min(std::max(options.exhcange_timeout_ms / 3, 1000u), 5000u));
         inited.store(true, std::memory_order_relaxed);
     }
     if (was_query_canceled || was_receiver_finished)

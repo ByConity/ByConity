@@ -1,7 +1,7 @@
 #include <memory>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/LoadBalancedExchangeSink.h>
-#include <Processors/ISink.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <common/types.h>
 #include <Common/Exception.h>
@@ -27,7 +27,7 @@ private:
 };
 
 LoadBalancedExchangeSink::LoadBalancedExchangeSink(Block header_, BroadcastSenderPtrs senders_)
-    : ISink(std::move(header_))
+    : IExchangeSink(std::move(header_))
     , senders(std::move(senders_))
     , partition_selector(std::make_unique<RoundRobinSelector>(senders.size()))
     , logger(&Poco::Logger::get("LoadBalancedExchangeSink"))
@@ -39,7 +39,9 @@ LoadBalancedExchangeSink::~LoadBalancedExchangeSink() = default;
 
 void LoadBalancedExchangeSink::consume(Chunk chunk)
 {
-    ExchangeUtils::sendAndCheckReturnStatus(*senders[partition_selector->selectNext()], std::move(chunk));
+    auto status = ExchangeUtils::sendAndCheckReturnStatus(*senders[partition_selector->selectNext()], std::move(chunk));
+    if (status.code != BroadcastStatusCode::RUNNING)
+        finish();
 }
 
 void LoadBalancedExchangeSink::onFinish()

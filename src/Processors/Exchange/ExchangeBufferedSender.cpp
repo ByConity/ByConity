@@ -24,17 +24,17 @@ ExchangeBufferedSender::ExchangeBufferedSender(
     resetBuffer();
 }
 
-void ExchangeBufferedSender::flush(bool force)
+BroadcastStatus ExchangeBufferedSender::flush(bool force)
 {
     size_t rows = partition_buffer[0]->size();
 
     if (rows == 0)
-        return;
+        return BroadcastStatus(BroadcastStatusCode::RUNNING);
 
     if (!force)
     {
         if (bufferBytes() < threshold_in_bytes && rows < threshold_in_row_num)
-            return;
+            return BroadcastStatus(BroadcastStatusCode::RUNNING);
     }
 
     LOG_TRACE(logger, "flush buffer, force: {}, row: {}", force, rows);
@@ -42,8 +42,9 @@ void ExchangeBufferedSender::flush(bool force)
     Chunk chunk(std::move(partition_buffer), rows, std::move(current_chunk_info));
     current_chunk_info = ChunkInfoPtr();
 
-    ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
+    auto res = ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
     resetBuffer();
+    return res;
 }
 
 bool ExchangeBufferedSender::compareBufferChunkInfo(const ChunkInfoPtr & chunk_info) const
@@ -58,9 +59,9 @@ void ExchangeBufferedSender::updateBufferChunkInfo(ChunkInfoPtr chunk_info)
     current_chunk_info = std::move(chunk_info);
 }
 
-void ExchangeBufferedSender::sendThrough(Chunk chunk)
+BroadcastStatus ExchangeBufferedSender::sendThrough(Chunk chunk)
 {
-    ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
+    return ExchangeUtils::sendAndCheckReturnStatus(*sender, std::move(chunk));
 }
 
 void ExchangeBufferedSender::resetBuffer()
