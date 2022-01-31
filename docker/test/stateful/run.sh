@@ -38,7 +38,7 @@ function start()
         --keeper_server.tcp_port 29181 --keeper_server.server_id 3
     fi
     sudo clickhouse start
-    sleep 2
+    sleep 10
     counter=0
     until clickhouse-client --query "SELECT 1"
     do
