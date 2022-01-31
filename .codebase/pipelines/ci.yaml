@@ -99,45 +99,46 @@ jobs:
               echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
               exit 1
             fi
+
   CertificateStatefullTest:
-      name: CertificateStatefullTest
-      image: hub.byted.org/bytehouse/clickhouse-stateful-test:certificate
-      depends: [scm_build]
-      steps:
-        - uses: actions/checkout
-          inputs:
-            depth: 1
-        - name: Download From SCM
-          commands:
-            - echo $(pwd)
-            - cd /
-            - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-            - CLICKHOUSE_PREFIX="clickhouse"
-            - mkdir -p $CLICKHOUSE_PREFIX
-            - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_dev_$CLICKHOUSE_VERSION.tar.gz
-            - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-            - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
-        - name: Run CertificateStatefullTest
-          commands:
-            - cd /
-            - cp /home/code/docker/test/certificate/run.sh run.sh
-            - /bin/bash run.sh
-        - name: Upload Artifact
-          uses: actions/upload-artifact
-          inputs:
-            name: test_output
-            path: /test_output
-        - name: Analyse Result
-          commands:
-            - |
-              if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-              then
-                echo "::add-message level=info::all cases pass!"
-                exit 0
-              else
-                echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-                exit 1
-              fi
+    name: CertificateStatefullTest
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:certificate
+    depends: [scm_build]
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - name: Download From SCM
+        commands:
+          - echo $(pwd)
+          - cd /
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_PREFIX="clickhouse"
+          - mkdir -p $CLICKHOUSE_PREFIX
+          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_dev_$CLICKHOUSE_VERSION.tar.gz
+          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - name: Run CertificateStatefullTest
+        commands:
+          - cd /
+          - cp /home/code/docker/test/certificate/run.sh run.sh
+          - /bin/bash run.sh
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: test_output
+          path: /test_output
+      - name: Analyse Result
+        commands:
+          - |
+            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
+            then
+              echo "::add-message level=info::all cases pass!"
+              exit 0
+            else
+              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
+              exit 1
+            fi
   
   StressTest:
     name: StressTest
@@ -178,3 +179,104 @@ jobs:
               echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
               exit 1
             fi
+
+  scm_build_ASAN:
+    manual: true
+    name: SCM Build_ASAN for clang11 ch_vanilla_debian_dev
+    image: hub.byted.org/data-ci-debian:latest
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - uses: actions/scm
+        id: scm_build
+        inputs:
+          scm_repo: dp/clickhouse/ch_vanilla_clang_dev
+          version_type: test
+          sync_bvc: false
+          sync_aws: false
+          sync_oss: false
+          envs:
+            CUSTOM_SANITIZE: "address"
+
+  FuntionalStatelessTest-ASAN:
+    name: FuntionalStatelessTest-ASAN
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+    depends: [scm_build_ASAN]
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - name: Download From SCM
+        commands:
+          - echo $(pwd)
+          - cd /
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build_ASAN"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_PREFIX="clickhouse"
+          - mkdir -p $CLICKHOUSE_PREFIX
+          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_dev_$CLICKHOUSE_VERSION.tar.gz
+          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - name: Run FuntionalStatelessTest
+        commands:
+          - cd /
+          - cp /home/code/docker/test/stateless/run.sh run.sh
+          - /bin/bash run.sh
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: test_output
+          path: /test_output
+      - name: Analyse Result
+        commands:
+          - |
+            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
+            then
+              echo "::add-message level=info::all cases pass!"
+              exit 0
+            else
+              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
+              exit 1
+            fi
+
+  FuntionalStatefulTest-ASAN:
+    name: FuntionalStatefulTest-ASAN
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
+    depends: [scm_build_ASAN]
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - name: Download From SCM
+        commands:
+          - echo $(pwd)
+          - cd /
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build_ASAN"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_PREFIX="clickhouse"
+          - mkdir -p $CLICKHOUSE_PREFIX
+          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_dev_$CLICKHOUSE_VERSION.tar.gz
+          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - name: Run FuntionalStatefulTest
+        commands:
+          - cd /
+          - cp /home/code/docker/test/stateful/run.sh run.sh
+          - /bin/bash run.sh
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: test_output
+          path: /test_output
+      - name: Analyse Result
+        commands:
+          - |
+            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
+            then
+              echo "::add-message level=info::all cases pass!"
+              exit 0
+            else
+              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
+              exit 1
+            fi  
+  
+

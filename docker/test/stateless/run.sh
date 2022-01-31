@@ -9,7 +9,7 @@ set -e -x -a
 # dpkg -i package_folder/clickhouse-server_*.deb
 # dpkg -i package_folder/clickhouse-client_*.deb
 # dpkg -i package_folder/clickhouse-test_*.deb
-sudo clickhouse/bin/clickhouse install
+clickhouse/bin/clickhouse install
 cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
 cp -r clickhouse/share/clickhouse-test /usr/share/
 
@@ -18,6 +18,8 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # prepare test_output directory
 mkdir -p test_output
+# ASAN log path defined
+export ASAN_OPTIONS=halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
@@ -42,7 +44,7 @@ if [ "$NUM_TRIES" -gt "1" ]; then
     # simpliest way to forward env variables to server
     sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
 else
-    sudo clickhouse start
+    sudo -E clickhouse start
 fi
 
 if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
@@ -156,4 +158,13 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
     mv /var/log/clickhouse-server/stderr2.log /test_output/ ||:
     tar -chf /test_output/coordination1.tar /var/lib/clickhouse1/coordination ||:
     tar -chf /test_output/coordination2.tar /var/lib/clickhouse2/coordination ||:
+fi
+
+#To print ASAN LOG in the console
+if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
+then
+    cat /var/log/clickhouse-server/asan.log.*
+    echo "ASAN Logs are printed for analysis."
+else
+    echo "No ASAN logs exists"
 fi
