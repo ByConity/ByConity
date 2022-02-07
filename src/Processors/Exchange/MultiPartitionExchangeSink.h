@@ -1,12 +1,12 @@
 #pragma once
 #include <Core/ColumnNumbers.h>
 #include <Functions/IFunction.h>
+#include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeBufferedSender.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/IProcessor.h>
-#include <Processors/ISink.h>
-#include "Processors/Chunk.h"
 
 namespace DB
 {
@@ -15,7 +15,7 @@ namespace DB
 /// ResizeProcessor-->||-> MultiPartitionExchangeSink
 ///                   ||-> MultiPartitionExchangeSink
 /// This pipeline will not keep data order and maximize the performance.
-class MultiPartitionExchangeSink : public ISink
+class MultiPartitionExchangeSink : public IExchangeSink
 {
 public:
     explicit MultiPartitionExchangeSink(

@@ -1,7 +1,7 @@
 #include <tuple>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/MultiPartitionExchangeSink.h>
-#include <Processors/ISink.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 #include <Columns/IColumn.h>
@@ -11,14 +11,13 @@
 
 namespace DB
 {
-
 MultiPartitionExchangeSink::MultiPartitionExchangeSink(
     Block header_,
     BroadcastSenderPtrs partition_senders_,
     ExecutableFunctionPtr repartition_func_,
     ColumnNumbers repartition_keys_,
     ExchangeOptions options_)
-    : ISink(std::move(header_))
+    : IExchangeSink(std::move(header_))
     , header(getPort().getHeader())
     , partition_senders(std::move(partition_senders_))
     , partition_num(partition_senders.size())
@@ -40,7 +39,9 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 {
     if (partition_num == 1)
     {
-        buffered_senders[0].sendThrough(std::move(chunk));
+        auto status = buffered_senders[0].sendThrough(std::move(chunk));
+        if (status.code != BroadcastStatusCode::RUNNING)
+            finish();
         return;
     }
     const auto & chunk_info = chunk.getChunkInfo();
@@ -73,7 +74,9 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 
     for(size_t i = 0; i < partition_num ; ++i)
     {  
-        buffered_senders[i].flush(false);
+        auto status = buffered_senders[i].flush(false);
+        if (status.code != BroadcastStatusCode::RUNNING)
+            finish();
     }
 
 }

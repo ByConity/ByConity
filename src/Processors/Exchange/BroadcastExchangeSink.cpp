@@ -4,7 +4,7 @@
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeUtils.h>
-#include <Processors/ISink.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -12,7 +12,7 @@
 namespace DB
 {
 BroadcastExchangeSink::BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_)
-    : ISink(std::move(header_)), senders(std::move(senders_)), logger(&Poco::Logger::get("BroadcastExchangeSink"))
+    : IExchangeSink(std::move(header_)), senders(std::move(senders_)), logger(&Poco::Logger::get("BroadcastExchangeSink"))
 
 {
 }
@@ -24,9 +24,13 @@ void BroadcastExchangeSink::consume(Chunk chunk)
 {
     for (size_t i = 0; i < senders.size() - 1; ++i)
     {
-        ExchangeUtils::sendAndCheckReturnStatus(*senders[i], chunk.clone());
+        auto status = ExchangeUtils::sendAndCheckReturnStatus(*senders[i], chunk.clone());
+        if (status.code != BroadcastStatusCode::RUNNING)
+            finish();
     }
-    ExchangeUtils::sendAndCheckReturnStatus(*senders.back(), std::move(chunk));
+    auto status = ExchangeUtils::sendAndCheckReturnStatus(*senders.back(), std::move(chunk));
+    if (status.code != BroadcastStatusCode::RUNNING)
+        finish();
 }
 
 void BroadcastExchangeSink::onFinish()

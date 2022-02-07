@@ -40,7 +40,14 @@ public:
         // this means exception happened during execution.
         if (!request->is_succeed() && !request->is_canceled())
         {
-            scheduler->cancelPlanSegmentsFromCoordinator(request->query_id(), request->message(), context);
+            try
+            {
+                scheduler->cancelPlanSegmentsFromCoordinator(request->query_id(), request->message(), context);
+            }
+            catch (...)
+            {
+                LOG_WARNING(log, "Call cancelPlanSegmentsFromCoordinator failed: " + getCurrentExceptionMessage(true));
+            }
         }
         // todo  scheduler.cancelSchedule
     }

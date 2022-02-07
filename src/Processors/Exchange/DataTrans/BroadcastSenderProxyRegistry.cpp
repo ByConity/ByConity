@@ -1,7 +1,8 @@
 #include <memory>
 #include <mutex>
-#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
+#include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {

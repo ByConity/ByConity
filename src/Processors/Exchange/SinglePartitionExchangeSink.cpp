@@ -8,9 +8,9 @@
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeBufferedSender.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Exchange/SinglePartitionExchangeSink.h>
-#include <Processors/ISink.h>
 #include <Processors/ISource.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Common/Exception.h>
@@ -26,7 +26,7 @@ namespace ErrorCodes
 
 SinglePartitionExchangeSink::SinglePartitionExchangeSink(
     Block header_, BroadcastSenderPtr sender_, size_t partition_id_, ExchangeOptions options_)
-    : ISink(std::move(header_))
+    : IExchangeSink(std::move(header_))
     , header(getPort().getHeader())
     , sender(sender_)
     , partition_id(partition_id_)
@@ -61,7 +61,9 @@ void SinglePartitionExchangeSink::consume(Chunk chunk)
     {
         buffered_sender.appendSelective(i, *columns[i], partition_selector, from, length);
     }
-    buffered_sender.flush(false);
+    auto status = buffered_sender.flush(false);
+    if (status.code != BroadcastStatusCode::RUNNING)
+        finish();
 }
 
 void SinglePartitionExchangeSink::onFinish()

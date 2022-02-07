@@ -53,7 +53,7 @@ public:
         if (status.is_modifer && status.code > 0)
         {
             throw Exception(
-                String(typeid(sender).name()) + " fail to send data: " + status.message + " code: " + std::to_string(status.code),
+                sender.getName() + " fail to send data: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         }
         return status;

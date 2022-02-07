@@ -86,6 +86,9 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 
 void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)
 {
+    if (brpc::StreamFinishedCode(stream_id) > 0)
+        return;
+
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
@@ -95,6 +98,9 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)
 
 void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
 {
+    if (brpc::StreamFinishedCode(stream_id) > 0)
+        return;
+
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, exception))
         throw Exception(
             "Push exchange exception to receiver for " + getName() + " timeout",

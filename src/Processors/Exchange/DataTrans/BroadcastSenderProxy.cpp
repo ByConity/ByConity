@@ -84,7 +84,7 @@ void BroadcastSenderProxy::merge(IBroadcastSender && sender)
 
 String BroadcastSenderProxy::getName() const
 {
-    String prefix = "Proxy for: ";
+    String prefix = "[Proxy]";
     return real_sender ? prefix + real_sender->getName() : prefix + data_key->dump();
 }
 
