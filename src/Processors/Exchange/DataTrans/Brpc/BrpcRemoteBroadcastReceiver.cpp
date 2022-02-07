@@ -87,18 +87,24 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)
 {
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
+    {
+        finish(BroadcastStatusCode::RECV_TIMEOUT, "push receive queue timeout");
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
-                + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
+            + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+    }
 }
 
 void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
 {
     if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, exception))
+    {
+        finish(BroadcastStatusCode::RECV_TIMEOUT, "push exception timeout, exception:" + exception);
         throw Exception(
             "Push exchange exception to receiver for " + getName() + " timeout",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
+    }
 }
 
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
