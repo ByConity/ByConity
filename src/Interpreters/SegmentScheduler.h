@@ -13,6 +13,7 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Parsers/IAST_fwd.h>
+#include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Common/Stopwatch.h>
@@ -94,12 +95,16 @@ public:
 
     String getCurrentDispatchStatus(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
+    void updateException(const String & query_id, const String & exception);
+    String getException(const String & query_id, size_t timeout_ms);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
     mutable bthread::Mutex mutex;
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
+    // record exception when exception occurred
+    ConcurrentShardMap<String, String> query_to_exception;
     Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);

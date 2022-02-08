@@ -190,6 +190,18 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->code = segment_status.code;
 }
 
+void SegmentScheduler::updateException(const String & query_id, const String & exception)
+{
+    // only record one exception
+    if (!query_to_exception.exist(query_id))
+        query_to_exception.put(query_id, exception);
+}
+
+String SegmentScheduler::getException(const String & query_id, size_t timeout_ms)
+{
+    query_to_exception.get(query_id, timeout_ms);
+}
+
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
 {
     graph_ptr->plan_segment_status_ptr = std::make_shared<PlanSegmentsStatus>();

@@ -15,6 +15,7 @@
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Columns/ColumnsNumber.h>
+#include <Interpreters/SegmentScheduler.h>
 
 namespace DB
 {
@@ -82,11 +83,15 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
     if (status.code > BroadcastStatusCode::RECV_REACH_LIMIT)
     {
-        //TODO fetch specific exception message from plan segment schedule
         if (throw_on_other_segment_error || status.is_modifer)
+        {
+            auto query_id = CurrentThread::getQueryId().toString();
+            String exception = CurrentThread::get().getQueryContext()->getSegmentScheduler()->getException(query_id, 100);
             throw Exception(
-                getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
+                getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
+                    + " exception: " + exception,
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+        }
     }
 
     return std::nullopt;
