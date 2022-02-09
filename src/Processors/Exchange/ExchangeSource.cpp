@@ -91,8 +91,9 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         
         if (fetch_exception_from_scheduler)
         {
-            auto query_id = CurrentThread::getQueryId().toString();
-            String exception = CurrentThread::get().getQueryContext()->getSegmentScheduler()->getException(query_id, 100);
+            auto context = CurrentThread::get().getQueryContext();
+            auto query_id = context->getClientInfo().initial_query_id;
+            String exception = context->getSegmentScheduler()->getException(query_id, 100);
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
                     + " exception: " + exception,
