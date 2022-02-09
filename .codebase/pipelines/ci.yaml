@@ -122,6 +122,7 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/certificate/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact

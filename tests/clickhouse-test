@@ -67,6 +67,85 @@ def stop_tests():
             os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
+# check indicator in sanitizer log:
+def is_sanitizer_pass():
+        if "ASAN_OPTIONS" in os.environ:
+            ASAN_OPTIONS = os.environ['ASAN_OPTIONS'].split(',')
+            for item in ASAN_OPTIONS:
+                if item.startswith('log_path='):
+                    ASAN_LOG_PATH = os.path.dirname(item.replace('log_path=', ''))
+                    print(f'\nASAN enbaled, the ASAN_LOG_PATH is:{ASAN_LOG_PATH}')
+                    return check_asan_log(ASAN_LOG_PATH)
+                    break
+            print(f'\nis_sanitizer_pass skipped because ASAN enbaled, but "log_path" can not find in ASAN_OPTIONS, the ASAN_OPTIONS is: {ASAN_OPTIONS}')
+            return True
+        else:
+            print('\nis_sanitizer_pass skipped due to ASAN_OPTIONS not in environ')
+            return True
+
+def is_block_has_indicator(start,end,indicator_line_number):
+    for line_number in indicator_line_number:
+        if end >= line_number and start <= line_number:
+            return True
+    return False
+
+def get_line_number(log_dir,log_file_name):
+
+    indicator = 'StackTrace::StackTrace()'
+    delimiter_line = '=================================================================\n'
+
+    with open(os.path.join(log_dir, log_file_name), "r",errors='replace') as log:
+        log_data = log.readlines()
+        delimiter_line_number = []
+        indicator_line_number = []
+        for line_count, line in enumerate(log_data):
+            if line == delimiter_line:
+                delimiter_line_number.append(line_count)
+            elif indicator in line:
+                indicator_line_number.append(line_count)
+    return delimiter_line_number, indicator_line_number, log_data
+
+def get_splitted_log(delimiter_line_number, indicator_line_number, log_data):
+
+    if delimiter_line_number == []:
+        return None
+    result = []
+    len_delimiter_line_number = len(delimiter_line_number)
+    if len_delimiter_line_number == 1:
+        return result.append(log_data)
+    else:
+        total_block = len_delimiter_line_number -1
+        for i in range(0,total_block):
+            start = delimiter_line_number[i]
+            end = delimiter_line_number[i+1]
+            if not is_block_has_indicator(start,end,indicator_line_number):
+                result.append(log_data[start:end])
+        start = delimiter_line_number[-1]
+        end = len(log_data)
+        if not is_block_has_indicator(start, end, indicator_line_number):
+            result.append(log_data[start:end])
+    return result
+
+def check_asan_log(log_dir):
+    result_is_pass = True
+    with open(os.path.join(log_dir , 'asan_report'), "w") as f:
+        for root, dirs, files in os.walk(log_dir):
+            print(f'some log files have been found in {log_dir} :{files}')
+            for log_file_name in files:
+                if '.log' in log_file_name:
+                    delimiter_line_number, indicator_line_number, log_data = get_line_number(root, log_file_name)
+                    result = get_splitted_log(delimiter_line_number, indicator_line_number, log_data)
+                    if result:
+                        result_is_pass = False
+                        print(f"asan log check failed, please review the asan error in {log_file_name} !")
+                        f.write(f"asan error foud in {log_file_name} \n")
+                        for item in result:
+                            for item_s in item:
+                                f.write(item_s)
+    return result_is_pass
+
+
+
 def json_minify(string):
     """
     Removes all js-style comments from json string. Allows to have comments in skip_list.json.
@@ -122,7 +201,6 @@ def json_minify(string):
 
     new_str.append(string[index:])
     return ''.join(new_str)
-
 
 def remove_control_characters(s):
     """
@@ -987,6 +1065,10 @@ def main(args):
             print(test_case)
             print(stderr)
             print("\n")
+
+    if not is_sanitizer_pass():
+        exit_code.value = 1
+        print('asan check failed！please check asan report in Job artifacts')
 
     if total_tests_run == 0:
         print("No tests were run.")

@@ -16,6 +16,8 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # prepare test_output directory
 mkdir -p test_output
+# ASAN log path defined
+export ASAN_OPTIONS=halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log
 
 function start()
 {
@@ -122,6 +124,24 @@ timeout "$MAX_RUN_TIME" bash -c run_tests ||:
 grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server.log ||:
 pigz < /var/log/clickhouse-server/clickhouse-server.log > /test_output/clickhouse-server.log.gz ||:
 mv /var/log/clickhouse-server/stderr.log /test_output/ ||:
+
+#To print ASAN LOG in the console
+if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
+then
+    mkdir -p /test_output/asan_log
+    echo "ASAN Logs are printed for analysis."
+    if [[ -n $(find /var/log/clickhouse-server -name "asan_report") ]]; then
+      cat /var/log/clickhouse-server/asan_report
+      mv /var/log/clickhouse-server/asan_report /test_output/asan_log/
+    else
+      echo "No ASAN report exists"
+    fi
+    echo 'Uploading asan log to Artifacts'
+    mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
+else
+    echo "No ASAN logs exists"
+fi
+
 if [[ -n "$WITH_COVERAGE" ]] && [[ "$WITH_COVERAGE" -eq 1 ]]; then
     tar -chf /test_output/clickhouse_coverage.tar.gz /profraw ||:
 fi
