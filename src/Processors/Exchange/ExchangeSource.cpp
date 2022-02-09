@@ -21,6 +21,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+    extern const int QUERY_WAS_CANCELLED;
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
@@ -28,16 +29,16 @@ ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, Ex
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
-    , throw_on_other_segment_error(false)
+    , fetch_exception_from_scheduler(false)
     , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
 
-ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_, bool throw_on_other_segment_error_)
+ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_, bool fetch_exception_from_scheduler_)
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
-    , throw_on_other_segment_error(throw_on_other_segment_error_)
+    , fetch_exception_from_scheduler(fetch_exception_from_scheduler_)
     , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
@@ -83,7 +84,12 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 
     if (status.code > BroadcastStatusCode::RECV_REACH_LIMIT)
     {
-        if (throw_on_other_segment_error || status.is_modifer)
+        if (status.is_modifer)
+            throw Exception(
+                getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
+                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+        
+        if (fetch_exception_from_scheduler)
         {
             auto query_id = CurrentThread::getQueryId().toString();
             String exception = CurrentThread::get().getQueryContext()->getSegmentScheduler()->getException(query_id, 100);
@@ -92,6 +98,12 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
                     + " exception: " + exception,
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         }
+
+        // If receiver is finihsed and not cancelly by pipeline, we should cancel pipeline here
+        if (status.code != BroadcastStatusCode::RECV_CANCELLED)
+            throw Exception(
+                getName() + " will cancel with finish message: " + status.message + " code: " + std::to_string(status.code),
+                ErrorCodes::QUERY_WAS_CANCELLED);
     }
 
     return std::nullopt;
