@@ -4081,7 +4081,8 @@ MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const 
 
 void StorageHaMergeTree::startBackgroundMovesIfNeeded()
 {
-    if (areBackgroundMovesNeeded())
+    /// Disable part move since bitEngine will modify part's file directly.
+    if (!isBitEngineMode() && areBackgroundMovesNeeded())
         background_moves_executor.start();
 }
 
