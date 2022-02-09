@@ -51,6 +51,19 @@ public:
             cvs[key]->notify_all();
     }
 
+    bool putIfNotExists(const KeyType & key, ElementType value)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        if (map_data.find(key) == map_data.end())
+        {
+            map_data.emplace(key, value);
+            if (cvs.count(key))
+                cvs[key]->notify_all();
+            return true;
+        }
+        return false;
+    }
+
     ElementType & get(const KeyType & key) { get(key, 0); }
 
     ElementType & get(const KeyType & key, size_t timeout_ms)

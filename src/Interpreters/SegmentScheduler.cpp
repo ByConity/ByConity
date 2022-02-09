@@ -193,8 +193,7 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
 void SegmentScheduler::updateException(const String & query_id, const String & exception)
 {
     // only record one exception
-    if (!query_to_exception.exist(query_id))
-        query_to_exception.put(query_id, exception);
+    query_to_exception.putIfNotExists(query_id, exception);
 }
 
 String SegmentScheduler::getException(const String & query_id, size_t timeout_ms)

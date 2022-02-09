@@ -23,6 +23,8 @@ public:
 
     void put(const KeyType & key, ElementType value) { getShard(key).put(key, value); }
 
+    bool putIfNotExists(const KeyType & key, ElementType value) { return getShard(key).putIfNotExists(key, value); }
+
     ElementType & get(const KeyType & key) { return getShard(key).get(key); }
 
     ElementType & get(const KeyType & key, size_t timeout) { return getShard(key).get(key, timeout); }
