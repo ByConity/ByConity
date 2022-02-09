@@ -3,6 +3,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ParserUnionQueryElement.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ParserTEALimit.h>
 
 namespace DB
 {
@@ -35,12 +36,23 @@ bool ParserSelectWithUnionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
         }
     }
 
+    ASTPtr tealimit;
+    ParserTEALimitClause teaLimitParser;
+    teaLimitParser.parse(pos, tealimit, expected);
+
     auto select_with_union_query = std::make_shared<ASTSelectWithUnionQuery>();
 
     node = select_with_union_query;
     select_with_union_query->list_of_selects = list_node;
     select_with_union_query->children.push_back(select_with_union_query->list_of_selects);
     select_with_union_query->list_of_modes = parser.getUnionModes();
+
+    // Put TEALIMIT clause as the last child, NOTE this will help rewrite if we want ignore this clause
+    if (tealimit)
+    {
+        select_with_union_query->tealimit = tealimit;
+        select_with_union_query->children.push_back(select_with_union_query->tealimit);
+    }
 
     return true;
 }

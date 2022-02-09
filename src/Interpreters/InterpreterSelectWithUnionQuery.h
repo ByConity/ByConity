@@ -30,6 +30,8 @@ public:
 
     BlockIO execute() override;
 
+    QueryPipeline executeTEALimit(QueryPipelinePtr& );
+
     bool ignoreLimits() const override { return options.ignore_limits; }
     bool ignoreQuota() const override { return options.ignore_quota; }
 

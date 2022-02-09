@@ -1713,6 +1713,7 @@ const char * ParserAlias::restricted_keywords[] =
     "SAMPLE",
     "SEMI",
     "SETTINGS",
+    "TEALIMIT",
     "UNION",
     "USING",
     "WHERE",
