@@ -3,7 +3,6 @@
 #include <Core/Block.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
-#include <Processors/Exchange/DataTrans/DataTransStruct.h>
 #include <brpc/stream.h>
 #include <Poco/Logger.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -21,9 +20,7 @@ public:
     RecvDataPacket recv(UInt32 timeout_ms) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
-    void pushReceiveQueue(Chunk & chunk);
-    void pushException(const String & exception);
-    void clearQueue() { queue->receive_queue->clear(); }
+    void pushReceiveQueue(Chunk chunk);
     Block getHeader() { return header; }
 
 private:
@@ -34,7 +31,7 @@ private:
     Block header;
     // todo::aron add MemoryTracker here
     // std::shared_ptr<MemoryTracker> memory_tracker = std::make_shared<MemoryTracker>(VariableContext::Global);
-    ReceiveQueuePtr queue = std::make_unique<ReceiveQueue>();
+    BoundedDataQueue<Chunk> queue;
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
 };

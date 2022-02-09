@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
@@ -10,7 +11,6 @@
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <boost/noncopyable.hpp>
 #include <Poco/Logger.h>
-#include <Common/ConcurrentBoundedQueue.h>
 #include <common/types.h>
 
 namespace DB
@@ -31,7 +31,7 @@ public:
 private:
     DataTransKeyPtr data_key;
     LocalChannelOptions options;
-    ConcurrentBoundedQueue<Chunk> receive_queue;
+    BoundedDataQueue<Chunk> receive_queue;
     std::atomic<BroadcastStatus *> broadcast_status;
     Poco::Logger * logger;
 };

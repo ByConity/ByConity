@@ -47,8 +47,6 @@ BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
 {
     if (!has_real_sender.load(std::memory_order_relaxed))
         waitBecomeRealSender(wait_timeout_ms);
-    if (!chunk)
-        return BroadcastStatus(BroadcastStatusCode::RUNNING);
     return real_sender->send(std::move(chunk));
 }
 

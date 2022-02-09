@@ -156,9 +156,9 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         plan_segment->getPlanSegmentId(),
         num_threads);
     pipeline_executor->execute(num_threads);
-
     for (const auto & sender : senders)
-        sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Pipeline execute finish");
+        // Send an empty chunk means all chunks are sended done.
+        sender->send(Chunk());
 }
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()

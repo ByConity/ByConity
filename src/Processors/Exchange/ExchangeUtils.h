@@ -9,7 +9,10 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <absl/strings/str_split.h>
 #include <Common/Allocator.h>
+#include <Common/CurrentMemoryTracker.h>
 #include <Common/Exception.h>
+#include <Common/MemoryTracker.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -80,6 +83,20 @@ public:
             merged_sender->merge(std::move(*senders_to_merge[i]));
         }
         senders.emplace_back(std::move(merged_sender));
+    }
+
+    static inline void transferThreadMemoryToGlobal(Int64 bytes)
+    {
+        CurrentMemoryTracker::free(bytes);
+        if (DB::MainThreadStatus::get())
+            total_memory_tracker.alloc(bytes);
+    }
+
+    static inline void transferGlobalMemoryToThread(size_t bytes)
+    {
+        if (DB::MainThreadStatus::get())
+            total_memory_tracker.free(bytes);
+        CurrentMemoryTracker::alloc(bytes);
     }
 };
 

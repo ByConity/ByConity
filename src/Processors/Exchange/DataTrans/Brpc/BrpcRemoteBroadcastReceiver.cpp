@@ -3,10 +3,10 @@
 
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
-#include <Processors/Exchange/DataTrans/DataTransStruct.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Protos/registry.pb.h>
 #include <brpc/stream.h>
 
@@ -84,78 +84,61 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
 }
 
-void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk & chunk)
+void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk chunk)
 {
-    if (brpc::StreamFinishedCode(stream_id) > 0)
+    if (queue.closed())
         return;
-
-    if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
-    {
-        finish(BroadcastStatusCode::RECV_TIMEOUT, "push receive queue timeout");
+    if (!queue.tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
             + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-    }
-}
-
-void BrpcRemoteBroadcastReceiver::pushException(const String & exception)
-{
-    if (brpc::StreamFinishedCode(stream_id) > 0)
-        return;
-
-    if (!queue->receive_queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, exception))
-    {
-        finish(BroadcastStatusCode::RECV_TIMEOUT, "push exception timeout, exception:" + exception);
-        throw Exception(
-            "Push exchange exception to receiver for " + getName() + " timeout",
-            ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
-    }
 }
 
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 {
-    DataTransPacket brpc_data_packet;
-    int stream_finished_code = brpc::StreamFinishedCode(stream_id);
-    /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
-    if (stream_finished_code > 0)
-        return BroadcastStatus(static_cast<BroadcastStatusCode>(stream_finished_code), false, "BrpcRemoteBroadcastReceiver::recv");
-
-    if (!queue->receive_queue->tryPop(brpc_data_packet, timeout_ms))
+    Chunk received_chunk;
+    if (!queue.tryPop(received_chunk, timeout_ms))
     {
-        const auto error_msg
-            = "Try pop receive queue for " + getName() +  " timeout for " + std::to_string(timeout_ms) + " ms.";
-        LOG_ERROR(log, error_msg);
+        const auto error_msg = "Try pop receive queue for " + getName() + " timeout for " + std::to_string(timeout_ms) + " ms.";
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
     }
-    if (!brpc_data_packet.exception.empty())
-    {
-        const auto & error_msg
-            = "Try pop receive queue for " + getName() + " failed. Exception:" + brpc_data_packet.exception;
-        LOG_ERROR(log, error_msg);
-        BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_UNKNOWN_ERROR, error_msg);
-        return std::move(current_status);
-    }
-    // receive a empty chunk means StreamHandler::on_finished is called and the receive is done.
-    if (brpc_data_packet.chunk.empty())
-    {
-        auto code = brpc::StreamFinishedCode(stream_id);
-        LOG_DEBUG(log, "Receive for stream id: {} finished, name: {}, status_code: {}.", stream_id, getName(), code);
-        return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastReceiver::recv done");
-    }
 
-    return RecvDataPacket(std::move(brpc_data_packet.chunk));
+    // receive a empty chunk means the receive is done.
+    if (!received_chunk)
+        return RecvDataPacket(finish(BroadcastStatusCode::ALL_SENDERS_DONE, "receiver done"));
+
+    ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
+    return RecvDataPacket(std::move(received_chunk));
 }
 
 BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
 {
-    int actual_status_code = status_code_;
-    int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_);
-    if (ret_code != 0)
+    int actual_status_code = BroadcastStatusCode::RUNNING;
+    if (status_code_ < 0)
+    {
+        brpc::StreamFinish(stream_id, actual_status_code, status_code_, false);
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(status_code_), false, message);
+    }
+
+    int rc = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
+    if (rc == EINVAL)
+    {
+        if (queue.close())
+            return BroadcastStatus(static_cast<BroadcastStatusCode>(status_code_), true, message);
+        else
+            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "BrpcRemoteBroadcastReceiver::finish: stream closed");
+    }
+
+    if (actual_status_code > 0)
+        queue.close();
+
+    if (rc != 0)
         return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "BrpcRemoteBroadcastReceiver::finish, already has been finished");
-    else
-        return BroadcastStatus(status_code_, true, message);
+
+    LOG_INFO(log, "{} finished with code: {} and message: {}", getName(), status_code_, message);
+    return BroadcastStatus(status_code_, true, message);
 }
 
 String BrpcRemoteBroadcastReceiver::getName() const
