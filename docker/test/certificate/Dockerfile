@@ -60,5 +60,4 @@ ENV https_proxy=
 ENV no_proxy=
 
 COPY run.sh /
-COPY process_functional_tests_result.py /
 # CMD ["/bin/bash", "/run.sh"]

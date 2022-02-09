@@ -40,7 +40,6 @@ if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_pthread_mutex_lock_AFTER_SLEEP_TIME_US=10000
     export THREAD_FUZZER_pthread_mutex_unlock_BEFORE_SLEEP_TIME_US=10000
     export THREAD_FUZZER_pthread_mutex_unlock_AFTER_SLEEP_TIME_US=10000
-
     # simpliest way to forward env variables to server
     sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
 else
@@ -145,6 +144,24 @@ mv /var/log/clickhouse-server/stderr.log /test_output/ ||:
 if [[ -n "$WITH_COVERAGE" ]] && [[ "$WITH_COVERAGE" -eq 1 ]]; then
     tar -chf /test_output/clickhouse_coverage.tar.gz /profraw ||:
 fi
+
+#To print ASAN LOG in the console
+if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
+then
+    mkdir -p /test_output/asan_log
+    echo "ASAN Logs are printed for analysis."
+    if [[ -n $(find /var/log/clickhouse-server -name "asan_report") ]]; then
+      cat /var/log/clickhouse-server/asan_report
+      mv /var/log/clickhouse-server/asan_report /test_output/asan_log/
+    else
+      echo "No ASAN report exists"
+    fi
+    echo 'Uploading asan log to Artifacts'
+    mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
+else
+    echo "No ASAN logs exists"
+fi
+
 tar -chf /test_output/text_log_dump.tar /var/lib/clickhouse/data/system/text_log ||:
 tar -chf /test_output/query_log_dump.tar /var/lib/clickhouse/data/system/query_log ||:
 tar -chf /test_output/coordination.tar /var/lib/clickhouse/coordination ||:
@@ -158,13 +175,4 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
     mv /var/log/clickhouse-server/stderr2.log /test_output/ ||:
     tar -chf /test_output/coordination1.tar /var/lib/clickhouse1/coordination ||:
     tar -chf /test_output/coordination2.tar /var/lib/clickhouse2/coordination ||:
-fi
-
-#To print ASAN LOG in the console
-if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
-then
-    cat /var/log/clickhouse-server/asan.log.*
-    echo "ASAN Logs are printed for analysis."
-else
-    echo "No ASAN logs exists"
 fi
