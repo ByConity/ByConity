@@ -5,6 +5,7 @@
 #include <Columns/ColumnAggregateFunction.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnBitMap64.h>
+#include <Columns/ColumnByteMap.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnDecimal.h>
 #include <Columns/ColumnFixedString.h>
@@ -147,6 +148,28 @@ TEST(InsertRangeSelective, ColumnLowcardinalityTest)
         src_column->insert(i);
     }
     compareInsertRangeSelectiveWithInsertFrom(*src_column);
+}
+
+TEST(InsertRangeSelective, ColumnByteMapTest)
+{
+    const size_t size = 100;
+    auto key_column = ColumnString::create();
+    auto value_column = ColumnString::create();
+    auto offset_column = ColumnVector<UInt64>::create();
+
+    size_t offest_size = 0;
+    for (size_t i = 0; i < size; i++)
+    {
+        key_column->insert("key: " + std::to_string(i));
+        value_column->insert("value: " + std::to_string(i));
+        if (i % 2 == 1)
+        {
+            offest_size += 2;
+            offset_column->insert(offest_size);
+        }
+    }
+    MutableColumnPtr src_column = ColumnByteMap::create(std::move(key_column), std::move(value_column), std::move(offset_column));
+    compareInsertRangeSelectiveWithInsertFrom(*src_column, true);
 }
 
 TEST(InsertRangeSelective, ColumnMapTest)
