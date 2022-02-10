@@ -838,8 +838,8 @@ public:
     String getSystemProfileName() const;
 
     /// Base path for format schemas
-    String getFormatSchemaPath() const;
-    void setFormatSchemaPath(const String & path);
+    String getFormatSchemaPath(bool remote = false) const;
+    void setFormatSchemaPath(const String & path, bool remote = false);
 
     SampleBlockCache & getSampleBlockCache() const;
 

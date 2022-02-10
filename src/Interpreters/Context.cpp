@@ -442,6 +442,7 @@ struct ContextSharedPart
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
     String format_schema_path;                              /// Path to a directory that contains schema files used by input formats.
+    String remote_format_schema_path;
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
@@ -2684,14 +2685,21 @@ String Context::getSystemProfileName() const
     return shared->system_profile_name;
 }
 
-String Context::getFormatSchemaPath() const
+String Context::getFormatSchemaPath(bool remote) const
 {
-    return shared->format_schema_path;
+    return remote ? shared->remote_format_schema_path : shared->format_schema_path;
 }
 
-void Context::setFormatSchemaPath(const String & path)
+void Context::setFormatSchemaPath(const String & path, bool remote)
 {
-    shared->format_schema_path = path;
+    if (remote)
+    {
+        shared->remote_format_schema_path = path;
+    }
+    else
+    {
+        shared->format_schema_path = path;
+    }
 }
 
 Context::SampleBlockCache & Context::getSampleBlockCache() const

@@ -66,6 +66,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RELOAD EMBEDDED DICTIONARIES";
         case Type::RELOAD_CONFIG:
             return "RELOAD CONFIG";
+        case Type::RELOAD_FORMAT_SCHEMA:
+            return "RELOAD FORMAT SCHEMA";
         case Type::RELOAD_SYMBOLS:
             return "RELOAD SYMBOLS";
         case Type::STOP_MERGES:

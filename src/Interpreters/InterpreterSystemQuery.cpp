@@ -27,6 +27,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/loadMetadata.h>
 #include <Access/ContextAccess.h>
 #include <Access/AllowedClientHosts.h>
 #include <Databases/IDatabase.h>
@@ -409,6 +410,11 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::RELOAD_CONFIG:
             getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
             system_context->reloadConfig();
+            break;
+        case Type::RELOAD_FORMAT_SCHEMA:
+            // REUSE SYSTEM_RELOAD_CONF
+            getContext()->checkAccess(AccessType::SYSTEM_RELOAD_CONFIG);
+            reloadFormatSchema(system_context->getFormatSchemaPath(true), system_context->getFormatSchemaPath(false));
             break;
         case Type::RELOAD_SYMBOLS:
         {
@@ -878,6 +884,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             break;
         }
         case Type::RELOAD_CONFIG:
+        case Type::RELOAD_FORMAT_SCHEMA:
         {
             required_access.emplace_back(AccessType::SYSTEM_RELOAD_CONFIG);
             break;

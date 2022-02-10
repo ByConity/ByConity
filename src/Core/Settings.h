@@ -507,7 +507,7 @@ class IColumn;
     M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
-    M(Bool, tealimit_order_keep, false, "whether tealimit output keep order by clause", 0)\
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
