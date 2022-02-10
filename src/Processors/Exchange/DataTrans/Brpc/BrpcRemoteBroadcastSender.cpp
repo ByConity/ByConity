@@ -64,13 +64,6 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
 {
     try
     {
-        for (auto id : sender_stream_ids)
-        {
-            int code = brpc::StreamFinishedCode(id);
-            if (code != 0)
-                return BroadcastStatus(static_cast<BroadcastStatusCode>(code), false, "BrpcRemoteBroadcastSender::send has been finished");
-        }
-
         const auto buf = serializeChunkToIoBuffer(std::move(chunk));
         auto res = BroadcastStatus(BroadcastStatusCode::RUNNING);
         for (size_t i = 0; i < sender_stream_ids.size(); ++i)
@@ -177,9 +170,14 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
             LOG_WARNING(
                 log, "Stream-{} write buffer error rect_code:{}, server is overcrowded, data_key-{}", stream_id, rect_code, data_key);
         }
-        //FIXME: need refine
-        else if (std::to_string(rect_code).starts_with('9'))
+        // stream finished
+        else if (rect_code == -1)
         {
+            int stream_finished_code = 0;
+            auto rc = brpc::StreamFinishedCode(stream_id, stream_finished_code);
+            // Stream is closed by remote peer and we can get finish code now
+            if (rc == EINVAL)
+                return BroadcastStatus(BroadcastStatusCode::RECV_UNKNOWN_ERROR, false, "Stream is closed by peer");
             LOG_INFO(log, "Stream-{} write receive finish request, finish code:{}, data_key-{}", stream_id, rect_code, data_key);
             return BroadcastStatus(static_cast<BroadcastStatusCode>(rect_code), false, "Stream Write receive finish request");
         }
@@ -200,7 +198,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
         LOG_ERROR(log, msg);
         auto current_status = BroadcastStatus(BroadcastStatusCode::SEND_TIMEOUT, true, msg);
         int actual_status_code = BroadcastStatusCode::RUNNING;
-        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, BroadcastStatusCode::SEND_TIMEOUT);
+        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, BroadcastStatusCode::SEND_TIMEOUT, true);
         if (ret_code != 0)
             return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "Stream Write receive finish request");
         return current_status;
@@ -223,7 +221,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
     for (auto stream_id : sender_stream_ids)
     {
         int actual_status_code = BroadcastStatusCode::RUNNING;
-        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_);
+        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
         if (ret_code == 0)
             is_modifer = true;
         else

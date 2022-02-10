@@ -214,6 +214,34 @@ void ColumnByteMap::insertRangeFrom(const IColumn & src, size_t start, size_t le
     }
 }
 
+void ColumnByteMap::insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
+{
+    if (length == 0) return;
+    
+    const ColumnByteMap & src_concrete = static_cast<const ColumnByteMap &>(src);
+    const IColumn & src_key_col = src_concrete.getKey();
+    const IColumn & src_value_col = src_concrete.getValue();
+    IColumn & cur_key_col = getKey();
+    IColumn & cur_value_col = getValue();
+    Offsets & cur_offsets = getOffsets();
+    
+    size_t old_size = cur_offsets.size();
+    cur_offsets.resize(old_size + length);
+
+    size_t cur_offset_size = cur_offsets[old_size - 1];
+    for (size_t i = 0; i < length; i++)
+    {
+        size_t n = selector[selector_start + i];
+        size_t size = src_concrete.sizeAt(n);
+        size_t offset = src_concrete.offsetAt(n);
+
+        cur_key_col.insertRangeFrom(src_key_col, offset, size);
+        cur_value_col.insertRangeFrom(src_value_col, offset, size);
+        cur_offsets[old_size + i] = cur_offset_size + size;
+        cur_offset_size += size;
+    }
+}
+
 // static method to filter Columns which was built on Offsets(similar to ColumnArray)
 void ColumnByteMap::filter(const ColumnPtr& implCol, ColumnPtr& implResCol,
                               const Offsets& offsets, const Filter& filt,

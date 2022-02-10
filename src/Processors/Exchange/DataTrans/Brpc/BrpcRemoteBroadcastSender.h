@@ -6,7 +6,6 @@
 #include <Interpreters/Context.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
-#include <Processors/Exchange/DataTrans/DataTransStruct.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <brpc/stream.h>
 #include <bthread/mtx_cv_base.h>
@@ -22,7 +21,7 @@ public:
     BroadcastStatus send(Chunk chunk) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
 
-    /// Merge another BrpcRemoteBroadcastSender to this sender, to simplify code, we assume that there is no member method is called concurrently
+    /// Merge another BrpcRemoteBroadcastSender to this sender, to simplify code, we assume that no member method is called concurrently
     void merge(IBroadcastSender && sender) override;
     String getName() const override;
     BroadcastSenderType getType() override { return BroadcastSenderType::Brpc; }

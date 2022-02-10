@@ -9,9 +9,9 @@
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Poco/Logger.h>
-#include <Common/CurrentMemoryTracker.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 
 namespace DB
 {
@@ -30,14 +30,14 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
     /// Positive status code means that we should close immediately and negative code means we should conusme all in flight data before close
-    if (current_status_ptr->code > 0 || (current_status_ptr->code < 0 && receive_queue.size() == 0))
+    if (current_status_ptr->code > 0)
         return *current_status_ptr;
 
     if (receive_queue.tryPop(recv_chunk, timeout_ms))
     {
         if (recv_chunk)
         {
-            CurrentMemoryTracker::alloc(recv_chunk.allocatedBytes());
+            ExchangeUtils::transferGlobalMemoryToThread(recv_chunk.allocatedBytes());
             return RecvDataPacket(std::move(recv_chunk));
         }
         else
@@ -58,8 +58,8 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
         return *broadcast_status.load(std::memory_order_relaxed);
     auto bytes = chunk.allocatedBytes();
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
-    {
-        CurrentMemoryTracker::free(bytes);
+    {       
+        ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
         return *broadcast_status.load(std::memory_order_relaxed);
     }
 
@@ -98,11 +98,8 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
             new_status_ptr->message);
         delete current_status_ptr;
         if (new_status_ptr->code > 0)
-        {
-            receive_queue.clear();
-        }
-        /// Send empty chunk as finish signal, it doesn't matter if tryEmplace timeout
-        receive_queue.tryEmplace(options.max_timeout_ms, Chunk());
+            // close queue immediately
+            receive_queue.close();
         auto res = *new_status_ptr;
         res.is_modifer = true;
         return res;
