@@ -78,9 +78,8 @@ private:
 private:
     /// Closes readers and unlock part locks
     void finish();
-    size_t currentMarkStart() const { return current_mark * index_granularity; }
-    size_t currentMarkEnd() const {
-        return std::min(data_part->index_granularity.getTotalRows(), (current_mark + 1) * index_granularity); }
+    size_t currentMarkStart() const { return data_part->index_granularity.getMarkStartingRow(current_mark); }
+    size_t currentMarkEnd() const { return data_part->index_granularity.getMarkStartingRow(current_mark + 1); }
 };
 
 }

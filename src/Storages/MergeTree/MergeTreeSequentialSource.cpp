@@ -87,14 +87,13 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
 Chunk MergeTreeSequentialSource::generate()
 try
 {
-    /// FIXME (UNIQUE KEY): support adaptive granularity part later
     if (delete_bitmap)
     {
         /// skip deleted mark
         size_t marks_count = data_part->index_granularity.getMarksCount();
         while (current_mark < marks_count && delete_bitmap->containsRange(currentMarkStart(), currentMarkEnd()))
         {
-            current_row += index_granularity;
+            current_row += data_part->index_granularity.getMarkRows(current_mark);
             current_mark++;
             continue_reading = false;
         }
@@ -123,7 +122,7 @@ try
             if (delete_bitmap)
             {
                 /// construct delete filter for current granule
-                auto delete_column = ColumnUInt8::create(index_granularity, 1);
+                auto delete_column = ColumnUInt8::create(rows_read, 1);
                 UInt8 * filter_data = delete_column->getData().data();
                 size_t start_row = currentMarkStart();
                 size_t end_row = currentMarkEnd();
@@ -138,7 +137,7 @@ try
                 delete_column->getData().resize(rows_read);
                 for (auto & column : columns)
                 {
-                    column = column->filter(delete_column->getData(), index_granularity - num_deleted);
+                    column = column->filter(delete_column->getData(), rows_read - num_deleted);
                 }
             }
 
@@ -186,7 +185,7 @@ try
             current_row += rows_read;
             current_mark += (rows_to_read == rows_read);
 
-            LOG_DEBUG(log, "Read {} {} {} from part {}", rows_to_read, rows_to_read, num_deleted, data_part->name);
+            LOG_DEBUG(log, "Try to read rows {}, actual read rows {}, delete {} row from part {}", rows_to_read, rows_read, num_deleted, data_part->name);
             return Chunk(std::move(res_columns), rows_read - num_deleted);
         }
     }
