@@ -81,5 +81,4 @@ private:
     size_t currentMarkStart() const { return data_part->index_granularity.getMarkStartingRow(current_mark); }
     size_t currentMarkEnd() const { return data_part->index_granularity.getMarkStartingRow(current_mark + 1); }
 };
-
 }

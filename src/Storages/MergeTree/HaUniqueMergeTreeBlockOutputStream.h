@@ -59,6 +59,16 @@ private:
     ConnectionPtr remote_conn;
     BlockOutputStreamPtr remote_stream;
     Int64 saved_memory_used{0};
+
+    size_t total_process_block_cost = 0;
+    size_t total_process_block_row = 0;
+    size_t total_get_uki_cost = 0;
+    size_t total_remove_dedup_cost = 0;
+    size_t total_query_uki_cost = 0;
+    size_t total_filter_cost = 0;
+    size_t total_write_cost = 0;
+    size_t total_write_part_cost = 0;
+    size_t total_write_part_row = 0;
 };
 
 }

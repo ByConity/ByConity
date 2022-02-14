@@ -36,6 +36,8 @@ public:
 
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
 
+    size_t getWriteRowStoreCost() override { return write_row_store_cost; }
+
 private:
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
@@ -105,6 +107,8 @@ private:
     /// to sort and persist index entries, then generate the key index file from "temp_unique_key_index"
     String temp_unique_key_index_dir;
     rocksdb::DB * temp_unique_key_index = nullptr;
+
+    size_t write_row_store_cost = 0;
 };
 
 }

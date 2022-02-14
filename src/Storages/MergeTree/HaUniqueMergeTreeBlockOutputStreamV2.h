@@ -71,6 +71,27 @@ private:
     String leader_name;
     ConnectionPtr remote_conn;
     BlockOutputStreamPtr remote_stream;
+
+    size_t total_process_block_cost = 0;
+    size_t total_process_block_row = 0;
+    size_t total_write_cost = 0;
+    size_t total_remove_dedup_cost = 0;
+    size_t total_remove_dedup_judge_cost = 0;
+    size_t total_remove_dedup_replace_column_cost = 0;
+    size_t total_remove_dedup_default_value_row = 0;
+    size_t total_remove_dedup_handle_column_count = 0;
+    size_t total_get_uki_cost = 0;
+    size_t total_get_row_store_cost = 0;
+    size_t total_query_uki_cost = 0;
+    size_t total_read_from_store_cost = 0;
+    size_t total_read_row = 0;
+    size_t total_replace_cost = 0;
+    size_t total_replace_default_value_row = 0;
+    size_t total_replace_handle_column_count = 0;
+    size_t total_filter_cost = 0;
+    size_t total_write_part_cost = 0;
+    size_t total_write_part_row = 0;
+    size_t total_write_row_store_cost = 0;
 };
 
 }

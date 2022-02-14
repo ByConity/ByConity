@@ -191,7 +191,14 @@ try
             current_row += rows_read;
             current_mark += (rows_to_read == rows_read);
 
-            //LOG_TRACE(log, "Try to read rows {}, actual read rows {}, delete {} row from part {}", rows_to_read, rows_read, num_deleted, data_part->name);
+            LOG_DEBUG(
+                log,
+                "Try to read rows {}, actual read rows {}, delete {} row, remaining rows {} from part {}",
+                rows_to_read,
+                rows_read,
+                num_deleted,
+                rows_read - num_deleted,
+                data_part->name);
             return Chunk(std::move(res_columns), rows_read - num_deleted);
         }
     }

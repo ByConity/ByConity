@@ -208,6 +208,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     }
     auto granules_to_write = getGranulesToWrite(index_granularity, block.rows(), getCurrentMark(), rows_written_in_last_mark);
 
+    LOG_DEBUG(getLogger(), "write granules size: {}", granules_to_write.size());
+
     auto offset_columns = written_offset_columns ? *written_offset_columns : WrittenOffsetColumns{};
     Block primary_key_block;
     if (settings.rewrite_primary_key)
@@ -326,7 +328,7 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     auto disk = data_part->volume->getDisk();
     String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
     IndexFile::Options options;
-    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
+    // options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
     IndexFile::IndexFileWriter row_store_writer(options);
     auto status = row_store_writer.Open(row_store_file);
     if (!status.ok())
@@ -361,7 +363,14 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     status = row_store_writer.Finish(&unique_row_store_file_info);
     if (!status.ok())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
-    LOG_DEBUG(log, "Finish writing row store for part {}, rows {}, cost {} ms.", data_part->name, block.rows(), timer.elapsedMilliseconds());
+    write_row_store_cost = timer.elapsedMilliseconds();
+    LOG_DEBUG(
+        log,
+        "Finish writing row store for part {}, rows {}, cost {} ms, total cost {} ms.",
+        data_part->name,
+        block.rows(),
+        timer.elapsedMilliseconds(),
+        write_row_store_cost);
 }
 
 /// Column must not be empty. (column.size() !== 0)

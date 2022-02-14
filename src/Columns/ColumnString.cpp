@@ -3,6 +3,7 @@
 #include <Columns/Collator.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnCompressed.h>
+#include <Columns/ColumnVector.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Common/Arena.h>
 #include <Common/HashTable/Hash.h>
@@ -536,6 +537,17 @@ ColumnPtr ColumnString::replicate(const Offsets & replicate_offsets) const
 void ColumnString::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
+}
+
+ColumnPtr ColumnString::selectDefault() const
+{
+    size_t row_num = size();
+    auto res = ColumnVector<UInt8>::create(row_num);
+    IColumn::Filter & filter = res->getData();
+    /// TODO: improve by SIMD
+    for (size_t i = 0; i < row_num; ++i)
+        filter[i] = (offsets[i] - offsets[i - 1]) == 1;
+    return res;
 }
 
 void ColumnString::reserve(size_t n)

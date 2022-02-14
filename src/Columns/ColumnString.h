@@ -267,6 +267,8 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
+    ColumnPtr selectDefault() const override;
+
     ColumnPtr replaceFrom(
         const PaddedPODArray<UInt32> & indexes,
         const IColumn & rhs, const PaddedPODArray<UInt32> * rhs_indexes,

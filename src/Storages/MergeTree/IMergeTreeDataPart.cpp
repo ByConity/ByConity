@@ -387,8 +387,9 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
     decrementTypeMetric(part_type);
 
     /// clear cache
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique && storage.unique_row_store_cache)
-        storage.unique_row_store_cache->remove(getMemoryAddress());
+    /// TODO(lta): find out why it will lead to crash
+    // if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique && storage.unique_row_store_cache)
+    //     storage.unique_row_store_cache->remove(getMemoryAddress());
 }
 
 String IMergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) const

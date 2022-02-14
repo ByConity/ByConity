@@ -183,6 +183,8 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
         {
             PartsWithDeleteRows parts_with_deletes;
             DeletesOnMergingParts deletes_on_merging_parts;
+            Stopwatch process_partition_timer;
+            total_process_block_row += current_block.block.rows();
             if (processPartitionBlock(current_block, preprocessed, existing_parts, parts_with_deletes, deletes_on_merging_parts))
             {
                 LOG_DEBUG(log, "All rows in block are filtered, no new part will be generated.");
@@ -191,11 +193,19 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
             }
             else
             {
+                total_process_block_cost += process_partition_timer.elapsedMilliseconds();
+
                 if (current_block.block.has(StorageInMemoryMetadata::delete_flag_column_name))
                     throw Exception(
                         "HaUniqueMergeTree engine tries to write the delete flag column to disk which is just a func column and should not be written to disk.",
                         ErrorCodes::LOGICAL_ERROR);
+                
+                Stopwatch write_timer;
                 part = storage.writer.writeTempPart(current_block, metadata_snapshot, context);
+                
+                total_write_part_cost += write_timer.elapsedMilliseconds();
+                total_write_part_row += current_block.block.rows();
+
                 UInt64 block_number = storage.allocateBlockNumberDirect(zookeeper);
                 part->info.min_block = block_number;
                 part->info.max_block = block_number;
@@ -285,6 +295,7 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
                         LOG_DEBUG(log, "Wrote committed part {} and updated {} rows at version {} in {} ms", part->name, deleted_row_size, lsn, watch.elapsedMilliseconds());
                     else
                         LOG_DEBUG(log, "Deleted {} rows at version {} in {} ms", deleted_row_size, lsn, watch.elapsedMilliseconds());
+                    total_write_cost += watch.elapsedMilliseconds();
                     /// Only after commit, we can append cached keys to merging part's delete buffer
                     for (auto & entry : deletes_on_merging_parts)
                     {
@@ -317,6 +328,23 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
 
 void HaUniqueMergeTreeBlockOutputStream::writeSuffix()
 {
+    if (total_process_block_row)
+    {
+        LOG_DEBUG(
+            log,
+            "Total Process block in {} ms, total row: {}, remove dup: {} ms, get uki in {} ms, query uki in {} ms, get&query uki in {} ms, filter cost {} ms",
+            total_process_block_cost,
+            total_process_block_row,
+            total_remove_dedup_cost,
+            total_get_uki_cost,
+            total_query_uki_cost,
+            total_get_uki_cost + total_query_uki_cost,
+            total_filter_cost);
+        
+        LOG_DEBUG(log, "Total Write part in {} ms, total row: {}", total_write_part_cost, total_write_part_row);
+        LOG_DEBUG(log, "Total Wrote committed part in {} ms", total_write_cost);
+    }
+
     /// loading key index will contribute to added memory usage
     auto added_memory = current_thread->memory_tracker.get() - saved_memory_used;
     if (added_memory > (1 << 26))
@@ -554,6 +582,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
                 && !version_column.column->getUInt(rowid);
         };
 
+    Stopwatch remove_dedup_timer;
     if (!preprocessed)
     {
         /// user can't specify explicit version column when use is_offline column feature
@@ -565,18 +594,22 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
         else
             num_filtered += removeDupKeys(block, nullptr, filter);
     }
+    total_remove_dedup_cost += remove_dedup_timer.elapsedMilliseconds();
 
     UInt64 cur_version = 0;
     if (storage.merging_params.partitionValueAsVersion())
         cur_version = block_with_partition.partition[0].safeGet<UInt64>();
 
+    Stopwatch get_uki_timer;
     auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
     UniqueKeyIndicesVector key_indices(existing_parts.size());
     for (size_t i = 0; i < existing_parts.size(); ++i)
     {
         key_indices[i] = existing_parts[i]->getUniqueKeyIndex();
     }
+    total_get_uki_cost += get_uki_timer.elapsedMilliseconds();
 
+    Stopwatch query_uki_timer;
     for (size_t rowid = 0; rowid < block_size; ++rowid) {
         if (filter[rowid] == 0)
             continue;
@@ -666,6 +699,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
             }
         }
     }
+    total_query_uki_cost += query_uki_timer.elapsedMilliseconds();
 
     if (block_size == num_filtered)
         return true;
@@ -676,6 +710,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
         if (!header_block.has(col_name))
             block.erase(col_name);
 
+    Stopwatch filter_timer;
     if (num_filtered > 0)
     {
         ssize_t new_size_hint = block_size - num_filtered;
@@ -683,6 +718,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
             ColumnWithTypeAndName & col = block.getByPosition(i);
             col.column = col.column->filter(filter, new_size_hint);
         }
+        total_filter_cost += filter_timer.elapsedMilliseconds();
     }
     return false;
 }

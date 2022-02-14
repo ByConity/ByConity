@@ -169,7 +169,7 @@ struct Settings;
     M(UInt64, unique_engine_temp_table_wait_interval, 0, "", 0) \
     M(UInt64, unique_index_max_idle_seconds, 7200, "", 0) \
     M(Bool, enable_unique_partial_update, true, "", 0) \
-    M(Bool, enable_unique_row_store, true, "", 0) \
+    M(Bool, enable_unique_row_store, false, "", 0) \
     /** When enable disk_based_unique_key_index and unique key index file exists, use disk_based uki. Otherwise, use in-memory uki. \
         Notice: this setting is under control of engine setting 'enable_disk_based_unique_key_index_method'.  \
         That's, when 'enable_disk_based_unique_key_index_method' is false, this setting will not take effect. */           \
