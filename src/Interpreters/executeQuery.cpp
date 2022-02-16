@@ -698,7 +698,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 element.profile_counters = std::move(info.profile_counters);
             };
 
-            auto query_id = CurrentThread::getQueryId().toString();
+            auto query_id = elem.client_info.initial_query_id;
             /// Also make possible for caller to log successful query finish and exception during execution.
             auto finish_callback = [elem, context, ast,
                  log_queries,

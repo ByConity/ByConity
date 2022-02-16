@@ -25,7 +25,7 @@ public:
         response->set_ret_code(std::to_string(static_cast<int>(cancel_code)));
     }
 
-    /// fetch plan segment status (segment executor host --> coordinator host)
+    /// send plan segment status (segment executor host --> coordinator host)
     void sendPlanSegmentStatus(
         ::google::protobuf::RpcController * /*controller*/,
         const ::DB::Protos::SendPlanSegmentStatusRequest * request,
@@ -40,6 +40,8 @@ public:
         // this means exception happened during execution.
         if (!request->is_succeed() && !request->is_canceled())
         {
+            scheduler->updateException(
+                request->query_id(), "Segment:" + std::to_string(request->segment_id()) + ", exception:" + request->message());
             try
             {
                 scheduler->cancelPlanSegmentsFromCoordinator(request->query_id(), request->message(), context);

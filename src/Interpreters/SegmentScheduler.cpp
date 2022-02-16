@@ -140,6 +140,8 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     auto seg_status_map_ite = segment_status_map.find(query_id);
     if (seg_status_map_ite != segment_status_map.end())
         segment_status_map.erase(seg_status_map_ite);
+
+    query_to_exception.remove(query_id);
     return true;
 }
 
@@ -188,6 +190,20 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->is_canceled = segment_status.is_canceled;
     status->message = segment_status.message;
     status->code = segment_status.code;
+}
+
+void SegmentScheduler::updateException(const String & query_id, const String & exception)
+{
+    std::unique_lock<bthread::Mutex> lock(mutex);
+    // only record one exception
+    // if query map can not find query_id means query has already finished
+    if (query_map.count(query_id))
+        query_to_exception.putIfNotExists(query_id, exception);
+}
+
+String SegmentScheduler::getException(const String & query_id, size_t timeout_ms)
+{
+    return query_to_exception.get(query_id, timeout_ms);
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
