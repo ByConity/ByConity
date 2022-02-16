@@ -2,18 +2,19 @@
 #include <utility>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/FilterDescription.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/Context_fwd.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Poco/Logger.h>
-#include <Columns/IColumn.h>
-#include <DataTypes/DataTypesNumber.h>
 #include <common/logger_useful.h>
-#include "Functions/FunctionFactory.h"
-#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
-RepartitionTransform::RepartitionTransform(const Block & header_, size_t partition_num_, ColumnNumbers repartition_keys_, ExecutableFunctionPtr repartition_func_)
+RepartitionTransform::RepartitionTransform(
+    const Block & header_, size_t partition_num_, ColumnNumbers repartition_keys_, ExecutableFunctionPtr repartition_func_)
     : ISimpleTransform(header_, header_, true)
     , partition_num(partition_num_)
     , repartition_keys(std::move(repartition_keys_))
@@ -22,20 +23,10 @@ RepartitionTransform::RepartitionTransform(const Block & header_, size_t partiti
 {
 }
 
-IProcessor::Status RepartitionTransform::prepare()
-{
-    return ISimpleTransform::prepare();
-}
-
 void RepartitionTransform::transform(Chunk & chunk)
 {
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
-
-    //TODO: support chunk info
-    if(chunk.getChunkInfo()){
-        LOG_WARNING(logger, "Chunk info {} will be overwrite by repartition", typeid(chunk.getChunkInfo().get()).name());
-    }
 
     std::tie(partition_selector, partition_start_points)
         = doRepartition(partition_num, chunk, getInputPort().getHeader(), {}, repartition_func, REPARTITION_FUNC_RESULT_TYPE);
@@ -51,7 +42,7 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
     const ColumnNumbers & repartition_keys,
     ExecutableFunctionPtr repartition_func,
     const DataTypePtr & result_type)
-{    
+{
     size_t input_rows_count = chunk.getNumRows();
     auto selector_column = ColumnUInt64::create(input_rows_count);
     const Columns & columns = chunk.getColumns();

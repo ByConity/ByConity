@@ -20,13 +20,15 @@ namespace ErrorCodes
 }
 
 BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
-    DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_)
+    DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_)
     : trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
     , header(std::move(header_))
+    , queue(context->getSettingsRef().exchange_remote_receiver_queue_size)
+    , data_key(trans_key->getKey())
+    , keep_order(keep_order_)
 {
-    data_key = trans_key->getKey();
 }
 
 BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
@@ -51,9 +53,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
     brpc::Controller cntl;
     brpc::StreamOptions stream_options;
-    const auto stream_max_buf_size_bytes = -1;
-    stream_options.max_buf_size = stream_max_buf_size_bytes;
-    stream_options.handler = std::make_shared<StreamHandler>(context, weak_from_this());
+    stream_options.handler = std::make_shared<StreamHandler>(context, shared_from_this(), header, keep_order);
     if (timeout_ms == 0)
         cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
     else
@@ -107,9 +107,13 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 
     // receive a empty chunk means the receive is done.
     if (!received_chunk)
+    {
+        LOG_DEBUG(log, "{} finished ", getName());
         return RecvDataPacket(finish(BroadcastStatusCode::ALL_SENDERS_DONE, "receiver done"));
+    }
 
-    ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
+    if(keep_order)
+        ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
     return RecvDataPacket(std::move(received_chunk));
 }
 
@@ -118,7 +122,21 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
     int actual_status_code = BroadcastStatusCode::RUNNING;
     if (status_code_ < 0)
     {
-        brpc::StreamFinish(stream_id, actual_status_code, status_code_, false);
+        int rc = brpc::StreamFinish(stream_id, actual_status_code, status_code_, false);
+        if (rc == EINVAL)
+        {
+            if (queue.closed())
+                return BroadcastStatus(
+                    BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "BrpcRemoteBroadcastReceiver: stream closed before finish");
+            else
+                return BroadcastStatus(status_code_, false, "BrpcRemoteBroadcastReceiver: stream closed gracefully before finish");
+        }
+        if (rc != 0)
+            return BroadcastStatus(
+                static_cast<BroadcastStatusCode>(actual_status_code),
+                false,
+                "BrpcRemoteBroadcastReceiver::finish, already has been finished");
+
         return BroadcastStatus(static_cast<BroadcastStatusCode>(status_code_), false, message);
     }
 

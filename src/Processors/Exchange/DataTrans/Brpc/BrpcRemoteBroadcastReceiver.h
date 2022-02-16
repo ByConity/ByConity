@@ -13,7 +13,7 @@ namespace DB
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
-    BrpcRemoteBroadcastReceiver(DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_);
+    BrpcRemoteBroadcastReceiver(DataTransKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_);
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
@@ -21,7 +21,6 @@ public:
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
     void pushReceiveQueue(Chunk chunk);
-    Block getHeader() { return header; }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
@@ -34,6 +33,7 @@ private:
     BoundedDataQueue<Chunk> queue;
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
+    bool keep_order;
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;

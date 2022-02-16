@@ -13,6 +13,7 @@
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeSource.h>
@@ -87,9 +88,24 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 
     Pipe pipe;
 
-    const Block & header = getOutputStream().header;
-
     size_t source_num = 0;
+    bool keep_order = context->getSettingsRef().exchange_enable_force_keep_order;
+    if (!keep_order)
+    {
+        for (const auto & input : inputs)
+        {
+            if (input->needKeepOrder())
+            {
+                keep_order = input->needKeepOrder();
+                break;
+            }
+        }
+    }
+
+    const Block & exchange_header = getOutputStream().header;
+    Block source_header;
+    if (keep_order)
+        source_header = exchange_header;
 
     for (const auto & input : inputs)
     {
@@ -101,7 +117,8 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             exchange_parallel_size = 1;
 
         size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
-        LocalChannelOptions local_options{.queue_size = 50, .max_timeout_ms = options.exhcange_timeout_ms};
+        LocalChannelOptions local_options{
+            .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ms = options.exhcange_timeout_ms};
         if (input->getSourceAddress().empty())
             throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
         bool is_final_plan_segment = (input->getExchangeMode() == ExchangeMode::GATHER);
@@ -127,24 +144,32 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                         String localhost_address = context->getLocalHost() + ":" + std::to_string(context->getExchangePort());
                         LOG_DEBUG(logger, "Force local exchange use remote source : {}@{}", data_key->dump(), localhost_address);
                         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
-                            std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), localhost_address, context, header));
+                            std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), localhost_address, context, exchange_header, keep_order));
                     }
                 }
                 else
                 {
                     LOG_DEBUG(logger, "Create remote exchange source : {}@{}", data_key->dump(), write_address_info);
                     receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
-                        std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), write_address_info, context, header));
+                        std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), write_address_info, context, exchange_header, keep_order));
                 }
-                auto source = std::make_shared<ExchangeSource>(header, std::move(receiver), options, is_final_plan_segment);
+                auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
                 pipe.addSource(std::move(source));
                 source_num++;
             }
         }
     }
-
+    
     pipeline.init(std::move(pipe));
-    LOG_DEBUG(logger, "Total exchange source : {}", source_num);
+    if (!keep_order)
+    {
+        pipeline.resize(context->getSettingsRef().exchange_source_pipeline_threads);
+        pipeline.addSimpleTransform(
+            [enable_compress = context->getSettingsRef().exchange_enable_block_compress, header = exchange_header](const Block & ) {
+                return std::make_shared<DeserializeBufTransform>(header, enable_compress);
+            });
+    }
+    LOG_DEBUG(logger, "Total exchange source : {}, keep_order: {}", source_num, keep_order);
     pipeline.setMinThreads(source_num + 1);
 }
 

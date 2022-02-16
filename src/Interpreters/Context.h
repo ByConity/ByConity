@@ -70,6 +70,7 @@ class MarkCache;
 class MMappedFileCache;
 class UncompressedCache;
 class ProcessList;
+class ProcessListEntry;
 class QueryStatus;
 class QueryCache;
 class Macros;
@@ -204,6 +205,7 @@ private:
     FileProgressCallback file_progress_callback; /// Callback for tracking progress of file loading.
 
     QueryStatus * process_list_elem = nullptr;  /// For tracking total resource usage for query.
+    std::weak_ptr<ProcessListEntry> process_list_entry;
     StorageID insertion_table = StorageID::createEmpty();  /// Saved insertion table in query context
 
     String default_format;  /// Format, used when server formats data by itself and if query does not have FORMAT specification.
@@ -641,6 +643,9 @@ public:
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
 
+    void setProcessListEntry(std::shared_ptr<ProcessListEntry> prcess_list_entry_);
+    std::weak_ptr<ProcessListEntry> getProcessListEntry();
+    
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in IBlockInputStream,
       *  to update and monitor information about the total number of resources spent for the query.
       */

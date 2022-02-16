@@ -33,7 +33,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
 {
     initLogger();
     const auto & context = getContext().context;
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
@@ -130,7 +130,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
 {
     initLogger();
     const auto context = Context::createCopy(getContext().context);
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();
@@ -225,7 +225,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
 {
     initLogger();
     const auto context = Context::createCopy(getContext().context);
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
     Block header = block.cloneEmpty();

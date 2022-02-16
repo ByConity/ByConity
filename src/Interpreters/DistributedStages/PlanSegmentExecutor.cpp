@@ -157,8 +157,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         num_threads);
     pipeline_executor->execute(num_threads);
     for (const auto & sender : senders)
-        // Send an empty chunk means all chunks are sended done.
-        sender->send(Chunk());
+        sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
 }
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
@@ -213,8 +212,9 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     }
     
     pipeline->setMaxThreads(pipeline->getNumThreads());
-    if (!keep_order)
-        pipeline->resize(context->getSettingsRef().exchange_unordered_output_parallel_size, false, false);
+    auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
+    if (!keep_order && output_size)
+        pipeline->resize(output_size, false, false);
 
     LOG_DEBUG(logger, "plan segment {} add {} senders", plan_segment->getPlanSegmentId(), senders.size());
 

@@ -120,7 +120,7 @@ public:
     UInt64 getNumColumns() const { return columns.size(); }
     bool hasRows() const { return num_rows > 0; }
     bool hasColumns() const { return !columns.empty(); }
-    bool empty() const { return !hasRows() && !hasColumns(); }
+    bool empty() const { return !hasRows() && !hasColumns() && !chunk_info; }
     operator bool() const { return !empty(); }
 
     void addColumn(ColumnPtr column);

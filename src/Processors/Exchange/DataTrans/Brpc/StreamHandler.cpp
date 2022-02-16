@@ -3,6 +3,8 @@
 
 #include <Compression/CompressedReadBuffer.h>
 #include <IO/ReadHelpers.h>
+#include <Processors/Chunk.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -25,7 +27,24 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
     }
     try
     {
-        auto header = receiver_ptr->getHeader();
+        if (!keep_order)
+        {
+            for (size_t index = 0; index < size; index++)
+            {
+                butil::IOBuf * msg = messages[index];
+                LOG_TRACE(
+                    log,
+                    "on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}",
+                    stream_id,
+                    msg->size());
+                auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfo>();
+                chunk_info->io_buf.append(msg->movable());
+                Chunk chunk;
+                chunk.setChunkInfo(std::move(chunk_info));
+                receiver_ptr->pushReceiveQueue(std::move(chunk));
+            }
+            return 0;
+        }
         for (size_t index = 0; index < size; index++)
         {
             butil::IOBuf & msg = *messages[index];
@@ -86,6 +105,13 @@ void StreamHandler::on_closed(brpc::StreamId stream_id)
         }
         else
         {
+            /// Try close receiver gracefully
+            auto res = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Finish in StreamHandler");
+            if (res.is_modifer || res.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+            {
+                // push an empty as finish
+                receiver_ptr->pushReceiveQueue(Chunk());
+            }
             LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
         }
     }
