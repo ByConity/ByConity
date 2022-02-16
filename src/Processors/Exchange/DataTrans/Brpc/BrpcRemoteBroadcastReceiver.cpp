@@ -105,14 +105,17 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
         return std::move(current_status);
     }
 
-    // receive a empty chunk means the receive is done.
-    if (!received_chunk)
+    // receive a empty chunk without any chunk info means the receive is done.
+    if (!received_chunk && !received_chunk.getChunkInfo())
     {
         LOG_DEBUG(log, "{} finished ", getName());
         return RecvDataPacket(finish(BroadcastStatusCode::ALL_SENDERS_DONE, "receiver done"));
     }
 
     if(keep_order)
+        // Chunk in queue is created in StreamHanlder's on_received_messages callback, which is run in bthread.
+        // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker. 
+        // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
         ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
     return RecvDataPacket(std::move(received_chunk));
 }

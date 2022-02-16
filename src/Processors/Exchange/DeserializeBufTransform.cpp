@@ -40,7 +40,6 @@ void DeserializeBufTransform::transform(Chunk & chunk)
         buf = std::move(read_buffer);
     NativeChunkInputStream chunk_in(*buf, header);
     chunk = chunk_in.readImpl();
-    ExchangeUtils::transferGlobalMemoryToThread(chunk.allocatedBytes());
 }
 
 }
