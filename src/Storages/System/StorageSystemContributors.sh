@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+echo "THIS IS HEAVILY DEPRECATED, USE tests/ci/version_helper.py:update_contributors()"
 set -x
 
 LC_ALL=C

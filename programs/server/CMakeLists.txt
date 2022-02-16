@@ -29,7 +29,7 @@ set (CLICKHOUSE_SERVER_LINK
 
 clickhouse_program_add(server)
 
-install(FILES config.xml users.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT clickhouse)
+install(FILES byconity-server.xml byconity-worker.xml byconity-write-worker.xml cnch_config.xml daemon-manager.xml tso.xml users.xml DESTINATION "${CLICKHOUSE_ETC_DIR}/clickhouse-server" COMPONENT clickhouse)
 
 clickhouse_embed_binaries(
     TARGET clickhouse_server_configs
