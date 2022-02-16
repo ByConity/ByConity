@@ -16,8 +16,7 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # prepare test_output directory
 mkdir -p test_output
-# ASAN log path defined
-export ASAN_OPTIONS=halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log
+mkdir -p sanitizer_log_output
 
 function start()
 {
@@ -138,6 +137,7 @@ then
     fi
     echo 'Uploading asan log to Artifacts'
     mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
+    cp -r /test_output/asan_log/ /sanitizer_log_output/
 else
     echo "No ASAN logs exists"
 fi

@@ -42,6 +42,7 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
@@ -82,6 +83,7 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/stateful/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
@@ -204,6 +206,8 @@ jobs:
     name: FuntionalStatelessTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
     depends: [scm_build_ASAN]
+    envs:
+      ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
       - uses: actions/checkout
         inputs:
@@ -222,12 +226,18 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
           name: test_output
           path: /test_output
+      - name: Upload sanitizer log
+        uses: actions/upload-artifact
+        inputs:
+          name: sanitizer_log_output
+          path: /sanitizer_log_output
       - name: Analyse Result
         commands:
           - |
@@ -244,6 +254,8 @@ jobs:
     name: FuntionalStatefulTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
     depends: [scm_build_ASAN]
+    envs:
+      ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
       - uses: actions/checkout
         inputs:
@@ -262,12 +274,18 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/stateful/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
           name: test_output
           path: /test_output
+      - name: Upload sanitizer log
+        uses: actions/upload-artifact
+        inputs:
+          name: sanitizer_log_output
+          path: /sanitizer_log_output
       - name: Analyse Result
         commands:
           - |
