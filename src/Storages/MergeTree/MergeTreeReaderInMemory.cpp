@@ -31,6 +31,8 @@ MergeTreeReaderInMemory::MergeTreeReaderInMemory(
     for (const auto & name_and_type : columns)
     {
         auto [name, type] = getColumnFromPart(name_and_type);
+        if (name == "_part_row_number")
+            continue;
 
         /// If array of Nested column is missing in part,
         /// we have to read its offsets if they exist.
@@ -111,7 +113,7 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
                 mutable_column->insertRangeFrom(*block_column, total_rows_read, rows_to_read);
                 res_columns[i] = std::move(mutable_column);
             }
-        } 
+        }
         else if (isMapImplicitKey(name_type.name)) /// handle implicit key
         {
             auto & part_all_columns = part_in_memory->getColumns();
@@ -168,6 +170,19 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
                     }
                 }
             }
+        }
+        else if (name_type.name == "_part_row_number")
+        {
+            if (res_columns[i] == nullptr)
+                res_columns[i] = name_type.type->createColumn();
+
+            auto mutable_column = res_columns[i]->assumeMutable();
+            auto & column = assert_cast<ColumnUInt64 &>(*mutable_column);
+            size_t row_number = total_rows_read;
+            size_t row_number_end = row_number + rows_to_read;
+            while (row_number < row_number_end)
+                 column.insertValue(row_number++);
+            res_columns[i] = std::move(mutable_column);
         }
     }
 

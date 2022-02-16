@@ -251,7 +251,7 @@ static void injectVirtualColumnsImpl(
     const Names & virtual_columns)
 {
     /// add virtual columns
-    /// Except _sample_factor, which is added from the outside.
+    /// Except _sample_factor and _part_row_number, which is added from the outside.
     if (!virtual_columns.empty())
     {
         if (unlikely(rows && !task))

@@ -92,6 +92,12 @@ NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetada
         alter_conversions = storage.getAlterConversionsForPart(part);
     for (size_t i = 0; i < columns.size(); ++i)
     {
+        if (columns[i] == "_part_row_number")
+        {
+            /// _part_row_number is read by IMergeTreeReader::readRows, just like other physical columns
+            have_at_least_one_physical_column = true;
+            continue;
+        }
         /// We are going to fetch only physical columns
         if (!storage_columns.hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, columns[i]))
             throw Exception("There is no physical column or subcolumn " + columns[i] + " in table.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
@@ -316,8 +322,10 @@ MergeTreeReadTaskColumns getReadTaskColumns(
     }
     else
     {
-        result.pre_columns = data_part->getColumns().addTypes(pre_column_names);
-        result.columns = data_part->getColumns().addTypes(column_names);
+        auto columns = data_part->getColumns();
+        columns.push_back(NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()));
+        result.pre_columns = columns.addTypes(pre_column_names);
+        result.columns = columns.addTypes(column_names);
     }
 
     result.should_reorder = should_reorder;

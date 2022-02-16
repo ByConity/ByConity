@@ -96,7 +96,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
             {
                 addByteMapStreams({column.name, column.type}, parseColNameFromImplicitName(column.name), profile_callback_, clock_type_);
             }
-            else
+            else if (column.name != "_part_row_number")
             {
                 // TODO
                 //String column_name = column_from_part.name;
@@ -104,7 +104,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
                 //	column_name = column_from_part.name + BITENGINE_COLUMN_EXTENSION;
                 //addStreams(column_name, *column_from_part.type, profile_callback, clock_type);
                 addStreams(column_from_part, profile_callback_, clock_type_);
-            } 
+            }
         }
 
         if (!dupImplicitKeys.empty()) names = columns.getNames();
@@ -118,6 +118,9 @@ MergeTreeReaderWide::MergeTreeReaderWide(
 
 size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
 {
+    if (!continue_reading)
+        next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
+
     size_t read_rows = 0;
     try
     {
@@ -142,6 +145,7 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
         OffsetColumns offset_columns;
         std::unordered_map<String, ISerialization::SubstreamsCache> caches;
 
+        int row_number_column_pos = -1;
         auto name_and_type = sort_columns.begin();
         for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
         {
@@ -153,6 +157,13 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
             bool append = res_columns[pos] != nullptr;
             if (!append)
                 res_columns[pos] = type->createColumn();
+
+            /// row number column will be populated at last after `read_rows` is set
+            if (name == "_part_row_number")
+            {
+                row_number_column_pos = pos;
+                continue;
+            }
 
             auto & column = res_columns[pos];
             try
@@ -195,8 +206,8 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
 
                         implKeyColHolder.push_back(implValueType->createColumn());
                         auto& implValueColumn = implKeyColHolder.back();
-                        readData(implicit_key_name_and_type, 
-								 implValueColumn, from_mark, continue_reading, 
+                        readData(implicit_key_name_and_type,
+								 implValueColumn, from_mark, continue_reading,
 							     max_rows_to_read, cache);
                         implKeyValues[kit->second] = {0, &(*implValueColumn)};
                     }
@@ -226,6 +237,29 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
                 res_columns[pos] = nullptr;
         }
 
+        /// Populate _part_row_number column if requested
+        if (row_number_column_pos >= 0)
+        {
+            /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
+            if (columns.size() == 1)
+            {
+                read_rows = std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read);
+            }
+
+            if (read_rows)
+            {
+                auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
+                ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
+                for (size_t i = 0, row_number = next_row_number_to_read; i < read_rows; ++i)
+                    column.insertValue(row_number++);
+                res_columns[row_number_column_pos] = std::move(mutable_column);
+            }
+            else
+            {
+                res_columns[row_number_column_pos] = nullptr;
+            }
+        }
+
         /// NOTE: positions for all streams must be kept in sync.
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
@@ -248,6 +282,7 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
         throw;
     }
 
+    next_row_number_to_read += read_rows;
     return read_rows;
 }
 
