@@ -117,6 +117,15 @@ PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, cons
     return res;
 }
 
+void mergeIndices(PaddedPODArray<UInt32> & rowids, PaddedPODArray<UInt32> & tmpids)
+{
+    size_t rowids_size = rowids.size();
+    size_t tmpids_size = rowids.size();
+    rowids.reserve(rowids_size + tmpids_size);
+    for (auto val: tmpids)
+        rowids.push_back(val);
+}
+
 } /// anonymous namespace
 
 using IndexFileIteratorPtr = std::unique_ptr<IndexFile::Iterator>;
@@ -424,7 +433,8 @@ void HaUniqueMergeTreeBlockOutputStreamV2::writeSuffix()
         remote_stream->writeSuffix();
 }
 
-size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColumn::Filter & filter)
+size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
+    Block & block, IColumn::Filter & filter, PaddedPODArray<UInt32> & replace_dst_indexes, PaddedPODArray<UInt32> & replace_src_indexes)
 {
     auto block_size = block.rows();
     size_t num_filtered = 0;
@@ -433,8 +443,6 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColum
 
     auto unique_key_names = metadata_snapshot->getUniqueKeyColumns();
     metadata_snapshot->getUniqueKeyExpression()->execute(block);
-
-    PaddedPODArray<UInt32> replace_from_indexes, replace_to_indexes;
 
     Stopwatch judge_timer;
     ColumnsWithTypeAndName keys;
@@ -452,8 +460,8 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColum
             /// When there is no explict version column, use rowid as version number,
             /// Otherwise use value from version column
             size_t old_pos = it->second;
-            replace_from_indexes.push_back(UInt32(rowid));
-            replace_to_indexes.push_back(UInt32(old_pos));
+            replace_dst_indexes.push_back(UInt32(rowid));
+            replace_src_indexes.push_back(UInt32(old_pos));
             size_t new_pos = rowid;
             filter[old_pos] = 0;
             it->second = new_pos;
@@ -466,39 +474,6 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(Block & block, IColum
     }
     index.clear();
     total_remove_dedup_judge_cost += judge_timer.elapsedMilliseconds();
-
-    Stopwatch replace_timer;
-    if (num_filtered)
-    {
-        NameSet non_updatable_columns;
-        for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
-            non_updatable_columns.insert(name);
-        for (auto & name : metadata_snapshot->getUniqueKeyColumns())
-            non_updatable_columns.insert(name);
-
-        for (auto & col : block)
-        {
-            if (non_updatable_columns.count(col.name))
-                continue;
-
-            ColumnPtr is_default_col = col.column->selectDefault();
-            const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
-            /// all values are non-default, nothing to replace
-            if (filterIsAlwaysFalse(is_default_filter))
-                continue;
-
-            total_remove_dedup_default_value_row += filterDefaultCount(is_default_filter);
-            total_remove_dedup_handle_column_count++;
-
-            /// when column[replace_from_indexes[i]] is default value, update to column[replace_to_indexes[i]]
-            ColumnPtr new_column = col.column->replaceFrom(
-                replace_from_indexes, *col.column, &replace_to_indexes,
-                filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter);
-            col.column = std::move(new_column);
-        }
-        total_remove_dedup_replace_column_cost += replace_timer.elapsedMilliseconds();
-    }
-
     return num_filtered;
 }
 
@@ -617,14 +592,20 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
             iter->NextUntil(key, exact_match);
         else if (cmp == 0)
             exact_match = true;
-        
+
         if (!exact_match)
         {
             size_t row_id_current;
             ReadBufferFromString buffer(iter->key());
             readBinary(row_id_current, buffer);
             row_id_current = Endian::big(row_id_current);
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row {} from row store in data part {}, current row id {}", pair.part_rowid, part->name, row_id_current);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Can not find row {} from row store in data part {}, current row id {}, part total rows {}",
+                pair.part_rowid,
+                part->name,
+                row_id_current,
+                part->rows_count);
         }
 
         std::vector<SerializationPtr> serializations;
@@ -667,7 +648,8 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     size_t block_size = block.rows();
     IColumn::Filter filter(block_size, 1);
     Stopwatch remove_dedup_timer;
-    size_t num_filtered = removeDupKeys(block, filter);
+    PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
+    size_t num_filtered = removeDupKeys(block, filter, replace_dst_indexes, replace_src_indexes);
 
     total_remove_dedup_cost += remove_dedup_timer.elapsedMilliseconds();
 
@@ -733,7 +715,8 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         }
 
         /// TODO(lta): optimize(skip non partial update row)
-        part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid)});
+        /// Rowid should be added with block_size to be distinguished with those rows which will be replaced from column self.
+        part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid + block_size)});
         process_row_deletion(existing_parts[part_index], part_rowid, key);
     }
     total_query_uki_cost += query_uki_timer.elapsedMilliseconds();
@@ -756,7 +739,10 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         total_get_row_store_cost += get_row_store_timer.elapsedMilliseconds();
 
         total_row += part_rowid_pairs[i].size();
-        if (row_store)
+        
+        /// According to the result of performace test, when the query data ratio is less than 5%, query row store has a better performance than query column store
+        /// For more detail, please see https://bytedance.feishu.cn/docs/doccnilaBbofUvfnQ3zBuLQKjFe#xMQQwA
+        if (row_store && part_rowid_pairs[i].size() * 100 < existing_parts[i]->rows_count * 5)
             readColumnsFromRowStore(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids, row_store);
         else
             readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);
@@ -773,10 +759,15 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     total_read_row += total_row;
 
     Stopwatch replace_timer;
-    if (!block_rowids.empty())
+    if (!block_rowids.empty() || !replace_dst_indexes.empty())
     {
-        PaddedPODArray<UInt32> replace_to_indexes = getRowidPermutation(block_rowids);
-        PaddedPODArray<UInt32> replace_from_indexes = permuteRowids(block_rowids, replace_to_indexes);
+        if (!block_rowids.empty())
+        {
+            PaddedPODArray<UInt32> tmp_src_indexes = getRowidPermutation(block_rowids);
+            PaddedPODArray<UInt32> tmp_dst_indexes = permuteRowids(block_rowids, tmp_src_indexes);
+            mergeIndices(replace_src_indexes, tmp_src_indexes);
+            mergeIndices(replace_dst_indexes, tmp_dst_indexes);
+        }
 
         NameSet non_updatable_columns;
         for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
@@ -786,26 +777,53 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
 
         for (auto & col : block)
         {
-            if (non_updatable_columns.count(col.name) || col.name == StorageInMemoryMetadata::delete_flag_column_name)
+            if (col.name == StorageInMemoryMetadata::delete_flag_column_name)
                 continue;
 
-            ColumnPtr is_default_col = col.column->selectDefault();
-            const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
+            if (non_updatable_columns.count(col.name))
+            {
+                if (num_filtered > 0)
+                {
+                    ssize_t new_size_hint = block_size - num_filtered;
+                    col.column = col.column->filter(filter, new_size_hint);
+                }        
+            }
+            else
+            {
+                ColumnPtr is_default_col = col.column->selectDefault();
+                const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
-            /// all values are non-default, nothing to replace
-            if (filterIsAlwaysFalse(is_default_filter))
-                continue;
+                /// all values are non-default, nothing to replace
+                if (filterIsAlwaysFalse(is_default_filter))
+                    continue;
 
-            total_replace_default_value_row += filterDefaultCount(is_default_filter);
-            total_replace_handle_column_count++;
-            ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
-            ColumnPtr new_column = col.column->replaceFrom(
-                replace_from_indexes, *column_from_storage, &replace_to_indexes,
-                filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter);
-            col.column = std::move(new_column);
+                total_replace_default_value_row += filterDefaultCount(is_default_filter);
+                total_replace_handle_column_count++;
+                ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
+                ColumnPtr new_column = col.column->replaceFrom(
+                    replace_dst_indexes,
+                    *column_from_storage,
+                    replace_src_indexes,
+                    filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter,
+                    num_filtered > 0 ? &filter : nullptr);
+                col.column = std::move(new_column);
+            }
         }
 
         total_replace_cost += replace_timer.elapsedMilliseconds();
+    }
+    else
+    {
+        Stopwatch filter_timer;
+        if (num_filtered > 0)
+        {
+            ssize_t new_size_hint = block_size - num_filtered;
+            for (size_t i = 0; i < block.columns(); ++i) {
+                ColumnWithTypeAndName & col = block.getByPosition(i);
+                col.column = col.column->filter(filter, new_size_hint);
+            }
+            total_filter_cost += filter_timer.elapsedMilliseconds();
+        }
     }
 
     /// remove column not in header, including func columns
@@ -814,16 +832,6 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         if (!header_block.has(col_name))
             block.erase(col_name);
 
-    Stopwatch filter_timer;
-    if (num_filtered > 0)
-    {
-        ssize_t new_size_hint = block_size - num_filtered;
-        for (size_t i = 0; i < block.columns(); ++i) {
-            ColumnWithTypeAndName & col = block.getByPosition(i);
-            col.column = col.column->filter(filter, new_size_hint);
-        }
-        total_filter_cost += filter_timer.elapsedMilliseconds();
-    }
     return false;
 }
 

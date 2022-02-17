@@ -387,9 +387,14 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
     decrementTypeMetric(part_type);
 
     /// clear cache
-    /// TODO(lta): find out why it will lead to crash
-    // if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique && storage.unique_row_store_cache)
-    //     storage.unique_row_store_cache->remove(getMemoryAddress());
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        String key = getMemoryAddress();
+        if (storage.unique_row_store_cache)
+            storage.unique_row_store_cache->remove(key);
+        if (uki_type == UkiType::DISK && storage.unique_key_index_cache)
+            storage.unique_key_index_cache->remove(key);
+    }
 }
 
 String IMergeTreeDataPart::getNewName(const MergeTreePartInfo & new_part_info) const
@@ -2314,11 +2319,7 @@ UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
             || !storage.getSettings()->enable_disk_based_unique_key_index || !Poco::File(getFullPath() + UKI_FILE_NAME).exists())
             uki_type = UkiType::MEMORY;
         else
-        {
             uki_type = UkiType::DISK;
-            String key = getMemoryAddress();
-            storage.unique_key_index_cache->remove(key);
-        }
     }
 
     if (uki_type == UkiType::MEMORY)

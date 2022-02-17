@@ -31,7 +31,11 @@ public:
     void writeSuffix() override;
 
 private:
-    size_t removeDupKeys(Block & block, IColumn::Filter & filter);
+    size_t removeDupKeys(
+        Block & block,
+        IColumn::Filter & filter,
+        PaddedPODArray<UInt32> & replace_dst_indexes,
+        PaddedPODArray<UInt32> & replace_src_indexes);
 
     struct RowidPair
     {

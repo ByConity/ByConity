@@ -347,14 +347,23 @@ public:
     {
         throw Exception("Method selectDefault is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    /// Return a new column that replace values at `indexes` with values in `rhs`.
-    /// When `rhs_indexes` and `filter` is null, column[indexes[i]] is replaced with rhs[i].
-    /// When `rhs_indexes` is not null, column[indexes[i]] is replaced with rhs[rhs_indexes[i]] instead.
-    /// When `filter` is not null, the i-th element is not replaced when filter[i] is 0.
+    
+    /**
+     * Return a new column that replace values at `indexes` with values in this column and `rhs`.
+     * Indexes has beed divided into two parts. All indexes belong to `rhs` has been added with the size of this column.
+     * For exmaple, the size of this column is 6, row (1,3,5) should be replace by row (0,2,4) of this column, row (1, 3) should be replace by row (1, 0) of rhs.
+     * In this case, indexes will be (1, 3, 5, 7, 9), rhs_indexes will be (0, 2, 4, 1, 0) and the size of rhs will be 2.
+     * For the first part, column[indexes[i]] is replaced with column[rhs_indexes[i]].
+     * For the second part, column[indexes[i]] is replaced with rhs[rhs_indexes[i]].
+     * 
+     * When `is_default_filter` is not null, the i-th element is not replaced when is_default_filter[i] is 0.
+     * When `filter` is not null, the i-th element will be discard when filter[i] is 0.
+     */
     virtual Ptr replaceFrom(
         const PaddedPODArray<UInt32> & /*indexes*/,
-        const IColumn & /*rhs*/, const PaddedPODArray<UInt32> * /*rhs_indexes*/,
+        const IColumn & /*rhs*/,
+        const PaddedPODArray<UInt32> & /*rhs_indexes*/,
+        const Filter * /*is_default_filter*/,
         const Filter * /*filter*/) const
     {
         throw Exception("Method replaceFrom is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -510,16 +519,15 @@ protected:
                          PaddedPODArray<Int8> & compare_results,
                          int direction, int nan_direction_hint) const;
 
-    template <typename Derived, bool has_rhs_indexes, bool has_filter>
-    Ptr replaceFromImpl(
-        const PaddedPODArray<UInt32> & indexes,
-        const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
-        const Filter * filter) const;
-
+    /**
+     * For more detail of usage, please see the description of method IColumn::replaceFrom.
+     */
     template <typename Derived>
     Ptr doReplaceFrom(
         const PaddedPODArray<UInt32> & indexes,
-        const Derived & rhs, const PaddedPODArray<UInt32> * rhs_indexes,
+        const Derived & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
         const Filter * filter) const;
 
     template <typename Derived>
