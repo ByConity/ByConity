@@ -54,7 +54,13 @@ private:
         bool need_finalize = false) override;
 
     /// Write row store data for unique table to speed up lookup based on row number
-    void writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation);
+    void writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool);
+
+    bool shouldWriteRowStore()
+    {
+        /// When it's under merge status, it'll generate row store later via merging all origin row stores directly.
+        return enable_unique_row_store && !is_merge;
+    }
 
     /// Method for self check (used in debug-build only). Checks that written
     /// data and corresponding marks are consistent. Otherwise throws logical

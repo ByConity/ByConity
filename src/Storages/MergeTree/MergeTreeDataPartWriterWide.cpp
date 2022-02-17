@@ -175,6 +175,32 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 {
     size_t rows = block.rows();
 
+    // pre-serialize value with multiple threads to improve performance
+    std::vector<String> serialized_values;
+    size_t threads = storage.getSettings()->write_unique_row_store_threads;
+    ThreadPool serialized_values_pool(threads);
+    if (shouldWriteRowStore())
+    {
+        serialized_values.resize(rows);
+        for (size_t i = 0; i < threads; ++i)
+        {
+            serialized_values_pool.scheduleOrThrowOnError([&, i]() { 
+                for (size_t j = i; j < rows; j += threads)
+                {
+                    size_t correct_row = j;
+                    if (permutation)
+                        correct_row = (*permutation)[j];
+                    if (correct_row >= rows)
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
+                    WriteBufferFromOwnString val_buf;
+                    for (auto & col : block)
+                        serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
+                    serialized_values[j] = val_buf.str();
+                }
+            });
+        }
+    }
+
     /// Fill index granularity for this block
     /// if it's unknown (in case of insert data or horizontal merge,
     /// but not in case of vertical part of vertical merge)
@@ -311,15 +337,14 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
             writeToTempUniqueKeyIndex(unique_key_block, /*first_rid=*/rows_count, *temp_unique_key_index);
         }
     }
-    writeRowStoreIfNeed(block, permutation);
+    writeRowStoreIfNeed(block, permutation, serialized_values, serialized_values_pool);
 
     rows_count += rows;
 }
 
-void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation)
+void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool)
 {
-    /// When it's under merge status, it'll generate row store later via merging all origin row stores directly.
-    if (!enable_unique_row_store || is_merge)
+    if (!shouldWriteRowStore())
         return;
     
     Stopwatch timer;
@@ -328,15 +353,28 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     auto disk = data_part->volume->getDisk();
     String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
     IndexFile::Options options;
-    // options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
+    
+    Stopwatch open_timer;
     IndexFile::IndexFileWriter row_store_writer(options);
     auto status = row_store_writer.Open(row_store_file);
     if (!status.ok())
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", row_store_file, status.ToString());
+    size_t open_cost = open_timer.elapsedMicroseconds();
 
     size_t rows = block.rows();
+    size_t serialize_row_cost = 0;
+    size_t serialize_value_cost = 0;
+    size_t insert_value_cost = 0;
+
+    {
+        Stopwatch inner_timer;
+        serialized_values_pool.wait();
+        serialize_value_cost += inner_timer.elapsedMicroseconds();
+    }
+
     for (size_t i = 0; i < rows; ++i)
     {
+        Stopwatch inner_timer;
         /// handle key, mem comparable
         size_t row = Endian::big(i);
         WriteBufferFromOwnString row_buf;
@@ -348,28 +386,33 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
         if (correct_row >= rows)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", i, correct_row, rows);
 
-        /// handle value
-        WriteBufferFromOwnString val_buf;
-        for (auto & col : block)
-            serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
-        String val = val_buf.str();
+        serialize_row_cost += inner_timer.elapsedMicroseconds();
+        inner_timer.restart();
 
         /// insert item
-        status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
+        status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(serialized_values[i].data(), serialized_values[i].size()));
         if (!status.ok())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
+
+        insert_value_cost += inner_timer.elapsedMicroseconds();
     }
 
+    Stopwatch finish_timer;
     status = row_store_writer.Finish(&unique_row_store_file_info);
+    size_t finish_cost = finish_timer.elapsedMicroseconds();
     if (!status.ok())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
     write_row_store_cost = timer.elapsedMilliseconds();
     LOG_DEBUG(
         log,
-        "Finish writing row store for part {}, rows {}, cost {} ms, total cost {} ms.",
+        "Finish writing row store for part {}, rows {}, open cost {} ms, serialize_row cost {} ms, serialize value cost {} ms, insert value cost {} ms, finish cost {} ms, total cost {} ms.",
         data_part->name,
         block.rows(),
-        timer.elapsedMilliseconds(),
+        open_cost / 1000,
+        serialize_row_cost / 1000,
+        serialize_value_cost / 1000,
+        insert_value_cost / 1000,
+        finish_cost / 1000,
         write_row_store_cost);
 }
 
