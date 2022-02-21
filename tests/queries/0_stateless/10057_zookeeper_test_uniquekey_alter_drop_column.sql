@@ -81,6 +81,13 @@ select '-----------------------------------';
 show create table test.alter_drop_column_t1;
 show create table test.alter_drop_column_t2;
 
+select '-----------------------------------';
+select 'optimize table final';
+optimize table test.alter_drop_column_t1 final;
+select sleep(3) format Null;
+select 'r1', d, id from test.alter_drop_column_t1 order by id ;
+select 'r2', d, id from test.alter_drop_column_t2 order by id;
+
 drop table if exists test.alter_drop_column_t1;
 drop table if exists test.alter_drop_column_t2;
 
