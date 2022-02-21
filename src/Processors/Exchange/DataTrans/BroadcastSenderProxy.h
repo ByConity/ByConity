@@ -31,6 +31,7 @@ public:
 
     ContextPtr getContext() const;
     Block getHeader() const;
+    DataTransKeyPtr getDataKey() const;
 
 private:
     friend class BroadcastSenderProxyRegistry;
