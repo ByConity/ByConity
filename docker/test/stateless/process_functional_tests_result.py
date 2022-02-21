@@ -88,36 +88,44 @@ def process_result(result_path):
         # If no tests were run (success == 0) it indicates an error (e.g. server did not start or crashed immediately)
         # But it's Ok for "flaky checks" - they can contain just one test for check which is marked as skipped.
         if failed != 0 or unknown != 0 or (success == 0 and (not is_flacky_check)):
-            state = "failure"
+            state = "test failed"
 
         if hung:
             description = "Some queries hung, "
-            state = "failure"
+            state = "test failed"
             test_results.append(("Some queries hung", "FAIL", "0"))
         elif task_timeout:
             description = "Timeout, "
-            state = "failure"
+            state = "test failed"
             test_results.append(("Timeout", "FAIL", "0"))
         elif retries:
             description = "Some tests restarted, "
             test_results.append(("Some tests restarted", "SKIPPED", "0"))
-        elif asan_fail:
-            description = "Asan filed, "
-            state = "failure"
-            test_results.append(("Asan filed", "FAIL", "0"))
         else:
             description = ""
 
-        description += "fail: {}, passed: {}".format(failed, success)
+        if failed > 0 :
+            description += " 1.Case(s) failed, summary: fail: {}, passed: {}".format(failed, success)
+        else:
+            description += " 1.All cases pass, summary: fail: {}, passed: {}".format(failed, success)
         if skipped != 0:
             description += ", skipped: {}".format(skipped)
         if unknown != 0:
             description += ", unknown: {}".format(unknown)
+
+        description += "."
+
     else:
-        state = "failure"
+        state = "test failed"
         description = "Output log doesn't exist"
         test_results = []
 
+    if asan_fail:
+        description += " 2.Asan failed, asan error detected after test finished, please check detailed log by downloading a copy of log at ARTIFACTS/sanitizer_log_output or searching keywords \"asan error found in\" Run ******Test step "
+        state = "test failed"
+        if test_results is []:
+            test_results.append(("Asan filed", "FAIL", "0"))
+    print(state, description)
     return state, description, test_results
 
 
@@ -126,7 +134,7 @@ def write_results(results_file, status_file, results, status):
         out = csv.writer(f, delimiter='\t')
         out.writerows(results)
     with open(status_file, 'w') as f:
-        out = csv.writer(f, delimiter='\t')
+        out = csv.writer(f, delimiter='\t',quoting=csv.QUOTE_NONE, escapechar=' ')
         out.writerow(status)
 
 

@@ -74,10 +74,10 @@ def is_sanitizer_pass():
             for item in ASAN_OPTIONS:
                 if item.startswith('log_path='):
                     ASAN_LOG_PATH = os.path.dirname(item.replace('log_path=', ''))
-                    print(f'\nASAN enbaled, the ASAN_LOG_PATH is:{ASAN_LOG_PATH}')
+                    print(f'\nASAN_OPTIONS found, search log at ASAN_LOG_PATH:{ASAN_LOG_PATH}')
                     return check_asan_log(ASAN_LOG_PATH)
                     break
-            print(f'\nis_sanitizer_pass skipped because ASAN enbaled, but "log_path" can not find in ASAN_OPTIONS, the ASAN_OPTIONS is: {ASAN_OPTIONS}')
+            print(f'\nis_sanitizer_pass skipped because "log_path" can not find in ASAN_OPTIONS, the ASAN_OPTIONS is: {ASAN_OPTIONS}')
             return True
         else:
             print('\nis_sanitizer_pass skipped due to ASAN_OPTIONS not in environ')

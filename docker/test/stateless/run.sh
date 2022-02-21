@@ -18,8 +18,7 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 
 # prepare test_output directory
 mkdir -p test_output
-# ASAN log path defined
-export ASAN_OPTIONS=halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log
+mkdir -p sanitizer_log_output
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
@@ -94,7 +93,7 @@ function run_tests()
         # Too many tests fail for DatabaseReplicated in parallel. All other
         # configurations are OK.
         ADDITIONAL_OPTIONS+=('--jobs')
-        ADDITIONAL_OPTIONS+=('8')
+        ADDITIONAL_OPTIONS+=('16')
     fi
 
     clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
@@ -158,6 +157,7 @@ then
     fi
     echo 'Uploading asan log to Artifacts'
     mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
+    cp -r /test_output/asan_log/ /sanitizer_log_output/
 else
     echo "No ASAN logs exists"
 fi
