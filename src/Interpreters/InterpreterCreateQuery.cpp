@@ -484,7 +484,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         }
 
         // Set type flags based on information in AST
-        column_type->setFlags(col_decl.flags);
+        column_names_and_types.back().type->setFlags(col_decl.flags);
     }
 
     Block defaults_sample_block;
