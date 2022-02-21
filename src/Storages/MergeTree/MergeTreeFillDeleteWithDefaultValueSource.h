@@ -7,7 +7,10 @@
 
 namespace DB
 {
-/// TODO: doc
+/// Similar to MergeTreeSequentialSource, the only differnence is that
+/// deleted rows (determined by the delete bitmap) are filled with default values
+/// rather than being filtered out as in MergeTreeSequentialSource.
+/// Currently used by the FAST_DELETE mutation to remove sensitive data in deleted columns.
 class MergeTreeFillDeleteWithDefaultValueSource : public SourceWithProgress
 {
 public:
@@ -21,10 +24,6 @@ public:
     ~MergeTreeFillDeleteWithDefaultValueSource() override;
 
     String getName() const override { return "MergeTreeFillDeleteWithDefaultValueSource"; }
-
-    size_t getCurrentMark() const { return current_mark; }
-
-    size_t getCurrentRow() const { return current_row; }
 
 protected:
     Chunk generate() override;
@@ -40,6 +39,8 @@ private:
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
+    /// whether the next read continues from last reading position and avoids seek
+    bool continue_reading;
 
     Poco::Logger * log = &Poco::Logger::get("MergeTreeFillDeleteWithDefaultValueSource");
 
@@ -54,6 +55,10 @@ private:
     size_t current_row = 0;
 
 private:
+    size_t currentMarkStart() const { return data_part->index_granularity.getMarkStartingRow(current_mark); }
+    size_t currentMarkEnd() const { return data_part->index_granularity.getMarkStartingRow(current_mark + 1); }
+    /// REQUIRES: columns should use header's schema
+    Columns replaceDeletesWithDefaultValues(Columns columns, const PODArray<UInt8> & is_deleted);
     /// Closes readers and unlock part locks
     void finish();
 };

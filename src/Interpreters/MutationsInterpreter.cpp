@@ -479,10 +479,10 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                 {
                     const auto * identifier = column->as<ASTIdentifier>();
                     if (!identifier)
-                        throw Exception("fastdelete columns should be identifiers", ErrorCodes::BAD_ARGUMENTS);
-                    /// TODO: check validity of fast delete columns
-                    /// 1. exist in table
-                    /// 2. is not security / encrypt / low cardinality / map kv (maybe ok for security/encrypt/lowcard ?)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete columns should be identifiers");
+                    if (!all_columns.contains(identifier->name()))
+                        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE, "Table doesn't contain physical column {}", identifier->name());
+                    /// TODO: check column is not security / encrypt / low cardinality / map kv (maybe ok for security/encrypt/lowcard ?)
                     stages.back().fast_delete_columns.insert(identifier->name());
                 }
             }

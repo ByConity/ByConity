@@ -203,6 +203,14 @@ BlockIO executeOnTable(const ASTSystemQuery & query, const StorageID & table_id,
             CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->markLost(); })
             break;
 
+        case Type::EXECUTE_MUTATION:
+            CAST_CALL(table, StorageHaMergeTree, [&] (auto * t) { t->systemExecuteMutation(query.mutation_id); })
+            break;
+
+        case Type::RELOAD_MUTATION:
+            CAST_CALL(table, StorageHaMergeTree, [&] (auto * t) { t->systemReloadMutation(query.mutation_id); })
+            break;
+
         default:
             throw Exception("Unknown type of SYSTEM query on table", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -521,6 +529,8 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::SKIP_LOG:
         case Type::SET_VALUE:
         case Type::MARK_LOST:
+        case Type::EXECUTE_MUTATION:
+        case Type::RELOAD_MUTATION:
             return executeOnTable(query, table_id, system_context);
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
@@ -1002,6 +1012,8 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::SET_VALUE:
         case Type::SYNC_MUTATION:
         case Type::MARK_LOST:
+        case Type::EXECUTE_MUTATION:
+        case Type::RELOAD_MUTATION:
         /// TODO:
         break;
 
@@ -1012,7 +1024,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_CONSUME, query.database, query.table);
             break;
         }
-        
+
         case Type::STOP_LISTEN_QUERIES: break;
         case Type::START_LISTEN_QUERIES: break;
         case Type::UNKNOWN: break;

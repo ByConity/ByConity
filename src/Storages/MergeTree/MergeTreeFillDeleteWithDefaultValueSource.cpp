@@ -6,6 +6,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+    extern const int LOGICAL_ERROR;
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
@@ -22,6 +23,7 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
     , data_part(std::move(data_part_))
     , delete_bitmap(std::move(delete_bitmap_))
     , columns_to_read(std::move(columns_to_read_))
+    , continue_reading(false)
     , mark_cache(storage.getContext()->getMarkCache())
 {
     {
@@ -43,7 +45,7 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
 
     MergeTreeReaderSettings reader_settings =
     {
-        .min_bytes_to_use_direct_io = std::numeric_limits<size_t>::max(),
+        .min_bytes_to_use_direct_io = std::numeric_limits<size_t>::max(), // disable direct io
         .max_read_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
         .save_marks_in_cache = false
     };
@@ -58,21 +60,54 @@ try
 {
     const auto & header = getPort().getHeader();
 
-    /// TODO:
-    /// 1. skip reading mark that's deleted
-    /// 2. replace deleted rows with default values
-
     if (!isCancelled() && current_row < data_part->rows_count)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(current_mark);
-        bool continue_reading = (current_mark != 0);
+        if (rows_to_read == 0)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "part {} reports 0 row for mark {}", data_part->name, current_mark);
 
-        const auto & sample = reader->getColumns();
-        Columns columns(sample.size());
-        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
+        Columns res_columns;
+        res_columns.reserve(header.columns());
 
-        if (rows_read)
+        /// return a chunk of defaults when the whole mark is deleted
+        if (delete_bitmap && delete_bitmap->containsRange(currentMarkStart(), currentMarkEnd()))
         {
+            current_row += rows_to_read;
+            current_mark++;
+            continue_reading = false;
+
+            for (auto & col : header)
+                res_columns.push_back(col.type->createColumnConstWithDefaultValue(rows_to_read)->convertToFullColumnIfConst());
+        }
+        else
+        {
+
+            const auto & sample = reader->getColumns();
+            Columns columns(sample.size());
+            size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
+            continue_reading = true;
+
+            if (rows_read != rows_to_read)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Expect {} rows read from mark {} in part {}, got {}",
+                    rows_to_read, current_mark, data_part->name, rows_read);
+
+            /// prepare positions of deleted rows in this mark
+            size_t num_deleted = 0;
+            PODArray<UInt8> is_deleted(rows_read, 0);
+            if (delete_bitmap)
+            {
+                size_t start_row = currentMarkStart();
+                size_t end_row = currentMarkEnd();
+
+                auto iter = delete_bitmap->begin();
+                iter.equalorlarger(start_row);
+                for (auto end = delete_bitmap->end(); iter != end && *iter < end_row; iter++)
+                {
+                    is_deleted[*iter - start_row] = 1;
+                    num_deleted++;
+                }
+            }
+
             current_row += rows_read;
             current_mark += (rows_to_read == rows_read);
 
@@ -87,21 +122,30 @@ try
             reader->performRequiredConversions(columns);
 
             /// Reorder columns and fill result block.
-            size_t num_columns = sample.size();
-            Columns res_columns;
-            res_columns.reserve(num_columns);
-
-            auto it = sample.begin();
-            for (size_t i = 0; i < num_columns; ++i)
+            std::unordered_map<String, size_t> sample_index_by_name;
+            auto sample_it = sample.begin();
+            for (size_t i = 0; i < sample.size(); ++i)
             {
-                if (header.has(it->name))
-                    res_columns.emplace_back(std::move(columns[i]));
-
-                ++it;
+                sample_index_by_name[sample_it->name] = i;
+                ++sample_it;
             }
 
-            return Chunk(std::move(res_columns), rows_read);
+            for (size_t ps = 0; ps < header.columns(); ++ps)
+            {
+                auto name = header.getByPosition(ps).name;
+                if (auto it = sample_index_by_name.find(name); it != sample_index_by_name.end())
+                    res_columns.emplace_back(std::move(columns[it->second]));
+                else
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Column {} not found", name);
+            }
+
+            /// replace deleted rows with default values
+            if (num_deleted)
+            {
+                res_columns = replaceDeletesWithDefaultValues(std::move(res_columns), is_deleted);
+            }
         }
+        return Chunk(std::move(res_columns), rows_to_read);
     }
     else
     {
@@ -116,6 +160,40 @@ catch (...)
     if (getCurrentExceptionCode() != ErrorCodes::MEMORY_LIMIT_EXCEEDED)
         storage.reportBrokenPart(data_part->name);
     throw;
+}
+
+Columns MergeTreeFillDeleteWithDefaultValueSource::replaceDeletesWithDefaultValues(Columns columns, const PODArray<UInt8> & is_deleted)
+{
+    if (is_deleted.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "is_deleted must be non-empty");
+
+    Columns res;
+    res.reserve(columns.size());
+
+    const auto & header = getPort().getHeader();
+
+    for (size_t ps = 0; ps < columns.size(); ++ps)
+    {
+        auto new_column = header.getByPosition(ps).type->createColumn();
+        auto & src_column = *columns[ps];
+
+        size_t start = 0;
+        for (size_t i = 1; i <= is_deleted.size(); ++i)
+        {
+            if (i == is_deleted.size() || is_deleted[i] != is_deleted[i - 1])
+            {
+                if (is_deleted[start])
+                    new_column->insertManyDefaults(i - start);
+                else
+                    new_column->insertRangeFrom(src_column, start, i - start);
+
+                start = i;
+            }
+        }
+
+        res.emplace_back(std::move(new_column));
+    }
+    return res;
 }
 
 void MergeTreeFillDeleteWithDefaultValueSource::finish()

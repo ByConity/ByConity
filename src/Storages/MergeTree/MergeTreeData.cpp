@@ -910,7 +910,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     for (const auto & part : parts)
     {
         if ((part_values.empty() || part_values.find(part->name) != part_values.end()) && !partition_pruner.canBePruned(*part))
-            res += part->rows_count;
+            res += part->numRowsRemovingDeletes();
     }
     return res;
 }

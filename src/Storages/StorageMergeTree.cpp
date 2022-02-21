@@ -209,7 +209,17 @@ Pipe StorageMergeTree::read(
 
 std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
 {
-    return getTotalActiveSizeInRows();
+    // not using total_active_size_rows because it doesn't consider delete bitmap
+    // return getTotalActiveSizeInRows();
+    auto parts = getDataPartsVector({DataPartState::Committed});
+    UInt64 res = 0;
+    for (auto & part : parts)
+    {
+        if (part->isEmpty())
+            continue;
+        res += part->numRowsRemovingDeletes();
+    }
+    return res;
 }
 
 std::optional<UInt64> StorageMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const

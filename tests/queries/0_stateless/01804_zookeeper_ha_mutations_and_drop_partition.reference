@@ -1,0 +1,12 @@
+sync mutation r1
+2021-01-01	2500	2500
+2021-01-02	2500	2500
+sync mutation r2
+2021-01-01	2500	2500
+2021-01-02	2500	2500
+truncate table
+r1	0
+sync mutation r1
+2021-01-03	4946	4946
+sync mutation r2
+2021-01-03	4946	4946
