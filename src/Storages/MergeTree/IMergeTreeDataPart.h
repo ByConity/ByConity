@@ -438,8 +438,7 @@ public:
     DeleteBitmapPtr readDeleteFileWithVersion(UInt64 version, bool log_on_error = true) const;
     std::vector<UInt64> listDeleteFiles(UInt64 min_version) const;
 
-    void writeDeleteFile(const DeleteBitmapPtr & bitmap) const;
-    void writeDeleteFileToBuffer(const DeleteBitmapPtr & bitmap, WriteBuffer & ostr) const;
+    void writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync);
     DeleteBitmapPtr readDeleteFile(bool log_on_error = true) const;
 
     /// For unique table: when attach a new part into table, we need to allocate a new lsn

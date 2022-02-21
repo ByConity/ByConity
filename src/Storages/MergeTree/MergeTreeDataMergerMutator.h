@@ -210,7 +210,8 @@ private:
         const Block & updated_header,
         const std::set<MergeTreeIndexPtr> & indices_to_recalc,
         const String & mrk_extension,
-        const std::set<MergeTreeProjectionPtr> & projections_to_recalc);
+        const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+        bool update_delete_bitmap);
 
     /// Get the columns list of the resulting part in the same order as storage_columns.
     static NamesAndTypesList getColumnsForNewDataPart(

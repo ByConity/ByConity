@@ -188,6 +188,22 @@ bool MutationCommands::willMutateData() const
     return false;
 }
 
+bool MutationCommands::requireIndependentExecution() const
+{
+    /// 'fastdelete' and 'modify column' reads part using an empty delete bitmap,
+    /// so they can't be executed together with commands like update or delete
+    /// which uses part's delete bitmap
+    return std::any_of(begin(), end(), [](const MutationCommand & c)
+    {
+        return c.type == MutationCommand::FAST_DELETE || c.type == MutationCommand::READ_COLUMN;
+    });
+}
+
+bool MutationCommands::isFastDelete() const
+{
+    return !empty() && std::all_of(begin(), end(), [](const auto & c) { return c.type == MutationCommand::FAST_DELETE; });
+}
+
 void MutationCommands::writeText(WriteBuffer & out) const
 {
     WriteBufferFromOwnString commands_buf;
@@ -211,11 +227,6 @@ void MutationCommands::readText(ReadBuffer & in)
             throw Exception("Unknown mutation command type: " + DB::toString<int>(command_ast->type), ErrorCodes::UNKNOWN_MUTATION_COMMAND);
         push_back(std::move(*command));
     }
-}
-
-bool MutationCommands::isFastDelete() const
-{
-    return std::all_of(begin(), end(), [](const MutationCommand & c) { return c.type == MutationCommand::Type::FAST_DELETE; });
 }
 
 }

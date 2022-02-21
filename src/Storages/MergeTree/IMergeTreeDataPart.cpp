@@ -1875,32 +1875,24 @@ String IMergeTreeDataPart::getDeleteFilePath() const
     return getFullPath() + delete_file_prefix + ".del";
 }
 
-void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap) const
+void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync)
 {
+    WriteBufferFromFile file_out(getDeleteFilePath(), 4096);
+    HashingWriteBuffer out(file_out);
+
     /// serialize bitmap to buffer
     size_t size = bitmap->getSizeInBytes();
     PODArray<char> buffer(size);
     size = bitmap->write(buffer.data());
-
     /// write to file
-    String path = getDeleteFilePath();
-    WriteBufferFromFile out(path, 4096);
     writeIntBinary(size, out);
     out.write(buffer.data(), size);
-}
+    out.next();
+    if (sync)
+        file_out.sync();
 
-void IMergeTreeDataPart::writeDeleteFileToBuffer(const DeleteBitmapPtr & bitmap, WriteBuffer & ostr) const
-{
-    if (bitmap)
-    {
-        /// serialize bitmap to buffer
-        size_t size = bitmap->getSizeInBytes();
-        PODArray<char> buffer(size);
-        size = bitmap->write(buffer.data());
-
-        writeIntBinary(size, ostr);
-        ostr.write(buffer.data(), size);
-    }
+    checksums.files[DELETE_BITMAP_FILE_NAME].file_size = out.count();
+    checksums.files[DELETE_BITMAP_FILE_NAME].file_hash = out.getHash();
 }
 
 void IMergeTreeDataPart::renameDeleteFileToVersion(UInt64 version) const

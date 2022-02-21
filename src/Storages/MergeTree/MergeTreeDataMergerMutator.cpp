@@ -1569,7 +1569,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     {
         if (command.partition == nullptr || future_part.parts[0]->info.partition_id == data.getPartitionIDFromQuery(
                 command.partition, context_for_reading))
-            commands_for_part.emplace_back(command);
+        {
+            /// use DELETE instead of FAST_DELETE for non-wide part
+            if (!isWidePart(source_part) && command.type == MutationCommand::FAST_DELETE)
+                commands_for_part.emplace_back(MutationCommand{.type = MutationCommand::DELETE, .predicate=command.predicate, .partition=command.partition});
+            else
+                commands_for_part.emplace_back(command);
+        }
     }
 
     if (source_part->isStoredOnDisk() && !isStorageTouchedByMutations(
@@ -1585,6 +1591,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
     BlockInputStreamPtr in = nullptr;
     Block updated_header;
+    DeleteBitmapPtr updated_delete_bitmap;
     std::unique_ptr<MutationsInterpreter> interpreter;
 
     const auto data_settings = data.getSettings();
@@ -1610,8 +1617,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
         materialized_projections = interpreter->grabMaterializedProjections();
         mutation_kind = interpreter->getMutationKind();
         in = interpreter->execute();
+        if (in)
+            in->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, stage_progress));
         updated_header = interpreter->getUpdatedHeader();
-        in->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, stage_progress));
+        updated_delete_bitmap = interpreter->getUpdatedDeleteBitmap();
     }
 
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + future_part.name, space_reservation->getDisk(), 0);
@@ -1711,7 +1720,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
             updated_header,
             indices_to_recalc,
             mrk_extension,
-            projections_to_recalc);
+            projections_to_recalc,
+            updated_delete_bitmap != nullptr);
         NameToNameVector files_to_rename = collectFilesForRenames(source_part, for_file_renames, mrk_extension);
 
         if (indices_to_recalc.empty() && projections_to_recalc.empty() && mutation_kind != MutationsInterpreter::MutationKind::MUTATE_OTHER
@@ -1801,6 +1811,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
                 new_data_part->checksums.files.erase(rename_from);
             }
+        }
+
+        if (updated_delete_bitmap)
+        {
+            new_data_part->writeDeleteFile(updated_delete_bitmap, need_sync);
         }
 
         finalizeMutatedPart(source_part, new_data_part, need_remove_expired_values, compression_codec);
@@ -2206,10 +2221,10 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
     const Block & updated_header,
     const std::set<MergeTreeIndexPtr> & indices_to_recalc,
     const String & mrk_extension,
-    const std::set<MergeTreeProjectionPtr> & projections_to_recalc)
+    const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+    bool update_delete_bitmap)
 {
     NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
-    /// FIXME: add delete.del if needs to udpate delete file
 
     /// Skip updated files
     for (const auto & entry : updated_header)
@@ -2233,6 +2248,10 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
     for (const auto & projection : projections_to_recalc)
     {
         files_to_skip.insert(projection->getDirectoryName());
+    }
+    if (update_delete_bitmap)
+    {
+        files_to_skip.insert(DELETE_BITMAP_FILE_NAME);
     }
 
     return files_to_skip;

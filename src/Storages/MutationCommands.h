@@ -83,10 +83,13 @@ public:
 
     bool willMutateData() const;
 
-    void writeText(WriteBuffer & out) const;
-    void readText(ReadBuffer & in);
+    /// whether current commands can be executed together with other commands
+    bool requireIndependentExecution() const;
 
     bool isFastDelete() const;
+
+    void writeText(WriteBuffer & out) const;
+    void readText(ReadBuffer & in);
 };
 
 }

@@ -72,6 +72,16 @@ public:
         return parts.front()->storage.getPartitionIDFromQuery(ast, context);
     }
 
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override
+    {
+        return parts.front()->storage.checkMutationIsPossible(commands, settings);
+    }
+
+    const MergeTreeData::DataPartsVector & getParts() const
+    {
+        return parts;
+    }
+
 protected:
     StorageFromMergeTreeDataPart(const MergeTreeData::DataPartPtr & part_)
         : IStorage(getIDFromPart(part_))
