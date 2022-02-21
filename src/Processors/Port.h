@@ -285,7 +285,7 @@ public:
 
         is_finished = flags & State::IS_FINISHED;
 
-        if (unlikely(!data->exception && data->chunk.getNumColumns() != header.columns()))
+        if (unlikely(!data->exception && header && data->chunk.getNumColumns() != header.columns()))
         {
             auto & chunk = data->chunk;
 
@@ -401,7 +401,7 @@ public:
 
     void ALWAYS_INLINE pushData(Data data_)
     {
-        if (unlikely(!data_.exception && data_.chunk.getNumColumns() != header.columns()))
+        if (unlikely(!data_.exception && header.columns() && data_.chunk.getNumColumns() != header.columns()))
         {
             String msg = "Invalid number of columns in chunk pushed to OutputPort. Expected "
                          + std::to_string(header.columns())

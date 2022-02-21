@@ -49,7 +49,7 @@ TEST(PlanSegmentProcessList, InsertTest)
 {
     initLogger();
     const auto & context = getContext().context;
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
@@ -69,7 +69,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
 {
     initLogger();
     const auto & context = getContext().context;
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();
@@ -99,7 +99,7 @@ TEST(PlanSegmentProcessList, InsertReplaceSuccessTest)
 TEST(PlanSegmentProcessList, InsertReplaceTimeoutTest)
 {
     const auto & context = getContext().context;
-    context->setProcessListElement(nullptr);
+    context->setProcessListEntry(nullptr);
     auto & client_info = context->getClientInfo();
     auto & plan_segment_processlist = context->getPlanSegmentProcessList();
     PlanSegment plan_segment = PlanSegment();

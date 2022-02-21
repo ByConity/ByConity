@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -103,7 +104,7 @@ void BroadcastSenderProxy::accept(ContextPtr context_, Block header_)
         throw Exception("Can't call accept twice for {} " + data_key->dump(), ErrorCodes::LOGICAL_ERROR);
     context = std::move(context_);
     header = std::move(header_);
-    wait_timeout_ms = context->getSettingsRef().exchange_timeout_ms;
+    wait_timeout_ms = std::min(std::max(context->getSettingsRef().exchange_timeout_ms / 10, 1000ul), 5000ul);
     wait_accept.notify_all();
 }
 
@@ -129,7 +130,7 @@ void BroadcastSenderProxy::waitBecomeRealSender(UInt32 timeout_ms)
     if (real_sender)
         return;
     if (!wait_become_real.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return this->real_sender.operator bool(); }))
-        throw Exception("Wait become real sender timeout for {} " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
+        throw Exception("Wait become real sender timeout for " + data_key->dump(), ErrorCodes::TIMEOUT_EXCEEDED);
 }
 
 BroadcastSenderType BroadcastSenderProxy::getType()

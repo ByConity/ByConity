@@ -494,7 +494,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             /// processlist also has query masked now, to avoid secrets leaks though SHOW PROCESSLIST by other users.
             process_list_entry = context->getProcessList().insert(query_for_logging, ast.get(), context);
-            context->setProcessListElement(&process_list_entry->get());
+            context->setProcessListEntry(process_list_entry);
         }
 
         /// Load external tables if they were provided

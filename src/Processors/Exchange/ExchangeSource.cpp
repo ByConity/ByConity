@@ -56,7 +56,7 @@ IProcessor::Status ExchangeSource::prepare()
     if (status == Status::Finished)
     {
         if (inited.load(std::memory_order_relaxed))
-            receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "Output port finished");
+            receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "ExchangeSource finished");
     }
     return status;
 }

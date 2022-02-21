@@ -100,6 +100,8 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
         if (new_status_ptr->code > 0)
             // close queue immediately
             receive_queue.close();
+        else
+            receive_queue.tryEmplace(options.max_timeout_ms, Chunk());
         auto res = *new_status_ptr;
         res.is_modifer = true;
         return res;

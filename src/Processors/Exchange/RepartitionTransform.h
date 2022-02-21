@@ -35,8 +35,6 @@ public:
 
     String getName() const override { return "RepartitionTransform"; }
 
-    Status prepare() override;
-
     inline static const String REPARTITION_FUNC{"cityHash64"};
 
     static const DataTypePtr REPARTITION_FUNC_RESULT_TYPE;

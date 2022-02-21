@@ -92,7 +92,7 @@ public:
             total_memory_tracker.alloc(bytes);
     }
 
-    static inline void transferGlobalMemoryToThread(size_t bytes)
+    static inline void transferGlobalMemoryToThread(Int64 bytes)
     {
         if (DB::MainThreadStatus::get())
             total_memory_tracker.free(bytes);

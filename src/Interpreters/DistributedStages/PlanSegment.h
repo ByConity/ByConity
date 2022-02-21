@@ -115,6 +115,10 @@ public:
 
     void setParallelIndex(size_t parallel_index_) { parallel_index = parallel_index_;}
 
+    bool needKeepOrder() const { return keep_order; }
+
+    void setKeepOrder(bool keep_order_) { keep_order = keep_order_; }
+
     void serialize(WriteBuffer & buf) const override;
 
     void deserialize(ReadBuffer & buf, ContextPtr context) override;
@@ -127,6 +131,7 @@ public:
 
 private:
     size_t parallel_index = 0;
+    bool keep_order = false;
     AddressInfos source_addresses;
     StorageID storage_id = StorageID::createEmpty();
 };

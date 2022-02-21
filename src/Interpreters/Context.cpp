@@ -1547,6 +1547,19 @@ ProgressCallback Context::getProgressCallback() const
     return progress_callback;
 }
 
+void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
+{
+    process_list_entry = process_list_entry_;
+    if(process_list_entry_)
+        process_list_elem = &process_list_entry_->get();
+    else
+        process_list_elem = nullptr;
+}
+
+std::weak_ptr<ProcessListEntry> Context::getProcessListEntry()
+{
+    return process_list_entry;
+}
 
 void Context::setProcessListElement(ProcessList::Element * elem)
 {

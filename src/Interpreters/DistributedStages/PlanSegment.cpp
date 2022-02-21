@@ -108,6 +108,8 @@ void PlanSegmentInput::serialize(WriteBuffer & buf) const
 
     writeBinary(parallel_index, buf);
 
+    writeBinary(keep_order, buf);
+
     writeBinary(source_addresses.size(), buf);
     for (auto & source_address : source_addresses)
         source_address.serialize(buf);
@@ -121,6 +123,8 @@ void PlanSegmentInput::deserialize(ReadBuffer & buf, ContextPtr context)
     IPlanSegment::deserialize(buf, context);
 
     readBinary(parallel_index, buf);
+
+    readBinary(keep_order, buf);
 
     size_t addresses_size;
     readBinary(addresses_size, buf);
@@ -142,6 +146,7 @@ String PlanSegmentInput::toString(size_t indent) const
 
     ostr << IPlanSegment::toString(indent) << "\n";
     ostr << indent_str << "parallel_index: " << parallel_index << "\n";
+    ostr << indent_str << "keep_order: " << keep_order << "\n";
     ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE ? storage_id.getNameForLogs() : "") << "\n";
     ostr << indent_str << "source_addresses: " << "\n";
     for (auto & address : source_addresses)

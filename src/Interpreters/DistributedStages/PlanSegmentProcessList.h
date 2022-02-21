@@ -23,8 +23,7 @@ struct PlanSegmentGroup
 {
     String coordinator_address;
     Decimal64 initial_query_start_time_ms;
-    using SegmentElement = std::pair<std::shared_ptr<ProcessListEntry>, QueryStatus *>;
-    using SegmentIdToElement = std::unordered_map<size_t, SegmentElement>;
+    using SegmentIdToElement = std::unordered_map<size_t, std::shared_ptr<ProcessListEntry>>;
     SegmentIdToElement segment_queries;
 };
 
