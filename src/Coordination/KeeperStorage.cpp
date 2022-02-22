@@ -223,7 +223,7 @@ struct KeeperStorageRequestProcessor
     explicit KeeperStorageRequestProcessor(const Coordination::ZooKeeperRequestPtr & zk_request_)
         : zk_request(zk_request_)
     {}
-    virtual std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id) const = 0;
+    virtual std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id, int64_t time) const = 0;
     virtual KeeperStorage::ResponsesForSessions processWatches(KeeperStorage::Watches & /*watches*/, KeeperStorage::Watches & /*list_watches*/) const { return {}; }
     virtual bool checkAuth(KeeperStorage & /*storage*/, int64_t /*session_id*/) const { return true; }
 
@@ -233,7 +233,7 @@ struct KeeperStorageRequestProcessor
 struct KeeperStorageHeartbeatRequestProcessor final : public KeeperStorageRequestProcessor
 {
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & /* storage */, int64_t /* zxid */, int64_t /* session_id */) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & /* storage */, int64_t /* zxid */, int64_t /* session_id */, int64_t /* time */) const override
     {
         return {zk_request->makeResponse(), {}};
     }
@@ -242,7 +242,7 @@ struct KeeperStorageHeartbeatRequestProcessor final : public KeeperStorageReques
 struct KeeperStorageSyncRequestProcessor final : public KeeperStorageRequestProcessor
 {
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & /* storage */, int64_t /* zxid */, int64_t /* session_id */) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & /* storage */, int64_t /* zxid */, int64_t /* session_id */, int64_t /* time */) const override
     {
         auto response = zk_request->makeResponse();
         dynamic_cast<Coordination::ZooKeeperSyncResponse &>(*response).path
@@ -277,7 +277,7 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
         return checkACL(Coordination::ACL::Create, node_acls, session_auths);
     }
 
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id, int64_t time) const override
     {
         auto & container = storage.container;
         auto & ephemerals = storage.ephemerals;
@@ -324,8 +324,8 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
                 created_node.stat.czxid = zxid;
                 created_node.stat.mzxid = zxid;
                 created_node.stat.pzxid = zxid;
-                created_node.stat.ctime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
-                created_node.stat.mtime = created_node.stat.ctime;
+                created_node.stat.ctime = time;
+                created_node.stat.mtime = time;
                 created_node.stat.numChildren = 0;
                 created_node.stat.dataLength = request.data.length();
                 created_node.stat.ephemeralOwner = request.is_ephemeral ? session_id : 0;
@@ -421,7 +421,7 @@ struct KeeperStorageGetRequestProcessor final : public KeeperStorageRequestProce
     }
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /* zxid */, int64_t /* session_id */) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /* zxid */, int64_t /* session_id */, int64_t /* time */) const override
     {
         auto & container = storage.container;
         Coordination::ZooKeeperResponsePtr response_ptr = zk_request->makeResponse();
@@ -480,7 +480,7 @@ struct KeeperStorageRemoveRequestProcessor final : public KeeperStorageRequestPr
     }
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t /*session_id*/) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t /*session_id*/, int64_t /* time */) const override
     {
         auto & container = storage.container;
         auto & ephemerals = storage.ephemerals;
@@ -562,7 +562,7 @@ struct KeeperStorageRemoveRequestProcessor final : public KeeperStorageRequestPr
 struct KeeperStorageExistsRequestProcessor final : public KeeperStorageRequestProcessor
 {
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /* session_id */) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /* session_id */, int64_t /* time */) const override
     {
         auto & container = storage.container;
 
@@ -603,7 +603,7 @@ struct KeeperStorageSetRequestProcessor final : public KeeperStorageRequestProce
     }
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t /* session_id */) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t /* session_id */, int64_t time) const override
     {
         auto & container = storage.container;
 
@@ -622,12 +622,12 @@ struct KeeperStorageSetRequestProcessor final : public KeeperStorageRequestProce
 
             auto prev_node = it->value;
 
-            auto itr = container.updateValue(request.path, [zxid, request] (KeeperStorage::Node & value)
+            auto itr = container.updateValue(request.path, [zxid, request, time] (KeeperStorage::Node & value)
             {
                 value.data = request.data;
                 value.stat.version++;
                 value.stat.mzxid = zxid;
-                value.stat.mtime = std::chrono::system_clock::now().time_since_epoch() / std::chrono::milliseconds(1);
+                value.stat.mtime = time;
                 value.stat.dataLength = request.data.length();
                 value.data = request.data;
             });
@@ -681,7 +681,7 @@ struct KeeperStorageListRequestProcessor final : public KeeperStorageRequestProc
     }
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/, int64_t /* time */) const override
     {
         auto & container = storage.container;
         Coordination::ZooKeeperResponsePtr response_ptr = zk_request->makeResponse();
@@ -726,7 +726,7 @@ struct KeeperStorageCheckRequestProcessor final : public KeeperStorageRequestPro
     }
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/, int64_t /* time */) const override
     {
         auto & container = storage.container;
 
@@ -771,7 +771,7 @@ struct KeeperStorageSetACLRequestProcessor final : public KeeperStorageRequestPr
 
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
 
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t session_id) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t session_id, int64_t /* time */) const override
     {
         auto & container = storage.container;
 
@@ -835,7 +835,7 @@ struct KeeperStorageGetACLRequestProcessor final : public KeeperStorageRequestPr
     }
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
 
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t /*session_id*/, int64_t /* time */) const override
     {
         Coordination::ZooKeeperResponsePtr response_ptr = zk_request->makeResponse();
         Coordination::ZooKeeperGetACLResponse & response = dynamic_cast<Coordination::ZooKeeperGetACLResponse &>(*response_ptr);
@@ -897,7 +897,7 @@ struct KeeperStorageMultiRequestProcessor final : public KeeperStorageRequestPro
         }
     }
 
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t zxid, int64_t session_id, int64_t time) const override
     {
         Coordination::ZooKeeperResponsePtr response_ptr = zk_request->makeResponse();
         Coordination::ZooKeeperMultiResponse & response = dynamic_cast<Coordination::ZooKeeperMultiResponse &>(*response_ptr);
@@ -908,7 +908,7 @@ struct KeeperStorageMultiRequestProcessor final : public KeeperStorageRequestPro
             size_t i = 0;
             for (const auto & concrete_request : concrete_requests)
             {
-                auto [ cur_response, undo_action ] = concrete_request->process(storage, zxid, session_id);
+                auto [ cur_response, undo_action ] = concrete_request->process(storage, zxid, session_id, time);
 
                 response.responses[i] = cur_response;
                 if (cur_response->error != Coordination::Error::ZOK)
@@ -965,7 +965,7 @@ struct KeeperStorageMultiRequestProcessor final : public KeeperStorageRequestPro
 struct KeeperStorageCloseRequestProcessor final : public KeeperStorageRequestProcessor
 {
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage &, int64_t, int64_t) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage &, int64_t, int64_t, int64_t /* time */) const override
     {
         throw DB::Exception("Called process on close request", ErrorCodes::LOGICAL_ERROR);
     }
@@ -974,7 +974,7 @@ struct KeeperStorageCloseRequestProcessor final : public KeeperStorageRequestPro
 struct KeeperStorageAuthRequestProcessor final : public KeeperStorageRequestProcessor
 {
     using KeeperStorageRequestProcessor::KeeperStorageRequestProcessor;
-    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t session_id) const override
+    std::pair<Coordination::ZooKeeperResponsePtr, Undo> process(KeeperStorage & storage, int64_t /*zxid*/, int64_t session_id, int64_t /* time */) const override
     {
         Coordination::ZooKeeperAuthRequest & auth_request = dynamic_cast<Coordination::ZooKeeperAuthRequest &>(*zk_request);
         Coordination::ZooKeeperResponsePtr response_ptr = zk_request->makeResponse();
@@ -1087,7 +1087,7 @@ KeeperStorageRequestProcessorsFactory::KeeperStorageRequestProcessorsFactory()
 }
 
 
-KeeperStorage::ResponsesForSessions KeeperStorage::processRequest(const Coordination::ZooKeeperRequestPtr & zk_request, int64_t session_id, std::optional<int64_t> new_last_zxid, bool check_acl)
+KeeperStorage::ResponsesForSessions KeeperStorage::processRequest(const Coordination::ZooKeeperRequestPtr & zk_request, int64_t session_id, int64_t time, std::optional<int64_t> new_last_zxid, bool check_acl)
 {
     KeeperStorage::ResponsesForSessions results;
     if (new_last_zxid)
@@ -1137,7 +1137,7 @@ KeeperStorage::ResponsesForSessions KeeperStorage::processRequest(const Coordina
     else if (zk_request->getOpNum() == Coordination::OpNum::Heartbeat) /// Heartbeat request is also special
     {
         KeeperStorageRequestProcessorPtr storage_request = KeeperStorageRequestProcessorsFactory::instance().get(zk_request);
-        auto [response, _] = storage_request->process(*this, zxid, session_id);
+        auto [response, _] = storage_request->process(*this, zxid, session_id, time);
         response->xid = zk_request->xid;
         response->zxid = getZXID();
 
@@ -1156,7 +1156,7 @@ KeeperStorage::ResponsesForSessions KeeperStorage::processRequest(const Coordina
         }
         else
         {
-            std::tie(response, std::ignore) = request_processor->process(*this, zxid, session_id);
+            std::tie(response, std::ignore) = request_processor->process(*this, zxid, session_id, time);
         }
 
         /// Watches for this requests are added to the watches lists

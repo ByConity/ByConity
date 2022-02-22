@@ -35,6 +35,8 @@ namespace
         request_for_session.request = Coordination::ZooKeeperRequestFactory::instance().get(opnum);
         request_for_session.request->xid = xid;
         request_for_session.request->readImpl(buffer);
+
+        readIntBinary(request_for_session.time, buffer);
         return request_for_session;
     }
 }
@@ -129,7 +131,7 @@ nuraft::ptr<nuraft::buffer> KeeperStateMachine::commit(const uint64_t log_idx, n
     else
     {
         std::lock_guard lock(storage_and_responses_lock);
-        KeeperStorage::ResponsesForSessions responses_for_sessions = storage->processRequest(request_for_session.request, request_for_session.session_id, log_idx);
+        KeeperStorage::ResponsesForSessions responses_for_sessions = storage->processRequest(request_for_session.request, request_for_session.session_id, request_for_session.time, log_idx);
         for (auto & response_for_session : responses_for_sessions)
             responses_queue.push(response_for_session);
     }
@@ -317,11 +319,8 @@ int KeeperStateMachine::read_logical_snp_obj(
 void KeeperStateMachine::processReadRequest(const KeeperStorage::RequestForSession & request_for_session)
 {
     /// Pure local request, just process it with storage
-    KeeperStorage::ResponsesForSessions responses;
-    {
-        std::lock_guard lock(storage_and_responses_lock);
-        responses = storage->processRequest(request_for_session.request, request_for_session.session_id, std::nullopt);
-    }
+    std::lock_guard lock(storage_and_responses_lock);
+    auto responses = storage->processRequest(request_for_session.request, request_for_session.session_id, request_for_session.time, std::nullopt);
     for (const auto & response : responses)
         responses_queue.push(response);
 }
