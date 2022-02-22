@@ -57,7 +57,10 @@ struct AlterCommand
         /// Other properties
         COMMENT,
         CODEC,
-        TTL
+        TTL,
+
+        ENCRYPT,
+        SECURITY
     };
 
     Type type = UNKNOWN;
@@ -188,7 +191,7 @@ public:
     /// Checks that all columns exist and dependencies between them.
     /// This check is lightweight and base only on metadata.
     /// More accurate check have to be performed with storage->checkAlterIsPossible.
-    void validate(const StorageInMemoryMetadata & metadata, ContextPtr context) const;
+    void validate(const StorageID & storage_id, const StorageInMemoryMetadata & metadata, ContextPtr context) const;
 
     /// Prepare alter commands. Set ignore flag to some of them and set some
     /// parts to commands from storage's metadata (for example, absent default)
@@ -197,6 +200,8 @@ public:
     /// Apply all alter command in sequential order to storage metadata.
     /// Commands have to be prepared before apply.
     void apply(StorageInMemoryMetadata & metadata, ContextPtr context) const;
+    /// Check whether we should create/remove KmsConfig, called by MergeTree family.
+    void apply(const StorageID & storage_id, StorageInMemoryMetadata & metadata, ContextPtr context) const;
 
     /// At least one command modify settings.
     bool hasSettingsAlterCommand() const;

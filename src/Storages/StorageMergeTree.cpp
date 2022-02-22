@@ -274,9 +274,11 @@ void StorageMergeTree::alter(
     auto maybe_mutation_commands = commands.getMutationCommands(new_metadata, local_context->getSettingsRef().materialize_ttl_after_modify, local_context);
     String mutation_file_name;
     Int64 mutation_version = -1;
-    commands.apply(new_metadata, local_context);
+
+    commands.apply(table_id, new_metadata, local_context);
+
     checkColumnsValidity(new_metadata.columns);
-    
+
     /// This alter can be performed at new_metadata level only
     if (commands.isSettingsAlter())
     {

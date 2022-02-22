@@ -209,10 +209,6 @@ if (USE_INTERNAL_AVRO_LIBRARY)
     add_subdirectory(avro-cmake)
 endif()
 
-if (USE_INTERNAL_INFSEC_LIBRARY)
-    add_subdirectory(infsec-cmake)
-endif ()
-
 if(USE_INTERNAL_GTEST_LIBRARY)
     set(GOOGLETEST_VERSION 1.10.0) # master
     # Google Test from sources
@@ -359,3 +355,6 @@ add_subdirectory(incubator-brpc)
 if(OPENSSL_INCLUDE_DIR)
     target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
 endif()
+
+add_subdirectory(infsec-cmake)
+add_subdirectory(cppkms-cmake)

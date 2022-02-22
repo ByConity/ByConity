@@ -1131,7 +1131,7 @@ void StorageHaMergeTree::alter(
         /// We don't replicate storage_settings_ptr ALTER. It's local operation.
         /// Also we don't upgrade alter lock to table structure lock.
         StorageInMemoryMetadata future_metadata = getInMemoryMetadata();
-        commands.apply(future_metadata, query_context);
+        commands.apply(table_id, future_metadata, query_context);
 
         /// merge_strategy_picker.refreshState();
 

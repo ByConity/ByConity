@@ -27,7 +27,7 @@ namespace ErrorCodes
 }
 
 
-DataTypePtr DataTypeFactory::get(const String & full_name) const
+DataTypePtr DataTypeFactory::get(const String & full_name, UInt8 flags) const
 {
     /// Data type parser can be invoked from coroutines with small stack.
     /// Value 315 is known to cause stack overflow in some test configurations (debug build, sanitizers)
@@ -37,33 +37,33 @@ DataTypePtr DataTypeFactory::get(const String & full_name) const
 
     ParserDataType parser;
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0, data_type_max_parse_depth);
-    return get(ast);
+    return get(ast, flags);
 }
 
-DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
+DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt8 flags) const
 {
     if (const auto * func = ast->as<ASTFunction>())
     {
         if (func->parameters)
             throw Exception("Data type cannot have multiple parenthesized parameters.", ErrorCodes::ILLEGAL_SYNTAX_FOR_DATA_TYPE);
-        return get(func->name, func->arguments);
+        return get(func->name, func->arguments, flags);
     }
 
     if (const auto * ident = ast->as<ASTIdentifier>())
     {
-        return get(ident->name(), {});
+        return get(ident->name(), {}, flags);
     }
 
     if (const auto * lit = ast->as<ASTLiteral>())
     {
         if (lit->value.isNull())
-            return get("Null", {});
+            return get("Null", {}, flags);
     }
 
     throw Exception("Unexpected AST element for data type.", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }
 
-DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters) const
+DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters, UInt8 flags) const
 {
     String family_name = getAliasToOrName(family_name_param);
 
@@ -81,10 +81,13 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
         else
             low_cardinality_params->children.push_back(std::make_shared<ASTIdentifier>(param_name));
 
-        return get("LowCardinality", low_cardinality_params);
+        return get("LowCardinality", low_cardinality_params, flags);
     }
 
-    return findCreatorByName(family_name)(parameters);
+    auto res = findCreatorByName(family_name)(parameters);
+    res->setFlags(flags);
+
+    return res;
 }
 
 DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization) const

@@ -137,6 +137,21 @@ ColumnsDescription StorageInMemoryMetadata::getColumnsWithRowid() const
     return ans;
 }
 
+bool StorageInMemoryMetadata::hasEncryptColumn() const
+{
+    return columns.hasEncryptColumn();
+}
+
+bool StorageInMemoryMetadata::hasSecurityColumn() const
+{
+    return columns.hasSecurityColumn();
+}
+
+ColumnsWithTypeAndName StorageInMemoryMetadata::getEncryptColumns() const
+{
+    return columns.getEncryptColumns();
+}
+
 const IndicesDescription & StorageInMemoryMetadata::getSecondaryIndices() const
 {
     return secondary_indices;

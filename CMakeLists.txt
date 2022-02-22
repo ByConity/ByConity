@@ -561,14 +561,15 @@ include (cmake/find/stats.cmake)
 include (cmake/find/datasketches.cmake)
 include (cmake/find/brpc.cmake)
 include (cmake/find/breakpad.cmake)
+include (cmake/find/infsec.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
 
 find_contrib_lib(farmhash)
-find_contrib_lib(infsec)
 find_contrib_lib(minizip)
 find_contrib_lib(consul)
+find_contrib_lib(cppkms)
 
 include(cmake/find_gflags.cmake)
 

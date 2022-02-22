@@ -877,6 +877,9 @@ public:
     void setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size);
     std::shared_ptr<DiskUniqueKeyIndexCache> getDiskUniqueKeyIndexCache() const;
 
+    String getKMSKeyCache(const String & config_name) const;
+    void addKMSKeyCache(const String & config_name, const String & key) const;
+
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;
 

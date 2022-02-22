@@ -95,16 +95,6 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
     //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "MarkBitmapIndex"  << (settings.hilite ? hilite_none : "");
     // }
 
-    // if (flags & TYPE_SECURITY_FLAG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "SECURITY"  << (settings.hilite ? hilite_none : "");
-    // }
-
-    // if (flags & TYPE_ENCRYPT_FLAG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "ENCRYPT"  << (settings.hilite ? hilite_none : "");
-    // }
-
     if (flags & TYPE_MAP_KV_STORE_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "KV"  << (settings.hilite ? hilite_none : "");
@@ -113,6 +103,16 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
     if (flags & TYPE_BITENGINE_ENCODE_FLAG)
     {
         settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitEngineEncode"  << (settings.hilite ? hilite_none : "");
+    }
+
+    if (flags & TYPE_ENCRYPT_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "ENCRYPT"  << (settings.hilite ? hilite_none : "");
+    }
+
+    if (flags & TYPE_SECURITY_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "SECURITY"  << (settings.hilite ? hilite_none : "");
     }
 
     if (comment)

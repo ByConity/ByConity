@@ -492,6 +492,7 @@ class IColumn;
     \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
+    M(String, encrypt_key, "", "Required key trust in kms when query a encrypt column", 0) \
     \
     /** Bytedance */ \
     M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \

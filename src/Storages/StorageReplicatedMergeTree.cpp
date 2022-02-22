@@ -4874,9 +4874,9 @@ void StorageReplicatedMergeTree::alter(
         mutation_znode.reset();
 
         auto current_metadata = getInMemoryMetadataPtr();
-
         StorageInMemoryMetadata future_metadata = *current_metadata;
-        commands.apply(future_metadata, query_context);
+
+        commands.apply(table_id, future_metadata, query_context);
         checkColumnsValidity(future_metadata.columns);
 
         ReplicatedMergeTreeTableMetadata future_metadata_in_zk(*this, current_metadata);
