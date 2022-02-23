@@ -146,22 +146,27 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
     {
         return CancellationCode::NotFound;
     }
-    try
+
+    auto res = CancellationCode::CancelSent;
+    for (auto & query : need_cancalled_queries)
     {
-        for (auto & query : need_cancalled_queries)
+        try
+        {
             query->get().cancelQuery(true);
+        }
+        catch (...)
+        {
+            LOG_WARNING(
+                logger,
+                "Fail to cancel distributed query[{}@{}] by error: {}",
+                initial_query_id,
+                coordinator_address,
+                getCurrentExceptionMessage(false));
+            res = CancellationCode::CancelCannotBeSent;
+        }
     }
-    catch (...)
-    {
-        LOG_WARNING(
-                    logger,
-                    "Fail to cancel distributed query[{}@{}] by error: {}",
-                    initial_query_id,
-                    coordinator_address,
-                    getCurrentExceptionMessage(false));
-        return CancellationCode::CancelCannotBeSent;
-    }
-    return CancellationCode::CancelSent;
+
+    return res;
 }
 
 PlanSegmentProcessListEntry::PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, size_t segment_id_)

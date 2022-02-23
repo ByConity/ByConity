@@ -216,13 +216,12 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, 
 
 BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_code_, String message)
 {
-    bool send_to_remote = (status_code_ > 0);
     int code = 0;
     bool is_modifer = false;
     for (auto stream_id : sender_stream_ids)
     {
         int actual_status_code = status_code_;
-        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_, send_to_remote);
+        int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
         if (ret_code == 0)
             is_modifer = true;
         else

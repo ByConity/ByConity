@@ -23,24 +23,23 @@ void BrpcExchangeReceiverRegistryService::registry(
     ::google::protobuf::Closure * done)
 {
     brpc::StreamId sender_stream_id = brpc::INVALID_STREAM_ID;
-    DataTransKeyPtr data_key;
+    BroadcastSenderProxyPtr sender_proxy;
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     /// SCOPE_EXIT wrap logic which run after done->Run(),
     /// since host socket of the accpeted stream is set in done->Run()
     SCOPE_EXIT({
-        if (data_key && sender_stream_id != brpc::INVALID_STREAM_ID)
+        if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
         {
             try
             {
-                auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
                 auto real_sender = std::dynamic_pointer_cast<IBroadcastSender>(std::make_shared<BrpcRemoteBroadcastSender>(
-                    std::move(data_key), sender_stream_id, sender_proxy->getContext(), sender_proxy->getHeader()));
+                    sender_proxy->getDataKey(), sender_stream_id, sender_proxy->getContext(), sender_proxy->getHeader()));
                 sender_proxy->becomeRealSender(std::move(real_sender));
             }
             catch (...)
             {
                 brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed for {} by exception: {}", data_key->getKey(), getCurrentExceptionMessage(false));
+                LOG_ERROR(log, "Create stream failed for {} by exception: {}", sender_proxy->getDataKey()->getKey(), getCurrentExceptionMessage(false));
             }
         }
     });
@@ -49,7 +48,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     brpc::ClosureGuard done_guard(done);
     brpc::StreamOptions stream_options;
     stream_options.max_buf_size = max_buf_size;
-    data_key = ExchangeUtils::parseDataKey(request->data_key());
+    auto data_key = ExchangeUtils::parseDataKey(request->data_key());
     if (!data_key)
     {
         LOG_ERROR(log, "Fail to parse data_key {}", request->data_key());
@@ -58,7 +57,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     }
     try
     {
-        auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+        sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
         sender_proxy->waitAccept(std::max(cntl->timeout_ms() - 500, 1000l));
     }
     catch (...)
