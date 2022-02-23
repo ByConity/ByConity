@@ -271,8 +271,10 @@ public:
 
     ColumnPtr replaceFrom(
         const PaddedPODArray<UInt32> & indexes,
-        const IColumn & rhs, const PaddedPODArray<UInt32> & rhs_indexes,
-        const Filter * is_default_filter, const IColumn::Filter * filter) const override
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        const IColumn::Filter * filter) const override
     {
         return doReplaceFrom<ColumnString>(indexes, assert_cast<const ColumnString &>(rhs), rhs_indexes, is_default_filter, filter);
     }

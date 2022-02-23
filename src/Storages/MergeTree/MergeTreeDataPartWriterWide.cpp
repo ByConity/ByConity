@@ -184,7 +184,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         serialized_values.resize(rows);
         for (size_t i = 0; i < threads; ++i)
         {
-            serialized_values_pool.scheduleOrThrowOnError([&, i]() { 
+            serialized_values_pool.scheduleOrThrowOnError([&, i]() {
+                Block columns_from_storage = metadata_snapshot->getSampleBlock();
                 for (size_t j = i; j < rows; j += threads)
                 {
                     size_t correct_row = j;
@@ -193,8 +194,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     if (correct_row >= rows)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
                     WriteBufferFromOwnString val_buf;
-                    for (auto & col : block)
-                        serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
+                    for (auto & col : columns_from_storage)
+                        serializations[col.name]->serializeBinary(*block.getByName(col.name).column, correct_row, val_buf);
                     serialized_values[j] = val_buf.str();
                 }
             });

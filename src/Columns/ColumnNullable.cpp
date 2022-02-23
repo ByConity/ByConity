@@ -509,10 +509,13 @@ void ColumnNullable::gather(ColumnGathererStream & gatherer)
 
 ColumnPtr ColumnNullable::replaceFrom(
     const PaddedPODArray<UInt32> & indexes,
-    const IColumn & rhs, const PaddedPODArray<UInt32> & rhs_indexes,
-    const Filter * is_default_filter, const IColumn::Filter * filter) const
+    const IColumn & rhs,
+    const PaddedPODArray<UInt32> & rhs_indexes,
+    const Filter * is_default_filter,
+    const IColumn::Filter * filter) const
 {
-    return doReplaceFrom<ColumnNullable>(indexes, assert_cast<const ColumnNullable &>(rhs), rhs_indexes, is_default_filter, filter);
+    return doReplaceFrom<ColumnNullable>(
+        indexes, assert_cast<const ColumnNullable &>(rhs), rhs_indexes, is_default_filter, filter);
 }
 
 void ColumnNullable::reserve(size_t n)

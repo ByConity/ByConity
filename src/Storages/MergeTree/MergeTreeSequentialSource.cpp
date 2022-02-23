@@ -138,7 +138,6 @@ try
                     filter_data[*iter - start_row] = 0;
                     num_deleted++;
                 }
-                delete_column->getData().resize(rows_read);
                 for (auto & column : columns)
                 {
                     /// The column is nullptr when it doesn't exist in the data_part, this case will happen when the table has applied operations of adding columns.

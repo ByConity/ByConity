@@ -123,8 +123,10 @@ public:
     ColumnPtr selectDefault() const override { return null_map; }
     ColumnPtr replaceFrom(
         const PaddedPODArray<UInt32> & indexes,
-        const IColumn & rhs, const PaddedPODArray<UInt32> & rhs_indexes,
-        const Filter * is_default_filter, const IColumn::Filter * filter) const override;
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        const IColumn::Filter * filter) const override;
 
     ColumnPtr compress() const override;
 

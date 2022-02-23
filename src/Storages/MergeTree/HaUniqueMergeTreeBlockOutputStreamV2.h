@@ -33,6 +33,7 @@ public:
 private:
     size_t removeDupKeys(
         Block & block,
+        ColumnPtr version_column,
         IColumn::Filter & filter,
         PaddedPODArray<UInt32> & replace_dst_indexes,
         PaddedPODArray<UInt32> & replace_src_indexes);

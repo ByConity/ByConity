@@ -189,7 +189,7 @@ IColumn::Ptr IColumn::doReplaceFrom(
             // Discard values according to filter
             if (filter)
             {
-                while ((*filter)[pos] == 0)
+                while (pos < index && (*filter)[pos] == 0)
                     pos++;
                 if (pos == index)
                     break;
@@ -210,7 +210,7 @@ IColumn::Ptr IColumn::doReplaceFrom(
         if (pos == num_rows)
             break;
         if (filter && (*filter)[pos] == 0)
-            ++pos;
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "The row to be replaced can not be filtered.");
         else if (!is_default_filter || (*is_default_filter)[pos] == 1) // If it is default value, replace the value with previous one.
         {
             // Check that the replace behavior belongs to the first part or the second part
@@ -220,7 +220,7 @@ IColumn::Ptr IColumn::doReplaceFrom(
                 static_cast<Derived &>(*res).insertFrom(*this, rhs_indexes[i]);
             else
             {
-                if (index == indexes[j] - num_rows && (index != indexes[i] || (is_default_filter && (*is_default_filter)[rhs_indexes[i]])))
+                if (index == indexes[j] - num_rows && (index != indexes[i] || (!is_default_filter || (*is_default_filter)[rhs_indexes[i]])))
                     static_cast<Derived &>(*res).insertFrom(rhs, rhs_indexes[j]);
                 else
                     static_cast<Derived &>(*res).insertFrom(*this, rhs_indexes[i]);

@@ -113,7 +113,11 @@ PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, cons
     PaddedPODArray<UInt32> res;
     res.resize(rowids.size());
     for (size_t i = 0; i < res.size(); ++i)
+    {
+        if (perm[i] >= rowids.size())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Row id {} is out of size {}", perm[i], rowids.size());
         res[i] = rowids[perm[i]];
+    }
     return res;
 }
 
@@ -235,9 +239,6 @@ void HaUniqueMergeTreeBlockOutputStreamV2::write(const Block & block)
     auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
 
     /// unique table doesn't support concurrent write
-    /// TODO:
-    /// 1. support table level unique
-    /// 2. move part write out of insert lock
     auto lock = storage.uniqueWriteLock();
 
     for (auto & current_block : part_blocks)
@@ -433,8 +434,13 @@ void HaUniqueMergeTreeBlockOutputStreamV2::writeSuffix()
         remote_stream->writeSuffix();
 }
 
+/// TODO(lta): handle the case that version is not different
 size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
-    Block & block, IColumn::Filter & filter, PaddedPODArray<UInt32> & replace_dst_indexes, PaddedPODArray<UInt32> & replace_src_indexes)
+    Block & block,
+    ColumnPtr version_column,
+    IColumn::Filter & filter,
+    PaddedPODArray<UInt32> & replace_dst_indexes,
+    PaddedPODArray<UInt32> & replace_src_indexes)
 {
     auto block_size = block.rows();
     size_t num_filtered = 0;
@@ -452,6 +458,17 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
     /// first rowid of key -> rowid of the highest version of the same key
     std::map<size_t, size_t, decltype(comparator)> index(comparator);
 
+
+    ColumnWithTypeAndName delete_flag_column;
+    if (block.has(StorageInMemoryMetadata::delete_flag_column_name))
+        delete_flag_column = block.getByName(StorageInMemoryMetadata::delete_flag_column_name);
+
+    auto is_delete_row = [&](int rowid) { return delete_flag_column.column && delete_flag_column.column->getBool(rowid); };
+    /// In the case that engine has been set version column, if version is set by user(not zero), the delete row will obey the rule of version.
+    /// Otherwise, the delete row will ignore comparing version, just doing the deletion directly.
+    auto delete_ignore_version
+        = [&](int rowid) { return is_delete_row(rowid) && version_column && !version_column->getUInt(rowid); };
+
     /// if there are duplicated keys, only keep the highest version for each key
     for (size_t rowid = 0; rowid < block_size; ++rowid)
     {
@@ -460,9 +477,18 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
             /// When there is no explict version column, use rowid as version number,
             /// Otherwise use value from version column
             size_t old_pos = it->second;
-            replace_dst_indexes.push_back(UInt32(rowid));
-            replace_src_indexes.push_back(UInt32(old_pos));
             size_t new_pos = rowid;
+            if (version_column && !delete_ignore_version(rowid) && version_column->getUInt(old_pos) > version_column->getUInt(new_pos))
+                std::swap(old_pos, new_pos);
+            else
+            {
+                // Only when the version of this row is larger than previous row and the row is not delete row, it will apply partial update action. 
+                if (!is_delete_row(new_pos) && !is_delete_row(old_pos))
+                {
+                    replace_dst_indexes.push_back(UInt32(new_pos));
+                    replace_src_indexes.push_back(UInt32(old_pos));
+                }
+            }
             filter[old_pos] = 0;
             it->second = new_pos;
             num_filtered++;
@@ -634,9 +660,6 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
     LOG_DEBUG(log, "Query for {} rows in data part {} from row store, cost {} ms", rowid_pairs.size(), part->name, timer.elapsedMilliseconds());
 }
 
-/// TODO:
-/// - support version column
-/// - support delete flag
 bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     BlockWithPartition & block_with_partition,
     const MergeTreeData::DataPartsVector & existing_parts,
@@ -646,12 +669,23 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     auto & block = block_with_partition.block;
 
     size_t block_size = block.rows();
-    IColumn::Filter filter(block_size, 1);
-    Stopwatch remove_dedup_timer;
-    PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
-    size_t num_filtered = removeDupKeys(block, filter, replace_dst_indexes, replace_src_indexes);
 
+    ColumnPtr version_column = nullptr;
+    if (storage.merging_params.hasExplicitVersionColumn())
+        /// copy element here because removeDupKeys below may change block,
+        /// which will invalidate all pointers and references to its elements.
+        /// note that this won't copy the actual data of the column.
+        version_column = block.getByName(storage.merging_params.version_column).column;
+
+    UInt64 cur_version = 0;
+    if (storage.merging_params.partitionValueAsVersion())
+        cur_version = block_with_partition.partition[0].safeGet<UInt64>();
+
+    Stopwatch remove_dedup_timer;
     total_remove_dedup_cost += remove_dedup_timer.elapsedMilliseconds();
+    PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
+    IColumn::Filter filter(block_size, 1);
+    size_t num_filtered = removeDupKeys(block, version_column, filter, replace_dst_indexes, replace_src_indexes);
 
     Stopwatch get_uki_timer;
     auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
@@ -692,7 +726,21 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         }
     };
 
+    ColumnWithTypeAndName delete_flag_column;
+    if (block.has(StorageInMemoryMetadata::delete_flag_column_name))
+        delete_flag_column = block.getByName(StorageInMemoryMetadata::delete_flag_column_name);
+
+    /// In the case that engine has been set version column, if version is set by user(not zero), the delete row will obey the rule of version.
+    /// Otherwise, the delete row will ignore comparing version, just doing the deletion directly.
+    auto delete_ignore_version = [&](int rowid) {
+        return delete_flag_column.column && delete_flag_column.column->getBool(rowid) && version_column
+            && !version_column->getUInt(rowid);
+    };
+
     Stopwatch query_uki_timer;
+    PaddedPODArray<UInt32> tmp_replace_dst_indexes, tmp_replace_src_indexes;
+    size_t replace_index_id = 0;
+    /// TODO(lta): add an example to explain this
     for (size_t rowid = 0; rowid < block_size; ++rowid) {
         if (filter[rowid] == 0)
             continue;
@@ -711,14 +759,61 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         int part_index = searchPartForKey(existing_parts, key_indices, key, part_rowid, part_version);
         if (part_index < 0)
         {
+            /// check if it's just a delete operation
+            if (delete_flag_column.column && delete_flag_column.column->getBool(rowid))
+            {
+                filter[rowid] = 0;
+                num_filtered++;
+            }
             continue;
         }
+        if (!storage.merging_params.version_column.empty() && !delete_ignore_version(rowid))
+        {
+            if (version_column)
+                cur_version = version_column->getUInt(rowid);
+            if (cur_version < part_version)
+            {
+                filter[rowid] = 0;
+                num_filtered++;
+                continue;
+            }
+        }
 
-        /// TODO(lta): optimize(skip non partial update row)
-        /// Rowid should be added with block_size to be distinguished with those rows which will be replaced from column self.
-        part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid + block_size)});
+        /// check if it's just a delete operation
+        if (delete_flag_column.column && delete_flag_column.column->getBool(rowid))
+        {
+            filter[rowid] = 0;
+            num_filtered++;
+        }
+        else
+        {
+            part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid + block_size)});
+
+            // check whether to delete the previous one
+            while (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] < rowid)
+            {
+                tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
+                tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
+                replace_index_id++;
+            }
+            if (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] == rowid)
+            {
+                if (version_column)
+                    cur_version = version_column->getUInt(rowid);
+                if (cur_version < part_version)
+                    replace_index_id++;
+            }
+        }
         process_row_deletion(existing_parts[part_index], part_rowid, key);
     }
+    while (replace_index_id < replace_dst_indexes.size())
+    {
+        tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
+        tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
+        replace_index_id++;
+    }
+    replace_dst_indexes = std::move(tmp_replace_dst_indexes);
+    replace_src_indexes = std::move(tmp_replace_src_indexes);
     total_query_uki_cost += query_uki_timer.elapsedMilliseconds();
 
     if (block_size == num_filtered)
@@ -769,6 +864,14 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
             mergeIndices(replace_dst_indexes, tmp_dst_indexes);
         }
 
+        // std::cout << "replace_src_indexes: " << std::endl;
+        // for (size_t i = 0 ; i < replace_src_indexes.size(); ++i)
+        //     std::cout << replace_src_indexes[i] << std::endl;
+
+        // std::cout << "replace_dst_indexes: " << std::endl;
+        // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
+        //     std::cout << replace_dst_indexes[i] << std::endl;
+
         NameSet non_updatable_columns;
         for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
             non_updatable_columns.insert(name);
@@ -794,7 +897,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
                 const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
                 /// all values are non-default, nothing to replace
-                if (filterIsAlwaysFalse(is_default_filter))
+                if (filterIsAlwaysFalse(is_default_filter) && !num_filtered)
                     continue;
 
                 total_replace_default_value_row += filterDefaultCount(is_default_filter);

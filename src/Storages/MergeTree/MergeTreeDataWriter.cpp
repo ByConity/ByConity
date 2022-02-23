@@ -200,6 +200,32 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(
     return result;
 }
 
+ColumnPtr MergeTreeDataWriter::getPartitionAsVersionColumn(const Block & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+{
+    if (!block || !block.rows() || !metadata_snapshot->hasPartitionKey()) /// Table is not partitioned.
+        return nullptr;
+
+    size_t block_size = block.rows();
+    MutableColumnPtr result = ColumnUInt64::create();
+
+    metadata_snapshot->check(block, true);
+    Block block_copy = block;
+    /// After expression execution partition key columns will be added to block_copy with names regarding partition function.
+    auto partition_key_names_and_types = MergeTreePartition::executePartitionByExpression(metadata_snapshot, block_copy, context);
+
+    ColumnRawPtrs partition_columns;
+    partition_columns.reserve(partition_key_names_and_types.size());
+    for (const auto & element : partition_key_names_and_types)
+        partition_columns.emplace_back(block_copy.getByName(element.name).column.get());
+
+    for (size_t i = 0 ; i < block_size; ++i)
+    {
+        UInt64 version = Field((*partition_columns[0])[i]).safeGet<UInt64>();
+        result->insert(version);
+    }
+    return result;
+}
+
 Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_description, Names & partition_key_columns, IColumn::Permutation *& permutation)
 {
     size_t block_size = block.rows();
