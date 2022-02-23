@@ -206,6 +206,7 @@ jobs:
     name: FuntionalStatelessTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
     depends: [scm_build_ASAN]
+    if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
@@ -254,6 +255,7 @@ jobs:
     name: FuntionalStatefulTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
     depends: [scm_build_ASAN]
+    if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
