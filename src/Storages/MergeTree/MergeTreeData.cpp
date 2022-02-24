@@ -5277,10 +5277,16 @@ MergeTreeData::WriteAheadLogPtr MergeTreeData::getWriteAheadLog()
 
 NamesAndTypesList MergeTreeData::getVirtuals() const
 {
+    /// Array(Tuple(String, String))
+    static const auto _map_column_keys_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(
+        DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
+
     return NamesAndTypesList{
         NameAndTypePair("_part", std::make_shared<DataTypeString>()),
         NameAndTypePair("_part_index", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_part_uuid", std::make_shared<DataTypeUUID>()),
+        NameAndTypePair("_part_map_files", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())),
+        NameAndTypePair("_map_column_keys", _map_column_keys_type),
         NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
@@ -5665,7 +5671,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
             /// remove implicit column file and base column file if necessary
             if (column.type->isMap() && !column.type->isMapKVStore())
             {
-                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
                 NameSet file_set;
                 auto map_key_prefix = genMapKeyFilePrefix(column.name);
                 auto map_base_prefix = genMapBaseFilePrefix(column.name);

@@ -29,6 +29,7 @@
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/executeQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
 
@@ -97,7 +98,7 @@ public:
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
-	{
+    {
         const ColumnByteMap * col_map = checkAndGetColumn<ColumnByteMap>(arguments[0].column.get());
         auto& col_sel = arguments[1].column;
         if (!col_map)
@@ -143,7 +144,7 @@ public:
         }
 
         return col_res;
-	}
+    }
 };
 
 class FunctionMapKeys : public IFunction
@@ -222,6 +223,7 @@ public:
     }
 };
 
+
 class FunctionGetMapKeys : public IFunction
 {
 public:
@@ -229,7 +231,7 @@ public:
 
     static FunctionPtr create(const ContextPtr & context) { return std::make_shared<FunctionGetMapKeys>(context); }
 
-    FunctionGetMapKeys(const ContextPtr & context_):context(context_) {}
+    FunctionGetMapKeys(const ContextPtr & c) : context(c) { }
 
     String getName() const override { return name; }
 
@@ -244,225 +246,84 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 3 && arguments.size() != 4 && arguments.size() != 5)
-            throw Exception("Function " + getName()
-                            + " requires 3 or 4 or 5 parameters: db, table, column, [partition expression], [max execute time]. Passed "
-                            + toString(arguments.size()),
-                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            throw Exception(
+                "Function " + getName()
+                    + " requires 3 or 4 or 5 parameters: db, table, column, [partition expression], [max execute time]. Passed "
+                    + toString(arguments.size()),
+                ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
         for (unsigned int i = 0; i < (arguments.size() == 5 ? 4 : arguments.size()); i++)
         {
             const IDataType * argument_type = arguments[i].type.get();
             const DataTypeString * argument = checkAndGetDataType<DataTypeString>(argument_type);
             if (!argument)
-                throw Exception("Illegal column " + arguments[i].name + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    "Illegal column " + arguments[i].name + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
         }
+
         if (arguments.size() == 5)
         {
             bool ok = checkAndGetDataType<DataTypeUInt64>(arguments[4].type.get())
-                      || checkAndGetDataType<DataTypeUInt32>(arguments[4].type.get())
-                      || checkAndGetDataType<DataTypeUInt16>(arguments[4].type.get())
-                      || checkAndGetDataType<DataTypeUInt8>(arguments[4].type.get());
+                || checkAndGetDataType<DataTypeUInt32>(arguments[4].type.get())
+                || checkAndGetDataType<DataTypeUInt16>(arguments[4].type.get())
+                || checkAndGetDataType<DataTypeUInt8>(arguments[4].type.get());
             if (!ok)
-                throw Exception("Illegal column " + arguments[4].name + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
+                throw Exception(
+                    "Illegal column " + arguments[4].name + " of argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
         }
+
         return std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
     }
 
-    StringRef getColumnStringValue(const ColumnPtr & column_ptr) const
+    inline String getColumnStringValue(const ColumnWithTypeAndName & argument) const { return argument.column->getDataAt(0).toString(); }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
-        return column_ptr->getDataAt(0);
-    }
+        String db_name = getColumnStringValue(arguments[0]);
+        String table_name = getColumnStringValue(arguments[1]);
+        String column_name = getColumnStringValue(arguments[2]);
+        if (db_name.empty() || table_name.empty() || column_name.empty())
+            throw Exception("Bad arguments: database/table/column should not be empty", ErrorCodes::BAD_ARGUMENTS);
 
-    ColumnPtr executeImpl([[maybe_unused]]const ColumnsWithTypeAndName & arguments, [[maybe_unused]]const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
-    {
-		return nullptr;
-#if 0  // TODO: need align with ClusterProxy::executeQuery
-
-        using MapKeySet = std::unordered_set<String>;
-        MapKeySet mapKeySet;
-
-        bool has_partition_expression = false;
-        std::regex partition_expression;
-        StringRef db_name = getColumnStringValue(arguments[0].column);
-        StringRef table_name = getColumnStringValue(arguments[1].column);
-        StringRef column_name = getColumnStringValue(arguments[2].column);
-
+        String pattern;
         if (arguments.size() >= 4)
         {
-            StringRef partition_expression_str = getColumnStringValue(arguments[3].column);
-            if (partition_expression_str.size > 0)
-            {
-                has_partition_expression = true;
-                partition_expression = std::regex(partition_expression_str.toString());
-            }
+            pattern = getColumnStringValue(arguments[3]);
+            if (pattern.empty())
+                throw Exception("Bad arguments: regex should not be empty", ErrorCodes::BAD_ARGUMENTS);
         }
 
-        UInt64 max_execute_time_in_second = 60;
-        if (arguments.size() == 5)
+        /**
+            SELECT groupUniqArrayArray(ks) AS keys FROM (
+                SELECT arrayMap(t -> t.2, arrayFilter(t -> t.1 = 'some_map', _map_column_keys)) AS ks
+                FROM some_db.some_table WHERE match(_partition_id, '.*2020.*10.*10.*')
+                SETTINGS early_limit_for_map_virtual_columns = 1, max_threads = 1
+            )
+         */
+        String inner_query = "SELECT arrayMap(t -> t.2, arrayFilter(t -> t.1 = '" + column_name + "', _map_column_keys)) AS ks" //
+            + " FROM `" + db_name + "`.`" + table_name + "`" //
+            + (pattern.empty() ? "" : " WHERE match(_partition_id, '" + pattern + "')") //
+            + " SETTINGS  max_threads = 1";
+        String query = "SELECT groupUniqArrayArray(ks) AS keys FROM ( " + inner_query + " )";
+
+        auto stream = executeQuery(query, context->getQueryContext(), true).getInputStream();
+        auto res = stream->read();
+        if (res)
         {
-            const ColumnPtr & column_ptr = arguments[4].column;
-            max_execute_time_in_second = column_ptr->get64(0);
+            Field field;
+            res.getByName("keys").column->get(0, field);
+            return result_type->createColumnConst(input_rows_count, field)->convertToFullColumnIfConst();
         }
-
-        auto col_res = ColumnArray::create(ColumnString::create());
-        if (db_name.size > 0 && table_name.size > 0 && column_name.size > 0)
+        else
         {
-            StoragePtr table = DatabaseCatalog::instance().getTable(db_name.toString(), table_name.toString());
-            StorageDistributed * distributed_table = dynamic_cast<StorageDistributed *>(table.get());
-            if (distributed_table)
-            {
-                ClusterPtr cluster = distributed_table->getCluster();
-                std::string remote_db_name = distributed_table->getRemoteDatabaseName();
-                std::string remote_table_name = distributed_table->getRemoteTableName();
-
-				// TODO
-                // SlowShardsDiagPtr slowDiag = nullptr;
-
-                //if (!context.getSettings().disable_remote_stream_log)
-                //{
-                //    slowDiag = std::make_shared<SlowShardsDiag>(context, &Poco::Logger::get("getMapKeys"));
-                //}
-
-                String query = "SELECT " + getName() +
-                               "('" + remote_db_name + "','" + remote_table_name + "','" +column_name.toString() + "','"
-                               + (has_partition_expression ? getColumnStringValue(arguments[3].column).toString() : "") + "',"
-                               + std::to_string(max_execute_time_in_second) + ")"
-                               + " as result;";
-                LOG_TRACE((&Poco::Logger::get("getMapKeys")), "Sending query: {}", query);
-
-                size_t max_query_size = context.getSettings().max_query_size;
-                const char * end = query.data() + query.size();
-                ParserQuery parser(end/*, context.getSettings().enable_debug_queries*/);
-                ASTPtr ast = parseQuery(parser, query, "", max_query_size, 0);
-                QueryProcessingStage::Enum processed_stage = QueryProcessingStage::Enum::Complete;
-                Block send_block;
-                ColumnWithTypeAndName col;
-                col.name = "result";
-                col.type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
-                col.column = col.type->createColumn();
-                send_block.insert(col);
-
-                ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-                        send_block, processed_stage, QualifiedTableName{remote_db_name, remote_table_name}, {}, false, slowDiag);
-
-                BlockInputStreams inputs = ClusterProxy::executeQuery(select_stream_factory, cluster, ast, context, context.getSettings());
-                BlockInputStreamPtr input = std::make_shared<UnionBlockInputStream>(inputs, nullptr,context.getSettings().max_distributed_connections);
-
-                input->readPrefix();
-                while (Block current = input->read())
-                {
-                    Field field;
-                    current.getByName("result").column->get(0, field);
-                    const Array & tmp_array = DB::get<const Array &>(field);
-                    for (auto & keyName: tmp_array)
-                    {
-                        mapKeySet.insert(keyName.safeGet<String>());
-                    }
-                }
-
-                Array array;
-                for (const String& vec: mapKeySet)
-                {
-                    array.push_back(Field(vec.data(), vec.size()));
-                }
-
-                col_res->insert(array);
-
-                return col_res; 
-            }
-
-            const MergeTreeData * merge_tree = dynamic_cast<MergeTreeData *>(table.get());
-            if (!merge_tree)
-            {
-                throw Exception("Not support table.", ErrorCodes::BAD_ARGUMENTS);
-            }
-
-            const DataTypeByteMap * map = checkAndGetDataType<DataTypeByteMap>(merge_tree->getColumn(column_name.toString()).type.get());
-
-            if (!map)
-                throw Exception("Column must be map.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
-            UInt64 deadline = max_execute_time_in_second * 1000;
-            Stopwatch watch;
-            for (auto data_part: merge_tree->getDataParts())
-            {
-                String partname = data_part->name;
-                if (partname.find("_") == std::string::npos)
-                    continue;
-                if (has_partition_expression)
-                {
-                    auto& partition_value = data_part->partition.value;
-                    FieldVisitorToString to_string_visitor;
-                    String compare_result;
-                    for (size_t i = 0; i < partition_value.size(); ++i)
-                    {
-                        if (i > 0)
-                            compare_result += '-';
-
-                        if (typeid_cast<const DataTypeDate *>(merge_tree->partition_key_sample.getByPosition(i).type.get()))
-                            compare_result += toString(DateLUT::instance().toNumYYYYMMDD(DayNum(partition_value[i].safeGet<UInt64>())));
-                        else
-                            compare_result += applyVisitor(to_string_visitor, partition_value[i]);
-                    }
-                    if (!std::regex_match(compare_result, partition_expression))
-                        continue;
-                }
-
-                {
-                    auto data_lock = data_part->getColumnsReadLock();
-                    for (auto & file : data_part->checksums.files)
-                    {
-                        const String & file_name = file.first;
-                        String keyName;
-                        bool parseSuccess = parseKeyFromImplicitFileName(column_name.toString(), file_name, keyName);
-                        if (parseSuccess)
-                        {
-                            mapKeySet.insert(keyName);
-                        }
-                    }
-                }
-
-                if (watch.elapsedMilliseconds() > deadline)
-                {
-                    LOG_TRACE((&Poco::Logger::get("getMapKeys")), "getMapKeys time out!");
-                    break;
-                }
-            }
-
-            Array array;
-            auto& keyType = map->getKeyType();
-            for (const String& vec: mapKeySet)
-            {
-                Field field = keyType->stringToVisitorField(vec);
-                if (isDateOrDateTime(keyType))
-                {
-                    if (isDate(keyType))
-                    {
-                        WriteBufferFromOwnString wb;
-                        writeDateText(DayNum(field.safeGet<UInt64>()), wb);
-                        array.push_back(wb.str());
-                    }
-                    else
-                    {
-                        WriteBufferFromOwnString wb;
-                        writeDateTimeText(field.safeGet<UInt64>(), wb);
-                        array.push_back(wb.str());
-                    }
-                }
-                else if (isStringOrFixedString(keyType))
-                    array.push_back(field);
-                else
-                    array.push_back(applyVisitor(DB::FieldVisitorToString(), field));
-            }
-            col_res->insert(array);
+            return result_type->createColumnConst(input_rows_count, Array{})->convertToFullColumnIfConst();
         }
-
-		return col_res;
-#endif
     }
 
 private:
-    const ContextPtr context;
+    ContextPtr context;
 };
+
 
 class FunctionStrToMap: public IFunction
 {
@@ -504,7 +365,7 @@ public:
         return std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>());
     }
 
-	ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         const ColumnPtr column_prt = arguments[0].column;
         auto item_delimiter = getDelimiter(arguments[1].column);
@@ -616,7 +477,7 @@ public:
         }
         return col_res;
     }
-        
+
 };
 
 struct NameExtractMapColumn

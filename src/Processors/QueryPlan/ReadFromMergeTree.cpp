@@ -6,6 +6,7 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/AddingSelectorTransform.h>
 #include <Processors/Transforms/CopyTransform.h>
+#include <Processors/LimitTransform.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Merges/AggregatingSortedTransform.h>
 #include <Processors/Merges/CollapsingSortedTransform.h>
@@ -21,8 +22,14 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/MapHelpers.h>
 #include <common/logger_useful.h>
 #include <Common/JSONBuilder.h>
+#include <Common/escapeForFileName.h>
 
 namespace ProfileEvents
 {
@@ -68,6 +75,69 @@ static const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_inf
                                  : query_info.prewhere_info;
 }
 
+static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
+{
+    Array res;
+
+    std::unordered_map<String, std::set<String>> column_keys;
+    std::unordered_map<String, DataTypePtr> column_types;
+    for (auto & part : parts)
+    {
+        for (auto & [file, _] : part->checksums.files)
+        {
+            if (!startsWith(file, "__") || std::string::npos != file.find("_base."))
+                continue;
+
+            std::string unescaped_file = unescapeForFileName(file);
+            std::string_view column_view;
+            std::string_view key_view = ExtractMapKey::apply(unescaped_file, &column_view);
+            if (column_view.empty() || key_view.empty())
+                continue;
+            std::string column(column_view);
+            std::string key(key_view);
+
+            column_keys[column].insert(key);
+            if (!column_types.count(column))
+            {
+                auto it = std::find_if(part->getColumns().begin(), part->getColumns().end(), [&] (auto & c) { return c.name == column; });
+                if (it != part->getColumns().end())
+                    column_types[column] = it->type;
+            }
+        }
+    }
+
+    for (auto & [column, keys] : column_keys)
+    {
+        auto type_it = column_types.find(column);
+        if (type_it == column_types.end())
+            continue;
+        auto type = type_it->second;
+
+        auto map_type = typeid_cast<const DataTypeByteMap *>(type.get());
+        if (!map_type || map_type->isMapKVStore())
+            throw Exception("Type of " + column + " is not an ordinary Map", ErrorCodes::LOGICAL_ERROR);
+        auto map_key_type = map_type->getKeyType();
+
+        if (dynamic_cast<const DataTypeDate *>(map_key_type.get()))
+        {
+            for (auto & key : keys)
+                res.push_back(Tuple{column, toString(LocalDate(DayNum(parse<UInt64>(key))))});
+        }
+        else if (dynamic_cast<const DataTypeDateTime *>(map_key_type.get()))
+        {
+            for (auto & key : keys)
+                res.push_back(Tuple{column, toString(LocalDateTime(parse<UInt64>(key)))});
+        }
+        else
+        {
+            for (auto & key : keys)
+                res.push_back(Tuple{column, key});
+        }
+    }
+
+    return res;
+}
+
 ReadFromMergeTree::ReadFromMergeTree(
     MergeTreeData::DataPartsVector parts_,
     Names real_column_names_,
@@ -80,6 +150,7 @@ ReadFromMergeTree::ReadFromMergeTree(
     size_t max_block_size_,
     size_t num_streams_,
     bool sample_factor_column_queried_,
+    bool map_column_keys_column_queried_,
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
     Poco::Logger * log_)
     : ISourceStep(DataStream{.header = MergeTreeBaseSelectProcessor::transformHeader(
@@ -103,6 +174,7 @@ ReadFromMergeTree::ReadFromMergeTree(
     , preferred_block_size_bytes(context->getSettingsRef().preferred_block_size_bytes)
     , preferred_max_column_in_block_size_bytes(context->getSettingsRef().preferred_max_column_in_block_size_bytes)
     , sample_factor_column_queried(sample_factor_column_queried_)
+    , map_column_keys_column_queried(map_column_keys_column_queried_)
     , max_block_numbers_to_read(std::move(max_block_numbers_to_read_))
     , log(log_)
 {
@@ -112,6 +184,13 @@ ReadFromMergeTree::ReadFromMergeTree(
         /// Other virtual columns are added by MergeTreeBaseSelectProcessor.
         auto type = std::make_shared<DataTypeFloat64>();
         output_stream->header.insert({type->createColumn(), type, "_sample_factor"});
+    }
+
+    if (map_column_keys_column_queried)
+    {
+        auto type = std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
+        output_stream->header.insert({type->createColumn(), type, "_map_column_keys"});
     }
 }
 
@@ -998,6 +1077,25 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         column.name = "_sample_factor";
         column.type = std::make_shared<DataTypeFloat64>();
         column.column = column.type->createColumnConst(0, Field(result.sampling.used_sample_factor));
+
+        auto adding_column = ActionsDAG::makeAddingColumnActions(std::move(column));
+        append_actions(std::move(adding_column));
+    }
+
+    if (map_column_keys_column_queried)
+    {
+        if (settings.early_limit_for_map_virtual_columns > 0)
+        {
+            pipe.addSimpleTransform([&](const Block & header) {
+                return std::make_shared<LimitTransform>(header, settings.early_limit_for_map_virtual_columns, 0);
+            });
+        }
+
+        ColumnWithTypeAndName column;
+        column.name = "_map_column_keys";
+        column.type = std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeTuple>(DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
+        column.column = column.type->createColumnConst(0, Field(extractMapColumnKeys(prepared_parts)));
 
         auto adding_column = ActionsDAG::makeAddingColumnActions(std::move(column));
         append_actions(std::move(adding_column));

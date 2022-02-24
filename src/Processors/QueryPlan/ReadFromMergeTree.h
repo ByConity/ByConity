@@ -66,6 +66,7 @@ public:
         size_t max_block_size_,
         size_t num_streams_,
         bool sample_factor_column_queried_,
+        bool map_column_keys_column_queried_,
         std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
         Poco::Logger * log_
     );
@@ -104,6 +105,7 @@ private:
     const size_t preferred_block_size_bytes;
     const size_t preferred_max_column_in_block_size_bytes;
     const bool sample_factor_column_queried;
+    const bool map_column_keys_column_queried;
 
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read;
 
