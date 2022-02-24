@@ -113,6 +113,10 @@ struct StorageInMemoryMetadata
     /// Returns combined set of columns and with a extra row id column
     ColumnsDescription getColumnsWithRowid() const;
 
+    bool hasEncryptColumn() const;
+    bool hasSecurityColumn() const;
+    ColumnsWithTypeAndName getEncryptColumns() const;
+
     /// Returns secondary indices
     const IndicesDescription & getSecondaryIndices() const;
 

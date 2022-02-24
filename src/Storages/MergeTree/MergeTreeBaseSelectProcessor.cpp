@@ -5,6 +5,7 @@
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
+#include <Common/escapeForFileName.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -295,6 +296,26 @@ static void injectVirtualColumnsImpl(
                     column = DataTypeUUID().createColumn();
 
                 inserter.insertUUIDColumn(column, virtual_column_name);
+            }
+            else if (virtual_column_name == "_part_map_files")
+            {
+                ColumnPtr column;
+                auto type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>());
+                if (rows)
+                {
+                    NameSet key_set;
+                    for (auto & [file, _] : task->data_part->checksums.files)
+                    {
+                        if (startsWith(file, "__") && std::string::npos == file.find("_base."))
+                            key_set.insert(unescapeForFileName(file));
+                    }
+
+                    column = type->createColumnConst(rows, Array(key_set.begin(), key_set.end()))->convertToFullColumnIfConst();
+                }
+                else
+                    column = type->createColumn();
+
+                inserter.insertArrayOfStringsColumn(column, virtual_column_name);
             }
             else if (virtual_column_name == "_partition_id")
             {

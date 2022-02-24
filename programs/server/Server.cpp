@@ -57,6 +57,7 @@
 #include <Common/DNSResolver.h>
 #include <Common/Elf.h>
 #include <Common/Macros.h>
+#include <Common/KMSClient.h>
 #include <Common/SensitiveDataMasker.h>
 #include <Common/StatusFile.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -775,6 +776,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("macros"))
         global_context->setMacros(std::make_unique<Macros>(config(), "macros", log));
+
+    if (config().has("cppkms"))
+    {
+        String psm = config().getString("cppkms.psm");
+        String name = config().getString("cppkms.name", "default");
+        String cluster = config().getString("cppkms.cluster");
+        String shared_cluster = config().getString("cppkms.shared", "");
+
+        KMSClient::init(psm, name, cluster, shared_cluster);
+    }
 
     /// Initialize main config reloader.
     std::string include_from_path = config().getString("include_from", "/etc/metrika.xml");
@@ -1604,7 +1615,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
 
             /// TODO status service
-            
+
         }
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;

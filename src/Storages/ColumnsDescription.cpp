@@ -89,18 +89,6 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
         //     DB::writeText("COMPRESSION", buf);
         //     flag ^= TYPE_COMPRESSION_FLAG;
         // }
-        // else if (flag & TYPE_SECURITY_FLAG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("SECURITY", buf);
-        //     flag ^= TYPE_SECURITY_FLAG;
-        // }
-        // else if (flag & TYPE_ENCRYPT_FLAG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("ENCRYPT", buf);
-        //     flag ^= TYPE_ENCRYPT_FLAG;
-        // }
         // else if (flag & TYPE_BLOOM_FLAG)
         // {
         //     writeChar('\t', buf);
@@ -119,7 +107,7 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
         //     DB::writeText("MarkBitmapIndex", buf);
         //     flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
         // }
-        // else 
+        // else
         if (flag & TYPE_MAP_KV_STORE_FLAG)
         {
             writeChar('\t', buf);
@@ -131,6 +119,18 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             writeChar('\t', buf);
             DB::writeText("BitEngineEncode", buf);
             flag ^= TYPE_BITENGINE_ENCODE_FLAG;
+        }
+        else if (flag & TYPE_SECURITY_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("SECURITY", buf);
+            flag ^= TYPE_SECURITY_FLAG;
+        }
+        else if (flag & TYPE_ENCRYPT_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("ENCRYPT", buf);
+            flag ^= TYPE_ENCRYPT_FLAG;
         }
     }
 
@@ -190,6 +190,9 @@ void ColumnDescription::readText(ReadBuffer & buf)
 
             if (col_ast->ttl)
                 ttl = col_ast->ttl;
+
+            if (col_ast->flags)
+                type->setFlags(col_ast->flags);
         }
         else
             throw Exception("Cannot parse column description", ErrorCodes::CANNOT_PARSE_TEXT);
@@ -273,6 +276,11 @@ void ColumnsDescription::add(ColumnDescription column, const String & after_colu
         insert_it = range.second;
     }
 
+    if (column.type->isEncrypt())
+        has_encrypt_column = true;
+    if (column.type->isSecurity())
+        has_security_column = true;
+
     addSubcolumns(column.name, column.type);
     columns.get<0>().insert(insert_it, std::move(column));
 }
@@ -289,6 +297,8 @@ void ColumnsDescription::remove(const String & column_name)
         removeSubcolumns(list_it->name);
         list_it = columns.get<0>().erase(list_it);
     }
+
+    updateColumnProperty();
 }
 
 void ColumnsDescription::rename(const String & column_from, const String & column_to)
@@ -762,6 +772,37 @@ void ColumnsDescription::removeSubcolumns(const String & name_in_storage)
     auto range = subcolumns.get<1>().equal_range(name_in_storage);
     if (range.first != range.second)
         subcolumns.get<1>().erase(range.first, range.second);
+}
+
+void ColumnsDescription::updateColumnProperty()
+{
+    /// update Encrypt/Security flags when remove/modify column.
+    if (has_encrypt_column || has_security_column)
+    {
+        has_encrypt_column = false;
+        has_security_column = false;
+
+        for (const auto & column : columns)
+        {
+            if (column.type->isEncrypt())
+                has_encrypt_column = true;
+            if (column.type->isSecurity())
+                has_security_column = true;
+        }
+    }
+}
+
+ColumnsWithTypeAndName ColumnsDescription::getEncryptColumns() const
+{
+    ColumnsWithTypeAndName res;
+
+    for (const auto & column: columns)
+    {
+        if (column.type->isEncrypt())
+            res.emplace_back(nullptr, column.type, column.name);
+    }
+
+    return res;
 }
 
 Block validateColumnsDefaultsAndGetSampleBlock(ASTPtr default_expr_list, const NamesAndTypesList & all_columns, ContextPtr context)

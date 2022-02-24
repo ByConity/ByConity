@@ -1,4 +1,5 @@
 #include <Compression/CompressionFactory.h>
+#include <Common/KMSClient.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -62,6 +63,10 @@ AlterCommand::RemoveProperty removePropertyFromString(const String & property)
         return AlterCommand::RemoveProperty::CODEC;
     else if (property == "TTL")
         return AlterCommand::RemoveProperty::TTL;
+    else if (property == "ENCRYPT")
+        return AlterCommand::RemoveProperty::ENCRYPT;
+    else if (property == "SECURITY")
+        return AlterCommand::RemoveProperty::SECURITY;
 
     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot remove unknown property '{}'", property);
 }
@@ -83,7 +88,7 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.column_name = ast_col_decl.name;
         if (ast_col_decl.type)
         {
-            command.data_type = data_type_factory.get(ast_col_decl.type);
+            command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
         }
         if (ast_col_decl.default_expression)
         {
@@ -140,7 +145,7 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         if (ast_col_decl.type)
         {
-            command.data_type = data_type_factory.get(ast_col_decl.type);
+            command.data_type = data_type_factory.get(ast_col_decl.type, ast_col_decl.flags);
         }
 
         if (ast_col_decl.default_expression)
@@ -410,6 +415,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
             else if (to_remove == RemoveProperty::TTL)
             {
                 column.ttl.reset();
+            }
+            else if (to_remove == RemoveProperty::SECURITY)
+            {
+                column.type->resetFlags(column.type->getFlags() ^ TYPE_SECURITY_FLAG);
             }
             else
             {
@@ -982,6 +991,23 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     metadata = std::move(metadata_copy);
 }
 
+void AlterCommands::apply(const StorageID & storage_id, StorageInMemoryMetadata & metadata, ContextPtr context) const
+{
+    bool before_has_security_column = metadata.hasSecurityColumn();
+    apply(metadata, context);
+    bool after_has_security_column = metadata.hasSecurityColumn();
+
+    if (before_has_security_column && !after_has_security_column)
+    {
+        auto config_name = storage_id.getFullNameNotQuoted();
+        KMSClient::instance().deleteKmsConfig(config_name);
+    }
+    else if (!before_has_security_column && after_has_security_column)
+    {
+        auto config_name = storage_id.getFullNameNotQuoted();
+        KMSClient::instance().createKmsConfig(config_name);
+    }
+}
 
 void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
 {
@@ -1024,7 +1050,7 @@ void AlterCommands::prepare(const StorageInMemoryMetadata & metadata)
     prepared = true;
 }
 
-void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPtr context) const
+void AlterCommands::validate(const StorageID & storage_id, const StorageInMemoryMetadata & metadata, ContextPtr context) const
 {
     auto all_columns = metadata.columns;
     /// Default expression for all added/modified columns
@@ -1047,8 +1073,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             }
 
             if (!command.data_type)
-                throw Exception{"Data type have to be specified for column " + backQuote(column_name) + " to add",
-                                ErrorCodes::BAD_ARGUMENTS};
+                throw Exception{"Data type have to be specified for column " + backQuote(column_name) + " to add", ErrorCodes::BAD_ARGUMENTS};
 
             if (command.codec)
                 CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(command.codec, command.data_type, !context->getSettingsRef().allow_suspicious_codecs, context->getSettingsRef().allow_experimental_codecs);
@@ -1072,6 +1097,7 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
 
             if (command.codec)
                 CompressionCodecFactory::instance().validateCodecAndGetPreprocessedAST(command.codec, command.data_type, !context->getSettingsRef().allow_suspicious_codecs, context->getSettingsRef().allow_experimental_codecs);
+
             auto column_default = all_columns.getDefault(column_name);
             if (column_default)
             {
@@ -1134,7 +1160,40 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                         ErrorCodes::BAD_ARGUMENTS,
                         "Column {} doesn't have COMMENT, cannot remove it",
                         backQuote(column_name));
+                if (command.to_remove == AlterCommand::RemoveProperty::ENCRYPT)
+                    throw Exception(
+                        ErrorCodes::BAD_ARGUMENTS,
+                        "ENCRYPT property is not changeable");
+                if (command.to_remove == AlterCommand::RemoveProperty::SECURITY)
+                {
+                    if (!column_from_table.type->isSecurity())
+                        throw Exception(
+                            ErrorCodes::BAD_ARGUMENTS,
+                            "Column {} doesn't have SECURITY, cannot remove it",
+                            backQuote(column_name));
 
+                    auto config_name = storage_id.getFullNameNotQuoted();
+
+                    if (!KMSClient::instance().auth(config_name, context->getSettingsRef().encrypt_key.value, context))
+                        throw Exception(
+                            ErrorCodes::BAD_ARGUMENTS,
+                            "Permission Denied. Mismatched key when alter security column: {}.",
+                            backQuote(column_name));
+                }
+            }
+
+            const auto & column = all_columns.get(column_name);
+            /// check alter encrypt columns
+            if (column.type->isEncrypt() || (command.data_type && command.data_type->isEncrypt()))
+            {
+                throw Exception("Not support modifying encrypt property " + column_name, ErrorCodes::ILLEGAL_COLUMN);
+            }
+            /// check alter security columns
+            else if (column.type->isSecurity())
+            {
+                auto config_name = storage_id.getFullNameNotQuoted();
+                if (!KMSClient::instance().auth(config_name, context->getSettingsRef().encrypt_key.value, context))
+                    throw Exception("Permission Denied. Mismatched key when alter security column: " + column.name, ErrorCodes::ILLEGAL_COLUMN);
             }
 
             modified_columns.emplace(column_name);

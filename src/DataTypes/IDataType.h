@@ -29,13 +29,14 @@ using DataTypes = std::vector<DataTypePtr>;
 struct NameAndTypePair;
 class SerializationInfo;
 
-#define TYPE_BLOOM_FLAG       0x01
-#define TYPE_COMPRESSION_FLAG 0x02
-#define TYPE_SECURITY_FLAG 0x04
-#define TYPE_MAP_KV_STORE_FLAG 0x08
-#define TYPE_ENCRYPT_FLAG 0x10
-#define TYPE_BITENGINE_ENCODE_FLAG 0x20
-#define TYPE_BITMAP_INDEX_FLAG 0x40
+#define TYPE_MAP_KV_STORE_FLAG      0x01
+#define TYPE_BITENGINE_ENCODE_FLAG  0x02
+#define TYPE_SECURITY_FLAG          0x04
+#define TYPE_ENCRYPT_FLAG           0x08
+// Not used
+#define TYPE_BLOOM_FLAG             0x10
+#define TYPE_COMPRESSION_FLAG       0x20
+#define TYPE_BITMAP_INDEX_FLAG      0x40
 #define TYPE_MARK_BITMAP_INDEX_FALG 0x80
 
 /** Properties of data type.
@@ -271,25 +272,23 @@ public:
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
 
-    /// ============= put code here for merge ==================
-    /*get flags */
-    UInt8 getFlags() const {return flags;}
-
-    void setFlags(UInt8 flag) { flags |= flag; }
-
-    void resetFlags(UInt8 flag) {
-        if (flags & flag)
-            flags ^= flag;
-    }
-
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
     virtual bool canBeMapKVType() const {return false;}
     virtual Field stringToVisitorField(const String &) const;
   	static String getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path);
-  
+
     /// check the type is marked as BitEngineEncode
     /// TODO (liuhaoqiang) write a right function logic, in community version, there is no type flag now.
     bool isBitEngineEncode() const { return getTypeId() == TypeIndex::BitMap64; }
+
+    UInt8 getFlags() const { return flags; }
+    void setFlags(UInt8 flag) const { checkFlags(flag); flags |= flag; }
+    void resetFlags(UInt8 flag) const { checkFlags(flag); flags = flag; }
+
+    virtual void checkFlags(UInt8 flag) const;
+
+    bool isEncrypt() const { return flags & TYPE_ENCRYPT_FLAG; }
+    bool isSecurity() const { return flags & TYPE_SECURITY_FLAG; }
 
 protected:
     friend class DataTypeFactory;
@@ -298,7 +297,6 @@ protected:
     /// Customize this DataType
     void setCustomization(DataTypeCustomDescPtr custom_desc_) const;
 
-    /// This is mutable to allow setting custom name and serialization on `const IDataType` post construction.
     mutable UInt8 flags = 0;
     mutable DataTypeCustomNamePtr custom_name;
     mutable SerializationPtr custom_serialization;

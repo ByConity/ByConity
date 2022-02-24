@@ -10,6 +10,7 @@
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/NativeChunkInputStream.h>
 #include <brpc/stream.h>
+#include <common/types.h>
 #include <common/logger_useful.h>
 
 #include <memory>
@@ -105,14 +106,14 @@ void StreamHandler::on_closed(brpc::StreamId stream_id)
         }
         else
         {
-            /// Try close receiver gracefully
-            auto res = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Finish in StreamHandler");
-            if (res.is_modifer || res.code == BroadcastStatusCode::ALL_SENDERS_DONE)
+            LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
+            auto status = receiver_ptr->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Try close receiver grafully");
+            if (status.is_modifer && status.code == BroadcastStatusCode::ALL_SENDERS_DONE)
             {
-                // push an empty as finish
+                LOG_DEBUG(log, "{} will close gracefully ", receiver_ptr->getName());
+                // Push an empty as finish to close receiver gracefully
                 receiver_ptr->pushReceiveQueue(Chunk());
             }
-            LOG_DEBUG(log, "Close StreamId: {} , datakey: {} ", stream_id, receiver_ptr->getName());
         }
     }
     catch (...)
@@ -136,6 +137,8 @@ void StreamHandler::on_finished(brpc::StreamId id, int32_t finish_status_code)
             LOG_INFO(log, "on_finished: StreamId-{}, data-key {}, finish code:{}", id, receiver_ptr->getName(), finish_status_code);
             if (finish_status_code > 0)
                 receiver_ptr->finish(static_cast<BroadcastStatusCode>(finish_status_code), "StreamHandler::on_finished called");
+            else
+                receiver_ptr->setSendDoneFlag();
         }
     }
     catch (...)

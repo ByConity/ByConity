@@ -492,6 +492,7 @@ class IColumn;
     \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
+    M(String, encrypt_key, "", "Required key trust in kms when query a encrypt column", 0) \
     \
     /** Bytedance */ \
     M(UInt64, alter_skip_check, 0, "Skip check while alter table. 1 for skipping columns and metadate strings check; 2 for skipping metadata_version check", 0) \
@@ -508,6 +509,7 @@ class IColumn;
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \

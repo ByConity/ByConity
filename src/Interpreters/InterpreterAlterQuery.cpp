@@ -143,7 +143,7 @@ BlockIO InterpreterAlterQuery::execute()
     if (!alter_commands.empty())
     {
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
-        alter_commands.validate(metadata, getContext());
+        alter_commands.validate(table->getStorageID(), metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
         if (dynamic_cast<const StorageHaUniqueMergeTree*>(table.get()))

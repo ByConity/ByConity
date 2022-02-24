@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <Core/Block.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
@@ -21,6 +22,7 @@ public:
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
     void pushReceiveQueue(Chunk chunk);
+    void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_relaxed); }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
@@ -28,11 +30,12 @@ private:
     String registry_address;
     ContextPtr context;
     Block header;
-    // todo::aron add MemoryTracker here
-    // std::shared_ptr<MemoryTracker> memory_tracker = std::make_shared<MemoryTracker>(VariableContext::Global);
+    std::atomic<BroadcastStatusCode> finish_status_code{BroadcastStatusCode::RUNNING};
+    std::atomic_flag send_done_flag = ATOMIC_FLAG_INIT;
     BoundedDataQueue<Chunk> queue;
     String data_key;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
+    
     bool keep_order;
 };
 

@@ -109,7 +109,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     if (!received_chunk && !received_chunk.getChunkInfo())
     {
         LOG_DEBUG(log, "{} finished ", getName());
-        return RecvDataPacket(finish(BroadcastStatusCode::ALL_SENDERS_DONE, "receiver done"));
+        return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
     }
 
     if(keep_order)
@@ -122,44 +122,40 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 
 BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
 {
+    BroadcastStatusCode current_fin_code = finish_status_code.load(std::memory_order_relaxed);
+    if (current_fin_code != BroadcastStatusCode::RUNNING)
+    {
+        LOG_TRACE(
+            log,
+            "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
+            data_key,
+            status_code_,
+            current_fin_code);
+        return BroadcastStatus(current_fin_code, false, "BrpcRemoteBroadcastReceiver: already has been finished");
+    }
+
     int actual_status_code = BroadcastStatusCode::RUNNING;
+
+    BroadcastStatusCode new_fin_code = status_code_;
     if (status_code_ < 0)
     {
-        int rc = brpc::StreamFinish(stream_id, actual_status_code, status_code_, false);
-        if (rc == EINVAL)
-        {
-            if (queue.closed())
-                return BroadcastStatus(
-                    BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "BrpcRemoteBroadcastReceiver: stream closed before finish");
-            else
-                return BroadcastStatus(status_code_, false, "BrpcRemoteBroadcastReceiver: stream closed gracefully before finish");
-        }
-        if (rc != 0)
-            return BroadcastStatus(
-                static_cast<BroadcastStatusCode>(actual_status_code),
-                false,
-                "BrpcRemoteBroadcastReceiver::finish, already has been finished");
-
-        return BroadcastStatus(static_cast<BroadcastStatusCode>(status_code_), false, message);
+        // if send_done_flag has never been set, sender should have some unkown errors.
+        if (!send_done_flag.test(std::memory_order_relaxed))
+            new_fin_code = BroadcastStatusCode::SEND_UNKNOWN_ERROR;
     }
 
-    int rc = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
-    if (rc == EINVAL)
+    if (finish_status_code.compare_exchange_strong(current_fin_code, new_fin_code, std::memory_order_relaxed, std::memory_order_relaxed))
     {
-        if (queue.close())
-            return BroadcastStatus(static_cast<BroadcastStatusCode>(status_code_), true, message);
-        else
-            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "BrpcRemoteBroadcastReceiver::finish: stream closed");
+        if (new_fin_code > 0)
+            queue.close();
+        brpc::StreamFinish(stream_id, actual_status_code, new_fin_code, new_fin_code > 0);
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(new_fin_code), true, message);
     }
-
-    if (actual_status_code > 0)
-        queue.close();
-
-    if (rc != 0)
-        return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "BrpcRemoteBroadcastReceiver::finish, already has been finished");
-
-    LOG_INFO(log, "{} finished with code: {} and message: {}", getName(), status_code_, message);
-    return BroadcastStatus(status_code_, true, message);
+    else
+    {
+        LOG_TRACE(log, "Fail to change broadcast status to {}, current status is: {} ", new_fin_code, current_fin_code);
+        return BroadcastStatus(current_fin_code, false, "BrpcRemoteBroadcastReceiver: already has been finished");
+    }
 }
 
 String BrpcRemoteBroadcastReceiver::getName() const

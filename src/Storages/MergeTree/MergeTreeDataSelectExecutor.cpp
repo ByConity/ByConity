@@ -1038,7 +1038,8 @@ static void selectColumnNames(
     const MergeTreeData & data,
     Names & real_column_names,
     Names & virt_column_names,
-    bool & sample_factor_column_queried)
+    bool & sample_factor_column_queried,
+    bool & map_column_keys_column_queried)
 {
     sample_factor_column_queried = false;
 
@@ -1050,6 +1051,15 @@ static void selectColumnNames(
         }
         else if (name == "_part_index")
         {
+            virt_column_names.push_back(name);
+        }
+        else if (name == "_part_map_files")
+        {
+            virt_column_names.push_back(name);
+        }
+        else if (name == "_map_column_keys")
+        {
+            map_column_keys_column_queried = true;
             virt_column_names.push_back(name);
         }
         else if (name == "_partition_id")
@@ -1104,7 +1114,9 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
     /// The virtual column `_sample_factor` (which is equal to 1 / used sample rate) can be requested in the query.
     bool sample_factor_column_queried = false;
 
-    selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried);
+    bool map_column_keys_column_queried = false;
+
+    selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried, map_column_keys_column_queried);
 
     auto part_values = filterPartsByVirtualColumns(data, parts, query_info.query, context);
     if (part_values && part_values->empty())
@@ -1185,7 +1197,9 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     /// The virtual column `_sample_factor` (which is equal to 1 / used sample rate) can be requested in the query.
     bool sample_factor_column_queried = false;
 
-    selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried);
+    bool map_column_keys_column_queried = false;
+
+    selectColumnNames(column_names_to_return, data, real_column_names, virt_column_names, sample_factor_column_queried, map_column_keys_column_queried);
 
     auto read_from_merge_tree = std::make_unique<ReadFromMergeTree>(
         parts,
@@ -1199,6 +1213,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
         max_block_size,
         num_streams,
         sample_factor_column_queried,
+        map_column_keys_column_queried,
         max_block_numbers_to_read,
         log
     );

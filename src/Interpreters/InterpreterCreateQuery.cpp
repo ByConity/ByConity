@@ -327,7 +327,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, 
         const char * type_end = type_pos + type_name.size();
         column_declaration->type = parseQuery(type_parser, type_pos, type_end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         column_declaration->flags = alias_column.type->getFlags();
-        
+
         column_declaration->default_specifier = "ALIAS";
 
         const auto & alias = alias_column.expression;
@@ -359,7 +359,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
         const char * type_name_end = type_name_pos + type_name.size();
         column_declaration->type = parseQuery(type_parser, type_name_pos, type_name_end, "data type", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         column_declaration->flags = column.type->getFlags();
-        
+
         if (column.default_desc.expression)
         {
             column_declaration->default_specifier = toString(column.default_desc.kind);
@@ -376,6 +376,8 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
 
         if (column.ttl)
             column_declaration->ttl = column.ttl;
+
+        column_declaration->flags = column.type->getFlags();
 
         columns_list->children.push_back(column_declaration_ptr);
     }
@@ -482,7 +484,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
         }
 
         // Set type flags based on information in AST
-        const_cast<IDataType*>(column_names_and_types.back().type.get())->setFlags(col_decl.flags);
+        column_names_and_types.back().type->setFlags(col_decl.flags);
     }
 
     Block defaults_sample_block;

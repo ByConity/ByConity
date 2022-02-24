@@ -244,3 +244,7 @@
 [submodule "contrib/breakpad"]
 	path = contrib/breakpad
 	url = git@code.byted.org:dp/breakpad.git
+[submodule "contrib/cppkms"]
+	path = contrib/cppkms
+	url = git@code.byted.org:security/cppkms.git
+	branch = support_platform

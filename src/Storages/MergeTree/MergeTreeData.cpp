@@ -55,6 +55,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include <Common/KMSClient.h>
 
 #include <boost/range/adaptor/filtered.hpp>
 #include <boost/algorithm/string/join.hpp>
@@ -298,6 +299,9 @@ MergeTreeData::MergeTreeData(
                 ErrorCodes::METADATA_MISMATCH);
     }
 
+    if (!attach && metadata_.hasSecurityColumn())
+        KMSClient::instance().createKmsConfig(getStorageID().getFullNameNotQuoted());
+
     String reason;
     if (!canUsePolymorphicParts(*settings, &reason) && !reason.empty())
         LOG_WARNING(log, "{} Settings 'min_rows_for_wide_part', 'min_bytes_for_wide_part', "
@@ -372,6 +376,9 @@ static void checkKeyExpression(const ExpressionActions & expr, const Block & sam
 
         if (!allow_nullable_key && element.type->isNullable())
             throw Exception{key_name + " key cannot contain nullable columns", ErrorCodes::ILLEGAL_COLUMN};
+
+        if (element.type->isEncrypt())
+            throw Exception{key_name + " key cannot contain encrypt columns", ErrorCodes::ILLEGAL_COLUMN};
     }
 }
 
@@ -1748,6 +1755,10 @@ void MergeTreeData::dropAllData()
     }
 
     setDataVolume(0, 0, 0);
+
+    /// Remove security config in kms.
+    if (getInMemoryMetadata().hasSecurityColumn())
+        KMSClient::instance().deleteKmsConfig(getStorageID().getFullNameNotQuoted());
 
     LOG_TRACE(log, "dropAllData: done.");
 }
@@ -5266,10 +5277,16 @@ MergeTreeData::WriteAheadLogPtr MergeTreeData::getWriteAheadLog()
 
 NamesAndTypesList MergeTreeData::getVirtuals() const
 {
+    /// Array(Tuple(String, String))
+    static const auto _map_column_keys_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(
+        DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
+
     return NamesAndTypesList{
         NameAndTypePair("_part", std::make_shared<DataTypeString>()),
         NameAndTypePair("_part_index", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_part_uuid", std::make_shared<DataTypeUUID>()),
+        NameAndTypePair("_part_map_files", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())),
+        NameAndTypePair("_map_column_keys", _map_column_keys_type),
         NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
@@ -5654,7 +5671,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
             /// remove implicit column file and base column file if necessary
             if (column.type->isMap() && !column.type->isMapKVStore())
             {
-                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
                 NameSet file_set;
                 auto map_key_prefix = genMapKeyFilePrefix(column.name);
                 auto map_base_prefix = genMapBaseFilePrefix(column.name);

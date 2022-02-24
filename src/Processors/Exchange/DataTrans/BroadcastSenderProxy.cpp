@@ -55,7 +55,13 @@ BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
 BroadcastStatus BroadcastSenderProxy::finish(BroadcastStatusCode status_code, String message)
 {
     if (!has_real_sender.load(std::memory_order_relaxed))
+    {
+        // SEND_CANCELLED is a trivial status since receiver can infer finish status as SEND_UNKNOWN_ERROR 
+        // if no finish code is received. No need to wait become real sender.
+        if (status_code == BroadcastStatusCode::SEND_CANCELLED)
+            return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY, false, "Sender not ready");
         waitBecomeRealSender(wait_timeout_ms);
+    }
     return real_sender->finish(status_code, message);
 }
 
@@ -150,6 +156,11 @@ Block BroadcastSenderProxy::getHeader() const
 {
     std::lock_guard lock(mutex);
     return header;
+}
+
+DataTransKeyPtr BroadcastSenderProxy::getDataKey() const
+{
+    return data_key;
 }
 
 }
