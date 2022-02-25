@@ -355,7 +355,7 @@ public:
      * In this case, indexes will be (1, 3, 5, 7, 9), rhs_indexes will be (0, 2, 4, 1, 0) and the size of rhs will be 2.
      * For the first part, column[indexes[i]] is replaced with column[rhs_indexes[i]].
      * For the second part, column[indexes[i]] is replaced with rhs[rhs_indexes[i]].
-     * The same target index to be replaced will appear at most twice.
+     * The same target index to be replaced will appear multiple times in first part and at most once in second part.
      * 
      * When `is_default_filter` is not null, the i-th element is not replaced when is_default_filter[i] is 0. If it's null, all data is default value.
      * When `filter` is not null, the i-th element will be discard when filter[i] is 0.

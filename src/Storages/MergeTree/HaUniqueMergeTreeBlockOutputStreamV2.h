@@ -31,6 +31,7 @@ public:
     void writeSuffix() override;
 
 private:
+    /// TODO(lta): add comments that replace_dst are reverse
     size_t removeDupKeys(
         Block & block,
         ColumnPtr version_column,

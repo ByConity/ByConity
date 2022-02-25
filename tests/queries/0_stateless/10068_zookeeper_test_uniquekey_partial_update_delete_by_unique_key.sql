@@ -40,9 +40,10 @@ select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
 select '';
+optimize table delete_by_unique_key_r1 final;
 insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_) 
 values ('2021-07-13 18:50:01', 10002, 5, 1),('2021-07-14 18:50:00', 10003, 2, 1),('2021-07-13 18:50:00', 10001, 2, 0), ('2021-07-15 18:50:00', 10004, 2, 0)
-select 'delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
+select 'after merge, delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
 select sleep(3) format Null;
@@ -88,9 +89,10 @@ select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
 select '';
+optimize table delete_by_unique_key_r2 final;
 insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_) 
 values ('2021-07-13 18:50:01', 10002, 5, 1),('2021-07-14 18:50:00', 10003, 2, 1),('2021-07-13 18:50:00', 10001, 2, 0), ('2021-07-15 18:50:00', 10004, 2, 0)
-select 'delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
+select 'after merge, delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
 select sleep(3) format Null;

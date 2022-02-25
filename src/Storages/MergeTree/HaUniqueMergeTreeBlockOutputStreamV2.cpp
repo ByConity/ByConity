@@ -121,6 +121,23 @@ PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, cons
     return res;
 }
 
+/// TODO(lta): add comments
+void handleCorrectPermutation(PaddedPODArray<UInt32> & replace_dst_indexes, PaddedPODArray<UInt32> & replace_src_indexes)
+{
+    PaddedPODArray<UInt32> perm;
+    perm.resize(replace_dst_indexes.size());
+    for (UInt32 i = 0; i < replace_dst_indexes.size(); ++i)
+        perm[i] = i;
+    std::sort(perm.begin(), perm.end(), [&](UInt32 lhs, UInt32 rhs) {
+        if (replace_dst_indexes[lhs] != replace_dst_indexes[rhs])
+            return replace_dst_indexes[lhs] < replace_dst_indexes[rhs];
+        else
+            return replace_src_indexes[lhs] > replace_src_indexes[rhs];
+    });
+    replace_dst_indexes = permuteRowids(replace_dst_indexes, perm);
+    replace_src_indexes = permuteRowids(replace_src_indexes, perm);
+}
+
 void mergeIndices(PaddedPODArray<UInt32> & rowids, PaddedPODArray<UInt32> & tmpids)
 {
     size_t rowids_size = rowids.size();
@@ -434,7 +451,6 @@ void HaUniqueMergeTreeBlockOutputStreamV2::writeSuffix()
         remote_stream->writeSuffix();
 }
 
-/// TODO(lta): handle the case that version is not different
 size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
     Block & block,
     ColumnPtr version_column,
@@ -494,11 +510,26 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
             num_filtered++;
         }
         else
-        {
             index[rowid] = rowid;
-        }
     }
     index.clear();
+
+    std::map<UInt32, UInt32> src_to_dst;
+    PaddedPODArray<UInt32> tmp_replace_dst_indexes, tmp_replace_src_indexes;
+    size_t size = replace_dst_indexes.size();
+    tmp_replace_dst_indexes.reserve(size);
+    tmp_replace_src_indexes.reserve(size);
+    for (int i = size - 1; i >= 0; --i)
+    {
+        UInt32 real_dst = replace_dst_indexes[i];
+        if (src_to_dst.count(replace_dst_indexes[i]))
+            real_dst = src_to_dst[replace_dst_indexes[i]];
+        tmp_replace_dst_indexes.push_back(real_dst);
+        tmp_replace_src_indexes.push_back(replace_src_indexes[i]);
+        src_to_dst[replace_src_indexes[i]] = real_dst;
+    }
+    replace_dst_indexes = std::move(tmp_replace_dst_indexes);
+    replace_src_indexes = std::move(tmp_replace_src_indexes);
     total_remove_dedup_judge_cost += judge_timer.elapsedMilliseconds();
     return num_filtered;
 }
@@ -594,6 +625,19 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
     mutable_columns.resize(to_block.columns());
     for (size_t i = 0, size = to_block.columns(); i < size; ++i)
         mutable_columns[i] = IColumn::mutate(std::move(to_block.getByPosition(i).column));
+    std::vector<size_t> column_indexes;
+
+    column_indexes.resize(row_store->columns.size());
+    std::vector<SerializationPtr> serializations;
+    size_t id = 0;
+    for (auto & name_and_type: row_store->columns)
+    {
+        /// TODO(lta): check data type
+        /// add a bool to present whether it's valid
+        column_indexes[id++] = to_block.getPositionByName(name_and_type.name);
+        /// TODO(lta): check serializations
+        serializations.emplace_back(name_and_type.type->getDefaultSerialization());
+    }
 
     const IndexFile::Comparator * comparator = IndexFile::BytewiseComparator();
     for (auto & pair : rowid_pairs)
@@ -604,14 +648,6 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
         writeBinary(row, row_buf);
         String key = row_buf.str();
 
-        /// method 1
-        // iter->Seek(key);
-        // if (!iter->Valid() || comparator->Compare(key, iter->key()) != 0)
-        // {
-        //     throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not find row {} from row store in data part {}", pair.part_rowid, part->name);
-        // }
-
-        /// method 2
         bool exact_match = false;
         int cmp = comparator->Compare(key, iter->key());
         if (cmp > 0)
@@ -634,20 +670,17 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
                 part->rows_count);
         }
 
-        std::vector<SerializationPtr> serializations;
-        /// TODO(lta): check serializations
-        for (const auto & column: to_block.getNamesAndTypesList())
-            serializations.emplace_back(column.type->getDefaultSerialization());
-
         /// TODO(lta): check if metadata is match
         Slice value = iter->value();
         ReadBufferFromMemory buffer(value.data(), value.size());
-        for (size_t i = 0, size = to_block.columns(); i < size; ++i)
+        for (size_t i = 0, size = row_store->columns.size(); i < size; ++i)
         {
             Field val;
             serializations[i]->deserializeBinary(val, buffer);
-            mutable_columns[i]->insert(val);
+            mutable_columns[column_indexes[i]]->insert(val);
         }
+
+        /// TODO(lta): handle empty column
 
         to_block_rowids.push_back(pair.block_rowid);
     }
@@ -686,6 +719,20 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
     IColumn::Filter filter(block_size, 1);
     size_t num_filtered = removeDupKeys(block, version_column, filter, replace_dst_indexes, replace_src_indexes);
+
+    // std::cout << "replace_src_indexes: " << std::endl;
+    // for (size_t i = 0 ; i < replace_src_indexes.size(); ++i)
+    //     std::cout << replace_src_indexes[i] << std::endl;
+
+    // std::cout << "replace_dst_indexes: " << std::endl;
+    // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
+    //     std::cout << replace_dst_indexes[i] << std::endl;
+
+    // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
+    // {
+    //     if (filter[replace_dst_indexes[i]] == 0)
+    //         throw Exception(ErrorCodes::LOGICAL_ERROR, "Pre Column {} is target and filtered.", replace_dst_indexes[i]);
+    // }
 
     Stopwatch get_uki_timer;
     auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
@@ -739,7 +786,9 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
 
     Stopwatch query_uki_timer;
     PaddedPODArray<UInt32> tmp_replace_dst_indexes, tmp_replace_src_indexes;
-    size_t replace_index_id = 0;
+    /// Due to all replace dst index are reverse, so it's necessary to start from tail.
+    /// Use int type to prevent infinite loop.
+    int replace_index_id = replace_dst_indexes.size() - 1;
     /// TODO(lta): add an example to explain this
     for (size_t rowid = 0; rowid < block_size; ++rowid) {
         if (filter[rowid] == 0)
@@ -789,31 +838,38 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         {
             part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid + block_size)});
 
-            // check whether to delete the previous one
-            while (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] < rowid)
+            /// Some rows may be just replace in block and not found in previous parts.
+            while (replace_index_id >= 0 && replace_dst_indexes[replace_index_id] < rowid)
             {
                 tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
                 tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
-                replace_index_id++;
+                replace_index_id--;
             }
-            if (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] == rowid)
+            /// Check whether to delete the previous one, there maybe multiple replaced column for the same
+            while (replace_index_id >=0 && replace_dst_indexes[replace_index_id] == rowid)
             {
                 if (version_column)
                     cur_version = version_column->getUInt(rowid);
-                if (cur_version < part_version)
-                    replace_index_id++;
+                if (cur_version >= part_version)
+                {
+                    tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
+                    tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
+                }
+                replace_index_id--;
             }
         }
         process_row_deletion(existing_parts[part_index], part_rowid, key);
     }
-    while (replace_index_id < replace_dst_indexes.size())
+    while (replace_index_id >= 0)
     {
         tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
         tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
-        replace_index_id++;
+        replace_index_id--;
     }
     replace_dst_indexes = std::move(tmp_replace_dst_indexes);
     replace_src_indexes = std::move(tmp_replace_src_indexes);
+    handleCorrectPermutation(replace_dst_indexes, replace_src_indexes);
+
     total_query_uki_cost += query_uki_timer.elapsedMilliseconds();
 
     if (block_size == num_filtered)
@@ -896,6 +952,12 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
                 ColumnPtr is_default_col = col.column->selectDefault();
                 const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
+                // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
+                // {
+                //     if (filter[replace_dst_indexes[i]] == 0)
+                //         throw Exception(ErrorCodes::LOGICAL_ERROR, "Column {} Row {} is target and filtered.", col.name, replace_dst_indexes[i]);
+                // }
+
                 /// all values are non-default, nothing to replace
                 if (filterIsAlwaysFalse(is_default_filter) && !num_filtered)
                     continue;
@@ -903,6 +965,10 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
                 total_replace_default_value_row += filterDefaultCount(is_default_filter);
                 total_replace_handle_column_count++;
                 ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
+                if (!column_from_storage)
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR, "Column for storage {} is nullptr while replacing column for partial update.", col.name);
+
                 ColumnPtr new_column = col.column->replaceFrom(
                     replace_dst_indexes,
                     *column_from_storage,

@@ -185,7 +185,6 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         for (size_t i = 0; i < threads; ++i)
         {
             serialized_values_pool.scheduleOrThrowOnError([&, i]() {
-                Block columns_from_storage = metadata_snapshot->getSampleBlock();
                 for (size_t j = i; j < rows; j += threads)
                 {
                     size_t correct_row = j;
@@ -194,8 +193,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     if (correct_row >= rows)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
                     WriteBufferFromOwnString val_buf;
-                    for (auto & col : columns_from_storage)
-                        serializations[col.name]->serializeBinary(*block.getByName(col.name).column, correct_row, val_buf);
+                    for (auto & col : block)
+                        serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
                     serialized_values[j] = val_buf.str();
                 }
             });
@@ -366,12 +365,13 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     size_t serialize_row_cost = 0;
     size_t serialize_value_cost = 0;
     size_t insert_value_cost = 0;
+    
+    row_store_columns = block.getNamesAndTypesList();
 
-    {
-        Stopwatch inner_timer;
-        serialized_values_pool.wait();
-        serialize_value_cost += inner_timer.elapsedMicroseconds();
-    }
+    /// wait serialized value to finish
+    Stopwatch serialize_value_timer;
+    serialized_values_pool.wait();
+    serialize_value_cost += serialize_value_timer.elapsedMicroseconds();
 
     for (size_t i = 0; i < rows; ++i)
     {
@@ -807,6 +807,16 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
     {
         checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
         checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
+
+        /// write row store columns
+        auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
+        HashingWriteBuffer out_hashing(*out);
+        row_store_columns.writeText(out_hashing);
+        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
+        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
+        out->finalize();
+        if (sync)
+            out->sync();
     }
 }
 

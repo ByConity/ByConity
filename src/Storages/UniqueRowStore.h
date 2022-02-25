@@ -10,10 +10,11 @@ namespace DB
 class UniqueRowStore
 {
 public:
-    /// created from local file located at "file_path".
-    UniqueRowStore(const String & file_path, IndexFileBlockCachePtr block_cache);
 
-    // bool lookup();
+    NamesAndTypesList columns;
+
+    /// created from local file located at "file_path".
+    UniqueRowStore(const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns);
 
     /// Return an iterator over KVs in this file.
     /// Note: client should make sure the UniqueRowStore object lives longer than the returned iterator.
@@ -22,6 +23,9 @@ public:
     size_t residentMemoryUsage() const;
 
 private:
+
+    void loadColumns(const String & columns_path);
+
     /// nullptr if the index contains no entries
     std::unique_ptr<IndexFile::IndexFileReader> index_reader;
 };

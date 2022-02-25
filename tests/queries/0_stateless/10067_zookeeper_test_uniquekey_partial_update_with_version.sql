@@ -35,8 +35,9 @@ select sleep(3) format Null;
 select 'r1', event_time, id, s, m1, m2 from unique_with_version_r1 order by event_time, id;
 select 'r2', event_time, id, s, m1, m2 from unique_with_version_r2 order by event_time, id;
 
+optimize table unique_with_version_r1 final;
 insert into unique_with_version_r2 (event_time, id, s, m1) values ('2020-10-29 23:50:00', 10001, '10001B', 8), ('2020-10-29 23:50:00', 10002, '10002B', 5), ('2020-10-29 23:55:00', 10001, '10001C', 10), ('2020-10-29 23:55:00', 10002, '10002C', 7);
-select 'update two rows in partial update mode';
+select 'after merge, update two rows in partial update mode';
 select sleep(3) format Null;
 select 'r1', event_time, id, s, m1, m2 from unique_with_version_r1 order by event_time, id;
 select 'r2', event_time, id, s, m1, m2 from unique_with_version_r2 order by event_time, id;
@@ -74,8 +75,9 @@ select sleep(3) format Null;
 select 'r1', event_time, id, s, m1, m2 from unique_with_version_r1 order by event_time, id;
 select 'r2', event_time, id, s, m1, m2 from unique_with_version_r2 order by event_time, id;
 
+optimize table unique_with_version_r2 final;
 insert into unique_with_version_r2 (event_time, id, s, m1) values ('2020-10-29 23:50:00', 10001, '10001B', 8), ('2020-10-29 23:50:00', 10002, '10002B', 5), ('2020-10-29 23:55:00', 10001, '10001C', 10), ('2020-10-29 23:55:00', 10002, '10002C', 7);
-select 'update two rows in partial update mode';
+select 'after merge, update two rows in partial update mode';
 select sleep(3) format Null;
 select 'r1', event_time, id, s, m1, m2 from unique_with_version_r1 order by event_time, id;
 select 'r2', event_time, id, s, m1, m2 from unique_with_version_r2 order by event_time, id;

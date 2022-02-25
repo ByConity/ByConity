@@ -1596,7 +1596,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 "Row counts do not match. Part id mapping size: {}, merged part rows count: {}",
                 part_id_mapping.size(),
                 to.getRowsCount());
-        mergeRowStoreIntoNewPart(future_part, part_id_mapping, new_data_part, additional_column_checksums);
+        mergeRowStoreIntoNewPart(future_part, part_id_mapping, new_data_part, additional_column_checksums, need_sync);
     }
 
     if (chosen_merge_algorithm != MergeAlgorithm::Vertical)
@@ -1612,7 +1612,8 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
         const FutureMergedMutatedPart & future_part,
         const PartIdMapping & part_id_mapping,
         const MergeTreeData::MutableDataPartPtr & new_part,
-        MergeTreeData::DataPart::Checksums & checksum)
+        MergeTreeData::DataPart::Checksums & checksum,
+        bool need_sync)
 {
     if (!data.getSettings()->enable_unique_partial_update || !data.getSettings()->enable_unique_row_store)
         throw Exception("Merge row store when disable unique row store.", ErrorCodes::LOGICAL_ERROR);
@@ -1695,6 +1696,17 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
     /// 4. add checksum
     checksum.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
     checksum.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
+
+    /// 5. merge the columns of row store
+    /// TODO(lta): handle the case that columns are not same with each other
+    auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
+    HashingWriteBuffer out_hashing(*out);
+    row_store_holders[0]->columns.writeText(out_hashing);
+    checksum.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
+    checksum.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
+    out->finalize();
+    if (need_sync)
+        out->sync();
 }
 
 MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTemporaryPart(

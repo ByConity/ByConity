@@ -1971,7 +1971,16 @@ DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
 UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
 {
     assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
-    return std::make_shared<UniqueRowStore>(getFullPath() + UNIQUE_ROW_STORE_DATA_NAME, storage.getContext()->getDiskUniqueRowStoreBlockCache());
+    NamesAndTypesList row_store_columns;
+    {
+        String path = fs::path(getFullRelativePath()) / UNIQUE_ROW_STORE_COLUMNS_NAME;
+        auto file = openForReading(volume->getDisk(), path);
+        row_store_columns.readText(*file);
+        assertEOF(*file);
+    }
+
+    return std::make_shared<UniqueRowStore>(
+        getFullPath() + UNIQUE_ROW_STORE_DATA_NAME, storage.getContext()->getDiskUniqueRowStoreBlockCache(), row_store_columns);
 }
 
 UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
@@ -2359,6 +2368,9 @@ UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
     /// handle the case that parts of old versions which don't have row store file
     if (!Poco::File(getFullPath() + UNIQUE_ROW_STORE_DATA_NAME).exists())
         return nullptr;
+
+    if (!Poco::File(getFullPath() + UNIQUE_ROW_STORE_COLUMNS_NAME).exists())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store column file doesn't exist while row store file exists.");
 
     /// Data part's memory address is used as the cache key.
     String key = getMemoryAddress();

@@ -172,7 +172,8 @@ public:
         const FutureMergedMutatedPart & future_part,
         const PartIdMapping & part_id_mapping,
         const MergeTreeData::MutableDataPartPtr & new_part,
-        MergeTreeData::DataPart::Checksums & checksum);
+        MergeTreeData::DataPart::Checksums & checksum,
+        bool need_sync);
 
     /// Mutate a single data part with the specified commands. Will create and return a temporary part.
     MergeTreeData::MutableDataPartPtr mutatePartToTemporaryPart(

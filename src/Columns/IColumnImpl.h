@@ -210,25 +210,37 @@ IColumn::Ptr IColumn::doReplaceFrom(
         if (pos == num_rows)
             break;
         if (filter && (*filter)[pos] == 0)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "The row to be replaced can not be filtered.");
-        else if (!is_default_filter || (*is_default_filter)[pos] == 1) // If it is default value, replace the value with previous one.
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "The row {} to be replaced can not be filtered.", pos);
+        else if (!is_default_filter || (*is_default_filter)[pos]) // If it is default value, replace the value with previous one.
         {
             // Check that the replace behavior belongs to the first part or the second part
-            if (i == rhs_pos)
-                static_cast<Derived &>(*res).insertFrom(rhs, rhs_indexes[j]);
-            else if (j == indexes.size())
-                static_cast<Derived &>(*res).insertFrom(*this, rhs_indexes[i]);
-            else
+            // The same index may appear multiple times in first part and only at most once in second part
+            bool has_replaced = false;
+            while (i < rhs_pos && index == indexes[i])
             {
-                if (index == indexes[j] - num_rows && (index != indexes[i] || (!is_default_filter || (*is_default_filter)[rhs_indexes[i]])))
-                    static_cast<Derived &>(*res).insertFrom(rhs, rhs_indexes[j]);
-                else
+                if (rhs_indexes[i] >= num_rows)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "rhs_index {} is out of this column size {}", rhs_indexes[i], num_rows);
+                if (is_default_filter && !(*is_default_filter)[rhs_indexes[i]]) /// If it's not default value, use it to replace
+                {
                     static_cast<Derived &>(*res).insertFrom(*this, rhs_indexes[i]);
+                    has_replaced = true;
+                    break;
+                }
+                i++;
             }
-            ++pos;
+            if (!has_replaced && j < indexes.size())
+            {
+                if (rhs_indexes[j] >= rhs.size())
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "rhs_index {} is out of rhs column size {}", rhs_indexes[j], rhs.size());
+                static_cast<Derived &>(*res).insertFrom(rhs, rhs_indexes[j]);
+                has_replaced = true;
+            }
+            // If all values to replace are in first part and they are all default-value, it will be false.
+            if (has_replaced)
+                ++pos;
         }
         // Update the pointer of the first part and the second part
-        if (i < rhs_pos && index == indexes[i])
+        while (i < rhs_pos && index == indexes[i])
             ++i;
         if (j < indexes.size() && index == indexes[j] - num_rows)
             ++j;
