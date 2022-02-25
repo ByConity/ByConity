@@ -346,14 +346,14 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
 {
     if (!shouldWriteRowStore())
         return;
-    
+
     Stopwatch timer;
     LOG_DEBUG(log, "Start to write row store for part {}, rows {}.", data_part->name, block.rows());
-    
+
     auto disk = data_part->volume->getDisk();
     String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
     IndexFile::Options options;
-    
+
     Stopwatch open_timer;
     IndexFile::IndexFileWriter row_store_writer(options);
     auto status = row_store_writer.Open(row_store_file);
