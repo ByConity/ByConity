@@ -1570,8 +1570,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
         if (command.partition == nullptr || future_part.parts[0]->info.partition_id == data.getPartitionIDFromQuery(
                 command.partition, context_for_reading))
         {
-            /// use DELETE instead of FAST_DELETE for non-wide part
-            if (!isWidePart(source_part) && command.type == MutationCommand::FAST_DELETE)
+            /// FAST_DELETE can't handle non-wide part and projections, convert to DELETE in those cases
+            if (command.type == MutationCommand::FAST_DELETE && (!isWidePart(source_part) || !metadata_snapshot->getProjections().empty()))
                 commands_for_part.emplace_back(MutationCommand{.type = MutationCommand::DELETE, .predicate=command.predicate, .partition=command.partition});
             else
                 commands_for_part.emplace_back(command);
@@ -1599,6 +1599,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     MutationCommands for_file_renames;
 
     splitMutationCommands(source_part, commands_for_part, for_interpreter, for_file_renames);
+
+    /// for modify column mutations, the new column data files should contain the same number of rows as before,
+    /// thus an empty delete bitmap is used for read.
+    if (for_interpreter.allOf(MutationCommand::READ_COLUMN))
+    {
+        storage_from_source_part->setDeleteBitmap(source_part, nullptr);
+    }
 
     UInt64 watch_prev_elapsed = 0;
     MergeStageProgress stage_progress(1.0);

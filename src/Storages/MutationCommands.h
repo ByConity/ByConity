@@ -86,7 +86,7 @@ public:
     /// whether current commands can be executed together with other commands
     bool requireIndependentExecution() const;
 
-    bool isFastDelete() const;
+    bool allOf(MutationCommand::Type type) const;
 
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);

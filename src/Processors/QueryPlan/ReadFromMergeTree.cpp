@@ -140,6 +140,7 @@ static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
 
 ReadFromMergeTree::ReadFromMergeTree(
     MergeTreeData::DataPartsVector parts_,
+    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
     Names real_column_names_,
     Names virt_column_names_,
     const MergeTreeData & data_,
@@ -160,6 +161,7 @@ ReadFromMergeTree::ReadFromMergeTree(
         virt_column_names_)})
     , reader_settings(getMergeTreeReaderSettings(context_))
     , prepared_parts(std::move(parts_))
+    , delete_bitmap_getter(std::move(delete_bitmap_getter_))
     , real_column_names(std::move(real_column_names_))
     , virt_column_names(std::move(virt_column_names_))
     , data(data_)
@@ -219,6 +221,7 @@ Pipe ReadFromMergeTree::readFromPool(
         sum_marks,
         min_marks_for_concurrent_read,
         std::move(parts_with_range),
+        delete_bitmap_getter,
         data,
         metadata_snapshot,
         prewhere_info,
@@ -257,8 +260,9 @@ ProcessorPtr ReadFromMergeTree::createSource(
     const Names & required_columns,
     bool use_uncompressed_cache)
 {
+    auto delete_bitmap = delete_bitmap_getter(part.data_part);
     return std::make_shared<TSource>(
-            data, metadata_snapshot, part.data_part, max_block_size, preferred_block_size_bytes,
+            data, metadata_snapshot, part.data_part, std::move(delete_bitmap), max_block_size, preferred_block_size_bytes,
             preferred_max_column_in_block_size_bytes, required_columns, part.ranges, use_uncompressed_cache,
             prewhere_info, actions_settings, true, reader_settings, virt_column_names, part.part_index_in_query);
 }

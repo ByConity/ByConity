@@ -199,9 +199,9 @@ bool MutationCommands::requireIndependentExecution() const
     });
 }
 
-bool MutationCommands::isFastDelete() const
+bool MutationCommands::allOf(MutationCommand::Type type) const
 {
-    return !empty() && std::all_of(begin(), end(), [](const auto & c) { return c.type == MutationCommand::FAST_DELETE; });
+    return !empty() && std::all_of(begin(), end(), [type](const MutationCommand & c) { return c.type == type; });
 }
 
 void MutationCommands::writeText(WriteBuffer & out) const

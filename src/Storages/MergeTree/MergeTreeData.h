@@ -244,6 +244,7 @@ public:
     using DataPartsLock = std::unique_lock<std::mutex>;
     DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
 
+    using DeleteBitmapGetter = std::function<DeleteBitmapPtr(const DataPartPtr &)>;
     using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
     DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
     {

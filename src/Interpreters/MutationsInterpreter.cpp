@@ -1018,7 +1018,8 @@ BlockInputStreamPtr MutationsInterpreter::execute()
 
     /// Sometimes we update just part of columns (for example UPDATE mutation)
     /// in this case we don't read sorting key, so just we don't check anything.
-    if (auto sort_desc = getStorageSortDescriptionIfPossible(result_stream->getHeader()))
+    /// Also skip order checking for FAST_DELETE because the mutated key column may not be sorted.
+    if (auto sort_desc = getStorageSortDescriptionIfPossible(result_stream->getHeader()); sort_desc && !is_fast_delete)
         result_stream = std::make_shared<CheckSortedBlockInputStream>(result_stream, *sort_desc);
 
     if (!updated_header)
