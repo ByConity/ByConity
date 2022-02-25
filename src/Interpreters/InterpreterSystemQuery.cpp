@@ -615,7 +615,11 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
     ASTPtr create_ast;
 
     /// Detach actions
-    if (!table || !dynamic_cast<const StorageReplicatedMergeTree *>(table.get()))
+    if (!table)
+        return nullptr;
+    if (!dynamic_cast<const StorageReplicatedMergeTree *>(table.get()) &&
+        !dynamic_cast<const StorageHaMergeTree *>(table.get()) &&
+        !dynamic_cast<const StorageHaKafka *>(table.get()))
         return nullptr;
 
     table->flushAndShutdown();

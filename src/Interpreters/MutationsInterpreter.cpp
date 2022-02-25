@@ -482,6 +482,9 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
                         throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete columns should be identifiers");
                     if (!all_columns.contains(identifier->name()))
                         throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE, "Table doesn't contain physical column {}", identifier->name());
+                    /// TODO: still got some issues on map column, disable temporarily
+                    if (auto col = all_columns.tryGetByName(identifier->name()); col.has_value() && col->type->isMap())
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete a map column '{}' is not supported", identifier->name());
                     /// TODO: check column is not security / encrypt / low cardinality / map kv (maybe ok for security/encrypt/lowcard ?)
                     stages.back().fast_delete_columns.insert(identifier->name());
                 }

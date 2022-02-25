@@ -2156,36 +2156,16 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             auto column = source_part->getColumns().tryGetByName(command.column_name);
             if (column)
             {
-                auto serialization = source_part->getSerializationForColumn(*column);
-                serialization->enumerateStreams(callback);
                 if (column->type->isMap() && !column->type->isMapKVStore())
                 {
-                    auto map_key_prefix = genMapKeyFilePrefix(command.column_name);
-                    auto map_base_prefix = genMapBaseFilePrefix(command.column_name);
-
-                    /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
-                    NameSet file_set;
-                    for (const auto & [file, _] : source_part->checksums.files)
-                    {
-                        if (startsWith(file, map_key_prefix))
-                        {
-                            if (source_part->versions->enable_compact_map_data)
-                            {
-                                String file_name = getColFileNameFromImplicitColFileName(file);
-                                if (!file_set.count(file_name))
-                                    file_set.insert(file_name);
-                            }
-                            rename_vector.emplace_back(file, "");
-                        }
-                        else if (startsWith(file, map_base_prefix))
-                            rename_vector.emplace_back(file, "");
-                    }
-
-                    if (source_part->versions->enable_compact_map_data)
-                    {
-                        for (String file: file_set)
-                            rename_vector.emplace_back(file, "");
-                    }
+                    Strings files = source_part->checksums.collectFilesForMapColumnNotKV(command.column_name);
+                    for (auto & file : files)
+                        rename_vector.emplace_back(file, "");
+                }
+                else
+                {
+                    auto serialization = source_part->getSerializationForColumn(*column);
+                    serialization->enumerateStreams(callback);
                 }
             }
         }
@@ -2244,8 +2224,19 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
             /// FIXME: getSpecialColumnFiles for column with bloom/bitmap_index/compression/bitengine
         };
 
-        auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
-        serialization->enumerateStreams(callback);
+        if (auto column = source_part->getColumns().tryGetByName(entry.name))
+        {
+            if (column->type->isMap() && !column->type->isMapKVStore())
+            {
+                Strings files = source_part->checksums.collectFilesForMapColumnNotKV(column->name);
+                files_to_skip.insert(files.begin(), files.end());
+            }
+            else
+            {
+                auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
+                serialization->enumerateStreams(callback);
+            }
+        }
     }
     for (const auto & index : indices_to_recalc)
     {

@@ -52,7 +52,7 @@ struct MergeTreeDataPartChecksums
     FileChecksums files;
 
     Versions versions = std::make_shared<MergeTreeDataPartVersions>(false);
-    
+
     void addFile(const String & file_name, UInt64 file_size, Checksum::uint128 file_hash);
 
     void add(MergeTreeDataPartChecksums && rhs_checksums);
@@ -96,6 +96,8 @@ struct MergeTreeDataPartChecksums
     static MergeTreeDataPartChecksums deserializeFrom(const String & s);
 
     UInt64 getTotalSizeOnDisk() const;
+
+    Strings collectFilesForMapColumnNotKV(const String & map_column) const;
 };
 
 
