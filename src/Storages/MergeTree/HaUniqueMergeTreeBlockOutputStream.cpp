@@ -55,10 +55,9 @@ HaUniqueMergeTreeBlockOutputStream::HaUniqueMergeTreeBlockOutputStream(
             allow_materialized ? metadata_snapshot_->getSampleBlock(true) : metadata_snapshot_->getSampleBlockNonMaterialized(true));
         auto query_str = queryToString(query);
 
-        /// FIXME (UNIQUE KEY): Handle the case where password may become empty
         auto & client_info = context->getClientInfo();
         String user = client_info.current_user;
-        String password;
+        String password = client_info.current_password; /// could be empty when the request comes from kafka engine
         if (auto address = storage.findClusterAddress(addr); address)
         {
             user = address->user;

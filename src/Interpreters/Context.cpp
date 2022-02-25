@@ -852,12 +852,12 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     client_info.current_user = credentials.getUserName();
     client_info.current_address = address;
 
-#if defined(ARCADIA_BUILD)
+//#if defined(ARCADIA_BUILD)
     /// This is harmful field that is used only in foreign "Arcadia" build.
     client_info.current_password.clear();
     if (const auto * basic_credentials = dynamic_cast<const BasicCredentials *>(&credentials))
         client_info.current_password = basic_credentials->getPassword();
-#endif
+//#endif
 
     /// Find a user with such name and check the credentials.
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
