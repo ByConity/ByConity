@@ -108,8 +108,7 @@ TEST(ExchangeSource, LocalLimitTest)
     Chunk pull_chunk;
     ASSERT_TRUE(executor.pull(pull_chunk));
     ASSERT_TRUE(pull_chunk.getNumRows() == 1);
-    executor.pull(pull_chunk);
-    ASSERT_FALSE(executor.pull(pull_chunk));
+    ASSERT_FALSE(executor.pull(pull_chunk) && pull_chunk);
     executor.cancel();
 }
 
