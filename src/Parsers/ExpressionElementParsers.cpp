@@ -1474,8 +1474,11 @@ bool ParserNull::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    const char * data_begin = pos->begin;
+    const char * data_end = pos->end;
     Pos literal_begin = pos;
     bool negative = false;
+    size_t sz;
 
     if (pos->type == TokenType::Minus)
     {
@@ -1495,21 +1498,66 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
       */
     static constexpr size_t MAX_LENGTH_OF_NUMBER = 319;
 
-    if (pos->size() > MAX_LENGTH_OF_NUMBER)
+    sz = pos->size();
+    if (sz > MAX_LENGTH_OF_NUMBER)
     {
         expected.add(pos, "number");
         return false;
     }
 
     char buf[MAX_LENGTH_OF_NUMBER + 1];
+    const char *dot;
 
-    memcpy(buf, pos->begin, pos->size());
-    buf[pos->size()] = 0;
+    memcpy(buf, pos->begin, sz);
+    buf[sz] = 0;
+
+    if (dt == DialectType::ANSI && !!(dot = strchr(buf, '.')))
+    {
+        /* parse as decimal */
+        UInt32 integral = dot - buf;
+        UInt32 precision = sz - 1; /* remove point */
+        UInt32 scale = precision - integral;
+        ASTs elements;
+
+        /* check valid decimal */
+        if (precision > DecimalUtils::max_precision<Decimal256> ||
+            scale == 0 || integral == 0) {
+            expected.add(pos, "number");
+            return false;
+        }
+
+        /* validate all numbers */
+        for (size_t i = 0; i < sz; i++) {
+            if (i == integral || isdigit(buf[i]))
+                continue;
+
+            expected.add(pos, "number");
+            return false;
+        }
+
+        elements.reserve(2);
+        elements.push_back(std::make_shared<ASTLiteral>(precision));
+        elements.push_back(std::make_shared<ASTLiteral>(scale));
+
+        auto list = std::make_shared<ASTExpressionList>();
+        list->children = std::move(elements);
+
+        auto function_node = std::make_shared<ASTFunction>();
+        function_node->name = "Decimal";
+        function_node->no_empty_args = true;
+        function_node->arguments = list;
+        function_node->children.push_back(function_node->arguments);
+
+        auto literal = std::make_shared<ASTLiteral>(String(data_begin, data_end - data_begin));
+        node = createFunctionCast(literal, function_node);
+        ++pos;
+        return true;
+    }
 
     char * pos_double = buf;
     errno = 0;    /// Functions strto* don't clear errno.
     Float64 float_value = std::strtod(buf, &pos_double);
-    if (pos_double != buf + pos->size() || errno == ERANGE)
+    if (pos_double != buf + sz || errno == ERANGE)
     {
         expected.add(pos, "number");
         return false;
