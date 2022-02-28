@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Core/SettingsEnums.h>
 #include <Parsers/IParser.h>
 
 
@@ -39,6 +40,14 @@ public:
 
 protected:
     virtual bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) = 0;
+};
+
+class IParserDialectBase : public IParserBase
+{
+public:
+    explicit IParserDialectBase(enum DialectType t) : dt(t) {}
+protected:
+    enum DialectType dt;
 };
 
 }

@@ -78,7 +78,7 @@ void RowPolicyCache::PolicyInfo::setPolicy(const RowPolicyPtr & policy_)
         /// Try to parse the condition.
         try
         {
-            ParserExpression parser;
+            ParserExpression parser(DialectType::CLICKHOUSE);
             parsed_conditions[type] = parseQuery(parser, condition, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         }
         catch (...)

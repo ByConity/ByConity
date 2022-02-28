@@ -158,4 +158,12 @@ enum class HandleKafkaErrorMode
 };
 
 DECLARE_SETTING_ENUM(HandleKafkaErrorMode)
+
+enum class DialectType {
+    CLICKHOUSE,
+    ANSI,
+};
+
+DECLARE_SETTING_ENUM(DialectType)
+
 }

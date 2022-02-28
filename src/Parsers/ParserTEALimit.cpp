@@ -12,9 +12,9 @@ bool ParserTEALimitClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword s_group("GROUP");
     ParserKeyword s_order("ORDER");
     ParserToken s_comma(TokenType::Comma);
-    ParserNumber num;
-    ParserNotEmptyExpressionList expr_list(false);
-    ParserOrderByExpressionList order_list;
+    ParserNumber num(dt);
+    ParserNotEmptyExpressionList expr_list(false, dt);
+    ParserOrderByExpressionList order_list(dt);
 
     if (!s_tealimit.ignore(pos, expected))
         return false;
@@ -37,7 +37,7 @@ bool ParserTEALimitClause::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     if (!s_order.ignore(pos, expected)) return false;
     if (!order_list.parse(pos, tea_limit->order_expr_list, expected))
         return false;
-    
+
     if (tea_limit->limit_offset)
         tea_limit->children.push_back(tea_limit->limit_offset);
     if (tea_limit->limit_value)

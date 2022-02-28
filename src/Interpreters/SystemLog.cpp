@@ -77,7 +77,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
         engine += " ORDER BY (event_date, event_time)";
     }
     // Validate engine definition grammatically to prevent some configuration errors
-    ParserStorage storage_parser;
+    ParserStorage storage_parser(context->getSettingsRef().dialect_type);
     parseQuery(storage_parser, engine.data(), engine.data() + engine.size(),
             "Storage to create table for " + config_prefix, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 

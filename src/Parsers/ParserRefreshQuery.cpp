@@ -16,7 +16,7 @@ namespace DB
         ParserKeyword s_partition("PARTITION");
         ParserKeyword s_sync("SYNC");
         ParserKeyword s_async("ASYNC");
-        ParserPartition parser_partition;
+        ParserPartition parser_partition(dt);
 
         if (!s_refresh_view.ignore(pos, expected))
             return false;

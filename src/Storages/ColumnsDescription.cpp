@@ -172,7 +172,7 @@ void ColumnDescription::readText(ReadBuffer & buf)
         String modifiers;
         readEscapedStringUntilEOL(modifiers, buf);
 
-        ParserColumnDeclaration column_parser(/* require type */ true);
+        ParserColumnDeclaration column_parser(DialectType::CLICKHOUSE, /* require type */ true);
         ASTPtr ast = parseQuery(column_parser, "x T " + modifiers, "column parser", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         if (const auto * col_ast = ast->as<ASTColumnDeclaration>())
@@ -219,7 +219,7 @@ ColumnsDescription::ColumnsDescription(NamesAndTypesList ordinary, NamesAndAlias
 
         const char * alias_expression_pos = alias.expression.data();
         const char * alias_expression_end = alias_expression_pos + alias.expression.size();
-        ParserExpression expression_parser;
+        ParserExpression expression_parser(DialectType::CLICKHOUSE); /* can interchange decimal and float in default value */
         description.default_desc.expression = parseQuery(expression_parser, alias_expression_pos, alias_expression_end, "expression", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         add(std::move(description));

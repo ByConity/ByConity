@@ -57,12 +57,12 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             pos = begin;
     }
 
-    ParserCreateTableQuery create_p;
-    ParserSelectWithUnionQuery select_p;
+    ParserCreateTableQuery create_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
     ASTPtr query;
     if (kind == ASTExplainQuery::ExplainKind::ParsedAST)
     {
-        ParserQuery p(end);
+        ParserQuery p(end, dt);
         if (p.parse(pos, query, expected))
             explain_query->setExplainedQuery(std::move(query));
         else

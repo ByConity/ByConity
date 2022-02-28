@@ -616,7 +616,7 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                     IParser::Pos token_iterator(tokens, max_query_size);
                     ASTPtr part_ast;
                     Expected expected;
-                    bool parse_res = ParserPartition().parse(token_iterator, part_ast, expected);
+                    bool parse_res = ParserPartition(local_context->getSettingsRef().dialect_type).parse(token_iterator, part_ast, expected);
                     if (!parse_res)
                         continue;
                     refreshImpl(part_ast, local_context, async);
@@ -681,7 +681,7 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
         const char * begin = alter_query_str.data();
         const char * end = alter_query_str.data() + alter_query_str.size();
 
-        ParserQuery parser(end);
+        ParserQuery parser(end, DialectType::CLICKHOUSE);
         auto ast = parseQuery(parser, begin, end, "", 0, 0);
         target_table->alterPartition(metadata_snapshot, drop_commands, local_context);
 

@@ -127,7 +127,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     /// Keep columns that are required after the filter actions.
     for (const auto & column_str : prerequisite_columns)
     {
-        ParserExpression expr_parser;
+        ParserExpression expr_parser(context->getSettingsRef().dialect_type);
         expr_list->children.push_back(parseQuery(expr_parser, column_str, 0, context->getSettingsRef().max_parser_depth));
     }
 
@@ -223,7 +223,7 @@ static void rewriteMultipleJoins(ASTPtr & query, const TablesWithColumns & table
     cross_to_inner.cross_to_inner_join_rewrite = settings.cross_to_inner_join_rewrite;
     CrossToInnerJoinVisitor(cross_to_inner).visit(query);
 
-    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, aliases};
+    JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, settings.dialect_type, aliases};
     JoinToSubqueryTransformVisitor(join_to_subs_data).visit(query);
 }
 

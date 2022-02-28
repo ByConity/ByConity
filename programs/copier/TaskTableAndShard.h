@@ -289,7 +289,7 @@ inline TaskTable::TaskTable(TaskCluster & parent, const Poco::Util::AbstractConf
     engine_push_str = config.getString(table_prefix + "engine", "rand()");
 
     {
-        ParserStorage parser_storage;
+        ParserStorage parser_storage(DialectType::CLICKHOUSE);
         engine_push_ast = parseQuery(parser_storage, engine_push_str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         engine_push_partition_key_ast = extractPartitionKey(engine_push_ast);
         primary_key_comma_separated = boost::algorithm::join(extractPrimaryKeyColumnNames(engine_push_ast), ", ");
@@ -300,7 +300,7 @@ inline TaskTable::TaskTable(TaskCluster & parent, const Poco::Util::AbstractConf
 
     auxiliary_engine_split_asts.reserve(number_of_splits);
     {
-        ParserExpressionWithOptionalAlias parser_expression(false);
+        ParserExpressionWithOptionalAlias parser_expression(false, DialectType::CLICKHOUSE);
         sharding_key_ast = parseQuery(parser_expression, sharding_key_str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
         main_engine_split_ast = createASTStorageDistributed(cluster_push_name, table_push.first, table_push.second,
                                                             sharding_key_ast);
@@ -318,7 +318,7 @@ inline TaskTable::TaskTable(TaskCluster & parent, const Poco::Util::AbstractConf
     where_condition_str = config.getString(table_prefix + "where_condition", "");
     if (!where_condition_str.empty())
     {
-        ParserExpressionWithOptionalAlias parser_expression(false);
+        ParserExpressionWithOptionalAlias parser_expression(false, DialectType::CLICKHOUSE);
         where_condition_ast = parseQuery(parser_expression, where_condition_str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         // Will use canonical expression form

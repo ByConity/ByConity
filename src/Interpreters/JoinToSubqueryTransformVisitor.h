@@ -19,6 +19,7 @@ public:
     struct Data
     {
         const std::vector<TableWithColumnNamesAndTypes> & tables;
+        enum DialectType dialect_type;
         const Aliases & aliases;
         bool done = false;
     };

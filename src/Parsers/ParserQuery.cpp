@@ -26,20 +26,20 @@ namespace DB
 
 bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserQueryWithOutput query_with_output_p(end);
-    ParserInsertQuery insert_p(end);
+    ParserQueryWithOutput query_with_output_p(end, dt);
+    ParserInsertQuery insert_p(end, dt);
     ParserUseQuery use_p;
-    ParserSetQuery set_p;
-    ParserSystemQuery system_p;
+    ParserSetQuery set_p(false);
+    ParserSystemQuery system_p(dt);
     ParserCreateUserQuery create_user_p;
     ParserCreateRoleQuery create_role_p;
     ParserCreateQuotaQuery create_quota_p;
-    ParserCreateRowPolicyQuery create_row_policy_p;
+    ParserCreateRowPolicyQuery create_row_policy_p(dt);
     ParserCreateSettingsProfileQuery create_settings_profile_p;
     ParserDropAccessEntityQuery drop_access_entity_p;
     ParserGrantQuery grant_p;
     ParserSetRoleQuery set_role_p;
-    ParserExternalDDLQuery external_ddl_p;
+    ParserExternalDDLQuery external_ddl_p(dt);
 
     bool res = query_with_output_p.parse(pos, node, expected)
         || insert_p.parse(pos, node, expected)

@@ -974,7 +974,7 @@ void StorageReplicatedMergeTree::setTableStructure(
     {
         auto parse_key_expr = [] (const String & key_expr)
         {
-            ParserNotEmptyExpressionList parser(false);
+            ParserNotEmptyExpressionList parser(false, DialectType::CLICKHOUSE); /* Always parse sorting keys with CK dialect */
             auto new_sorting_key_expr_list = parseQuery(parser, key_expr, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
             ASTPtr order_by_ast;
@@ -1026,7 +1026,7 @@ void StorageReplicatedMergeTree::setTableStructure(
         {
             if (!metadata_diff.new_ttl_table.empty())
             {
-                ParserTTLExpressionList parser;
+                ParserTTLExpressionList parser(DialectType::CLICKHOUSE); /* Use CK dialect to parse TTL */
                 auto ttl_for_table_ast = parseQuery(parser, metadata_diff.new_ttl_table, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
                 new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
                     ttl_for_table_ast, new_metadata.columns, getContext(), new_metadata.primary_key);

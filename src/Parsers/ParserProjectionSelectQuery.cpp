@@ -20,9 +20,9 @@ bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ParserKeyword s_group_by("GROUP BY");
     ParserKeyword s_order_by("ORDER BY");
 
-    ParserNotEmptyExpressionList exp_list_for_with_clause(false);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true); /// Allows aliases without AS keyword.
-    ParserExpression order_expression_p;
+    ParserNotEmptyExpressionList exp_list_for_with_clause(false, dt);
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt); /// Allows aliases without AS keyword.
+    ParserExpression order_expression_p(dt);
 
     ASTPtr with_expression_list;
     ASTPtr select_expression_list;
@@ -50,7 +50,7 @@ bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
     // If group by is specified, AggregatingMergeTree engine is used, and the group by keys are implied to be order by keys
     if (s_group_by.ignore(pos, expected))
     {
-        if (!ParserList(std::make_unique<ParserExpression>(), std::make_unique<ParserToken>(TokenType::Comma))
+        if (!ParserList(std::make_unique<ParserExpression>(dt), std::make_unique<ParserToken>(TokenType::Comma))
                  .parse(pos, group_expression_list, expected))
             return false;
     }
@@ -58,7 +58,7 @@ bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
     if (s_order_by.ignore(pos, expected))
     {
         ASTPtr expr_list;
-        if (!ParserList(std::make_unique<ParserExpression>(), std::make_unique<ParserToken>(TokenType::Comma)).parse(pos, expr_list, expected))
+        if (!ParserList(std::make_unique<ParserExpression>(dt), std::make_unique<ParserToken>(TokenType::Comma)).parse(pos, expr_list, expected))
             return false;
 
         if (expr_list->children.size() == 1)

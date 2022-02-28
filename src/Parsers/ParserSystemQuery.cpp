@@ -281,7 +281,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             if (!ParserKeyword{"WHERE"}.ignore(pos, expected))
                 return false;
 
-            if (!ParserExpression{}.parse(pos, res->predicate, expected))
+            if (!ParserExpression{dt}.parse(pos, res->predicate, expected))
                 return false;
 
             break;

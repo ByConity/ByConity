@@ -19,8 +19,8 @@ namespace DB
 
 bool ParserDictionaryLifetime::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserLiteral literal_p;
-    ParserKeyValuePairsList key_value_pairs_p;
+    ParserLiteral literal_p(dt);
+    ParserKeyValuePairsList key_value_pairs_p(dt);
     ASTPtr ast_lifetime;
     auto res = std::make_shared<ASTDictionaryLifetime>();
 
@@ -77,7 +77,7 @@ bool ParserDictionaryLifetime::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 
 bool ParserDictionaryRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserKeyValuePairsList key_value_pairs_p;
+    ParserKeyValuePairsList key_value_pairs_p(dt);
     ASTPtr ast_range;
     if (!key_value_pairs_p.parse(pos, ast_range, expected))
         return false;
@@ -111,7 +111,7 @@ bool ParserDictionaryRange::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
 bool ParserDictionaryLayout::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserFunctionWithKeyValueArguments key_value_func_p(/* brackets_can_be_omitted = */ true);
+    ParserFunctionWithKeyValueArguments key_value_func_p(dt, /* brackets_can_be_omitted = */ true);
     ASTPtr ast_func;
     if (!key_value_func_p.parse(pos, ast_func, expected))
         return false;
@@ -172,12 +172,12 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword settings_keyword("SETTINGS");
     ParserToken open(TokenType::OpeningRoundBracket);
     ParserToken close(TokenType::ClosingRoundBracket);
-    ParserFunctionWithKeyValueArguments key_value_pairs_p;
+    ParserFunctionWithKeyValueArguments key_value_pairs_p(dt);
     ParserList expression_list_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
-    ParserDictionaryLifetime lifetime_p;
-    ParserDictionaryRange range_p;
-    ParserDictionaryLayout layout_p;
-    ParserDictionarySettings settings_p;
+    ParserDictionaryLifetime lifetime_p(dt);
+    ParserDictionaryRange range_p(dt);
+    ParserDictionaryLayout layout_p(dt);
+    ParserDictionarySettings settings_p(dt);
 
     ASTPtr primary_key;
     ASTPtr ast_source;

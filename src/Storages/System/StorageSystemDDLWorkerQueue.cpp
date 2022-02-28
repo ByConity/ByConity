@@ -102,7 +102,7 @@ static String clusterNameFromDDLQuery(ContextPtr context, const DDLLogEntry & en
     ASTPtr query;
     ASTQueryWithOnCluster * query_on_cluster;
     String cluster_name;
-    ParserQuery parser_query(end);
+    ParserQuery parser_query(end, context->getSettingsRef().dialect_type);
     String description;
     query = parseQuery(parser_query, begin, end, description, 0, context->getSettingsRef().max_parser_depth);
     if (query && (query_on_cluster = dynamic_cast<ASTQueryWithOnCluster *>(query.get())))

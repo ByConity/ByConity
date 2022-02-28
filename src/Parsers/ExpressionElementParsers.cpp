@@ -55,7 +55,7 @@ namespace ErrorCodes
 bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ASTPtr contents_node;
-    ParserExpressionList contents(false);
+    ParserExpressionList contents(false, dt);
 
     if (pos->type != TokenType::OpeningSquareBracket)
         return false;
@@ -81,7 +81,7 @@ bool ParserArray::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ASTPtr contents_node;
-    ParserExpressionList contents(false);
+    ParserExpressionList contents(false, dt);
 
     if (pos->type != TokenType::OpeningRoundBracket)
         return false;
@@ -130,7 +130,7 @@ bool ParserParenthesisExpression::parseImpl(Pos & pos, ASTPtr & node, Expected &
 bool ParserSubquery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ASTPtr select_node;
-    ParserSelectWithUnionQuery select;
+    ParserSelectWithUnionQuery select(dt);
 
     if (pos->type != TokenType::OpeningRoundBracket)
         return false;
@@ -274,8 +274,8 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserIdentifier id_parser;
     ParserKeyword distinct("DISTINCT");
     ParserKeyword all("ALL");
-    ParserExpressionList contents(false, is_table_function);
-    ParserSelectWithUnionQuery select;
+    ParserExpressionList contents(false, dt, is_table_function);
+    ParserSelectWithUnionQuery select(dt);
     ParserKeyword over("OVER");
 
     bool has_all = false;
@@ -288,7 +288,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (is_table_function)
     {
-        if (ParserTableFunctionView().parse(pos, node, expected))
+        if (ParserTableFunctionView(dt).parse(pos, node, expected))
             return true;
     }
 
@@ -450,7 +450,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         // of a different type, hence this workaround with a temporary pointer.
         ASTPtr function_node_as_iast = function_node;
 
-        ParserWindowReference window_reference;
+        ParserWindowReference window_reference(dt);
         if (!window_reference.parse(pos, function_node_as_iast, expected))
         {
             return false;
@@ -465,7 +465,7 @@ bool ParserTableFunctionView::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 {
     ParserIdentifier id_parser;
     ParserKeyword view("VIEW");
-    ParserSelectWithUnionQuery select;
+    ParserSelectWithUnionQuery select(dt);
 
     ASTPtr identifier;
     ASTPtr query;
@@ -528,12 +528,12 @@ bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     // Variant 2:
     // function_name ( * ) OVER ( window_definition )
-    ParserWindowDefinition parser_definition;
+    ParserWindowDefinition parser_definition(dt);
     return parser_definition.parse(pos, function.window_definition, expected);
 }
 
 static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & pos,
-    Expected & expected)
+    Expected & expected, enum DialectType dt)
 {
     ParserKeyword keyword_rows("ROWS");
     ParserKeyword keyword_groups("GROUPS");
@@ -578,7 +578,7 @@ static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & p
     }
     else
     {
-        ParserExpression parser_expression;
+        ParserExpression parser_expression(dt);
         if (keyword_unbounded.ignore(pos, expected))
         {
             node->frame_begin_type = WindowFrame::BoundaryType::Unbounded;
@@ -625,7 +625,7 @@ static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & p
         }
         else
         {
-            ParserExpression parser_expression;
+            ParserExpression parser_expression(dt);
             if (keyword_unbounded.ignore(pos, expected))
             {
                 node->frame_end_type = WindowFrame::BoundaryType::Unbounded;
@@ -666,13 +666,13 @@ static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & p
 
 // All except parent window name.
 static bool parseWindowDefinitionParts(IParser::Pos & pos,
-    ASTWindowDefinition & node, Expected & expected)
+    ASTWindowDefinition & node, Expected & expected, enum DialectType dt)
 {
     ParserKeyword keyword_partition_by("PARTITION BY");
     ParserNotEmptyExpressionList columns_partition_by(
-        false /* we don't allow declaring aliases here*/);
+        false /* we don't allow declaring aliases here*/, dt);
     ParserKeyword keyword_order_by("ORDER BY");
-    ParserOrderByExpressionList columns_order_by;
+    ParserOrderByExpressionList columns_order_by(dt);
 
     if (keyword_partition_by.ignore(pos, expected))
     {
@@ -702,7 +702,7 @@ static bool parseWindowDefinitionParts(IParser::Pos & pos,
         }
     }
 
-    return tryParseFrameDefinition(&node, pos, expected);
+    return tryParseFrameDefinition(&node, pos, expected, dt);
 }
 
 bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -718,7 +718,7 @@ bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     // We can have a parent window name specified before all other things. No
     // easy way to distinguish identifier from keywords, so just try to parse it
     // both ways.
-    if (parseWindowDefinitionParts(pos, *result, expected))
+    if (parseWindowDefinitionParts(pos, *result, expected, dt))
     {
         // Successfully parsed without parent window specifier. It can be empty,
         // so check that it is followed by the closing bracket.
@@ -739,7 +739,7 @@ bool ParserWindowDefinition::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     }
     result->parent_window_name = window_name_identifier->as<const ASTIdentifier &>().name();
 
-    if (!parseWindowDefinitionParts(pos, *result, expected))
+    if (!parseWindowDefinitionParts(pos, *result, expected, dt))
     {
         return false;
     }
@@ -776,7 +776,7 @@ bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
             return false;
         }
 
-        ParserWindowDefinition parser_window_definition;
+        ParserWindowDefinition parser_window_definition(dt);
         if (!parser_window_definition.parse(pos, elem->definition, expected))
         {
             return false;
@@ -798,7 +798,7 @@ bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserCodecDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserIdentifierWithOptionalParameters>(),
+    return ParserList(std::make_unique<ParserIdentifierWithOptionalParameters>(DialectType::CLICKHOUSE),
         std::make_unique<ParserToken>(TokenType::Comma), false).parse(pos, node, expected);
 }
 
@@ -965,7 +965,7 @@ bool ParserCastAsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
     if (ParserKeyword("CAST").ignore(pos, expected)
         && ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected)
-        && ParserExpression().parse(pos, expr_node, expected)
+        && ParserExpression(dt).parse(pos, expr_node, expected)
         && ParserKeyword("AS").ignore(pos, expected)
         && ParserDataType().parse(pos, type_node, expected)
         && ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
@@ -993,7 +993,7 @@ bool ParserSubstringExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         return false;
     ++pos;
 
-    if (!ParserExpression().parse(pos, expr_node, expected))
+    if (!ParserExpression(dt).parse(pos, expr_node, expected))
         return false;
 
     if (pos->type != TokenType::Comma)
@@ -1006,7 +1006,7 @@ bool ParserSubstringExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         ++pos;
     }
 
-    if (!ParserExpression().parse(pos, start_node, expected))
+    if (!ParserExpression(dt).parse(pos, start_node, expected))
         return false;
 
     if (pos->type == TokenType::ClosingRoundBracket)
@@ -1025,7 +1025,7 @@ bool ParserSubstringExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             ++pos;
         }
 
-        if (!ParserExpression().parse(pos, length_node, expected))
+        if (!ParserExpression(dt).parse(pos, length_node, expected))
             return false;
 
         ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected);
@@ -1104,7 +1104,7 @@ bool ParserTrimExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
 
         if (char_override)
         {
-            if (!ParserExpression().parse(pos, to_remove, expected))
+            if (!ParserExpression(dt).parse(pos, to_remove, expected))
                 return false;
             if (!ParserKeyword("FROM").ignore(pos, expected))
                 return false;
@@ -1124,7 +1124,7 @@ bool ParserTrimExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     if (!(trim_left || trim_right))
         return false;
 
-    if (!ParserExpression().parse(pos, expr_node, expected))
+    if (!ParserExpression(dt).parse(pos, expr_node, expected))
         return false;
 
     if (pos->type != TokenType::ClosingRoundBracket)
@@ -1226,12 +1226,12 @@ bool ParserLeftExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
         return false;
     ++pos;
 
-    if (!ParserExpression().parse(pos, expr_node, expected))
+    if (!ParserExpression(dt).parse(pos, expr_node, expected))
         return false;
 
     ParserToken(TokenType::Comma).ignore(pos, expected);
 
-    if (!ParserExpression().parse(pos, length_node, expected))
+    if (!ParserExpression(dt).parse(pos, length_node, expected))
         return false;
 
     if (pos->type != TokenType::ClosingRoundBracket)
@@ -1265,12 +1265,12 @@ bool ParserRightExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         return false;
     ++pos;
 
-    if (!ParserExpression().parse(pos, expr_node, expected))
+    if (!ParserExpression(dt).parse(pos, expr_node, expected))
         return false;
 
     ParserToken(TokenType::Comma).ignore(pos, expected);
 
-    if (!ParserExpression().parse(pos, length_node, expected))
+    if (!ParserExpression(dt).parse(pos, length_node, expected))
         return false;
 
     if (pos->type != TokenType::ClosingRoundBracket)
@@ -1316,7 +1316,7 @@ bool ParserExtractExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     if (!s_from.ignore(pos, expected))
         return false;
 
-    ParserExpression elem_parser;
+    ParserExpression elem_parser(dt);
     if (!elem_parser.parse(pos, expr, expected))
         return false;
 
@@ -1363,14 +1363,14 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
             return false;
         ++pos;
 
-        if (!ParserExpression().parse(pos, offset_node, expected))
+        if (!ParserExpression(dt).parse(pos, offset_node, expected))
             return false;
 
         if (pos->type != TokenType::Comma)
             return false;
         ++pos;
 
-        if (!ParserExpression().parse(pos, timestamp_node, expected))
+        if (!ParserExpression(dt).parse(pos, timestamp_node, expected))
             return false;
         auto interval_expr_list_args = std::make_shared<ASTExpressionList>();
         interval_expr_list_args->children = {offset_node};
@@ -1383,14 +1383,14 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     else
     {
         /// function(timestamp, INTERVAL offset unit)
-        if (!ParserExpression().parse(pos, timestamp_node, expected))
+        if (!ParserExpression(dt).parse(pos, timestamp_node, expected))
             return false;
 
         if (pos->type != TokenType::Comma)
             return false;
         ++pos;
 
-        if (!ParserIntervalOperatorExpression{}.parse(pos, interval_func_node, expected))
+        if (!ParserIntervalOperatorExpression{dt}.parse(pos, interval_func_node, expected))
             return false;
     }
     if (pos->type != TokenType::ClosingRoundBracket)
@@ -1431,14 +1431,14 @@ bool ParserDateDiffExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
         return false;
     ++pos;
 
-    if (!ParserExpression().parse(pos, left_node, expected))
+    if (!ParserExpression(dt).parse(pos, left_node, expected))
         return false;
 
     if (pos->type != TokenType::Comma)
         return false;
     ++pos;
 
-    if (!ParserExpression().parse(pos, right_node, expected))
+    if (!ParserExpression(dt).parse(pos, right_node, expected))
         return false;
 
     if (pos->type != TokenType::ClosingRoundBracket)
@@ -1609,8 +1609,8 @@ bool ParserCollectionOfLiterals<Collection>::parseImpl(Pos & pos, ASTPtr & node,
     Pos literal_begin = pos;
 
     Collection arr;
-    ParserLiteral literal_p;
-    ParserCollectionOfLiterals<Collection> collection_p(opening_bracket, closing_bracket);
+    ParserLiteral literal_p(dt);
+    ParserCollectionOfLiterals<Collection> collection_p(opening_bracket, closing_bracket, dt);
 
     ++pos;
     while (pos.isValid())
@@ -1664,7 +1664,7 @@ template bool ParserCollectionOfLiterals<Map>::parseImpl(Pos & pos, ASTPtr & nod
 bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserNull null_p;
-    ParserNumber num_p;
+    ParserNumber num_p(dt);
     ParserStringLiteral str_p;
 
     if (null_p.parse(pos, node, expected))
@@ -1786,7 +1786,7 @@ bool ParserColumnsMatcher::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
         res->children.push_back(regex_node);
     }
 
-    ParserColumnsTransformers transformers_p(allowed_transformers);
+    ParserColumnsTransformers transformers_p(dt, allowed_transformers);
     ASTPtr transformer;
     while (transformers_p.parse(pos, transformer, expected))
     {
@@ -1823,7 +1823,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
         if (pos->type == TokenType::OpeningRoundBracket)
         {
             ++pos;
-            if (!ParserExpressionList(false).parse(pos, expr_list_args, expected))
+            if (!ParserExpressionList(false, dt).parse(pos, expr_list_args, expected))
                 return false;
 
             if (pos->type != TokenType::ClosingRoundBracket)
@@ -1909,7 +1909,7 @@ bool ParserColumnsTransformers::parseImpl(Pos & pos, ASTPtr & node, Expected & e
             is_strict = true;
 
         ASTs replacements;
-        ParserExpression element_p;
+        ParserExpression element_p(dt);
         ParserIdentifier ident_p;
         auto parse_id = [&]
         {
@@ -1966,7 +1966,7 @@ bool ParserAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         ++pos;
         auto asterisk = std::make_shared<ASTAsterisk>();
-        ParserColumnsTransformers transformers_p(allowed_transformers);
+        ParserColumnsTransformers transformers_p(dt, allowed_transformers);
         ASTPtr transformer;
         while (transformers_p.parse(pos, transformer, expected))
         {
@@ -1994,7 +1994,7 @@ bool ParserQualifiedAsterisk::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 
     auto res = std::make_shared<ASTQualifiedAsterisk>();
     res->children.push_back(node);
-    ParserColumnsTransformers transformers_p;
+    ParserColumnsTransformers transformers_p(dt);
     ASTPtr transformer;
     while (transformers_p.parse(pos, transformer, expected))
     {
@@ -2099,28 +2099,28 @@ bool ParserMySQLGlobalVariable::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
 bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserSubquery().parse(pos, node, expected)
-        || ParserCastOperator().parse(pos, node, expected)
-        || ParserTupleOfLiterals().parse(pos, node, expected)
-        || ParserParenthesisExpression().parse(pos, node, expected)
-        || ParserArrayOfLiterals().parse(pos, node, expected)
-        || ParserArray().parse(pos, node, expected)
-        || ParserLiteral().parse(pos, node, expected)
-        || ParserCastAsExpression().parse(pos, node, expected)
-        || ParserExtractExpression().parse(pos, node, expected)
-        || ParserDateAddExpression().parse(pos, node, expected)
-        || ParserDateDiffExpression().parse(pos, node, expected)
-        || ParserSubstringExpression().parse(pos, node, expected)
-        || ParserTrimExpression().parse(pos, node, expected)
-        || ParserLeftExpression().parse(pos, node, expected)
-        || ParserRightExpression().parse(pos, node, expected)
-        || ParserCase().parse(pos, node, expected)
-        || ParserColumnsMatcher().parse(pos, node, expected) /// before ParserFunction because it can be also parsed as a function.
-        || ParserFunction().parse(pos, node, expected)
-        || ParserQualifiedAsterisk().parse(pos, node, expected)
-        || ParserAsterisk().parse(pos, node, expected)
+    return ParserSubquery(dt).parse(pos, node, expected)
+        || ParserCastOperator(dt).parse(pos, node, expected)
+        || ParserTupleOfLiterals(dt).parse(pos, node, expected)
+        || ParserParenthesisExpression(dt).parse(pos, node, expected)
+        || ParserArrayOfLiterals(dt).parse(pos, node, expected)
+        || ParserArray(dt).parse(pos, node, expected)
+        || ParserLiteral(dt).parse(pos, node, expected)
+        || ParserCastAsExpression(dt).parse(pos, node, expected)
+        || ParserExtractExpression(dt).parse(pos, node, expected)
+        || ParserDateAddExpression(dt).parse(pos, node, expected)
+        || ParserDateDiffExpression(dt).parse(pos, node, expected)
+        || ParserSubstringExpression(dt).parse(pos, node, expected)
+        || ParserTrimExpression(dt).parse(pos, node, expected)
+        || ParserLeftExpression(dt).parse(pos, node, expected)
+        || ParserRightExpression(dt).parse(pos, node, expected)
+        || ParserCase(dt).parse(pos, node, expected)
+        || ParserColumnsMatcher(dt).parse(pos, node, expected) /// before ParserFunction because it can be also parsed as a function.
+        || ParserFunction(dt).parse(pos, node, expected)
+        || ParserQualifiedAsterisk(dt).parse(pos, node, expected)
+        || ParserAsterisk(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier(false, true).parse(pos, node, expected)
-        || ParserSubstitution().parse(pos, node, expected)
+        || ParserSubstitution(dt).parse(pos, node, expected)
         || ParserMySQLGlobalVariable().parse(pos, node, expected);
 }
 
@@ -2176,7 +2176,7 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
 
 bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserExpressionWithOptionalAlias elem_p(false);
+    ParserExpressionWithOptionalAlias elem_p(false, dt);
     ParserKeyword ascending("ASCENDING");
     ParserKeyword descending("DESCENDING");
     ParserKeyword asc("ASC");
@@ -2190,7 +2190,7 @@ bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword to("TO");
     ParserKeyword step("STEP");
     ParserStringLiteral collate_locale_parser;
-    ParserExpressionWithOptionalAlias exp_parser(false);
+    ParserExpressionWithOptionalAlias exp_parser(false, dt);
 
     ASTPtr expr_elem;
     if (!elem_p.parse(pos, expr_elem, expected))
@@ -2265,7 +2265,7 @@ bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
 bool ParserFunctionWithKeyValueArguments::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier id_parser;
-    ParserKeyValuePairsList pairs_list_parser;
+    ParserKeyValuePairsList pairs_list_parser(dt);
 
     ASTPtr identifier;
     ASTPtr expr_list_args;
@@ -2319,12 +2319,12 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserIdentifier parser_identifier;
     ParserStringLiteral parser_string_literal;
-    ParserExpression parser_exp;
-    ParserExpressionList parser_keys_list(false);
+    ParserExpression parser_exp(dt);
+    ParserExpressionList parser_keys_list(false, dt);
     ParserCodec parser_codec;
 
     ParserList parser_assignment_list(
-        std::make_unique<ParserAssignment>(), std::make_unique<ParserToken>(TokenType::Comma));
+        std::make_unique<ParserAssignment>(dt), std::make_unique<ParserToken>(TokenType::Comma));
 
     ASTPtr ttl_expr;
     if (!parser_exp.parse(pos, ttl_expr, expected))
@@ -2418,7 +2418,7 @@ bool ParserTTLElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 bool ParserIdentifierWithOptionalParameters::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier non_parametric;
-    ParserIdentifierWithParameters parametric;
+    ParserIdentifierWithParameters parametric(dt);
 
     if (parametric.parse(pos, node, expected))
     {
@@ -2447,7 +2447,7 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserIdentifier p_identifier;
     ParserToken s_equals(TokenType::Equals);
-    ParserExpression p_expression;
+    ParserExpression p_expression(dt);
 
     ASTPtr column;
     if (!p_identifier.parse(pos, column, expected))

@@ -14,7 +14,7 @@ bool ParserPartition::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_id("ID");
     ParserStringLiteral parser_string_literal;
-    ParserExpression parser_expr;
+    ParserExpression parser_expr(dt);
 
     Pos begin = pos;
 

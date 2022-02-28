@@ -14,7 +14,7 @@ bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier s_ident;
     ParserKeyword s_as("AS");
-    ParserSubquery s_subquery;
+    ParserSubquery s_subquery(dt);
 
     auto old_pos = pos;
     if (ASTPtr name, subquery;
@@ -29,7 +29,7 @@ bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else
     {
         pos = old_pos;
-        ParserExpressionWithOptionalAlias s_expr(false);
+        ParserExpressionWithOptionalAlias s_expr(false, dt);
         if (!s_expr.parse(pos, node, expected))
             return false;
     }

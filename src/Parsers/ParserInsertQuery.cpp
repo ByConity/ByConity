@@ -38,8 +38,8 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
     ParserToken s_rparen(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
-    ParserList columns_p(std::make_unique<ParserInsertElement>(), std::make_unique<ParserToken>(TokenType::Comma), false);
-    ParserFunction table_function_p{false};
+    ParserList columns_p(std::make_unique<ParserInsertElement>(dt), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserFunction table_function_p{dt, false};
 
     ASTPtr database;
     ASTPtr table;
@@ -107,7 +107,7 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else if (s_select.ignore(pos, expected) || s_with.ignore(pos,expected))
     {
         pos = before_values;
-        ParserSelectWithUnionQuery select_p;
+        ParserSelectWithUnionQuery select_p(dt);
         select_p.parse(pos, select, expected);
 
         /// FORMAT section is expected if we have input() in SELECT part
@@ -217,9 +217,9 @@ bool ParserInsertQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserInsertElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserColumnsMatcher().parse(pos, node, expected)
-        || ParserQualifiedAsterisk().parse(pos, node, expected)
-        || ParserAsterisk().parse(pos, node, expected)
+    return ParserColumnsMatcher(dt).parse(pos, node, expected)
+        || ParserQualifiedAsterisk(dt).parse(pos, node, expected)
+        || ParserAsterisk(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier().parse(pos, node, expected);
 }
 
