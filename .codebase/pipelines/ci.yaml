@@ -1,7 +1,8 @@
 name: CI
 trigger:
   change:
-    types: ["create", "push"]
+    branches: ["ce-dev"]
+    types: ["create", "push", "submit"]
 jobs:
   scm_build:
     name: SCM Build for clang11 ch_vanilla_debian_ci
@@ -298,6 +299,4 @@ jobs:
             else
               echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
               exit 1
-            fi  
-  
-
+            fi
