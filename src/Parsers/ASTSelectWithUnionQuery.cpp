@@ -2,6 +2,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Parsers/ASTTEALimit.h>
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
 #include <Common/typeid_cast.h>
 #include <IO/Operators.h>
@@ -27,6 +28,12 @@ ASTPtr ASTSelectWithUnionQuery::clone() const
     res->set_of_modes = set_of_modes;
 
     cloneOutputOptions(*res);
+
+    if (tealimit)
+    {
+        res->tealimit = tealimit->clone();
+        res->children.push_back(res->tealimit);
+    }
     return res;
 }
 
@@ -74,6 +81,12 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
             (*it)->formatImpl(settings, state, frame);
         }
     }
+
+    if (tealimit)
+    {
+        settings.ostr << settings.nl_or_ws;
+        tealimit->formatImpl(settings, state, frame);
+    }
 }
 
 void ASTSelectWithUnionQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & has_table_functions) const
@@ -82,6 +95,18 @@ void ASTSelectWithUnionQuery::collectAllTables(std::vector<ASTPtr>& all_tables, 
     {
         auto& select = typeid_cast<ASTSelectQuery&>(*child);
         select.collectAllTables(all_tables, has_table_functions);
+    }
+}
+
+void ASTSelectWithUnionQuery::resetTEALimit()
+{
+    if (tealimit)
+    {
+        tealimit = nullptr;
+        // sanity check
+        if (!typeid_cast<ASTTEALimit *>(children.back().get()))
+            throw Exception("last child should be TEALIMIT in SelectWithUnionQuery", ErrorCodes::LOGICAL_ERROR);
+        children.pop_back();
     }
 }
 

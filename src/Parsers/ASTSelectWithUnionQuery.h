@@ -21,6 +21,8 @@ public:
 
     void collectAllTables(std::vector<ASTPtr> &, bool &) const;
 
+    void resetTEALimit();
+
     enum class Mode
     {
         Unspecified,
@@ -38,6 +40,9 @@ public:
     bool is_normalized = false;
 
     ASTPtr list_of_selects;
+
+    // special info for TEA LIMIT post stage processing
+    ASTPtr tealimit;
 
     UnionModesSet set_of_modes;
 

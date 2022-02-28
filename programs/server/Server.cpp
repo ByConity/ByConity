@@ -976,6 +976,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setFormatSchemaPath(format_schema_path);
     fs::create_directories(format_schema_path);
 
+    auto remote_format_schema_path = config().getString("remote_format_schema_path", ""); // only hdfs for now
+    global_context->setFormatSchemaPath(remote_format_schema_path, true);
+    try
+    {
+        reloadFormatSchema(remote_format_schema_path, format_schema_path.string(), log);
+    }
+    catch(const Exception& )
+    {
+        LOG_ERROR(log, "load remote format schema fail, reload it later manually");
+    }
+    catch(...)
+    {
+        throw;
+    }
+
     /// Check sanity of MergeTreeSettings on server startup
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);

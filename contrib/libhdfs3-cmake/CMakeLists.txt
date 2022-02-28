@@ -9,7 +9,8 @@ endif()
 
 SET(WITH_KERBEROS false)
 SET(WITH_CURL false)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_POCO_LOGGER")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_POCO_LOGGER")
+
 # project and source dir
 set(HDFS3_ROOT_DIR ${CMAKE_SOURCE_DIR}/contrib/libhdfs3)
 set(HDFS3_SOURCE_DIR ${HDFS3_ROOT_DIR}/src)
@@ -244,8 +245,8 @@ target_link_libraries(hdfs3 ${INFSEC_LIBRARIES})
 target_include_directories(hdfs3 PRIVATE ${Protobuf_INCLUDE_DIR})
 
 #poco logger
-target_include_directories(hdfs3 PRIVATE ${Poco_INCLUDE_DIRS})
-target_link_libraries(hdfs3 ${Poco_Foundation_LIBRARY})
+#target_include_directories(hdfs3 PRIVATE ${Poco_INCLUDE_DIRS})
+target_link_libraries(hdfs3 Poco::Foundation)
 
 # libgsasl
 #target_compile_definitions (hdfs3 PRIVATE HAVE_CONFIG_H=1)
