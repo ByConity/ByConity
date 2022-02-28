@@ -29,7 +29,7 @@ void RepartitionTransform::transform(Chunk & chunk)
     RepartitionTransform::PartitionStartPoints partition_start_points;
 
     std::tie(partition_selector, partition_start_points)
-        = doRepartition(partition_num, chunk, getInputPort().getHeader(), {}, repartition_func, REPARTITION_FUNC_RESULT_TYPE);
+        = doRepartition(partition_num, chunk, getInputPort().getHeader(), repartition_keys, repartition_func, REPARTITION_FUNC_RESULT_TYPE);
     ChunkInfoPtr repartion_info = std::make_shared<RepartitionChunkInfo>(
         std::move(partition_selector), std::move(partition_start_points), std::move(chunk.getChunkInfo()));
     chunk.setChunkInfo(std::move(repartion_info));
@@ -64,7 +64,12 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
     PODArrayWithStackMemory<UInt32, 32> partition_index(input_rows_count, 0);
 
     for (size_t i = 0; i < input_rows_count; ++i)
-        partition_index[i] = hash_result->get64(i) % partition_num;
+    {
+        if (!hash_result->isNullable())
+            partition_index[i] = hash_result->get64(i) % partition_num;
+        else
+            partition_index[i] = hash_result->isNullAt(input_rows_count) ? 0 : hash_result->get64(i) % partition_num;
+    }
 
     for (size_t i = 0; i < input_rows_count; ++i)
         partition_row_idx_start_points[partition_index[i]]++;
