@@ -45,7 +45,7 @@ protected:
 class IParserDialectBase : public IParserBase
 {
 public:
-    explicit IParserDialectBase(enum DialectType t) : dt(t) {}
+    explicit IParserDialectBase(enum DialectType t = DialectType::CLICKHOUSE) : dt(t) {}
 protected:
     enum DialectType dt;
 };
