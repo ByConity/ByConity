@@ -231,7 +231,6 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     auto header = getHeader(1);
     auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
     Chunk chunk = createUInt8Chunk(10, 1, 8);
-    // auto sender = std::make_shared<BrpcRemoteBroadcastSender>(data_key, getContext().context, header);
     auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     sender->accept(getContext().context, header);
     std::vector<std::thread> thread_senders;
