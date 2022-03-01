@@ -319,6 +319,8 @@ public:
     MutableDataPartPtr createPart(const String & name, const MergeTreePartInfo & part_info,
         const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr) const;
 
+    bool supportsMapImplicitColumn() const override { return true; }
+
     /// Auxiliary object to add a set of parts into the working set in two steps:
     /// * First, as PreCommitted parts (the parts are ready, but not yet in the active set).
     /// * Next, if commit() is called, the parts are added to the active set and the parts that are
