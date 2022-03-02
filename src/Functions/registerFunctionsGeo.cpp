@@ -25,6 +25,7 @@ void registerFunctionGeohashesInBox(FunctionFactory & factory);
 void registerFunctionWkt(FunctionFactory & factory);
 void registerFunctionReadWkt(FunctionFactory & factory);
 void registerFunctionSvg(FunctionFactory & factory);
+void registerFunctionMultiAddressFilter(FunctionFactory & factory);
 
 #if USE_H3
 void registerFunctionGeoToH3(FunctionFactory &);
@@ -63,6 +64,7 @@ void registerFunctionsGeo(FunctionFactory & factory)
     registerFunctionWkt(factory);
     registerFunctionReadWkt(factory);
     registerFunctionSvg(factory);
+    registerFunctionMultiAddressFilter(factory);
 
 #if USE_H3
     registerFunctionGeoToH3(factory);
