@@ -142,6 +142,7 @@ jobs:
         commands:
           - cd /
           - cp /home/code/docker/test/stress/run.sh run.sh
+          - cp /home/code/docker/test/stress/stress stress
           - /bin/bash run.sh
       - name: Upload Artifact
         uses: actions/upload-artifact
