@@ -52,15 +52,7 @@ jobs:
           path: /test_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
 
   FuntionalStatefulTest:
     name: FuntionalStatefulTest
@@ -93,15 +85,7 @@ jobs:
           path: /test_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
 
   CertificateStatefullTest:
     name: CertificateStatefullTest
@@ -134,15 +118,7 @@ jobs:
           path: /test_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
   
   StressTest:
     name: StressTest
@@ -174,15 +150,7 @@ jobs:
           path: /test_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
 
   scm_build_ASAN:
     manual: true
@@ -242,15 +210,7 @@ jobs:
           path: /sanitizer_log_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
 
   FuntionalStatefulTest-ASAN:
     name: FuntionalStatefulTest-ASAN
@@ -291,12 +251,4 @@ jobs:
           path: /sanitizer_log_output
       - name: Analyse Result
         commands:
-          - |
-            if [ $(cut -f1 /test_output/check_status.tsv) = 'success' ]
-            then
-              echo "::add-message level=info::all cases pass!"
-              exit 0
-            else
-              echo "::add-message level=error::$(cat /test_output/check_status.tsv)"
-              exit 1
-            fi
+          - /bin/bash /home/code/docker/test/result.sh
