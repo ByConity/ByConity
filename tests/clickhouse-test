@@ -90,7 +90,6 @@ def is_block_has_indicator(start,end,indicator_line_number):
     return False
 
 def get_line_number(log_dir,log_file_name):
-
     indicator = 'StackTrace::StackTrace()'
     delimiter_line = '=================================================================\n'
 
@@ -106,13 +105,12 @@ def get_line_number(log_dir,log_file_name):
     return delimiter_line_number, indicator_line_number, log_data
 
 def get_splitted_log(delimiter_line_number, indicator_line_number, log_data):
-
     if delimiter_line_number == []:
         return None
     result = []
     len_delimiter_line_number = len(delimiter_line_number)
     if len_delimiter_line_number == 1:
-        return result.append(log_data)
+        return log_data
     else:
         total_block = len_delimiter_line_number -1
         for i in range(0,total_block):
@@ -128,20 +126,23 @@ def get_splitted_log(delimiter_line_number, indicator_line_number, log_data):
 
 def check_asan_log(log_dir):
     result_is_pass = True
-    with open(os.path.join(log_dir , 'asan_report'), "w") as f:
-        for root, dirs, files in os.walk(log_dir):
-            print(f'some log files have been found in {log_dir} :{files}')
-            for log_file_name in files:
-                if '.log' in log_file_name:
-                    delimiter_line_number, indicator_line_number, log_data = get_line_number(root, log_file_name)
-                    result = get_splitted_log(delimiter_line_number, indicator_line_number, log_data)
-                    if result:
-                        result_is_pass = False
-                        print(f"asan log check failed, please review the asan error in {log_file_name} !")
-                        f.write(f"asan error foud in {log_file_name} \n")
-                        for item in result:
-                            for item_s in item:
-                                f.write(item_s)
+    log_file_names = []
+    for root, dirs, files in os.walk(log_dir):
+        for file in files:
+            log_file_names.append(file)
+    log_file_names = [x for x in log_file_names if x.startswith('asan.log')]
+    if log_file_names != []: print(f'some log files have been found in {log_dir} :{log_file_names}')
+    for log_file_name in log_file_names:
+        delimiter_line_number, indicator_line_number, log_data = get_line_number(log_dir, log_file_name)
+        result = get_splitted_log(delimiter_line_number, indicator_line_number, log_data)
+        if result:
+            with open(os.path.join(log_dir, 'asan_report'), "w") as f:
+                result_is_pass = False
+                print(f"asan log check failed, please review the asan error in {log_file_name} !")
+                f.write(f"asan error foud in {log_file_name} \n")
+                for item in result:
+                    for item_s in item:
+                            f.write(item_s)
     return result_is_pass
 
 
