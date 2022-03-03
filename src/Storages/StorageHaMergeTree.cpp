@@ -2180,7 +2180,9 @@ bool StorageHaMergeTree::executeMerge(HaQueueExecutingEntrySetPtr & executing_se
     }
 
     auto table_id = getStorageID();
-    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_merged_part);
+
+    const Settings & settings = getContext()->getSettingsRef();
+    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_merged_part, settings);
 
     // Without fetch firstly strategy deployed in product, we find out merge in replica(1:N) settings are
     // quite costly, and too many OOMs. we try fetch if possible
@@ -2335,7 +2337,8 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     future_part.updatePath(*this, reserved_space);
     future_part.type = source_part->getType();
 
-    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_part);
+    const Settings & settings = getContext()->getSettingsRef();
+    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_part, settings);
 
     MergeTreeData::MutableDataPartPtr part;
     Stopwatch stopwatch;

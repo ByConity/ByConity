@@ -80,8 +80,6 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     reader = data_part->getReader(columns_for_reader, metadata_snapshot,
         MarkRanges{MarkRange(0, data_part->getMarksCount())},
         /* uncompressed_cache = */ nullptr, mark_cache.get(), reader_settings);
-
-    index_granularity = storage_.getSettings()->index_granularity;
 }
 
 Chunk MergeTreeSequentialSource::generate()
@@ -214,6 +212,7 @@ void MergeTreeSequentialSource::finish()
      */
     reader.reset();
     data_part.reset();
+    delete_bitmap.reset();
 }
 
 MergeTreeSequentialSource::~MergeTreeSequentialSource() = default;
