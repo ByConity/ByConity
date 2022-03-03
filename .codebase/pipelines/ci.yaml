@@ -4,7 +4,7 @@ trigger:
     branches: ["ce-dev"]
     types: ["create", "push", "submit"]
 jobs:
-  scm_build:
+  scm_build:    
     name: SCM Build for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
     steps:
@@ -154,9 +154,9 @@ jobs:
           - /bin/bash /home/code/docker/test/result.sh
 
   scm_build_ASAN:
-    manual: true
     name: SCM Build_ASAN for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
+    if: ${{ false }}
     steps:
       - uses: actions/checkout
         inputs:
