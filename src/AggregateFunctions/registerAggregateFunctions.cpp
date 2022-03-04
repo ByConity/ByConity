@@ -72,6 +72,7 @@ void registerAggregateFunctionSlideMatchCount(AggregateFunctionFactory & factory
 void registerAggregateFunctionFrequency(AggregateFunctionFactory & factory);
 void registerAggregateFunctionPathSplit(AggregateFunctionFactory & factory);
 void registerAggregateFunctionPathCount(AggregateFunctionFactory & factory);
+void registerAggregateFunctionXirr(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitmapLogic(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitmapFromColumn(AggregateFunctionFactory &);
 void registerAggregateFunctionsBitmapColumnDiff(AggregateFunctionFactory & factory);
@@ -165,6 +166,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionFrequency(factory);
         registerAggregateFunctionPathSplit(factory);
         registerAggregateFunctionPathCount(factory);
+        registerAggregateFunctionXirr(factory);
 
         registerWindowFunctions(factory);
 
