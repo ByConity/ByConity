@@ -3137,7 +3137,13 @@ void StorageHaMergeTree::tryExecutePartitionLevelTTL()
         if (part->info.isFakeDropRangePart())
             continue;
 
-        auto ttl = calcTTLForPartition(part->partition, partition_key_description, rows_ttl);
+        //auto ttl = calcTTLForPartition(part->partition, partition_key_description, rows_ttl);
+        /**
+         * calcTTLForPartition cannot handle expressions with function, e.g. toDate(p_date).
+         * However, since new ttl implement contains part_min_ttl, it is unneccessary to calculate ttl time online.
+         * A unified way is to use TTLBlockInputStream but it maybe too slow for large number of parts.
+         */
+        auto ttl = part->ttl_infos.part_min_ttl;
         if (ttl < now)
             partitions_to_clean.insert(*curr_partition);
     }
