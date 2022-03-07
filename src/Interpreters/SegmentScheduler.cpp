@@ -132,7 +132,7 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)
 {
-    std::unique_lock<bthread::Mutex> lock(mutex);
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_map_ite = query_map.find(query_id);
     if (query_map_ite != query_map.end())
         query_map.erase(query_map_ite);
