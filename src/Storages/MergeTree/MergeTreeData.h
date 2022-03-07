@@ -1182,6 +1182,7 @@ protected:
     std::atomic<UInt64> unique_commit_version {0};
     /// used to serialize write and merge
     mutable std::mutex unique_write_mutex;
+    std::atomic<bool> disable_delete_file_gc {false};
     /// make sure only one thread can perform delete file gc at a time
     mutable std::mutex delete_file_gc_mutex;
 

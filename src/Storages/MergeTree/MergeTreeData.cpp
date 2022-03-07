@@ -5613,6 +5613,8 @@ void MergeTreeData::performUniqueIndexGc()
 
 void MergeTreeData::clearOldDeleteFilesFromFilesystem()
 {
+    if (disable_delete_file_gc)
+        return;
     std::unique_lock<std::mutex> lock(delete_file_gc_mutex);
     DataPartsVector parts = getDataPartsVector();
     auto commit_version = unique_commit_version.load(std::memory_order_relaxed);

@@ -477,6 +477,7 @@ private:
     struct RepairState
     {
         UInt64 version;
+        UInt64 checkpoint_version = 0;
         String leader;
         time_t start_time;
         std::vector<std::pair<DataPartPtr, UInt64>> delete_files_to_fetch;

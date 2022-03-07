@@ -100,7 +100,7 @@ void HaUniqueMergeTreeRestartingThread::run()
                         break;
                     case UniqueTableState::REPAIR_DATA:
                         /// re-create repair_lsn in case session expired during repair
-                        storage.saveRepairVersionToZk(storage.current_repair_state->version);
+                        storage.saveRepairVersionToZk(storage.current_repair_state->checkpoint_version);
                         break;
                     case UniqueTableState::REPAIRED:
                         /// after there is nothing to repair
