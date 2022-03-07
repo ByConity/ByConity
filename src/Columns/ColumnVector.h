@@ -305,17 +305,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    ColumnPtr selectDefault() const override;
-
-    ColumnPtr replaceFrom(
-        const PaddedPODArray<UInt32> & indexes,
-        const IColumn & rhs,
-        const PaddedPODArray<UInt32> & rhs_indexes,
-        const IColumn::Filter * is_default_filter,
-        const IColumn::Filter * filter) const override
-    {
-        return this->template doReplaceFrom<Self>(indexes, assert_cast<const Self &>(rhs), rhs_indexes, is_default_filter, filter);
-    }
+    ColumnPtr selectDefault(const Field) const override;
 
     bool canBeInsideNullable() const override { return true; }
     bool isFixedAndContiguous() const override { return true; }

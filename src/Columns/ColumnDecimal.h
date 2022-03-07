@@ -168,6 +168,8 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
+    ColumnPtr selectDefault(const Field) const override;
+
     bool structureEquals(const IColumn & rhs) const override
     {
         if (auto rhs_concrete = typeid_cast<const ColumnDecimal<T> *>(&rhs))

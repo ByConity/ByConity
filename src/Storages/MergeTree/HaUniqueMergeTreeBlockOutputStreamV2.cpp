@@ -27,34 +27,6 @@ namespace ErrorCodes
 
 namespace
 {
-bool filterIsAlwaysTrue(const IColumn::Filter & filter)
-{
-    /// TODO: there should be faster SIMD way to implement this
-    for (size_t i = 0, size = filter.size(); i < size; ++i)
-        if (filter[i] == 0)
-            return false;
-    return true;
-}
-
-bool filterIsAlwaysFalse(const IColumn::Filter & filter)
-{
-    /// TODO: there should be faster SIMD way to implement this
-    for (size_t i = 0, size = filter.size(); i < size; ++i)
-        if (filter[i] == 1)
-            return false;
-    return true;
-}
-
-size_t filterDefaultCount(const IColumn::Filter & filter)
-{
-    size_t count = 0;
-    /// TODO: there should be faster SIMD way to implement this
-    for (size_t i = 0, size = filter.size(); i < size; ++i)
-        if (filter[i] == 1)
-            count++;
-    return count;
-}
-
 /// Search `key' in `parts'.
 /// If found, return index of the part containing the key and set rowid and version(optional) for the key.
 /// Otherwise return -1.
@@ -121,7 +93,13 @@ PaddedPODArray<UInt32> permuteRowids(const PaddedPODArray<UInt32> & rowids, cons
     return res;
 }
 
-/// TODO(lta): add comments
+/**
+ * Permutate the indexes in correct order, the rules of order are as follow:
+ * 1. Sort by target index ascending.
+ * 2. In the case that target indexes are same, sort by source index descending because the index is larger, the data is newer.
+ * For example, replace_dst_indexes is {5, 5, 4, 5}, replace_src_indexes is {0, 2, 1, 3}
+ * After correct permutation, replace_dst_indexes is {4, 5, 5, 5}, replace_src_indexes is {1, 3, 2, 0}
+ */
 void handleCorrectPermutation(PaddedPODArray<UInt32> & replace_dst_indexes, PaddedPODArray<UInt32> & replace_src_indexes)
 {
     PaddedPODArray<UInt32> perm;
@@ -437,9 +415,9 @@ void HaUniqueMergeTreeBlockOutputStreamV2::writeSuffix()
         LOG_DEBUG(log, "Total Read from store in {} ms, total row: {}", total_read_from_store_cost, total_read_row);
         LOG_DEBUG(
             log,
-            "Total Replace column in {} ms, replace default value rows: {}, replace handle column count: {}",
+            "Total Replace column in {} ms, get default cost {} ms, replace handle column count: {}",
             total_replace_cost,
-            total_replace_default_value_row,
+            total_replace_get_default_cost,
             total_replace_handle_column_count);
 
         LOG_DEBUG(log, "Total Write part in {} ms, total row: {}", total_write_part_cost - total_write_row_store_cost, total_write_part_row);
@@ -513,6 +491,21 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
     }
     index.clear();
 
+    /********************************************************************************************************
+     * Find the final target row for each source row.
+     * For example, block has six rows and the first column is unique key:
+     * row id       data
+     *    0     (1, 'a', [1, 2])
+     *    1     (2, 'b', [3, 4]) 
+     *    2     (1, 'c', [1, 2, 3])
+     *    3     (1, 'd', [4, 5])
+     *    4     (2, 'e', [4, 5])
+     *    5     (1, 'f', [4, 5])
+     * Currently, replace_dst_indexes is {2, 3, 4, 5}, replace_src_indexes is {0, 2, 1, 3}
+     * Actually, the final target row for the row 0 is 3.
+     * So, it needs to reverse the list and record the real target row.
+     * For the result, replace_dst_indexes is {5, 4, 5, 5}, replace_src_indexes is {3, 1, 2, 0}
+     ********************************************************************************************************/
     std::map<UInt32, UInt32> src_to_dst;
     PaddedPODArray<UInt32> tmp_replace_dst_indexes, tmp_replace_src_indexes;
     size_t size = replace_dst_indexes.size();
@@ -529,6 +522,7 @@ size_t HaUniqueMergeTreeBlockOutputStreamV2::removeDupKeys(
     }
     replace_dst_indexes = std::move(tmp_replace_dst_indexes);
     replace_src_indexes = std::move(tmp_replace_src_indexes);
+    handleCorrectPermutation(replace_dst_indexes, replace_src_indexes);
     total_remove_dedup_judge_cost += judge_timer.elapsedMilliseconds();
     return num_filtered;
 }
@@ -698,6 +692,14 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     PartsWithDeleteRows & parts_with_deletes,
     DeletesOnMergingParts & deletes_on_merging_parts)
 {
+    /********************************************************************
+     * We divide the process into several phases:
+     * Phase 1: Remove duplicate keys in block and get replace info
+     * Phase 2: Get indexes that need to be searched in previous parts.
+     * Phase 3: Query data from previous parts.
+     * Phase 4: Replace column and filter data.
+     * Phase 5: Remove column not in header.
+     ********************************************************************/
     auto & block = block_with_partition.block;
 
     size_t block_size = block.rows();
@@ -713,25 +715,12 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     if (storage.merging_params.partitionValueAsVersion())
         cur_version = block_with_partition.partition[0].safeGet<UInt64>();
 
+    /// Phase 1: Remove duplicate keys in block and get replace info
     Stopwatch remove_dedup_timer;
     total_remove_dedup_cost += remove_dedup_timer.elapsedMilliseconds();
     PaddedPODArray<UInt32> replace_dst_indexes, replace_src_indexes;
     IColumn::Filter filter(block_size, 1);
     size_t num_filtered = removeDupKeys(block, version_column, filter, replace_dst_indexes, replace_src_indexes);
-
-    // std::cout << "replace_src_indexes: " << std::endl;
-    // for (size_t i = 0 ; i < replace_src_indexes.size(); ++i)
-    //     std::cout << replace_src_indexes[i] << std::endl;
-
-    // std::cout << "replace_dst_indexes: " << std::endl;
-    // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
-    //     std::cout << replace_dst_indexes[i] << std::endl;
-
-    // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
-    // {
-    //     if (filter[replace_dst_indexes[i]] == 0)
-    //         throw Exception(ErrorCodes::LOGICAL_ERROR, "Pre Column {} is target and filtered.", replace_dst_indexes[i]);
-    // }
 
     Stopwatch get_uki_timer;
     auto unique_key_column_names = metadata_snapshot->getUniqueKeyColumns();
@@ -784,11 +773,20 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     };
 
     Stopwatch query_uki_timer;
+    /********************************************************************************************************
+     * Phase 2: Get indexes that need to be searched in previous parts.
+     * It's necessary to remove those rows whose version is lower than that of previous parts.
+     * For example, table has four column, the first column is unique key and second column is version:
+     * CREATE TABLE test.example (id UInt8, version UInt8, int0 UInt8, String0 String) Engine=HaUniqueMergeTree...
+     * Currently, it has one row (1, 4, 0, '') whose int0 and String0 are both default value.
+     * The insert block has two row: (1, 3, 3, 'a') (1, 4, 4, '')
+     * After removeDupKeys method, replace_dst_indexes is {1}, replace_src_indexes {0}
+     * But version(3) of row 0 is lower than that(4) of previous parts, so row 0 should be discard.
+     * The final result should be (1, 4, 4, '') whose String0 is still default value.
+     * If version of row 0 is set to 4, the final result would be (1, 4, 4, 'a').
+     ********************************************************************************************************/
     PaddedPODArray<UInt32> tmp_replace_dst_indexes, tmp_replace_src_indexes;
-    /// Due to all replace dst index are reverse, so it's necessary to start from tail.
-    /// Use int type to prevent infinite loop.
-    int replace_index_id = replace_dst_indexes.size() - 1;
-    /// TODO(lta): add an example to explain this
+    size_t replace_index_id = 0;
     for (size_t rowid = 0; rowid < block_size; ++rowid) {
         if (filter[rowid] == 0)
             continue;
@@ -838,14 +836,14 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
             part_rowid_pairs[part_index].push_back({part_rowid, static_cast<UInt32>(rowid + block_size)});
 
             /// Some rows may be just replace in block and not found in previous parts.
-            while (replace_index_id >= 0 && replace_dst_indexes[replace_index_id] < rowid)
+            while (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] < rowid)
             {
                 tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
                 tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
-                replace_index_id--;
+                replace_index_id++;
             }
             /// Check whether to delete the previous one, there maybe multiple replaced column for the same
-            while (replace_index_id >=0 && replace_dst_indexes[replace_index_id] == rowid)
+            while (replace_index_id < replace_dst_indexes.size() && replace_dst_indexes[replace_index_id] == rowid)
             {
                 if (version_column)
                     cur_version = version_column->getUInt(rowid);
@@ -854,20 +852,19 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
                     tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
                     tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
                 }
-                replace_index_id--;
+                replace_index_id++;
             }
         }
         process_row_deletion(existing_parts[part_index], part_rowid, key);
     }
-    while (replace_index_id >= 0)
+    while (replace_index_id < replace_dst_indexes.size())
     {
         tmp_replace_dst_indexes.push_back(replace_dst_indexes[replace_index_id]);
         tmp_replace_src_indexes.push_back(replace_src_indexes[replace_index_id]);
-        replace_index_id--;
+        replace_index_id++;
     }
     replace_dst_indexes = std::move(tmp_replace_dst_indexes);
     replace_src_indexes = std::move(tmp_replace_src_indexes);
-    handleCorrectPermutation(replace_dst_indexes, replace_src_indexes);
 
     total_query_uki_cost += query_uki_timer.elapsedMilliseconds();
 
@@ -879,6 +876,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
 
     Stopwatch timer;
     size_t total_row = 0;
+    /// Phase 3: Query data from previous parts.
     for (size_t i = 0; i < part_rowid_pairs.size(); ++i)
     {
         if (part_rowid_pairs[i].empty())
@@ -909,6 +907,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
     total_read_row += total_row;
 
     Stopwatch replace_timer;
+    /// Phase 4: Replace column and filter data.
     if (!block_rowids.empty() || !replace_dst_indexes.empty())
     {
         if (!block_rowids.empty())
@@ -919,19 +918,13 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
             mergeIndices(replace_dst_indexes, tmp_dst_indexes);
         }
 
-        // std::cout << "replace_src_indexes: " << std::endl;
-        // for (size_t i = 0 ; i < replace_src_indexes.size(); ++i)
-        //     std::cout << replace_src_indexes[i] << std::endl;
-
-        // std::cout << "replace_dst_indexes: " << std::endl;
-        // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
-        //     std::cout << replace_dst_indexes[i] << std::endl;
-
         NameSet non_updatable_columns;
         for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
             non_updatable_columns.insert(name);
         for (auto & name : metadata_snapshot->getUniqueKeyColumns())
             non_updatable_columns.insert(name);
+
+        Block a = block;
 
         for (auto & col : block)
         {
@@ -948,20 +941,16 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
             }
             else
             {
-                ColumnPtr is_default_col = col.column->selectDefault();
+                Stopwatch replace_get_default_timer;
+                ColumnPtr is_default_col = col.column->selectDefault(col.type->getDefault());
                 const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
-                // for (size_t i = 0 ; i < replace_dst_indexes.size(); ++i)
-                // {
-                //     if (filter[replace_dst_indexes[i]] == 0)
-                //         throw Exception(ErrorCodes::LOGICAL_ERROR, "Column {} Row {} is target and filtered.", col.name, replace_dst_indexes[i]);
-                // }
+                total_replace_get_default_cost += replace_get_default_timer.elapsedMilliseconds();
 
                 /// all values are non-default, nothing to replace
-                if (filterIsAlwaysFalse(is_default_filter) && !num_filtered)
+                if (filterIsAlwaysFalse(is_default_filter) && !col.type->isMap() && !num_filtered)
                     continue;
 
-                total_replace_default_value_row += filterDefaultCount(is_default_filter);
                 total_replace_handle_column_count++;
                 ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
                 if (!column_from_storage)
@@ -994,7 +983,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         }
     }
 
-    /// remove column not in header, including func columns
+    /// Phase 5: Remove column not in header, including func columns
     auto header_block = getHeader();
     for (auto & col_name : block.getNames())
         if (!header_block.has(col_name))

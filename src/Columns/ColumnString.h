@@ -267,17 +267,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    ColumnPtr selectDefault() const override;
-
-    ColumnPtr replaceFrom(
-        const PaddedPODArray<UInt32> & indexes,
-        const IColumn & rhs,
-        const PaddedPODArray<UInt32> & rhs_indexes,
-        const Filter * is_default_filter,
-        const IColumn::Filter * filter) const override
-    {
-        return doReplaceFrom<ColumnString>(indexes, assert_cast<const ColumnString &>(rhs), rhs_indexes, is_default_filter, filter);
-    }
+    ColumnPtr selectDefault(const Field) const override;
 
     ColumnPtr compress() const override;
 

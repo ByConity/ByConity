@@ -1,6 +1,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnCompressed.h>
+#include <Columns/ColumnVector.h>
 
 #include <DataStreams/ColumnGathererStream.h>
 #include <IO/WriteHelpers.h>
@@ -439,6 +440,25 @@ ColumnPtr ColumnFixedString::replicate(const Offsets & offsets) const
 void ColumnFixedString::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
+}
+
+ColumnPtr ColumnFixedString::selectDefault(const Field) const
+{
+    size_t row_num = size();
+    auto res = ColumnVector<UInt8>::create(row_num, 1);
+    IColumn::Filter & filter = res->getData();
+    /// TODO: improve by SIMD
+    size_t id = 0, cnt = 0;
+    for (size_t i = 0; i < chars.size(); ++i)
+    {
+        filter[id] &= chars[i] == 0;
+        if (++cnt == n)
+        {
+            id++;
+            cnt = 0;
+        }
+    }
+    return res;
 }
 
 void ColumnFixedString::getExtremes(Field & min, Field & max) const

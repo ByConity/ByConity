@@ -539,14 +539,14 @@ void ColumnString::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-ColumnPtr ColumnString::selectDefault() const
+ColumnPtr ColumnString::selectDefault(const Field) const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num);
     IColumn::Filter & filter = res->getData();
     /// TODO: improve by SIMD
     for (size_t i = 0; i < row_num; ++i)
-        filter[i] = (offsets[i] - offsets[i - 1]) == 1;
+        filter[i] = sizeAt(i) == 1;
     return res;
 }
 

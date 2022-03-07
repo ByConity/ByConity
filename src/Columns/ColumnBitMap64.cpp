@@ -5,6 +5,7 @@
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnBitMap64.h>
 #include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnVector.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/WeakHash.h>
@@ -527,6 +528,18 @@ void ColumnBitMap64::gather(ColumnGathererStream & gatherer)
 {
     gatherer.gather(*this);
 }
+
+ColumnPtr ColumnBitMap64::selectDefault(const Field) const
+{
+    size_t row_num = size();
+    auto res = ColumnVector<UInt8>::create(row_num, 1);
+    IColumn::Filter & filter = res->getData();
+    BitMap64 value;
+    for (size_t i = 0; i < row_num; ++i)
+        filter[i] = getBitMapAt(i) == value;
+    return res;
+}
+
 
 void ColumnBitMap64::reserve(size_t n)
 {

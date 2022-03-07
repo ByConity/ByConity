@@ -17,6 +17,8 @@ class ColumnByteMap final : public COWHelper<IColumn, ColumnByteMap>
 private:
     friend class COWHelper<IColumn, ColumnByteMap>;
 
+    using RowValue = std::map<Field, Field>;
+
     WrappedPtr keyColumn;
     WrappedPtr valueColumn;
     WrappedPtr offsets;
@@ -26,6 +28,15 @@ private:
     /** Create an empty column of Map with key, value information */
     explicit ColumnByteMap(MutableColumnPtr && key_column, MutableColumnPtr && value_column);
     ColumnByteMap(const ColumnByteMap &) = default;
+
+    /**
+     * For the feature of partial update, the row of map column will merge the values.
+     * The caller must make sure that those Fields already in row is the newest one.
+     * 
+     * @param row result of this row
+     * @param n the row to be merged
+     */
+    void mergeRowValue(RowValue & row, size_t n) const;
 
 public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
@@ -82,6 +93,24 @@ public:
     void updateHashWithValue(size_t n, SipHash & hash) const override;
     void updateWeakHash32(WeakHash32 & hash) const override;
     void updateHashFast(SipHash & hash) const override;
+
+    ColumnPtr selectDefault(const Field) const override;
+
+    /**
+     * Try to replace the current value of current_pos with merging the value and those of two parts. The same target index will appear multiple times in first part and at most once in second part.
+     * For example, there are three data of the same row(current_pos) from old to new:
+     * {'a': 1, 'b': 2}, {'b': 3, 'c': 4}, {'a': 7,'c': 5, 'd': 6}
+     * After merging data, result row is {'a': 7, 'b': 3, 'c': 5, 'd': 6}
+     */
+    virtual bool replaceRow(
+        const PaddedPODArray<UInt32> & indexes,
+        const IColumn & rhs,
+        const PaddedPODArray<UInt32> & rhs_indexes,
+        const Filter * is_default_filter,
+        size_t current_pos,
+        size_t & first_part_pos,
+        size_t & second_part_pos,
+        MutableColumnPtr & res) const override;
 
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertRangeSelective(const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length) override;

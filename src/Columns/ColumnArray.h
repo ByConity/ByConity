@@ -129,6 +129,8 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
+    ColumnPtr selectDefault(const Field) const override;
+
     ColumnPtr compress() const override;
 
     void forEachSubcolumn(ColumnCallback callback) override

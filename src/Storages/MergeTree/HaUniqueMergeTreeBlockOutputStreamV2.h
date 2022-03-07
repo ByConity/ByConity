@@ -31,7 +31,7 @@ public:
     void writeSuffix() override;
 
 private:
-    /// TODO(lta): add comments that replace_dst are reverse
+
     size_t removeDupKeys(
         Block & block,
         ColumnPtr version_column,
@@ -91,8 +91,8 @@ private:
     size_t total_query_uki_cost = 0;
     size_t total_read_from_store_cost = 0;
     size_t total_read_row = 0;
+    size_t total_replace_get_default_cost = 0;
     size_t total_replace_cost = 0;
-    size_t total_replace_default_value_row = 0;
     size_t total_replace_handle_column_count = 0;
     size_t total_filter_cost = 0;
     size_t total_write_part_cost = 0;
