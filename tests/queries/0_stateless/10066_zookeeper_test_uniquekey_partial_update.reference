@@ -1,44 +1,44 @@
 insert with normal mode, using default value
 select replica 1
-1	0	6
-2	0	8
+1	0		\0\0\0\0\0\0\0\0\0\0	[]	{'c':5}
+2	0	8	\0\0\0\0\0\0\0\0\0\0	[]	{'g':14}
 select replica 2
-1	0	6
-2	0	8
+1	0		\0\0\0\0\0\0\0\0\0\0	[]	{'c':5}
+2	0	8	\0\0\0\0\0\0\0\0\0\0	[]	{'g':14}
 after merge, insert with normal mode
 select replica 1
-1	4	0
-2	6	0
+1	4		\0\0\0\0\0\0\0\0\0\0	[10,20]	{}
+2	6		\0\0\0\0\0\0\0\0\0\0	[50,60]	{}
 select replica 2
-1	4	0
-2	6	0
+1	4		\0\0\0\0\0\0\0\0\0\0	[10,20]	{}
+2	6		\0\0\0\0\0\0\0\0\0\0	[50,60]	{}
 
 insert with partial update mode, disable unique row store
 select replica 1
-1	2	6
-2	3	8
+1	2	x	m\0\0\0\0\0\0\0\0\0	[1,2]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	3	8	t\0\0\0\0\0\0\0\0\0	[5,6]	{'a':1,'e':6,'f':10,'g':14}
 select replica 2
-1	2	6
-2	3	8
+1	2	x	m\0\0\0\0\0\0\0\0\0	[1,2]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	3	8	t\0\0\0\0\0\0\0\0\0	[5,6]	{'a':1,'e':6,'f':10,'g':14}
 after merge, insert with partial update mode, disable unique row store
 select replica 1
-1	4	6
-2	6	8
+1	4	x	m\0\0\0\0\0\0\0\0\0	[10,20]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	6	8	t\0\0\0\0\0\0\0\0\0	[50,60]	{'a':1,'e':6,'f':10,'g':14}
 select replica 2
-1	4	6
-2	6	8
+1	4	x	m\0\0\0\0\0\0\0\0\0	[10,20]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	6	8	t\0\0\0\0\0\0\0\0\0	[50,60]	{'a':1,'e':6,'f':10,'g':14}
 
 insert with partial update mode, enable unique row store
 select replica 1
-1	2	6
-2	3	8
+1	2	x	m\0\0\0\0\0\0\0\0\0	[1,2]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	3	8	t\0\0\0\0\0\0\0\0\0	[5,6]	{'a':1,'e':6,'f':10,'g':14}
 select replica 2
-1	2	6
-2	3	8
+1	2	x	m\0\0\0\0\0\0\0\0\0	[1,2]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	3	8	t\0\0\0\0\0\0\0\0\0	[5,6]	{'a':1,'e':6,'f':10,'g':14}
 after merge, insert with partial update mode, enable unique row store
 select replica 1
-1	4	6
-2	6	8
+1	4	x	m\0\0\0\0\0\0\0\0\0	[10,20]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	6	8	t\0\0\0\0\0\0\0\0\0	[50,60]	{'a':1,'e':6,'f':10,'g':14}
 select replica 2
-1	4	6
-2	6	8
+1	4	x	m\0\0\0\0\0\0\0\0\0	[10,20]	{'a':2,'b':3,'c':5,'d':7,'h':12}
+2	6	8	t\0\0\0\0\0\0\0\0\0	[50,60]	{'a':1,'e':6,'f':10,'g':14}
