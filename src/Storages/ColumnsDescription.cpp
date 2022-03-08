@@ -22,6 +22,7 @@
 #include <DataTypes/DataTypeNested.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/MapHelpers.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
@@ -485,6 +486,11 @@ NamesAndTypesList ColumnsDescription::getByNames(GetFlags flags, const Names & n
         else if (auto impl = tryGetMapImplicitColumn(name))
         {
             res.push_back(*impl);
+            continue;
+        }
+        else if (name == "_part_row_number")
+        {
+            res.emplace_back("_part_row_number", std::make_shared<DataTypeUInt64>());
             continue;
         }
         else if (with_subcolumns)

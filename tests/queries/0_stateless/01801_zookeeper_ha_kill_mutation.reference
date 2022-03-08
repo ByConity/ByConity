@@ -1,0 +1,11 @@
+*** Create and kill a single invalid mutation ***
+0000000000	1	1	Code: 6,
+waiting	test	ha_kill_mutation_r1	0000000000	FASTDELETE x WHERE toUInt32(s) = 1
+0
+*** Create and kill invalid mutation that blocks another mutation ***
+0000000001	1	1	Code: 6,
+waiting	test	ha_kill_mutation_r1	0000000001	FASTDELETE x WHERE toUInt32(s) = 1
+select r1
+2001-01-01	2	b
+select r2
+2001-01-01	2	b

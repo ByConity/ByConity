@@ -56,6 +56,7 @@ public:
 
     ReadFromMergeTree(
         MergeTreeData::DataPartsVector parts_,
+        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
         Names real_column_names_,
         Names virt_column_names_,
         const MergeTreeData & data_,
@@ -87,6 +88,7 @@ private:
     const MergeTreeReaderSettings reader_settings;
 
     MergeTreeData::DataPartsVector prepared_parts;
+    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter;
     Names real_column_names;
     Names virt_column_names;
 

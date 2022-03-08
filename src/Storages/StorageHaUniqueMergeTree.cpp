@@ -3407,7 +3407,7 @@ void StorageHaUniqueMergeTree::setTableStructure(
 std::optional<UInt64> StorageHaUniqueMergeTree::totalRows(const Settings & settings) const
 {
     UInt64 res = 0;
-    foreachCommittedParts([&res](auto & part) { res += part->rows_count; });
+    foreachCommittedParts([&res](auto & part) { res += part->numRowsRemovingDeletes(); });
     return res;
 }
 

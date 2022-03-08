@@ -169,6 +169,21 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 return false;
             break;
 
+        case Type::EXECUTE_MUTATION:
+        case Type::RELOAD_MUTATION:
+        {
+            /// system execute|reload mutation 'mutation_id' on db.table
+            ASTPtr ast;
+            if (!ParserStringLiteral{}.parse(pos, ast, expected))
+                return false;
+            res->mutation_id = ast->as<ASTLiteral &>().value.safeGet<String>();
+            if (!ParserKeyword{"ON"}.ignore(pos, expected))
+                return false;
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            break;
+        }
+
         case Type::RESTART_DISK:
         {
             ASTPtr ast;

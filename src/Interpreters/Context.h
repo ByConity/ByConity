@@ -142,6 +142,7 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
 
+class DeleteBitmapCache;
 /// Used in unique table for caching unique key
 class DiskUniqueKeyIndexCache;
 using DiskUniqueKeyIndexBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
@@ -868,6 +869,10 @@ public:
 
     void setPipelineLogPath(const String & path) { pipeline_log_path = path; }
     String getPipelineLogpath() const { return pipeline_log_path; }
+
+    /// Create a memory cache of delete bitmaps for data parts.
+    void setDeleteBitmapCache(size_t cache_size_in_bytes);
+    std::shared_ptr<DeleteBitmapCache> getDeleteBitmapCache() const;
 
     /// Create a memory cache of data blocks reading from unique key index files.
     void setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes);

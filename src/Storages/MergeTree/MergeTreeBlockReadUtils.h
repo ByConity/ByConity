@@ -30,6 +30,8 @@ struct MergeTreeReadTask
 {
     /// data part which should be read while performing this task
     MergeTreeData::DataPartPtr data_part;
+    /// used to filter out deleted rows from part, could be nullptr if no deleted rows
+    DeleteBitmapPtr delete_bitmap;
     /// Ranges to read from `data_part`.
     MarkRanges mark_ranges;
     /// for virtual `part_index` virtual column
@@ -51,13 +53,11 @@ struct MergeTreeReadTask
     /// Used to save current range processing status
     MergeTreeRangeReader range_reader;
     MergeTreeRangeReader pre_range_reader;
-    /// delete bitmap for `data_part`, used to filter out deleted rows
-    DeleteBitmapPtr delete_bitmap;
 
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
     MergeTreeReadTask(
-        const MergeTreeData::DataPartPtr & data_part_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+        const MergeTreeData::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
         const Names & ordered_names_, const NameSet & column_name_set_, const NamesAndTypesList & columns_,
         const NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
         MergeTreeBlockSizePredictorPtr && size_predictor_);

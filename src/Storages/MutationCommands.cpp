@@ -38,6 +38,16 @@ std::optional<MutationCommand> MutationCommand::parse(ASTAlterCommand * command,
         res.partition = command->partition;
         return res;
     }
+    else if (command->type == ASTAlterCommand::FAST_DELETE)
+    {
+        MutationCommand res;
+        res.ast = command->ptr();
+        res.type = FAST_DELETE;
+        res.predicate = command->predicate;
+        res.partition = command->partition;
+        res.columns = command->columns;
+        return res;
+    }
     else if (command->type == ASTAlterCommand::UPDATE)
     {
         MutationCommand res;
@@ -176,6 +186,22 @@ bool MutationCommands::willMutateData() const
         if (c.type != MutationCommand::Type::ADD_COLUMN)
             return true;
     return false;
+}
+
+bool MutationCommands::requireIndependentExecution() const
+{
+    /// 'fastdelete' and 'modify column' reads part using an empty delete bitmap,
+    /// so they can't be executed together with commands like update or delete
+    /// which uses part's delete bitmap
+    return std::any_of(begin(), end(), [](const MutationCommand & c)
+    {
+        return c.type == MutationCommand::FAST_DELETE || c.type == MutationCommand::READ_COLUMN;
+    });
+}
+
+bool MutationCommands::allOf(MutationCommand::Type type) const
+{
+    return !empty() && std::all_of(begin(), end(), [type](const MutationCommand & c) { return c.type == type; });
 }
 
 void MutationCommands::writeText(WriteBuffer & out) const

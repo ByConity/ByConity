@@ -139,8 +139,28 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 
     if (!query_info.projection)
     {
+        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter;
+        if (metadata_snapshot->hasUniqueKey())
+        {
+            /// get a consistent snapshot of delete bitmaps for query,
+            /// otherwise concurrent upserts that modify part's delete bitmap will cause incorrect query result
+            auto delete_bitmap_snapshot = data.getLatestDeleteSnapshot(parts);
+            /// move delete_bitmap_snapshot into the closure because delete_bitmap_getter will be used after this function returns
+            delete_bitmap_getter = [snapshot = std::move(delete_bitmap_snapshot)](const auto & part) -> DeleteBitmapPtr
+            {
+                if (auto it = snapshot.find(part); it != snapshot.end())
+                    return it->second;
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Not found delete bitmap for part " + part->name);
+            };
+        }
+        else
+        {
+            delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
+        }
+
         auto plan = readFromParts(
             parts,
+            delete_bitmap_getter,
             column_names_to_return,
             metadata_snapshot,
             metadata_snapshot,
@@ -184,8 +204,11 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     if (!projection_parts.empty())
     {
         LOG_DEBUG(log, "projection required columns: {}", fmt::join(query_info.projection->required_columns, ", "));
+        /// projection part shouldn't have delete bitmap
+        MergeTreeData::DeleteBitmapGetter null_getter = [](auto & /*part*/) { return nullptr; };
         auto plan = readFromParts(
             projection_parts,
+            null_getter,
             query_info.projection->required_columns,
             metadata_snapshot,
             query_info.projection->desc->metadata,
@@ -1178,6 +1201,7 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
 
 QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
     MergeTreeData::DataPartsVector parts,
+    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter,
     const Names & column_names_to_return,
     const StorageMetadataPtr & metadata_snapshot_base,
     const StorageMetadataPtr & metadata_snapshot,
@@ -1203,6 +1227,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
 
     auto read_from_merge_tree = std::make_unique<ReadFromMergeTree>(
         parts,
+        delete_bitmap_getter,
         real_column_names,
         virt_column_names,
         data,

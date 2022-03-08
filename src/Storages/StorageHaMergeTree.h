@@ -195,6 +195,12 @@ public:
     void systemExecuteLog(const std::vector<UInt64> & lsns);
     void systemSkipLog(const std::vector<UInt64> & lsns);
     void systemSetValues(const ASTPtr & values_changes);
+    /// Generate local mutate logs for parts in parts_to_do of the mutation.
+    /// It can fix hang mutation when mutate logs are incorrectly skipped due to bugs.
+    void systemExecuteMutation(const String & mutation_id);
+    /// Re-populate parts_to_do for the mutation based on local part list.
+    /// It's designed to be used in case parts_to_do is not maintained correctly due to bugs.
+    void systemReloadMutation(const String & mutation_id);
 
     void markLost();
 

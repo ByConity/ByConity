@@ -10,13 +10,13 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int MEMORY_LIMIT_EXCEEDED;
-    extern const int LOGICAL_ERROR;
 }
 
 MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     const MergeTreeData & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const MergeTreeData::DataPartPtr & owned_data_part_,
+    DeleteBitmapPtr delete_bitmap_,
     UInt64 max_block_size_rows_,
     size_t preferred_block_size_bytes_,
     size_t preferred_max_column_in_block_size_bytes_,
@@ -38,6 +38,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
+    delete_bitmap{std::move(delete_bitmap_)},
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
     check_columns(check_columns_)
@@ -82,17 +83,9 @@ try
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns.columns,
+        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns.columns,
         task_columns.pre_columns, prewhere_info && prewhere_info->remove_prewhere_column,
         task_columns.should_reorder, std::move(size_predictor));
-
-
-    if (metadata_snapshot->hasUniqueKey())
-    {
-        task->delete_bitmap = task->data_part->getDeleteBitmap();
-        if (!task->delete_bitmap)
-            throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
-    }
 
     if (!reader)
     {

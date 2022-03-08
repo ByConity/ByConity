@@ -71,7 +71,8 @@ private:
 public:
     MergeTreeReadPool(
         const size_t threads_, const size_t sum_marks_, const size_t min_marks_for_concurrent_read_,
-        RangesInDataParts && parts_, const MergeTreeData & data_, const StorageMetadataPtr & metadata_snapshot_,
+        RangesInDataParts && parts_, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter,
+        const MergeTreeData & data_, const StorageMetadataPtr & metadata_snapshot_,
         const PrewhereInfoPtr & prewhere_info_,
         const bool check_columns_, const Names & column_names_,
         const BackoffSettings & backoff_settings_, size_t preferred_block_size_bytes_,
@@ -92,7 +93,7 @@ public:
 
 private:
     std::vector<size_t> fillPerPartInfo(
-        const RangesInDataParts & parts, const bool check_columns);
+        const RangesInDataParts & parts, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns);
 
     void fillPerThreadInfo(
         const size_t threads, const size_t sum_marks, std::vector<size_t> per_part_sum_marks,
@@ -114,6 +115,7 @@ private:
     {
         MergeTreeData::DataPartPtr data_part;
         size_t part_index_in_query;
+        DeleteBitmapPtr delete_bitmap;
     };
 
     std::vector<Part> parts_with_idx;

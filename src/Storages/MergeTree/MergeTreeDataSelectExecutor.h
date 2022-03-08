@@ -48,6 +48,7 @@ public:
     /// The same as read, but with specified set of parts.
     QueryPlanPtr readFromParts(
         MergeTreeData::DataPartsVector parts,
+        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter,
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot_base,
         const StorageMetadataPtr & metadata_snapshot,

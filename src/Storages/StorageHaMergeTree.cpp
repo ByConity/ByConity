@@ -950,7 +950,7 @@ void StorageHaMergeTree::foreachCommittedParts(Func && func, bool select_sequent
 std::optional<UInt64> StorageHaMergeTree::totalRows(const Settings & settings) const
 {
     UInt64 res = 0;
-    foreachCommittedParts([&res](auto & part) { res += part->rows_count; }, settings.select_sequential_consistency);
+    foreachCommittedParts([&res](auto & part) { res += part->numRowsRemovingDeletes(); }, settings.select_sequential_consistency);
     return res;
 }
 
@@ -1299,7 +1299,7 @@ void StorageHaMergeTree::mutate(const MutationCommands & commands, ContextPtr qu
     mutation_entry.query_id = query_context->getInitialQueryId();
     mutation_entry.source_replica = replica_name;
     mutation_entry.commands = commands;
-
+    /// tests can overwrite query id using `SETTINGS mutation_query_id = 'xxx'`
     if (String query_id = query_context->getSettingsRef().mutation_query_id; !query_id.empty())
         mutation_entry.query_id = query_id;
 
@@ -4158,6 +4158,44 @@ void StorageHaMergeTree::systemSetValues(const ASTPtr & values_changes)
             throw Exception("Unknown value: " + c.name, ErrorCodes::BAD_ARGUMENTS);
         }
     }
+}
+
+void StorageHaMergeTree::systemExecuteMutation(const String & mutation_id)
+{
+    if (is_leader)
+        throw Exception("This operation only applies to non-leader replica", ErrorCodes::BAD_ARGUMENTS);
+
+    Strings parts_to_do;
+    auto mutation = queue.getExecutablePartsToMutate(mutation_id, parts_to_do);
+    if (!mutation || parts_to_do.empty())
+    {
+        LOG_INFO(log, "Nothing to execute for mutation {}", mutation_id);
+        return;
+    }
+
+    /// block merge select task during the execution of this task
+    /// because we may add part mutate log
+    std::lock_guard merge_selecting_lock(merge_selecting_mutex);
+
+    size_t max_queued_mutates = getSettings()->max_replicated_mutations_in_queue;
+
+    LogEntry::Vec log_entries;
+    for (String & part : parts_to_do)
+    {
+        auto info = MergeTreePartInfo::fromPartName(part, format_version);
+        auto log_entry = createLogEntryToMutatePart(info, mutation->block_number, mutation->alter_version, /*current_replica_only=*/true);
+        log_entries.push_back(log_entry);
+        if (log_entries.size() >= max_queued_mutates)
+            break;
+    }
+    queue.write(log_entries, /*broadcast=*/false);
+    LOG_INFO(log, "Wrote {} logs to fix hang mutation {}", log_entries.size(), mutation->getNameForLogs());
+    background_executor.triggerTask();
+}
+
+void StorageHaMergeTree::systemReloadMutation(const String & mutation_id)
+{
+    queue.forceReloadMutation(mutation_id);
 }
 
 void StorageHaMergeTree::markLost()

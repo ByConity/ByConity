@@ -146,6 +146,9 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             throw Exception("Can not convert part into MergeTreeDataPartCompact in MergeTreeReaderCompact.", ErrorCodes::LOGICAL_ERROR);
         for (size_t i = 0; i < columns_num; ++i, ++name_and_type)
         {
+            if (name_and_type->name == "_part_row_number")
+                continue;
+
             NameAndTypePair column_from_part;
 
             if (isMapKV(name_and_type->name))
@@ -176,6 +179,9 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
 
         for (const NameAndTypePair & column : columns)
         {
+            if (column.name == "_part_row_number")
+                continue;
+
             auto column_from_part = getColumnFromPart(column);
             if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
             {
@@ -263,7 +269,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
         res_col_to_idx[name] = i;
 
         // Each implicit map column is stored in a seperate file whose column_postition is nullptr.
-        if ((type->isMap() && !type->isMapKVStore()) || isMapImplicitKeyNotKV(name) || column_positions[i])
+        if ((type->isMap() && !type->isMapKVStore()) || isMapImplicitKeyNotKV(name) || column_positions[i] || name == "_part_row_number")
         {
             if (res_columns[i] == nullptr)
                 res_columns[i] = type->createColumn();
@@ -273,12 +279,14 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     auto sort_columns = columns;
     if (!dupImplicitKeys.empty())
         sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
-    
+
     while (read_rows < max_rows_to_read)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(from_mark);
+        size_t read_rows_in_column = 0;
 
         std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+        int row_number_column_pos = -1;
         auto name_and_type = sort_columns.begin();
         for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
         {
@@ -289,6 +297,13 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
 
             if (!res_columns[pos])
                 continue;
+
+            /// row number column will be populated at last after `read_rows` is set
+            if (name == "_part_row_number")
+            {
+                row_number_column_pos = pos;
+                continue;
+            }
 
             try
             {
@@ -318,7 +333,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                         implKeyName = getImplicitFileNameForMapKey(name, kit->second);
                         NameAndTypePair implicit_key_name_and_type{implKeyName, implValueType};
                         cache = caches[implicit_key_name_and_type.getNameInStorage()];
-                        
+
                         // If MAP implicit column and MAP column co-exist in columns, implicit column should
                         // only read only once.
                         if (dupImplicitKeys.count(implKeyName) !=0)
@@ -332,8 +347,8 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
 
                         implKeyColHolder.push_back(implValueType->createColumn());
                         auto& implValueColumn = implKeyColHolder.back();
-                        readData(implicit_key_name_and_type, 
-								 implValueColumn, from_mark, continue_reading, 
+                        readData(implicit_key_name_and_type,
+								 implValueColumn, from_mark, continue_reading,
 							     rows_to_read, cache);
                         implKeyValues[kit->second] = {0, &(*implValueColumn)};
                     }
@@ -347,7 +362,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                 	readData(column_from_part, column, from_mark, continue_reading, rows_to_read, cache);
                 else
                 {
-                    if (!data_reader)            
+                    if (!data_reader)
                         throw Exception("Compact data reader is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
                     if (map_kv_to_origin_col.count(name_and_type->name))
                     {
@@ -375,12 +390,12 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                     else
                         readCompactData(column_from_part, column, from_mark, *column_positions[pos], rows_to_read, read_only_offsets[pos]);
                 }
-            
+
                 if (column->empty())
                     column = nullptr;
                 else
                 {
-                    size_t read_rows_in_column = column->size() - column_size_before_reading;
+                    read_rows_in_column = column->size() - column_size_before_reading;
                     if (read_rows_in_column < rows_to_read)
                         throw Exception("Cannot read all data in MergeTreeReaderCompact. Rows read: " + toString(read_rows_in_column) +
                             ". Rows expected: " + toString(rows_to_read) + ".", ErrorCodes::CANNOT_READ_ALL_DATA);
@@ -400,6 +415,17 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                 storage.reportBrokenPart(data_part->name);
                 throw;
             }
+        }
+
+        /// Populate _part_row_number column if requested
+        if (row_number_column_pos >= 0)
+        {
+            auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
+            ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
+            size_t row_number = data_part->index_granularity.getMarkStartingRow(from_mark);
+            for (size_t i = 0; i < rows_to_read; ++i)
+                column.insertValue(row_number++);
+            res_columns[row_number_column_pos] = std::move(mutable_column);
         }
 
         ++from_mark;

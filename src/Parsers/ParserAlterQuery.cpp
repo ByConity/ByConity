@@ -93,6 +93,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_to_shard("TO SHARD");
 
     ParserKeyword s_delete("DELETE");
+    ParserKeyword s_fast_delete("FASTDELETE");
     ParserKeyword s_update("UPDATE");
     ParserKeyword s_where("WHERE");
     ParserKeyword s_to("TO");
@@ -727,6 +728,30 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
 
             command->type = ASTAlterCommand::DELETE;
+        }
+        else if (s_fast_delete.ignore(pos, expected))
+        {
+            if (!s_in_partition.checkWithoutMoving(pos, expected)
+                && !s_where.checkWithoutMoving(pos, expected))
+            {
+                ParserList parser_column_list(std::make_unique<ParserTupleElementExpression>(), std::make_unique<ParserToken>(TokenType::Comma));
+                if (!parser_column_list.parse(pos, command->columns, expected))
+                    return false;
+            }
+
+            if (s_in_partition.ignore(pos, expected))
+            {
+                if (!parser_partition.parse(pos, command->partition, expected))
+                    return false;
+            }
+
+            if (!s_where.ignore(pos, expected))
+                return false;
+
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            command->type = ASTAlterCommand::FAST_DELETE;
         }
         else if (s_update.ignore(pos, expected))
         {

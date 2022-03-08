@@ -295,6 +295,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::DELETE:
+        case ASTAlterCommand::FAST_DELETE:
         case ASTAlterCommand::DROP_PARTITION:
         case ASTAlterCommand::DROP_PARTITION_WHERE:
         case ASTAlterCommand::DROP_DETACHED_PARTITION:

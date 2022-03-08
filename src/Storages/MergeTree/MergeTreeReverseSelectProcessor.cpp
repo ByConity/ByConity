@@ -16,6 +16,7 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     const MergeTreeData & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const MergeTreeData::DataPartPtr & owned_data_part_,
+    DeleteBitmapPtr delete_bitmap_,
     UInt64 max_block_size_rows_,
     size_t preferred_block_size_bytes_,
     size_t preferred_max_column_in_block_size_bytes_,
@@ -37,6 +38,7 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     required_columns{std::move(required_columns_)},
     data_part{owned_data_part_},
+    delete_bitmap{std::move(delete_bitmap_)},
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
     path(data_part->getFullRelativePath())
@@ -99,7 +101,7 @@ try
         : std::make_unique<MergeTreeBlockSizePredictor>(data_part, ordered_names, metadata_snapshot->getSampleBlock());
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, mark_ranges_for_task, part_index_in_query, ordered_names, column_name_set,
+        data_part, delete_bitmap, mark_ranges_for_task, part_index_in_query, ordered_names, column_name_set,
         task_columns.columns, task_columns.pre_columns, prewhere_info && prewhere_info->remove_prewhere_column,
         task_columns.should_reorder, std::move(size_predictor));
 

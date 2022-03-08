@@ -22,6 +22,7 @@ MergeTreeReadPool::MergeTreeReadPool(
     const size_t sum_marks_,
     const size_t min_marks_for_concurrent_read_,
     RangesInDataParts && parts_,
+    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
     const MergeTreeData & data_,
     const StorageMetadataPtr & metadata_snapshot_,
     const PrewhereInfoPtr & prewhere_info_,
@@ -41,7 +42,7 @@ MergeTreeReadPool::MergeTreeReadPool(
     , parts_ranges{std::move(parts_)}
 {
     /// parts don't contain duplicate MergeTreeDataPart's.
-    const auto per_part_sum_marks = fillPerPartInfo(parts_ranges, check_columns_);
+    const auto per_part_sum_marks = fillPerPartInfo(parts_ranges, delete_bitmap_getter_, check_columns_);
     fillPerThreadInfo(threads_, sum_marks_, per_part_sum_marks, parts_ranges, min_marks_for_concurrent_read_);
 }
 
@@ -137,7 +138,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
         : std::make_unique<MergeTreeBlockSizePredictor>(*per_part_size_predictor[part_idx]); /// make a copy
 
     return std::make_unique<MergeTreeReadTask>(
-        part.data_part, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
+        part.data_part, part.delete_bitmap, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
         per_part_column_name_set[part_idx], per_part_columns[part_idx], per_part_pre_columns[part_idx],
         prewhere_info && prewhere_info->remove_prewhere_column, per_part_should_reorder[part_idx], std::move(curr_task_size_predictor));
 }
@@ -212,7 +213,7 @@ void MergeTreeReadPool::profileFeedback(const ReadBufferFromFileBase::ProfileInf
 
 
 std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
-    const RangesInDataParts & parts, const bool check_columns)
+    const RangesInDataParts & parts, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns)
 {
     std::vector<size_t> per_part_sum_marks;
     Block sample_block = metadata_snapshot->getSampleBlock();
@@ -239,7 +240,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         per_part_columns.push_back(std::move(required_columns));
         per_part_should_reorder.push_back(should_reorder);
 
-        parts_with_idx.push_back({ part.data_part, part.part_index_in_query });
+        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, delete_bitmap_getter(part.data_part) });
 
         if (predict_block_size_bytes)
         {

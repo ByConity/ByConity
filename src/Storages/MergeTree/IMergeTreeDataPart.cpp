@@ -1271,7 +1271,7 @@ void IMergeTreeDataPart::remove() const
                     {
                         continue;
                     }
-                    file_set.insert(file_name); 
+                    file_set.insert(file_name);
                     if (projection_directories.find(file_name) == projection_directories.end())
                         disk->removeSharedFile(fs::path(to) / file_name, *keep_shared_data);
                 }
@@ -1875,32 +1875,24 @@ String IMergeTreeDataPart::getDeleteFilePath() const
     return getFullPath() + delete_file_prefix + ".del";
 }
 
-void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap) const
+void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync)
 {
+    WriteBufferFromFile file_out(getDeleteFilePath(), 4096);
+    HashingWriteBuffer out(file_out);
+
     /// serialize bitmap to buffer
     size_t size = bitmap->getSizeInBytes();
     PODArray<char> buffer(size);
     size = bitmap->write(buffer.data());
-
     /// write to file
-    String path = getDeleteFilePath();
-    WriteBufferFromFile out(path, 4096);
     writeIntBinary(size, out);
     out.write(buffer.data(), size);
-}
+    out.next();
+    if (sync)
+        file_out.sync();
 
-void IMergeTreeDataPart::writeDeleteFileToBuffer(const DeleteBitmapPtr & bitmap, WriteBuffer & ostr) const
-{
-    if (bitmap)
-    {
-        /// serialize bitmap to buffer
-        size_t size = bitmap->getSizeInBytes();
-        PODArray<char> buffer(size);
-        size = bitmap->write(buffer.data());
-
-        writeIntBinary(size, ostr);
-        ostr.write(buffer.data(), size);
-    }
+    checksums.files[DELETE_BITMAP_FILE_NAME].file_size = out.count();
+    checksums.files[DELETE_BITMAP_FILE_NAME].file_hash = out.getHash();
 }
 
 void IMergeTreeDataPart::renameDeleteFileToVersion(UInt64 version) const
@@ -2028,48 +2020,67 @@ DeleteBitmapPtr IMergeTreeDataPart::getDeleteBitmap() const
     }
     else
     {
-        return nullptr;
         /// For ordinary MergeTree, each part contains at most one delete bitmap.
         /// A part has a delete bitmap if and only if the delete file is contained in the checksums.
         /// A global DeleteBitmapCache is used to cache hot delete bitmaps.
-        // const_cast<IMergeTreeDataPart &>(*this).loadChecksumsIfNeed();
-        // if (!checksums.files.count(DELETE_BITMAP_FILE_NAME))
-        //     return nullptr; /// the part doesn't have a delete bitmap
+        if (!Poco::File(getDeleteFilePath()).exists())
+            return nullptr; /// the part doesn't have a delete bitmap
 
-        // Stopwatch watch;
-        // auto cache = storage.getContext()->getDeleteBitmapCache();
-        // DeleteBitmapPtr bitmap;
-        // bool hit_cache = false;
+        Stopwatch watch;
+        auto cache = storage.getContext()->getDeleteBitmapCache();
+        DeleteBitmapPtr bitmap;
+        bool hit_cache = false;
 
-        // /// Data part's memory address is used as the cache key.
-        // auto addr = reinterpret_cast<uintptr_t>(this);
-        // String cache_key(reinterpret_cast<char *>(&addr), sizeof(addr));
+        /// Data part's memory address is used as the cache key.
+        String cache_key = getMemoryAddress();
 
-        // /// In order to prevent a data part from picking up a delete bitmap cached by
-        // /// another freed data part with the same memory address, cache is searched only if
-        // /// the part has inserted its delete bitmap into the cache before.
-        // if (is_delete_bitmap_cached)
-        // {
-        //     hit_cache = cache->lookup(cache_key, bitmap);
-        // }
+        /// In order to prevent a data part from picking up a delete bitmap cached by
+        /// another freed data part with the same memory address, cache is searched only if
+        /// the part has inserted its delete bitmap into the cache before.
+        if (is_delete_bitmap_cached)
+        {
+            hit_cache = cache->lookup(cache_key, bitmap);
+        }
 
-        // if (!hit_cache)
-        // {
-        //     bitmap = readDeleteFile(true);
-        //     if (!bitmap)
-        //         throw Exception("Get null bitmap for part " + name, ErrorCodes::LOGICAL_ERROR);
+        if (!hit_cache)
+        {
+            bitmap = readDeleteFile(true);
+            if (!bitmap)
+                throw Exception("Get null bitmap for part " + name, ErrorCodes::LOGICAL_ERROR);
 
-        //     cache->insert(cache_key, bitmap);
-        //     if (!is_delete_bitmap_cached)
-        //     {
-        //         delete_rows = static_cast<UInt32>(bitmap->cardinality());
-        //         const_cast<IMergeTreeDataPart &>(*this).is_delete_bitmap_cached = true;
-        //     }
-        //     LOG_TRACE(storage.log, "part " + name + " loaded delete bitmap (cardinality=" + toString(delete_rows.load(std::memory_order_relaxed)) + ") in " +
-        //                            toString(watch.elapsedMilliseconds()) + " ms");
-        // }
+            if (!is_delete_bitmap_cached)
+            {
+                cache->erase(cache_key);
+                delete_rows = static_cast<UInt32>(bitmap->cardinality());
+                const_cast<IMergeTreeDataPart &>(*this).is_delete_bitmap_cached = true;
+            }
+            cache->insert(cache_key, bitmap);
+            LOG_TRACE(storage.log, "part " + name + " loaded delete bitmap (cardinality=" + toString(delete_rows.load(std::memory_order_relaxed)) + ") in " +
+                                   toString(watch.elapsedMilliseconds()) + " ms");
+        }
 
-        // return bitmap;
+        return bitmap;
+    }
+}
+
+DeleteBitmapPtr IMergeTreeDataPart::readDeleteFile(bool log_on_error) const
+{
+    String path = getDeleteFilePath();
+    try
+    {
+        auto in = openForReading(volume->getDisk(), path);
+        size_t buf_size;
+        readIntBinary(buf_size, *in);
+        PODArray<char> buf(buf_size);
+        in->read(buf.data(), buf_size);
+        Roaring bitmap = Roaring::read(buf.data());
+        return std::make_shared<Roaring>(std::move(bitmap));
+    }
+    catch (...)
+    {
+        if (log_on_error)
+            LOG_ERROR(storage.log, "Failed to load delete file " + path + " : " + DB::getCurrentExceptionMessage(false));
+        throw;
     }
 }
 

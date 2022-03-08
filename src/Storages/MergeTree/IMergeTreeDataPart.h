@@ -115,7 +115,7 @@ public:
     virtual bool isStoredOnDisk() const = 0;
 
     virtual bool supportsVerticalMerge() const { return false; }
-    
+
     /// NOTE: Returns zeros if column files are not found in checksums.
     /// Otherwise return information about column size on disk.
     ColumnSize getColumnSize(const String & column_name, const IDataType & /* type */) const;
@@ -438,8 +438,7 @@ public:
     DeleteBitmapPtr readDeleteFileWithVersion(UInt64 version, bool log_on_error = true) const;
     std::vector<UInt64> listDeleteFiles(UInt64 min_version) const;
 
-    void writeDeleteFile(const DeleteBitmapPtr & bitmap) const;
-    void writeDeleteFileToBuffer(const DeleteBitmapPtr & bitmap, WriteBuffer & ostr) const;
+    void writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync);
     DeleteBitmapPtr readDeleteFile(bool log_on_error = true) const;
 
     /// For unique table: when attach a new part into table, we need to allocate a new lsn
@@ -547,6 +546,12 @@ public:
     /// FIXME (UNIQUE KEY): related to metastore, verify later.
     mutable std::shared_mutex columns_lock;
     mutable std::atomic_bool checksum_loaded{false};
+
+    /// FIXME: move to PartMetaEntry once metastore is added
+    /// Used to prevent concurrent modification to a part.
+    /// Can be removed once all data modification tasks (e.g, build bitmap index, recode) are
+    /// implemented as mutation commands and parts become immutable.
+    mutable std::mutex mutate_mutex;
 
     /// Delete bitmap is a bitmap containing the row numbers of deleted rows in this part.
     /// It's populated from the "delete file" on disk and is used to filter out deleted rows when reading from the part.

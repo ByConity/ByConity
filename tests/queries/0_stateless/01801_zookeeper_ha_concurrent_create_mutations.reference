@@ -1,0 +1,12 @@
+0000000000	1
+0000000001	1
+0000000002	1
+0000000003	1
+0000000004	1
+after create mutations with the same query id
+r1	0000000000	1
+r2	0000000000	1
+Create mutation with same query id but different commands should fail
+0000000001	DELETE WHERE x = 2	1
+0000000002	DELETE WHERE x = 3	1
+0000000003	DELETE WHERE x = 4	0

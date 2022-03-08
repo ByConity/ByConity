@@ -790,7 +790,7 @@ static void extractMergingAndGatheringColumns(
 }
 
 static void handleCompactPartWithCompactMapCol(
-    MergeAlgorithm & merge_algorithm, 
+    MergeAlgorithm & merge_algorithm,
     NamesAndTypesList & gathering_columns, Names & gathering_column_names,
     NamesAndTypesList & merging_columns, Names & merging_column_names)
 {
@@ -1054,7 +1054,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
 
     if (isCompactPart(new_data_part) && data_settings->enable_compact_map_data)
         handleCompactPartWithCompactMapCol(chosen_merge_algorithm, gathering_columns, gathering_column_names, merging_columns, merging_column_names);
-    
+
     merge_entry->merge_algorithm.store(chosen_merge_algorithm, std::memory_order_relaxed);
 
     LOG_DEBUG(log, "Selected MergeAlgorithm: {}", toString(chosen_merge_algorithm));
@@ -1344,7 +1344,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
 
                 rows_sources_read_buf.seek(0, 0);
                 ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf);
-                
+
                 MergedColumnOnlyOutputStream column_to(
                     new_data_part,
                     metadata_snapshot,
@@ -1554,6 +1554,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     const auto & source_part = future_part.parts[0];
     auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part);
 
+    /// prevent other data modification tasks (recode/build bitmap index) from execution during part mutation
+    auto mutate_lock = std::unique_lock<std::mutex>(source_part->mutate_mutex);
+
     auto context_for_reading = Context::createCopy(context);
     context_for_reading->setSetting("max_streams_to_max_threads_ratio", 1);
     context_for_reading->setSetting("max_threads", 1);
@@ -1566,7 +1569,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     {
         if (command.partition == nullptr || future_part.parts[0]->info.partition_id == data.getPartitionIDFromQuery(
                 command.partition, context_for_reading))
-            commands_for_part.emplace_back(command);
+        {
+            /// FAST_DELETE can't handle non-wide part and projections, convert to DELETE in those cases
+            if (command.type == MutationCommand::FAST_DELETE && (!isWidePart(source_part) || !metadata_snapshot->getProjections().empty()))
+                commands_for_part.emplace_back(MutationCommand{.type = MutationCommand::DELETE, .predicate=command.predicate, .partition=command.partition});
+            else
+                commands_for_part.emplace_back(command);
+        }
     }
 
     if (source_part->isStoredOnDisk() && !isStorageTouchedByMutations(
@@ -1582,6 +1591,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
     BlockInputStreamPtr in = nullptr;
     Block updated_header;
+    DeleteBitmapPtr updated_delete_bitmap;
     std::unique_ptr<MutationsInterpreter> interpreter;
 
     const auto data_settings = data.getSettings();
@@ -1589,6 +1599,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
     MutationCommands for_file_renames;
 
     splitMutationCommands(source_part, commands_for_part, for_interpreter, for_file_renames);
+
+    /// for modify column mutations, the new column data files should contain the same number of rows as before,
+    /// thus an empty delete bitmap is used for read.
+    if (for_interpreter.allOf(MutationCommand::READ_COLUMN))
+    {
+        storage_from_source_part->setDeleteBitmap(source_part, nullptr);
+    }
 
     UInt64 watch_prev_elapsed = 0;
     MergeStageProgress stage_progress(1.0);
@@ -1607,8 +1624,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
         materialized_projections = interpreter->grabMaterializedProjections();
         mutation_kind = interpreter->getMutationKind();
         in = interpreter->execute();
+        if (in)
+            in->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, stage_progress));
         updated_header = interpreter->getUpdatedHeader();
-        in->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, stage_progress));
+        updated_delete_bitmap = interpreter->getUpdatedDeleteBitmap();
     }
 
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + future_part.name, space_reservation->getDisk(), 0);
@@ -1708,7 +1727,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
             updated_header,
             indices_to_recalc,
             mrk_extension,
-            projections_to_recalc);
+            projections_to_recalc,
+            updated_delete_bitmap != nullptr);
         NameToNameVector files_to_rename = collectFilesForRenames(source_part, for_file_renames, mrk_extension);
 
         if (indices_to_recalc.empty() && projections_to_recalc.empty() && mutation_kind != MutationsInterpreter::MutationKind::MUTATE_OTHER
@@ -1762,7 +1782,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
         merge_entry->columns_written = storage_columns.size() - updated_header.columns();
 
-        new_data_part->checksums = source_part->checksums;
+        new_data_part->checksums = source_part->checksums; /// FIXME: replace source_part->checksums with getChecksumsWithColumnsLock()
 
         auto compression_codec = source_part->default_codec;
 
@@ -1798,6 +1818,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
 
                 new_data_part->checksums.files.erase(rename_from);
             }
+        }
+
+        if (updated_delete_bitmap)
+        {
+            new_data_part->writeDeleteFile(updated_delete_bitmap, need_sync);
         }
 
         finalizeMutatedPart(source_part, new_data_part, need_remove_expired_values, compression_codec);
@@ -1944,6 +1969,7 @@ void MergeTreeDataMergerMutator::splitMutationCommands(
                 || command.type == MutationCommand::Type::MATERIALIZE_PROJECTION
                 || command.type == MutationCommand::Type::MATERIALIZE_TTL
                 || command.type == MutationCommand::Type::DELETE
+                || command.type == MutationCommand::Type::FAST_DELETE
                 || command.type == MutationCommand::Type::UPDATE)
             {
                 for_interpreter.push_back(command);
@@ -1993,6 +2019,7 @@ void MergeTreeDataMergerMutator::splitMutationCommands(
                 || command.type == MutationCommand::Type::MATERIALIZE_PROJECTION
                 || command.type == MutationCommand::Type::MATERIALIZE_TTL
                 || command.type == MutationCommand::Type::DELETE
+                || command.type == MutationCommand::Type::FAST_DELETE
                 || command.type == MutationCommand::Type::UPDATE)
             {
                 for_interpreter.push_back(command);
@@ -2030,9 +2057,9 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
     {
         if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
             continue;
-        auto files = source_part->checksums.files; 
+        auto files = source_part->checksums.files;
 
-        /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
+        /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
         NameSet file_set;
 
         /// Remove all files of the implicit key name
@@ -2042,7 +2069,7 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
             String implicitKeyName = getImplicitFileNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
             for (const auto & [file, _] : source_part->checksums.files)
             {
-                if (startsWith(file, implicitKeyName))    
+                if (startsWith(file, implicitKeyName))
                 {
                     if (source_part->versions->enable_compact_map_data)
                     {
@@ -2129,36 +2156,16 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             auto column = source_part->getColumns().tryGetByName(command.column_name);
             if (column)
             {
-                auto serialization = source_part->getSerializationForColumn(*column);
-                serialization->enumerateStreams(callback);
                 if (column->type->isMap() && !column->type->isMapKVStore())
                 {
-                    auto map_key_prefix = genMapKeyFilePrefix(command.column_name);
-                    auto map_base_prefix = genMapBaseFilePrefix(command.column_name);
-
-                    /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files. 
-                    NameSet file_set;
-                    for (const auto & [file, _] : source_part->checksums.files)
-                    {
-                        if (startsWith(file, map_key_prefix))
-                        {
-                            if (source_part->versions->enable_compact_map_data)
-                            {
-                                String file_name = getColFileNameFromImplicitColFileName(file);
-                                if (!file_set.count(file_name))
-                                    file_set.insert(file_name);
-                            }
-                            rename_vector.emplace_back(file, "");
-                        }
-                        else if (startsWith(file, map_base_prefix))
-                            rename_vector.emplace_back(file, "");
-                    }
-                    
-                    if (source_part->versions->enable_compact_map_data)
-                    {
-                        for (String file: file_set)
-                            rename_vector.emplace_back(file, "");
-                    }
+                    Strings files = source_part->checksums.collectFilesForMapColumnNotKV(command.column_name);
+                    for (auto & file : files)
+                        rename_vector.emplace_back(file, "");
+                }
+                else
+                {
+                    auto serialization = source_part->getSerializationForColumn(*column);
+                    serialization->enumerateStreams(callback);
                 }
             }
         }
@@ -2201,7 +2208,8 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
     const Block & updated_header,
     const std::set<MergeTreeIndexPtr> & indices_to_recalc,
     const String & mrk_extension,
-    const std::set<MergeTreeProjectionPtr> & projections_to_recalc)
+    const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+    bool update_delete_bitmap)
 {
     NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
 
@@ -2213,10 +2221,22 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
             String stream_name = ISerialization::getFileNameForStream({entry.name, entry.type}, substream_path);
             files_to_skip.insert(stream_name + ".bin");
             files_to_skip.insert(stream_name + mrk_extension);
+            /// FIXME: getSpecialColumnFiles for column with bloom/bitmap_index/compression/bitengine
         };
 
-        auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
-        serialization->enumerateStreams(callback);
+        if (auto column = source_part->getColumns().tryGetByName(entry.name))
+        {
+            if (column->type->isMap() && !column->type->isMapKVStore())
+            {
+                Strings files = source_part->checksums.collectFilesForMapColumnNotKV(column->name);
+                files_to_skip.insert(files.begin(), files.end());
+            }
+            else
+            {
+                auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
+                serialization->enumerateStreams(callback);
+            }
+        }
     }
     for (const auto & index : indices_to_recalc)
     {
@@ -2226,6 +2246,10 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
     for (const auto & projection : projections_to_recalc)
     {
         files_to_skip.insert(projection->getDirectoryName());
+    }
+    if (update_delete_bitmap)
+    {
+        files_to_skip.insert(DELETE_BITMAP_FILE_NAME);
     }
 
     return files_to_skip;

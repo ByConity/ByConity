@@ -67,6 +67,7 @@ public:
         FETCH_PARTITION_WHERE,
 
         DELETE,
+        FAST_DELETE,
         UPDATE,
 
         CLEAR_MAP_KEY,
@@ -128,12 +129,12 @@ public:
      */
     ASTPtr projection;
 
-    /** Used in DROP PARTITION, ATTACH PARTITION FROM, UPDATE, DELETE queries.
+    /** Used in DROP PARTITION, ATTACH PARTITION FROM, UPDATE, DELETE, FASTDELETE queries.
      *  The value or ID of the partition is stored here.
      */
     ASTPtr partition;
 
-    /// For DELETE/UPDATE WHERE: the predicate that filters the rows to delete/update.
+    /// For DELETE/FASTDELETE/UPDATE WHERE: the predicate that filters the rows to delete/update.
     ASTPtr predicate;
 
     /// A list of expressions of the form `column = expr` for the UPDATE command.
@@ -160,6 +161,9 @@ public:
 
     /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
     ASTPtr map_keys;
+
+    /// For FASTDELETE query, the optional list of columns to overwrite
+    ASTPtr columns;
 
     bool detach = false;        /// true for DETACH PARTITION
 

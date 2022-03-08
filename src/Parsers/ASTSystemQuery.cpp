@@ -52,6 +52,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SYNC REPLICA";
         case Type::SYNC_MUTATION:
             return "SYNC MUTATION";
+        case Type::EXECUTE_MUTATION:
+            return "EXECUTE MUTATION";
+        case Type::RELOAD_MUTATION:
+            return "RELOAD MUTATION";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
         case Type::RELOAD_DICTIONARY:
@@ -206,6 +210,16 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
              || type == Type::STOP_CONSUME
              || type == Type::RESTART_CONSUME)
     {
+        print_database_table();
+    }
+    else if (   type == Type::EXECUTE_MUTATION
+             || type == Type::RELOAD_MUTATION)
+    {
+        WriteBufferFromOwnString wb;
+        writeQuoted(mutation_id, wb);
+        settings.ostr << " " << wb.str()
+                      << (settings.hilite ? hilite_keyword : "") << " ON"
+                      << (settings.hilite ? hilite_none : "");
         print_database_table();
     }
     else if (type == Type::DROP_REPLICA)

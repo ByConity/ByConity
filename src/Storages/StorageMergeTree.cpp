@@ -209,7 +209,17 @@ Pipe StorageMergeTree::read(
 
 std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
 {
-    return getTotalActiveSizeInRows();
+    // not using total_active_size_rows because it doesn't consider delete bitmap
+    // return getTotalActiveSizeInRows();
+    auto parts = getDataPartsVector({DataPartState::Committed});
+    UInt64 res = 0;
+    for (auto & part : parts)
+    {
+        if (part->isEmpty())
+            continue;
+        res += part->numRowsRemovingDeletes();
+    }
+    return res;
 }
 
 std::optional<UInt64> StorageMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr local_context) const
@@ -983,9 +993,16 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
             if (current_ast_elements + commands_size >= max_ast_elements)
                 break;
 
+            bool require_independent_execution = it->second.commands.requireIndependentExecution();
+            if (require_independent_execution && !commands.empty())
+                break;
+
             current_ast_elements += commands_size;
             commands.insert(commands.end(), it->second.commands.begin(), it->second.commands.end());
             mutation_version = it->first;
+
+            if (require_independent_execution)
+                break;
         }
 
         if (!commands.empty())

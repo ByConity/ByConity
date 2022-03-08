@@ -36,6 +36,8 @@ public:
         DROP_REPLICA,
         SYNC_REPLICA,
         SYNC_MUTATION,
+        EXECUTE_MUTATION,
+        RELOAD_MUTATION,
         RELOAD_DICTIONARY,
         RELOAD_DICTIONARIES,
         RELOAD_MODEL,
@@ -85,6 +87,9 @@ public:
     String volume;
     String disk;
     UInt64 seconds{};
+
+    // For execute/reload mutation
+    String mutation_id;
 
     ASTPtr predicate;
     ASTPtr values_changes;

@@ -99,6 +99,38 @@ UInt64 MergeTreeDataPartChecksums::getTotalSizeOnDisk() const
     return res;
 }
 
+/// Returns names of all the files for the given map column.
+/// For compact map, both checksum's filename and disk's filename are returned in order for
+/// MergeTreeDataMergerMutator to remove related files from disk and checksums when the column is dropped.
+Strings MergeTreeDataPartChecksums::collectFilesForMapColumnNotKV(const String & map_column) const
+{
+    auto map_key_prefix = genMapKeyFilePrefix(map_column);
+    auto map_base_prefix = genMapBaseFilePrefix(map_column);
+
+    Strings res;
+    /// Collect all compact file names from the implicit key name from checksums
+    NameSet compact_file_set;
+    for (const auto & [file, _] : files)
+    {
+        if (startsWith(file, map_key_prefix))
+        {
+            if (versions->enable_compact_map_data)
+            {
+                String file_name = getColFileNameFromImplicitColFileName(file);
+                compact_file_set.insert(file_name);
+            }
+            res.emplace_back(file);
+        }
+        else if (startsWith(file, map_base_prefix))
+            res.emplace_back(file);
+    }
+
+    for (auto & file : compact_file_set)
+        res.emplace_back(file);
+
+    return res;
+}
+
 bool MergeTreeDataPartChecksums::read(ReadBuffer & in, size_t format_version)
 {
     switch (format_version)

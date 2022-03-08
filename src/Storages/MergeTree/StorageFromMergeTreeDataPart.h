@@ -11,6 +11,10 @@
 
 #include <common/shared_ptr_helper.h>
 
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 
 namespace DB
 {
@@ -31,10 +35,18 @@ public:
         size_t max_block_size,
         unsigned num_streams) override
     {
+        /// copy `delete_bitmaps` because delete_bitmap_getter may live longer than `this`
+        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter = [snapshot = delete_bitmaps](auto & part) -> DeleteBitmapPtr
+        {
+            if (auto it = snapshot.find(part); it != snapshot.end())
+                return it->second;
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Not found delete bitmap for part " + part->name);
+        };
         // NOTE: It's used to read normal parts only
         QueryPlan query_plan = std::move(*MergeTreeDataSelectExecutor(parts.front()->storage)
                                               .readFromParts(
                                                   parts,
+                                                  delete_bitmap_getter,
                                                   column_names,
                                                   metadata_snapshot,
                                                   metadata_snapshot,
@@ -72,12 +84,29 @@ public:
         return parts.front()->storage.getPartitionIDFromQuery(ast, context);
     }
 
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override
+    {
+        return parts.front()->storage.checkMutationIsPossible(commands, settings);
+    }
+
+    const MergeTreeData::DataPartsVector & getParts() const
+    {
+        return parts;
+    }
+
+    /// use a different delete bitmap than part's one for reading
+    void setDeleteBitmap(const MergeTreeData::DataPartPtr & part, DeleteBitmapPtr delete_bitmap)
+    {
+        delete_bitmaps[part] = std::move(delete_bitmap);
+    }
+
 protected:
     StorageFromMergeTreeDataPart(const MergeTreeData::DataPartPtr & part_)
         : IStorage(getIDFromPart(part_))
         , parts({part_})
     {
         setInMemoryMetadata(part_->storage.getInMemoryMetadata());
+        delete_bitmaps.insert({part_, part_->getDeleteBitmap()});
     }
 
     StorageFromMergeTreeDataPart(MergeTreeData::DataPartsVector && parts_)
@@ -85,10 +114,13 @@ protected:
         , parts(std::move(parts_))
     {
         setInMemoryMetadata(parts.front()->storage.getInMemoryMetadata());
+        for (auto & part : parts)
+            delete_bitmaps.insert({part, part->getDeleteBitmap()});
     }
 
 private:
     MergeTreeData::DataPartsVector parts;
+    MergeTreeData::DataPartsDeleteSnapshot delete_bitmaps;
 
     static StorageID getIDFromPart(const MergeTreeData::DataPartPtr & part_)
     {
