@@ -102,6 +102,11 @@ public:
 
     void setHardLimit(Int64 value);
 
+    Int64 getHardLimit() const
+    {
+        return hard_limit.load(std::memory_order_relaxed);
+    }
+
     /** Set limit if it was not set.
       * Otherwise, set limit to new value, if new value is greater than previous limit.
       */

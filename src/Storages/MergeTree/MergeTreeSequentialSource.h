@@ -74,7 +74,6 @@ private:
     /// Should return an additional rowid column named `rowid_column_name`
     bool include_rowid_column{false};
 
-    UInt64 index_granularity{0};
 private:
     /// Closes readers and unlock part locks
     void finish();

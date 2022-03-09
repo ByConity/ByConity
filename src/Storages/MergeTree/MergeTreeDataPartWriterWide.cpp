@@ -359,8 +359,8 @@ void MergeTreeDataPartWriterWide::writeColumn(
         else if (isMapImplicitKeyNotKV(name) && !last_non_written_marks.count(name))
         {
             /// This case maybe happen when writing uncompact map data during merging.
-            /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream. 
-            /// Thus, it may not exist in last_non_written_marks, we need to fill its mark info using the mark info of base stream. 
+            /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream.
+            /// Thus, it may not exist in last_non_written_marks, we need to fill its mark info using the mark info of base stream.
             String col = parseColNameFromImplicitName(name);
             String map_base_stream_name = getBaseNameForMapCol(col);
             if (!last_non_written_marks.count(map_base_stream_name))
@@ -794,8 +794,10 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
         WriteBufferFromOwnString key_buf;
         for (auto & col : key_columns)
         {
-            serializations[col.name]->serializeMemComparable(*col.column, i, key_buf);
+            auto serial = col.type->getDefaultSerialization();
+            serial->serializeMemComparable(*col.column, i, key_buf);
         }
+
         String value;
         auto rid = static_cast<UInt32>(first_rid + i);
         PutVarint32(&value, rid);

@@ -2056,7 +2056,8 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
             merge_entry.get());
     };
 
-    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_part);
+    const Settings & settings = getContext()->getSettingsRef();
+    MergeList::EntryPtr merge_entry = getContext()->getMergeList().insert(getStorageID(), future_part, settings);
 
     try
     {

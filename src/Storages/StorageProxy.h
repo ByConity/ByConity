@@ -23,6 +23,7 @@ public:
     bool supportsFinal() const override { return getNested()->supportsFinal(); }
     bool supportsPrewhere() const override { return getNested()->supportsPrewhere(); }
     bool supportsReplication() const override { return getNested()->supportsReplication(); }
+    bool supportsMapImplicitColumn() const override { return getNested()->supportsMapImplicitColumn(); }
     bool supportsParallelInsert() const override { return getNested()->supportsParallelInsert(); }
     bool supportsDeduplication() const override { return getNested()->supportsDeduplication(); }
     bool noPushingToViews() const override { return getNested()->noPushingToViews(); }

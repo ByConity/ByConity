@@ -56,6 +56,8 @@ struct MergeInfo
 
 struct FutureMergedMutatedPart;
 
+struct Settings;
+
 struct MergeListElement : boost::noncopyable
 {
     const StorageID table_id;
@@ -97,7 +99,7 @@ struct MergeListElement : boost::noncopyable
     /// Detected after merge already started
     std::atomic<MergeAlgorithm> merge_algorithm;
 
-    MergeListElement(const StorageID & table_id_, const FutureMergedMutatedPart & future_part);
+    MergeListElement(const StorageID & table_id_, const FutureMergedMutatedPart & future_part, const Settings & settings);
 
     MergeInfo getInfo() const;
 
