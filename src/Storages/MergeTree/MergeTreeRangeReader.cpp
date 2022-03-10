@@ -795,16 +795,22 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
             if (!merge_tree_reader->canReadIncompleteGranules())
                 current_space = stream.ceilRowsToCompleteGranules(space_left);
 
-            auto rows_to_read = std::min(current_space, stream.numPendingRowsInCurrentGranule());
+            const auto unread_rows_in_current_granule = stream.numPendingRowsInCurrentGranule();
+            auto rows_to_read = std::min(current_space, unread_rows_in_current_granule);
 
             auto read_pos = stream.position();
             auto read_end = read_pos + rows_to_read;
-            if (delete_bitmap && delete_bitmap->containsRange(read_pos, read_end))
+            /// Skip the current granule if all the pending rows have been deleted
+            /// TODO: maybe it's better to prune deleted granules when constructing the mark ranges
+            if (rows_to_read == unread_rows_in_current_granule &&
+                delete_bitmap && delete_bitmap->containsRange(read_pos, read_end))
             {
                 /// all pending rows in current granule has been deleted, skip it
                 stream.skip(rows_to_read);
                 result.addGranule(0);
             }
+            /// Otherwise read the next `rows_to_read` rows (maybe < unread_rows_in_current_granule) from
+            /// the current granule and prepare the delete filter that'll be used later to remove deleted rows
             else
             {
                 /// populate delete filter for this granule
@@ -827,8 +833,8 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t 
                 bool last = rows_to_read == space_left;
                 result.addRows(stream.read(result.columns, rows_to_read, !last));
                 result.addGranule(rows_to_read);
+                space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
             }
-            space_left = (rows_to_read > space_left ? 0 : space_left - rows_to_read);
         }
     }
 
@@ -955,6 +961,74 @@ static ColumnPtr combineFilters(ColumnPtr first, ColumnPtr second)
     return mut_first;
 }
 
+static ColumnPtr combineFilterEqualSize(ColumnPtr first, ColumnPtr second)
+{
+    /// Use first filter to only fiter the rows not been filted in second filter.
+    /// in other words, do a & operation like: first = first & second
+    ConstantFilterDescription second_const_descr(*second);
+
+    checkCombinedFiltersSize(first->size(), second->size());
+
+    if (second_const_descr.always_true)
+        return first;
+
+    if (second_const_descr.always_false)
+        return second;
+
+    FilterDescription first_descr(*first);
+    FilterDescription second_descr(*second);
+
+    MutableColumnPtr mut_first;
+    if (first_descr.data_holder)
+        mut_first = IColumn::mutate(std::move(first_descr.data_holder));
+    else
+        mut_first = IColumn::mutate(std::move(first));
+
+    auto dst = typeid_cast<ColumnUInt8 *>(mut_first.get())->getData().data();
+    auto end = dst + second->size();
+    auto src = second_descr.data->data();
+
+    /// TODO @canhld:
+    /// 1. can use aligned load/store?
+    /// 2. can be more efficient with bit unpacking instructions
+    /// Notes: when using simd instructions, we use `while(dst < end)` without guarding because we assume
+    /// that the columns data is padded right at least 32 bytes, look at PODArray implementation.
+
+#if defined (__AVX2__)
+    while (dst < end)
+    {
+        /// *dst &= val
+        _mm256_storeu_si256(
+            reinterpret_cast<__m256i *>(dst),
+            _mm256_and_si256(
+                _mm256_loadu_si256(reinterpret_cast<const __m256i *>(dst)), _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src))));
+        dst += 32; /// assume using POD Array with 32 bytes padding data
+        src += 32;
+    }
+#elif defined (__SSE2__)
+    while (dst < end)
+    {
+        /// *dst &= val
+        _mm_storeu_si128(
+            reinterpret_cast<__m128i *>(dst),
+            _mm_and_si128(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(dst)), _mm_loadu_si128(reinterpret_cast<const __m128i *>(src))));
+        dst += 16; /// assume using POD Array with 32 bytes padding data
+        src += 16;
+    }
+#endif
+
+    /// guard in case no SIMD instructions are available
+    while (dst < end)
+    {
+        *reinterpret_cast<UInt64 *>(dst) &= *reinterpret_cast<const UInt64 *>(src);
+        dst += 8;
+        src += 8;
+    }
+
+    return mut_first;
+}
+
 void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & result)
 {
     if (!prewhere_info)
@@ -1002,6 +1076,20 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
             row_level_filter = block.getByPosition(row_level_filter_pos).column;
             block.erase(row_level_filter_pos);
 
+            if (result.getFilter())
+            {
+                /// NOTE: 1 means keep this row, 0 means delete this row
+                /// we first use the row_level_filter (if any) to filter the block, then
+                /// execute prewhere_actions to create the `filter` on already filtered block.
+                //
+                /// thus row_level_filter's size always equal to the original block's size.
+                /// filter's size might be small if row_level_filter exists
+                ///
+                /// in essential, deleted_bitmap is also a row_level_filter, so here we combine them together.
+                /// row_level_filter &= delete_bitmap
+                row_level_filter = combineFilterEqualSize(std::move(row_level_filter), result.getFilterHolder());
+            }
+
             auto columns = block.getColumns();
             filterColumns(columns, row_level_filter);
             if (columns.empty())
@@ -1024,10 +1112,11 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
 
     if (result.getFilter())
     {
-        /// TODO: implement for prewhere chain.
-        /// In order to do it we need combine filter and result.filter, where filter filters only '1' in result.filter.
-        throw Exception("MergeTreeRangeReader chain with several prewhere actions in not implemented.",
-                        ErrorCodes::LOGICAL_ERROR);
+        if (filter && !row_level_filter)
+        {
+            /// filter &= delete_bitmap
+            filter = combineFilterEqualSize(std::move(filter), result.getFilterHolder());
+        }
     }
 
     if (filter && row_level_filter)
