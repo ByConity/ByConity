@@ -313,6 +313,20 @@ public:
         return toDayNum(i - (lut[i].day_of_month - 1));
     }
 
+    /// Round down to start of bi-month
+    template <typename DateOrTime>
+    inline ExtendedDayNum toFirstDayNumOfBiMonth(DateOrTime v) const
+    {
+        const LUTIndex i = toLUTIndex(v);
+        if (lut[i].month & 1)
+            return toDayNum(i - (lut[i].day_of_month - 1));
+        /// January, March, May, July has 31 days
+        else if (lut[i].month <= 8)
+            return toDayNum(i - lut[i].day_of_month - 30);
+        else
+            return toDayNum(i - lut[i].day_of_month - 29);
+    }
+
     /// Round down to start of quarter.
     template <typename DateOrTime>
     inline ExtendedDayNum toFirstDayNumOfQuarter(DateOrTime v) const
