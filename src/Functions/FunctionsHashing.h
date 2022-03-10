@@ -919,10 +919,6 @@ private:
             else
             {
                 hash = applyWithSeed(reinterpret_cast<const char *>(&value), sizeof(value));
-                // if constexpr (with_seed)
-                //     hash = Impl::apply(reinterpret_cast<const char *>(&value), sizeof(value), seed);
-                // else
-                //     hash = Impl::apply(reinterpret_cast<const char *>(&value), sizeof(value));
             }
 
             size_t size = vec_to.size();

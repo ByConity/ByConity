@@ -7,12 +7,12 @@ namespace DB
 {
 
 using FunctionToStartOfMonth = FunctionDateOrDateTimeToSomething<DataTypeDate, ToStartOfMonthImpl>;
+using FunctionToStartOfBiMonth = FunctionDateOrDateTimeToSomething<DataTypeDate, ToStartOfBiMonthImpl>;
 
 void registerFunctionToStartOfMonth(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionToStartOfMonth>();
+    factory.registerFunction<FunctionToStartOfBiMonth>();
 }
 
 }
-
-
