@@ -2841,11 +2841,6 @@ void StorageHaUniqueMergeTree::repairDataTask()
     }
 }
 
-void StorageHaUniqueMergeTree::dropPart(const String & part_name, bool detach, ContextPtr query_context)
-{
-    throw Exception("not supported", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 void StorageHaUniqueMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & query)
 {
     assertNotReadonly();
@@ -3418,5 +3413,12 @@ std::optional<UInt64> StorageHaUniqueMergeTree::totalBytes(const Settings & sett
     foreachCommittedParts([&res](auto & part) { res += part->getBytesOnDisk(); } );
     return res;
 }
+
+std::optional<UInt64> StorageHaUniqueMergeTree::totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr query_context) const
+{
+    auto parts = getDataPartsVector({DataPartState::Committed});
+    return totalRowsByPartitionPredicateImpl(query_info, query_context, parts);
+}
+
 }
 

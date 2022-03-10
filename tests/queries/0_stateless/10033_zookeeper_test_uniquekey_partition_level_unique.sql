@@ -20,5 +20,12 @@ select sleep(3) format Null;
 select 'r1', d, id, s, arr, sum from test.partition_level_unique_r1 order by d, id;
 select 'r2', d, id, s, arr, sum from test.partition_level_unique_r2 order by d, id;
 
+-- Test select total row
+select sleep(3) format Null;
+select count(*) from test.partition_level_unique_r1;
+
+-- Test select rows in partition
+select count(*) from test.partition_level_unique_r1 where d=toDate('2020-10-29');
+
 drop table if exists test.partition_level_unique_r1;
 drop table if exists test.partition_level_unique_r2;

@@ -258,7 +258,6 @@ private:
     void saveRepairVersionToZk(UInt64 repair_version);
     void removeRepairVersionFromZk();
 
-    void dropPart(const String & part_name, bool detach, ContextPtr query_context) override;
     void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & query) override;
     void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, const ASTPtr & query) override;
 
@@ -270,42 +269,52 @@ private:
     void foreachCommittedParts(Func && func) const;
     std::optional<UInt64> totalRows(const Settings & /*settings*/) const override;
     std::optional<UInt64> totalBytes(const Settings & /*settings*/) const override;
+    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & query_info, ContextPtr query_context) const override;
 
-    // FIXME (UNIQUE KEY): handle these apis later
-    std::optional<UInt64> totalRowsByPartitionPredicate(const SelectQueryInfo & /*query_info*/, ContextPtr /*query_context*/) const override
-    {
-        throw Exception("Method totalRowsByPartitionPredicate is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+    /// link: https://clickhouse.com/docs/en/sql-reference/statements/alter/partition/
     void replacePartitionFrom(const StoragePtr & /*source_table*/, const ASTPtr & /*partition*/, bool /*replace*/, ContextPtr /*query_context*/) override
     {
+        /// Copies the data partition from one table to another and replaces
         throw Exception("Method replacePartitionFrom is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void movePartitionToTable(const StoragePtr & /*dest_table*/, const ASTPtr & /*partition*/, ContextPtr /*query_context*/) override
     {
+        /// Moves the data partition from one table to another.
         throw Exception("Method movePartitionToTable is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void fetchPartition(const ASTPtr & /*partition*/, const StorageMetadataPtr & /*metadata_snapshot*/, const String & /*from*/, bool /*fetch_part*/, ContextPtr /*query_context*/) override
     {
+        ///  Downloads a part or partition from another server.
         throw Exception("Method fetchPartition is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
     void startBackgroundMovesIfNeeded() override
     {
+        /// Not needed for now.
         throw Exception("Method startBackgroundMovesIfNeeded is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
-    /// Get job to execute in background pool (merge, mutate, drop range and so on)
+
     bool scheduleDataProcessingJob(IBackgroundJobExecutor & /*executor*/) override
     {
+        /// Get job to execute in background pool (merge, mutate, drop range and so on)
+        /// FIXME (UNIQUEY KEY): Use BackgroundJobsExecutor.h to do merge task later
         throw Exception("Method scheduleDataProcessingJob is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    /// FIXME (UNIQUEY KEY): Implement drop part later
+    void dropPart(const String & /*part_name*/, bool /*detach*/, ContextPtr /*query_context*/) override
+    {
+        throw Exception("not supported", ErrorCodes::NOT_IMPLEMENTED);
     }
     void dropPartNoWaitNoThrow(const String & /*part_name*/) override
     {
         throw Exception("Method dropPartNoWaitNoThrow is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
+
+    // mutation is not supported yet
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & /*part*/) const override
     {
         return {};
     }
-    // mutation is not supported yet
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override
     {
         throw Exception("Method getMutationsStatus is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
