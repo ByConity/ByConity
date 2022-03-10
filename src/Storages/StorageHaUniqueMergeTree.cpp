@@ -166,6 +166,8 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     , cleanup_thread(*this)
     , restarting_thread(*this)
 {
+    checkPartialUpdateConstrain();
+
     auto db_table = getStorageID().database_name + "." + getStorageID().table_name;
     repair_data_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (RepairData)", [this] { return repairDataTask(); });
     become_leader_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (BecomeLeader)", [this] { return becomeLeaderTask(); });
@@ -350,6 +352,24 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     }
 
     increment.set(getMaxBlockNumber());
+}
+
+void StorageHaUniqueMergeTree::checkPartialUpdateConstrain()
+{
+    if (!getSettings()->enable_unique_partial_update)
+        return;
+    if (!getSettings()->partition_level_unique_keys)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Not support table level unique keys when enable unique partial update.");
+    auto metadata = getInMemoryMetadataPtr();
+    auto order_by_keys = metadata->getSortingKeyColumns();
+    auto unique_keys = metadata->getUniqueKeyColumns();
+    if (order_by_keys.size() < unique_keys.size())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique key should be prefix of order by when enable unique partial update.");
+    for (size_t i = 0, size = unique_keys.size(); i < size; ++i)
+    {
+        if (unique_keys[i] != order_by_keys[i])
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique key should be prefix of order by when enable unique partial update.");
+    }
 }
 
 bool StorageHaUniqueMergeTree::checkFixedGranularityInZookeeper()

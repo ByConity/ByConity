@@ -184,7 +184,6 @@ MergeTreeData::MergeTreeData(
     , replicated_sends_throttler(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
-    /// TODO(lta): limit unique key must be the prefix of group by
     const auto settings = getSettings();
     allow_nullable_key = attach || settings->allow_nullable_key;
     enable_metastore = settings->enable_metastore;

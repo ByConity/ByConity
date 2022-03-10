@@ -211,6 +211,8 @@ private:
     bool mergeTask();
     void repairDataTask();
     void alterThread();
+    /// Check some constrains for partial update feature
+    void checkPartialUpdateConstrain();
 
     void executeSyncParts(const ManifestLogEntry & entry);
     void executeDeatchParts(const ManifestLogEntry & entry);
