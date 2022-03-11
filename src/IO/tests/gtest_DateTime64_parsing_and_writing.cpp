@@ -137,6 +137,20 @@ INSTANTIATE_TEST_SUITE_P(Basic,
             1568650817'1ULL,
             1,
             DateLUT::instance("Europe/Minsk")
+        },
+        {
+            "When timezone offset is present, timezone 'Europe/Minsk' is ignored. subsecond part scale is larger than DateTime64 scale, subsecond part is truncated.",
+            "2019-09-16 19:20:17.123+02:30",
+            1568652617'1ULL,
+            1,
+            DateLUT::instance("Europe/Minsk")
+        },
+        {
+            "When timezone offset is present, timezone 'Europe/Minsk' is ignored. When subsecond part scale is smaller than DateTime64 scale, subsecond part is properly adjusted (as if padded from right with zeroes).",
+            "2019-09-16 19:20:17.123-02:30",
+            1568670617'12300ULL,
+            5,
+            DateLUT::instance("Europe/Minsk")
         }
     })
 );
