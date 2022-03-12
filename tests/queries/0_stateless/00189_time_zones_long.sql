@@ -52,6 +52,26 @@ SELECT toStartOfMonth(toDate(16433));
 SELECT toStartOfMonth(toDate(16433));
 SELECT toStartOfMonth(toDate(16433));
 
+/* toStartOfBiMonth */
+
+SELECT 'toStartOfBiMonth';
+SELECT toStartOfBiMonth(toDateTime('2021-06-30 23:30:00', 'UTC'), 'Asia/Shanghai');
+SELECT toStartOfBiMonth(toDateTime('2021-06-30 23:30:00', 'UTC'), 'UTC');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/Moscow');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/Paris');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Europe/London');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Asia/Tokyo');
+SELECT toStartOfBiMonth(toDateTime(1419800400), 'Pacific/Pitcairn');
+SELECT toStartOfBiMonth(toDate(16343));
+SELECT toStartOfBiMonth(toDate(16433));
+SELECT toStartOfBiMonth(toDate(17933));
+SELECT toStartOfBiMonth('2021-01-02');
+SELECT toStartOfBiMonth('2021-02-02');
+SELECT toStartOfBiMonth('2021-07-02');
+SELECT toStartOfBiMonth('2021-08-02');
+SELECT toStartOfBiMonth('2021-11-02');
+SELECT toStartOfBiMonth('2021-12-02');
+
 /* toStartOfQuarter */
 
 SELECT 'toStartOfQuarter';

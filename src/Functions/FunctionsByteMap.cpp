@@ -371,23 +371,32 @@ public:
         auto item_delimiter = getDelimiter(arguments[1].column);
         auto key_value_delimiter = getDelimiter(arguments[2].column);
         auto col_res = result_type->createColumn();
-        ByteMap map;
+
         for (size_t i = 0; i < input_rows_count; ++i)
         {
+            ByteMap map;
             const StringRef & str = column_prt->getDataAt(i);
-            String parsed_value, parsed_key;
-            map.clear();
-            auto start = str.data, end = str.data + str.size;
-            size_t pos = 0, size = str.size;
-            while (pos < size)
+            const char * curr = str.data;
+            const char * end = str.data + str.size;
+
+            while (curr != end)
             {
-                parseStringValue(str.data, end, pos, parsed_key, key_value_delimiter);
-                while (pos < size && *(start + pos) == ' ') ++pos;
-                if(pos == size)
-                    throw Exception("Function " + getName() + " parse error, The number of Key and Value not equal.", ErrorCodes::CANNOT_CONVERT_TYPE);
-                parseStringValue(str.data, end, pos, parsed_value, item_delimiter);
-                while (pos < size && *(start + pos) == ' ') ++pos;
-                map.push_back({parsed_key, parsed_value});
+                auto parsed_key = parseStringValue(curr, end, key_value_delimiter);
+
+                /// skip space
+                while (curr != end && *curr == ' ')
+                    ++curr;
+                /// No matched value, discard this key
+                if (curr == end)
+                    break;
+
+                auto parsed_value = parseStringValue(curr, end, item_delimiter);
+
+                /// skip space
+                while (curr != end && *curr == ' ')
+                    ++curr;
+
+                map.emplace_back(parsed_key, parsed_value);
             }
             col_res->insert(map);
         }
@@ -396,21 +405,28 @@ public:
 
 private:
 
-    inline void parseStringValue(const char * start, const char * end, size_t & pos, String & res, char delimiter) const
+    static String parseStringValue(const char *& curr, const char * end, char delimiter)
     {
-        res = "";
-        while (start + pos != end && *(start + pos) != delimiter)
+        const auto * begin = curr;
+        size_t length = 0;
+        while (curr != end && *curr != delimiter)
         {
-            res += *(start + pos);
-            ++pos;
+            ++curr;
+            ++length;
         }
-        if (start + pos != end && *(start + pos) == delimiter) ++pos;
+
+        /// skip delimiter
+        if (curr != end && *curr == delimiter)
+            ++curr;
+
+        return {begin, length};
     }
 
     inline char getDelimiter(const ColumnPtr & column_ptr) const
     {
-        // TODO: recheck column type
-        const auto & value = dynamic_cast<const ColumnUInt8*>(column_ptr.get())->getDataAt(0);
+        const auto & value = column_ptr->getDataAt(0);
+        if (!value.size)
+            throw Exception("Delimiter of function " + getName() + " should be non-empty string", ErrorCodes::ILLEGAL_COLUMN);
         return value.data[0];
     }
 };
@@ -434,7 +450,7 @@ public:
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if ((arguments.size() & 1) || arguments.empty())
-            throw Exception("Function " + getName() + " requires none zero even number of argument. Passed " + toString(arguments.size()) + ".",
+            throw Exception("Function " + getName() + " requires none zero even number of argument. Passed " + toString(arguments.size()),
                     ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         DataTypes key_types;
@@ -453,31 +469,31 @@ public:
         auto key_type = getLeastSupertype(key_types);
         auto value_type = getLeastSupertype(value_types);
 
-        if (key_type->isNullable() || value_type->isNullable())
-            throw Exception("KeyType and ValueType for Map should be non-nullable.", ErrorCodes::TYPE_MISMATCH);
-
-        return std::make_shared<DataTypeByteMap>(key_type, value_type);
+        return std::make_shared<DataTypeByteMap>(removeNullable(key_type), removeNullable(value_type));
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
         auto col_res = result_type->createColumn();
 
-        ByteMap map;
         for (size_t i = 0; i < input_rows_count; ++i)
         {
-            map.clear();
+            ByteMap map;
             for(size_t pos = 0; pos < arguments.size(); pos += 2)
             {
                 auto key = (*arguments[pos].column)[i];
                 auto value = (*arguments[pos + 1].column)[i];
-                map.push_back({key, value});
+
+                /// remove null value
+                if (key.isNull() || value.isNull())
+                    continue;
+
+                map.emplace_back(key, value);
             }
             col_res->insert(map);
         }
         return col_res;
     }
-
 };
 
 struct NameExtractMapColumn
@@ -532,8 +548,8 @@ void registerFunctionsByteMap(FunctionFactory & factory)
     factory.registerFunction<FunctionMapKeys>();
     factory.registerFunction<FunctionMapValues>();
     factory.registerFunction<FunctionGetMapKeys>();
-    factory.registerFunction<FunctionStrToMap>();
-    factory.registerFunction<FunctionMapConstructor>();
+    factory.registerFunction<FunctionStrToMap>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionMapConstructor>(FunctionFactory::CaseInsensitive);
 
     using FunctionExtractMapColumn = FunctionStringToString<ExtractMapWrapper<ExtractMapColumn>, NameExtractMapColumn>;
     using FunctionExtractMapKey = FunctionStringToString<ExtractMapWrapper<ExtractMapKey>, NameExtractMapKey>;

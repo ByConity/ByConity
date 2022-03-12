@@ -38,6 +38,7 @@ void registerFunctionEncodeXMLComponent(FunctionFactory &);
 void registerFunctionDecodeXMLComponent(FunctionFactory &);
 void registerFunctionExtractTextFromHTML(FunctionFactory &);
 void registerFunctionsAppVersionCompare(FunctionFactory &);
+void registerFunctionUnicodeToUTF8(FunctionFactory &);
 
 
 #if USE_BASE64
@@ -79,6 +80,7 @@ void registerFunctionsString(FunctionFactory & factory)
     registerFunctionDecodeXMLComponent(factory);
     registerFunctionExtractTextFromHTML(factory);
     registerFunctionsAppVersionCompare(factory);
+    registerFunctionUnicodeToUTF8(factory);
 #if USE_BASE64
     registerFunctionBase64Encode(factory);
     registerFunctionBase64Decode(factory);

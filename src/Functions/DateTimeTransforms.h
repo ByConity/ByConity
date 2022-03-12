@@ -134,6 +134,27 @@ struct ToStartOfMonthImpl
     using FactorTransform = ZeroTransform;
 };
 
+struct ToStartOfBiMonthImpl
+{
+    static constexpr auto name = "toStartOfBiMonth";
+
+    static inline UInt16 execute(Int64 t, const DateLUTImpl & time_zone)
+    {
+        return time_zone.toFirstDayNumOfBiMonth(time_zone.toDayNum(t));
+    }
+
+    static inline UInt16 execute(UInt32 t, const DateLUTImpl & timezone)
+    {
+        return timezone.toFirstDayNumOfBiMonth(timezone.toDayNum(t));
+    }
+    static inline UInt16 execute(UInt16 d, const DateLUTImpl & timezone)
+    {
+        return timezone.toFirstDayNumOfBiMonth(ExtendedDayNum(d));
+    }
+
+    using FactorTransform = ZeroTransform;
+};
+
 struct ToStartOfQuarterImpl
 {
     static constexpr auto name = "toStartOfQuarter";

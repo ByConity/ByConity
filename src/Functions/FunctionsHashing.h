@@ -270,6 +270,43 @@ struct MurmurHash2Impl64
     static constexpr bool use_int_hash_for_pods = false;
 };
 
+struct MurmurHash2Impl32WithSeed
+{
+    static constexpr auto name = "murmurHash2_32WithSeed";
+
+    using ReturnType = UInt32;
+
+    static UInt32 apply(const char * data, const size_t size, const uint32_t seed)
+    {
+        return MurmurHash2(data, size, seed);
+    }
+
+    static UInt32 combineHashes(UInt32 h1, UInt32 h2)
+    {
+        return IntHash32Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
+struct MurmurHash2Impl64WithSeed
+{
+    static constexpr auto name = "murmurHash2_64WithSeed";
+    using ReturnType = UInt64;
+
+    static UInt64 apply(const char * data, const size_t size, const uint32_t seed)
+    {
+        return MurmurHash64A(data, size, seed);
+    }
+
+    static UInt64 combineHashes(UInt64 h1, UInt64 h2)
+    {
+        return IntHash64Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
 /// To be compatible with gcc: https://github.com/gcc-mirror/gcc/blob/41d6b10e96a1de98e90a7c0378437c3255814b16/libstdc%2B%2B-v3/include/bits/functional_hash.h#L191
 struct GccMurmurHashImpl
 {
@@ -347,6 +384,66 @@ struct MurmurHash3Impl128
         MurmurHash3_x64_128(begin, size, 0, out_char_data);
     }
 };
+
+struct MurmurHash3Impl32WithSeed
+{
+    static constexpr auto name = "murmurHash3_32WithSeed";
+    using ReturnType = UInt32;
+
+    static UInt32 apply(const char * data, const size_t size, const uint32_t seed)
+    {
+        union
+        {
+            UInt32 h;
+            char bytes[sizeof(h)];
+        };
+        MurmurHash3_x86_32(data, size, seed, bytes);
+        return h;
+    }
+
+    static UInt32 combineHashes(UInt32 h1, UInt32 h2)
+    {
+        return IntHash32Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
+struct MurmurHash3Impl64WithSeed
+{
+    static constexpr auto name = "murmurHash3_64WithSeed";
+    using ReturnType = UInt64;
+
+    static UInt64 apply(const char * data, const size_t size, const uint32_t seed)
+    {
+        union
+        {
+            UInt64 h[2];
+            char bytes[16];
+        };
+        MurmurHash3_x64_128(data, size, seed, bytes);
+        return h[0] ^ h[1];
+    }
+
+    static UInt64 combineHashes(UInt64 h1, UInt64 h2)
+    {
+        return IntHash64Impl::apply(h1) ^ h2;
+    }
+
+    static constexpr bool use_int_hash_for_pods = false;
+};
+
+struct MurmurHash3Impl128WithSeed
+{
+    static constexpr auto name = "murmurHash3_128WithSeed";
+    enum { length = 16 };
+
+    static void apply(const char * begin, const size_t size, unsigned char * out_char_data, const uint32_t seed)
+    {
+        MurmurHash3_x64_128(begin, size, seed, out_char_data);
+    }
+};
+
 #endif
 
 /// http://hg.openjdk.java.net/jdk8u/jdk8u/jdk/file/478a4add975b/src/share/classes/java/lang/String.java#l1452
@@ -367,7 +464,7 @@ struct JavaHashImpl
 
     static Int32 combineHashes(Int32, Int32)
     {
-        throw Exception("Java hash is not combineable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Java hash is not combinable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     static constexpr bool use_int_hash_for_pods = false;
@@ -402,7 +499,7 @@ struct JavaHashUTF16LEImpl
 
     static Int32 combineHashes(Int32, Int32)
     {
-        throw Exception("Java hash is not combineable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Java hash is not combinable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     static constexpr bool use_int_hash_for_pods = false;
@@ -423,7 +520,7 @@ struct HiveHashImpl
 
     static Int32 combineHashes(Int32, Int32)
     {
-        throw Exception("Hive hash is not combineable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Hive hash is not combinable for multiple arguments", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     static constexpr bool use_int_hash_for_pods = false;
@@ -531,19 +628,16 @@ struct ImplXxHash64
 #endif
 
 
-template <typename Impl>
+template <typename Impl, bool with_seed = false>
 class FunctionStringHashFixedString : public IFunction
 {
 public:
     static constexpr auto name = Impl::name;
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionStringHashFixedString>(); }
 
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name;}
 
-    size_t getNumberOfArguments() const override { return 1; }
+    size_t getNumberOfArguments() const override { return 1 + with_seed; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -551,13 +645,30 @@ public:
             throw Exception("Illegal type " + arguments[0]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+        if (with_seed && !isUnsignedInteger(arguments.back()))
+            throw Exception("Illegal type " + arguments.back()->getName() + " of argument of function " + getName(),
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
         return std::make_shared<DataTypeFixedString>(Impl::length);
     }
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
     {
+        [[maybe_unused]] uint32_t seed = 0;
+        if constexpr (with_seed)
+        {
+            const auto & column = arguments.back().column;
+            const auto * seed_const_column = checkAndGetColumn<ColumnConst>(column.get());
+            if (!seed_const_column)
+                throw Exception("Column should be ColumnConst, but got " + column->getName(), ErrorCodes::LOGICAL_ERROR);
+
+            seed = seed_const_column->getValue<UInt32>();
+        }
+
         if (const ColumnString * col_from = checkAndGetColumn<ColumnString>(arguments[0].column.get()))
         {
             auto col_to = ColumnFixedString::create(Impl::length);
@@ -571,18 +682,24 @@ public:
             ColumnString::Offset current_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
-                Impl::apply(
-                    reinterpret_cast<const char *>(&data[current_offset]),
-                    offsets[i] - current_offset - 1,
-                    reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]));
+                if constexpr (with_seed)
+                    Impl::apply(
+                        reinterpret_cast<const char *>(&data[current_offset]),
+                        offsets[i] - current_offset - 1,
+                        reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]),
+                        seed);
+                else
+                    Impl::apply(
+                        reinterpret_cast<const char *>(&data[current_offset]),
+                        offsets[i] - current_offset - 1,
+                        reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]));
 
                 current_offset = offsets[i];
             }
 
             return col_to;
         }
-        else if (
-            const ColumnFixedString * col_from_fix = checkAndGetColumn<ColumnFixedString>(arguments[0].column.get()))
+        else if (const ColumnFixedString * col_from_fix = checkAndGetColumn<ColumnFixedString>(arguments[0].column.get()))
         {
             auto col_to = ColumnFixedString::create(Impl::length);
             const typename ColumnFixedString::Chars & data = col_from_fix->getChars();
@@ -592,14 +709,22 @@ public:
             chars_to.resize(size * Impl::length);
             for (size_t i = 0; i < size; ++i)
             {
-                Impl::apply(
-                    reinterpret_cast<const char *>(&data[i * length]), length, reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]));
+                if constexpr (with_seed)
+                    Impl::apply(
+                        reinterpret_cast<const char *>(&data[i * length]),
+                        length,
+                        reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]),
+                        seed);
+                else
+                    Impl::apply(
+                        reinterpret_cast<const char *>(&data[i * length]),
+                        length,
+                        reinterpret_cast<uint8_t *>(&chars_to[i * Impl::length]));
             }
             return col_to;
         }
         else
-            throw Exception("Illegal column " + arguments[0].column->getName()
-                    + " of first argument of function " + getName(),
+            throw Exception("Illegal column " + arguments[0].column->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 };
@@ -730,7 +855,7 @@ private:
 
 DECLARE_MULTITARGET_CODE(
 
-template <typename Impl>
+template <typename Impl, bool with_seed = false>
 class FunctionAnyHash : public IFunction
 {
 public:
@@ -738,6 +863,15 @@ public:
 
 private:
     using ToType = typename Impl::ReturnType;
+
+    template<typename ...Args>
+    ToType applyWithSeed(Args &&... args) const
+    {
+        if constexpr (with_seed)
+            return Impl::apply(std::forward<Args>(args)..., seed);
+        else
+            return Impl::apply(std::forward<Args>(args)...);
+    }
 
     template <typename FromType, bool first>
     void executeIntType(const IColumn * column, typename ColumnVector<ToType>::Container & vec_to) const
@@ -761,7 +895,7 @@ private:
                 }
                 else
                 {
-                    h = Impl::apply(reinterpret_cast<const char *>(&vec_from[i]), sizeof(vec_from[i]));
+                    h = applyWithSeed(reinterpret_cast<const char *>(&vec_from[i]), sizeof(vec_from[i]));
                 }
 
                 if constexpr (first)
@@ -773,11 +907,19 @@ private:
         else if (auto col_from_const = checkAndGetColumnConst<ColVecType>(column))
         {
             auto value = col_from_const->template getValue<FromType>();
+
             ToType hash;
-            if constexpr (std::is_same_v<ToType, UInt64>)
-                hash = IntHash64Impl::apply(bit_cast<UInt64>(value));
+            if constexpr (Impl::use_int_hash_for_pods)
+            {
+                if constexpr (std::is_same_v<ToType, UInt64>)
+                    hash = IntHash64Impl::apply(bit_cast<UInt64>(value));
+                else
+                    hash = IntHash32Impl::apply(bit_cast<UInt32>(value));
+            }
             else
-                hash = IntHash32Impl::apply(bit_cast<UInt32>(value));
+            {
+                hash = applyWithSeed(reinterpret_cast<const char *>(&value), sizeof(value));
+            }
 
             size_t size = vec_to.size();
             if constexpr (first)
@@ -791,8 +933,7 @@ private:
             }
         }
         else
-            throw Exception("Illegal column " + column->getName()
-                + " of argument of function " + getName(),
+            throw Exception("Illegal column " + column->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -807,7 +948,7 @@ private:
             size_t size = vec_from.size();
             for (size_t i = 0; i < size; ++i)
             {
-                ToType h = Impl::apply(reinterpret_cast<const char *>(&vec_from[i]), sizeof(vec_from[i]));
+                ToType h = applyWithSeed(reinterpret_cast<const char *>(&vec_from[i]), sizeof(vec_from[i]));
 
                 if constexpr (first)
                     vec_to[i] = h;
@@ -818,8 +959,7 @@ private:
         else if (auto col_from_const = checkAndGetColumnConst<ColVecType>(column))
         {
             auto value = col_from_const->template getValue<FromType>();
-
-            ToType h = Impl::apply(reinterpret_cast<const char *>(&value), sizeof(value));
+            ToType h = applyWithSeed(reinterpret_cast<const char *>(&value), sizeof(value));
 
             size_t size = vec_to.size();
             if constexpr (first)
@@ -833,8 +973,7 @@ private:
             }
         }
         else
-            throw Exception("Illegal column " + column->getName()
-                + " of argument of function " + getName(),
+            throw Exception("Illegal column " + column->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -844,7 +983,7 @@ private:
         for (size_t i = 0, size = column->size(); i < size; ++i)
         {
             StringRef bytes = column->getDataAt(i);
-            const ToType h = Impl::apply(bytes.data, bytes.size);
+            const ToType h = applyWithSeed(bytes.data, bytes.size);
             if constexpr (first)
                 vec_to[i] = h;
             else
@@ -864,9 +1003,7 @@ private:
             ColumnString::Offset current_offset = 0;
             for (size_t i = 0; i < size; ++i)
             {
-                const ToType h = Impl::apply(
-                    reinterpret_cast<const char *>(&data[current_offset]),
-                    offsets[i] - current_offset - 1);
+                ToType h = applyWithSeed(reinterpret_cast<const char *>(&data[current_offset]), offsets[i] - current_offset - 1);
 
                 if constexpr (first)
                     vec_to[i] = h;
@@ -884,7 +1021,8 @@ private:
 
             for (size_t i = 0; i < size; ++i)
             {
-                const ToType h = Impl::apply(reinterpret_cast<const char *>(&data[i * n]), n);
+                ToType h = applyWithSeed(reinterpret_cast<const char *>(&data[i * n]), n);
+
                 if constexpr (first)
                     vec_to[i] = h;
                 else
@@ -894,8 +1032,9 @@ private:
         else if (const ColumnConst * col_from_const = checkAndGetColumnConstStringOrFixedString(column))
         {
             String value = col_from_const->getValue<String>();
-            const ToType hash = Impl::apply(value.data(), value.size());
             const size_t size = vec_to.size();
+
+            ToType hash = applyWithSeed(value.data(), value.size());
 
             if constexpr (first)
             {
@@ -910,8 +1049,7 @@ private:
             }
         }
         else
-            throw Exception("Illegal column " + column->getName()
-                    + " of first argument of function " + getName(),
+            throw Exception("Illegal column " + column->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -960,8 +1098,7 @@ private:
             executeArray<first>(type, &*full_column, vec_to);
         }
         else
-            throw Exception("Illegal column " + column->getName()
-                    + " of first argument of function " + getName(),
+            throw Exception("Illegal column " + column->getName() + " of first argument of function " + getName(),
                 ErrorCodes::ILLEGAL_COLUMN);
     }
 
@@ -1035,28 +1172,46 @@ private:
     }
 
 public:
-    String getName() const override
-    {
-        return name;
-    }
+    String getName() const override { return name; }
 
     bool isVariadic() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
-    bool useDefaultImplementationForConstants() const override { return true; }
+    bool useDefaultImplementationForConstants() const override { return !with_seed; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & /*arguments*/) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
+        if constexpr (with_seed)
+        {
+            if (arguments.empty())
+                throw Exception("Number of arguments for function " + getName() + " doesn't match.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+            if (!isUnsignedInteger(arguments.back()))
+                throw Exception("Seed should be unsigned integer.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        }
         return std::make_shared<DataTypeNumber<ToType>>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+        size_t size = arguments.size();
+
+        if constexpr (with_seed)
+        {
+            auto column = arguments.back().column;
+
+            auto seed_const_column = checkAndGetColumn<ColumnConst>(column.get());
+            if (!seed_const_column)
+                throw Exception("Column should be ColumnConst, but got " + column->getName(), ErrorCodes::LOGICAL_ERROR);
+
+            seed = seed_const_column->getValue<UInt32>();
+            size -= 1;
+        }
+
         size_t rows = input_rows_count;
         auto col_to = ColumnVector<ToType>::create(rows);
 
         typename ColumnVector<ToType>::Container & vec_to = col_to->getData();
 
-        if (arguments.empty())
+        if (!size)
         {
             /// Constant random number from /dev/urandom is used as a hash value of empty list of arguments.
             vec_to.assign(rows, static_cast<ToType>(0xe28dbde7fe22e41c));
@@ -1065,29 +1220,32 @@ public:
         /// The function supports arbitrary number of arguments of arbitrary types.
 
         bool is_first_argument = true;
-        for (const auto & col : arguments)
-            executeForArgument(col.type.get(), col.column.get(), vec_to, is_first_argument);
+        for (size_t i = 0; i < size; ++i)
+            executeForArgument(arguments[i].type.get(), arguments[i].column.get(), vec_to, is_first_argument);
 
         return col_to;
     }
+
+private:
+    mutable uint32_t seed = 0;
 };
 
 ) // DECLARE_MULTITARGET_CODE
 
-template <typename Impl>
-class FunctionAnyHash : public TargetSpecific::Default::FunctionAnyHash<Impl>
+template <typename Impl, bool with_seed = false>
+class FunctionAnyHash : public TargetSpecific::Default::FunctionAnyHash<Impl, with_seed>
 {
 public:
     explicit FunctionAnyHash(ContextPtr context) : selector(context)
     {
         selector.registerImplementation<TargetArch::Default,
-            TargetSpecific::Default::FunctionAnyHash<Impl>>();
+            TargetSpecific::Default::FunctionAnyHash<Impl, with_seed>>();
 
     #if USE_MULTITARGET_CODE
         selector.registerImplementation<TargetArch::AVX2,
-            TargetSpecific::AVX2::FunctionAnyHash<Impl>>();
+            TargetSpecific::AVX2::FunctionAnyHash<Impl, with_seed>>();
         selector.registerImplementation<TargetArch::AVX512F,
-            TargetSpecific::AVX512F::FunctionAnyHash<Impl>>();
+            TargetSpecific::AVX512F::FunctionAnyHash<Impl, with_seed>>();
     #endif
     }
 
@@ -1319,10 +1477,15 @@ using FunctionMetroHash64 = FunctionAnyHash<ImplMetroHash64>;
 #if !defined(ARCADIA_BUILD)
 using FunctionMurmurHash2_32 = FunctionAnyHash<MurmurHash2Impl32>;
 using FunctionMurmurHash2_64 = FunctionAnyHash<MurmurHash2Impl64>;
+using FunctionMurmurHash2_32WithSeed = FunctionAnyHash<MurmurHash2Impl32WithSeed, true>;
+using FunctionMurmurHash2_64WithSeed = FunctionAnyHash<MurmurHash2Impl64WithSeed, true>;
 using FunctionGccMurmurHash = FunctionAnyHash<GccMurmurHashImpl>;
 using FunctionMurmurHash3_32 = FunctionAnyHash<MurmurHash3Impl32>;
 using FunctionMurmurHash3_64 = FunctionAnyHash<MurmurHash3Impl64>;
 using FunctionMurmurHash3_128 = FunctionStringHashFixedString<MurmurHash3Impl128>;
+using FunctionMurmurHash3_32WithSeed = FunctionAnyHash<MurmurHash3Impl32WithSeed, true>;
+using FunctionMurmurHash3_64WithSeed = FunctionAnyHash<MurmurHash3Impl64WithSeed, true>;
+using FunctionMurmurHash3_128WithSeed = FunctionStringHashFixedString<MurmurHash3Impl128WithSeed, true>;
 #endif
 
 using FunctionJavaHash = FunctionAnyHash<JavaHashImpl>;
