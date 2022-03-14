@@ -227,6 +227,7 @@ private:
     friend class HaMergeTreeLogExchangerBase;
     friend class HaMergeTreeLogExchanger;
     friend class MergeTreeData;
+    friend class IngestPartition;
 
     /// using MergeStrategyPicker = ReplicatedMergeTreeMergeStrategyPicker;
 

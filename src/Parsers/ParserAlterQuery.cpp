@@ -75,6 +75,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_fetch_part("FETCH PART");
     ParserKeyword s_fetch_partition_where("FETCH PARTITION WHERE");
     ParserKeyword s_replace_partition("REPLACE PARTITION");
+    ParserKeyword s_ingest_partition("INGEST PARTITION");
     ParserKeyword s_freeze("FREEZE");
     ParserKeyword s_unfreeze("UNFREEZE");
     ParserKeyword s_partition("PARTITION");
@@ -557,6 +558,33 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->replace = true;
             command->type = ASTAlterCommand::REPLACE_PARTITION;
+        }
+        else if (s_ingest_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            if (!ParserKeyword("COLUMNS").ignore(pos, expected))
+                return false;
+
+            ParserList parser_column_list(std::make_unique<ParserExpression>(), std::make_unique<ParserToken>(TokenType::Comma));
+
+            if (!parser_column_list.parse(pos, command->columns, expected))
+                return false;
+
+            if (ParserKeyword("KEY").ignore(pos, expected))
+            {
+                if (!parser_column_list.parse(pos, command->keys, expected))
+                    return false;
+            }
+
+            if (!s_from.ignore(pos, expected))
+                return false;
+
+            if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                return false;
+
+            command->type = ASTAlterCommand::INGEST_PARTITION;
         }
         else if (s_attach_part.ignore(pos, expected))
         {

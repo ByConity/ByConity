@@ -339,6 +339,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_DELETE | AccessType::INSERT, database, table);
             break;
         }
+        case ASTAlterCommand::INGEST_PARTITION:
+        {
+            required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::FETCH_PARTITION:
         case ASTAlterCommand::FETCH_PARTITION_WHERE:
         {

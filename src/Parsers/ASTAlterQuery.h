@@ -61,6 +61,7 @@ public:
         MOVE_PARTITION,
         MOVE_PARTITION_FROM,
         REPLACE_PARTITION,
+        INGEST_PARTITION,
         FETCH_PARTITION,
         FREEZE_PARTITION,
         FREEZE_ALL,
@@ -170,8 +171,10 @@ public:
     /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
     ASTPtr map_keys;
 
-    /// For FASTDELETE query, the optional list of columns to overwrite
+    /// For FASTDELETE / INGESTION query, the optional list of columns to overwrite
     ASTPtr columns;
+    /// For Ingestion columns
+    ASTPtr keys;
 
     bool detach = false;        /// true for DETACH PARTITION
 

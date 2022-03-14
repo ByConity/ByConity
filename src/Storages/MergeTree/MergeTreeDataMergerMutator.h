@@ -300,6 +300,8 @@ private:
         TableLockHolder & holder,
         ContextPtr context);
 
+
+public :
     /// Initialize and write to disk new part fields like checksums, columns,
     /// etc.
     static void finalizeMutatedPart(
@@ -307,8 +309,7 @@ private:
         MergeTreeData::MutableDataPartPtr new_data_part,
         bool need_remove_expired_values,
         const CompressionCodecPtr & codec);
-
-public :
+    
     /** Is used to cancel all merges and mutations. On cancel() call all currently running actions will throw exception soon.
       * All new attempts to start a merge or mutation will throw an exception until all 'LockHolder' objects will be destroyed.
       */
