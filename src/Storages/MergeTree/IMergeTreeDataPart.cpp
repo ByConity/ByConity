@@ -1320,7 +1320,7 @@ void IMergeTreeDataPart::remove() const
         projection_directories.emplace(p_name + ".proj");
     }
 
-    if (checksums->empty())
+    if (checksums.empty() || storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
         disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
