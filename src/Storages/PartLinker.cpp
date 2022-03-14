@@ -1,13 +1,51 @@
 #include <Storages/PartLinker.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 #include <Disks/IDisk.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <iostream>
 
 
 namespace DB
 {
 
+NameSet PartLinker::collectFilesToSkip(
+    const MergeTreeDataPartPtr & source_part,
+    const Block & updated_header,
+    const std::set<MergeTreeIndexPtr> & indices_to_recalc,
+    const String & mrk_extension,
+    const std::set<MergeTreeProjectionPtr> & projections_to_recalc)
+{
+    NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
+
+    /// Skip updated files
+    for (const auto & entry : updated_header)
+    {
+        ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path)
+        {
+            String stream_name = ISerialization::getFileNameForStream({entry.name, entry.type}, substream_path);
+            files_to_skip.insert(stream_name + ".bin");
+            files_to_skip.insert(stream_name + mrk_extension);
+        };
+
+        auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
+        serialization->enumerateStreams(callback);
+    }
+    for (const auto & index : indices_to_recalc)
+    {
+        files_to_skip.insert(index->getFileName() + ".idx");
+        files_to_skip.insert(index->getFileName() + mrk_extension);
+    }
+    for (const auto & projection : projections_to_recalc)
+    {
+        files_to_skip.insert(projection->getDirectoryName());
+    }
+
+    return files_to_skip;
+}
+
 void PartLinker::execute()
 {
+    disk->createDirectories(new_part_path);
     /// Create hardlinks for unchanged files
     for (auto it = disk->iterateDirectory(source_part_path); it->isValid(); it->next())
     {
@@ -30,6 +68,7 @@ void PartLinker::execute()
             destination += it->name();
         }
 
+        std::cout<<" <<< part link: " << it->path() << " -> " << destination << std::endl;
         if (!disk->isDirectory(it->path()))
             disk->createHardLink(it->path(), destination);
         else if (!startsWith("tmp_", it->name())) // ignore projection tmp merge dir

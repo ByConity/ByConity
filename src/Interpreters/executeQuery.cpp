@@ -961,7 +961,8 @@ void executeQuery(
     bool allow_into_outfile,
     ContextMutablePtr context,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details,
-    const std::optional<FormatSettings> & output_format_settings)
+    const std::optional<FormatSettings> & output_format_settings,
+    bool internal)
 {
     PODArray<char> parse_buf;
     const char * begin;
@@ -1001,7 +1002,7 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    std::tie(ast, streams) = executeQueryImpl(begin, end, context, false, QueryProcessingStage::Complete, may_have_tail, &istr);
+    std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
 
     auto & pipeline = streams.pipeline;
 

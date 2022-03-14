@@ -287,6 +287,9 @@ void IngestPartition::checkPartitionRows(MergeTreeData::DataPartsVector & parts,
     size_t rows = 0;
     for (auto & part : parts)
     {
+        if (!isWidePart(part))
+            throw Exception("INGEST PARTITION only support wide part now", ErrorCodes::NOT_IMPLEMENTED);
+
         if (check_compact_map && part->versions->enable_compact_map_data)
             throw Exception("INGEST PARTITON not support compact map type now", ErrorCodes::NOT_IMPLEMENTED);
 
@@ -321,12 +324,14 @@ IngestPartition::IngestPartition(
         const ASTPtr & partition_,
         const Names & column_names_,
         const Names & key_names_,
+        Int64 mutation_,
         const ContextPtr & context_)
         : target_table(target_table_)
         , source_table(source_table_)
         , partition(partition_)
         , column_names(column_names_)
         , key_names(key_names_)
+        , mutation(mutation_)
         , context(context_)
         , log(&Poco::Logger::get("IngestPartition")) {}
 
@@ -336,7 +341,6 @@ void IngestPartition::ingestPartition()
     if (!target_data)
         return;
     auto target_meta = target_data->getInMemoryMetadataPtr();
-
 
     // if (target_data->getIngestionBlocker().isCancelled())
     //     throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
@@ -406,10 +410,11 @@ void IngestPartition::ingestPartition()
         ReadBufferFromString istr(query);
         String dummy_string;
         WriteBufferFromString ostr(dummy_string);
-        std::optional<CurrentThread::QueryScope> query_scope;
+        // std::optional<CurrentThread::QueryScope> query_scope;
         auto query_context = Context::createCopy(context);
-        query_scope.emplace(query_context);
-        executeQuery(istr, ostr, false, query_context, {});
+        // query_scope.emplace(query_context);
+        executeQuery(istr, ostr, false, query_context, {}, std::nullopt, true);
+        //query_scope.reset();
     };
 
     auto parts_to_read = source_data->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
@@ -641,7 +646,7 @@ IngestParts IngestPartition::generateIngestParts(MergeTreeData & data, const Mer
     for (const auto & part : parts)
     {
         MergeTreePartInfo new_part_info = part->info;
-        new_part_info.mutation = 0;
+        new_part_info.mutation = mutation;
 
         size_t estimated_space_for_result = MergeTreeDataMergerMutator::estimateNeededDiskSpace({part});
         ReservationPtr reserved_space = MergeTreeData::reserveSpace(estimated_space_for_result, part->volume);
@@ -742,7 +747,7 @@ String IngestPartition::generateRemoteQuery(
     return query_ss.str();
 }
 
-void IngestPartition::ingestPart(MergeTreeData & data, const IngestPartPtr & ingest_part, const IngestPartition::IngestSources & src_blocks,
+MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & data, const IngestPartPtr & ingest_part, const IngestPartition::IngestSources & src_blocks,
                 const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns,
                 const Settings & settings)
 {
@@ -805,8 +810,14 @@ void IngestPartition::ingestPart(MergeTreeData & data, const IngestPartPtr & ing
 
     auto disk = new_data_part->volume->getDisk();
 
-    NameSet files_to_skip(all_columns.begin(), all_columns.end());
-    files_to_skip.insert(ingest_column_names.begin(), ingest_column_names.end());
+    /// Don't change granularity type while mutating subset of columns
+    auto mrk_extension = target_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType())
+                                                                         : getNonAdaptiveMrkExtension();
+
+    // NameSet files_to_skip(all_columns.begin(), all_columns.end());
+    // files_to_skip.insert(ingest_column_names.begin(), ingest_column_names.end());
+    std::cout<<" <<<< skip header: " << header.dumpStructure() << std::endl;
+    auto files_to_skip = PartLinker::collectFilesToSkip(target_part, header, std::set<MergeTreeIndexPtr>{}, mrk_extension, std::set<MergeTreeProjectionPtr>{});
     NameToNameVector files_to_rename;
 
     PartLinker part_linker(disk, new_data_part->getFullRelativePath(), target_part->getFullRelativePath(), files_to_skip, files_to_rename);
@@ -854,6 +865,8 @@ void IngestPartition::ingestPart(MergeTreeData & data, const IngestPartPtr & ing
     MergeTreeDataMergerMutator::finalizeMutatedPart(target_part, new_data_part, false, compression_codec);
 
     LOG_TRACE(&Poco::Logger::get("Ingestion"), "End ingest part {}", future_part.name);
+
+    return new_data_part;
 }
 
 void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_to_ingest, const IngestPartition::IngestSources & src_blocks,
@@ -866,6 +879,13 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
         return;
     }
 
+    LOG_TRACE(&Poco::Logger::get("Ingestion"), "Ingestion task with parts {}, source_blocks {}, ingest_column_name {}, ordered_key_names {}, all_columns {}", 
+                                                parts_to_ingest.size(),
+                                                src_blocks.size(),
+                                                ingest_column_names.size(),
+                                                ordered_key_names.size(),
+                                                all_columns.size());
+    
     // if (data.getIngestionBlocker().isCancelled())
     //     throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
 
@@ -899,7 +919,8 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
 
             try
             {
-                ingestPart(data, part, src_blocks, ingest_column_names, ordered_key_names, all_columns, settings);
+                auto ingested_part = ingestPart(data, part, src_blocks, ingest_column_names, ordered_key_names, all_columns, settings);
+                data.renameTempPartAndReplace(ingested_part);
             }
             catch(...)
             {

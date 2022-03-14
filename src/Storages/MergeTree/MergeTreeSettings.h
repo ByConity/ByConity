@@ -197,6 +197,7 @@ struct Settings;
     /** Using in ingest partition function. If true, we'll insert default when                                |
       * the user have not provided values for some rows of a column */                                        \
     M(Bool, ingest_default_column_value_if_not_provided, true, "", 0) \
+    M(Bool, enable_ingest_wide_part, false, "", 0) \
     /** detach partition lightweight rename directory instead of makeClone */                                 \
     M(Bool, light_detach_partition, false, "", 0) \
     M(Bool, enable_nullable_sorting_key, false, "", 0) \

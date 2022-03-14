@@ -8,6 +8,14 @@ namespace DB
 class IDisk;
 using DiskPtr = std::shared_ptr<IDisk>;
 
+class Block;
+class IMergeTreeDataPart;
+using MergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
+struct IMergeTreeIndex;
+using MergeTreeIndexPtr = std::shared_ptr<const IMergeTreeIndex>;
+struct IMergeTreeProjection;
+using MergeTreeProjectionPtr = std::shared_ptr<const IMergeTreeProjection>;
+
 class PartLinker
 {
 public:
@@ -24,6 +32,12 @@ public:
                {}
 
     void execute();
+
+    static NameSet collectFilesToSkip(const MergeTreeDataPartPtr & source_part,
+                                      const Block & updated_header,
+                                      const std::set<MergeTreeIndexPtr> & indices_to_recalc,
+                                      const String & mrk_extension,
+                                      const std::set<MergeTreeProjectionPtr> & projections_to_recalc);
 
 private:
     DiskPtr disk;

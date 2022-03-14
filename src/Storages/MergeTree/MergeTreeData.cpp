@@ -2201,6 +2201,9 @@ MergeTreeDataPartType MergeTreeData::choosePartType(size_t bytes_uncompressed, s
         return MergeTreeDataPartType::WIDE;
 
     const auto settings = getSettings();
+    if (settings->enable_ingest_wide_part)
+        return MergeTreeDataPartType::WIDE;
+
     if (!canUsePolymorphicParts(*settings))
         return MergeTreeDataPartType::WIDE;
 
@@ -3625,6 +3628,15 @@ Pipe MergeTreeData::alterPartition(
             case PartitionCommand::BITENGINE_RECODE_PARTITION_WHERE:
                 bitengineRecodePartitionWhere(command.partition, command.detach, query_context, false);
                 break;
+
+            case PartitionCommand::INGEST_PARTITION:
+            {
+                String from_database = query_context->resolveDatabase(command.from_database);
+                auto from_storage = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+                ingestPartition(from_storage, command.partition, command.column_names, command.key_names, query_context);
+            }
+
+            break;
 
             default:
                 throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);

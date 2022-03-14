@@ -44,6 +44,7 @@ public:
         const ASTPtr & partition_,
         const Names & column_names_,
         const Names & key_names_,
+        Int64 mutation_,
         const ContextPtr & context_);
 
     void ingestPartition();
@@ -75,7 +76,7 @@ private:
     Block blockJoinBlocks(MergeTreeData & data, Block & target_block, const IngestPartition::IngestSources & src_blocks, const Names & column_names, const Names & ordered_key_names);
 
     /// Perform outer join, ingest the specified columns.
-    void ingestPart(MergeTreeData & data, const IngestPartPtr & ingest_part, const IngestPartition::IngestSources & src_blocks,
+    MergeTreeData::MutableDataPartPtr ingestPart(MergeTreeData & data, const IngestPartPtr & ingest_part, const IngestPartition::IngestSources & src_blocks,
                 const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns,
                 const Settings & settings);
     void ingestion(MergeTreeData & data, const IngestParts & parts_to_ingest, const IngestPartition::IngestSources & src_blocks,
@@ -86,6 +87,7 @@ private:
     ASTPtr partition;
     Names column_names;
     Names key_names;
+    Int64 mutation = 0;
     ContextPtr context;
     Poco::Logger * log;
 };
