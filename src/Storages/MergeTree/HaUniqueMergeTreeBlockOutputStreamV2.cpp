@@ -600,7 +600,7 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
 
     Stopwatch timer;
     size_t block_size_before = to_block.rows();
-    /// sort by part_rowid so that we can read row store sequentially
+    /// Sort by part_rowid so that we can read row store sequentially
     std::sort(rowid_pairs.begin(), rowid_pairs.end(), [](auto & lhs, auto & rhs) { return lhs.part_rowid < rhs.part_rowid; });
 
     DeleteBitmapPtr delete_bitmap (new Roaring);
@@ -613,7 +613,7 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
     IndexFileIteratorPtr iter = row_store->new_iterator(opts);
     iter->SeekToFirst();
 
-    /// get mutable columns
+    /// Get mutable columns
     std::vector<IColumn::MutablePtr> mutable_columns;
     mutable_columns.resize(to_block.columns());
     for (size_t i = 0, size = to_block.columns(); i < size; ++i)
@@ -623,12 +623,12 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
     column_indexes.resize(row_store->columns.size());
     std::vector<SerializationPtr> serializations;
     size_t id = 0;
-    for (auto & name_and_type: row_store->columns)
+    for (auto & name_and_type : row_store->columns)
     {
-        /// TODO(lta): check data type
-        /// add a bool to present whether it's valid
-        column_indexes[id++] = to_block.getPositionByName(name_and_type.name);
-        /// TODO(lta): check serializations
+        if (row_store->columns_delete_bitmap->contains(id))
+            column_indexes[id++] = to_block.columns();
+        else
+            column_indexes[id++] = to_block.getPositionByName(name_and_type.name);
         serializations.emplace_back(name_and_type.type->getDefaultSerialization());
     }
 
@@ -663,19 +663,24 @@ void HaUniqueMergeTreeBlockOutputStreamV2::readColumnsFromRowStore(
                 part->rows_count);
         }
 
-        /// TODO(lta): check if metadata is match
         Slice value = iter->value();
         ReadBufferFromMemory buffer(value.data(), value.size());
         for (size_t i = 0, size = row_store->columns.size(); i < size; ++i)
         {
             Field val;
             serializations[i]->deserializeBinary(val, buffer);
-            mutable_columns[column_indexes[i]]->insert(val);
+            if (column_indexes[i] < mutable_columns.size())
+                mutable_columns[column_indexes[i]]->insert(val);
         }
 
-        /// TODO(lta): handle empty column
-
         to_block_rowids.push_back(pair.block_rowid);
+    }
+
+    /// Handle missing columns
+    for (size_t i = 0 ; i < mutable_columns.size(); ++i)
+    {
+        if (mutable_columns[i]->size() == block_size_before)
+            mutable_columns[i]->insertManyDefaults(rowid_pairs.size());
     }
 
     for (size_t i = 0, size = to_block.columns(); i < size; ++i)
@@ -694,7 +699,7 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
 {
     /********************************************************************
      * We divide the process into several phases:
-     * Phase 1: Remove duplicate keys in block and get replace info
+     * Phase 1: Remove duplicate keys in block and get replace info.
      * Phase 2: Get indexes that need to be searched in previous parts.
      * Phase 3: Query data from previous parts.
      * Phase 4: Replace column and filter data.
@@ -890,7 +895,8 @@ bool HaUniqueMergeTreeBlockOutputStreamV2::processPartitionBlock(
         
         /// According to the result of performace test, when the query data ratio is less than 5%, query row store has a better performance than query column store
         /// For more detail, please see https://bytedance.feishu.cn/docs/doccnilaBbofUvfnQ3zBuLQKjFe#xMQQwA
-        if (row_store && part_rowid_pairs[i].size() * 100 < existing_parts[i]->rows_count * 5)
+        // if (row_store && part_rowid_pairs[i].size() * 100 < existing_parts[i]->rows_count * 5)
+        if (row_store)
             readColumnsFromRowStore(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids, row_store);
         else
             readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);

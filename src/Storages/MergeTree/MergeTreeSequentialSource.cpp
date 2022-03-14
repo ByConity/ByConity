@@ -147,7 +147,7 @@ try
             }
 
             bool should_evaluate_missing_defaults = false;
-            reader->fillMissingColumns(columns, should_evaluate_missing_defaults, rows_read);
+            reader->fillMissingColumns(columns, should_evaluate_missing_defaults, rows_read - num_deleted);
 
             if (should_evaluate_missing_defaults)
             {

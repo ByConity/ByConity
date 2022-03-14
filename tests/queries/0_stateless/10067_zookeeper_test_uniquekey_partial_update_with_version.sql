@@ -13,7 +13,7 @@ create table unique_with_version_r1 (
     s String, 
     m1 UInt32, 
     m2 UInt64) 
-ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r1', event_time) partition by toDate(event_time) order by s unique key id 
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r1', event_time) partition by toDate(event_time) order by id unique key id 
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
 
 create table unique_with_version_r2 (
@@ -22,7 +22,7 @@ create table unique_with_version_r2 (
     s String, 
     m1 UInt32, 
     m2 UInt64) 
-ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r2', event_time) partition by toDate(event_time) order by s unique key id 
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r2', event_time) partition by toDate(event_time) order by id unique key id 
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
 
 insert into unique_with_version_r1 values ('2020-10-29 23:40:00', 10001, '10001A', 5, 500), ('2020-10-29 23:40:00', 10002, '10002A', 2, 200), ('2020-10-29 23:50:00', 10001, '10001B', 8, 800), ('2020-10-29 23:50:00', 10002, '10002B', 5, 500);
@@ -53,7 +53,7 @@ create table unique_with_version_r1 (
     s String, 
     m1 UInt32, 
     m2 UInt64) 
-ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r1', event_time) partition by toDate(event_time) order by s unique key id 
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r1', event_time) partition by toDate(event_time) order by id unique key id 
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
 
 create table unique_with_version_r2 (
@@ -62,7 +62,7 @@ create table unique_with_version_r2 (
     s String, 
     m1 UInt32, 
     m2 UInt64) 
-ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r2', event_time) partition by toDate(event_time) order by s unique key id 
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/10067_zookeeper_test_uniquekey_partial_update_with_version/unique_with_version_1', 'r2', event_time) partition by toDate(event_time) order by id unique key id 
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
 
 insert into unique_with_version_r1 values ('2020-10-29 23:40:00', 10001, '10001A', 5, 500), ('2020-10-29 23:40:00', 10002, '10002A', 2, 200), ('2020-10-29 23:50:00', 10001, '10001B', 8, 800), ('2020-10-29 23:50:00', 10002, '10002B', 5, 500);

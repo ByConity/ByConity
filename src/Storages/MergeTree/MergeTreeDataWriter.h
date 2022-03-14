@@ -41,13 +41,6 @@ public:
       */
     static BlocksWithPartition splitBlockIntoParts(const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
 
-    /**
-     * TODO(lta): add comment
-     * For unique table, when partition as version 
-     * 
-     */
-    static ColumnPtr getPartitionAsVersionColumn(const Block & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
-
     /** All rows must correspond to same partition.
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
       */

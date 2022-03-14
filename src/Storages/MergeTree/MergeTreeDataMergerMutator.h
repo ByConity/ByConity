@@ -24,6 +24,23 @@ enum class SelectPartsDecision
     NOTHING_TO_MERGE = 2,
 };
 
+enum class RowStoreColumnsMatchType
+{
+    Mismatch = 0,
+    PrefixMatch = 1,
+    ExactMatch = 2,
+};
+
+struct RowStoreColumnsInfo
+{
+    RowStoreColumnsMatchType match_type;
+    std::vector<size_t> column_indexes;
+    std::vector<bool> column_hits;
+    std::vector<SerializationPtr> column_serializations;
+};
+
+using RowStoreColumnsInfoList = std::vector<RowStoreColumnsInfo>;
+
 /// Auxiliary struct holding metainformation for the future merged or mutated part.
 struct FutureMergedMutatedPart
 {
@@ -167,12 +184,12 @@ public:
         const String & prefix = "",
         const ActionBlocker * unique_table_blocker = nullptr);
 
-    /// merge row store for unique part after merging using part_id_mapping when enable_unique_partial_update and enable_unique_row_store
+    /// Merge row store for unique part after merging using part_id_mapping when enable_unique_partial_update and enable_unique_row_store
     void mergeRowStoreIntoNewPart(
         const FutureMergedMutatedPart & future_part,
         const PartIdMapping & part_id_mapping,
         const MergeTreeData::MutableDataPartPtr & new_part,
-        MergeTreeData::DataPart::Checksums & checksum,
+        MergeTreeData::DataPart::Checksums & checksums,
         bool need_sync);
 
     /// Mutate a single data part with the specified commands. Will create and return a temporary part.

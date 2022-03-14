@@ -7,14 +7,19 @@
 
 namespace DB
 {
+
 class UniqueRowStore
 {
 public:
-
+    using Roaring = roaring::Roaring;
+    using DeleteBitmapPtr = std::shared_ptr<const Roaring>;
+    
     NamesAndTypesList columns;
+    DeleteBitmapPtr columns_delete_bitmap;
 
     /// created from local file located at "file_path".
-    UniqueRowStore(const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns);
+    UniqueRowStore(
+        const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns, DeleteBitmapPtr columns_delete_bitmap);
 
     /// Return an iterator over KVs in this file.
     /// Note: client should make sure the UniqueRowStore object lives longer than the returned iterator.

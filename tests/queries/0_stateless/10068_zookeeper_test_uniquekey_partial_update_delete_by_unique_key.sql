@@ -13,7 +13,7 @@ CREATE table delete_by_unique_key_r1(
     `revenue` UInt64)
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_partial_update_delete_by_unique_key/delete_by_unique_key', 'r1')
 partition by toDate(event_time)
-order by (event_time, product_id)
+order by (product_id, event_time)
 unique key product_id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
 
@@ -24,7 +24,7 @@ CREATE table delete_by_unique_key_r2 (
     `revenue` UInt64)
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_partial_update_delete_by_unique_key/delete_by_unique_key', 'r2')
 partition by toDate(event_time)
-order by (event_time, product_id)
+order by (product_id, event_time)
 unique key product_id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
 
@@ -62,7 +62,7 @@ CREATE table delete_by_unique_key_r1(
     `revenue` UInt64)
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_partial_update_delete_by_unique_key/delete_by_unique_key', 'r1')
 partition by toDate(event_time)
-order by (event_time, product_id)
+order by (product_id, event_time)
 unique key product_id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
 
@@ -73,7 +73,7 @@ CREATE table delete_by_unique_key_r2 (
     `revenue` UInt64)
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_partial_update_delete_by_unique_key/delete_by_unique_key', 'r2')
 partition by toDate(event_time)
-order by (event_time, product_id)
+order by (product_id, event_time)
 unique key product_id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
 

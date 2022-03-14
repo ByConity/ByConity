@@ -6372,6 +6372,41 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
             new_checksums->files.erase(it.first);
     }
 
+    if (part->storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// When there has commands of drop column, it's necessary to rewrite delete bitmap of row store columns.
+        UniqueRowStorePtr row_store = part->tryGetUniqueRowStore();
+        if (row_store)
+        {
+            Roaring bitmap = *row_store->columns_delete_bitmap;
+            size_t id = 0;
+            for (auto & [name, type] : row_store->columns)
+            {
+                if (!new_types.count(name))
+                    bitmap.add(id);
+                id++;
+            }
+            /// write new delete bitmap of row store columns
+            auto columns_bitmap = std::make_shared<Roaring>(bitmap);
+            size_t size = columns_bitmap->getSizeInBytes();
+            PODArray<char> buffer(size);
+            size = columns_bitmap->write(buffer.data());
+
+            /// write to file
+            String tmp_suffix = ".tmp";
+            WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME + tmp_suffix, 4096);
+            HashingWriteBuffer out_hashing(file);
+            writeIntBinary(size, out_hashing);
+            out_hashing.write(buffer.data(), size);
+            new_checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_size = out_hashing.count();
+            new_checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_hash = out_hashing.getHash();
+            transaction->rename_map[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME + tmp_suffix] = UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME;
+            
+            /// update delete bitmap of row store columns in memory
+            row_store->columns_delete_bitmap = columns_bitmap;
+        }
+    }
+
     /// Write the checksums to the temporary file.
     bool checksums_empty = false;
     {

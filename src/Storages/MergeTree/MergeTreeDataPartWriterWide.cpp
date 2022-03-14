@@ -182,9 +182,12 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     if (shouldWriteRowStore())
     {
         serialized_values.resize(rows);
+        auto columns = data_part->getColumns();
+        if (columns.size() != block.columns())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Column in data part {} doesn't match block", data_part->name);
         for (size_t i = 0; i < threads; ++i)
         {
-            serialized_values_pool.scheduleOrThrowOnError([&, i]() {
+            serialized_values_pool.scheduleOrThrowOnError([&, columns, i]() {
                 for (size_t j = i; j < rows; j += threads)
                 {
                     size_t correct_row = j;
@@ -193,8 +196,9 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     if (correct_row >= rows)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
                     WriteBufferFromOwnString val_buf;
-                    for (auto & col : block)
-                        serializations[col.name]->serializeBinary(*col.column, correct_row, val_buf);
+                    /// Obey the order in metadata snapshot.
+                    for (auto & col : columns)
+                        serializations[col.name]->serializeBinary(*block.getByName(col.name).column, correct_row, val_buf);
                     serialized_values[j] = val_buf.str();
                 }
             });
@@ -366,8 +370,6 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     size_t serialize_value_cost = 0;
     size_t insert_value_cost = 0;
     
-    row_store_columns = block.getNamesAndTypesList();
-
     /// wait serialized value to finish
     Stopwatch serialize_value_timer;
     serialized_values_pool.wait();
@@ -809,14 +811,36 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
 
         /// write row store columns
-        auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
-        HashingWriteBuffer out_hashing(*out);
-        row_store_columns.writeText(out_hashing);
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
-        out->finalize();
-        if (sync)
-            out->sync();
+        {
+            auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
+            HashingWriteBuffer out_hashing(*out);
+            data_part->getColumns().writeText(out_hashing);
+            checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
+            checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
+            out->finalize();
+            if (sync)
+                out->sync();
+        }
+
+        /// write delete bitmap of row store columns
+        {
+            /// serialize bitmap to buffer
+            auto columns_bitmap = std::make_shared<Roaring>();
+            size_t size = columns_bitmap->getSizeInBytes();
+            PODArray<char> buffer(size);
+            size = columns_bitmap->write(buffer.data());
+            
+            /// write to file
+            auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME, 4096);
+            HashingWriteBuffer out_hashing(*out);
+            writeIntBinary(size, out_hashing);
+            out_hashing.write(buffer.data(), size);
+            checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_size = out_hashing.count();
+            checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_hash = out_hashing.getHash();
+            out->finalize();
+            if (sync)
+                out->sync();
+        }
     }
 }
 

@@ -30,8 +30,9 @@ constexpr auto KLL_FILE_EXTENSION = ".kll";
 
 constexpr auto UKI_FILE_NAME = "unique_key.idx";   /// name of unique key index file
 
-constexpr auto UNIQUE_ROW_STORE_DATA_NAME = "row_store.data"; /// name of row store data file
-constexpr auto UNIQUE_ROW_STORE_COLUMNS_NAME = "row_store_columns.txt"; /// name of row store columns file
+constexpr auto UNIQUE_ROW_STORE_DATA_NAME = "row_store.data";
+constexpr auto UNIQUE_ROW_STORE_COLUMNS_NAME = "row_store_columns.txt";
+constexpr auto UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME = "row_store_columns_delete.del";
 
 bool isEngineReservedWord(const String & column);
 

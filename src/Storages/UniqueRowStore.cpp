@@ -11,7 +11,9 @@ namespace ErrorCodes
     extern const int UNKNOWN_EXCEPTION;
 }
 
-UniqueRowStore::UniqueRowStore(const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns_): columns(columns_)
+UniqueRowStore::UniqueRowStore(
+    const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns_, DeleteBitmapPtr columns_delete_bitmap_)
+    : columns(columns_), columns_delete_bitmap(columns_delete_bitmap_)
 {
     IndexFile::Options options;
     options.block_cache = std::move(block_cache);

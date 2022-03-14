@@ -1971,16 +1971,37 @@ DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
 UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
 {
     assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    /// get row store columns
     NamesAndTypesList row_store_columns;
     {
-        String path = fs::path(getFullRelativePath()) / UNIQUE_ROW_STORE_COLUMNS_NAME;
+        String path = getFullPath() + UNIQUE_ROW_STORE_COLUMNS_NAME;
+        if (!Poco::File(path).exists())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store column file doesn't exist.");
         auto file = openForReading(volume->getDisk(), path);
         row_store_columns.readText(*file);
         assertEOF(*file);
     }
 
+    /// get delete bitmap of row store columns
+    DeleteBitmapPtr columns_delete_bitmap;
+    {
+        String path = getFullPath() + UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME;
+        if (!Poco::File(path).exists())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap of row store column file doesn't exist.");
+        auto file = openForReading(volume->getDisk(), path);
+        size_t buf_size;
+        readIntBinary(buf_size, *file);
+        PODArray<char> buf(buf_size);
+        file->read(buf.data(), buf_size);
+        Roaring bitmap = Roaring::read(buf.data());
+        columns_delete_bitmap = std::make_shared<Roaring>(std::move(bitmap));
+    }
+
     return std::make_shared<UniqueRowStore>(
-        getFullPath() + UNIQUE_ROW_STORE_DATA_NAME, storage.getContext()->getDiskUniqueRowStoreBlockCache(), row_store_columns);
+        getFullPath() + UNIQUE_ROW_STORE_DATA_NAME,
+        storage.getContext()->getDiskUniqueRowStoreBlockCache(),
+        row_store_columns,
+        columns_delete_bitmap);
 }
 
 UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
@@ -2368,9 +2389,6 @@ UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
     /// handle the case that parts of old versions which don't have row store file
     if (!Poco::File(getFullPath() + UNIQUE_ROW_STORE_DATA_NAME).exists())
         return nullptr;
-
-    if (!Poco::File(getFullPath() + UNIQUE_ROW_STORE_COLUMNS_NAME).exists())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store column file doesn't exist while row store file exists.");
 
     /// Data part's memory address is used as the cache key.
     String key = getMemoryAddress();

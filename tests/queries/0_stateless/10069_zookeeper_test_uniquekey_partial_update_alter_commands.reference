@@ -1,0 +1,59 @@
+insert with partial update mode, disbale unique row store
+select ha unique table r1
+1	bce	[10,20]	{'k1':10,'k2':2,'k5':5}
+2	abc	[3,4,5]	{'k3':3,'k4':4,'k7':7,'k8':8}
+select ha unique table r2
+1	bce	[10,20]	{'k1':10,'k2':2,'k5':5}
+2	abc	[3,4,5]	{'k3':3,'k4':4,'k7':7,'k8':8}
+
+drop column a1, update one row and insert one new row, then merge
+select ha unique table r1
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	abc	{'k3':3,'k4':4,'k7':7,'k8':8}	[]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+select ha unique table r2
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	abc	{'k3':3,'k4':4,'k7':7,'k8':8}	[]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+
+update 1 row and insert one row
+select ha unique table r1
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	efg	{'k7':7}	[70,80]
+select ha unique table r2
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	efg	{'k7':7}	[70,80]
+
+insert with partial update mode, enable unique row store
+select ha unique table r1
+1	bce	[10,20]	{'k1':10,'k2':2,'k5':5}
+2	abc	[3,4,5]	{'k3':3,'k4':4,'k7':7,'k8':8}
+select ha unique table r2
+1	bce	[10,20]	{'k1':10,'k2':2,'k5':5}
+2	abc	[3,4,5]	{'k3':3,'k4':4,'k7':7,'k8':8}
+
+drop column a1, update one row and insert one new row, then merge
+select ha unique table r1
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	abc	{'k3':3,'k4':4,'k7':7,'k8':8}	[]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+select ha unique table r2
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	abc	{'k3':3,'k4':4,'k7':7,'k8':8}	[]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+
+update 1 row and insert one row
+select ha unique table r1
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	efg	{'k7':7}	[70,80]
+select ha unique table r2
+1	bce	{'k1':10,'k2':2,'k5':50,'k9':9}	[100,200]
+2	bcd	{'k3':3,'k4':4,'k5':5,'k7':7,'k8':8}	[10,20]
+3	def	{'k3':4,'k4':3}	[30,40,50]
+5	efg	{'k7':7}	[70,80]

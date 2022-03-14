@@ -55,9 +55,6 @@ using DeleteBitmapPtr = std::shared_ptr<const Roaring>;
 using MutableDeleteBitmapPtr = std::shared_ptr<Roaring>;
 using DeleteBitmapsVector = std::vector<DeleteBitmapPtr>;
 
-/// name of unique key index file
-const String uki_file_name = "unique_key.idx";
-
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
 {
@@ -559,7 +556,7 @@ public:
     /// Return disk unique key index (corresponding to unique_key.idx) if the part has unique key.
     DiskUniqueKeyIndexPtr loadDiskUniqueIndex();
 
-    /// Return unique row store (corresponding to row_store.data) if the part has unique key.
+    /// Return unique row store (corresponding to row_store.data) if the part has unique row store.
     UniqueRowStorePtr loadUniqueRowStore();
 
     String ALWAYS_INLINE getMemoryAddress() const

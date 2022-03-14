@@ -103,8 +103,6 @@ private:
     bool enable_unique_row_store = false;
     /// generate row store to speed up lookup based on row number
     IndexFile::IndexFileInfo unique_row_store_file_info;
-    /// record the columns of row store
-    NamesAndTypesList row_store_columns;
     
     size_t rows_count = 0;
 
