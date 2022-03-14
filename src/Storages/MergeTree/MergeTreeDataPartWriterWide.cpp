@@ -173,18 +173,24 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
     // pre-serialize value with multiple threads to improve performance
     std::vector<String> serialized_values;
-    size_t threads = storage.getSettings()->write_unique_row_store_threads;
-    ThreadPool serialized_values_pool(threads);
+    size_t thread_num = 8;
+    ThreadPool serialized_values_pool(thread_num);
+    std::vector<const ColumnWithTypeAndName *> block_columns_with_name;
+    block_columns_with_name.resize(block.columns());
     if (shouldWriteRowStore())
     {
         serialized_values.resize(rows);
-        auto columns = data_part->getColumns();
+        auto & columns = data_part->getColumns();
         if (columns.size() != block.columns())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Column in data part {} doesn't match block", data_part->name);
-        for (size_t i = 0; i < threads; ++i)
+        size_t id = 0;
+        /// Obey the order in metadata snapshot.
+        for (auto & col : columns)
+            block_columns_with_name[id++] = &block.getByName(col.name);
+        for (size_t i = 0; i < thread_num; ++i)
         {
-            serialized_values_pool.scheduleOrThrowOnError([&, columns, i]() {
-                for (size_t j = i; j < rows; j += threads)
+            serialized_values_pool.scheduleOrThrowOnError([&, i]() {
+                for (size_t j = i; j < rows; j += thread_num)
                 {
                     size_t correct_row = j;
                     if (permutation)
@@ -192,9 +198,12 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     if (correct_row >= rows)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
                     WriteBufferFromOwnString val_buf;
-                    /// Obey the order in metadata snapshot.
-                    for (auto & col : columns)
-                        serializations[col.name]->serializeBinary(*block.getByName(col.name).column, correct_row, val_buf);
+                    for (auto col_with_name: block_columns_with_name)
+                    {
+                        if (!serializations.count(col_with_name->name))
+                            throw Exception(ErrorCodes::LOGICAL_ERROR, "Serializations doesn't contain column {} when serialize value for unique row store", col_with_name->name);
+                        serializations[col_with_name->name]->serializeBinary(*col_with_name->column, correct_row, val_buf);
+                    }
                     serialized_values[j] = val_buf.str();
                 }
             });

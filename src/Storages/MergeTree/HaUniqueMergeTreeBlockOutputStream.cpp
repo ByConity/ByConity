@@ -801,7 +801,8 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     size_t id = 0;
     for (auto & name_and_type : row_store->columns)
     {
-        if (row_store->columns_delete_bitmap->contains(id))
+        /// After drop column, adding this info into columns_delete_bitmap of existing parts is an asynchronous operation, thus the columns_delete_bitmap may be lagging
+        if (row_store->columns_delete_bitmap->contains(id) || !to_block.has(name_and_type.name))
             column_indexes[id++] = to_block.columns();
         else
             column_indexes[id++] = to_block.getPositionByName(name_and_type.name);
@@ -1058,8 +1059,8 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlockInPartialUpdateMod
      * In partial update mode, we divide the process into several phases:
      * Phase 1: Remove duplicate keys in block and get replace info.
      * Phase 2: Get indexes that need to be searched in previous parts.
-     * Phase 3: Query data from previous parts.
-     * Phase 4: Replace column and filter data.
+     * Phase 3: Query data from previous parts parallel.
+     * Phase 4: Replace column and filter data parallel.
      * Phase 5: Remove column not in header.
      ********************************************************************/
     auto & block = block_with_partition.block;
@@ -1226,88 +1227,139 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlockInPartialUpdateMod
     if (block_size == num_filtered)
         return true; /// all filtered
 
-    Block columns_from_storage = metadata_snapshot->getSampleBlock();
-    PaddedPODArray<UInt32> block_rowids;
-
-    /// Phase 3: Query data from previous parts.
+    /// Phase 3: Query data from previous parts parallel.
+    Stopwatch query_data_timer;
+    size_t valid_num = 0, total_query_row = 0;
     for (size_t i = 0; i < part_rowid_pairs.size(); ++i)
     {
         if (part_rowid_pairs[i].empty())
-            continue;        
-        UniqueRowStorePtr row_store = existing_parts[i]->tryGetUniqueRowStore();
-        if (row_store)
-            readColumnsFromRowStore(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids, row_store);
-        else
-            readColumnsFromStorage(existing_parts[i], part_rowid_pairs[i], columns_from_storage, block_rowids);
+            continue;
+        valid_num++;
+        total_query_row += part_rowid_pairs[i].size();
+    }
+    size_t thread_num = valid_num == 0 ? 1: std::min(valid_num, assert_cast<size_t>(8));
+    ThreadPool read_data_pool(thread_num);
+    std::vector<Block> columns_from_storage_vector(thread_num);
+    std::vector<PaddedPODArray<UInt32>> block_rowids_vector(thread_num);
+    for (size_t i = 0 ; i < thread_num; ++i)
+    {
+        columns_from_storage_vector[i] = metadata_snapshot->getSampleBlock();
+        read_data_pool.scheduleOrThrowOnError([&, i]() {
+            size_t j = 0, cnt = 0;
+            while (j < part_rowid_pairs.size() && cnt != i)
+            {
+                if (!part_rowid_pairs[j].empty())
+                    ++cnt;
+                ++j;
+            }
+            cnt = 0;
+            while (j < part_rowid_pairs.size())
+            {
+                if (!part_rowid_pairs[j].empty())
+                {
+                    if (cnt == 0)
+                    {
+                        UniqueRowStorePtr row_store = existing_parts[j]->tryGetUniqueRowStore();
+                        if (row_store)
+                            readColumnsFromRowStore(
+                                existing_parts[j], part_rowid_pairs[j], columns_from_storage_vector[i], block_rowids_vector[i], row_store);
+                        else
+                            readColumnsFromStorage(
+                                existing_parts[j], part_rowid_pairs[j], columns_from_storage_vector[i], block_rowids_vector[i]);
+                    }
+                    if (++cnt == thread_num)
+                        cnt = 0;
+                }
+                j++;
+            }
+        });
+    }
+    read_data_pool.wait();
+    for (size_t i = 0, size = columns_from_storage_vector[0].columns(); i < size; ++i)
+    {
+        auto mutable_column = IColumn::mutate(std::move(columns_from_storage_vector[0].getByPosition(i).column));
+        for (size_t j = 1; j < thread_num; ++j)
+        {
+            const auto source_column = columns_from_storage_vector[j].getByPosition(i).column;
+            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
+        }
+        columns_from_storage_vector[0].getByPosition(i).column = std::move(mutable_column);
+    }
+    for (size_t j = 1; j < thread_num; ++j)
+        block_rowids_vector[0].insert(block_rowids_vector[j].begin(), block_rowids_vector[j].end());
+    Block & columns_from_storage = columns_from_storage_vector[0];
+    PaddedPODArray<UInt32> & block_rowids = block_rowids_vector[0];
+    if (columns_from_storage.rows() != block_rowids.size())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of block {} is not equal to replace rows {}", columns_from_storage.rows(), block_rowids.size());
+    LOG_DEBUG(
+        log,
+        "Read from {} part parallel cost {}ms, total row {}",
+        part_rowid_pairs.size(),
+        query_data_timer.elapsedMilliseconds(),
+        total_query_row);
+
+    /// Phase 4: Replace column and filter data parallel.
+    if (!block_rowids.empty())
+    {
+        PaddedPODArray<UInt32> tmp_src_indexes = getRowidPermutation(block_rowids);
+        PaddedPODArray<UInt32> tmp_dst_indexes = permuteRowids(block_rowids, tmp_src_indexes);
+        mergeIndices(replace_src_indexes, tmp_src_indexes);
+        mergeIndices(replace_dst_indexes, tmp_dst_indexes);
     }
 
-    /// Phase 4: Replace column and filter data.
-    if (!block_rowids.empty() || !replace_dst_indexes.empty())
+    NameSet non_updatable_columns;
+    for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
+        non_updatable_columns.insert(name);
+    for (auto & name : metadata_snapshot->getUniqueKeyColumns())
+        non_updatable_columns.insert(name);
+
+    thread_num = std::min(block.columns(), static_cast<size_t>(8));
+    ThreadPool replace_column_pool(thread_num);
+    for (size_t i = 0 ; i < thread_num; ++i)
     {
-        if (!block_rowids.empty())
-        {
-            PaddedPODArray<UInt32> tmp_src_indexes = getRowidPermutation(block_rowids);
-            PaddedPODArray<UInt32> tmp_dst_indexes = permuteRowids(block_rowids, tmp_src_indexes);
-            mergeIndices(replace_src_indexes, tmp_src_indexes);
-            mergeIndices(replace_dst_indexes, tmp_dst_indexes);
-        }
-
-        NameSet non_updatable_columns;
-        for (auto & name : metadata_snapshot->getColumnsRequiredForUniqueKey())
-            non_updatable_columns.insert(name);
-        for (auto & name : metadata_snapshot->getUniqueKeyColumns())
-            non_updatable_columns.insert(name);
-
-        Block a = block;
-
-        for (auto & col : block)
-        {
-            if (col.name == StorageInMemoryMetadata::delete_flag_column_name)
-                continue;
-
-            if (non_updatable_columns.count(col.name))
+        replace_column_pool.scheduleOrThrowOnError([&, i]() {
+            for (size_t j = i, size = block.columns(); j < size; j += thread_num)
             {
-                if (num_filtered > 0)
-                {
-                    ssize_t new_size_hint = block_size - num_filtered;
-                    col.column = col.column->filter(filter, new_size_hint);
-                }        
-            }
-            else
-            {
-                ColumnPtr is_default_col = col.column->selectDefault(col.type->getDefault());
-                const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
-
-                /// all values are non-default, nothing to replace
-                if (filterIsAlwaysFalse(is_default_filter) && !col.type->isMap() && !num_filtered)
+                auto & col = block.getByPosition(j);
+                if (col.name == StorageInMemoryMetadata::delete_flag_column_name)
                     continue;
 
-                ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
-                if (!column_from_storage)
-                    throw Exception(
-                        ErrorCodes::LOGICAL_ERROR, "Column for storage {} is nullptr while replacing column for partial update.", col.name);
+                if (replace_dst_indexes.empty() || non_updatable_columns.count(col.name))
+                {
+                    if (num_filtered > 0)
+                    {
+                        ssize_t new_size_hint = block_size - num_filtered;
+                        col.column = col.column->filter(filter, new_size_hint);
+                    }
+                }
+                else
+                {
+                    ColumnPtr is_default_col = col.column->selectDefault(col.type->getDefault());
+                    const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
-                ColumnPtr new_column = col.column->replaceFrom(
-                    replace_dst_indexes,
-                    *column_from_storage,
-                    replace_src_indexes,
-                    filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter,
-                    num_filtered > 0 ? &filter : nullptr);
-                col.column = std::move(new_column);
+                    /// all values are non-default, nothing to replace
+                    if (filterIsAlwaysFalse(is_default_filter) && !col.type->isMap() && !num_filtered)
+                        continue;
+
+                    ColumnPtr column_from_storage = columns_from_storage.getByName(col.name).column;
+                    if (!column_from_storage)
+                        throw Exception(
+                            ErrorCodes::LOGICAL_ERROR,
+                            "Column for storage {} is nullptr while replacing column for partial update.",
+                            col.name);
+
+                    ColumnPtr new_column = col.column->replaceFrom(
+                        replace_dst_indexes,
+                        *column_from_storage,
+                        replace_src_indexes,
+                        filterIsAlwaysTrue(is_default_filter) ? nullptr : &is_default_filter,
+                        num_filtered > 0 ? &filter : nullptr);
+                    col.column = std::move(new_column);
+                }
             }
-        }
+        });
     }
-    else
-    {
-        if (num_filtered > 0)
-        {
-            ssize_t new_size_hint = block_size - num_filtered;
-            for (size_t i = 0; i < block.columns(); ++i) {
-                ColumnWithTypeAndName & col = block.getByPosition(i);
-                col.column = col.column->filter(filter, new_size_hint);
-            }
-        }
-    }
+    replace_column_pool.wait();
 
     /// Phase 5: Remove column not in header, including func columns
     auto header_block = getHeader();
