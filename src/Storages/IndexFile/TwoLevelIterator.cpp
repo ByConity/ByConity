@@ -142,31 +142,11 @@ namespace
             InitDataBlock();
             if (data_iter_.iter() != nullptr)
             {
-                // if (1)
-                // {
-                    data_iter_.Seek(target);
-                    if (data_iter_.Valid())
-                    {
-                        exact_match = Compare(data_iter_.key(), target) == 0;
-                    }
-                // }
-                // else
-                // {
-                //     // another approach
-                //     data_iter_.SeekToFirst();
-                //     if (data_iter_.Valid())
-                //     {
-                //         int cmp = Compare(data_iter_.key(), target);
-                //         if (cmp >= 0)
-                //         {
-                //             exact_match = (cmp == 0);
-                //         }
-                //         else
-                //         {
-                //             data_iter_.NextUntil(target, exact_match);
-                //         }
-                //     }
-                // }
+                data_iter_.Seek(target);
+                if (data_iter_.Valid())
+                {
+                    exact_match = Compare(data_iter_.key(), target) == 0;
+                }
             }
         }
     }

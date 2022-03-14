@@ -313,7 +313,6 @@ void HaUniqueMergeTreeBlockOutputStream::write(const Block & block)
                     throw Exception(
                         "HaUniqueMergeTree engine tries to write the delete flag column to disk which is just a func column and should not be written to disk.",
                         ErrorCodes::LOGICAL_ERROR);
-                
                 part = storage.writer.writeTempPart(current_block, metadata_snapshot, context);
                 UInt64 block_number = storage.allocateBlockNumberDirect(zookeeper);
                 part->info.min_block = block_number;
@@ -1038,7 +1037,6 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlock(
         if (!header_block.has(col_name))
             block.erase(col_name);
 
-    Stopwatch filter_timer;
     if (num_filtered > 0)
     {
         ssize_t new_size_hint = block_size - num_filtered;

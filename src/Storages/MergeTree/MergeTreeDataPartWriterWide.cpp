@@ -234,8 +234,6 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     }
     auto granules_to_write = getGranulesToWrite(index_granularity, block.rows(), getCurrentMark(), rows_written_in_last_mark);
 
-    LOG_DEBUG(getLogger(), "write granules size: {}", granules_to_write.size());
-
     auto offset_columns = written_offset_columns ? *written_offset_columns : WrittenOffsetColumns{};
     Block primary_key_block;
     if (settings.rewrite_primary_key)

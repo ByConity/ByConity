@@ -502,7 +502,7 @@ class IColumn;
     M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     M(UInt64, max_insert_wait_seconds_for_unique_table_leader, 0, "The maximum seconds to block insert statement on HaUniqueMergeTree until leader is found", 0) \
-    M(Bool, enable_disk_based_unique_key_index_method, 1, "Whether to allow unique table using disk based unique key index method.", 0) \
+    M(Bool, enable_disk_based_unique_key_index_method, true, "Whether to allow unique table using disk based unique key index method.", 0) \
     M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
     M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \

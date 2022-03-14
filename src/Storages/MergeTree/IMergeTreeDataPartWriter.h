@@ -31,8 +31,6 @@ public:
 
     virtual ~IMergeTreeDataPartWriter();
 
-    virtual size_t getWriteRowStoreCost() { return 0; }
-
     virtual void write(const Block & block, const IColumn::Permutation * permutation) = 0;
 
     void writeImplicitColumnForBitEngine(Block & block);
