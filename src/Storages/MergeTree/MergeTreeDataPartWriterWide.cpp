@@ -118,15 +118,11 @@ void MergeTreeDataPartWriterWide::init()
 {
     if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        if (true /*storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method*/ // FIXME (UNIQUE KEY): not work, fix later
+        if (storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method
             && storage.getSettings()->enable_disk_based_unique_key_index)
-        {
             enable_disk_based_key_index = true;
-        }
         if (storage.getSettings()->enable_unique_partial_update && storage.getSettings()->enable_unique_row_store)
-        {
             enable_unique_row_store = true;
-        }
     }
 }
 
@@ -358,26 +354,19 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
     IndexFile::Options options;
 
-    Stopwatch open_timer;
     IndexFile::IndexFileWriter row_store_writer(options);
     auto status = row_store_writer.Open(row_store_file);
     if (!status.ok())
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", row_store_file, status.ToString());
-    size_t open_cost = open_timer.elapsedMicroseconds();
 
-    size_t rows = block.rows();
-    size_t serialize_row_cost = 0;
-    size_t serialize_value_cost = 0;
-    size_t insert_value_cost = 0;
-    
     /// wait serialized value to finish
     Stopwatch serialize_value_timer;
     serialized_values_pool.wait();
-    serialize_value_cost += serialize_value_timer.elapsedMicroseconds();
+    size_t serialize_value_cost = serialize_value_timer.elapsedMilliseconds();
 
+    size_t rows = block.rows();
     for (size_t i = 0; i < rows; ++i)
     {
-        Stopwatch inner_timer;
         /// handle key, mem comparable
         size_t row = Endian::big(i);
         WriteBufferFromOwnString row_buf;
@@ -387,36 +376,33 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
         if (permutation)
             correct_row = (*permutation)[i];
         if (correct_row >= rows)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", i, correct_row, rows);
-
-        serialize_row_cost += inner_timer.elapsedMicroseconds();
-        inner_timer.restart();
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}",
+                i,
+                correct_row,
+                rows);
 
         /// insert item
         status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(serialized_values[i].data(), serialized_values[i].size()));
         if (!status.ok())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
-
-        insert_value_cost += inner_timer.elapsedMicroseconds();
     }
 
     Stopwatch finish_timer;
     status = row_store_writer.Finish(&unique_row_store_file_info);
-    size_t finish_cost = finish_timer.elapsedMicroseconds();
+    size_t finish_cost = finish_timer.elapsedMilliseconds();
     if (!status.ok())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
-    write_row_store_cost = timer.elapsedMilliseconds();
+
     LOG_DEBUG(
         log,
-        "Finish writing row store for part {}, rows {}, open cost {} ms, serialize_row cost {} ms, serialize value cost {} ms, insert value cost {} ms, finish cost {} ms, total cost {} ms.",
+        "Finish writing row store for part {}, rows {}, serialize value cost {} ms, finish cost {} ms, total cost {} ms.",
         data_part->name,
         block.rows(),
-        open_cost / 1000,
-        serialize_row_cost / 1000,
-        serialize_value_cost / 1000,
-        insert_value_cost / 1000,
-        finish_cost / 1000,
-        write_row_store_cost);
+        serialize_value_cost,
+        finish_cost,
+        timer.elapsedMilliseconds());
 }
 
 /// Column must not be empty. (column.size() !== 0)

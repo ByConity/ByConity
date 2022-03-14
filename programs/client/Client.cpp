@@ -534,8 +534,6 @@ private:
         else
             insert_format_max_block_size = config().getInt("insert_format_max_block_size", context->getSettingsRef().max_insert_block_size);
 
-        // insert_format_max_block_size = 524288;;
-        // std::cout << "insert format max block size: " << insert_format_max_block_size << std::endl;
         if (!is_interactive)
         {
             need_render_progress = config().getBool("progress", false);
@@ -1903,7 +1901,6 @@ private:
         while (true)
         {
             Block block = async_block_input->read();
-            // std::cout << "client block: " << block.rows() << std::endl;
 
             /// Check if server send Log packet
             receiveLogs();

@@ -43,8 +43,6 @@ public:
 
     size_t getRowsCount() const { return rows_count; }
 
-    size_t getWriteRowStoreCost() { return write_row_store_cost; }
-
 private:
     /** If `permutation` is given, it rearranges the values in the columns when writing.
       * This is necessary to not keep the whole block in the RAM to sort it.
@@ -62,8 +60,6 @@ private:
     IMergeTreeDataPart::MinMaxIndex minmax_idx;
     size_t rows_count = 0;
     CompressionCodecPtr default_codec;
-
-    size_t write_row_store_cost = 0;
 };
 
 }

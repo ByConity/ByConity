@@ -14,7 +14,6 @@
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/HaUniqueMergeTreeBlockOutputStream.h>
-#include <Storages/MergeTree/HaUniqueMergeTreeBlockOutputStreamV2.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
@@ -571,13 +570,9 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
         }
     }
 
-    /// TODO offline node handling
-    if (query_settings.enable_unique_partial_update && settings->enable_unique_partial_update)
-        return std::make_shared<HaUniqueMergeTreeBlockOutputStreamV2>(
-            *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block);
-
+    bool enable_partial_update = query_settings.enable_unique_partial_update && settings->enable_unique_partial_update; 
     return std::make_shared<HaUniqueMergeTreeBlockOutputStream>(
-        *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block);
+        *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block, enable_partial_update);
 }
 
 void StorageHaUniqueMergeTree::drop()

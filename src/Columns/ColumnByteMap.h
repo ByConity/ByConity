@@ -102,7 +102,7 @@ public:
      * {'a': 1, 'b': 2}, {'b': 3, 'c': 4}, {'a': 7,'c': 5, 'd': 6}
      * After merging data, result row is {'a': 7, 'b': 3, 'c': 5, 'd': 6}
      */
-    virtual bool replaceRow(
+    bool replaceRow(
         const PaddedPODArray<UInt32> & indexes,
         const IColumn & rhs,
         const PaddedPODArray<UInt32> & rhs_indexes,

@@ -1,5 +1,5 @@
 #include <DataStreams/SquashingTransform.h>
-#include <iostream>
+
 
 namespace DB
 {
@@ -122,9 +122,6 @@ bool SquashingTransform::isEnoughSize(const Block & block)
 
         bytes += column->byteSize();
     }
-
-    // if (isEnoughSize(rows, bytes))
-    //     std::cout << "rows: " << rows << ", bytes: " << bytes << ", min_block_size_rows: " << min_block_size_rows << ", min_block_size_bytes: " << min_block_size_bytes << std::endl;
 
     return isEnoughSize(rows, bytes);
 }

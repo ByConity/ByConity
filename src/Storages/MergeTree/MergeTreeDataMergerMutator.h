@@ -96,7 +96,6 @@ public:
     using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String *)>;
     
     /// The i-th input row is mapped to the RowidMapping[i]-th output row in the merged part
-    /// TODO: the elements are sorted integers, could apply encoding to reduce memory footprint
     using PartIdMapping = PODArray<UInt32, /*INITIAL_SIZE*/1024>;
 
     MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size, bool build_part_id_mapping = false);

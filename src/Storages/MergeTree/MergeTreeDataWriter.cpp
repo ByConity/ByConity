@@ -460,8 +460,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     out.writeWithPermutation(block, perm_ptr);
     out.writeSuffixAndFinalizePart(new_data_part, sync_on_insert);
 
-    write_row_store_cost = out.getWriteRowStoreCost();
-
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterRows, block.rows());
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterUncompressedBytes, block.bytes());
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterCompressedBytes, new_data_part->getBytesOnDisk());
