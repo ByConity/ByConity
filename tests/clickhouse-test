@@ -67,21 +67,86 @@ def stop_tests():
             os.killpg(os.getpgid(os.getpid()), signal.SIGTERM)
             signal.signal(signal.SIGTERM, signal.SIG_DFL)
 
+def collect_new_asan_log_after_test(sanitizer_log_dir=None, tmp_sanitizer_log=None, case_name='test_00001'):
+
+    if "ASAN_LOG_PATH" in os.environ and sanitizer_log_dir == None:
+        sanitizer_log_dir = os.environ['ASAN_LOG_PATH']
+        tmp_sanitizer_log = os.path.join(sanitizer_log_dir,'tmp')
+
+    individual_sanitizer_log_path = os.path.join(sanitizer_log_dir, 'tmp', 'individual_sanitizer_log', )
+    def get_difference_in_two_list(list_a, list_b):
+        difference = []
+        for item in list_a:
+            if item not in list_b:
+                difference.append(item)
+        return difference
+
+    def get_file_names_in_dir(sanitizer_log_dir, prefix='asan.log'):
+        sanitizer_file_names = set()
+
+        for root, dirs, files in os.walk(sanitizer_log_dir):
+            for file in files:
+                if file.startswith(prefix):
+                    sanitizer_file_names.add(file)
+        return sorted(sanitizer_file_names)
+
+    def clean_asan_log_in_dir(root):
+        file_names = os.listdir(root)
+        for file_name in file_names:
+            if os.path.isdir(os.path.join(root,file_name)):
+                continue
+            delimiter_line_number, indicator_line_number, log_data = get_line_number(root, file_name)
+            result = get_splitted_log(delimiter_line_number, indicator_line_number, log_data)
+            if result is None:
+                os.remove(os.path.join(root,file_name))
+            else:
+                with open(os.path.join(root, file_name), 'w+') as cleaned_log:
+                    for line in result:
+                        cleaned_log.writelines(line)
+
+    clean_asan_log_in_dir(sanitizer_log_dir)
+
+    sanitizer_log_names = get_file_names_in_dir(sanitizer_log_dir)
+    tmp_sanitizer_log_names = get_file_names_in_dir(tmp_sanitizer_log)
+    new_log_files = get_difference_in_two_list(sanitizer_log_names, tmp_sanitizer_log_names)
+
+    if new_log_files != []:  # if new asan log generated
+        new_log_files = get_difference_in_two_list(sanitizer_log_names, tmp_sanitizer_log_names)
+
+        print(f"\nWarnning! new senitizer log generated after case {case_name} - {new_log_files}")
+        consolidated_log_tmp = []
+        with open(os.path.join(individual_sanitizer_log_path, case_name), 'w+') as consolidated_log: # consolidate logs to cases
+            for new_log_file in new_log_files:
+                log_file_path = os.path.join(sanitizer_log_dir, new_log_file)
+                tmp_file_path = os.path.join(tmp_sanitizer_log, new_log_file)
+                with open(log_file_path, 'r') as new_log_files:
+                    consolidated_log_tmp.append(f"\nlog {new_log_file}")
+                    consolidated_log_tmp.append(new_log_files.read())
+                    print('\n'.join(consolidated_log_tmp))
+                os.system(f" cat '{log_file_path}' > '{tmp_file_path}'")
+            consolidated_log.write('\n'.join(consolidated_log_tmp))
+
+    # if asan log name are same, then diff each file， save diff result to tmp_sanitizer_log_for_cases
+    for file_name in sanitizer_log_names:
+        log_file_path = os.path.join(sanitizer_log_dir, file_name)
+        tmp_file_path = os.path.join(tmp_sanitizer_log, file_name)
+        diff_result = os.popen(f"diff -u -w --strip-trailing-cr '{tmp_file_path}' '{log_file_path}'").read()
+        if len(diff_result) != 0:
+            print(f"\nWarnning! new content appended after case {case_name} - {file_name}")
+            print(diff_result)
+            os.system(f" cat '{log_file_path}' > '{tmp_file_path}'")
+            with open(os.path.join(individual_sanitizer_log_path,case_name), 'a+') as f:
+                f.write(diff_result)
+
 # check indicator in sanitizer log:
 def is_sanitizer_pass():
-        if "ASAN_OPTIONS" in os.environ:
-            ASAN_OPTIONS = os.environ['ASAN_OPTIONS'].split(',')
-            for item in ASAN_OPTIONS:
-                if item.startswith('log_path='):
-                    ASAN_LOG_PATH = os.path.dirname(item.replace('log_path=', ''))
-                    print(f'\nASAN_OPTIONS found, search log at ASAN_LOG_PATH:{ASAN_LOG_PATH}')
-                    return check_asan_log(ASAN_LOG_PATH)
-                    break
-            print(f'\nis_sanitizer_pass skipped because "log_path" can not find in ASAN_OPTIONS, the ASAN_OPTIONS is: {ASAN_OPTIONS}')
-            return True
-        else:
-            print('\nis_sanitizer_pass skipped due to ASAN_OPTIONS not in environ')
-            return True
+    if "ASAN_LOG_PATH" in os.environ:
+        ASAN_LOG_PATH = os.environ['ASAN_LOG_PATH']
+        print(f'\nASAN enbaled, the ASAN_LOG_PATH is:{ASAN_LOG_PATH}')
+        return check_asan_log( os.environ['ASAN_LOG_PATH'])
+    else:
+        print('\nis_sanitizer_pass skipped due to ASAN_OPTIONS not in environ')
+        return True
 
 def is_block_has_indicator(start,end,indicator_line_number):
     for line_number in indicator_line_number:
@@ -105,32 +170,43 @@ def get_line_number(log_dir,log_file_name):
     return delimiter_line_number, indicator_line_number, log_data
 
 def get_splitted_log(delimiter_line_number, indicator_line_number, log_data):
-    if delimiter_line_number == []:
-        return None
     result = []
     len_delimiter_line_number = len(delimiter_line_number)
-    if len_delimiter_line_number == 1:
-        return log_data
+
+    if len_delimiter_line_number == 0:
+        return None
+    elif len_delimiter_line_number == 1:
+        start = delimiter_line_number[0]
+        end = len(log_data)
+        if not is_block_has_indicator(start, end, indicator_line_number):
+            result += log_data[start:end]
+            return result
+        else:
+            return None
     else:
         total_block = len_delimiter_line_number -1
         for i in range(0,total_block):
             start = delimiter_line_number[i]
             end = delimiter_line_number[i+1]
             if not is_block_has_indicator(start,end,indicator_line_number):
-                result.append(log_data[start:end])
+                result += log_data[start:end]
         start = delimiter_line_number[-1]
         end = len(log_data)
         if not is_block_has_indicator(start, end, indicator_line_number):
-            result.append(log_data[start:end])
-    return result
+            result += log_data[start:end]
+        return result
 
 def check_asan_log(log_dir):
     result_is_pass = True
     log_file_names = []
-    for root, dirs, files in os.walk(log_dir):
-        for file in files:
-            log_file_names.append(file)
+
+    for log_name in os.listdir(log_dir):
+        path = os.path.join(log_dir, log_name)
+        if os.path.isfile(path):
+            log_file_names.append(log_name)
+
     log_file_names = [x for x in log_file_names if x.startswith('asan.log')]
+
     if log_file_names != []: print(f'some log files have been found in {log_dir} :{log_file_names}')
     for log_file_name in log_file_names:
         delimiter_line_number, indicator_line_number, log_data = get_line_number(log_dir, log_file_name)
@@ -661,6 +737,11 @@ def run_tests_array(all_tests_with_params):
 
             sys.stdout.write(status)
             sys.stdout.flush()
+
+            if args.locate_asan_error_to_case:
+                sleep(0.2)
+                collect_new_asan_log_after_test(case_name=case)
+
         except KeyboardInterrupt as e:
             print(colored("Break tests execution", args, "red"))
             stop_tests()
@@ -1199,6 +1280,7 @@ if __name__ == '__main__':
     group.add_argument('--shard', action='store_true', default=None, dest='shard', help='Run sharding related tests (required to clickhouse-server listen 127.0.0.2 127.0.0.3)')
     group.add_argument('--no-shard', action='store_false', default=None, dest='shard', help='Do not run shard related tests')
     parser.add_argument('--run', required=False, default=None, nargs='+', help='name of suites to be executed')
+    parser.add_argument('--locate-asan-error-to-case', action='store_true', default=False,help='enable check asan erorr after each case finishs, no -j')
 
     args = parser.parse_args()
 
@@ -1287,4 +1369,20 @@ if __name__ == '__main__':
     if args.jobs is None:
         args.jobs = multiprocessing.cpu_count()
 
+    if "ASAN_OPTIONS" in os.environ:
+        ASAN_OPTIONS = os.environ['ASAN_OPTIONS'].split(',')
+        for item in ASAN_OPTIONS:
+            if item.startswith('log_path='):
+                ASAN_LOG_PATH = os.path.dirname(item.replace('log_path=', ''))
+                os.environ["ASAN_LOG_PATH"] = ASAN_LOG_PATH
+                print('\nASAN enbaled, the ASAN_LOG_PATH is:', ASAN_LOG_PATH)
+
+                if args.locate_asan_error_to_case:  # create folder for collect_new_asan_log_after_test()
+                    individual_sanitizer_log_path = os.path.join(ASAN_LOG_PATH, 'tmp', 'individual_sanitizer_log', )
+                    if not os.path.exists(individual_sanitizer_log_path):
+                        os.system(f" mkdir -p '{individual_sanitizer_log_path}' ")
+
+                break
+
+    print(args)
     main(args)
