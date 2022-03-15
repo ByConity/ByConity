@@ -364,6 +364,8 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
 {
     try
     {
+        UInt64 total_send_time_ms = 0;
+        Stopwatch watch;
         // scheduler source
         for (auto segment_id : dag_graph_ptr->sources)
         {
@@ -386,6 +388,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
             dag_graph_ptr->scheduler_segments.emplace(segment_id);
             std::cerr << "finish handle segment: " << segment_id << std::endl;
         }
+        total_send_time_ms += watch.elapsedMilliseconds();
 
         std::unordered_map<size_t, PlanSegment *>::iterator it;
         while (dag_graph_ptr->id_to_address.size() < (dag_graph_ptr->id_to_segment.size() - 1))
@@ -432,7 +435,9 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 if (is_inputs_ready)
                 {
                     AddressInfos address_infos;
+                    watch.restart();
                     address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr);
+                    total_send_time_ms += watch.elapsedMilliseconds();
                     // local join/global join is not between two source stages, for example, group by subquery global join source table
                     if (dag_graph_ptr->local_exchange_ids.find(it->first) != dag_graph_ptr->local_exchange_ids.end()
                         && !dag_graph_ptr->has_set_local_exchange)
@@ -445,6 +450,8 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 }
             }
         }
+        LOG_DEBUG(log, "SegmentScheduler send plansegments takes:{}", total_send_time_ms);
+
         auto final_it = dag_graph_ptr->id_to_segment.find(dag_graph_ptr->final);
         if (final_it == dag_graph_ptr->id_to_segment.end())
             throw Exception("Logical error: final stage is not found", ErrorCodes::LOGICAL_ERROR);
