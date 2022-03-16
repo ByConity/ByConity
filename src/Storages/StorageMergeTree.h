@@ -229,7 +229,7 @@ private:
     void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, bool can_skip = false) override;
     void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip = false) override;
 
-    void ingestPartition(const StoragePtr & source_table, const ASTPtr & partition, const Names & column_names, const Names & key_names, ContextPtr context) override;
+    void ingestPartition(const PartitionCommand & command, ContextPtr context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr context) override;
     bool partIsAssignedToBackgroundOperation(const DataPartPtr & part) const override;

@@ -1269,7 +1269,7 @@ protected:
 
     virtual void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr context);
 
-    virtual void ingestPartition(const StoragePtr & /*source_table*/, const ASTPtr & /*partition*/, const Names & /*column_names*/, const Names & /*key_names*/, ContextPtr /*context*/) { throw Exception("IngestPartition not implement", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual void ingestPartition(const PartitionCommand & /*command*/, ContextPtr /*context*/) { throw Exception("IngestPartition not implement", ErrorCodes::NOT_IMPLEMENTED); }
 
     void preattachPartition(const ASTPtr & partition, ContextPtr context);
     virtual void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr context, bool can_skip);

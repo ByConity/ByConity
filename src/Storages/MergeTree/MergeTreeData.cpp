@@ -3631,9 +3631,7 @@ Pipe MergeTreeData::alterPartition(
 
             case PartitionCommand::INGEST_PARTITION:
             {
-                String from_database = query_context->resolveDatabase(command.from_database);
-                auto from_storage = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
-                ingestPartition(from_storage, command.partition, command.column_names, command.key_names, query_context);
+                ingestPartition(command, query_context);
             }
 
             break;

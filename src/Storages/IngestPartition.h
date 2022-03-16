@@ -5,6 +5,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
+#include <Common/ZooKeeper/ZooKeeper.h>
 #include <common/logger_useful.h>
 
 
@@ -47,8 +48,12 @@ public:
         Int64 mutation_,
         const ContextPtr & context_);
 
-    void ingestPartition();
+    bool ingestPartition();
     void ingestPartitionFromRemote(const String & source_replica, const String & source_database, const String & source_table);
+
+    static Names getOrderedKeys(const Names & key_names, const StorageInMemoryMetadata & data);
+    static zkutil::EphemeralNodeHolderPtr getIngestTaskLock(const zkutil::ZooKeeperPtr & zk_ptr, const String & zookeeper_path, const String & replica_name, const String & partition_id);
+    static String parseIngestPartition(const String & part_name, const MergeTreeDataFormatVersion & format_version);
 
 private:
 
@@ -61,7 +66,6 @@ private:
     String getMapKey(const String & map_col_name, const String & map_implicit_name);
     std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & data, const String & col_name);
     void writeNewPart(const StorageInMemoryMetadata & data, const IngestPartition::IngestSources & src_blocks, BlockOutputStreamPtr & output, Names & column_names);
-    Names getOrderedKeys(const StorageInMemoryMetadata & data);
     void checkIngestColumns(const StorageInMemoryMetadata & data, bool & has_map_implicite_key);
     void checkColumnStructure(const StorageInMemoryMetadata & target_data, const StorageInMemoryMetadata & src_data, const Names & column_names);
     int compare(Columns & target_key_cols, Columns & src_key_cols, size_t n, size_t m);
@@ -73,7 +77,12 @@ private:
      * @param column_names The columns that going to be ingested in src_blocks
      * @param ordered_key_names The join keys
      */
-    Block blockJoinBlocks(MergeTreeData & data, Block & target_block, const IngestPartition::IngestSources & src_blocks, const Names & column_names, const Names & ordered_key_names);
+    Block blockJoinBlocks(MergeTreeData & data,
+                    Block & target_block, 
+                    const IngestPartition::IngestSources & src_blocks, 
+                    const Names & column_names, 
+                    const Names & ordered_key_names,
+                    bool compact);
 
     /// Perform outer join, ingest the specified columns.
     MergeTreeData::MutableDataPartPtr ingestPart(MergeTreeData & data, const IngestPartPtr & ingest_part, const IngestPartition::IngestSources & src_blocks,
@@ -81,6 +90,26 @@ private:
                 const Settings & settings);
     void ingestion(MergeTreeData & data, const IngestParts & parts_to_ingest, const IngestPartition::IngestSources & src_blocks,
                    const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns, const Settings & settings);
+
+    void ingestWidePart(MergeTreeData & data, 
+                const Block & header,
+                MergeTreeData::MutableDataPartPtr & new_data_part, 
+                const MergeTreeData::DataPartPtr & target_part, 
+                const IngestPartition::IngestSources & src_blocks,
+                const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns,
+                const Settings & settings,
+                std::function<bool()> check_cached_cancel);
+
+    void ingestCompactPart(
+                MergeTreeData & data, 
+                const NamesAndTypesList & part_columns,
+                MergeTreeData::MutableDataPartPtr & new_data_part, 
+                const MergeTreeData::DataPartPtr & target_part, 
+                const IngestPartition::IngestSources & src_blocks,
+                const Names & ingest_column_names, const Names & ordered_key_names,
+                const Settings & settings,
+                std::function<bool()> check_cached_cancel
+            );
 
     StoragePtr target_table;
     StoragePtr source_table;

@@ -11,7 +11,6 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <IO/WriteHelpers.h>
-#include <Common/typeid_cast.h>
 #include <Client/Connection.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryToString.h>
@@ -30,6 +29,9 @@
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/MapHelpers.h>
 #include <Core/Field.h>
+
+#include <Common/typeid_cast.h>
+#include <Common/ZooKeeper/KeeperException.h>
 
 namespace DB
 {
@@ -182,17 +184,17 @@ void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, co
     output->writeSuffix();
 }
 
-Names IngestPartition::getOrderedKeys(const StorageInMemoryMetadata & meta_data)
+Names IngestPartition::getOrderedKeys(const Names & names_to_order, const StorageInMemoryMetadata & meta_data)
 {
     auto ordered_keys = meta_data.getColumnsRequiredForPrimaryKey();
 
-    if (key_names.empty())
+    if (names_to_order.empty())
     {
         return ordered_keys;
     }
     else
     {
-        for (auto & key : key_names)
+        for (auto & key : names_to_order)
         {
             bool found = false;
             for (auto & table_key : ordered_keys)
@@ -209,7 +211,7 @@ Names IngestPartition::getOrderedKeys(const StorageInMemoryMetadata & meta_data)
         Names res;
         for (size_t i = 0; i < ordered_keys.size(); ++i)
         {
-            for (auto & key : key_names)
+            for (auto & key : names_to_order)
             {
                 if (key == ordered_keys[i])
                     res.push_back(key);
@@ -256,12 +258,15 @@ void IngestPartition::checkIngestColumns(const StorageInMemoryMetadata & meta_da
         if (!all_columns.emplace(col_name).second)
             throw Exception("Ingest duplicate column " + backQuoteIfNeed(col_name), ErrorCodes::DUPLICATE_COLUMN);
 
+        if (isMapImplicitKeyNotKV(col_name))
+        {
+            has_map_implicite_key = true;
+            continue;
+        }
+
         if (meta_data.getColumns().get(col_name).type->isMap())
             throw Exception("Ingest whole map column " + backQuoteIfNeed(col_name) +
                             " is not supported, you can specify a map key.", ErrorCodes::BAD_ARGUMENTS);
-
-        if (isMapImplicitKeyNotKV(col_name))
-            has_map_implicite_key = true;
     }
 }
 
@@ -269,8 +274,8 @@ void IngestPartition::checkColumnStructure(const StorageInMemoryMetadata & targe
 {
     for (const auto & col_name : names)
     {
-        const auto & target = target_data.getColumns().get(col_name);
-        const auto & src = src_data.getColumns().get(col_name);
+        const auto & target = target_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
+        const auto & src = src_data.getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, col_name);
 
         if (target.name != src.name)
             throw Exception("Column structure mismatch, found different names of column " + backQuoteIfNeed(col_name),
@@ -287,9 +292,6 @@ void IngestPartition::checkPartitionRows(MergeTreeData::DataPartsVector & parts,
     size_t rows = 0;
     for (auto & part : parts)
     {
-        if (!isWidePart(part))
-            throw Exception("INGEST PARTITION only support wide part now", ErrorCodes::NOT_IMPLEMENTED);
-
         if (check_compact_map && part->versions->enable_compact_map_data)
             throw Exception("INGEST PARTITON not support compact map type now", ErrorCodes::NOT_IMPLEMENTED);
 
@@ -335,18 +337,22 @@ IngestPartition::IngestPartition(
         , context(context_)
         , log(&Poco::Logger::get("IngestPartition")) {}
 
-void IngestPartition::ingestPartition()
+
+/***
+ * Return 0 / 1 to indicate whether a ingestion happend, so that we determine to generate a ingest log or not.
+ */
+bool IngestPartition::ingestPartition()
 {
     MergeTreeData * target_data = dynamic_cast<MergeTreeData *>(target_table.get());
     if (!target_data)
-        return;
+        return false;
     auto target_meta = target_data->getInMemoryMetadataPtr();
 
     // if (target_data->getIngestionBlocker().isCancelled())
     //     throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
 
     /// Order is important when execute the outer join.
-    const auto & ordered_key_names = getOrderedKeys(*target_meta);
+    const auto & ordered_key_names = getOrderedKeys(key_names, *target_meta);
     /// Some check for columns.
     bool has_map_implicite_key = false;
     checkIngestColumns(*target_meta, has_map_implicite_key);
@@ -385,26 +391,6 @@ void IngestPartition::ingestPartition()
 
     String partition_id = target_data->getPartitionIDFromQuery(partition, context);
 
-    auto generate_drop_query = [&](const Strings & commands) -> String
-    {
-        String database = target_data->getStorageID().getDatabaseName();
-        String table = target_data->getStorageID().getTableName();
-        if (database.empty())
-            database = context->getCurrentDatabase();
-        
-        if (commands.size() == 0)
-            return {};
-
-        String drop_query = "ALTER TABLE " + database + "." + table + " " + commands[0] + " PARTITION ID '" + partition_id + "'";
-
-        for (size_t i = 1; i < commands.size(); ++i)
-        {
-            drop_query += ", " + commands[i] + " PARTITION ID '" + partition_id + "'";
-        }
-        
-        return drop_query;
-    };
-
     auto execute_query = [&](const String & query)
     {
         ReadBufferFromString istr(query);
@@ -417,51 +403,73 @@ void IngestPartition::ingestPartition()
         //query_scope.reset();
     };
 
+    auto clear_column = [&](const String & column_name) -> MutationCommand
+    {
+        std::shared_ptr<ASTAlterCommand> ast_command = std::make_shared<ASTAlterCommand>();
+        ast_command->type = ASTAlterCommand::DROP_COLUMN;
+        ast_command->if_exists = true;
+        ast_command->clear_column = true;
+        ast_command->detach = false;
+        ast_command->partition = partition;
+        ast_command->column = std::make_shared<ASTIdentifier>(column_name);
+        ast_command->children.push_back(ast_command->column);
+        ast_command->children.push_back(ast_command->partition);
+
+        MutationCommand res = *MutationCommand::parse(ast_command.get(), true);
+        return res;
+    };
+
     auto parts_to_read = source_data->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
     if (parts_to_read.empty())
     {
         if (context->getSettingsRef().allow_ingest_empty_partition)
         {
             /// drop the target column in target partition
-            Strings commands;
+            MutationCommands commands;
             for (const auto & column_name : column_names)
-            {
-                String ast_command_string = "CLEAR COLUMN " + column_name + " IN";
-                commands.push_back(ast_command_string);
-            }
+                commands.emplace_back(clear_column(column_name));
             
-            auto drop_query = generate_drop_query(commands);
-            LOG_TRACE(log, "AST clear column: {}", drop_query);
-            
-            if (drop_query.empty())
-                return;
+            if (commands.empty())
+                return false;
 
-            execute_query(drop_query);
+            target_table->mutate(commands, context);
 
             LOG_DEBUG(log, "Drop target partition columns since no parts to be ingested inside partition ID {} from table {}", partition_id, source_table->getStorageID().getFullTableName());
-            return;
+            return false;
         }
         else
         {
             LOG_WARNING(log, "No parts to be ingested inside partition ID {} from table {}", partition_id, source_table->getStorageID().getFullTableName());
-            return;
+            return false;
         }
     }
-    
-    // auto lock = target_table->lockAlterIntention(context->getCurrentQueryId());
-    // target_table->lockNewDataStructureExclusively(lock, context->getCurrentQueryId());
-    // target_table->lockStructureForShare(true, context->getCurrentQueryId());
 
     /// Read target table in partiton_id, and probe src blocks
     MergeTreeData::DataPartsVector parts_to_ingest = target_data->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
     if (parts_to_ingest.empty())
     {
-        String move_to_query = "ALTER TABLE " + source_data->getStorageID().getFullTableName() + " MOVE PARTITION ID '" + partition_id + "'" + " TO TABLE " + target_data->getStorageID().getFullTableName();
-        LOG_TRACE(log, "AST move partition: {}", move_to_query);
+        String source_db_table = source_data->getStorageID().getFullTableName();
+        String target_db_table = target_data->getStorageID().getFullTableName();
+        if (auto * ha_target_table = dynamic_cast<StorageHaMergeTree *>(target_table.get()))
+        {
+            String detach_query = "ALTER TABLE " + source_db_table + " DETACH PARTITION ID '" + partition_id + "'";
+            String move_query = "ALTER TABLE " + target_db_table + " MOVE PARTITION ID '" + partition_id + "' FROM " + source_db_table;
+            String attach_query = "ALTER TABLE " + target_db_table + " ATTACH PARTITION ID '" + partition_id + "'";
 
-        execute_query(move_to_query);
+            LOG_TRACE(log, "AST move partition: {}, {}, {}", detach_query, move_query, attach_query);
+            execute_query(detach_query);
+            ha_target_table->movePartitionFrom(source_table, partition, context);
+            ha_target_table->attachPartition(partition, target_meta, false, context);
+        }
+        else
+        {
+            String move_to_query = "ALTER TABLE " + source_db_table + " MOVE PARTITION ID '" + partition_id + "'" + " TO TABLE " + target_db_table;
+            LOG_TRACE(log, "AST move partition: {}", move_to_query);
 
-        return;
+            execute_query(move_to_query);
+        }
+
+        return false;
     }
 
     /// check total rows for source table and target table
@@ -499,18 +507,20 @@ void IngestPartition::ingestPartition()
         {
             bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
                                        read_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
+
+            
             auto source_input = std::make_shared<MergeTreeSequentialSource>(*source_data,
                                                                             source_data->getInMemoryMetadataPtr(),
                                                                             read_part,
                                                                             all_columns_with_partition_key,
                                                                             read_with_direct_io, true);
-            // in = std::make_shared<SquashingBlockInputStream>(in, settings.min_insert_block_size_rows,
-            //                                                  settings.min_insert_block_size_bytes);
-
+            
             QueryPipeline source_pipeline;
             source_pipeline.init(Pipe(std::move(source_input)));
             source_pipeline.setMaxThreads(1);
-            auto pipeline_input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(source_pipeline));
+            BlockInputStreamPtr pipeline_input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(source_pipeline));
+            pipeline_input_stream = std::make_shared<SquashingBlockInputStream>(pipeline_input_stream, settings.min_insert_block_size_rows * 2,
+                                                         settings.min_insert_block_size_bytes * 4);
 
             pipeline_input_stream->readPrefix();
             while (Block block = pipeline_input_stream->read())
@@ -534,19 +544,32 @@ void IngestPartition::ingestPartition()
 
         /// STEP 3:
         Block sample_block = target_meta->getSampleBlock();
+        Block ingested_header;
+        for (const auto & name : all_columns_with_partition_key)
+        {   
+            auto column_name = name;
+            /// No need to add implicit map column
+            if (isMapImplicitKeyNotKV(name))
+                column_name = parseColNameFromImplicitName(name);
+            auto column = target_meta->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
+            ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));
+        }
+
         BlockOutputStreamPtr new_part_output = target_table->write(ASTPtr(), target_meta, context);
         new_part_output = std::make_shared<SquashingBlockOutputStream>(new_part_output,
                                                                        sample_block,
                                                                        settings.min_insert_block_size_rows,
                                                                        settings.min_insert_block_size_bytes);
         new_part_output = std::make_shared<AddingDefaultBlockOutputStream>(new_part_output,
-                                                                           new_part_output->getHeader(),
+                                                                           ingested_header,
                                                                            target_meta->getColumns(), context);
         writeNewPart(*target_meta, src_blocks, new_part_output, all_columns_with_partition_key);
 
         // After ingest, the columns have been updated
         // context->dropCaches(target_data->getDatabaseName(), target_data->getTableName());
     }
+
+    return true;
 }
 
 void IngestPartition::ingestPartitionFromRemote(const String & source_replica, const String & source_database_in, const String & source_table_in)
@@ -667,7 +690,7 @@ IngestParts IngestPartition::generateIngestParts(MergeTreeData & data, const Mer
 
 ASTPtr IngestPartition::getDefaultFilter(const String & column_name)
 {
-    auto name_type = target_table->getInMemoryMetadata().getColumns().get(column_name);
+    auto name_type = target_table->getInMemoryMetadata().getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
     Field value = name_type.type->getDefault();
     auto literal = std::make_shared<ASTLiteral>(value);
     auto identifier = std::make_shared<ASTIdentifier>(column_name);
@@ -761,40 +784,24 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
     if (check_cached_cancel())
         throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
 
-    // auto mutate_lock = std::unique_lock<std::mutex>(ingest_part->metainfo->mutate_mutex,  std::try_to_lock);
-    // if (!mutate_lock.owns_lock())
-    //     throw Exception("Cannot get mutate lock, there must a background task mutating the part, try to redo ingestion", ErrorCodes::LOGICAL_ERROR);
-    
     auto future_part = ingest_part->future_part;
     const auto & target_part = future_part.parts[0];
     LOG_TRACE(&Poco::Logger::get("Ingestion"), "Begin ingest part {}", target_part->name);
 
-    
-
-    bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
-                                target_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
-    auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
-                                                                    data.getInMemoryMetadataPtr(),
-                                                                    target_part,
-                                                                    all_columns,
-                                                                    read_with_direct_io, true);
-    // in = std::make_shared<SquashingBlockInputStream>(in, settings.min_insert_block_size_rows,
-    //                                                     settings.min_insert_block_size_bytes);
-
-    QueryPipeline source_pipeline;
-    source_pipeline.init(Pipe(std::move(source_input)));
-    source_pipeline.setMaxThreads(1);
-    auto pipeline_input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(source_pipeline));
-
-    Block header;
+    NamesAndTypesList part_columns = target_part->getNamesAndTypes();
+    auto storage_names = part_columns.getNames();
+    NameSet target_columns_names(storage_names.begin(), storage_names.end());
+    Block ingest_header;
     for (auto & col_name : ingest_column_names)
     {
         const auto & src_column = src_blocks.at(0)->block.getByName(col_name);
-        header.insert(ColumnWithTypeAndName(src_column.type, src_column.name));
+        ingest_header.insert(ColumnWithTypeAndName(src_column.type, src_column.name));
+
+        if (!target_columns_names.count(col_name))
+            part_columns.insert(part_columns.end(), NameAndTypePair(src_column.name, src_column.type));
     }
 
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + future_part.name, ingest_part->reserved_space->getDisk(), 0);
-    NamesAndTypesList storage_columns = data.getInMemoryMetadataPtr()->getColumns().getAllPhysical();
     auto new_data_part = data.createPart(
         future_part.name, future_part.type, future_part.part_info, single_disk_volume, "tmp_ingest_" + future_part.name);
 
@@ -803,66 +810,52 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
     new_data_part->ttl_infos = target_part->ttl_infos;
     new_data_part->versions = target_part->versions;
 
+    new_data_part->setColumns(part_columns);
+    new_data_part->checksums = target_part->checksums;
     /// It shouldn't be changed by mutation.
     new_data_part->index_granularity_info = target_part->index_granularity_info;
-    new_data_part->setColumns(storage_columns);
     new_data_part->partition.assign(target_part->partition);
+
 
     auto disk = new_data_part->volume->getDisk();
 
-    /// Don't change granularity type while mutating subset of columns
-    auto mrk_extension = target_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType())
-                                                                         : getNonAdaptiveMrkExtension();
-
-    // NameSet files_to_skip(all_columns.begin(), all_columns.end());
-    // files_to_skip.insert(ingest_column_names.begin(), ingest_column_names.end());
-    std::cout<<" <<<< skip header: " << header.dumpStructure() << std::endl;
-    auto files_to_skip = PartLinker::collectFilesToSkip(target_part, header, std::set<MergeTreeIndexPtr>{}, mrk_extension, std::set<MergeTreeProjectionPtr>{});
-    NameToNameVector files_to_rename;
-
-    PartLinker part_linker(disk, new_data_part->getFullRelativePath(), target_part->getFullRelativePath(), files_to_skip, files_to_rename);
-    part_linker.execute();
-
-    new_data_part->checksums = target_part->checksums;
-
-    auto compression_codec = target_part->default_codec;
-    std::vector<MergeTreeIndexPtr> indices_to_recalc;
-    MergedColumnOnlyOutputStream out(
-            new_data_part,
-            data.getInMemoryMetadataPtr(),
-            header,
-            compression_codec,
-            indices_to_recalc,
-            nullptr,
-            target_part->index_granularity,
-            &target_part->index_granularity_info);
-
-    auto match_type = std::make_shared<DataTypeUInt8>();
-
-    pipeline_input_stream->readPrefix();
-    out.writePrefix();
-
-    Block block;
-    while (!check_cached_cancel() && (block = pipeline_input_stream->read()))
+    if (isWidePart(target_part))
     {
-        /// append match count column into block
-        auto match_col = match_type->createColumn();
-        typeid_cast<ColumnUInt8 &>(*match_col).getData().resize_fill(block.rows());
-        block.insert(ColumnWithTypeAndName(std::move(match_col), match_type, "___match_count"));
+        /// Don't change granularity type while mutating subset of columns
+        auto mrk_extension = target_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType())
+                                                                            : getNonAdaptiveMrkExtension();
 
-        /// assume blocks already sorted by keys, implement join semantics
-        const auto & res_block = blockJoinBlocks(data, block, src_blocks, ingest_column_names, ordered_key_names);
-        out.write(res_block);
+        auto files_to_skip = PartLinker::collectFilesToSkip(target_part, ingest_header, std::set<MergeTreeIndexPtr>{}, mrk_extension, std::set<MergeTreeProjectionPtr>{});
+        NameToNameVector files_to_rename;
+
+        PartLinker part_linker(disk, new_data_part->getFullRelativePath(), target_part->getFullRelativePath(), files_to_skip, files_to_rename);
+        part_linker.execute();
+
+        ingestWidePart(data, 
+                    ingest_header, 
+                    new_data_part, 
+                    target_part, 
+                    src_blocks, 
+                    ingest_column_names, 
+                    ordered_key_names, 
+                    all_columns, 
+                    settings,
+                    check_cached_cancel);
     }
+    else
+    {
+        disk->createDirectories(new_data_part->getFullRelativePath());
 
-    if (check_cached_cancel())
-        throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
-
-    pipeline_input_stream->readSuffix();
-    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums, false);
-    new_data_part->checksums.add(std::move(changed_checksums));
-
-    MergeTreeDataMergerMutator::finalizeMutatedPart(target_part, new_data_part, false, compression_codec);
+        ingestCompactPart(data, 
+                    part_columns, 
+                    new_data_part, 
+                    target_part, 
+                    src_blocks, 
+                    ingest_column_names, 
+                    ordered_key_names,  
+                    settings,
+                    check_cached_cancel);
+    }
 
     LOG_TRACE(&Poco::Logger::get("Ingestion"), "End ingest part {}", future_part.name);
 
@@ -900,7 +893,9 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
     auto ingest_part_func = [&]()
     {
         setThreadName("IngestPart");
-        CurrentThread::attachToIfDetached(thread_group);
+        if (thread_group)
+            CurrentThread::attachToIfDetached(thread_group);
+        
         while (1)
         {
             IngestPartPtr part = nullptr;
@@ -942,13 +937,151 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
         throw Exception("Ingestion failed", ErrorCodes::ABORTED);
 }
 
+void IngestPartition::ingestWidePart(MergeTreeData & data, 
+                const Block & header,
+                MergeTreeData::MutableDataPartPtr & new_data_part, 
+                const MergeTreeData::DataPartPtr & target_part, 
+                const IngestPartition::IngestSources & src_blocks,
+                const Names & ingest_column_names, const Names & ordered_key_names, const Names & all_columns,
+                const Settings & settings,
+                std::function<bool()> check_cached_cancel)
+{
+    bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
+                                target_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
+    auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
+                                                                    data.getInMemoryMetadataPtr(),
+                                                                    target_part,
+                                                                    all_columns,
+                                                                    read_with_direct_io, true);
+
+    QueryPipeline source_pipeline;
+    source_pipeline.init(Pipe(std::move(source_input)));
+    source_pipeline.setMaxThreads(1);
+    BlockInputStreamPtr pipeline_input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(source_pipeline));
+    pipeline_input_stream = std::make_shared<SquashingBlockInputStream>(pipeline_input_stream, settings.min_insert_block_size_rows * 2,
+                                                         settings.min_insert_block_size_bytes * 4);
+
+    auto compression_codec = target_part->default_codec;
+    std::vector<MergeTreeIndexPtr> indices_to_recalc;
+    MergedColumnOnlyOutputStream out(
+            new_data_part,
+            data.getInMemoryMetadataPtr(),
+            header,
+            compression_codec,
+            indices_to_recalc,
+            nullptr,
+            target_part->index_granularity,
+            &target_part->index_granularity_info);
+
+    auto match_type = std::make_shared<DataTypeUInt8>();
+
+    pipeline_input_stream->readPrefix();
+    out.writePrefix();
+
+    Block block;
+    while (!check_cached_cancel() && (block = pipeline_input_stream->read()))
+    {
+        /// append match count column into block
+        auto match_col = match_type->createColumn();
+        typeid_cast<ColumnUInt8 &>(*match_col).getData().resize_fill(block.rows());
+        block.insert(ColumnWithTypeAndName(std::move(match_col), match_type, "___match_count"));
+
+        /// assume blocks already sorted by keys, implement join semantics
+        const auto & res_block = blockJoinBlocks(data, block, src_blocks, ingest_column_names, ordered_key_names, false);
+        out.write(res_block);
+    }
+
+    if (check_cached_cancel())
+        throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
+
+    pipeline_input_stream->readSuffix();
+    auto changed_checksums = out.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums, false);
+    new_data_part->checksums.add(std::move(changed_checksums));
+
+    MergeTreeDataMergerMutator::finalizeMutatedPart(target_part, new_data_part, false, compression_codec);
+}
+
+void IngestPartition::ingestCompactPart(
+    MergeTreeData & data, 
+    const NamesAndTypesList & part_columns,
+    MergeTreeData::MutableDataPartPtr & new_data_part, 
+    const MergeTreeData::DataPartPtr & target_part, 
+    const IngestPartition::IngestSources & src_blocks,
+    const Names & ingest_column_names, const Names & ordered_key_names,
+    const Settings & settings,
+    std::function<bool()> check_cached_cancel
+)
+{
+    bool read_with_direct_io = settings.min_bytes_to_use_direct_io != 0 &&
+                                target_part->getBytesOnDisk() >= settings.min_bytes_to_use_direct_io;
+    auto source_input = std::make_shared<MergeTreeSequentialSource>(data,
+                                                                    data.getInMemoryMetadataPtr(),
+                                                                    target_part,
+                                                                    part_columns.getNames(),
+                                                                    read_with_direct_io, true);
+
+    QueryPipeline source_pipeline;
+    source_pipeline.init(Pipe(std::move(source_input)));
+    source_pipeline.setMaxThreads(1);
+    BlockInputStreamPtr pipeline_input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(source_pipeline));
+    pipeline_input_stream = std::make_shared<SquashingBlockInputStream>(pipeline_input_stream, settings.min_insert_block_size_rows * 2,
+                                                         settings.min_insert_block_size_bytes * 4);
+
+    auto compression_codec = target_part->default_codec;
+    MergeTreeIndices indices_to_recalc;
+    for (const auto & index : data.getInMemoryMetadataPtr()->getSecondaryIndices())
+        indices_to_recalc.push_back(MergeTreeIndexFactory::instance().get(index));
+    
+    MergedBlockOutputStream out(
+            new_data_part,
+            data.getInMemoryMetadataPtr(),
+            part_columns,
+            indices_to_recalc,
+            compression_codec);
+
+    auto match_type = std::make_shared<DataTypeUInt8>();
+
+    pipeline_input_stream->readPrefix();
+    out.writePrefix();
+
+    IMergeTreeDataPart::MinMaxIndex minmax_idx;
+    Block block;
+    while (!check_cached_cancel() && (block = pipeline_input_stream->read()))
+    {
+        /// append match count column into block
+        auto match_col = match_type->createColumn();
+        typeid_cast<ColumnUInt8 &>(*match_col).getData().resize_fill(block.rows());
+        block.insert(ColumnWithTypeAndName(std::move(match_col), match_type, "___match_count"));
+
+        /// assume blocks already sorted by keys, implement join semantics
+        const auto & res_block = blockJoinBlocks(data, block, src_blocks, ingest_column_names, ordered_key_names, true);
+
+        minmax_idx.update(res_block, data.getMinMaxColumnsNames(data.getInMemoryMetadataPtr()->getPartitionKey()));
+
+        out.write(res_block);
+    }
+
+    
+    if (check_cached_cancel())
+        throw Exception("INGEST PARTITION was cancelled", ErrorCodes::ABORTED);
+
+    new_data_part->minmax_idx = std::move(minmax_idx);
+    pipeline_input_stream->readSuffix();
+    out.writeSuffixAndFinalizePart(new_data_part, false);
+}
+
 /**
  * Outer join the target_block with the src_blocks
  *
  * @param ingest_column_names The columns that going to be ingested in src_blocks
  * @param ordered_key_names The join keys
  */
-Block IngestPartition::blockJoinBlocks(MergeTreeData & data, Block & target_block, const IngestPartition::IngestSources & src_blocks, const Names & ingest_column_names, const Names & ordered_key_names)
+Block IngestPartition::blockJoinBlocks(MergeTreeData & data, 
+                                       Block & target_block,
+                                       const IngestPartition::IngestSources & src_blocks,
+                                       const Names & ingest_column_names,
+                                       const Names & ordered_key_names,
+                                       bool compact)
 {
     Columns target_key_cols;
     for (auto & key : ordered_key_names)
@@ -1035,8 +1168,55 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data, Block & target_bloc
         res.insert(ColumnWithTypeAndName(std::move(target_column), col_type, col_name));
     }
 
+    if (compact)
+    {
+        NameSet ingested_column(ingest_column_names.begin(), ingest_column_names.end());
+        for (size_t i = 0; i < target_block.columns(); ++i)
+        {
+            auto column_with_type_name = target_block.getByPosition(i);
+            if (ingested_column.count(column_with_type_name.name))
+                continue;
+
+            res.insert(ColumnWithTypeAndName(std::move(column_with_type_name.column), column_with_type_name.type, column_with_type_name.name));
+        }
+    }
+
     return res;
 }
 
+zkutil::EphemeralNodeHolderPtr IngestPartition::getIngestTaskLock(const zkutil::ZooKeeperPtr & zk_ptr, const String & zookeeper_path, const String & replica_name, const String & partition_id)
+{
+    String partitionHash = toString(std::hash<String>{}(partition_id));
+
+    /**
+     * Hold a zookeeper lock for local log, local log means the log generated in node receiving ingestion task.
+     * We think only the local log needs to race condition since they can generate new part and GET_PART.
+     * To avoid re-generating same rows, same partitions should be ingested in order. 
+     **/
+    try
+    {
+        return zkutil::EphemeralNodeHolder::create(zookeeper_path + "/ingesting_" + partitionHash, *zk_ptr, replica_name);
+    }
+    catch(Coordination::Exception & e)
+    {
+        if (e.code == Coordination::Error::ZNODEEXISTS)
+        {
+            e.addMessage("only one ongoing ingesting task of same partition id is accepted for local log, please wait for the current task to complete " + partition_id);
+        }
+        throw;
+    }
+}
+
+String IngestPartition::parseIngestPartition(const String & part_name, const MergeTreeDataFormatVersion & format_version)
+{
+    String partition_id;
+    MergeTreePartInfo part_info;
+    if (!MergeTreePartInfo::tryParsePartName(part_name, &part_info, format_version))
+        partition_id = part_name;
+    else
+        partition_id = part_info.partition_id;
+
+    return partition_id;
+}
 
 }

@@ -138,6 +138,7 @@ public:
     virtual void setColumns(const NamesAndTypesList & new_columns);
 
     const NamesAndTypesList & getColumns() const { return columns; }
+    NamesAndTypesList getNamesAndTypes() const { return columns; }
 
     /// Throws an exception if part is not stored in on-disk format.
     void assertOnDisk() const;

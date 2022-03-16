@@ -1587,9 +1587,16 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     }
 }
 
-void StorageMergeTree::ingestPartition(const StoragePtr & source_table, const ASTPtr & partition, const Names & column_names, const Names & key_names, ContextPtr query_context)
+void StorageMergeTree::ingestPartition(const PartitionCommand & command, ContextPtr query_context)
 {
+    String from_database = query_context->resolveDatabase(command.from_database);
+    auto source_table = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+
     if (!source_table) return;
+
+    auto partition = command.partition;
+    auto column_names = command.column_names;
+    auto key_names = command.key_names;
 
     LOG_TRACE(log, "INGEST PARTITION {} from {} with columns {} and keys {}", 
                     queryToString(partition), 

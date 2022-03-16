@@ -119,6 +119,8 @@ struct HaMergeTreeLogEntryData
     /// For INGEST PARTITION partition COLUMNS col1, col2 [KEY k1, k2] FROM db.table
     Names column_names;
     Names key_names;
+    String source_database;
+    String source_table;
 
     /// Used by Queue
     bool currently_executing{false};
@@ -136,7 +138,7 @@ struct HaMergeTreeLogEntryData
 
     /// -------- Members above may be serialized --------
 
-    UInt8 format_version = 4; // default version changes in case log breaking
+    UInt8 format_version = 5; // default version changes in case log breaking
     size_t num_tries{0};
     time_t first_attempt_time{0};
     time_t last_attempt_time{0};

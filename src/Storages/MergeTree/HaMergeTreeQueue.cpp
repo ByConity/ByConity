@@ -1,6 +1,7 @@
 #include <Storages/MergeTree/HaMergeTreeQueue.h>
 
 #include <Storages/StorageHaMergeTree.h>
+#include <Storages/IngestPartition.h>
 #include <Interpreters/MutationLog.h>
 
 namespace DB
@@ -131,6 +132,35 @@ bool HaMergeTreeQueue::canExecuteClone(const HaMergeTreeLogEntryPtr & clone_entr
 
     */
     return true;
+}
+
+/**
+ * We think ingest conflict with ingest / get / clone / drop / clear if and only if they have same partition.
+ * Here we first check it entry type.
+ */
+bool HaMergeTreeQueue::ingestConflictEntry(const HaMergeTreeLogEntryPtr & entry) const
+{
+    if (entry->type == LogEntry::INGEST_PARTITION
+        || entry->type == LogEntry::GET_PART
+        || entry->type == LogEntry::CLONE_PART
+        || entry->type == LogEntry::DROP_RANGE)
+        return true;
+    return false;
+}
+
+/**
+ * Return true if there is ingest conflict task with same partition that executing right now, 
+ * to block the subsequent ingest log until there is no ongoing ingest conflict task with same partition.
+ */
+bool HaMergeTreeQueue::checkIngestConflict(const HaMergeTreeLogEntryPtr & entry, const NameSet & ingesting_partitions) const
+{   
+    String partition_id = IngestPartition::parseIngestPartition(entry->new_part_name, storage.format_version);
+    if (ingesting_partitions.count(partition_id))
+    {
+        LOG_TRACE(log, "Ingest log conflict in partition " + partition_id + " during the log selecting");
+        return true;
+    }
+    return false;
 }
 
 
@@ -805,11 +835,18 @@ HaQueueExecutingEntrySetPtr HaMergeTreeQueue::selectEntryToProcessLocked(
 
     /// stat only
     num_avail_fetches = 0;
+    NameSet ingesting_partitions;
     for (auto & entry : unprocessed_queue)
     {
         if (!entry->currently_executing && (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART)
             && entry->num_tries == 0 && canExecuteClone(entry))
             num_avail_fetches += 1;
+
+        if (entry->currently_executing && ingestConflictEntry(entry))
+        {
+            auto partition_id = IngestPartition::parseIngestPartition(entry->new_part_name, storage.format_version);
+            ingesting_partitions.insert(partition_id);
+        }
     }
 
     auto now = time(nullptr);
@@ -847,6 +884,10 @@ HaQueueExecutingEntrySetPtr HaMergeTreeQueue::selectEntryToProcessLocked(
             continue;
 
         if (!canExecuteClone(entry))
+            continue;
+
+        // If any conflict before ingestion, delay executing. 
+        if (entry->type == LogEntry::INGEST_PARTITION && checkIngestConflict(entry, ingesting_partitions))
             continue;
 
         if ((entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART) && entry->num_tries == 0)
