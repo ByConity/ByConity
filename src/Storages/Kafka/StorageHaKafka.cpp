@@ -69,6 +69,7 @@ const auto STREAM_RESCHEDULE_MS = 100;
 const String CONFIG_PREFIX = "kafka";
 const String BYTEDANCE_CONFIG_PREFIX = "bytedance_kafka";
 static constexpr auto CONSUL_PREFIX = "consul://";
+const auto MEMEORY_TABLE_CHECK_RESCHEDULE_MS = 500;
 
 
 void loadFromConfig(
@@ -370,6 +371,13 @@ void StorageHaKafka::startup()
     restarting_thread.start();
     startup_event.wait();
 
+    if (enableMemoryTable())
+    {
+        check_memory_table_task
+            = getContext()->getConsumeSchedulePool().createTask(log->name(), [this] { checkMemoryTable(); });
+        check_memory_table_task->activateAndSchedule();
+    }
+
     LOG_DEBUG(log, "startup finished; cost {} ms", stopwatch.elapsedMilliseconds());
 }
 
@@ -378,10 +386,8 @@ void StorageHaKafka::shutdown(/* bool */)
     restarting_thread.shutdown();
     // check_memory_table_task could be null as it is initialized during startup. shutdown
     // could be invoked before startup is scheduled.
-    /*if (enableMemoryTable() && check_memory_table_task.hasTask())
-    {
+    if (enableMemoryTable() && check_memory_table_task)
         check_memory_table_task->deactivate();
-    }*/
 }
 
 void StorageHaKafka::updateDependencies()
@@ -486,6 +492,9 @@ void StorageHaKafka::alter(
 
         if (num_consumers_changed)
             initConsumerContexts();
+
+        if (enableMemoryTable())
+            check_memory_table_task->activateAndSchedule();
     }
 }
 
@@ -1060,6 +1069,153 @@ void StorageHaKafka::streamThread(size_t consumer_index)
     return insert;
 }
 
+void StorageHaKafka::checkMemoryTable()
+{
+    try
+    {
+        std::vector<DatabaseAndTableName> active_table_keys;
+        auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
+        for (const auto & db_storage_id : dependencies)
+        {
+            auto storage = DatabaseCatalog::instance().tryGetTable(db_storage_id, getContext());
+            auto materialized_view = dynamic_cast<const StorageMaterializedView *>(storage.get());
+            if (!materialized_view)
+                continue;
+            String target_table_name = materialized_view->getTargetTable()->getStorageID().getTableName();
+            String target_db_name = materialized_view->getTargetTable()->getStorageID().getDatabaseName();
+            DatabaseAndTableName table_key(target_db_name, target_table_name);
+            active_table_keys.emplace_back(table_key);
+            {
+                std::lock_guard lock(memory_table_mtx);
+                if (memory_tables.find(table_key) == memory_tables.end())
+                {
+                    /// Each dependency view own one buffer table with buffer layer equal to consumer number
+                    bool allow_materialized
+                        = static_cast<bool>(getContext()->getSettingsRef().insert_allow_materialized_columns);
+                    {
+                        LOG_INFO(log,
+                            "Create memory table- {}_buffer, columns-{}", target_table_name, getInMemoryMetadataPtr()->getColumns().toString());
+                        ConstraintsDescription constraints;
+                        String comment;
+                        memory_tables[table_key] = std::make_shared<StorageMemoryTable>(
+                            StorageID(target_table_name, target_table_name + "_memory_table"),
+                            getInMemoryMetadataPtr()->getColumns(),
+                            constraints,
+                            comment,
+                            getContext(),
+                            settings.num_consumers,
+                            params.memory_table_min_thresholds,
+                            params.memory_table_max_thresholds,
+                            StorageID(target_db_name, target_table_name),
+                            allow_materialized,
+                            settings.memory_table_queue_size);
+                        memory_tables[table_key]->setReadMemoryMode(params.memory_table_read_mode);
+                        memory_tables[table_key]->startup();
+                    }
+                }
+            }
+        }
+
+        {
+            std::lock_guard lock(memory_table_mtx);
+            /// Get all buffer table keys
+            std::vector<DatabaseAndTableName> buffer_keys;
+            std::transform(
+                memory_tables.begin(),
+                memory_tables.end(),
+                std::back_inserter(buffer_keys),
+                [](const std::map<DatabaseAndTableName, MemoryTablePtr>::value_type & buffer_info) {
+                    return buffer_info.first;
+                });
+
+            /// Buffer table which is not in view dependencies should flush buffer and commit offsets
+            std::vector<DatabaseAndTableName> invalid_buffer_keys;
+            std::set_difference(
+                buffer_keys.begin(),
+                buffer_keys.end(),
+                active_table_keys.begin(),
+                active_table_keys.end(),
+                std::back_inserter(invalid_buffer_keys));
+            for (auto & buffer_key : invalid_buffer_keys)
+            {
+                LOG_INFO(log, "Release memory table db-{} table-{}", buffer_key.first, buffer_key.second);
+                memory_tables.erase(buffer_key);
+            }
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    check_memory_table_task->scheduleAfter(MEMEORY_TABLE_CHECK_RESCHEDULE_MS);
+}
+
+StoragePtr StorageHaKafka::getMemoryTable(const DatabaseAndTableName & target_table_name)
+{
+    std::lock_guard lock(memory_table_mtx);
+    auto iter = memory_tables.find(target_table_name);
+    if (iter == memory_tables.end())
+    {
+        LOG_ERROR(log, "Memory table db-{}, table-{} NOT FOUND.", target_table_name.first, target_table_name.second);
+        return {};
+    }
+
+    return iter->second;
+}
+
+void StorageHaKafka::flushMemoryTable(std::optional<DatabaseAndTableName> buffer_key)
+{
+    if (enableMemoryTable())
+    {
+        if (buffer_key)
+        {
+            memory_tables[buffer_key.value()]->flushAllBuffers(false);
+        }
+        else
+        {
+            for (const auto & buffer_table : memory_tables)
+                buffer_table.second->flushAllBuffers(false);
+        }
+    }
+}
+
+void StorageHaKafka::syncFlushAction(size_t consumer_index)
+{
+    std::lock_guard lock(memory_table_mtx);
+    bool is_flush_buffer = false;
+    for (auto & buffer_table : memory_tables)
+        is_flush_buffer = is_flush_buffer || buffer_table.second->check_buffer_status(consumer_index);
+    if (is_flush_buffer)
+    {
+        for (auto & buffer_table : memory_tables)
+        {
+            if (!buffer_table.second->check_buffer_status(consumer_index))
+                buffer_table.second->forceFlushBuffer(consumer_index);
+        }
+    }
+}
+
+void StorageHaKafka::shutdownMemoryTable()
+{
+    if (enableMemoryTable())
+    {
+        for (const auto & buffer_table : memory_tables)
+            buffer_table.second->shutdown();
+    }
+}
+
+void StorageHaKafka::setReadMemoryTableMode(ReadMemoryTableMode mode)
+{
+    if (enableMemoryTable())
+    {
+        for (auto memory_table : memory_tables)
+        {
+            memory_table.second->setReadMemoryMode(mode);
+        }
+    }
+}
+
 bool StorageHaKafka::streamToViews(const Names & /*required_column_names*/, size_t consumer_index)
 {
     ///   Currently, we can not track memory usage when memory table enabled.
@@ -1162,6 +1318,9 @@ bool StorageHaKafka::streamToViews(const Names & /*required_column_names*/, size
                 }
             }
         }
+
+        if (enableMemoryTable())
+            syncFlushAction(consumer_index);
     }
     catch (...)
     {

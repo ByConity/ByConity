@@ -118,6 +118,8 @@ public:
     /// get Coordination::WatchCallback needed for notifications from ZooKeeper watches.
     Coordination::WatchCallback getWatchCallback();
 
+    String dumpStatus();
+
 private:
     friend class TaskNotification;
     friend class BackgroundSchedulePool;

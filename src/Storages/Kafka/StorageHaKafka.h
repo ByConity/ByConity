@@ -17,6 +17,8 @@
 #include <Interpreters/KafkaLog.h>
 #include <Poco/Event.h>
 #include <common/shared_ptr_helper.h>
+#include <Storages/Kafka/ReadMemoryTableMode.h>
+#include <Storages/StorageMemoryTable.h>
 
 #include <cppkafka/cppkafka.h>
 #include <mutex>
@@ -25,7 +27,8 @@ namespace DB
 {
 
 using DatabaseAndTableName = std::pair<String, String>;
-
+using MemoryTablePtr = std::shared_ptr<StorageMemoryTable>;
+using MemoryTables = std::map<DatabaseAndTableName, MemoryTablePtr>;
 
 /** Implements a Kafka queue table engine that can be used as a persistent queue / buffer,
   * or as a basic building block for creating pipelines with a continuous insertion / ETL.
@@ -91,6 +94,8 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
     Names getVirtualColumnNames() const;
+    void setReadMemoryTableMode(ReadMemoryTableMode mode);
+    StoragePtr getMemoryTable(const DatabaseAndTableName & target_table_name);
 private:
 
     // Configuration and state
@@ -110,6 +115,7 @@ private:
         String leader_priority;
         Thresholds memory_table_min_thresholds;
         Thresholds memory_table_max_thresholds;
+        ReadMemoryTableMode memory_table_read_mode;
     };
     KafkaParams params;
 
@@ -144,8 +150,8 @@ private:
     /// KafkaOffsetManagerPtr offset_manager;
 
     /// buffer table as memory table
-    /// MemoryTables memory_tables;
-    /// std::mutex memory_table_mtx;
+    MemoryTables memory_tables;
+    std::mutex memory_table_mtx;
 
     time_t last_lookup_time = 0;
 
@@ -172,6 +178,14 @@ private:
     Names collectRequiredColumnsFromTable(const StorageID & table_id);
     Names filterVirtualNames(const Names & names) const;
     ASTPtr constructInsertQuery(const Names & required_virtual_names);
+
+    /// check buffer dependency task
+    void checkMemoryTable();
+    BackgroundSchedulePool::TaskHolder check_memory_table_task;
+    void flushMemoryTable(std::optional<DatabaseAndTableName> buffer_key = std::nullopt);
+    void syncFlushAction(size_t consumer_index);
+    void shutdownMemoryTable();
+   
 
     void createStopMarkFile();
     void removeStopMarkFile();
