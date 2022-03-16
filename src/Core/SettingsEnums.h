@@ -164,6 +164,56 @@ enum class DialectType {
     ANSI,
 };
 
-DECLARE_SETTING_ENUM(DialectType)
+struct SettingFieldDialectTypeTraits
+{
+    using EnumType = DialectType;
+    static const String & toString(DialectType value);
+    static DialectType fromString(const std::string_view & str);
+};
+
+struct SettingFieldDialectType
+{
+    using EnumType = DialectType;
+    using Traits = SettingFieldDialectTypeTraits;
+
+    DialectType value;
+    bool changed = false;
+    bool pending = false;
+
+    explicit SettingFieldDialectType(DialectType x = DialectType{0}) : value(x) {}
+    explicit SettingFieldDialectType(const Field & f) :
+        SettingFieldDialectType(Traits::fromString(f.safeGet<const String &>())) {}
+
+    SettingFieldDialectType& operator =(DialectType x) {
+        if (x != value) {
+            value = x;
+            changed = true;
+            pending = true;
+        }
+
+        return *this;
+    }
+    SettingFieldDialectType& operator =(const Field & f) {
+        *this = Traits::fromString(f.safeGet<const String &>());
+        return *this;
+    }
+
+    operator DialectType() const { return value; }
+    explicit operator Field() const { return toString(); }
+
+    String toString() const { return Traits::toString(value); }
+    void parseFromString(const String & str) {
+        *this = Traits::fromString(str);
+    }
+
+    void writeBinary(WriteBuffer & out) const {
+        SettingFieldEnumHelpers::writeBinary(toString(), out);
+    }
+
+    void readBinary(ReadBuffer & in) {
+        *this = Traits::fromString(SettingFieldEnumHelpers::readBinary(in));
+    }
+};
+
 
 }

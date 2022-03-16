@@ -16,6 +16,7 @@
 #include <Access/User.h>
 #include <Compression/ICompressionCodec.h>
 #include <Coordination/KeeperStorageDispatcher.h>
+#include <Core/AnsiSettings.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Settings.h>
 #include <Core/SettingsQuirks.h>
@@ -1262,6 +1263,7 @@ void Context::applySettingsChanges(const SettingsChanges & changes)
     for (const SettingChange & change : changes)
         applySettingChange(change);
     applySettingsQuirks(settings);
+    ANSI::onSettingChanged(&settings);
 }
 
 
