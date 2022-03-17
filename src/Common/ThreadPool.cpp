@@ -2,9 +2,13 @@
 #include <Common/Exception.h>
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/CurrentThread.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InternalResourceGroup.h>
 
 #include <cassert>
 #include <type_traits>
+#include <string_view>
 
 #include <Poco/Util/Application.h>
 #include <Poco/Util/LayeredConfiguration.h>
@@ -41,12 +45,13 @@ ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, DB::CpuSetPtr cpu_se
 }
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_, DB::CpuSetPtr cpu_set_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_, DB::CpuSetPtr cpu_set_,  DB::CpuControllerPtr cpu_)
     : max_threads(max_threads_)
     , max_free_threads(max_free_threads_)
     , queue_size(queue_size_)
     , shutdown_on_exception(shutdown_on_exception_)
     , cpu_set(std::move(cpu_set_))
+    , cpu(std::move(cpu_))
 {
 }
 
@@ -279,6 +284,14 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
     CurrentMetrics::Increment metric_all_threads(
         std::is_same_v<Thread, std::thread> ? CurrentMetrics::GlobalThread : CurrentMetrics::LocalThread);
 
+    /// Add cpu.shares
+    if (cpu)
+    {
+        auto tid = DB::SystemUtils::gettid();
+        cpu->addTask(tid);
+        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "add thread : {}", tid);
+    }
+
     while (true)
     {
         Job job;
@@ -363,6 +376,19 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
 
         job_finished.notify_all();
     }
+}
+
+FreeThreadPool & ThreadFromGlobalPool::getThreadPool()
+{
+    auto query_context = DB::CurrentThread::get().getQueryContext();
+    if (std::string_view(DB::CurrentThread::getQueryId()).empty() || !query_context)
+        return GlobalThreadPool::instance();
+
+    if (auto * resource_group = query_context->getResourceGroup();
+        likely(resource_group == nullptr || resource_group->getThreadPool() == nullptr))
+        return GlobalThreadPool::instance();
+    else
+        return *resource_group->getThreadPool();
 }
 
 

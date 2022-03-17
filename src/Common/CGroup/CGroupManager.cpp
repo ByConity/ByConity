@@ -43,7 +43,7 @@ CGroupManager::CGroupManager(PassKey ) {}
 
 CpuSetPtr CGroupManager::createCpuSet(const String & cpu_set_name, const Cpus & cpus)
 {
-    if (!enable())
+    if (!enableForCpu())
         return nullptr;
     if (cpu_set_map.count(cpu_set_name))
         return cpu_set_map.find(cpu_set_name)->second;

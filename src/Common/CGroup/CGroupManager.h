@@ -16,6 +16,8 @@ class CGroupManager
 public:
     bool enable(){ return access("/proc/cgroups", F_OK) == 0 && access(getCGroupCpuSetPath().c_str(), W_OK|R_OK) == 0; }
 
+    bool enableForCpu(){ return enable() && access(getClickhouseCpuPath().c_str(), W_OK|R_OK) == 0; }
+
     /// cpuset
 
     CpuSetPtr getCpuSet(const String & cpu_set_name);

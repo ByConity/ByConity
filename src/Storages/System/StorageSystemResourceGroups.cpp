@@ -27,6 +27,8 @@ NamesAndTypesList StorageSystemResourceGroups::getNamesAndTypes()
 
         {"priority", std::make_shared<DataTypeInt32>()},
 
+        {"cpu_shares", std::make_shared<DataTypeInt32>()},
+
         {"parent_resource_group", std::make_shared<DataTypeString>()},
     };
 }
@@ -56,6 +58,8 @@ void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, Context
         res_columns[i++]->insert(info.queuedQueries);
 
         res_columns[i++]->insert(info.priority);
+
+        res_columns[i++]->insert(info.cpu_shares);
 
         res_columns[i++]->insert(info.parent_resource_group);
     }

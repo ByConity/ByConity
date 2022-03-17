@@ -8,6 +8,8 @@
 #include <unordered_map>
 
 #include <Core/Types.h>
+#include <Common/ThreadPool.h>
+#include <Common/CGroup/CpuController.h>
 #include <Interpreters/ResourceGroup.h>
 
 namespace DB
@@ -30,6 +32,7 @@ struct InternalResourceGroupInfo
     Int32 max_concurrent_queries;
     Int32 max_queued;
     Int32 priority;
+    Int32 cpu_shares;
     String parent_resource_group;
     Int64 cachedMemoryUsageBytes;
     Int32 runningQueries;
@@ -87,6 +90,9 @@ public:
     bool canQueueMore() const;
     bool isLeaf() const { return subGroups.empty(); }
 
+    void initCpu();
+    FreeThreadPool * getThreadPool() const;
+
 protected:
     void internalRefreshStats();
     bool internalProcessNext();
@@ -105,6 +111,8 @@ protected:
     Int32 descendentQueuedQueries{0};
     Int64 cachedMemoryUsageBytes{0};
     std::atomic<Int32> id{0};
+    CpuControllerPtr cpu{nullptr};
+    std::shared_ptr<FreeThreadPool> thread_pool{nullptr};
     mutable std::mutex mutex;
     mutable std::condition_variable can_run;
 };

@@ -16,6 +16,8 @@
 #include <common/scope_guard.h>
 #include <Common/SystemUtils.h>
 #include <Common/CGroup/CpuSet.h>
+#include <Common/CGroup/CpuController.h>
+
 
 /** Very simple thread pool similar to boost::threadpool.
   * Advantages:
@@ -40,7 +42,7 @@ public:
     explicit ThreadPoolImpl(size_t max_threads_, DB::CpuSetPtr cpu_set_ = nullptr);
 
     /// queue_size - maximum number of running plus scheduled jobs. It can be greater than max_threads. Zero means unlimited.
-    ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true, DB::CpuSetPtr cpu_set_ = nullptr);
+    ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_ = true, DB::CpuSetPtr cpu_set_ = nullptr, DB::CpuControllerPtr cpu_ = nullptr);
 
     /// Add new job. Locks until number of scheduled jobs is less than maximum or exception in one of threads was thrown.
     /// If any thread was throw an exception, first exception will be rethrown from this method,
@@ -111,6 +113,7 @@ private:
     std::list<Thread> threads;
     std::exception_ptr first_exception;
     DB::CpuSetPtr cpu_set;
+    DB::CpuControllerPtr cpu;
 
 
     template <typename ReturnType>
@@ -171,7 +174,7 @@ public:
         mutex()
     {
         /// NOTE: If this will throw an exception, the destructor won't be called.
-        GlobalThreadPool::instance().scheduleOrThrow([
+        getThreadPool().scheduleOrThrow([
             tid = tid,
             cv = cv,
             state = state,
@@ -244,6 +247,8 @@ public:
         cv->wait(lock, [tid=tid]{return *tid != 0;});
         return *tid;
     }
+
+    FreeThreadPool & getThreadPool();
 
 private:
     /// The state used in this object and inside the thread job.

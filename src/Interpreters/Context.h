@@ -463,7 +463,7 @@ public:
     const ClientInfo & getClientInfo() const { return client_info; }
 
     void setResourceGroup(const IAST *ast);
-    InternalResourceGroup* getResourceGroup();
+    InternalResourceGroup* getResourceGroup() const;
     ResourceGroupManager & getResourceGroupManager();
     const ResourceGroupManager & getResourceGroupManager() const;
     void startResourceGroup();

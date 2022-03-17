@@ -90,8 +90,10 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
             group->setName(name);
             group->setSoftMaxMemoryUsage(config.getInt64(prefixWithKey + ".soft_max_memory_usage", 0));
             group->setMinQueryMemoryUsage(config.getInt64(prefixWithKey + ".min_query_memory_usage", 536870912)); /// default 512MB
-            group->setMaxConcurrentQueries(config.getInt(prefixWithKey + ".max_concurrent_queries", 100)); /// default 100
-            group->setMaxQueued(config.getInt(prefixWithKey + ".max_queued", 100)); /// default 100
+            group->setMaxConcurrentQueries(
+                    config.getInt(prefixWithKey + ".max_concurrent_queries", 0)); /// default 0
+            group->setMaxQueued(config.getInt(prefixWithKey + ".max_queued", 0)); /// default 0
+            group->setMaxQueuedWaitingMs(config.getInt(prefixWithKey + ".max_queued_waiting_ms", 5000)); /// default 5s
             group->setMaxQueuedWaitingMs(config.getInt(prefixWithKey + ".max_queued_waiting_ms", 5000)); /// default 5s
             group->setPriority(config.getInt(prefixWithKey + ".priority", 0));
             if (config.has(prefixWithKey + ".parent_resource_group"))
@@ -119,6 +121,7 @@ void ResourceGroupManager::loadFromConfig(const Poco::Util::AbstractConfiguratio
                     ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
             p.second.setParent(&(parentIt->second));
         }
+        p.second.initCpu();
     }
     /// load cases
     for (const String & key : config_keys)

@@ -1,8 +1,11 @@
+#include <Interpreters/InternalResourceGroup.h>
+
 #include <chrono>
+
 #include <Core/Settings.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InternalResourceGroup.h>
 #include <Interpreters/ProcessList.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -226,9 +229,27 @@ InternalResourceGroupInfo InternalResourceGroup::getInfo() const
     info.max_queued = max_queued;
     info.queuedQueries = queuedQueries.size() + descendentQueuedQueries;
     info.priority = priority;
+    info.cpu_shares = cpu_shares;
     info.parent_resource_group = parent_resource_group;
 
     return info;
+}
+
+void InternalResourceGroup::initCpu()
+{
+    if (cpu_shares == 0)
+        return;
+
+    CGroupManager & cgroup_manager = CGroupManagerFactory::instance();
+    cpu = cgroup_manager.createCpu(name, cpu_shares);
+    if (!cpu)
+        return;
+    thread_pool = std::make_shared<FreeThreadPool>(10000, 500, 10000, true, nullptr, cpu);
+}
+
+FreeThreadPool * InternalResourceGroup::getThreadPool() const
+{
+    return thread_pool ? thread_pool.get() : nullptr;
 }
 
 } // namespace DB

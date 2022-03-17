@@ -918,7 +918,7 @@ void Context::setResourceGroup(const IAST *ast)
         resourceGroup = nullptr;
 }
 
-InternalResourceGroup* Context::getResourceGroup()
+InternalResourceGroup* Context::getResourceGroup() const
 {
     auto lock = getLock();
     return resourceGroup;

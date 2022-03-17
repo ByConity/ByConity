@@ -31,6 +31,10 @@ public:
 
     void setPriority(Int32 priority_) { priority = priority_; }
 
+    Int32 getCpuShares() const { return cpu_shares; }
+
+    void setCpuShares(Int32 cpu_shares_) { ResourceGroup::cpu_shares = cpu_shares_; }
+
     const String & getName() const { return name; }
 
     void setName(const String & name_) { name = name_; }
@@ -40,12 +44,13 @@ public:
     void setParentResourceGroup(const String & parentResourceGroup) { parent_resource_group = parentResourceGroup; }
 
 protected:
-    Int64 soft_max_memory_usage = 0;
-    Int64 min_query_memory_usage = 0;
-    Int32 max_concurrent_queries = 0;
-    Int32 max_queued = 0;
-    Int32 max_queued_waiting_ms = 0;
-    Int32 priority = 0;
+    Int64 soft_max_memory_usage{0};
+    Int64 min_query_memory_usage{0};
+    Int32 max_concurrent_queries{0};
+    Int32 max_queued{0};
+    Int32 max_queued_waiting_ms{0};
+    Int32 priority{0};
+    Int32 cpu_shares{0};
     String name;
     String parent_resource_group;
 };
