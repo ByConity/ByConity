@@ -1,5 +1,6 @@
 #include <Common/ThreadPool.h>
 #include <Common/Exception.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 
 #include <cassert>
@@ -27,24 +28,25 @@ namespace CurrentMetrics
 
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl()
-    : ThreadPoolImpl(getNumberOfPhysicalCPUCores())
+ThreadPoolImpl<Thread>::ThreadPoolImpl(DB::CpuSetPtr cpu_set_)
+    : ThreadPoolImpl(getNumberOfPhysicalCPUCores(), std::move(cpu_set_))
 {
 }
 
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_)
-    : ThreadPoolImpl(max_threads_, max_threads_, max_threads_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, DB::CpuSetPtr cpu_set_)
+    : ThreadPoolImpl(max_threads_, max_threads_, max_threads_, true, std::move(cpu_set_))
 {
 }
 
 template <typename Thread>
-ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_)
+ThreadPoolImpl<Thread>::ThreadPoolImpl(size_t max_threads_, size_t max_free_threads_, size_t queue_size_, bool shutdown_on_exception_, DB::CpuSetPtr cpu_set_)
     : max_threads(max_threads_)
     , max_free_threads(max_free_threads_)
     , queue_size(queue_size_)
     , shutdown_on_exception(shutdown_on_exception_)
+    , cpu_set(std::move(cpu_set_))
 {
 }
 
@@ -134,9 +136,30 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
             try
             {
                 threads.front() = Thread([this, it = threads.begin()] { worker(it); });
+
+                if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
+                {
+                    if (nullptr != cpu_set)
+                    {
+                        auto tid = threads.front().gettid();
+                        cpu_set->addTask(tid);
+                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "add thread : {}", tid);
+                    }
+                }
             }
             catch (...)
             {
+                if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
+                {
+                    auto & cgroup_manager = DB::CGroupManagerFactory::instance();
+                    if (cgroup_manager.isInit())
+                    {
+                        DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
+                        system_cpu_set->addTask(threads.front().gettid());
+                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for exception : {}", threads.front().gettid());
+                    }
+                }
+
                 threads.pop_front();
                 return on_error("cannot allocate thread");
             }
@@ -204,8 +227,33 @@ void ThreadPoolImpl<Thread>::finalize()
 
     new_job_or_shutdown.notify_all();
 
+    std::vector<size_t> tids;
+    std::stringstream ss;
+    ss << "[";
+    tids.reserve(threads.size());
+
     for (auto & thread : threads)
+    {
         thread.join();
+        if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
+        {
+            tids.emplace_back(thread.gettid());
+            ss << thread.gettid() << ", ";
+        }
+    }
+    ss << "]";
+
+
+    if (!tids.empty())
+    {
+        auto & cgroup_manager = DB::CGroupManagerFactory::instance();
+        if (cgroup_manager.isInit())
+        {
+            DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
+            system_cpu_set->addTasks(tids);
+        }
+        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for finalize : {}", ss.str());
+    }
 
     threads.clear();
 }
@@ -295,6 +343,17 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
 
             if (threads.size() > scheduled_jobs + max_free_threads)
             {
+                if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
+                {
+                    auto & cgroup_manager = DB::CGroupManagerFactory::instance();
+                    if (cgroup_manager.isInit())
+                    {
+                        DB::CpuSetPtr system_cpu_set = cgroup_manager.getSystemCpuSet();
+                        system_cpu_set->addTask(thread_it->gettid());
+                        LOG_DEBUG(&Poco::Logger::get("ThreadPool"), "clear thread for max_threads : {}", thread_it->gettid());
+                    }
+                }
+
                 thread_it->detach();
                 threads.erase(thread_it);
                 job_finished.notify_all();

@@ -117,6 +117,8 @@
 #include <Poco/Util/Application.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
+#include <Common/CGroup/CpuSetScaleManager.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/Macros.h>
 #include <Common/RemoteHostFilter.h>
@@ -509,6 +511,8 @@ struct ContextSharedPart
 
     mutable IndexFileBlockCachePtr unique_row_store_block_cache; /// Shared block cache of unique row stores
     mutable DiskUniqueRowStoreCachePtr unique_row_store_cache; /// Shared object cache of unique row stores
+
+    CpuSetScaleManagerPtr cpu_set_scale_manager;
 
     bool shutdown_called = false;
 
@@ -1873,9 +1877,18 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 BackgroundSchedulePool & Context::getConsumeSchedulePool() const
 {
     auto lock = getLock();
-    if (!shared->extra_schedule_pools[SchedulePool::Consume])
+    LOG_DEBUG(&Poco::Logger::get("BackgroundSchedulePool"), "getConsumeSchedulePool");
+    if (!shared->extra_schedule_pools[SchedulePool::Consume]) {
+        CpuSetPtr cpu_set;
+        if (auto & cgroup_manager = CGroupManagerFactory::instance(); cgroup_manager.isInit())
+        {
+            cpu_set = cgroup_manager.getCpuSet("hakafka");
+        }
+
         shared->extra_schedule_pools[SchedulePool::Consume].emplace(
-            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool");
+            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool", std::move(cpu_set));
+    }
+
     return *shared->extra_schedule_pools[SchedulePool::Consume];
 }
 
@@ -3278,6 +3291,25 @@ std::shared_ptr<DiskUniqueRowStoreCache> Context::getDiskUniqueRowStoreCache() c
 {
     auto lock = getLock();
     return shared->unique_row_store_cache;
+}
+
+void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)
+{
+    if (config.has("enable_cpu_scale") && config.getBool("enable_cpu_scale"))
+    {
+        if (nullptr != shared->cpu_set_scale_manager)
+            return;
+        LOG_INFO(&Poco::Logger::get("CpuSetScaleManager"), "Init CpuSetScaleManager");
+        BackgroundSchedulePool & schedule_pool = getSchedulePool();
+        shared->cpu_set_scale_manager = std::make_shared<CpuSetScaleManager>(schedule_pool);
+        shared->cpu_set_scale_manager->loadCpuSetFromConfig(config);
+        shared->cpu_set_scale_manager->run();
+    }
+    else
+    {
+        if (nullptr != shared->cpu_set_scale_manager)
+            shared->cpu_set_scale_manager = nullptr;
+    }
 }
 
 }

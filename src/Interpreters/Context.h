@@ -11,6 +11,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
@@ -665,7 +666,7 @@ public:
 
     void setProcessListEntry(std::shared_ptr<ProcessListEntry> prcess_list_entry_);
     std::weak_ptr<ProcessListEntry> getProcessListEntry();
-    
+
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in IBlockInputStream,
       *  to update and monitor information about the total number of resources spent for the query.
       */
@@ -918,6 +919,8 @@ public:
     /// urs: unique row store
     void setDiskUniqueRowStoreCache(size_t disk_urs_meta_cache_size, size_t disk_urs_file_cache_size);
     std::shared_ptr<DiskUniqueRowStoreCache> getDiskUniqueRowStoreCache() const;
+
+    void setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config);
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

@@ -50,6 +50,7 @@
 #include <Poco/Net/NetException.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Version.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/Brpc/BrpcApplication.h>
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
@@ -477,6 +478,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerFunctions();
     registerAggregateFunctions();
     registerTableFunctions();
+    /// Init cgroup
+    CGroupManagerFactory::loadFromConfig(config());
     registerStorages();
     registerDictionaries();
     registerDisks();
@@ -879,6 +882,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->updateInterserverCredentials(*config);
 
             global_context->setMergeSchedulerSettings(*config);
+            CGroupManagerFactory::loadFromConfig(*config);
+            global_context->setCpuSetScaleManager(*config);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 

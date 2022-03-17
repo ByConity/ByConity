@@ -1,7 +1,8 @@
 #pragma once
 
+#include <memory>
+
 #include <IO/ReadBufferFromFileBase.h>
-#include <Interpreters/Context.h>
 
 #include <unistd.h>
 
@@ -9,6 +10,10 @@
 namespace DB
 {
 
+class Context;
+
+/// Most used types have shorter names
+using ContextPtr = std::shared_ptr<const Context>;
 /** Use ready file descriptor. Does not open or close a file.
   */
 class ReadBufferFromFileDescriptor : public ReadBufferFromFileBase
