@@ -433,6 +433,16 @@ void Set::serialize(WriteBuffer & buf) const
     writeBinary(is_created, buf);
 }
 
+template <typename Method>
+void Set::deserializeImplCase(
+    Method & method,
+    SetVariants & variants,
+    ReadBuffer & buf
+)
+{
+    Method::State::read(method.data, buf, variants.string_pool);
+}
+
 void Set::deserializeImpl(ReadBuffer & buf)
 {
     auto header = deserializeBlock(buf);
@@ -444,7 +454,7 @@ void Set::deserializeImpl(ReadBuffer & buf)
             break;
 #define M(NAME) \
         case SetVariants::Type::NAME: \
-            data.NAME->data.read(buf); \
+            deserializeImplCase(*data.NAME, data, buf); \
             break;
     APPLY_FOR_SET_VARIANTS(M)
 #undef M
