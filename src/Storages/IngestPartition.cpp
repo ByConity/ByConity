@@ -825,7 +825,7 @@ MergeTreeData::MutableDataPartPtr IngestPartition::ingestPart(MergeTreeData & da
         auto mrk_extension = target_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType())
                                                                             : getNonAdaptiveMrkExtension();
 
-        auto files_to_skip = PartLinker::collectFilesToSkip(target_part, ingest_header, std::set<MergeTreeIndexPtr>{}, mrk_extension, std::set<MergeTreeProjectionPtr>{});
+        auto files_to_skip = PartLinker::collectFilesToSkip(target_part, ingest_header, std::set<MergeTreeIndexPtr>{}, mrk_extension, std::set<MergeTreeProjectionPtr>{}, false);
         NameToNameVector files_to_rename;
 
         PartLinker part_linker(disk, new_data_part->getFullRelativePath(), target_part->getFullRelativePath(), files_to_skip, files_to_rename);

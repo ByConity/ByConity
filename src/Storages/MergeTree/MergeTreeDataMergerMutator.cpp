@@ -11,6 +11,7 @@
 #include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
+#include <Storages/PartLinker.h>
 #include <DataStreams/TTLBlockInputStream.h>
 #include <DataStreams/DistinctSortedBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -1771,43 +1772,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
         if (need_remove_expired_values)
             files_to_skip.insert("ttl.txt");
 
-        disk->createDirectories(new_part_tmp_path);
-
         /// Create hardlinks for unchanged files
-        for (auto it = disk->iterateDirectory(source_part->getFullRelativePath()); it->isValid(); it->next())
-        {
-            if (files_to_skip.count(it->name()))
-                continue;
-
-            String destination = new_part_tmp_path;
-            String file_name = it->name();
-            auto rename_it = std::find_if(files_to_rename.begin(), files_to_rename.end(), [&file_name](const auto & rename_pair) { return rename_pair.first == file_name; });
-            if (rename_it != files_to_rename.end())
-            {
-                if (rename_it->second.empty())
-                    continue;
-                destination += rename_it->second;
-            }
-            else
-            {
-                destination += it->name();
-            }
-
-            if (!disk->isDirectory(it->path()))
-                disk->createHardLink(it->path(), destination);
-            else if (!startsWith("tmp_", it->name())) // ignore projection tmp merge dir
-            {
-                // it's a projection part directory
-                disk->createDirectories(destination);
-                for (auto p_it = disk->iterateDirectory(it->path()); p_it->isValid(); p_it->next())
-                {
-                    String p_destination = destination + "/";
-                    String p_file_name = p_it->name();
-                    p_destination += p_it->name();
-                    disk->createHardLink(p_it->path(), p_destination);
-                }
-            }
-        }
+        PartLinker linker(disk, new_part_tmp_path, source_part->getFullRelativePath(), files_to_skip, files_to_rename);
+        linker.execute();
 
         merge_entry->columns_written = storage_columns.size() - updated_header.columns();
 
@@ -2241,48 +2208,12 @@ NameSet MergeTreeDataMergerMutator::collectFilesToSkip(
     const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
     bool update_delete_bitmap)
 {
-    NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
-
-    /// Skip updated files
-    for (const auto & entry : updated_header)
-    {
-        ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path)
-        {
-            String stream_name = ISerialization::getFileNameForStream({entry.name, entry.type}, substream_path);
-            files_to_skip.insert(stream_name + ".bin");
-            files_to_skip.insert(stream_name + mrk_extension);
-            /// FIXME: getSpecialColumnFiles for column with bloom/bitmap_index/compression/bitengine
-        };
-
-        if (auto column = source_part->getColumns().tryGetByName(entry.name))
-        {
-            if (column->type->isMap() && !column->type->isMapKVStore())
-            {
-                Strings files = source_part->checksums.collectFilesForMapColumnNotKV(column->name);
-                files_to_skip.insert(files.begin(), files.end());
-            }
-            else
-            {
-                auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
-                serialization->enumerateStreams(callback);
-            }
-        }
-    }
-    for (const auto & index : indices_to_recalc)
-    {
-        files_to_skip.insert(index->getFileName() + ".idx");
-        files_to_skip.insert(index->getFileName() + mrk_extension);
-    }
-    for (const auto & projection : projections_to_recalc)
-    {
-        files_to_skip.insert(projection->getDirectoryName());
-    }
-    if (update_delete_bitmap)
-    {
-        files_to_skip.insert(DELETE_BITMAP_FILE_NAME);
-    }
-
-    return files_to_skip;
+    return PartLinker::collectFilesToSkip(source_part,
+                                          updated_header,
+                                          indices_to_recalc,
+                                          mrk_extension,
+                                          projections_to_recalc,
+                                          update_delete_bitmap);
 }
 
 

@@ -37,7 +37,8 @@ public:
                                       const Block & updated_header,
                                       const std::set<MergeTreeIndexPtr> & indices_to_recalc,
                                       const String & mrk_extension,
-                                      const std::set<MergeTreeProjectionPtr> & projections_to_recalc);
+                                      const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+                                      bool update_delete_bitmap);
 
 private:
     DiskPtr disk;

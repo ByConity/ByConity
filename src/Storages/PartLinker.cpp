@@ -8,12 +8,17 @@
 namespace DB
 {
 
+/**
+ * collect files to skip when hard link files to ingested new part file.
+ * It is different from MergeTreeDataMergerMutator::collectFilesToSkip.
+ */
 NameSet PartLinker::collectFilesToSkip(
     const MergeTreeDataPartPtr & source_part,
     const Block & updated_header,
     const std::set<MergeTreeIndexPtr> & indices_to_recalc,
     const String & mrk_extension,
-    const std::set<MergeTreeProjectionPtr> & projections_to_recalc)
+    const std::set<MergeTreeProjectionPtr> & projections_to_recalc,
+    bool update_delete_bitmap)
 {
     NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
 
@@ -27,8 +32,19 @@ NameSet PartLinker::collectFilesToSkip(
             files_to_skip.insert(stream_name + mrk_extension);
         };
 
-        auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
-        serialization->enumerateStreams(callback);
+        if (auto column = source_part->getColumns().tryGetByName(entry.name))
+        {
+            if (column->type->isMap() && !column->type->isMapKVStore())
+            {
+                Strings files = source_part->checksums.collectFilesForMapColumnNotKV(column->name);
+                files_to_skip.insert(files.begin(), files.end());
+            }
+            else
+            {
+                auto serialization = source_part->getSerializationForColumn({entry.name, entry.type});
+                serialization->enumerateStreams(callback);
+            }
+        }
     }
     for (const auto & index : indices_to_recalc)
     {
@@ -38,6 +54,10 @@ NameSet PartLinker::collectFilesToSkip(
     for (const auto & projection : projections_to_recalc)
     {
         files_to_skip.insert(projection->getDirectoryName());
+    }
+    if (update_delete_bitmap)
+    {
+        files_to_skip.insert(DELETE_BITMAP_FILE_NAME);
     }
 
     return files_to_skip;
@@ -68,7 +88,6 @@ void PartLinker::execute()
             destination += it->name();
         }
 
-        std::cout<<" <<< part link: " << it->path() << " -> " << destination << std::endl;
         if (!disk->isDirectory(it->path()))
             disk->createHardLink(it->path(), destination);
         else if (!startsWith("tmp_", it->name())) // ignore projection tmp merge dir
