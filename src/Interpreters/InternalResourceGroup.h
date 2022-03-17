@@ -91,7 +91,8 @@ public:
     bool isLeaf() const { return subGroups.empty(); }
 
     void initCpu();
-    FreeThreadPool * getThreadPool() const;
+    FreeThreadPool * getThreadPool() const { return thread_pool ? thread_pool.get() : nullptr; }
+
 
 protected:
     void internalRefreshStats();

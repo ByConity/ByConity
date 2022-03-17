@@ -247,9 +247,4 @@ void InternalResourceGroup::initCpu()
     thread_pool = std::make_shared<FreeThreadPool>(10000, 500, 10000, true, nullptr, cpu);
 }
 
-FreeThreadPool * InternalResourceGroup::getThreadPool() const
-{
-    return thread_pool ? thread_pool.get() : nullptr;
-}
-
 } // namespace DB

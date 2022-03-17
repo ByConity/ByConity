@@ -290,6 +290,7 @@ target_link_libraries (clickhouse_common_io
             ${LINK_LIBRARIES_ONLY_ON_X86_64}
         PUBLIC
             common
+            dbms
             ${DOUBLE_CONVERSION_LIBRARIES}
             dragonbox_to_chars
 )
