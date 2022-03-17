@@ -802,6 +802,94 @@ bool ParserIntervalOperatorExpression::parseArgumentAndIntervalKind(
     return parseIntervalKind(pos, expected, interval_kind);
 }
 
+static bool parseLiteral(const ASTPtr node, UInt64 &node_value) {
+    return node->as<ASTLiteral &>().value.tryGet(node_value);
+}
+
+/** SQL standard defined interval types YEAR_MONTH and DAY_TIME
+ * YEAR_MONTH interval type has the format year-month
+ * DAY_TIME interval type has the format "day hour:minute:second"
+ */
+bool ParserIntervalOperatorExpression::parseSQLStandardArgumentAndIntervalKind(
+    Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected)
+{
+    ASTPtr string_literal;
+    // A String literal followed INTERVAL keyword,
+    /// the literal can be 'year-month' or 'day time:minute:second'.
+    if (!ParserStringLiteral{}.parse(pos, string_literal, expected))
+        return false;
+
+    String literal;
+    if (!string_literal->as<ASTLiteral &>().value.tryGet(literal))
+        return false;
+
+    Tokens tokens(literal.data(), literal.data() + literal.size());
+    Pos token_pos(tokens, 0);
+
+    if (ParserKeyword("YEAR_MONTH").ignore(pos, expected)) {
+        ASTPtr year_literal, month_literal;
+        ParserToken dash(TokenType::Minus);
+
+        if (!ParserUnsignedInteger{}.parse(token_pos, year_literal, expected) ||
+            !dash.ignore(token_pos, expected) ||
+            !ParserUnsignedInteger{}.parse(token_pos, month_literal, expected))
+            return false;
+
+        UInt64 year = 0;
+        UInt64 month = 0;
+
+        if (!parseLiteral(year_literal, year)
+            || !parseLiteral(month_literal, month)) {
+            return false;
+        }
+
+        if (month > 12)
+            return false;
+
+        UInt64 to_month = year * 12 + month;
+        expr = std::make_shared<ASTLiteral>(to_month);
+        interval_kind = IntervalKind::Month;
+        return true;
+    }
+
+    if (ParserKeyword("DAY_TIME").ignore(pos, expected)) {
+        ASTPtr day_literal, hour_literal, minute_literal, second_literal;
+        ParserToken colon(TokenType::Colon);
+
+        if (!ParserUnsignedInteger{}.parse(token_pos, day_literal, expected)
+            || !ParserUnsignedInteger{}.parse(token_pos, hour_literal, expected)
+            || !colon.ignore(token_pos, expected)
+            || !ParserUnsignedInteger{}.parse(token_pos, minute_literal, expected)
+            || !colon.ignore(token_pos, expected)
+            || !ParserUnsignedInteger{}.parse(token_pos, second_literal, expected))
+            return false;
+
+        UInt64 day = 0;
+        UInt64 hour = 0;
+        UInt64 minute = 0;
+        UInt64 second = 0;
+
+        if (!parseLiteral(day_literal, day)
+            || !parseLiteral(hour_literal, hour)
+            || !parseLiteral(minute_literal, minute)
+            || !parseLiteral(second_literal, second)) {
+            return false;
+        }
+
+        if (hour > 24 || minute > 60 || second > 60)
+            return false;
+
+        std::chrono::duration<UInt64> tm = std::chrono::hours(day * 24 + hour)
+                                            + std::chrono::minutes(minute)
+                                            + std::chrono::seconds(second);
+        expr = std::make_shared<ASTLiteral>(tm.count());
+        interval_kind = IntervalKind::Second;
+        return true;
+    }
+
+    return false;
+}
+
 bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     auto begin = pos;
@@ -815,7 +903,12 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
     if (!parseArgumentAndIntervalKind(pos, expr, interval_kind, expected, dt))
     {
         pos = begin;
-        return next_parser.parse(pos, node, expected);
+        ++pos;
+        // If the interval type is YEAR_MONTH or DAY_TIME
+        if (!parseSQLStandardArgumentAndIntervalKind(pos, expr, interval_kind, expected)) {
+            pos = begin;
+            return next_parser.parse(pos, node, expected);
+        }
     }
 
     /// the function corresponding to the operator
