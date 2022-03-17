@@ -10,7 +10,7 @@ namespace DB
 
 /**
  * collect files to skip when hard link files to ingested new part file.
- * It is different from MergeTreeDataMergerMutator::collectFilesToSkip.
+ * It is same with MergeTreeDataMergerMutator::collectFilesToSkip.
  */
 NameSet PartLinker::collectFilesToSkip(
     const MergeTreeDataPartPtr & source_part,

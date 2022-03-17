@@ -549,10 +549,10 @@ class IColumn;
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, max_ingest_rows_size, 50000000, "The maximum rows for ingestion.", 0) \
     M(UInt64, parallel_ingest_threads, 8, "The maximum threads for ingestion.", 0) \
-    M(Bool, enable_ingest_back_compatible, 0, "back compatible table level ingesting restriction", 0) \
-    M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "whether to enable replicas to create ingest node in zk", 0) \
-    M(Bool, allow_ingest_empty_partition, false, "allow empty partition replace target table", 0) \
-    M(Bool, enable_async_ingest, false, "allow ingest in aync mode", 0) \
+    M(Bool, enable_ingest_back_compatible, 0, "Back compatible table level ingesting restriction", 0) \
+    M(Bool, enable_replicas_create_ingest_node_in_zk, 0, "Whether to enable replicas to create ingest node in zk", 0) \
+    M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
+    M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
     \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
