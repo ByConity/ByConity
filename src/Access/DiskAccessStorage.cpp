@@ -68,7 +68,7 @@ namespace
         {
             ParserCreateUserQuery create_user_p;
             ParserCreateRoleQuery create_role_p;
-            ParserCreateRowPolicyQuery create_policy_p;
+            ParserCreateRowPolicyQuery create_policy_p(DialectType::CLICKHOUSE);
             ParserCreateQuotaQuery create_quota_p;
             ParserCreateSettingsProfileQuery create_profile_p;
             ParserGrantQuery grant_p;

@@ -29,7 +29,7 @@ protected:
                 return true;
             }
         }
-        ParserLiteral p_literal;
+        ParserLiteral p_literal(DialectType::CLICKHOUSE);
         if (!p_literal.parse(pos, node, expected) || !node->as<ASTLiteral>())
             return false;
 
@@ -66,8 +66,8 @@ bool ParserDeclareTableOptions::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
 {
     return ParserDeclareOptions{
         {
-            OptionDescribe("AUTO_INCREMENT", "auto_increment", std::make_shared<ParserLiteral>()),
-            OptionDescribe("AVG_ROW_LENGTH", "avg_row_length", std::make_shared<ParserLiteral>()),
+            OptionDescribe("AUTO_INCREMENT", "auto_increment", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
+            OptionDescribe("AVG_ROW_LENGTH", "avg_row_length", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
             OptionDescribe("CHARSET", "character_set", std::make_shared<ParserCharsetOrCollateName>()),
             OptionDescribe("DEFAULT CHARSET", "character_set", std::make_shared<ParserCharsetOrCollateName>()),
             OptionDescribe("CHARACTER SET", "character_set", std::make_shared<ParserCharsetOrCollateName>()),
@@ -84,17 +84,17 @@ bool ParserDeclareTableOptions::parseImpl(IParser::Pos & pos, ASTPtr & node, Exp
             OptionDescribe("ENCRYPTION", "encryption", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("ENGINE", "engine", std::make_shared<ParserIdentifier>()),
             OptionDescribe("INSERT_METHOD", "insert_method", std::make_shared<ParserIdentifier>()),
-            OptionDescribe("KEY_BLOCK_SIZE", "key_block_size", std::make_shared<ParserLiteral>()),
-            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>()),
-            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>()),
+            OptionDescribe("KEY_BLOCK_SIZE", "key_block_size", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
+            OptionDescribe("MAX_ROWS", "max_rows", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
+            OptionDescribe("MIN_ROWS", "min_rows", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
             OptionDescribe("PACK_KEYS", "pack_keys", std::make_shared<ParserBoolOption<true>>()),
             OptionDescribe("PASSWORD", "password", std::make_shared<ParserStringLiteral>()),
             OptionDescribe("ROW_FORMAT", "row_format", std::make_shared<ParserIdentifier>()),
             OptionDescribe("STATS_AUTO_RECALC", "stats_auto_recalc", std::make_shared<ParserBoolOption<true>>()),
             OptionDescribe("STATS_PERSISTENT", "stats_persistent", std::make_shared<ParserBoolOption<true>>()),
-            OptionDescribe("STATS_SAMPLE_PAGES", "stats_sample_pages", std::make_shared<ParserLiteral>()),
+            OptionDescribe("STATS_SAMPLE_PAGES", "stats_sample_pages", std::make_shared<ParserLiteral>(DialectType::CLICKHOUSE)),
             OptionDescribe("TABLESPACE", "tablespace", std::make_shared<ParserTablespaceName>()),
-            OptionDescribe("UNION", "union", std::make_shared<ParserExpression>()),
+            OptionDescribe("UNION", "union", std::make_shared<ParserExpression>(DialectType::CLICKHOUSE)),
         }
     }.parse(pos, node, expected);
 }

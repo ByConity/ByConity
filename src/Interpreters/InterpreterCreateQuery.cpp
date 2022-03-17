@@ -312,7 +312,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns)
     return columns_list;
 }
 
-ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns)
+ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, enum DialectType dialect_type)
 {
     std::shared_ptr<ASTExpressionList> columns_list = std::static_pointer_cast<ASTExpressionList>(formatColumns(columns));
 
@@ -333,7 +333,7 @@ ASTPtr InterpreterCreateQuery::formatColumns(const NamesAndTypesList & columns, 
         const auto & alias = alias_column.expression;
         const char * alias_pos = alias.data();
         const char * alias_end = alias_pos + alias.size();
-        ParserExpression expression_parser;
+        ParserExpression expression_parser(dialect_type);
         column_declaration->default_expression = parseQuery(expression_parser, alias_pos, alias_end, "expression", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
         columns_list->children.emplace_back(column_declaration);

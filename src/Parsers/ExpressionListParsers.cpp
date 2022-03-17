@@ -484,7 +484,7 @@ bool ParserLambdaExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 
 bool ParserTableFunctionExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    if (ParserTableFunctionView().parse(pos, node, expected))
+    if (ParserTableFunctionView(dt).parse(pos, node, expected))
         return true;
     return elem_parser.parse(pos, node, expected);
 }
@@ -561,11 +561,11 @@ bool ParserUnaryExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (pos->type == TokenType::Minus)
     {
         Pos begin = pos;
-        if (ParserCastOperator().parse(pos, node, expected))
+        if (ParserCastOperator(dt).parse(pos, node, expected))
             return true;
 
         pos = begin;
-        if (ParserLiteral().parse(pos, node, expected))
+        if (ParserLiteral(dt).parse(pos, node, expected))
             return true;
 
         pos = begin;
@@ -578,8 +578,8 @@ bool ParserMapElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & 
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
-        std::make_unique<ParserCastExpression>(),
-        std::make_unique<ParserExpression>()
+        std::make_unique<ParserCastExpression>(dt),
+        std::make_unique<ParserExpression>(dt)
        }.parse(pos, node, expected);
 }
 
@@ -609,8 +609,8 @@ bool ParserArrayElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
         // std::make_unique<ParserCastExpression>(),
-        std::make_unique<ParserMapElementExpression>(),
-        std::make_unique<ParserExpressionWithOptionalAlias>(false)
+        std::make_unique<ParserMapElementExpression>(dt),
+        std::make_unique<ParserExpressionWithOptionalAlias>(false, dt)
     }.parse(pos, node, expected);
 }
 
@@ -619,16 +619,16 @@ bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
-        std::make_unique<ParserArrayElementExpression>(),
+        std::make_unique<ParserArrayElementExpression>(dt),
         std::make_unique<ParserUnsignedInteger>()
     }.parse(pos, node, expected);
 }
 
 
-ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, bool is_table_function)
-    : impl(std::make_unique<ParserWithOptionalAlias>(
-        is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>()) : ParserPtr(std::make_unique<ParserExpression>()),
-        allow_alias_without_as_keyword))
+ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, enum DialectType t, bool is_table_function)
+    : IParserDialectBase(t), impl(std::make_unique<ParserWithOptionalAlias>(
+        is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt)),
+        allow_alias_without_as_keyword, dt))
 {
 }
 
@@ -636,7 +636,7 @@ ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_
 bool ParserExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserList(
-        std::make_unique<ParserExpressionWithOptionalAlias>(allow_alias_without_as_keyword, is_table_function),
+        std::make_unique<ParserExpressionWithOptionalAlias>(allow_alias_without_as_keyword, dt, is_table_function),
         std::make_unique<ParserToken>(TokenType::Comma))
         .parse(pos, node, expected);
 }
@@ -650,14 +650,14 @@ bool ParserNotEmptyExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected 
 
 bool ParserOrderByExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserOrderByElement>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserOrderByElement>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
 
 bool ParserTTLExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserTTLElement>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserTTLElement>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
@@ -762,7 +762,7 @@ bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expe
 }
 
 bool ParserIntervalOperatorExpression::parseArgumentAndIntervalKind(
-    Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected)
+    Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, enum DialectType t)
 {
     auto begin = pos;
     auto init_expected = expected;
@@ -779,7 +779,7 @@ bool ParserIntervalOperatorExpression::parseArgumentAndIntervalKind(
             Pos token_pos(tokens, 0);
             Expected token_expected;
 
-            if (!ParserNumber{}.parse(token_pos, expr, token_expected))
+            if (!ParserNumber{t}.parse(token_pos, expr, token_expected))
                 return false;
             else
             {
@@ -797,7 +797,7 @@ bool ParserIntervalOperatorExpression::parseArgumentAndIntervalKind(
         }
     }
     // case: INTERVAL expr HOUR
-    if (!ParserExpressionWithOptionalAlias(false).parse(pos, expr, expected))
+    if (!ParserExpressionWithOptionalAlias(false, t).parse(pos, expr, expected))
         return false;
     return parseIntervalKind(pos, expected, interval_kind);
 }
@@ -812,7 +812,7 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
 
     ASTPtr expr;
     IntervalKind interval_kind;
-    if (!parseArgumentAndIntervalKind(pos, expr, interval_kind, expected))
+    if (!parseArgumentAndIntervalKind(pos, expr, interval_kind, expected, dt))
     {
         pos = begin;
         return next_parser.parse(pos, node, expected);
@@ -838,8 +838,8 @@ bool ParserIntervalOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expec
 bool ParserKeyValuePair::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier id_parser;
-    ParserLiteral literal_parser;
-    ParserFunction func_parser;
+    ParserLiteral literal_parser(dt);
+    ParserFunction func_parser(dt);
 
     ASTPtr identifier;
     ASTPtr value;
@@ -850,7 +850,7 @@ bool ParserKeyValuePair::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     /// If it's neither literal, nor identifier, nor function, than it's possible list of pairs
     if (!func_parser.parse(pos, value, expected) && !literal_parser.parse(pos, value, expected) && !id_parser.parse(pos, value, expected))
     {
-        ParserKeyValuePairsList kv_pairs_list;
+        ParserKeyValuePairsList kv_pairs_list(dt);
         ParserToken open(TokenType::OpeningRoundBracket);
         ParserToken close(TokenType::ClosingRoundBracket);
 
@@ -875,7 +875,7 @@ bool ParserKeyValuePair::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
 bool ParserKeyValuePairsList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserList parser(std::make_unique<ParserKeyValuePair>(), std::make_unique<ParserNothing>(), true, 0);
+    ParserList parser(std::make_unique<ParserKeyValuePair>(dt), std::make_unique<ParserNothing>(), true, 0);
     return parser.parse(pos, node, expected);
 }
 

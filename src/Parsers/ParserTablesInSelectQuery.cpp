@@ -21,9 +21,9 @@ bool ParserTableExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 {
     auto res = std::make_shared<ASTTableExpression>();
 
-    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(), true).parse(pos, res->subquery, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(true, true), true).parse(pos, res->table_function, expected)
-        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true)
+    if (!ParserWithOptionalAlias(std::make_unique<ParserSubquery>(dt), true, dt).parse(pos, res->subquery, expected)
+        && !ParserWithOptionalAlias(std::make_unique<ParserFunction>(dt, true, true), true, dt).parse(pos, res->table_function, expected)
+        && !ParserWithOptionalAlias(std::make_unique<ParserCompoundIdentifier>(true, true), true, dt)
                 .parse(pos, res->database_and_table_name, expected))
         return false;
 
@@ -95,7 +95,7 @@ bool ParserArrayJoin::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (!has_array_join)
         return false;
 
-    if (!ParserExpressionList(false).parse(pos, res->expression_list, expected))
+    if (!ParserExpressionList(false, dt).parse(pos, res->expression_list, expected))
         return false;
 
     if (res->expression_list)
@@ -126,10 +126,10 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
 
     if (is_first)
     {
-        if (!ParserTableExpression().parse(pos, res->table_expression, expected))
+        if (!ParserTableExpression(dt).parse(pos, res->table_expression, expected))
             return false;
     }
-    else if (ParserArrayJoin().parse(pos, res->array_join, expected))
+    else if (ParserArrayJoin(dt).parse(pos, res->array_join, expected))
     {
     }
     else
@@ -200,7 +200,7 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
                 return false;
         }
 
-        if (!ParserTableExpression().parse(pos, res->table_expression, expected))
+        if (!ParserTableExpression(dt).parse(pos, res->table_expression, expected))
             return false;
 
         if (table_join->kind != ASTTableJoin::Kind::Comma
@@ -213,7 +213,7 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
                 if (in_parens)
                     ++pos;
 
-                if (!ParserExpressionList(false).parse(pos, table_join->using_expression_list, expected))
+                if (!ParserExpressionList(false,dt).parse(pos, table_join->using_expression_list, expected))
                     return false;
 
                 if (in_parens)
@@ -226,7 +226,7 @@ bool ParserTablesInSelectQueryElement::parseImpl(Pos & pos, ASTPtr & node, Expec
             else if (ParserKeyword("ON").ignore(pos, expected))
             {
                 /// OR is operator with lowest priority, so start parsing from it.
-                if (!ParserLogicalOrExpression().parse(pos, table_join->on_expression, expected))
+                if (!ParserLogicalOrExpression(dt).parse(pos, table_join->on_expression, expected))
                     return false;
             }
             else
@@ -261,12 +261,12 @@ bool ParserTablesInSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     ASTPtr child;
 
-    if (ParserTablesInSelectQueryElement(true).parse(pos, child, expected))
+    if (ParserTablesInSelectQueryElement(true, dt).parse(pos, child, expected))
         res->children.emplace_back(child);
     else
         return false;
 
-    while (ParserTablesInSelectQueryElement(false).parse(pos, child, expected))
+    while (ParserTablesInSelectQueryElement(false, dt).parse(pos, child, expected))
         res->children.emplace_back(child);
 
     node = res;

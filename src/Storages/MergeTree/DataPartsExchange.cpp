@@ -329,7 +329,7 @@ void Service::processQueryPartList(const HTMLForm & params, [[maybe_unused]]Read
 
     if (String filter = params.get("filter"); !filter.empty())
     {
-        ParserExpression p_expr;
+        ParserExpression p_expr(DialectType::CLICKHOUSE);
         auto predicate = parseQuery(p_expr, filter, 0, 0);
         if (!predicate)
             throw Exception("Failed to parse filter of fetch list, may be a logic error: " + filter, ErrorCodes::SYNTAX_ERROR);

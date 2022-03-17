@@ -7,11 +7,13 @@ namespace DB
 
 /// Parse either a partition value as a (possibly compound) literal or a partition ID.
 /// Produce ASTPartition.
-class ParserPartition : public IParserBase
+class ParserPartition : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "partition"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

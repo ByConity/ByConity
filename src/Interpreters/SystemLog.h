@@ -82,7 +82,7 @@ class ISystemLog
 {
 public:
     virtual String getName() = 0;
-    virtual ASTPtr getCreateTableQuery() = 0;
+    virtual ASTPtr getCreateTableQuery(enum DialectType dt) = 0;
     //// force -- force table creation (used for SYSTEM FLUSH LOGS)
     virtual void flush(bool force = false) = 0;
     virtual void prepareTable() = 0;
@@ -168,7 +168,7 @@ public:
         return LogElement::name();
     }
 
-    ASTPtr getCreateTableQuery() override;
+    ASTPtr getCreateTableQuery(enum DialectType dt) override;
 
 protected:
     Poco::Logger * log;
@@ -520,7 +520,9 @@ void SystemLog<LogElement>::prepareTable()
 
         auto ordinary_columns = LogElement::getNamesAndTypes();
         auto alias_columns = LogElement::getNamesAndAliases();
-        auto current_query = InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns);
+        auto query_context = Context::createCopy(context);
+        auto current_query = InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns,
+                                                                   query_context->getSettingsRef().dialect_type);
 
         if (old_query->getTreeHash() != current_query->getTreeHash())
         {
@@ -552,7 +554,6 @@ void SystemLog<LogElement>::prepareTable()
                 description,
                 backQuoteIfNeed(to.table));
 
-            auto query_context = Context::createCopy(context);
             query_context->makeQueryContext();
             InterpreterRenameQuery(rename, query_context).execute();
 
@@ -567,11 +568,9 @@ void SystemLog<LogElement>::prepareTable()
     {
         /// Create the table.
         LOG_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
-
-        auto create = getCreateTableQuery();
-
-
         auto query_context = Context::createCopy(context);
+        auto create = getCreateTableQuery(query_context->getSettingsRef().dialect_type);
+
         query_context->makeQueryContext();
 
         InterpreterCreateQuery interpreter(create, query_context);
@@ -586,7 +585,7 @@ void SystemLog<LogElement>::prepareTable()
 
 
 template <typename LogElement>
-ASTPtr SystemLog<LogElement>::getCreateTableQuery()
+ASTPtr SystemLog<LogElement>::getCreateTableQuery(enum DialectType dt)
 {
     auto create = std::make_shared<ASTCreateQuery>();
 
@@ -596,10 +595,10 @@ ASTPtr SystemLog<LogElement>::getCreateTableQuery()
     auto ordinary_columns = LogElement::getNamesAndTypes();
     auto alias_columns = LogElement::getNamesAndAliases();
     auto new_columns_list = std::make_shared<ASTColumns>();
-    new_columns_list->set(new_columns_list->columns, InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns));
+    new_columns_list->set(new_columns_list->columns, InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns, dt));
     create->set(create->columns_list, new_columns_list);
 
-    ParserStorage storage_parser;
+    ParserStorage storage_parser(dt);
     ASTPtr storage_ast = parseQuery(
         storage_parser, storage_def.data(), storage_def.data() + storage_def.size(),
         "Storage to create table for " + LogElement::name(), 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);

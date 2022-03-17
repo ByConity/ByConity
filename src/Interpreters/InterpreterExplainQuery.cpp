@@ -579,7 +579,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
-            ParserQuery parser(end);
+            ParserQuery parser(end, getContext()->getSettingsRef().dialect_type);
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
@@ -630,7 +630,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
-            ParserQuery parser(end);
+            ParserQuery parser(end, getContext()->getSettingsRef().dialect_type);
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());

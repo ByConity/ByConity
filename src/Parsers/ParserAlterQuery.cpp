@@ -113,23 +113,23 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserCompoundIdentifier parser_name;
     ParserStringLiteral parser_string_literal;
     ParserIdentifier parser_remove_property;
-    ParserCompoundColumnDeclaration parser_col_decl;
-    ParserIndexDeclaration parser_idx_decl;
-    ParserConstraintDeclaration parser_constraint_decl;
-    ParserProjectionDeclaration parser_projection_decl;
-    ParserCompoundColumnDeclaration parser_modify_col_decl(false, false, true);
-    ParserPartition parser_partition;
-    ParserExpression parser_exp_elem;
+    ParserCompoundColumnDeclaration parser_col_decl(dt);
+    ParserIndexDeclaration parser_idx_decl(dt);
+    ParserConstraintDeclaration parser_constraint_decl(dt);
+    ParserProjectionDeclaration parser_projection_decl(dt);
+    ParserCompoundColumnDeclaration parser_modify_col_decl(dt, false, false, true);
+    ParserPartition parser_partition(dt);
+    ParserExpression parser_exp_elem(dt);
     ParserList parser_assignment_list(
-        std::make_unique<ParserAssignment>(), std::make_unique<ParserToken>(TokenType::Comma),
+        std::make_unique<ParserAssignment>(dt), std::make_unique<ParserToken>(TokenType::Comma),
         /* allow_empty = */ false);
     ParserSetQuery parser_settings(true);
     ParserList parser_reset_setting(
         std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma),
         /* allow_empty = */ false);
-    ParserNameList values_p;
-    ParserSelectWithUnionQuery select_p;
-    ParserTTLExpressionList parser_ttl_list;
+    ParserNameList values_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
+    ParserTTLExpressionList parser_ttl_list(dt);
     ParserList parser_map_key_list(std::make_unique<ParserStringLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
 
     // Optional CASCADING keyword for drop/detach partition
@@ -734,7 +734,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (!s_in_partition.checkWithoutMoving(pos, expected)
                 && !s_where.checkWithoutMoving(pos, expected))
             {
-                ParserList parser_column_list(std::make_unique<ParserTupleElementExpression>(), std::make_unique<ParserToken>(TokenType::Comma));
+                ParserList parser_column_list(std::make_unique<ParserTupleElementExpression>(DialectType::CLICKHOUSE), std::make_unique<ParserToken>(TokenType::Comma));
                 if (!parser_column_list.parse(pos, command->columns, expected))
                     return false;
             }
@@ -872,7 +872,7 @@ bool ParserAlterCommandList::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     node = command_list;
 
     ParserToken s_comma(TokenType::Comma);
-    ParserAlterCommand p_command(is_live_view);
+    ParserAlterCommand p_command(dt, is_live_view);
 
     do
     {
@@ -920,7 +920,7 @@ bool ParserAlterQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     }
     query->cluster = cluster_str;
 
-    ParserAlterCommandList p_command_list(is_live_view);
+    ParserAlterCommandList p_command_list(dt, is_live_view);
     ASTPtr command_list;
     if (!p_command_list.parse(pos, command_list, expected))
         return false;

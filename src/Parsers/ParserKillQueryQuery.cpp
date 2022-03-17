@@ -22,7 +22,7 @@ bool ParserKillQueryQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expect
     ParserKeyword p_sync{"SYNC"};
     ParserKeyword p_async{"ASYNC"};
     ParserKeyword p_where{"WHERE"};
-    ParserExpression p_where_expression;
+    ParserExpression p_where_expression(dt);
 
     if (!p_kill.ignore(pos, expected))
         return false;

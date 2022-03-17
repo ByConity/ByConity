@@ -26,7 +26,7 @@ namespace ErrorCodes
 
 bool ParserExternalDDLQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserFunction p_function;
+    ParserFunction p_function(dt);
     ParserKeyword s_external("EXTERNAL DDL FROM");
 
     ASTPtr from;

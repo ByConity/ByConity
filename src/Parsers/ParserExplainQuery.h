@@ -6,7 +6,7 @@ namespace DB
 {
 
 
-class ParserExplainQuery : public IParserBase
+class ParserExplainQuery : public IParserDialectBase
 {
 protected:
     const char * end;
@@ -14,7 +14,7 @@ protected:
     const char * getName() const override { return "EXPLAIN"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
-    ParserExplainQuery(const char* end_) : end(end_) {}
+    ParserExplainQuery(const char* end_, enum DialectType t) : IParserDialectBase(t), end(end_) {}
 };
 
 }

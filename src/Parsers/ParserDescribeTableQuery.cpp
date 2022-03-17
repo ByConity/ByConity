@@ -30,7 +30,7 @@ bool ParserDescribeTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
     s_table.ignore(pos, expected);
 
     ASTPtr table_expression;
-    if (!ParserTableExpression().parse(pos, table_expression, expected))
+    if (!ParserTableExpression(dt).parse(pos, table_expression, expected))
         return false;
 
     query->table_expression = table_expression;

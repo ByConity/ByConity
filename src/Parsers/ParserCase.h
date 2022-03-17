@@ -11,11 +11,13 @@ namespace DB
   * 2. CASE WHEN cond1 THEN res1 [WHEN ...] ELSE resN END
   * NOTE Until we get full support for NULL values in ClickHouse, ELSE sections are mandatory.
   */
-class ParserCase final : public IParserBase
+class ParserCase final : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "case"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

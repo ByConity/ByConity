@@ -508,6 +508,7 @@ class IColumn;
     M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
     M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
+    M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
     \

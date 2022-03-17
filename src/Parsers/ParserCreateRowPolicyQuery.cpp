@@ -55,7 +55,7 @@ namespace
         });
     }
 
-    bool parseConditionalExpression(IParserBase::Pos & pos, Expected & expected, ASTPtr & expr)
+    bool parseConditionalExpression(IParserBase::Pos & pos, Expected & expected, ASTPtr & expr, enum DialectType dt)
     {
         return IParserBase::wrapParseImpl(pos, [&]
         {
@@ -65,7 +65,7 @@ namespace
                 return true;
             }
 
-            ParserExpression parser;
+            ParserExpression parser(dt);
             ASTPtr x;
             if (!parser.parse(pos, x, expected))
                 return false;
@@ -121,7 +121,7 @@ namespace
 
 
     bool
-    parseForClauses(IParserBase::Pos & pos, Expected & expected, bool alter, std::vector<std::pair<ConditionType, ASTPtr>> & conditions)
+    parseForClauses(IParserBase::Pos & pos, Expected & expected, bool alter, std::vector<std::pair<ConditionType, ASTPtr>> & conditions, enum DialectType dt)
     {
         std::vector<std::pair<ConditionType, ASTPtr>> res_conditions;
 
@@ -141,12 +141,12 @@ namespace
             std::optional<ASTPtr> check;
             if (ParserKeyword{"USING"}.ignore(pos, expected))
             {
-                if (!parseConditionalExpression(pos, expected, filter.emplace()))
+                if (!parseConditionalExpression(pos, expected, filter.emplace(), dt))
                     return false;
             }
             if (ParserKeyword{"WITH CHECK"}.ignore(pos, expected))
             {
-                if (!parseConditionalExpression(pos, expected, check.emplace()))
+                if (!parseConditionalExpression(pos, expected, check.emplace(), dt))
                     return false;
             }
 
@@ -267,7 +267,7 @@ bool ParserCreateRowPolicyQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
         }
 
         std::vector<std::pair<ConditionType, ASTPtr>> new_conditions;
-        if (parseForClauses(pos, expected, alter, new_conditions))
+        if (parseForClauses(pos, expected, alter, new_conditions, dt))
         {
             boost::range::push_back(conditions, std::move(new_conditions));
             continue;

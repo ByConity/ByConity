@@ -59,11 +59,11 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_first("FIRST");
     ParserKeyword s_next("NEXT");
 
-    ParserNotEmptyExpressionList exp_list(false);
-    ParserNotEmptyExpressionList exp_list_for_with_clause(false);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true);    /// Allows aliases without AS keyword.
-    ParserExpressionWithOptionalAlias exp_elem(false);
-    ParserOrderByExpressionList order_list;
+    ParserNotEmptyExpressionList exp_list(false, dt);
+    ParserNotEmptyExpressionList exp_list_for_with_clause(false, dt);
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt);    /// Allows aliases without AS keyword.
+    ParserExpressionWithOptionalAlias exp_elem(false, dt);
+    ParserOrderByExpressionList order_list(dt);
 
     ParserToken open_bracket(TokenType::OpeningRoundBracket);
     ParserToken close_bracket(TokenType::ClosingRoundBracket);
@@ -90,7 +90,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     {
         if (s_with.ignore(pos, expected))
         {
-            if (!ParserList(std::make_unique<ParserWithElement>(), std::make_unique<ParserToken>(TokenType::Comma))
+            if (!ParserList(std::make_unique<ParserWithElement>(dt), std::make_unique<ParserToken>(TokenType::Comma))
                      .parse(pos, with_expression_list, expected))
                 return false;
             if (with_expression_list->children.empty())
@@ -132,7 +132,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
         if (s_top.ignore(pos, expected))
         {
-            ParserNumber num;
+            ParserNumber num(dt);
 
             if (open_bracket.ignore(pos, expected))
             {
@@ -158,7 +158,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// FROM database.table or FROM table or FROM (subquery) or FROM tableFunction(...)
     if (s_from.ignore(pos, expected))
     {
-        if (!ParserTablesInSelectQuery().parse(pos, tables, expected))
+        if (!ParserTablesInSelectQuery(dt).parse(pos, tables, expected))
             return false;
     }
 
@@ -226,7 +226,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// WINDOW clause
     if (s_window.ignore(pos, expected))
     {
-        ParserWindowList window_list_parser;
+        ParserWindowList window_list_parser(dt);
         if (!window_list_parser.parse(pos, window_list, expected))
         {
             return false;

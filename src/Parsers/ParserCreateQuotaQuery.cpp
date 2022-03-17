@@ -116,7 +116,7 @@ namespace
     bool parseMaxAmount(IParserBase::Pos & pos, Expected & expected, ResourceType resource_type, ResourceAmount & max)
     {
         ASTPtr ast;
-        if (!ParserNumber{}.parse(pos, ast, expected))
+        if (!ParserNumber{DialectType::CLICKHOUSE}.parse(pos, ast, expected))
             return false;
 
         const Field & max_field = ast->as<ASTLiteral &>().value;
@@ -183,7 +183,7 @@ namespace
             ParserKeyword{"INTERVAL"}.ignore(pos, expected);
 
             ASTPtr num_intervals_ast;
-            if (!ParserNumber{}.parse(pos, num_intervals_ast, expected))
+            if (!ParserNumber{DialectType::CLICKHOUSE}.parse(pos, num_intervals_ast, expected))
                 return false;
 
             double num_intervals = applyVisitor(FieldVisitorConvertToNumber<double>(), num_intervals_ast->as<ASTLiteral &>().value);

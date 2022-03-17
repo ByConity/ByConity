@@ -35,7 +35,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_limit("LIMIT");
     ParserStringLiteral like_p;
     ParserIdentifier name_p;
-    ParserExpressionWithOptionalAlias exp_elem(false);
+    ParserExpressionWithOptionalAlias exp_elem(false, dt);
 
     ASTPtr like;
     ASTPtr database;

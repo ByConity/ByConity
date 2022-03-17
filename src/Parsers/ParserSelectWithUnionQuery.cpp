@@ -13,10 +13,11 @@ bool ParserSelectWithUnionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     ASTPtr list_node;
 
     ParserUnionList parser(
-        std::make_unique<ParserUnionQueryElement>(),
+        std::make_unique<ParserUnionQueryElement>(dt),
         std::make_unique<ParserKeyword>("UNION"),
         std::make_unique<ParserKeyword>("ALL"),
-        std::make_unique<ParserKeyword>("DISTINCT"));
+        std::make_unique<ParserKeyword>("DISTINCT"),
+        dt);
 
     if (!parser.parse(pos, list_node, expected))
         return false;
@@ -37,7 +38,7 @@ bool ParserSelectWithUnionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
     }
 
     ASTPtr tealimit;
-    ParserTEALimitClause teaLimitParser;
+    ParserTEALimitClause teaLimitParser(dt);
     teaLimitParser.parse(pos, tealimit, expected);
 
     auto select_with_union_query = std::make_shared<ASTSelectWithUnionQuery>();

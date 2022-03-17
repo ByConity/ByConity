@@ -31,26 +31,26 @@ namespace DB
 
 bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserShowTablesQuery show_tables_p;
-    ParserSelectWithUnionQuery select_p;
+    ParserShowTablesQuery show_tables_p(dt);
+    ParserSelectWithUnionQuery select_p(dt);
     ParserTablePropertiesQuery table_p;
-    ParserDescribeTableQuery describe_table_p;
+    ParserDescribeTableQuery describe_table_p(dt);
     ParserShowProcesslistQuery show_processlist_p;
-    ParserCreateQuery create_p;
-    ParserAlterQuery alter_p;
+    ParserCreateQuery create_p(dt);
+    ParserAlterQuery alter_p(dt);
     ParserRenameQuery rename_p;
     ParserDropQuery drop_p;
-    ParserCheckQuery check_p;
-    ParserOptimizeQuery optimize_p;
-    ParserKillQueryQuery kill_query_p;
+    ParserCheckQuery check_p(dt);
+    ParserOptimizeQuery optimize_p(dt);
+    ParserKillQueryQuery kill_query_p(dt);
     ParserWatchQuery watch_p;
     ParserShowAccessQuery show_access_p;
     ParserShowAccessEntitiesQuery show_access_entities_p;
     ParserShowCreateAccessEntityQuery show_create_access_entity_p;
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
-    ParserExplainQuery explain_p(end);
-    ParserRefreshQuery refresh_p;
+    ParserExplainQuery explain_p(end, dt);
+    ParserRefreshQuery refresh_p(dt);
 
     ASTPtr query;
 

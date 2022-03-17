@@ -11,11 +11,13 @@ namespace DB
   * or
   * SHOW DATABASES.
   */
-class ParserShowTablesQuery : public IParserBase
+class ParserShowTablesQuery : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "SHOW [TEMPORARY] TABLES|DATABASES|CLUSTERS|CLUSTER 'name' [[NOT] [I]LIKE 'str'] [LIMIT expr]"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }

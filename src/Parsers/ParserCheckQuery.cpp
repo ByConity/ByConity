@@ -16,7 +16,7 @@ bool ParserCheckQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserToken s_dot(TokenType::Dot);
 
     ParserIdentifier table_parser;
-    ParserPartition partition_parser;
+    ParserPartition partition_parser(dt);
 
     ASTPtr table;
     ASTPtr database;

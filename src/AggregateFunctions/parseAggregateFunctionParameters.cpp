@@ -4,6 +4,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/parseQuery.h>
 
+#include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
 
 
@@ -78,7 +79,7 @@ void getAggregateFunctionNameAndParametersArray(
         throw Exception(aggregate_function_name_with_params + " doesn't look like aggregate function name in " + error_context + ".",
             ErrorCodes::BAD_ARGUMENTS);
 
-    ParserExpressionList params_parser(false);
+    ParserExpressionList params_parser(false, context->getSettingsRef().dialect_type);
     ASTPtr args_ast = parseQuery(params_parser,
         parameters_str.data(), parameters_str.data() + parameters_str.size(),
         "parameters of aggregate function in " + error_context, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);

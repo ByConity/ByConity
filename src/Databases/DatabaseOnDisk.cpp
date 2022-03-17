@@ -521,7 +521,7 @@ ASTPtr DatabaseOnDisk::getCreateDatabaseQuery() const
         /// Handle databases (such as default) for which there are no database.sql files.
         /// If database.sql doesn't exist, then engine is Ordinary
         String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " ENGINE = Ordinary";
-        ParserCreateQuery parser;
+        ParserCreateQuery parser(settings.dialect_type);
         ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     }
 
@@ -659,7 +659,7 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
     }
 
     auto settings = local_context->getSettingsRef();
-    ParserCreateQuery parser;
+    ParserCreateQuery parser(settings.dialect_type);
     const char * pos = query.data();
     std::string error_message;
     auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message, /* hilite = */ false,
