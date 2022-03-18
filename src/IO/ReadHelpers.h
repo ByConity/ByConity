@@ -38,7 +38,8 @@
 
 /// 1 GiB
 #define DEFAULT_MAX_STRING_SIZE (1ULL << 30)
-
+// SQL standard for Timezone offset is of the format [+/-]hh:mm
+#define TIME_ZONE_STRING_INPUT_SIZE 6
 
 namespace DB
 {
@@ -738,6 +739,42 @@ inline T parseFromString(const std::string_view & str)
     return parse<T>(str.data(), str.size());
 }
 
+static inline bool hasTzSign(const char *c)
+{
+    return *c == '+' || *c  == '-';
+}
+
+inline bool parseTimezoneOffset(Int32 &t, ReadBuffer & buf, UInt8 i = 0) {
+    const char * s = buf.position() + i;
+    if (buf.buffer().end() < s + TIME_ZONE_STRING_INPUT_SIZE) {
+        return false;
+    }
+    if (!hasTzSign(s) || s[3] != ':') {
+        return false;
+    }
+
+    bool is_negative = s[0] == '+';
+
+    UInt8 hour = (s[1] - '0') * 10 + (s[2] - '0');
+    UInt8 minute = (s[4] - '0') * 10 + (s[5] - '0');
+    if (unlikely(hour < 0 || hour > 14 || minute < 0 || minute > 60)) {
+        return false;
+    }
+    t = hour * 3600 + minute * 60;
+    if (is_negative) t= -t;
+    return true;
+}
+
+inline bool ignoreTimezoneOffset(ReadBuffer & buf) {
+    if (!buf.eof() && hasTzSign(buf.position())) {
+        Int32 t;
+        if (!parseTimezoneOffset(t, buf)) {
+            return false;
+        }
+        buf.position() += TIME_ZONE_STRING_INPUT_SIZE;
+    }
+    return true;
+}
 
 template <typename ReturnType = void>
 ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut);
@@ -746,7 +783,7 @@ ReturnType readDateTimeTextFallback(time_t & datetime, ReadBuffer & buf, const D
   * As an exception, also supported parsing of unix timestamp in form of decimal number.
   */
 template <typename ReturnType = void>
-inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
+inline ReturnType readDateTimeTzTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     /// Optimistic path, when whole value is in buffer.
     const char * s = buf.position();
@@ -754,6 +791,7 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
     /// YYYY-MM-DD hh:mm:ss
     static constexpr auto DateTimeStringInputSize = 19;
     bool optimistic_path_for_date_time_input = s + DateTimeStringInputSize <= buf.buffer().end();
+    static constexpr bool throw_exception = std::is_same_v<ReturnType, void>;
 
     if (optimistic_path_for_date_time_input)
     {
@@ -766,13 +804,29 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
             UInt8 hour = (s[11] - '0') * 10 + (s[12] - '0');
             UInt8 minute = (s[14] - '0') * 10 + (s[15] - '0');
             UInt8 second = (s[17] - '0') * 10 + (s[18] - '0');
-
-            if (unlikely(year == 0))
-                datetime = 0;
-            else
-                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
-
             buf.position() += DateTimeStringInputSize;
+            if (unlikely(year == 0)) {
+                datetime = 0;
+                return ReturnType(true);
+            }
+            s = buf.position();
+            if (s < buf.buffer().end() && *s == '.') {
+                while(++s < buf.buffer().end() && isNumericASCII(*s));
+            }
+            if (s < buf.buffer().end() && hasTzSign(s)) {
+                Int32 timezone_offset;
+                if (!parseTimezoneOffset(timezone_offset, buf, s - buf.position())) {
+                    if constexpr (throw_exception) {
+                        throw Exception("Cannot parse datetime: timezone offset value",
+                            ErrorCodes::CANNOT_PARSE_DATETIME);
+                    }
+                    return ReturnType(false);
+                }
+                const DateLUTImpl & utc_lut = DateLUT::instance("UTC");
+                datetime = utc_lut.makeDateTime(year, month, day, hour, minute, second) + timezone_offset;
+            } else {
+                datetime = date_lut.makeDateTime(year, month, day, hour, minute, second);
+            }
             return ReturnType(true);
         }
         else
@@ -783,11 +837,37 @@ inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, cons
         return readDateTimeTextFallback<ReturnType>(datetime, buf, date_lut);
 }
 
+/** In YYYY-MM-DD hh:mm:ss or YYYY-MM-DD format, according to specified time zone.
+  * As an exception, also supported parsing of unix timestamp in form of decimal number.
+  * For row level timezone, we only support YYYY-MM-DD hh:mm:ss(+/-)hh:mm format
+  * if it has been parsed by path other than the above format and has timezone offset (+/-)hh:mm,
+  * it may have incorect result.
+  */
+
+template <typename ReturnType = void>
+inline ReturnType readDateTimeTextImpl(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & date_lut)
+{
+    if constexpr (std::is_same_v<ReturnType, void>)
+        readDateTimeTzTextImpl<void>(datetime, buf, date_lut);
+    else if (!readDateTimeTzTextImpl<bool>(datetime, buf, date_lut))
+        return false;
+
+    if (!ignoreTimezoneOffset(buf)) {
+        return ReturnType(false);
+    }
+
+    return ReturnType(true);
+}
+
+/** For row level timezone, we only support YYYY-MM-DD hh:mm:ss[.mmmmmmmm](+/-)hh:mm format
+  * if it has been parsed by path other than the above format and has timezone offset (+/-)hh:mm,
+  * it may have incorect result.
+  */
 template <typename ReturnType>
 inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut)
 {
     time_t whole;
-    if (!readDateTimeTextImpl<bool>(whole, buf, date_lut))
+    if (!readDateTimeTzTextImpl<bool>(whole, buf, date_lut))
     {
         return ReturnType(false);
     }
@@ -830,6 +910,11 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
             components.fractional += components.whole % 10;
             components.whole /= 10;
         }
+    }
+
+    // If it has been parsed by any other path, it will have incorect result.
+    if (!ignoreTimezoneOffset(buf)) {
+        return ReturnType(false);
     }
 
     datetime64 = DecimalUtils::decimalFromComponents<DateTime64>(components, scale);
