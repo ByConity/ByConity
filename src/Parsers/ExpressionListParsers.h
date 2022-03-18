@@ -331,6 +331,7 @@ protected:
 
 private:
     static bool parseArgumentAndIntervalKind(Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, enum DialectType t);
+    static bool parseSQLStandardArgumentAndIntervalKind(Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected);
 public:
     using IParserDialectBase::IParserDialectBase;
 };
