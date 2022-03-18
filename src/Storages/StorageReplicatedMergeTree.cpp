@@ -7614,4 +7614,31 @@ bool StorageReplicatedMergeTree::createEmptyPartInsteadOfLost(zkutil::ZooKeeperP
     return true;
 }
 
+void StorageReplicatedMergeTree::attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr query_context)
+{
+    if (parts_with_disk.empty())
+        return;
+
+    assertNotReadonly();
+
+    LOG_DEBUG(log, "Attaching [] parts in path {}", parts_with_disk.size(), relative_path);
+
+    MutableDataPartsVector loaded_parts = tryLoadPartsInPathToAttach(parts_with_disk, relative_path);
+
+    /// TODO Allow to use quorum here.
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    ReplicatedMergeTreeBlockOutputStream output(*this, metadata_snapshot, 0, 0, 0, false, false, query_context,
+        /*is_attach*/true);
+
+    for (size_t i = 0; i < loaded_parts.size(); ++i)
+    {
+        const String old_name = loaded_parts[i]->name;
+
+        output.writeExistingPart(loaded_parts[i]);
+
+        LOG_DEBUG(log, "Attached part {} as {}", old_name, loaded_parts[i]->name);
+
+    }
+}
+
 }

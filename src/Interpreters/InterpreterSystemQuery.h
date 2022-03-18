@@ -63,6 +63,9 @@ private:
     void startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type);
 
     void extendQueryLogElemImpl(QueryLogElement &, const ASTPtr &, ContextPtr) const override;
+
+    /// fetch part from remote storage and attach to target table.
+    void fetchParts(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context);
 };
 
 

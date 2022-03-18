@@ -120,6 +120,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP CONSUME";
         case Type::RESTART_CONSUME:
             return "RESTART CONSUME";
+        case Type::FETCH_PARTS:
+            return "FETCH PARTS INTO";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -244,6 +246,12 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         print_database_table();
         settings.ostr << " ";
         values_changes->formatImpl(settings, state, frame);
+    }
+    else if (type == Type::FETCH_PARTS)
+    {
+        print_database_table();
+        settings.ostr << " ";
+        target_path->formatImpl(settings, state, frame);
     }
 }
 

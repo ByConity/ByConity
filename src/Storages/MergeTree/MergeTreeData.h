@@ -64,6 +64,7 @@ class IBitEngineDictionaryManager;
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 /// State of HaUniqueMergeTree table, valid state transfer includes
@@ -600,6 +601,15 @@ public:
 
     MutableDataPartsVector tryLoadPartsToAttach(const ASTPtr & partition, bool attach_part,
             ContextPtr context, PartsTemporaryRename & renamed_parts);
+
+    using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
+
+    MutableDataPartsVector tryLoadPartsInPathToAttach(const PartNamesWithDisks & parts_with_disk, const String & relative_path);
+
+    virtual void attachPartsInDirectory(const PartNamesWithDisks & /*local_parts*/, const String & /*relative path*/, ContextPtr /*local_context*/)
+    {
+        throw Exception("Not implemented.", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /// Returns Committed parts
     DataParts getDataParts() const;

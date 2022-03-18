@@ -66,6 +66,7 @@ add_subdirectory (Compression)
 add_subdirectory (Server)
 add_subdirectory (Coordination)
 add_subdirectory (Protos)
+add_subdirectory (FormaterTool)
 
 
 set(dbms_headers)
@@ -78,6 +79,7 @@ add_headers_and_sources(clickhouse_common_io IO)
 add_headers_and_sources(clickhouse_common_io IO/S3)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 add_headers_and_sources(dbms Storages/IndexFile)
+add_headers_and_sources(dbms FormaterTool)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -347,6 +349,7 @@ dbms_target_link_libraries (
         lz4
         Poco::JSON
         Poco::MongoDB
+        Poco::ZIP
         string_utils
     PUBLIC
         ${MYSQLXX_LIBRARY}

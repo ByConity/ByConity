@@ -260,6 +260,8 @@ public:
 
     bool createEmptyPartInsteadOfLost(zkutil::ZooKeeperPtr zookeeper, const String & lost_part_name);
 
+    void attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr query_context) override;
+
 private:
     std::atomic_bool are_restoring_replica {false};
 

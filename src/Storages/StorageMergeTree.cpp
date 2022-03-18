@@ -1130,6 +1130,26 @@ bool StorageMergeTree::scheduleDataProcessingJob(IBackgroundJobExecutor & execut
     return false;
 }
 
+void StorageMergeTree::attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr local_context)
+{
+    LOG_DEBUG(log, "Attaching [] parts in path {}", parts_with_disk.size(), relative_path);
+
+    if (parts_with_disk.empty())
+        return;
+
+    MutableDataPartsVector loaded_parts = tryLoadPartsInPathToAttach(parts_with_disk, relative_path);
+
+    for (size_t i = 0; i < loaded_parts.size(); ++i)
+    {
+        LOG_INFO(log, "Attaching part {}", loaded_parts[i]->name);
+        renameTempPartAndAdd(loaded_parts[i], &increment);
+        LOG_INFO(log, "Finished attaching part");
+    }
+
+    /// New parts with other data may appear in place of deleted parts.
+    local_context->dropCaches();
+}
+
 Int64 StorageMergeTree::getCurrentMutationVersion(
     const DataPartPtr & part,
     std::unique_lock<std::mutex> & /* currently_processing_in_background_mutex_lock */) const

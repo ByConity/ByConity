@@ -112,6 +112,32 @@ zkutil::ZooKeeperPtr StorageHaMergeTree::getZooKeeper() const
     return res;
 }
 
+void StorageHaMergeTree::attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr query_context)
+{
+    if (parts_with_disk.empty())
+        return;
+
+    assertNotReadonly();
+
+    LOG_DEBUG(log, "Attaching [] parts in path {}", parts_with_disk.size(), relative_path);
+
+    MutableDataPartsVector loaded_parts = tryLoadPartsInPathToAttach(parts_with_disk, relative_path);
+
+    /// TODO Allow to use quorum here.
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    HaMergeTreeBlockOutputStream output(*this, metadata_snapshot, query_context);
+
+    Names old_names;
+    for (auto & part : loaded_parts)
+        old_names.push_back(part->name);
+
+    output.writeExistingParts(loaded_parts);
+
+    LOG_DEBUG(log, "Attached {} parts", loaded_parts.size());
+    for (size_t i = 0; i < loaded_parts.size(); ++i)
+        LOG_TRACE(log, "Attached part {} as {}", old_names[i], loaded_parts[i]->name);
+}
+
 static std::string normalizeZooKeeperPath(std::string zookeeper_path)
 {
     if (!zookeeper_path.empty() && zookeeper_path.back() == '/')
