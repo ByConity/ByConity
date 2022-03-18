@@ -125,7 +125,8 @@ bool NestedLoopJoin::addJoinedBlock(const Block & src_block, bool)
 {
     Block block = materializeBlock(src_block);
     JoinCommon::removeLowCardinalityInplace(block);
-
+    if (nullable_right_side)
+        JoinCommon::convertColumnsToNullable(block);
     return saveRightBlock(std::move(block));
 }
 
