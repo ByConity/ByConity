@@ -61,7 +61,10 @@ private:
     String generateFilterString();
     String generateRemoteQuery(const String & source_database, const String & source_table, const String & partition_id, const Strings & column_lists);
     IngestParts generateIngestParts(MergeTreeData & data, const MergeTreeData::DataPartsVector & parts);
-
+    IngestSources generateSourceBlocks(MergeTreeData & source_data, 
+                                                    const MergeTreeData::DataPartsVector & parts_to_read, 
+                                                    const Names & all_columns_with_partition_key);    
+    
     // ------ Utilities for Ingest partition -------
     String getMapKey(const String & map_col_name, const String & map_implicit_name);
     std::optional<NameAndTypePair> tryGetMapColumn(const StorageInMemoryMetadata & data, const String & col_name);

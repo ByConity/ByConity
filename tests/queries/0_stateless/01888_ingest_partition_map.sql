@@ -12,6 +12,30 @@ insert into test.test_ingest_map_source select '2021-01-01', number, 'b', map('k
 
 alter table test.test_ingest_map_target ingest partition '2021-01-01' columns c1, string_profile{'k'} key uid from test.test_ingest_map_source;
 
+select * from test.test_ingest_map_target order by uid;
+
+drop table if exists test.test_ingest_map_target;
+drop table if exists test.test_ingest_map_source;
+
+CREATE TABLE test.test_ingest_map_target (`p_date` Date, `uid` Int32, `c1` String, `string_profile` Map(String, String)) ENGINE = MergeTree PARTITION BY p_date ORDER BY uid SETTINGS index_granularity = 8192;
+
+CREATE TABLE test.test_ingest_map_source (`p_date` Date, `uid` Int32, `c1` String, `string_profile` Map(String, String)) ENGINE = MergeTree PARTITION BY p_date ORDER BY uid SETTINGS index_granularity = 8192;
+
+insert into test.test_ingest_map_target select '2021-01-01', number, 'a', map('k', 'v') from numbers(5);
+insert into test.test_ingest_map_source select '2021-01-01', number, 'b', map('c', 'w') from numbers(5);
+
+alter table test.test_ingest_map_target ingest partition '2021-01-01' columns c1, string_profile{'c'} key uid from test.test_ingest_map_source;
+
+select * from test.test_ingest_map_target order by uid;
+
+alter table test.test_ingest_map_target drop partition id '20210101';
+
+insert into test.test_ingest_map_target values ('2021-01-01', 1, 'a', {});
+
+alter table test.test_ingest_map_target ingest partition '2021-01-01' columns c1, string_profile{'c'} key uid from test.test_ingest_map_source;
+
+select * from test.test_ingest_map_target order by uid;
+
 drop table if exists test.test_ingest_map_target;
 drop table if exists test.test_ingest_map_source;
 

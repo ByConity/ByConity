@@ -1266,6 +1266,84 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
     offsets = std::move(offset_res);
 }
 
+/***
+ * insert implicit map column from outside, 
+ * only when the current ColumnByteMap has the same size with implicit columns. 
+ * implicit columns should be non-nullable, if it is nullable, you should remove nullable before this method.
+ */
+void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)
+{
+    if (implicit_columns.empty())
+        return;
+    
+    size_t col_size = size();
+
+    ColumnPtr key_res = keyColumn->cloneEmpty();
+    ColumnPtr value_res = valueColumn->cloneEmpty();
+    ColumnPtr offset_res = offsets->cloneEmpty();
+    const Offsets & offsets_ = getOffsets();
+    auto & key_res_col = key_res->assumeMutableRef();
+    auto & value_res_col = value_res->assumeMutableRef();
+    Offsets& offset_res_col = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
+
+    if (col_size == 0)
+    {
+        col_size = implicit_columns.begin()->second->size();
+        for (size_t i = 0; i < col_size; ++i)
+        {
+            size_t numKVPairs = 0;
+            for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
+            {
+                key_res_col.insert(Field(it->first));
+                value_res_col.insertFrom(*(it->second), i);
+                numKVPairs++;
+            }
+
+            offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
+        }
+    }
+    else
+    {
+        if (col_size != implicit_columns.begin()->second->size())
+            throw Exception("Expect equal size between map and implicit columns", ErrorCodes::LOGICAL_ERROR);
+
+        size_t offset = 0;
+        size_t row_size = offsets_[0];
+
+        for (size_t i = 0; i < col_size; ++i)
+        {
+            offset = offsets_[i - 1];
+            row_size = offsets_[i] - offset;
+
+            size_t numKVPairs = 0;
+            for (size_t r = 0; r < row_size; ++r)
+            {
+                auto tmp_key = keyColumn->getDataAt(offset + r).toString();
+                auto it = implicit_columns.find(tmp_key);
+                if (it == implicit_columns.end())
+                {
+                    key_res_col.insertFrom(*keyColumn, offset + r);
+                    value_res_col.insertFrom(*valueColumn, offset + r);
+                    numKVPairs++;
+                }
+            }
+
+            for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
+            {
+                key_res_col.insert(Field(it->first));
+                value_res_col.insertFrom(*(it->second), i);
+                numKVPairs++;
+            }
+
+            offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
+        }
+    }
+
+
+    keyColumn = std::move(key_res);
+    valueColumn = std::move(value_res);
+    offsets = std::move(offset_res);
+}
 
 // this optimization mostly not work for Map type
 bool ColumnByteMap::hasEqualValues() const

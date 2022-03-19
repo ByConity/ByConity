@@ -12,5 +12,13 @@ insert into test.test_ingest_map_source2 select '2021-01-01', number, 'b', map('
 
 alter table test.test_ingest_map_target2 ingest partition '2021-01-01' columns c1, string_profile{'k'} key uid from test.test_ingest_map_source2;
 
+alter table test.test_ingest_map_target2 drop partition id '20210101';
+
+insert into test.test_ingest_map_target2 values ('2021-01-01', 1, 'a', {}, {});
+
+alter table test.test_ingest_map_target2 ingest partition '2021-01-01' columns c1, string_profile{'k'} key uid from test.test_ingest_map_source2;
+
+select * from test.test_ingest_map_target2 order by uid;
+
 drop table if exists test.test_ingest_map_target2;
 drop table if exists test.test_ingest_map_source2;
