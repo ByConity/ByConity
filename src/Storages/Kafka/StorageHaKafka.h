@@ -28,7 +28,7 @@ namespace DB
 
 using DatabaseAndTableName = std::pair<String, String>;
 using MemoryTablePtr = std::shared_ptr<StorageMemoryTable>;
-using MemoryTables = std::map<DatabaseAndTableName, MemoryTablePtr>;
+using MemoryTables = std::map<StorageID, MemoryTablePtr>;
 
 /** Implements a Kafka queue table engine that can be used as a persistent queue / buffer,
   * or as a basic building block for creating pipelines with a continuous insertion / ETL.
@@ -95,7 +95,7 @@ public:
     NamesAndTypesList getVirtuals() const override;
     Names getVirtualColumnNames() const;
     void setReadMemoryTableMode(ReadMemoryTableMode mode);
-    StoragePtr getMemoryTable(const DatabaseAndTableName & target_table_name);
+    StoragePtr getMemoryTable(const StorageID & target_table_id);
 private:
 
     // Configuration and state
@@ -182,7 +182,7 @@ private:
     /// check buffer dependency task
     void checkMemoryTable();
     BackgroundSchedulePool::TaskHolder check_memory_table_task;
-    void flushMemoryTable(std::optional<DatabaseAndTableName> buffer_key = std::nullopt);
+    void flushMemoryTable(std::optional<StorageID> buffer_key = std::nullopt);
     void syncFlushAction(size_t consumer_index);
     void shutdownMemoryTable();
    

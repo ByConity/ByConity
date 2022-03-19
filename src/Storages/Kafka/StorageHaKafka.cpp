@@ -1073,7 +1073,7 @@ void StorageHaKafka::checkMemoryTable()
 {
     try
     {
-        std::vector<DatabaseAndTableName> active_table_keys;
+        std::vector<StorageID> active_table_keys;
         auto dependencies = DatabaseCatalog::instance().getDependencies(getStorageID());
         for (const auto & db_storage_id : dependencies)
         {
@@ -1081,24 +1081,21 @@ void StorageHaKafka::checkMemoryTable()
             auto materialized_view = dynamic_cast<const StorageMaterializedView *>(storage.get());
             if (!materialized_view)
                 continue;
-            String target_table_name = materialized_view->getTargetTable()->getStorageID().getTableName();
-            String target_db_name = materialized_view->getTargetTable()->getStorageID().getDatabaseName();
-            DatabaseAndTableName table_key(target_db_name, target_table_name);
-            active_table_keys.emplace_back(table_key);
+            StorageID tarage_table_id{materialized_view->getTargetTable()->getStorageID().getDatabaseName(), materialized_view->getTargetTable()->getStorageID().getTableName()};
+            active_table_keys.emplace_back(materialized_view->getTargetTable()->getStorageID());
             {
                 std::lock_guard lock(memory_table_mtx);
-                if (memory_tables.find(table_key) == memory_tables.end())
+                if (memory_tables.find(tarage_table_id) == memory_tables.end())
                 {
                     /// Each dependency view own one buffer table with buffer layer equal to consumer number
                     bool allow_materialized
                         = static_cast<bool>(getContext()->getSettingsRef().insert_allow_materialized_columns);
                     {
-                        LOG_INFO(log,
-                            "Create memory table- {}_buffer, columns-{}", target_table_name, getInMemoryMetadataPtr()->getColumns().toString());
+                        LOG_INFO(log, "Create memory table-{}_memory_table, columns-{}", tarage_table_id.getNameForLogs(), getInMemoryMetadataPtr()->getColumns().toString());
                         ConstraintsDescription constraints;
                         String comment;
-                        memory_tables[table_key] = std::make_shared<StorageMemoryTable>(
-                            StorageID(target_table_name, target_table_name + "_memory_table"),
+                        memory_tables[tarage_table_id] = std::make_shared<StorageMemoryTable>(
+                            StorageID(tarage_table_id.getDatabaseName(), tarage_table_id.getTableName() + "_memory_table"),
                             getInMemoryMetadataPtr()->getColumns(),
                             constraints,
                             comment,
@@ -1106,11 +1103,11 @@ void StorageHaKafka::checkMemoryTable()
                             settings.num_consumers,
                             params.memory_table_min_thresholds,
                             params.memory_table_max_thresholds,
-                            StorageID(target_db_name, target_table_name),
+                            materialized_view->getTargetTable()->getStorageID(),
                             allow_materialized,
                             settings.memory_table_queue_size);
-                        memory_tables[table_key]->setReadMemoryMode(params.memory_table_read_mode);
-                        memory_tables[table_key]->startup();
+                        memory_tables[tarage_table_id]->setReadMemoryMode(params.memory_table_read_mode);
+                        memory_tables[tarage_table_id]->startup();
                     }
                 }
             }
@@ -1119,17 +1116,17 @@ void StorageHaKafka::checkMemoryTable()
         {
             std::lock_guard lock(memory_table_mtx);
             /// Get all buffer table keys
-            std::vector<DatabaseAndTableName> buffer_keys;
+            std::vector<StorageID> buffer_keys;
             std::transform(
                 memory_tables.begin(),
                 memory_tables.end(),
                 std::back_inserter(buffer_keys),
-                [](const std::map<DatabaseAndTableName, MemoryTablePtr>::value_type & buffer_info) {
+                [](const std::map<StorageID, MemoryTablePtr>::value_type & buffer_info) {
                     return buffer_info.first;
                 });
 
             /// Buffer table which is not in view dependencies should flush buffer and commit offsets
-            std::vector<DatabaseAndTableName> invalid_buffer_keys;
+            std::vector<StorageID> invalid_buffer_keys;
             std::set_difference(
                 buffer_keys.begin(),
                 buffer_keys.end(),
@@ -1138,7 +1135,7 @@ void StorageHaKafka::checkMemoryTable()
                 std::back_inserter(invalid_buffer_keys));
             for (auto & buffer_key : invalid_buffer_keys)
             {
-                LOG_INFO(log, "Release memory table db-{} table-{}", buffer_key.first, buffer_key.second);
+                LOG_INFO(log, "Release memory table db-{} table-{}", buffer_key.getDatabaseName(), buffer_key.getTableName());
                 memory_tables.erase(buffer_key);
             }
         }
@@ -1151,20 +1148,20 @@ void StorageHaKafka::checkMemoryTable()
     check_memory_table_task->scheduleAfter(MEMEORY_TABLE_CHECK_RESCHEDULE_MS);
 }
 
-StoragePtr StorageHaKafka::getMemoryTable(const DatabaseAndTableName & target_table_name)
+StoragePtr StorageHaKafka::getMemoryTable(const StorageID & target_table_id)
 {
     std::lock_guard lock(memory_table_mtx);
-    auto iter = memory_tables.find(target_table_name);
+    auto iter = memory_tables.find(target_table_id);
     if (iter == memory_tables.end())
     {
-        LOG_ERROR(log, "Memory table db-{}, table-{} NOT FOUND.", target_table_name.first, target_table_name.second);
+        LOG_ERROR(log, "Memory table db-{}, table-{} NOT FOUND.", target_table_id.getNameForLogs());
         return {};
     }
 
     return iter->second;
 }
 
-void StorageHaKafka::flushMemoryTable(std::optional<DatabaseAndTableName> buffer_key)
+void StorageHaKafka::flushMemoryTable(std::optional<StorageID> buffer_key)
 {
     if (enableMemoryTable())
     {

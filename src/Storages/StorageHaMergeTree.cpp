@@ -3,6 +3,7 @@
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/MutationLog.h>
+#include <Interpreters/Cluster.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/ASTPartition.h>
 #include <Parsers/formatAST.h>
@@ -15,8 +16,11 @@
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
-
-
+#include <Storages/StorageMemoryTable.h>
+#include <Processors/QueryPlan/UnionStep.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ParserTablesInSelectQuery.h>
+#include <Common/isLocalAddress.h>
 #include <regex>
 
 #pragma clang diagnostic push
@@ -916,22 +920,79 @@ void StorageHaMergeTree::read(
     const size_t max_block_size,
     const unsigned num_streams)
 {
-    /** The `select_sequential_consistency` setting has two meanings:
-    * 1. To throw an exception if on a replica there are not all parts which have been written down on quorum of remaining replicas.
-    * 2. Do not read parts that have not yet been written to the quorum of the replicas.
-    * For this you have to synchronously go to ZooKeeper.
-    */
-    if (query_context->getSettingsRef().select_sequential_consistency)
-    {
-        auto max_added_blocks = std::make_shared<HaMergeTreeQuorumAddedParts::PartitionIdToMaxBlock>(getMaxAddedBlocks());
-        if (auto plan = reader.read(
-                column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage, std::move(max_added_blocks)))
-            query_plan = std::move(*plan);
-        return;
-    }
+    /// MemoryTableInfo - (StorageMemoryTablePtr, kafka consume leader role)
+    std::optional<MemoryTableInfo> memory_table_info = DatabaseCatalog::instance().tryGetDependencyMemoryTable(getStorageID(), query_context);
 
-    if (auto plan = reader.read(column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage))
-        query_plan = std::move(*plan);
+    /// Read from memory table return local table + memory table streams read_local_table is set to false to prevent read local table twice
+    /// When memory table is skip mode directly read from local merge tree
+    if (memory_table_info && query_info.read_local_table && memory_table_info.value().first
+#if USE_RDKAFKA
+        && dynamic_cast<StorageMemoryTable *>(memory_table_info.value().first.get())->getReadMemoryMode() != ReadMemoryTableMode::SKIP
+#endif
+        )
+    {
+        /// When attach with memory table and kafka consumer is leader read memory table with local data directly
+        auto [memory_table, is_leader] = memory_table_info.value();
+        if (is_leader)
+        {
+            return memory_table->read(query_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+        }
+        else
+        {
+            /// When remote_query_memory_table is true request from other replica and follower directly return empty streams
+            if (!query_context->getSettingsRef().remote_query_memory_table)
+            {
+                if (query_context->getSettingsRef().select_sequential_consistency)
+                {
+                    auto max_added_blocks = std::make_shared<HaMergeTreeQuorumAddedParts::PartitionIdToMaxBlock>(getMaxAddedBlocks());
+                    if (auto plan = reader.read(
+                            column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage, std::move(max_added_blocks)))
+                        query_plan = std::move(*plan);
+                }
+                else
+                {
+                    if (auto plan = reader.read(column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage))
+                        query_plan = std::move(*plan);
+                }
+
+                /// When kafka consumer is follower read memory table from leader replica union local data stream
+                QueryPlan memory_table_plan;
+                readMemoryTable(memory_table_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
+                
+                DataStreams input_streams;
+                input_streams.emplace_back(query_plan.getCurrentDataStream());
+                input_streams.emplace_back(memory_table_plan.getCurrentDataStream());
+
+                std::vector<std::unique_ptr<QueryPlan>> plans;
+                plans.emplace_back(std::make_unique<QueryPlan>(std::move(query_plan)));
+                plans.emplace_back(std::make_unique<QueryPlan>(std::move(memory_table_plan)));
+                query_plan = QueryPlan();
+
+                auto union_step = std::make_unique<UnionStep>(std::move(input_streams));
+                union_step->setStepDescription("Unite sources from memory table and local table");
+                query_plan.unitePlans(std::move(union_step), std::move(plans));
+            }
+        }
+    }
+    else
+    {
+        /** The `select_sequential_consistency` setting has two meanings:
+        * 1. To throw an exception if on a replica there are not all parts which have been written down on quorum of remaining replicas.
+        * 2. Do not read parts that have not yet been written to the quorum of the replicas.
+        * For this you have to synchronously go to ZooKeeper.
+        */
+        if (query_context->getSettingsRef().select_sequential_consistency)
+        {
+            auto max_added_blocks = std::make_shared<HaMergeTreeQuorumAddedParts::PartitionIdToMaxBlock>(getMaxAddedBlocks());
+            if (auto plan = reader.read(
+                    column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage, std::move(max_added_blocks)))
+                query_plan = std::move(*plan);
+            return;
+        }
+
+        if (auto plan = reader.read(column_names, metadata_snapshot, query_info, query_context, max_block_size, num_streams, processed_stage))
+            query_plan = std::move(*plan);
+    }
 }
 
 Pipe StorageHaMergeTree::read(
@@ -950,6 +1011,133 @@ Pipe StorageHaMergeTree::read(
         BuildQueryPipelineSettings::fromContext(query_context));
 }
 
+void StorageHaMergeTree::readMemoryTable(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        const SelectQueryInfo & query_info,
+        ContextPtr query_context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams)
+{
+    try
+    {
+        const Strings &replicas = findReplicaAddress();
+        if (replicas.empty())
+            throw Exception("Read memory table get empty replicas", ErrorCodes::LOGICAL_ERROR);
+
+        std::stringstream replica_hosts;
+        for (auto it = replicas.begin(); it != replicas.end(); ++it)
+        {
+            replica_hosts << *it;
+            if (std::distance(it, replicas.end()) > 1)
+                replica_hosts << ",";
+        }
+
+        /// Construct remote table for other replicas
+        const auto &query_client_info = query_context->getClientInfo();
+        String user = query_client_info.current_user;
+        String password = query_client_info.current_password;
+
+        /// Construct remote table for other replicas
+        String query = "remote('" + replica_hosts.str() + "','" + getStorageID().getDatabaseName() + "','" +
+                       getStorageID().getTableName() + "','" + user + "','" + password + "')";
+
+        LOG_TRACE(log, "Read from memory table -{} ", query);
+
+        const char * begin = query.data();
+        const char * end = query.data() + query.size();
+        size_t max_query_size = query_context->getSettingsRef().max_query_size;
+        Tokens tokens(begin, end);
+        IParser::Pos token_iterator(tokens, max_query_size);
+        ASTPtr res;
+        Expected expected;
+        bool parse_res = ParserTableExpression().parse(token_iterator, res, expected);
+        if (!parse_res) return;
+
+        auto ast_table_func = res->as<ASTTableExpression>();
+        auto query_mutable_context = const_cast<Context *>(query_context.get());
+        StoragePtr remote_table_ptr = query_mutable_context->executeTableFunction(ast_table_func->table_function);
+
+        auto & mutable_query_info = const_cast<SelectQueryInfo &>(query_info);
+        auto * select_ast = mutable_query_info.query->as<ASTSelectQuery>();
+
+        /// Remote query from memory table add two settings
+        /// remote_query_memory_table is true indicate only read memory table without local data
+        /// skip_unavailable_shards is true skip some unavailable replicas in this shard
+        if (select_ast)
+        {
+            std::vector<String> setting_names{"remote_query_memory_table",  "skip_unavailable_shards"};
+            for (auto & setting_name : setting_names)
+            {
+                SettingChange setting;
+                setting.name = setting_name;
+                setting.value = Field(true);
+                if (select_ast->settings())
+                {
+                    auto * set_ast = select_ast->settings()->as<ASTSetQuery>();
+                    auto it = std::find_if(set_ast->changes.begin(), set_ast->changes.end(), [&](const SettingChange & change) {
+                        return change.name == setting_name;
+                    });
+                    if (it != set_ast->changes.end())
+                    {
+                        it->value = Field(true);
+                    }
+                    else
+                    {
+                        set_ast->changes.emplace_back(setting);
+                    }
+                }
+                else
+                {
+                    ASTSetQuery remote_query_ast;
+                    remote_query_ast.is_standalone = false;
+                    remote_query_ast.changes.emplace_back(setting);
+                    select_ast->setExpression(ASTSelectQuery::Expression::SETTINGS, std::make_shared<ASTSetQuery>(remote_query_ast));
+                }
+            }
+        }
+        remote_table_ptr->read(query_plan, column_names, metadata_snapshot, mutable_query_info, query_context, processed_stage, max_block_size, num_streams);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+}
+
+std::vector<String> StorageHaMergeTree::findReplicaAddress()
+{
+    std::vector<String> replicas;
+    for (const auto & name_and_cluster : getContext()->getClusters()->getContainer())
+    {
+        const ClusterPtr & cluster = name_and_cluster.second;
+        const auto & shards_info = cluster->getShardsInfo();
+        const auto & addresses_with_failover = cluster->getShardsAddresses();
+        for (size_t shard_index = 0; shard_index < shards_info.size(); ++shard_index)
+        {
+            const auto & shard_info = shards_info[shard_index];
+            const auto & shard_addresses = addresses_with_failover[shard_index];
+            for (size_t replica_index = 0; replica_index < shard_addresses.size(); ++replica_index)
+            {
+                const auto & address = shard_addresses[replica_index];
+
+                /// Find replicas with same shard name
+                if (shard_info.isLocal())
+                {
+                    Poco::Net::IPAddress ip_address = DNSResolver::instance().resolveHost(address.host_name);
+
+                    /// Replica self is not included in replicas list
+                    if (!isLocalAddress(ip_address))
+                    {
+                        replicas.emplace_back(ip_address.toString() + ":" + std::to_string(address.port));
+                    }
+                }
+            }
+        }
+    }
+    return replicas;
+}
 
 template <class Func>
 void StorageHaMergeTree::foreachCommittedParts(Func && func, bool select_sequential_consistency) const

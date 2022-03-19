@@ -599,6 +599,7 @@ class IColumn;
     M(UInt64, utc_time_to_start_clone, 12, "The hour of UTC time, if current time is greater than it, clone is started", 0) \
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
+    M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */
 
 
