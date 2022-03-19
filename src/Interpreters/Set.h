@@ -172,6 +172,12 @@ private:
         bool negative,
         size_t rows,
         ConstNullMapPtr null_map) const;
+
+    template <typename Method>
+	void deserializeImplCase(
+		Method & method,
+		SetVariants & variants,
+		ReadBuffer & buf);
 };
 
 using ConstSetPtr = std::shared_ptr<const Set>;

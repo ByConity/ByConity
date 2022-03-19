@@ -67,6 +67,9 @@ struct HashMethodOneNumber
     FieldType getKeyHolder(size_t row, Arena &) const { return unalignedLoad<FieldType>(vec + row * sizeof(FieldType)); }
 
     const FieldType * getKeyData() const { return reinterpret_cast<const FieldType *>(vec); }
+
+    template <typename Data>
+    static void read(Data & data, ReadBuffer & buf, Arena &) { data.read(buf); }
 };
 
 
@@ -101,6 +104,15 @@ struct HashMethodString
         {
             return key;
         }
+    }
+
+    template <typename Data>
+    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
+    { 
+        if constexpr (place_string_to_arena)
+            data.read(buf, arena);
+        else
+            data.read(buf); 
     }
 
 protected:
@@ -140,6 +152,15 @@ struct HashMethodFixedString
         {
             return key;
         }
+    }
+
+    template <typename Data>
+    static void read(Data & data, ReadBuffer & buf, Arena & arena) 
+    { 
+        if constexpr (place_string_to_arena)
+            data.read(buf, arena);
+        else
+            data.read(buf); 
     }
 
 protected:
@@ -498,6 +519,12 @@ struct HashMethodKeysFixed
         return true;
     }
 
+    template <typename Data>
+    static void read(Data & data, ReadBuffer & buf, Arena &) 
+    { 
+        data.read(buf); 
+    }
+
     HashMethodKeysFixed(const ColumnRawPtrs & key_columns, const Sizes & key_sizes_, const HashMethodContextPtr &)
         : Base(key_columns), key_sizes(std::move(key_sizes_)), keys_size(key_columns.size())
     {
@@ -682,6 +709,12 @@ struct HashMethodHashed
     ALWAYS_INLINE Key getKeyHolder(size_t row, Arena &) const
     {
         return hash128(row, key_columns.size(), key_columns);
+    }
+
+    template <typename Data>
+    static void read(Data & data, ReadBuffer & buf, Arena &) 
+    { 
+        data.read(buf); 
     }
 };
 

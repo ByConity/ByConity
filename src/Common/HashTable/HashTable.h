@@ -13,6 +13,7 @@
 #include <common/types.h>
 #include <Common/Exception.h>
 #include <Common/MemorySanitizer.h>
+#include <Common/Arena.h>
 
 #include <IO/WriteBuffer.h>
 #include <IO/WriteHelpers.h>
@@ -204,6 +205,7 @@ struct HashTableCell
 
     /// Deserialization, in binary and text form.
     void read(DB::ReadBuffer & rb)        { DB::readBinary(key, rb); }
+    void read(DB::ReadBuffer & rb, DB::Arena & arena)        { DB::readBinary(key, rb, arena); }
     void readText(DB::ReadBuffer & rb)    { DB::readDoubleQuoted(key, rb); }
 
     /// When cell pointer is moved during erase, reinsert or resize operations
@@ -1209,6 +1211,30 @@ public:
                 DB::writeChar(',', wb);
                 ptr->writeText(wb);
             }
+        }
+    }
+
+    void read(DB::ReadBuffer & rb, DB::Arena & arena)
+    {
+        Cell::State::read(rb);
+
+        destroyElements();
+        this->clearHasZero();
+        m_size = 0;
+
+        size_t new_size = 0;
+        DB::readVarUInt(new_size, rb);
+
+        free();
+        Grower new_grower = grower;
+        new_grower.set(new_size);
+        alloc(new_grower);
+
+        for (size_t i = 0; i < new_size; ++i)
+        {
+            Cell x;
+            x.read(rb, arena);
+            insert(x.getValue());
         }
     }
 

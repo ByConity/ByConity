@@ -19,5 +19,8 @@ select * from test.test_in where id in (1, 2, 3) and event = 'a' order by id;
 
 select id from test.test_in where id in (1) or id in 2 order by id;
 
+select count() from test.test_in where event in 'a' or id in 2;
+select count() from test.test_in where event in ('a', 'b') and id in 2;
+
 drop table if exists test.test_in;
 drop table if exists test.test_in_local;

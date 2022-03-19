@@ -626,7 +626,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
         // Invoke writeColumn for those generated implicit value column
         if (type_map->valueTypeIsLC())
         {
-            serialize_settings.getter = createStreamGetter({implicitStreamName, nullValTypePtr},  offset_columns);
+            serialize_settings.getter = createStreamGetter(implicit_column,  offset_columns);
             serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
             serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
             nullValSerial->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
@@ -668,7 +668,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
 
             if (type_map->valueTypeIsLC())
             {
-                serialize_settings.getter = createStreamGetter({streamName, nullValTypePtr}, offset_columns);
+                serialize_settings.getter = createStreamGetter(implicit_column, offset_columns);
                 nullValSerial->serializeBinaryBulkStatePrefix(serialize_settings, it2->second);
             }
 
