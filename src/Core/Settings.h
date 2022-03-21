@@ -551,6 +551,16 @@ class IColumn;
     M(Bool, exchange_enable_keep_order_parallel_shuffle, false, "Whether enable parallel shuffle when exchange need keep order", 0) \
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
+    \
+    /** ip2geo settings */ \
+    M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\
+    M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0)\
+    M(Bool, ip2geo_update_from_hdfs, 0, "Whether to update db file from hdfs", 0)\
+    M(String, ipv4_file, "ipv4_pro", "IPDB file for ipv4", 0)\
+    M(String, ipv6_file, "ipv6_pro", "IPDB file for ipv6", 0)\
+    M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
+    M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
+    M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
     /** The section above is for obsolete settings. Do not add anything there. */
 
 
