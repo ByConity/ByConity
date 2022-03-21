@@ -1284,6 +1284,7 @@ void StorageHaUniqueMergeTree::refreshClusterCommitVersion(const zkutil::ZooKeep
         detail_ss << entry.first << "=" << entry.second.commit_version << " ";
     }
 
+    bool has_replica_under_repair = false;
     /// for non-active replicas
     /// - if the replica is not lost, get cached commit version from ZK
     /// - if the replica is under repair, get repair version from ZK
@@ -1305,6 +1306,7 @@ void StorageHaUniqueMergeTree::refreshClusterCommitVersion(const zkutil::ZooKeep
         {
             commit_version = parse<UInt64>(data);
             detail_ss << replica << "=" << commit_version << "(repair) ";
+            has_replica_under_repair = true;
         }
         else
         {
@@ -1314,6 +1316,9 @@ void StorageHaUniqueMergeTree::refreshClusterCommitVersion(const zkutil::ZooKeep
         min_commit_version = std::min(min_commit_version, commit_version);
     }
     unique_commit_version.store(min_commit_version, std::memory_order_release);
+    /// replica under repair may require fetching delete files < repair_lsn(unique_commit_version),
+    /// therefore we disable delete file gc during repair recovery
+    disable_delete_file_gc = has_replica_under_repair;
     LOG_TRACE(log, "Update cluster commit version to {}, detail: {}", min_commit_version, detail_ss.str());
 }
 
@@ -2649,6 +2654,7 @@ void StorageHaUniqueMergeTree::enterRepairMode()
     /// 5. determine sets of parts and delete files to fetch
     RepairStatePtr new_repair_state = std::make_unique<RepairState>();
     new_repair_state->version = leader_commit_version;
+    new_repair_state->checkpoint_version = leader_checkpoint_version;
     new_repair_state->leader = leader_replica_name;
     new_repair_state->start_time = time(nullptr);
 
