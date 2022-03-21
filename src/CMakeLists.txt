@@ -307,6 +307,8 @@ target_link_libraries(clickhouse_common_io
             Poco::Foundation
             roaring
             ${CPPKMS_LIBRARIES}
+            ipdb
+            maxminddb
 )
 
 

@@ -248,3 +248,12 @@
 	path = contrib/cppkms
 	url = git@code.byted.org:security/cppkms.git
 	branch = support_platform
+[submodule "contrib/ipdb"]
+	path = contrib/ipdb
+	url = git@code.byted.org:dp/ipdb-c.git
+[submodule "contrib/maxminddb"]
+	path = contrib/maxminddb
+	url = git@code.byted.org:dp/libmaxminddb.git
+[submodule "contrib/json-c"]
+	path = contrib/json-c
+	url = git@code.byted.org:dp/json-c.git
