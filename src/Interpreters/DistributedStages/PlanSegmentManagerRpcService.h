@@ -9,7 +9,17 @@ namespace DB
 class PlanSegmentManagerRpcService : public Protos::PlanSegmentManagerService
 {
 public:
-    explicit PlanSegmentManagerRpcService(ContextPtr context_) : context(context_), log(&Poco::Logger::get("PlanSegmentManagerRpcService")) { }
+    explicit PlanSegmentManagerRpcService(ContextMutablePtr context_)
+        : context(context_), log(&Poco::Logger::get("PlanSegmentManagerRpcService"))
+    {
+    }
+
+    /// execute query described by plan segment
+    void executeQuery(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::ExecutePlanSegmentRequest * request,
+        ::DB::Protos::ExecutePlanSegmentResponse * response,
+        ::google::protobuf::Closure * done) override;
 
     /// receive exception report send terminate query (coordinate host ---> segment executor host)
     void cancelQuery(
@@ -19,9 +29,8 @@ public:
         ::google::protobuf::Closure * done) override
     {
         brpc::ClosureGuard done_guard(done);
-        auto mutable_context = Context::createCopy(context);
         auto cancel_code
-            = mutable_context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coordinator_address());
+            = context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coordinator_address());
         response->set_ret_code(std::to_string(static_cast<int>(cancel_code)));
     }
 
@@ -55,7 +64,7 @@ public:
     }
 
 private:
-    ContextPtr context;
+    ContextMutablePtr context;
     Poco::Logger * log;
 };
 }

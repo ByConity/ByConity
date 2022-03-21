@@ -6,6 +6,7 @@ create table test.test_agg as test.test_agg_local engine = Distributed(test_shar
 
 set enable_distributed_stages = 1;
 set exchange_enable_force_remote_mode = 1;
+set send_plan_segment_by_brpc = 1;
 
 select id from test.test_agg limit 10;
 select id from test.test_agg order by id limit 10;

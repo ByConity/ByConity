@@ -28,6 +28,7 @@ public:
         GRPC = 3,
         MYSQL = 4,
         POSTGRESQL = 5,
+        BRPC = 99,
     };
 
     enum class HTTPMethod : uint8_t
@@ -90,6 +91,9 @@ public:
 
     /// For mysql
     UInt64 connection_id = 0;
+
+    /// For brpc inter server communication protocol
+    UInt32 brpc_protocol_version = 0;
 
     /// Comma separated list of forwarded IP addresses (from X-Forwarded-For for HTTP interface).
     /// It's expected that proxy appends the forwarded address to the end of the list.

@@ -14,6 +14,8 @@
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
+#include <Protos/plan_segment_manager.pb.h>
+#include <brpc/controller.h>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Common/Stopwatch.h>

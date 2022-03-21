@@ -56,6 +56,7 @@ CREATE TABLE ci_ssb.supplier as ci_ssb.supplier_local ENGINE = Distributed(test_
 use ci_ssb;
 set enable_distributed_stages = 1;
 set exchange_enable_force_remote_mode = 1;
+set send_plan_segment_by_brpc = 1;
 
 --Q1.1
 SELECT SUM(LO_EXTENDEDPRICE * LO_DISCOUNT) AS REVENUE

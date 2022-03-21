@@ -5,7 +5,7 @@ create table test.test_subquery_join_local (p_date Date, id Int32, event String)
 create table test.test_subquery_join as test.test_subquery_join_local engine = Distributed(test_shard_localhost, test, test_subquery_join_local, rand());
 
 set enable_distributed_stages = 1;
-set exchange_enable_force_remote_mode = 1;
+set send_plan_segment_by_brpc = 1;
 
 select id from test.test_subquery_join limit 10;
 select id from test.test_subquery_join order by id limit 10;

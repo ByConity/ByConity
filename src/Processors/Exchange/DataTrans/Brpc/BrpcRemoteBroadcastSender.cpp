@@ -64,7 +64,9 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
 {
     try
     {
-        const auto buf = serializeChunkToIoBuffer(std::move(chunk));
+        WriteBufferFromBrpcBuf out;
+        serializeChunkToIoBuffer(std::move(chunk), out);
+        const auto & buf = out.getFinishedBuf();
         auto res = BroadcastStatus(BroadcastStatusCode::RUNNING);
         for (size_t i = 0; i < sender_stream_ids.size(); ++i)
         {
@@ -90,10 +92,9 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
     }
 }
 
-butil::IOBuf BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk) const
+void BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk, WriteBufferFromBrpcBuf & out) const
 {
     const auto settings = context->getSettingsRef();
-    WriteBufferFromBrpcBuf out;
     if (settings.exchange_enable_block_compress)
     {
         std::string method = Poco::toUpper(settings.network_compression_method.toString());
@@ -113,10 +114,9 @@ butil::IOBuf BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk) co
             out, ClickHouseRevision::getVersionRevision(), header, !settings.low_cardinality_allow_in_native_format);
         chunk_out.write(chunk);
     }
-    return out.getFinishedBuf();
 }
 
-BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key)
+BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const String & data_key)
 {
     if (io_buffer.size() > brpc::FLAGS_max_body_size)
         throw Exception(

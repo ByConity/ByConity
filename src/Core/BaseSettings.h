@@ -86,6 +86,9 @@ public:
     // A debugging aid.
     std::string toString() const;
 
+    /// dump to map
+    std::unordered_map<String, String> dumpToMap() const;
+
     /// Represents a reference to a setting field.
     class SettingFieldRef
     {
@@ -495,6 +498,17 @@ String BaseSettings<Traits_>::toString() const
         if (!res.empty())
             res += ", ";
         res += field.getName() + " = " + field.getValueString();
+    }
+    return res;
+}
+
+template <typename Traits_>
+std::unordered_map<String, String> BaseSettings<Traits_>::dumpToMap() const
+{
+    std::unordered_map<String, String> res;
+    for (const auto & field : *this)
+    {
+        res.emplace(field.getName(), field.getValueString());
     }
     return res;
 }

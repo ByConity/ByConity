@@ -9,6 +9,7 @@
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <brpc/stream.h>
 #include <bthread/mtx_cv_base.h>
+#include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 
 namespace DB
 {
@@ -25,8 +26,6 @@ public:
     void merge(IBroadcastSender && sender) override;
     String getName() const override;
     BroadcastSenderType getType() override { return BroadcastSenderType::Brpc; }
-    BroadcastStatus sendIOBuffer(butil::IOBuf io_buffer, brpc::StreamId stream_id, const String & data_key);
-    butil::IOBuf serializeChunkToIoBuffer(Chunk chunk) const;
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastSender");
@@ -34,5 +33,8 @@ private:
     ContextPtr context;
     Block header;
     std::vector<brpc::StreamId> sender_stream_ids;
+
+    BroadcastStatus sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const String & data_key);
+    void serializeChunkToIoBuffer(Chunk chunk, WriteBufferFromBrpcBuf & out) const;
 };
 }
