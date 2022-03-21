@@ -144,7 +144,7 @@ ReturnType ThreadPoolImpl<Thread>::scheduleImpl(Job job, int priority, std::opti
 
                 if constexpr (std::is_same_v<ThreadFromGlobalPool, Thread>)
                 {
-                    if (nullptr != cpu_set)
+                    if (cpu_set)
                     {
                         auto tid = threads.front().gettid();
                         cpu_set->addTask(tid);
@@ -380,8 +380,11 @@ void ThreadPoolImpl<Thread>::worker(typename std::list<Thread>::iterator thread_
 
 FreeThreadPool & ThreadFromGlobalPool::getThreadPool()
 {
+    if (std::string_view(DB::CurrentThread::getQueryId()).empty())
+        return GlobalThreadPool::instance();
+
     auto query_context = DB::CurrentThread::get().getQueryContext();
-    if (std::string_view(DB::CurrentThread::getQueryId()).empty() || !query_context)
+    if (!query_context)
         return GlobalThreadPool::instance();
 
     if (auto * resource_group = query_context->getResourceGroup();
