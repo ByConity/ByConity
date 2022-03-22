@@ -179,7 +179,7 @@ public:
 
     void addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id);
     void removeMemoryTableDependency(const StorageID & local_table_id);
-    std::optional<MemoryTableInfo> tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr context) const;
+    std::optional<MemoryTableInfo> tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const;
 
     /// For Materialized and Live View
     void updateDependency(const StorageID & old_from, const StorageID & old_where,const StorageID & new_from, const StorageID & new_where);

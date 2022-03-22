@@ -462,7 +462,7 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
+    mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::MemoryTable> extra_schedule_pools;
 
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends

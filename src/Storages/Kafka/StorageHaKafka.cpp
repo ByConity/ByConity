@@ -253,9 +253,6 @@ void StorageHaKafka::checkAndLoadSettings(KafkaSettings & cur_settings, KafkaPar
 
     if (cur_settings.enable_transaction)
         throw Exception("Transaction is not supported for kafka consumption now", ErrorCodes::LOGICAL_ERROR);
-
-    if (cur_settings.enable_memory_table)
-        throw Exception("Memory table is not supported now", ErrorCodes::LOGICAL_ERROR);
 }
 
 void StorageHaKafka::initConsumerContexts()
@@ -373,8 +370,7 @@ void StorageHaKafka::startup()
 
     if (enableMemoryTable())
     {
-        check_memory_table_task
-            = getContext()->getConsumeSchedulePool().createTask(log->name(), [this] { checkMemoryTable(); });
+        check_memory_table_task = getContext()->getSchedulePool().createTask(log->name(), [this] { checkMemoryTable(); });
         check_memory_table_task->activateAndSchedule();
     }
 
@@ -1081,8 +1077,8 @@ void StorageHaKafka::checkMemoryTable()
             auto materialized_view = dynamic_cast<const StorageMaterializedView *>(storage.get());
             if (!materialized_view)
                 continue;
-            StorageID tarage_table_id{materialized_view->getTargetTable()->getStorageID().getDatabaseName(), materialized_view->getTargetTable()->getStorageID().getTableName()};
-            active_table_keys.emplace_back(materialized_view->getTargetTable()->getStorageID());
+            StorageID tarage_table_id = materialized_view->getTargetTable()->getStorageID();
+            active_table_keys.emplace_back(tarage_table_id);
             {
                 std::lock_guard lock(memory_table_mtx);
                 if (memory_tables.find(tarage_table_id) == memory_tables.end())

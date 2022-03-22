@@ -105,6 +105,8 @@ StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_,
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
 
+    log = &Poco::Logger::get("StorageMemoryTable (" + table_id_.getNameForLogs() + ")");
+    
     for (size_t i = 0; i < num_shards; ++i)
     {
         buffer_contexts[i].buffer.index = i;
@@ -115,7 +117,7 @@ StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_,
         buffer_contexts[i].write_block_queue = std::make_shared<ConcurrentBoundedQueue<WriteBlockRequest>>(write_block_queue_size);
     }
     read_memory_mode = ReadMemoryTableMode::ALL;
-    log = &Poco::Logger::get("StorageMemoryTable (" + table_id_.getNameForLogs() + ")");
+    
 }
 
 StorageMemoryTable::~StorageMemoryTable()
