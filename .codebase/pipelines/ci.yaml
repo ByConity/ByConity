@@ -253,3 +253,46 @@ jobs:
       - name: Analyse Result
         commands:
           - /bin/bash /home/code/docker/test/result.sh
+
+  FuntionalStatelessTest-ASAN-LocateASANError:
+      name: FuntionalStatelessTest-ASAN-LocateASANError
+      image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+      timeout: 360
+      depends: [scm_build_ASAN]
+      if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
+      envs:
+        ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
+      steps:
+        - uses: actions/checkout
+          inputs:
+            depth: 1
+        - name: Download From SCM
+          commands:
+            - echo $(pwd)
+            - cd /
+            - CLICKHOUSE_VERSION=${{ Jobs["scm_build_ASAN"].Steps["scm_build"].Outputs["version"] }}
+            - CLICKHOUSE_PREFIX="clickhouse"
+            - mkdir -p $CLICKHOUSE_PREFIX
+            - echo 'ok'
+            - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
+            - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+            - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+        - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
+          commands:
+            - cd /
+            - cp /home/code/docker/test/stateless_locate_asan_error/run.sh run.sh
+            - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+            - /bin/bash run.sh
+        - name: Upload Artifact
+          uses: actions/upload-artifact
+          inputs:
+            name: test_output
+            path: /test_output
+        - name: Upload sanitizer log
+          uses: actions/upload-artifact
+          inputs:
+            name: sanitizer_log_output
+            path: /sanitizer_log_output
+        - name: Analyse Result
+          commands:
+            - /bin/bash /home/code/docker/test/result.sh
