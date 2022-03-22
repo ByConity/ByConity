@@ -190,12 +190,14 @@ else \
 WindowTransform::WindowTransform(const Block & input_header_,
         const Block & output_header_,
         const WindowDescription & window_description_,
-        const std::vector<WindowFunctionDescription> & functions)
+        const std::vector<WindowFunctionDescription> & functions,
+        DialectType dialect_type_)
     : IProcessor({input_header_}, {output_header_})
     , input(inputs.front())
     , output(outputs.front())
     , input_header(input_header_)
     , window_description(window_description_)
+    , dt(dialect_type_)
 {
     workspaces.reserve(functions.size());
     for (const auto & f : functions)
@@ -290,7 +292,140 @@ WindowTransform::WindowTransform(const Block & input_header_,
                     window_description.frame.end_offset);
             }
         }
+    } else if (window_description.frame.type == WindowFrame::FrameType::Groups) {
+        const WindowFrame *f = &window_description.frame;
+
+        if (f->begin_type == WindowFrame::BoundaryType::Offset) {
+            frame_offset[BoundaryFrom] = f->begin_offset.get<UInt64>();
+            if (f->begin_preceding)
+                frame_offset[BoundaryFrom] = -frame_offset[BoundaryFrom];
+        } else {
+            frame_offset[BoundaryFrom] = 0;
+        }
+
+        if (f->end_type == WindowFrame::BoundaryType::Offset) {
+            /* plus 1 to find beyond end of the last group */
+            uint64_t val = f->end_offset.get<UInt64>();
+            if (f->end_preceding)
+                frame_offset[BoundaryTo] = -val + 1;
+            else
+                frame_offset[BoundaryTo] = val + 1;
+        } else {
+            frame_offset[BoundaryTo] = 0;
+        }
+
+        resetFindFirstFrame();
+
+        /* TODO: create ringbuffer to cache for begin */
+        /* if (frame_offset[BoundaryFrom] && frame_offset[BoundaryTo]) {
+        } */
     }
+}
+
+template<WindowTransform::FrameBoundary fb>
+bool WindowTransform::findFirstFrame(RowNumber &row)
+{
+    /* find first frame of the current partition,
+     * afterwards we can do a single step for both start and end */
+    constexpr int i = static_cast<std::underlying_type<FrameBoundary>::type>(fb);
+
+    /* first frame is frame_start */
+    if (frame_offset[i] <= 0)
+        return true;
+
+    /* we shall advance frame_end from frame_start */
+    if constexpr (fb == FrameBoundary::To) {
+        auto from = curr_offset[BoundaryFrom];
+
+        if (from > 0 && curr_offset[BoundaryTo] < from)
+            curr_offset[BoundaryTo] = from;
+    }
+
+    /* first frame already found */
+    if (curr_offset[i] == frame_offset[i])
+        return true;
+
+    size_t order_cnt = order_by_indices.size();
+    RowNumber ref = row;
+
+    for (; row < partition_end; advanceRowNumber(row))  {
+        /* skip for the same group */
+        if (areSameOrder(ref, row, order_cnt))
+            continue;
+
+        /* use new reference for new group, and increase count */
+        ref = row;
+        if (++curr_offset[i] != frame_offset[i])
+            continue;
+
+        /* first frame found */
+        return true;
+    }
+
+    if (!partition_ended)
+        return false;
+
+    /* first frame at partition end */
+    curr_offset[i] = frame_offset[i];
+    return true;
+}
+
+template<WindowTransform::FrameBoundary fb>
+void WindowTransform::advanceFrameGroupsOffset()
+{
+    bool *found;
+
+    if constexpr (fb == FrameBoundary::From)
+        found = &frame_started;
+    else
+        found = &frame_ended;
+
+    /* find first frame */
+    if (1 == current_row_number) {
+        if constexpr (fb == FrameBoundary::From)
+            *found = findFirstFrame<FrameBoundary::From>(frame_start);
+        else
+            *found = findFirstFrame<FrameBoundary::To>(frame_end);
+
+        return;
+    }
+
+    /* reuse the current frame for rows in the same group */
+    if (peer_group_start_row_number != current_row_number) {
+        *found = true;
+        return;
+    }
+
+    /* negative case, reuse frame_start */
+    constexpr int i = static_cast<std::underlying_type<FrameBoundary>::type>(fb);
+    if (curr_offset[i] < 0) {
+        curr_offset[i]++;
+        *found = true;
+        return;
+    }
+
+    /* advance by one group */
+    RowNumber *row;
+    if constexpr (fb == FrameBoundary::From)
+        row = &frame_start;
+    else
+        row = &frame_end;
+
+    const size_t order_cnt = order_by_indices.size();
+    RowNumber ref = *row;
+
+    for (; *row < partition_end; advanceRowNumber(*row))  {
+        /* skip rows in the same group */
+        if (areSameOrder(ref, *row, order_cnt))
+            continue;
+
+        /* found new group */
+        *found = true;
+        return;
+    }
+    /* reached partition end */
+    if (partition_ended)
+        *found = true;
 }
 
 WindowTransform::~WindowTransform()
@@ -587,11 +722,9 @@ void WindowTransform::advanceFrameStart()
                 case WindowFrame::FrameType::Range:
                     advanceFrameStartRangeOffset();
                     break;
-                default:
-                    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "Frame start type '{}' for frame '{}' is not implemented",
-                        WindowFrame::toString(window_description.frame.begin_type),
-                        WindowFrame::toString(window_description.frame.type));
+                case WindowFrame::FrameType::Groups:
+                    advanceFrameGroupsOffset<FrameBoundary::From>();
+                    break;
             }
             break;
     }
@@ -620,6 +753,7 @@ void WindowTransform::advanceFrameStart()
     }
 }
 
+template<DialectType dt>
 bool WindowTransform::arePeers(const RowNumber & x, const RowNumber & y) const
 {
     if (x == y)
@@ -628,34 +762,20 @@ bool WindowTransform::arePeers(const RowNumber & x, const RowNumber & y) const
         return true;
     }
 
-    if (window_description.frame.type == WindowFrame::FrameType::Rows)
+    /* ANSI: For the purposes of built-in window function processing,
+     * rows with the same values for all ORDER BY expressions are
+     * considered peers regardless of the frame type. */
+    if constexpr (dt == DialectType::CLICKHOUSE)
     {
-        // For ROWS frame, row is only peers with itself (checked above);
-        return false;
-    }
-
-    // For RANGE and GROUPS frames, rows that compare equal w/ORDER BY are peers.
-    assert(window_description.frame.type == WindowFrame::FrameType::Range);
-    const size_t n = order_by_indices.size();
-    if (n == 0)
-    {
-        // No ORDER BY, so all rows are peers.
-        return true;
-    }
-
-    size_t i = 0;
-    for (; i < n; i++)
-    {
-        const auto * column_x = inputAt(x)[order_by_indices[i]].get();
-        const auto * column_y = inputAt(y)[order_by_indices[i]].get();
-        if (column_x->compareAt(x.row, y.row, *column_y,
-                1 /* nan_direction_hint */) != 0)
+        if (window_description.frame.type == WindowFrame::FrameType::Rows)
         {
+            // For ROWS frame, row is only peers with itself (checked above);
             return false;
         }
     }
 
-    return true;
+    // For RANGE and GROUPS frames, rows that compare equal w/ORDER BY are peers.
+    return areSameOrder(x, y);
 }
 
 void WindowTransform::advanceFrameEndCurrentRow()
@@ -702,7 +822,7 @@ void WindowTransform::advanceFrameEndCurrentRow()
     // Advance frame_end while it is still peers with the current row.
     for (; frame_end.row < rows_end; ++frame_end.row)
     {
-        if (!arePeers(current_row, frame_end))
+        if (!arePeers<DialectType::CLICKHOUSE>(current_row, frame_end))
         {
 //            fmt::print(stderr, "{} and {} don't match\n", reference, frame_end);
             frame_ended = true;
@@ -819,10 +939,9 @@ void WindowTransform::advanceFrameEnd()
                 case WindowFrame::FrameType::Range:
                     advanceFrameEndRangeOffset();
                     break;
-                default:
-                    throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-                        "The frame end type '{}' is not implemented",
-                        WindowFrame::toString(window_description.frame.end_type));
+                case WindowFrame::FrameType::Groups:
+                    advanceFrameGroupsOffset<FrameBoundary::To>();
+                    break;
             }
             break;
     }
@@ -1079,7 +1198,14 @@ void WindowTransform::appendChunk(Chunk & chunk)
 
             // We now know that the current row is valid, so we can update the
             // peer group start.
-            if (!arePeers(peer_group_start, current_row))
+            bool peer;
+            if (dt == DialectType::CLICKHOUSE) {
+                peer = arePeers<DialectType::CLICKHOUSE>(peer_group_start, current_row);
+            } else {
+                peer = arePeers<DialectType::ANSI>(peer_group_start, current_row);
+            }
+
+            if (!peer)
             {
                 peer_group_start = current_row;
                 peer_group_start_row_number = current_row_number;
@@ -1179,6 +1305,7 @@ void WindowTransform::appendChunk(Chunk & chunk)
         peer_group_start = partition_start;
         peer_group_start_row_number = 1;
         peer_group_number = 1;
+        resetFindFirstFrame();
 
 //        fmt::print(stderr, "reinitialize agg data at start of {}\n",
 //            new_partition_start);

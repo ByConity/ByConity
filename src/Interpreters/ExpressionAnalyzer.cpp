@@ -576,14 +576,7 @@ void makeWindowDescriptionFromAST(const Context & context,
     desc.full_sort_description.insert(desc.full_sort_description.end(),
         desc.order_by.begin(), desc.order_by.end());
 
-    if (definition.frame_type != WindowFrame::FrameType::Rows
-        && definition.frame_type != WindowFrame::FrameType::Range)
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED,
-            "Window frame '{}' is not implemented (while processing '{}')",
-            WindowFrame::toString(definition.frame_type),
-            ast->formatForErrorMessage());
-    }
+    /* all frame types are supported, type check is ont needed */
 
     desc.frame.is_default = definition.frame_is_default;
     desc.frame.type = definition.frame_type;

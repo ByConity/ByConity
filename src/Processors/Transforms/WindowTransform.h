@@ -8,6 +8,7 @@
 
 #include <deque>
 
+#include <type_traits>
 
 namespace DB
 {
@@ -89,7 +90,8 @@ public:
             const Block & output_header_,
             const WindowDescription & window_description_,
             const std::vector<WindowFunctionDescription> &
-                functions);
+                functions,
+            DialectType dialect_type_);
 
     ~WindowTransform() override;
 
@@ -116,6 +118,7 @@ public:
      */
     void advancePartitionEnd();
 
+    template<DialectType dt>
     bool arePeers(const RowNumber & x, const RowNumber & y) const;
 
     void advanceFrameStartRowsOffset();
@@ -230,6 +233,24 @@ public:
     RowNumber blocksBegin() const
     { return RowNumber{first_block_number, 0}; }
 
+    bool areSameOrder(const RowNumber & x, const RowNumber & y) const;
+
+    bool areSameOrder(const RowNumber & x, const RowNumber & y,
+                      size_t order_cnt) const;
+private:
+    enum class FrameBoundary {
+        From,
+        To,
+    };
+    static constexpr auto BoundaryFrom =
+        static_cast<std::underlying_type<FrameBoundary>::type>(FrameBoundary::From);
+    static constexpr auto BoundaryTo =
+        static_cast<std::underlying_type<FrameBoundary>::type>(FrameBoundary::To);
+
+    template<WindowTransform::FrameBoundary fb> bool findFirstFrame(RowNumber &row);
+    void resetFindFirstFrame();
+    template<FrameBoundary fb> void advanceFrameGroupsOffset();
+
 public:
     /*
      * Data (formerly) inherited from ISimpleTransform, needed for the
@@ -297,6 +318,8 @@ public:
     uint64_t current_row_number = 1;
     uint64_t peer_group_start_row_number = 1;
     uint64_t peer_group_number = 1;
+    int64_t frame_offset[2];
+    int64_t curr_offset[2];
 
     // The frame is [frame_start, frame_end) if frame_ended && frame_started,
     // and unknown otherwise. Note that when we move to the next row, both the
@@ -326,7 +349,40 @@ public:
         const IColumn * reference_column, size_t reference_row,
         const Field & offset,
         bool offset_is_preceding);
+
+    DialectType dt;
 };
+
+inline bool WindowTransform::areSameOrder(const RowNumber & x,
+                                          const RowNumber & y) const
+{
+    return areSameOrder(x, y, order_by_indices.size());
+}
+
+inline bool WindowTransform::areSameOrder(const RowNumber & x,
+                                          const RowNumber & y,
+                                          size_t order_cnt) const
+{
+    for (size_t i = 0; i < order_cnt; i++) {
+        const auto * column_x = inputAt(x)[order_by_indices[i]].get();
+        const auto * column_y = inputAt(y)[order_by_indices[i]].get();
+        if (column_x->compareAt(x.row, y.row, *column_y,
+                        1 /* nan_direction_hint */) != 0)
+            return false;
+    }
+
+    /* If the frame type is RANGE or GROUPS,
+     * then rows with the same values for all ORDER BY expressions
+     * are considered "peers". Or, if there are no ORDER BY terms,
+     * all rows are peers */
+    return true;
+}
+
+inline void WindowTransform::resetFindFirstFrame()
+{
+    curr_offset[BoundaryFrom] = frame_offset[BoundaryFrom] >= 0 ? 0 : frame_offset[BoundaryFrom];
+    curr_offset[BoundaryTo] = frame_offset[BoundaryTo] >= 0 ? 0 : frame_offset[BoundaryTo];
+}
 
 }
 
