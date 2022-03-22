@@ -1,8 +1,8 @@
 option(USE_INTERNAL_JSONC_LIBRARY "Set to FALSE to use system json-c library instead of bundled" ${NOT_UNBUNDLED})
 
-if(NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/json-c/json.h")
+if(NOT EXISTS "${ClickHouse_SOURCE_DIR}/contrib/json-c/json_object.h")
     if(USE_INTERNAL_JSONC_LIBRARY)
-        message(WARNING "submodule contrib/json-c is missing. to fix try run: \n git submodule update --init --recursive")
+        message(FATAL_ERROR "submodule contrib/json-c is missing. to fix try run: \n git submodule update --init --recursive")
         set(USE_INTERNAL_JSONC_LIBRARY 0)
     endif()
     set(USE_INTERNAL_JSONC_LIBRARY 1)
