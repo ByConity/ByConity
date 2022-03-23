@@ -10,6 +10,8 @@
 namespace DB
 {
 
+class MergeScheduler;
+
 /** Merge selector, which is used to remove values with expired ttl.
   * It selects parts to merge by greedy algorithm:
   *  1. Finds part with the most earliest expired ttl and includes it to result.
@@ -30,7 +32,8 @@ public:
 
     PartsRange select(
         const PartsRanges & parts_ranges,
-        const size_t max_total_size_to_merge) override;
+        const size_t max_total_size_to_merge,
+        [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) override;
 
     /// Get TTL value for part, may depend on child type and some settings in
     /// constructor.

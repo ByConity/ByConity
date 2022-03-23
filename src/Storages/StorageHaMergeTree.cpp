@@ -228,6 +228,7 @@ StorageHaMergeTree::StorageHaMergeTree(
     , alter_thread(*this)
     , allow_renaming(allow_renaming_)
     , replicated_fetches_pool_size(getContext()->getSettingsRef().background_fetches_pool_size)
+    , merge_scheduler(std::make_unique<MergeScheduler>(getContext(), getSettings()->max_replicated_merges_in_queue))
 {
     auto data_paths = getDataPaths();
 
@@ -1082,7 +1083,8 @@ bool StorageHaMergeTree::optimize(
         getSettings()->max_bytes_to_merge_at_max_space_in_pool,
         merge_pred,
         false, // merge_with_ttl_allowed
-        nullptr /// out_disable_reason
+        nullptr, /// out_disable_reason
+        merge_scheduler.get()
     );
 
     if (SelectPartsDecision::SELECTED != select_decision)
@@ -3312,7 +3314,8 @@ void StorageHaMergeTree::mergeSelectingTask()
                 max_source_parts_size,
                 merge_pred,
                 false, // merge_with_ttl_allowed
-                nullptr // out_disable_reason
+                nullptr, // out_disable_reason
+                merge_scheduler.get()
             );
 
             if (auto elapsed = watch.elapsedMilliseconds(); elapsed > 1000)

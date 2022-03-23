@@ -11,6 +11,8 @@
 namespace DB
 {
 
+class MergeScheduler;
+
 /** Interface of algorithm to select data parts to merge
  *   (merge is also known as "compaction").
   * Following properties depend on it:
@@ -66,11 +68,15 @@ public:
       */
     virtual PartsRange select(
         const PartsRanges & parts_ranges,
-        const size_t max_total_size_to_merge) = 0;
+        const size_t max_total_size_to_merge,
+        [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr) = 0;
 
-    virtual PartsRanges selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge)
+    virtual PartsRanges selectMulti(
+        const PartsRanges & partitions, 
+        const size_t max_total_size_to_merge,
+        [[maybe_unused]] MergeScheduler * merge_scheduler = nullptr)
     {
-        if (auto res = select(partitions, max_total_size_to_merge); res.empty())
+        if (auto res = select(partitions, max_total_size_to_merge, merge_scheduler); res.empty())
             return {};
         else
             return {res};

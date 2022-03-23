@@ -83,6 +83,8 @@ When doing SELECT we read from all data parts. INSERTed data parts comes with un
 namespace DB
 {
 
+class MergeScheduler;
+
 class SimpleMergeSelector final : public IMergeSelector
 {
 public:
@@ -158,7 +160,8 @@ public:
 
     PartsRange select(
         const PartsRanges & parts_ranges,
-        const size_t max_total_size_to_merge) override;
+        const size_t max_total_size_to_merge,
+        MergeScheduler * merge_scheduler = nullptr) override;
 
 private:
     const Settings settings;

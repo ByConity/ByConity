@@ -571,6 +571,7 @@ public:
     /// --------------------
 protected:
     friend class MergeTreeData;
+    friend class MergeScheduler;
 
     /// Total size of all columns, calculated once in calcuateColumnSizesOnDisk
     ColumnSize total_columns_size;

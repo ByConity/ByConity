@@ -1,4 +1,5 @@
 #include <Storages/MergeTree/SimpleMergeSelector.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 
 #include <Common/interpolate.h>
 
@@ -148,11 +149,15 @@ void selectWithinPartition(
     Estimator & estimator,
     const SimpleMergeSelector::Settings & settings,
     double min_size_to_lower_base_log,
-    double max_size_to_lower_base_log)
+    double max_size_to_lower_base_log,
+    MergeScheduler * merge_scheduler = nullptr)
 {
     size_t parts_count = parts.size();
     if (parts_count <= 1)
         return;
+
+    if (merge_scheduler)
+        merge_scheduler->prepare();
 
     for (size_t begin = 0; begin < parts_count; ++begin)
     {
@@ -188,8 +193,15 @@ void selectWithinPartition(
 
             if (settings.max_total_rows_to_merge && sum_rows > settings.max_total_rows_to_merge)
                 break;
+            
+            size_t estimated_size_to_merge = max_total_size_to_merge;
+            if (merge_scheduler)
+                merge_scheduler->getEstimatedBytes(estimated_size_to_merge);
 
-            if (max_total_size_to_merge && sum_size > max_total_size_to_merge)
+            if (estimated_size_to_merge && sum_size > estimated_size_to_merge)
+                break;
+
+            if (merge_scheduler && !merge_scheduler->canMerge(parts, begin, end))
                 break;
 
             if (allow(sum_size, max_size, min_age, end - begin, parts_count, min_size_to_lower_base_log, max_size_to_lower_base_log, settings))
@@ -208,7 +220,8 @@ void selectWithinPartition(
 
 SimpleMergeSelector::PartsRange SimpleMergeSelector::select(
     const PartsRanges & parts_ranges,
-    const size_t max_total_size_to_merge)
+    const size_t max_total_size_to_merge,
+    MergeScheduler * merge_scheduler)
 {
     Estimator estimator;
 
@@ -217,7 +230,7 @@ SimpleMergeSelector::PartsRange SimpleMergeSelector::select(
     const double max_size_to_lower_base_log = log(1 + settings.max_size_to_lower_base);
 
     for (const auto & part_range : parts_ranges)
-        selectWithinPartition(part_range, max_total_size_to_merge, estimator, settings, min_size_to_lower_base_log, max_size_to_lower_base_log);
+        selectWithinPartition(part_range, max_total_size_to_merge, estimator, settings, min_size_to_lower_base_log, max_size_to_lower_base_log, merge_scheduler);
 
     return estimator.getBest();
 }

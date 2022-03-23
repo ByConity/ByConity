@@ -6,6 +6,7 @@
 
 namespace DB
 {
+class MergeScheduler;
 class MergeTreeData;
 
 #define LIST_OF_DANCE_MERGE_SELECTOR_SETTINGS(M) \
@@ -48,8 +49,8 @@ public:
 
     DanceMergeSelector(MergeTreeData & data_, const Settings & settings_) : data(data_), settings(settings_) {}
 
-    PartsRange select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge) override;
-    PartsRanges selectMulti(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge) override;
+    PartsRange select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
+    PartsRanges selectMulti(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
 
     struct BestRangeWithScore
     {
@@ -71,7 +72,7 @@ public:
     };
 
 private:
-    void selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge);
+    void selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr);
     bool allow(double sum_size, double max_size, double min_age, double range_size);
 
     [[maybe_unused]] MergeTreeData & data;

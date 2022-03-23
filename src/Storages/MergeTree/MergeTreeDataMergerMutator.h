@@ -15,6 +15,7 @@ namespace DB
 {
 
 class MergeProgressCallback;
+class MergeScheduler;
 
 enum class SelectPartsDecision
 {
@@ -107,7 +108,8 @@ public:
         size_t max_total_size_to_merge,
         const AllowedMergingPredicate & can_merge,
         bool merge_with_ttl_allowed,
-        String * out_disable_reason = nullptr);
+        String * out_disable_reason = nullptr,
+        MergeScheduler * merge_scheduler = nullptr);
 
     SelectPartsDecision selectPartsToMergeMulti(
         std::vector<FutureMergedMutatedPart> & future_parts,
@@ -116,7 +118,8 @@ public:
         size_t max_total_size_to_merge,
         const AllowedMergingPredicate & can_merge,
         bool merge_with_ttl_allowed,
-        String * out_disable_reason = nullptr);
+        String * out_disable_reason = nullptr,
+        MergeScheduler * merge_scheduler = nullptr);
 
     /** Select all the parts in the specified partition for merge, if possible.
       * final - choose to merge even a single part - that is, allow to merge one part "with itself",
@@ -131,7 +134,8 @@ public:
         bool final,
         const StorageMetadataPtr & metadata_snapshot,
         String * out_disable_reason = nullptr,
-        bool optimize_skip_merged_partitions = false);
+        bool optimize_skip_merged_partitions = false,
+        MergeScheduler * merge_scheduler = nullptr);
 
     /** Merge the parts.
       * If `reservation != nullptr`, now and then reduces the size of the reserved space

@@ -12,6 +12,7 @@
 #include <Storages/MergeTree/HaUniqueMergeTreeRestartingThread.h>
 #include <Storages/MergeTree/LSNStatus.h>
 #include <Storages/MergeTree/LeaderElection.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>

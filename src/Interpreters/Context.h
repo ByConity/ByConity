@@ -724,6 +724,9 @@ public:
       */
     void dropCaches() const;
 
+    /// Settings for merge scheduler.
+    void setMergeSchedulerSettings(const Poco::Util::AbstractConfiguration & config);
+
     /// Settings for MergeTree background tasks stored in config.xml
     BackgroundTaskSchedulingSettings getBackgroundProcessingTaskSchedulingSettings() const;
     BackgroundTaskSchedulingSettings getBackgroundMoveTaskSchedulingSettings() const;
