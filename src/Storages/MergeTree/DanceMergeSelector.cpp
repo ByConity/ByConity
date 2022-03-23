@@ -1,6 +1,7 @@
 #include <Storages/MergeTree/DanceMergeSelector.h>
 
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 #include <Common/Exception.h>
 #include <Common/interpolate.h>
 
@@ -53,13 +54,13 @@ static double mapPiecewiseLinearToUnit(double value, double min, double max)
     return value <= min ? 0 : (value >= max ? 1 : ((value - min) / (max - min)));
 }
 
-IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partitions, const size_t max_total_size_to_merge)
+IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     for (auto & partition : partitions)
         num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
 
     for (auto & partition : partitions)
-        selectWithinPartition(partition, max_total_size_to_merge);
+        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
 
     auto it = std::min_element(
         best_ranges.begin(), best_ranges.end(), [](auto & lhs, auto & rhs) { return lhs.second.min_score < rhs.second.min_score; });
@@ -69,13 +70,13 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
     return {};
 }
 
-IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge)
+IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     for (auto & partition : partitions)
         num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
 
     for (auto & partition : partitions)
-        selectWithinPartition(partition, max_total_size_to_merge);
+        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
 
     std::vector<BestRangeWithScore *> range_vec;
     for (auto & [_, range] : best_ranges)
@@ -92,7 +93,7 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
     return res;
 }
 
-void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge)
+void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
     if (parts.size() <= 1)
         return;

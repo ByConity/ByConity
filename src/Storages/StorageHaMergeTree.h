@@ -15,6 +15,7 @@
 #include <Storages/MergeTree/HaMergeTreeRestartingThread.h>
 #include <Storages/MergeTree/HaQueueExecutingEntrySet.h>
 #include <Storages/MergeTree/LeaderElection.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
@@ -431,6 +432,9 @@ private:
       */
     void mergeSelectingTask();
 
+    using MergeSchedulerPtr = std::unique_ptr<MergeScheduler>;
+    MergeSchedulerPtr merge_scheduler = nullptr;
+    
     void createLogEntriesToMergeParts(const std::vector<FutureMergedMutatedPart> & future_parts);
     HaMergeTreeLogEntryPtr createLogEntryToMutatePart(
         const MergeTreePartInfo & part_info, Int64 mutation_version, int alter_version, bool current_replica_only = false);

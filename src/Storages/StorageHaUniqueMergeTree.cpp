@@ -1985,14 +1985,14 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
                 /*pool_size=*/ getContext()->getUniqueTableSchedulePool().getNumberOfThreads(),
                 /*pool_used=*/ running_bg_merges == 0 ? 0 : running_bg_merges - 1);
             if (max_source_parts_size > 0)
-                selected = merger_mutator.selectPartsToMerge(future_part, aggressive, max_source_parts_size, can_merge, /*merge_with_ttl_allowed*/true, nullptr);
+                selected = merger_mutator.selectPartsToMerge(future_part, aggressive, max_source_parts_size, can_merge, /*merge_with_ttl_allowed*/true, nullptr, /*merge_scheduler*/nullptr);
             else if (enable_try)
                 LOG_DEBUG(log, "Current value of max_source_parts_size is zero");
         }
         else
         {
             UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
-            selected = merger_mutator.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, getInMemoryMetadataPtr(), nullptr, /*optimize_skip_merged_partitions*/ false);
+            selected = merger_mutator.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, getInMemoryMetadataPtr(), nullptr, /*optimize_skip_merged_partitions*/ false, /*merge_scheduler*/nullptr);
         }
         if (selected != SelectPartsDecision::SELECTED || enable_try)
             return false;

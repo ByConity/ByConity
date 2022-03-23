@@ -8,6 +8,7 @@
 #include <Storages/MergeTree/AllMergeSelector.h>
 #include <Storages/MergeTree/TTLMergeSelector.h>
 #include <Storages/MergeTree/MergeList.h>
+#include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <DataStreams/TTLBlockInputStream.h>
@@ -227,7 +228,8 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
     size_t max_total_size_to_merge,
     const AllowedMergingPredicate & can_merge_callback,
     bool merge_with_ttl_allowed,
-    String * out_disable_reason)
+    String * out_disable_reason,
+    MergeScheduler * merge_scheduler)
 {
     MergeTreeData::DataPartsVector data_parts = data.getDataPartsVector();
     const auto data_settings = data.getSettings();
@@ -378,7 +380,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMerge(
             merge_settings.base = 1;
 
         parts_to_merge = SimpleMergeSelector(merge_settings)
-                            .select(parts_ranges, max_total_size_to_merge);
+                            .select(parts_ranges, max_total_size_to_merge, merge_scheduler);
 
         /// Do not allow to "merge" part with itself for regular merges, unless it is a TTL-merge where it is ok to remove some values with expired ttl
         if (parts_to_merge.size() == 1)
@@ -413,7 +415,8 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
     size_t max_total_size_to_merge,
     const AllowedMergingPredicate & can_merge_callback,
     bool merge_with_ttl_allowed,
-    String * out_disable_reason)
+    String * out_disable_reason,
+    MergeScheduler * merge_scheduler)
 {
     const auto data_settings = data.getSettings();
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
@@ -591,7 +594,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         merge_selector = std::make_unique<SimpleMergeSelector>(merge_settings);
     }
 
-    auto ranges = merge_selector->selectMulti(parts_ranges, max_total_size_to_merge);
+    auto ranges = merge_selector->selectMulti(parts_ranges, max_total_size_to_merge, merge_scheduler);
     if (ranges.empty())
     {
         if (out_disable_reason)
@@ -623,9 +626,13 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectAllPartsToMergeWithinParti
     bool final,
     const StorageMetadataPtr & metadata_snapshot,
     String * out_disable_reason,
-    bool optimize_skip_merged_partitions)
+    bool optimize_skip_merged_partitions,
+    MergeScheduler * merge_scheduler)
 {
     MergeTreeData::DataPartsVector parts = selectAllPartsFromPartition(partition_id);
+
+    if (merge_scheduler)
+        parts = merge_scheduler->getPartsForOptimize(parts);
 
     if (parts.empty())
         return SelectPartsDecision::CANNOT_SELECT;

@@ -868,6 +868,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             global_context->updateStorageConfiguration(*config);
             global_context->updateInterserverCredentials(*config);
+
+            global_context->setMergeSchedulerSettings(*config);
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 

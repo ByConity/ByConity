@@ -1705,6 +1705,16 @@ void Context::dropCaches() const
         shared->mmap_cache->reset();
 }
 
+
+void Context::setMergeSchedulerSettings(const Poco::Util::AbstractConfiguration & config)
+{
+    settings.enable_merge_scheduler = config.getBool("enable_merge_scheduler", false);
+    settings.slow_query_ms = config.getUInt64("slow_query_ms", 0);
+    settings.max_rows_to_schedule_merge = config.getUInt64("max_rows_to_schedule_merge", 500000000);
+    settings.strict_rows_to_schedule_merge = config.getUInt64("strict_rows_to_schedule_merge", 50000000);
+    settings.total_rows_to_schedule_merge = config.getUInt64("total_rows_to_schedule_merge", 0);
+}
+
 BackgroundSchedulePool & Context::getBufferFlushSchedulePool() const
 {
     auto lock = getLock();

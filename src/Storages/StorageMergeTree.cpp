@@ -83,6 +83,7 @@ StorageMergeTree::StorageMergeTree(
     , merger_mutator(*this, getContext()->getSettingsRef().background_pool_size)
     , background_executor(*this, getContext())
     , background_moves_executor(*this, getContext())
+    , merge_scheduler(std::make_unique<MergeScheduler>(getContext(), getSettings()->max_replicated_merges_in_queue))
 
 {
     loadDataParts(has_force_restore_data_flag);
@@ -741,7 +742,8 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
                 max_source_parts_size,
                 can_merge,
                 merge_with_ttl_allowed,
-                out_disable_reason);
+                out_disable_reason,
+                merge_scheduler.get());
         }
         else if (out_disable_reason)
             *out_disable_reason = "Current value of max_source_parts_size is zero";
@@ -752,7 +754,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         {
             UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
             select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
-                future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason, optimize_skip_merged_partitions);
+                future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason, optimize_skip_merged_partitions, merge_scheduler.get());
             auto timeout_ms = getSettings()->lock_acquire_timeout_for_background_operations.totalMilliseconds();
             auto timeout = std::chrono::milliseconds(timeout_ms);
 
