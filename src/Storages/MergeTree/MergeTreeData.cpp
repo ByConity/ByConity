@@ -3917,6 +3917,28 @@ MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsToAttach(const 
     return loaded_parts;
 }
 
+MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsInPathToAttach(const PartNamesWithDisks & parts_with_disk, const String & relative_path)
+{
+    LOG_DEBUG(log, "Loading parts from relative path {}", relative_path);
+
+    MutableDataPartsVector loaded_parts;
+    loaded_parts.reserve(parts_with_disk.size());
+
+    for (const auto & [part_name, disk_ptr] : parts_with_disk)
+    {
+        LOG_DEBUG(log, "Checking part {}", part_name);
+        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk_ptr);
+        MutableDataPartPtr part = createPart(part_name, single_disk_volume, fs::path(relative_path) / part_name);
+
+        loadPartAndFixMetadataImpl(part);
+        loaded_parts.push_back(part);
+    }
+
+    LOG_DEBUG(log, "Loaded {} parts.", loaded_parts.size());
+
+    return loaded_parts;
+}
+
 namespace
 {
 

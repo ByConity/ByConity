@@ -296,6 +296,15 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::FETCH_PARTS:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (!ParserStringLiteral().parse(pos, res->target_path, expected))
+                return false;
+            break;
+        }
+
         default:
             /// There are no [db.table] after COMMAND NAME
             break;

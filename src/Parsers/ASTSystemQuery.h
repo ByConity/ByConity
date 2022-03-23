@@ -70,6 +70,7 @@ public:
         START_CONSUME,
         STOP_CONSUME,
         RESTART_CONSUME,
+        FETCH_PARTS,
         END
     };
 
@@ -93,6 +94,8 @@ public:
 
     ASTPtr predicate;
     ASTPtr values_changes;
+
+    ASTPtr target_path;
 
     String getID(char) const override { return "SYSTEM query"; }
 

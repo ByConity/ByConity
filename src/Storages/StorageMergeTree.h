@@ -97,6 +97,9 @@ public:
     bool scheduleDataProcessingJob(IBackgroundJobExecutor & executor) override;
 
     MergeTreeDeduplicationLog * getDeduplicationLog() { return deduplication_log.get(); }
+
+    void attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr local_context) override;
+
 private:
 
     /// Mutex and condvar for synchronous mutations wait

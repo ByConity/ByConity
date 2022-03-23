@@ -41,6 +41,10 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/formatAST.h>
+#include <Poco/UUIDGenerator.h>
+#include <Poco/URI.h>
+#include <TableFunctions/ITableFunction.h>
+#include <FormaterTool/HDFSDumper.h>
 #include <csignal>
 #include <algorithm>
 
@@ -524,6 +528,9 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::STOP_LISTEN_QUERIES:
         case Type::START_LISTEN_QUERIES:
             throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
+        case Type::FETCH_PARTS:
+            fetchParts(query, table_id, system_context);
+            break;
 
         case Type::EXECUTE_LOG:
         case Type::SKIP_LOG:
@@ -1029,6 +1036,12 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             break;
         }
 
+        case Type::FETCH_PARTS:
+        {
+            required_access.emplace_back(AccessType::INSERT, query.database, query.table);
+            break;
+        }
+
         case Type::STOP_LISTEN_QUERIES: break;
         case Type::START_LISTEN_QUERIES: break;
         case Type::UNKNOWN: break;
@@ -1040,6 +1053,86 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
 void InterpreterSystemQuery::extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & /*ast*/, ContextPtr) const
 {
     elem.query_kind = "System";
+}
+
+void InterpreterSystemQuery::fetchParts(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)
+{
+
+    if (table_id.empty())
+        throw Exception("Database and table must be specified when fetch parts from remote.", ErrorCodes::LOGICAL_ERROR);
+
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, local_context);
+
+    auto merge_tree_storage = dynamic_cast<MergeTreeData *>(table.get());
+
+    if (!merge_tree_storage)
+        throw Exception("FetchParts only support MergeTree family, but got " + table->getName(), ErrorCodes::LOGICAL_ERROR);
+
+    String hdfs_base = query.target_path->as<ASTLiteral &>().value.safeGet<String>();
+
+    String prefix, fuzzyname;
+    size_t pos = hdfs_base.find_last_of('/');
+    if (pos == hdfs_base.length() - 1)
+    {
+        size_t lpos = hdfs_base.rfind('/', pos - 1);
+        prefix = hdfs_base.substr(0, lpos + 1);
+        fuzzyname = hdfs_base.substr(lpos + 1, pos - lpos - 1);
+    }
+    else
+    {
+        prefix = hdfs_base.substr(0, pos + 1);
+        fuzzyname = hdfs_base.substr(pos + 1);
+    }
+
+    /// hard code max subdir size
+    std::vector<String> matched = parseDescription(fuzzyname, 0, fuzzyname.length(), ',', 100);
+
+    auto disks = merge_tree_storage->getDisksByType(DiskType::Type::Local);
+
+    if (disks.empty())
+        throw Exception("Cannot fetch parts to storage with no local disk.", ErrorCodes::LOGICAL_ERROR);
+
+    Poco::UUIDGenerator & generator = Poco::UUIDGenerator::defaultGenerator();
+    HDFSDumper dumper(getContext()->getHdfsUser(), getContext()->getHdfsNNProxy());
+    for (auto const & remote_dir : matched)
+    {
+        String remote_path = prefix + remote_dir + "/";
+        String part_relative_path = "detached/" + generator.createRandom().toString() + "/";
+
+        SCOPE_EXIT(
+        {
+            // clean tmp directory, which is created during fetching part from remote
+            for (const auto & disk: disks)
+            {
+                Poco::File local_tmp_path(fullPath(disk, fs::path(merge_tree_storage->getRelativeDataPath()) / part_relative_path));
+                local_tmp_path.remove(true);
+            }
+        });
+
+        /// There may have network exceptions when fetching parts from remote, just try again it happens.
+        std::vector<std::pair<String, DiskPtr>> fetched;
+        int max_retry = 2;
+        while (max_retry)
+        {
+            try
+            {
+                fetched = dumper.fetchPartsFromRemote(disks, remote_path, fs::path(merge_tree_storage->getRelativeDataPath()) / part_relative_path);
+                break;
+            }
+            catch (Exception & e)
+            {
+                if (--max_retry)
+                {
+                    LOG_DEBUG(log, "Failed to fetch from remote, error : {}, try again", e.message());
+                }
+                else
+                    throw;
+            }
+        }
+        // attach fetched part
+        merge_tree_storage->attachPartsInDirectory(fetched, part_relative_path, local_context);
+    }
+    
 }
 
 }

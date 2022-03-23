@@ -216,8 +216,8 @@ if (USE_INTERNAL_POCO_LIBRARY)
     target_compile_definitions (_poco_foundation
         PRIVATE
             POCO_UNBUNDLED
-            POCO_UNBUNDLED_ZLIB
         PUBLIC
+            POCO_UNBUNDLED_ZLIB
             POCO_ENABLE_CPP11
             POCO_OS_FAMILY_UNIX
     )

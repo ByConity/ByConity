@@ -210,6 +210,8 @@ public:
     BitEngineDictionaryHaManager * getBitEngineDictionaryHaManager() { return bitengine_ha_manager.get(); }
     /************  BitEngine Related functions ******/
 
+    void attachPartsInDirectory(const PartNamesWithDisks & parts_with_disk, const String & relative_path, ContextPtr query_context) override;
+
 private:
     /// Get a sequential consistent view of current parts.
     ReplicatedMergeTreeQuorumAddedParts::PartitionIdToMaxBlock getMaxAddedBlocks() const;
