@@ -12,6 +12,10 @@
 namespace DB
 {
 
+/**
+ * future_part : parts to be ingested.
+ * it contains new_part, source_part that requeired for ingestion.
+ */
 struct IngestPart
 {
     FutureMergedMutatedPart future_part;

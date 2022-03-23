@@ -16,6 +16,11 @@ using MergeTreeIndexPtr = std::shared_ptr<const IMergeTreeIndex>;
 struct IMergeTreeProjection;
 using MergeTreeProjectionPtr = std::shared_ptr<const IMergeTreeProjection>;
 
+/***
+ * link files from source_part_path to new_part_path,
+ * need a files_to_skip / files_to_rename to indicate which files should not
+ * be linked and which files should be renamed after link.
+ */
 class PartLinker
 {
 public:
