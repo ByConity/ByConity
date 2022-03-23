@@ -75,6 +75,10 @@ static Field convertNumericType(const Field & from, const IDataType & type)
         return convertNumericTypeImpl<UInt256, To>(from);
     if (from.getType() == Field::Types::Int256)
         return convertNumericTypeImpl<Int256, To>(from);
+    if (from.getType() == Field::Types::Decimal32)
+        return DecimalUtils::convertTo<Float32>(from.get<Decimal32>().getValue(), from.get<Decimal32>().getScale());
+    if (from.getType() == Field::Types::Decimal64)
+        return DecimalUtils::convertTo<Float64>(from.get<Decimal64>().getValue(), from.get<Decimal64>().getScale());
 
     throw Exception("Type mismatch in IN or VALUES section. Expected: " + type.getName() + ". Got: "
         + Field::Types::toString(from.getType()), ErrorCodes::TYPE_MISMATCH);
