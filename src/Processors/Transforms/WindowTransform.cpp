@@ -5,6 +5,8 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/arithmeticOverflow.h>
 #include <Columns/ColumnConst.h>
+#include <Columns/ColumnNullable.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/ExpressionActions.h>
@@ -35,6 +37,58 @@ public:
     // Must insert the result for current_row.
     virtual void windowInsertResultInto(const WindowTransform * transform,
         size_t function_index) = 0;
+
+    virtual bool hasSecondStage() const {return false;}
+};
+
+struct ITwoStageWindowFunction: public IWindowFunction
+{
+    struct PartitionDataRange {
+        /* point to first block */
+        std::deque<WindowTransformBlock>::iterator blk_it;
+        /* row number in first block */
+        uint64_t blk_offset;
+        /* total rows */
+        uint64_t total_row_cnt;
+        /* pointer to window transform */
+        WindowTransform *wt;
+    };
+    virtual void executeSecondStage(const PartitionDataRange *pdr,
+                                    size_t function_index) = 0;
+
+    bool hasSecondStage() const override {return true;}
+
+    template<typename T, typename F>
+    void foreach(const PartitionDataRange *pdr, size_t wi, F fn) {
+        uint64_t total = pdr->total_row_cnt + pdr->blk_offset;
+        uint64_t row = pdr->blk_offset;
+        auto it = pdr->blk_it;
+
+        do {
+            T* col = assert_cast<T *>(it->output_columns[wi].get());
+
+            for (; row < std::min(it->rows, total); row++)
+                fn(col, row);
+
+            total -= row;
+            row = 0;
+            ++it;
+        } while (total);
+    }
+
+    template<typename T, typename F>
+    void modifyEach(const PartitionDataRange *pdr, size_t wi, F fn) {
+        foreach<T>(pdr, wi, [&fn](T* col, uint64_t row) {
+            fn(col->getElement(row));
+        });
+    }
+
+    template<typename T, typename F>
+    void insertEach(const PartitionDataRange *pdr, size_t wi, F fn) {
+        foreach<T>(pdr, wi, [&fn](T* col, uint64_t) {
+            col->getData().push_back(fn());
+        });
+    }
 };
 
 // Compares ORDER BY column values at given rows to find the boundaries of frame:
@@ -227,6 +281,10 @@ WindowTransform::WindowTransform(const Block & input_header_,
                 aggregate_function->sizeOfData(),
                 aggregate_function->alignOfData());
             aggregate_function->create(workspace.aggregate_function_state.data());
+        }
+        else if (workspace.window_function_impl->hasSecondStage())
+        {
+            has_two_stage_exection = true;
         }
 
         workspaces.push_back(std::move(workspace));
@@ -1059,6 +1117,31 @@ void WindowTransform::updateAggregationState()
     prev_frame_end = frame_end;
 }
 
+void WindowTransform::executeSecondStage()
+{
+    if (!has_two_stage_exection)
+        return;
+
+    const struct ITwoStageWindowFunction::PartitionDataRange pdr = {
+        .blk_it = blocks.begin() + (partition_start.block - first_block_number),
+        .blk_offset = partition_start.row,
+        .total_row_cnt = current_row_number - 1,
+        .wt = this,
+    };
+
+    for (size_t wi = 0; wi < workspaces.size(); ++wi)
+    {
+        IWindowFunction * wf = workspaces[wi].window_function_impl;
+        if (!wf || !wf->hasSecondStage())
+            continue;
+
+        static_cast<ITwoStageWindowFunction*>(wf)->executeSecondStage(&pdr, wi);
+    }
+
+    first_not_ready_row = partition_end;
+}
+
+
 void WindowTransform::writeOutCurrentRow()
 {
     assert(current_row < partition_end);
@@ -1268,13 +1351,15 @@ void WindowTransform::appendChunk(Chunk & chunk)
             // because current_row might now be past-the-end.
             advanceRowNumber(current_row);
             ++current_row_number;
-            first_not_ready_row = current_row;
+            if (!has_two_stage_exection)
+                first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
         }
 
         if (input_is_finished)
         {
+            executeSecondStage();
             // We finalized the last partition in the above loop, and don't have
             // to do anything else.
             return;
@@ -1289,6 +1374,8 @@ void WindowTransform::appendChunk(Chunk & chunk)
             assert(!input_is_finished);
             break;
         }
+
+        executeSecondStage();
 
         // Start the next partition.
         partition_start = partition_end;
@@ -1511,9 +1598,10 @@ void WindowTransform::work()
 
 // A basic implementation for a true window function. It pretends to be an
 // aggregate function, but refuses to work as such.
+template<class T>
 struct WindowFunction
-    : public IAggregateFunctionHelper<WindowFunction>
-    , public IWindowFunction
+    : public IAggregateFunctionHelper<WindowFunction<T>>
+    , public T
 {
     std::string name;
 
@@ -1544,7 +1632,7 @@ struct WindowFunction
     void insertResultInto(AggregateDataPtr __restrict, IColumn &, Arena *) const override { fail(); }
 };
 
-struct WindowFunctionRank final : public WindowFunction
+struct WindowFunctionRank final : public WindowFunction<IWindowFunction>
 {
     WindowFunctionRank(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
@@ -1566,7 +1654,7 @@ struct WindowFunctionRank final : public WindowFunction
     }
 };
 
-struct WindowFunctionDenseRank final : public WindowFunction
+struct WindowFunctionDenseRank final : public WindowFunction<IWindowFunction>
 {
     WindowFunctionDenseRank(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
@@ -1588,7 +1676,7 @@ struct WindowFunctionDenseRank final : public WindowFunction
     }
 };
 
-struct WindowFunctionRowNumber final : public WindowFunction
+struct WindowFunctionRowNumber final : public WindowFunction<IWindowFunction>
 {
     WindowFunctionRowNumber(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
@@ -1610,9 +1698,294 @@ struct WindowFunctionRowNumber final : public WindowFunction
     }
 };
 
+// Despite the name, this function always returns a value between 0.0 and 1.0 equal to
+// (rank - 1)/(partition-rows - 1), where rank is the value returned by built-in window
+// function rank() and partition-rows is the total number of rows in the partition.
+// If the partition contains only one row, this function returns 0.0.
+struct WindowFunctionPercentRank final : public WindowFunction<ITwoStageWindowFunction>
+{
+    using Type = Float64;
+    WindowFunctionPercentRank(const std::string & name_,
+                              const DataTypes & argument_types_,
+                              const Array & parameters_)
+        : WindowFunction(name_, argument_types_, parameters_)
+    {}
+
+    DataTypePtr getReturnType() const override
+    { return std::make_shared<DataTypeNumber<Type>>(); }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+    void windowInsertResultInto(const WindowTransform * transform,
+                                size_t function_index) override
+    {
+        IColumn & to = *transform->blockAt(transform->current_row)
+            .output_columns[function_index];
+        assert_cast<ColumnVector<Type> &>(to).getData().push_back(
+            transform->peer_group_start_row_number - 1);
+    }
+
+    void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
+    {
+        if (pdr->total_row_cnt <= 1)
+            return;
+
+        /* rank - 1 was done in windowInsertResultInto */
+        modifyEach<ColumnVector<Type>>(pdr, wi, [pdr](auto &rank) {
+            rank = rank / (pdr->total_row_cnt - 1);
+        });
+    }
+};
+
+struct WindowFunctionCumeDist final : public WindowFunction<ITwoStageWindowFunction>
+{
+    using Type = Float64;
+    WindowFunctionCumeDist(const std::string & name_,
+                           const DataTypes & argument_types_,
+                           const Array & parameters_)
+        : WindowFunction(name_, argument_types_, parameters_)
+    {}
+
+    DataTypePtr getReturnType() const override
+    { return std::make_shared<DataTypeNumber<Type>>(); }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+    void fillGroup(const WindowTransform * wt, size_t wi) {
+        /* write back line count back to the last group */
+        for (size_t i = 0; i < last_peer_cnt; i++) {
+            IColumn & to = *wt->blockAt(last_peer_start).output_columns[wi];
+            assert_cast<ColumnVector<Type> &>(to).getData().push_back(
+                wt->current_row_number - 1);
+            wt->advanceRowNumber(last_peer_start);
+        }
+    }
+
+    void windowInsertResultInto(const WindowTransform * wt,
+                                size_t function_index) override
+    {
+        /* still in the same group */
+        if (wt->peer_group_start_row_number != wt->current_row_number) {
+            last_peer_cnt++;
+            return;
+        }
+
+        /* new group */
+        fillGroup(wt, function_index);
+        last_peer_start = wt->current_row;
+        last_peer_cnt = 1;
+    }
+
+    void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
+    {
+        /* write back last group */
+        fillGroup(pdr->wt, wi);
+        /* same function instance will be reused for different partitions,
+         * so we need to reset the peer cnt */
+        last_peer_cnt = 0;
+
+        /* get cume_dist */
+        modifyEach<ColumnVector<Type>>(pdr, wi, [pdr](auto &cnt) {
+            cnt = cnt / pdr->total_row_cnt;
+        });
+    }
+
+    uint64_t last_peer_cnt = 0;
+    RowNumber last_peer_start;
+};
+
+/* ntile(number of tiles) */
+struct WindowFunctionNtile final : public WindowFunction<ITwoStageWindowFunction>
+{
+    using Type = UInt64;
+    WindowFunctionNtile(const std::string & name_,
+                        const DataTypes & argument_types_,
+                        const Array & parameters_)
+        : WindowFunction(name_, argument_types_, parameters_)
+    {
+        if (!parameters.empty())
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} cannot be parameterized", name_);
+        }
+
+        if (argument_types.size() != 1)
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} takes only one argument", name_);
+        }
+
+        if (!isInt64OrUInt64FieldType(argument_types[0]->getDefault().getType()))
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "number of tiles must be an integer, '{}' given",
+                argument_types[0]->getName());
+        }
+    }
+
+    DataTypePtr getReturnType() const override
+    { return std::make_shared<DataTypeNumber<Type>>(); }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+    void windowInsertResultInto(const WindowTransform *, size_t) override
+    {
+    }
+
+    void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
+    {
+        uint64_t tiles_cnt = getTilesCnt(pdr, wi);
+        size_t tile_rows = 0;
+        size_t bucket_sz;     /* max bucket size */
+        size_t v = 1;         /* value to write */
+        size_t i = 0;         /* row count */
+
+        if (tiles_cnt < 1) {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "argument of ntile must be greater than zero");
+        }
+
+        bucket_sz = (pdr->total_row_cnt + tiles_cnt - 1) / tiles_cnt;
+        if (bucket_sz <= 1)
+            bucket_sz = 1;
+
+        const size_t delim = pdr->total_row_cnt % tiles_cnt * bucket_sz;
+
+        insertEach<ColumnVector<Type>>(pdr, wi, [&i, &v, &bucket_sz, &tile_rows, delim]() {
+            if (tile_rows++ == bucket_sz) {
+                /* at first of group */
+                tile_rows = 1;
+                ++v;
+                if (i == delim)
+                    --bucket_sz;
+            }
+
+            ++i;
+            return v;
+        });
+    }
+
+    static uint64_t getTilesCnt(const PartitionDataRange *pdr, size_t wi) {
+        size_t idx = pdr->wt->workspaces[wi].argument_column_indices[0];
+        return (*pdr->blk_it->input_columns[idx])[pdr->blk_offset].get<Int64>();
+    }
+};
+
+/* nth_value(expr, nth row) [FROM FIRST/LAST] [null treatment]
+ * nth row: simple value spec, or dynamic parameter spec
+ * default FROM FIRST, and RESPECT NULLs */
+struct WindowFunctionNthValue final : public WindowFunction<ITwoStageWindowFunction>
+{
+    WindowFunctionNthValue(const std::string & name_,
+                           const DataTypes & argument_types_,
+                           const Array & parameters_)
+        : WindowFunction(name_, argument_types_, parameters_)
+    {
+        if (!parameters.empty())
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} cannot be parameterized", name_);
+        }
+
+        if (argument_types.size() != 2)
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "Function {} takes two arguments", name_);
+        }
+
+        if (!isInt64OrUInt64FieldType(argument_types[1]->getDefault().getType()))
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                "nth row must be an integer, '{}' given",
+                argument_types[1]->getName());
+        }
+    }
+
+    DataTypePtr getReturnType() const override {
+        return makeNullable(argument_types[0]);
+    }
+
+    bool allocatesMemoryInArena() const override { return false; }
+
+    static uint64_t getNthRow(const WindowTransform * wt, size_t wi) {
+        size_t idx = wt->workspaces[wi].argument_column_indices[1];
+        const auto &col = *wt->blockAt(wt->current_row).input_columns[idx];
+        return col[wt->current_row.row].get<Int64>();
+    }
+
+    void fillGroup(const WindowTransform * wt, size_t wi) {
+        if (!last_peer_cnt)
+            return;
+
+        if (!nth_row) {
+            nth_row = getNthRow(wt, wi);
+            if (!nth_row)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS,
+                    "Function {} expect positive nth row", name);
+            input_idx = wt->workspaces[wi].argument_column_indices[0];
+        }
+
+        if (last_peer_cnt < nth_row) {
+            /* write null */
+            for (size_t i = 0; i < last_peer_cnt; i++) {
+                IColumn & to = *wt->blockAt(last_peer_start).output_columns[wi];
+                // TODO: insertManyDefault
+                to.insertDefault();
+                wt->advanceRowNumber(last_peer_start);
+            }
+        } else {
+            auto *p = wt->blockAt(last_peer_start).output_columns[wi].get();
+            auto *to = static_cast<ColumnNullable *>(p);
+
+            for (size_t i = 0; i < nth_row - 1; i++)
+                wt->advanceRowNumber(last_peer_start);
+
+            for (size_t i = 0; i < last_peer_cnt; i++) {
+                const IColumn *c;
+
+                c = wt->blockAt(last_peer_start).input_columns[input_idx].get();
+                if (c->isNullable())
+                    to->insertFrom(*c, last_peer_start.row);
+                else
+                    to->insertFromNotNullable(*c, last_peer_start.row);
+            }
+        }
+    }
+
+    void windowInsertResultInto(const WindowTransform * wt,
+                                size_t function_index) override
+    {
+        /* still in the same group */
+        if (wt->peer_group_start_row_number != wt->current_row_number) {
+            last_peer_cnt++;
+            return;
+        }
+
+        /* new group */
+        fillGroup(wt, function_index);
+        last_peer_start = wt->current_row;
+        last_peer_cnt = 1;
+    }
+
+    void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
+    {
+        /* write back last group */
+        fillGroup(pdr->wt, wi);
+        /* same function instance will be reused for different partitions,
+         * so we need to reset the peer cnt */
+        last_peer_cnt = 0;
+        nth_row = 0;
+    }
+
+    RowNumber last_peer_start;
+    size_t last_peer_cnt = 0;
+    size_t nth_row = 0;
+    size_t input_idx;
+};
+
 // ClickHouse-specific variant of lag/lead that respects the window frame.
 template <bool is_lead>
-struct WindowFunctionLagLeadInFrame final : public WindowFunction
+struct WindowFunctionLagLeadInFrame final : public WindowFunction<IWindowFunction>
 {
     WindowFunctionLagLeadInFrame(const std::string & name_,
             const DataTypes & argument_types_, const Array & parameters_)
@@ -1759,12 +2132,41 @@ void registerWindowFunctions(AggregateFunctionFactory & factory)
                 parameters);
         });
 
+    factory.registerFunction("percent_rank", [](const std::string & name,
+        const DataTypes & argument_types, const Array & parameters, const Settings *)
+    {
+        return std::make_shared<WindowFunctionPercentRank>(name, argument_types,
+            parameters);
+    });
+
+    factory.registerFunction("cume_dist", [](const std::string & name,
+        const DataTypes & argument_types, const Array & parameters, const Settings *)
+    {
+        return std::make_shared<WindowFunctionCumeDist>(name, argument_types,
+            parameters);
+    });
+
+    factory.registerFunction("ntile", [](const std::string & name,
+        const DataTypes & argument_types, const Array & parameters, const Settings *)
+    {
+        return std::make_shared<WindowFunctionNtile>(name, argument_types,
+            parameters);
+    });
+
+    factory.registerFunction("nth_value", [](const std::string & name,
+        const DataTypes & argument_types, const Array & parameters, const Settings *)
+    {
+        return std::make_shared<WindowFunctionNthValue>(name, argument_types,
+            parameters);
+    });
+
     factory.registerFunction("row_number", [](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)
         {
             return std::make_shared<WindowFunctionRowNumber>(name, argument_types,
                 parameters);
         });
+
 
     factory.registerFunction("lagInFrame", [](const std::string & name,
             const DataTypes & argument_types, const Array & parameters, const Settings *)

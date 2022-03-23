@@ -133,6 +133,7 @@ public:
 
     void updateAggregationState();
     void writeOutCurrentRow();
+    void executeSecondStage();
 
     Columns & inputAt(const RowNumber & x)
     {
@@ -320,6 +321,7 @@ public:
     uint64_t peer_group_number = 1;
     int64_t frame_offset[2];
     int64_t curr_offset[2];
+    bool has_two_stage_exection = false;
 
     // The frame is [frame_start, frame_end) if frame_ended && frame_started,
     // and unknown otherwise. Note that when we move to the next row, both the
