@@ -99,10 +99,14 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
                       << (clear_column ? "CLEAR " : "DROP ") << "COLUMN " << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
         column->formatImpl(settings, state, frame);
-        if (partition)
+        if (partition || predicate)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " IN PARTITION " << (settings.hilite ? hilite_none : "");
-            partition->formatImpl(settings, state, frame);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
+                        << (predicate ? " IN PARTITION WHERE " : " IN PARTITION ") << (settings.hilite ? hilite_none : "");
+            if (partition)
+                partition->formatImpl(settings, state, frame);
+            else if (predicate)
+                predicate->formatImpl(settings, state, frame);
         }
     }
     else if (type == ASTAlterCommand::MODIFY_COLUMN)

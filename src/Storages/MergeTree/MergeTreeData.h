@@ -652,6 +652,9 @@ public:
 
     DataPartsVector getPartsByPredicate(const ASTPtr & predicate);
 
+    /// Split CLEAR COLUMN IN PARTITION WHERE command into multiple CLEAR COLUMN IN PARTITION commands.
+    void handleClearColumnInPartitionWhere(MutationCommands & mutation_commands, const AlterCommands & alter_commands);
+
     /// Total size of active parts in bytes.
     size_t getTotalActiveSizeInBytes() const;
 
@@ -765,6 +768,8 @@ public:
     /// - columns corresponding to primary key, indices, sign, sampling expression and date are not affected.
     /// If something is wrong, throws an exception.
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
+
+    virtual bool supportsClearColumnInPartitionWhere() const { return false; }
 
     /// Checks if the Mutation can be performed.
     /// (currently no additional checks: always ok)

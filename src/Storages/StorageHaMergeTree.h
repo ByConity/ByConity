@@ -89,6 +89,8 @@ public:
 
     void alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & table_lock_holder) override;
 
+    bool supportsClearColumnInPartitionWhere() const override { return true; }
+
     void mutate(const MutationCommands & commands, ContextPtr context) override;
     void waitMutation(const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const;
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override;

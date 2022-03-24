@@ -1180,6 +1180,9 @@ void StorageHaMergeTree::alter(
     auto mutation_commands
         = commands.getMutationCommands(*current_metadata, query_context->getSettingsRef().materialize_ttl_after_modify, query_context);
 
+    /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
+    handleClearColumnInPartitionWhere(mutation_commands, commands);
+
     queue.pullLogs(zookeeper);
     queue.checkAddMetadataAlter(mutation_commands);
 
