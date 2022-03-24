@@ -38,6 +38,10 @@ public:
         UNKNOWN,
         SHUTDOWN,
         KILL,
+        OFFLINE_REPLICA, // offline replica of a table
+        ONLINE_REPLICA, // online replica of a table
+        OFFLINE_NODE,    // offline the node in case unrecoverable failure
+        ONLINE_NODE,
         SUSPEND,
         DROP_DNS_CACHE,
         DROP_MARK_CACHE,
@@ -109,6 +113,8 @@ public:
     String volume;
     String disk;
     UInt64 seconds{};
+
+    String user;
 
     // For execute/reload mutation
     String mutation_id;

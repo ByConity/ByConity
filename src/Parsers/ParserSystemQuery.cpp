@@ -7,6 +7,7 @@
 #include <Parsers/parseDatabaseAndTableName.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Parsers/parseIdentifierOrStringLiteral.h>
 
 
 namespace ErrorCodes
@@ -158,6 +159,25 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             else
                 res->is_drop_whole_replica = true;
 
+            break;
+        }
+
+        case Type::OFFLINE_REPLICA:
+        case Type::ONLINE_REPLICA:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (!ParserKeyword("OF").ignore(pos, expected))
+                return false;
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->user))
+                return false;
+            break;
+        }
+        case Type::OFFLINE_NODE:
+        case Type::ONLINE_NODE:
+        {
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->user))
+                return false;
             break;
         }
 

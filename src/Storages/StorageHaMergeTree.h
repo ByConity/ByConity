@@ -162,6 +162,8 @@ public:
     /// NOTE: Will communicate to ZooKeeper to calculate relative delay.
     void getReplicaDelays(time_t & out_absolute_delay, time_t & out_relative_delay);
 
+    Int64 getDependedNumLogFrom(const String & replica = "") const;
+
     /// Add a part to the queue of parts whose data you want to check in the background thread.
     void enqueuePartForCheck([[maybe_unused]] const String & part_name, [[maybe_unused]] time_t delay_to_check_seconds = 0)
     {
@@ -205,6 +207,18 @@ public:
 
     void markLost();
 
+    String getReplicaName(const String & replica_name_);
+
+    void trySetNodeOffline(const String & node_replica_name, bool current_node);
+    void trySetNodeOnline(const String & node_replica_name, bool current_node);
+    void tryGetOffline();
+    void assertNotOffline();
+
+    void offlineReplica(const String & replica);
+    void onlineNode(const String & target_replica);
+    void offlineNodePhaseOne(const String & node);
+    void offlineNodePhaseTwo(const String & node);
+
     zkutil::ZooKeeperPtr getZooKeeper() const;
 
     /************  BitEngine Related functions ******/
@@ -242,6 +256,9 @@ private:
     std::atomic_bool is_readonly {false};
     /// If false - ZooKeeper is available, but there is no table metadata. It's safe to drop table in this case.
     bool has_metadata_in_zookeeper = true;
+
+    std::atomic_bool is_offline {false};
+    std::atomic_bool is_offlining {false};
 
     static constexpr auto default_zookeeper_name = "default";
     String zookeeper_name;
@@ -339,8 +356,6 @@ private:
     time_t last_commit_log_time {0};
 
     time_t last_check_hang_mutation_time {0};
-
-    bool is_offline = false;
 
     template <class Func>
     void foreachCommittedParts(Func && func, bool select_sequential_consistency) const;

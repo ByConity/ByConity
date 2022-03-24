@@ -41,6 +41,14 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SHUTDOWN";
         case Type::KILL:
             return "KILL";
+        case Type::OFFLINE_REPLICA:
+            return "OFFLINE REPLICA";
+        case Type::ONLINE_REPLICA:
+            return "ONLINE REPLICA";
+        case Type::OFFLINE_NODE:
+            return "OFFLINE NODE";
+        case Type::ONLINE_NODE:
+            return "ONLINE NODE";
         case Type::SUSPEND:
             return "SUSPEND";
         case Type::DROP_DNS_CACHE:
@@ -262,6 +270,28 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (type == Type::DROP_REPLICA)
     {
         print_drop_replica();
+    }
+    else if (type == Type::OFFLINE_REPLICA)
+    {
+        print_database_table();
+        // reuse user to record replica name
+        settings.ostr << " OF " << backQuoteIfNeed(user);
+    }
+    else if (type == Type::ONLINE_REPLICA)
+    {
+        print_database_table();
+        // reuse user to record replica name
+        settings.ostr << " OF " << backQuoteIfNeed(user);
+    }
+    else if (type == Type::OFFLINE_NODE)
+    {
+        // reuse user to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(user);
+    }
+    else if (type == Type::ONLINE_NODE)
+    {
+        // reuse user to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(user);
     }
     else if (type == Type::SUSPEND)
     {

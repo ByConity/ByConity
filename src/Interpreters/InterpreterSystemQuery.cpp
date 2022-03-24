@@ -490,6 +490,14 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::SYNC_REPLICA:
             syncReplica(query);
             break;
+        case Type::OFFLINE_REPLICA:
+        case Type::OFFLINE_NODE:
+            offlineHa(query, query.type == Type::OFFLINE_NODE);
+            break;
+        case Type::ONLINE_REPLICA:
+        case Type::ONLINE_NODE:
+            onlineHa(query, query.type == Type::ONLINE_NODE);
+            break;
         case Type::SYNC_MUTATION:
             syncMutation(query, system_context);
             break;
@@ -813,6 +821,90 @@ bool InterpreterSystemQuery::dropReplicaImpl(ASTSystemQuery & query, const Stora
     return true;
 }
 
+void InterpreterSystemQuery::offlineHa(DB::ASTSystemQuery& query, bool is_node)
+{
+    if (is_node)
+    {
+        // TODO, get replica name based on node ip
+        // This operation is dangerous, and limit its usage
+        auto databases = DatabaseCatalog::instance().getDatabases();
+        for (const auto & database : databases)
+        {
+            // offline a replica in two-phase:
+            // 1. set replica as offfline node
+            // 2. mark replica as lost
+            // iterator all the tables
+            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
+            {
+                auto table = iterator->table();
+                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
+                if (ha_table)
+                    ha_table->offlineNodePhaseOne(query.user);
+            }
+        }
+
+        for (const auto & database : databases)
+        {
+            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
+            {
+                auto table = iterator->table();
+                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
+                if (ha_table)
+                    ha_table->offlineNodePhaseTwo(query.user);
+            }
+        }
+    }
+    else
+    {
+        String & database = query.database;
+        String & table = query.table;
+        String & replica = query.user;
+        if (database.empty() || table.empty() || replica.empty())
+            throw Exception("Database, table, replica must be specified when offline table.", ErrorCodes::LOGICAL_ERROR);
+
+        auto table_ptr = DatabaseCatalog::instance().getTable(table_id, getContext());
+        // only apply to HaMergeTree
+        if (!table_ptr || !dynamic_cast<StorageHaMergeTree *>(table_ptr.get())) return;
+
+        auto *explicit_table = dynamic_cast<StorageHaMergeTree *>(table_ptr.get());
+        explicit_table->offlineReplica(replica);
+    }
+}
+
+void InterpreterSystemQuery::onlineHa(DB::ASTSystemQuery& query, bool is_node)
+{
+    if (is_node)
+    {
+        // This operation is dangerous, and limit its usage
+        auto databases = DatabaseCatalog::instance().getDatabases();
+        for (const auto & database : databases)
+        {
+            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
+            {
+                StoragePtr table = iterator->table();
+                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
+                if (ha_table)
+                    ha_table->onlineNode(query.user);
+            }
+        }
+    }
+    else
+    {
+        String & database = query.database;
+        String & table = query.table;
+        String & replica = query.user;
+        if (database.empty() || table.empty() || replica.empty())
+            throw Exception("Database, table, replica must be specified when online table.", ErrorCodes::LOGICAL_ERROR);
+
+        auto table_ptr = DatabaseCatalog::instance().getTable(table_id, getContext());
+        // only apply to HaMergeTree
+        if (!table_ptr || !dynamic_cast<StorageHaMergeTree *>(table_ptr.get())) return;
+
+        auto *explicit_table = dynamic_cast<StorageHaMergeTree *>(table_ptr.get());
+        explicit_table->onlineNode(replica);
+    }
+}
+
 void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
 {
     getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
@@ -1104,6 +1196,10 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTART_DISK);
             break;
         }
+        case Type::OFFLINE_REPLICA:
+        case Type::OFFLINE_NODE:
+        case Type::ONLINE_REPLICA:
+        case Type::ONLINE_NODE:
         case Type::EXECUTE_LOG:
         case Type::SKIP_LOG:
         case Type::SET_VALUE:

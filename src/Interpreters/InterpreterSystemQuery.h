@@ -58,6 +58,9 @@ private:
     void flushDistributed(ASTSystemQuery & query);
     void restartDisk(String & name);
 
+    void offlineHa(ASTSystemQuery & query, bool isNodeLevel);
+    void onlineHa(ASTSystemQuery & query, bool is_node);
+
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);
     void startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type);

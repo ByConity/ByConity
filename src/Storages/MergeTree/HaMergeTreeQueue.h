@@ -28,6 +28,7 @@ class HaMergeTreeLogManager;
 class HaMergeTreeLogExchanger;
 
 constexpr time_t VERY_LARGE_DELAY = 60 * 60 * 24 * 10; // 10 days
+constexpr time_t OFFLINE_DELAY = VERY_LARGE_DELAY - 1; // a little smaller than VERY_LARGE_DELAY
 
 /**
  *  Ha Queue holds the unprocessed log entries.
