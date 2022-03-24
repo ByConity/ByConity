@@ -4307,6 +4307,95 @@ UInt64 StorageHaMergeTree::allocLSNAndSet(const zkutil::ZooKeeperPtr & zookeeper
     return parse<UInt64>(lsn_str);
 }
 
+// a helper to encapsulate a future part for bitengine encoding work
+FutureMergedMutatedPart StorageHaMergeTree::transformPartToFuturePart(const DataPartPtr & part)
+{
+    FutureMergedMutatedPart future_part;
+    if (storage_settings.get()->assign_part_uuids)
+        future_part.uuid = UUIDHelpers::generateV4();
+    auto zookeeper = getZooKeeper();
+
+    auto new_part_info = part->info;
+    new_part_info.mutation = allocateBlockNumberDirect(zookeeper);
+
+    // If mutation=0, then the newly mutated part name is equal to the original part.
+    // Eg: 202201_0_0_0 and it won't be changed by mutation value 0.
+    // Then encoding process will remove it and nothing remains.
+    if (new_part_info.mutation == 0)
+        new_part_info.mutation = allocateBlockNumberDirect(zookeeper);
+
+    future_part.parts.push_back(part);
+    future_part.part_info = new_part_info;
+    future_part.name = part->getNewName(new_part_info);
+    future_part.type = part->getType();
+    return future_part;
 }
 
+void StorageHaMergeTree::bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, bool can_skip)
+{
+    if (!bitengine_ha_manager)
+        return;
+
+    auto merge_blocker = merger_mutator.merges_blocker.cancel();
+
+    std::vector<FutureMergedMutatedPart> future_parts;
+    if (detach)
+    {
+        PartsTemporaryRename renamed_parts(*this, "detached/");
+        auto loaded_parts = tryLoadPartsToAttach(partition, /*attach_part=*/false, query_context, renamed_parts, true);
+
+        for (const auto & part : loaded_parts)
+        {
+            if (!part->info.isFakeDropRangePart())
+                future_parts.emplace_back(transformPartToFuturePart(part));
+        }
+    }
+    else
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+        DataPartsVector parts;
+        if (partition_id == "all")
+            parts = getDataPartsVector();
+        else
+            parts = getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
+
+        for (const auto & part : parts)
+        {
+            if (!part->info.isFakeDropRangePart())
+                future_parts.emplace_back(transformPartToFuturePart(part));
+        }
+    }
+
+    if (future_parts.empty())
+        return;
+
+    if (query_context->getSettingsRef().enable_parallel_bitengine_recode)
+        bitengine_ha_manager->recodeBitEnginePartsParallel(future_parts, query_context, can_skip, detach);
+    else
+        bitengine_ha_manager->recodeBitEngineParts(future_parts, query_context, can_skip, detach);
+}
+
+void StorageHaMergeTree::bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip)
+{
+    if (detach)
+        throw Exception("BitEngine cannot recode partition from detach by where predicate", ErrorCodes::LOGICAL_ERROR);
+
+    if (!bitengine_ha_manager)
+        return;
+
+    std::vector<FutureMergedMutatedPart> future_parts;
+    auto parts_to_recode = getPartsByPredicate(predicate);
+    for (const auto & part : parts_to_recode)
+    {
+        if (!part->info.isFakeDropRangePart())
+            future_parts.emplace_back(transformPartToFuturePart(part));
+    }
+
+    if (query_context->getSettingsRef().enable_parallel_bitengine_recode)
+        bitengine_ha_manager->recodeBitEnginePartsParallel(future_parts, query_context, can_skip, /*part_in_detach*/ false);
+    else
+        bitengine_ha_manager->recodeBitEngineParts(future_parts, query_context, can_skip, /*part_in_detach*/ false);
+}
+
+}
 #pragma clang diagnostic pop

@@ -285,6 +285,7 @@ MergeTreeData::MergeTreeData(
                 bitengine_disk->createDirectories(fs::path(relative_data_path) / MergeTreeData::BITENGINE_DICTIONARY_DIR_NAME);
                 bitengine_dictionary_manager =
                     std::make_shared<BitEngineDictionaryManager>(db_tbl, bitengine_disk->getName(), bitengine_dictionary_path, getContext());
+                LOG_DEBUG(log, "Successfully created a BitEngineDictionary of column {}", item.name);
             }
 
             bitengine_dictionary_manager->reload(item.name);
@@ -2630,6 +2631,41 @@ MergeTreeData::DataPartsVector MergeTreeData::renameTempPartAndReplace(
     return covered_parts;
 }
 
+bool MergeTreeData::renameTempPartInDetachDirecotry(MutableDataPartPtr & new_part, const DataPartPtr & old_part)
+{
+    new_part->assertState({IMergeTreeDataPart::State::Temporary});
+    LOG_DEBUG(
+        log,
+        "Renaming temporary part {} to {}.",
+        new_part->relative_path,
+        String(MergeTreeData::DETACHED_DIR_NAME).append("/").append(new_part->name));
+
+    auto new_part_tmp_path = new_part->getFullRelativePath();
+
+    // rename temporary encoding part
+    new_part->is_temp = false;
+    new_part->renameTo(fs::path(MergeTreeData::DETACHED_DIR_NAME) / new_part->name, true);
+
+    try
+    {
+        // remove old part in disk
+        auto disk = old_part->volume->getDisk();
+        auto old_path = old_part->getFullRelativePath();
+        LOG_DEBUG(log, "Deleting the old part: {}", old_path);
+        if (disk->exists(old_path))
+            disk->removeRecursive(old_path);
+    }
+    catch(...)
+    {
+        new_part->is_temp = true;
+        new_part->renameTo(new_part_tmp_path, true);
+
+        throw Exception("Fail to remove the old detached part " + old_part->relative_path, ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return true;
+}
+
 void MergeTreeData::removePartsFromWorkingSet(const MergeTreeData::DataPartsVector & remove, bool clear_without_timeout, DataPartsLock & /*acquired_lock*/)
 {
     auto remove_time = clear_without_timeout ? 0 : time(nullptr);
@@ -3579,8 +3615,16 @@ Pipe MergeTreeData::alterPartition(
                 auto lock = lockForShare(query_context->getCurrentQueryId(), query_context->getSettingsRef().lock_acquire_timeout);
                 current_command_results = unfreezeAll(command.with_name, query_context, lock);
             }
-
             break;
+            case PartitionCommand::PREATTACH_PARTITION:
+                bitengineRecodePartition(command.partition, true, query_context, true);
+                break;
+            case PartitionCommand::BITENGINE_RECODE_PARTITION:
+                bitengineRecodePartition(command.partition, command.detach, query_context, false);
+                break;
+            case PartitionCommand::BITENGINE_RECODE_PARTITION_WHERE:
+                bitengineRecodePartitionWhere(command.partition, command.detach, query_context, false);
+                break;
 
             default:
                 throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);
@@ -3599,6 +3643,20 @@ Pipe MergeTreeData::alterPartition(
 void MergeTreeData::movePartitionFrom(const StoragePtr &, const ASTPtr &, ContextPtr)
 {
     throw Exception("movePartitionFrom is not supported by " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+void MergeTreeData::preattachPartition(const ASTPtr & partition, ContextPtr query_context)
+{
+    bitengineRecodePartition(partition, true, query_context, true);
+}
+
+void MergeTreeData::bitengineRecodePartition(const ASTPtr & , bool , ContextPtr , bool )
+{
+    throw Exception(" MergeTreeData::bitengineRecodePartition is not implemented!", ErrorCodes::NOT_IMPLEMENTED);
+}
+void MergeTreeData::bitengineRecodePartitionWhere(const ASTPtr & , bool , ContextPtr , bool )
+{
+    throw Exception(" MergeTreeData::bitengineRecodePartitionWhere is not implemented!", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 String MergeTreeData::getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr local_context) const
@@ -3833,7 +3891,7 @@ void MergeTreeData::dropDetached(const ASTPtr & partition, bool part, ContextPtr
 }
 
 MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsToAttach(const ASTPtr & partition, bool attach_part,
-        ContextPtr local_context, PartsTemporaryRename & renamed_parts)
+        ContextPtr local_context, PartsTemporaryRename & renamed_parts, bool in_preattach)
 {
     const String source_dir = "detached/";
 
@@ -3889,6 +3947,8 @@ MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsToAttach(const 
                 // TODO maybe use PartsTemporaryRename here?
                 disk->moveDirectory(fs::path(relative_data_path) / source_dir / name,
                     fs::path(relative_data_path) / source_dir / ("inactive_" + name));
+            else if (in_preattach)
+                renamed_parts.addPart(name, name);
             else
                 renamed_parts.addPart(name, "attaching_" + name);
         }

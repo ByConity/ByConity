@@ -26,6 +26,7 @@
 #include <Processors/Pipe.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <optional>
 
 namespace CurrentMetrics
@@ -1680,6 +1681,95 @@ void StorageMergeTree::startBackgroundMovesIfNeeded()
 std::unique_ptr<MergeTreeSettings> StorageMergeTree::getDefaultSettings() const
 {
     return std::make_unique<MergeTreeSettings>(getContext()->getMergeTreeSettings());
+}
+
+// a helper to encapsulate a future part for bitengine encoding work
+FutureMergedMutatedPart StorageMergeTree::transformPartToFuturePart(const DataPartPtr & part)
+{
+    FutureMergedMutatedPart future_part;
+    if (storage_settings.get()->assign_part_uuids)
+        future_part.uuid = UUIDHelpers::generateV4();
+
+    auto new_part_info = part->info;
+    new_part_info.mutation = increment.get();
+    if (new_part_info.mutation == 0)
+        new_part_info.mutation = increment.get();
+
+    future_part.parts.push_back(part);
+    future_part.part_info = new_part_info;
+    future_part.name = part->getNewName(new_part_info);
+    future_part.type = part->getType();
+    return future_part;
+}
+
+void StorageMergeTree::bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, [[maybe_unused]] bool can_skip)
+{
+    if (!bitengine_dictionary_manager)
+        return;
+
+    auto merge_block = merger_mutator.merges_blocker.cancel();
+
+    std::vector<FutureMergedMutatedPart> future_parts;
+    if (detach)
+    {
+        PartsTemporaryRename renamed_parts(*this, "detached/");
+        auto loaded_parts = tryLoadPartsToAttach(partition, /*attach_part=*/false, query_context, renamed_parts, true);
+
+        for (const auto & part : loaded_parts)
+        {
+            if (!part->info.isFakeDropRangePart())
+                future_parts.emplace_back(transformPartToFuturePart(part));
+        }
+    }
+    else
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+        DataPartsVector parts;
+        if (partition_id == "all")
+            parts = getDataPartsVector();
+        else
+            parts = getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
+
+        for (const auto & part : parts)
+        {
+            if (!part->info.isFakeDropRangePart())
+                future_parts.emplace_back(transformPartToFuturePart(part));
+        }
+    }
+
+    if (future_parts.empty())
+        return;
+
+    if (query_context->getSettingsRef().enable_parallel_bitengine_recode)
+        bitengine_dictionary_manager->recodeBitEnginePartsParallel(future_parts, *this, query_context, can_skip, detach);
+    else
+        bitengine_dictionary_manager->recodeBitEngineParts(future_parts, *this, query_context, can_skip, detach);
+}
+
+void StorageMergeTree::bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip)
+{
+    if (detach)
+        throw Exception("BitEngine cannot recode partition from detach by where predicate", ErrorCodes::LOGICAL_ERROR);
+
+    if (!bitengine_dictionary_manager)
+        return;
+
+    auto parts_to_recode = getPartsByPredicate(predicate);
+
+    if (parts_to_recode.empty())
+        return;
+
+    std::vector<FutureMergedMutatedPart> future_parts;
+    for (const auto & part : parts_to_recode)
+    {
+        if (!part->info.isFakeDropRangePart())
+            future_parts.emplace_back(transformPartToFuturePart(part));
+    }
+
+    if (query_context->getSettingsRef().enable_parallel_bitengine_recode)
+        bitengine_dictionary_manager->recodeBitEnginePartsParallel(future_parts, *this, query_context, can_skip, false);
+    else
+        bitengine_dictionary_manager->recodeBitEngineParts(future_parts, *this, query_context, can_skip, false);
 }
 
 }

@@ -46,6 +46,47 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
     writer_on_disk->setMergeStatus();
 }
 
+MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
+    const MergeTreeDataPartPtr & data_part,
+    const StorageMetadataPtr & metadata_snapshot_,
+    const MergeTreeWriterSettings & write_settings,
+    const Block & header_,
+    CompressionCodecPtr default_codec,
+    const MergeTreeIndices & indices_to_recalc,
+    WrittenOffsetColumns * offset_columns_,
+    const MergeTreeIndexGranularity & index_granularity)
+    : IMergedBlockOutputStream(data_part, metadata_snapshot_)
+    , header(header_)
+{
+    NamesAndTypesList columns_list;
+    if (write_settings.bitengine_settings.only_recode)
+    {
+        for (auto & it : header.getNamesAndTypesList())
+        {
+            if (isBitmap64(it.type) && it.type->isBitEngineEncode())
+                columns_list.emplace_back(it.name + BITENGINE_COLUMN_EXTENSION, it.type);
+        }
+    }
+    else
+        columns_list = header.getNamesAndTypesList();
+
+    writer = data_part->getWriter(
+        std::move(columns_list),
+        metadata_snapshot_,
+        indices_to_recalc,
+        default_codec,
+        write_settings,
+        index_granularity);
+
+    auto * writer_on_disk = dynamic_cast<MergeTreeDataPartWriterOnDisk *>(writer.get());
+    if (!writer_on_disk)
+        throw Exception("MergedColumnOnlyOutputStream supports only parts stored on disk", ErrorCodes::NOT_IMPLEMENTED);
+
+    writer_on_disk->setWrittenOffsetColumns(offset_columns_);
+    writer_on_disk->setMergeStatus();
+}
+
+
 void MergedColumnOnlyOutputStream::write(const Block & block)
 {
     if (!block.rows())

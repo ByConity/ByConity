@@ -600,7 +600,7 @@ public:
     void dropDetached(const ASTPtr & partition, bool part, ContextPtr context);
 
     MutableDataPartsVector tryLoadPartsToAttach(const ASTPtr & partition, bool attach_part,
-            ContextPtr context, PartsTemporaryRename & renamed_parts);
+            ContextPtr context, PartsTemporaryRename & renamed_parts, bool in_preattach = false);
 
     using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
 
@@ -671,6 +671,7 @@ public:
             MutableDataPartPtr & part, SimpleIncrement * increment, Transaction * out_transaction, DataPartsLock & lock,
             DataPartsVector * out_covered_parts = nullptr, MergeTreeDeduplicationLog * deduplication_log = nullptr);
 
+    bool renameTempPartInDetachDirecotry(MutableDataPartPtr & new_part, const DataPartPtr & old_part);
 
     /// Remove parts from working set immediately (without wait for background
     /// process). Transfer part state to temporary. Have very limited usage only
@@ -1267,6 +1268,10 @@ protected:
     virtual void movePartitionToShard(const ASTPtr & partition, bool move_part, const String & to, ContextPtr query_context);
 
     virtual void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr context);
+
+    void preattachPartition(const ASTPtr & partition, ContextPtr context);
+    virtual void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr context, bool can_skip);
+    virtual void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, bool can_skip);
 
     void writePartLog(
         PartLogElement::Type type,

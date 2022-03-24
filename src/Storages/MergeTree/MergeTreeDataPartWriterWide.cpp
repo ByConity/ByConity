@@ -184,7 +184,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         fillIndexGranularity(index_granularity_for_block, block.rows());
     }
 
-    if (storage.isBitEngineMode())
+    if (storage.isBitEngineMode() && !settings.bitengine_settings.skip_bitengine_encode)
     {
         /// encode bitmap column by BitEngine dictionary if needed
         writeImplicitColumnForBitEngine(const_cast<Block &>(block));

@@ -494,6 +494,9 @@ private:
     void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context);
 
     void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context) override;
+    FutureMergedMutatedPart transformPartToFuturePart(const DataPartPtr & part);
+    void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, bool can_skip = false) override;
+    void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip = false) override;
 
     bool checkIfDetachedPartitionExists(const String & partition_name);
 

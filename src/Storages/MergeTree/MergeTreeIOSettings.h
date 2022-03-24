@@ -24,6 +24,8 @@ struct MergeTreeReaderSettings
     bool convert_nested_to_subcolumns = false;
     /// Validate checksums on reading (should be always enabled in production).
     bool checksum_on_read = true;
+    /// used by BitEngine to read user-input but not encoded bitmaps in part
+    bool read_source_bitmap = false;
 };
 
 struct BitEngineEncodeSettings
@@ -59,6 +61,7 @@ struct BitEngineEncodeSettings
     bool only_recode = false;
     bool without_lock = false;
     bool encode_fast_mode = false;
+    bool skip_bitengine_encode = false;
 
 private:
     Float64 loss_rate=0.1;
@@ -73,7 +76,8 @@ struct MergeTreeWriterSettings
         const MergeTreeSettingsPtr & storage_settings,
         bool can_use_adaptive_granularity_,
         bool rewrite_primary_key_,
-        bool blocks_are_granules_size_ = false)
+        bool blocks_are_granules_size_ = false,
+        bool skip_bitengine_encode_ = false)
         : min_compress_block_size(
             storage_settings->min_compress_block_size ? storage_settings->min_compress_block_size : global_settings.min_compress_block_size)
         , max_compress_block_size(
@@ -84,6 +88,7 @@ struct MergeTreeWriterSettings
         , blocks_are_granules_size(blocks_are_granules_size_)
         , bitengine_settings(global_settings, storage_settings)
     {
+        bitengine_settings.skip_bitengine_encode = skip_bitengine_encode_;
     }
 
     size_t min_compress_block_size;

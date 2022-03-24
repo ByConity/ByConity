@@ -30,8 +30,7 @@ IMergeTreeReader::IMergeTreeReader(
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    const ValueSizeMap & avg_value_size_hints_,
-    bool internal_read_)
+    const ValueSizeMap & avg_value_size_hints_)
     : data_part(data_part_)
     , avg_value_size_hints(avg_value_size_hints_)
     , columns(columns_)
@@ -43,7 +42,6 @@ IMergeTreeReader::IMergeTreeReader(
     , metadata_snapshot(metadata_snapshot_)
     , all_mark_ranges(all_mark_ranges_)
     , alter_conversions(storage.getAlterConversionsForPart(data_part))
-    , internal_read(internal_read_)
 {
     if (settings.convert_nested_to_subcolumns)
     {
@@ -433,17 +431,8 @@ void IMergeTreeReader::readData(
 
 bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
 {
-    if (isBitmap64(column.type)
-        && column.type->isBitEngineEncode()
-        && storage.isBitEngineMode()
-        && !internal_read)
-    {
-        // If dict is invalid, we should also read encoded column, only throw exception when we actually need to decode it.
-        //if (storage.bitengine_dictionary_manager->isValid())
-        return true;
-        //throw Exception("Cannot decode column " + column.name + " by bitengine, since it is invalia", ErrorCodes::LOGICAL_ERROR);
-    }
-    return false;
+    return storage.isBitEngineMode() && !settings.read_source_bitmap
+        && isBitmap64(column.type) && column.type->isBitEngineEncode();
 }
 
 }

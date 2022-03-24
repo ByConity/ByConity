@@ -288,8 +288,8 @@ BitEngineDictionary::BitEngineDictionary(const String & disk_name_, const String
     value_column(std::make_shared<DataTypeUInt64>(), dict_name + "_value"),
     log(&Poco::Logger::get("BitEngineDictionary"))
 {
-    // path ends with '/'
-    file_path = path + dict_name + "_" + std::to_string(split_id) + ".dict";
+
+    file_path = fs::path(path) / String(dict_name).append("_").append(std::to_string(split_id)).append((".dict"));
     shard_base_offset = shard_id * (1UL << 48) + split_id * (1UL << 40);
     reload();
 }
@@ -806,7 +806,7 @@ void BitEngineDictionary::flushDict()
             if (disk->exists(dict_path_tmp))
                 disk->removeFile(dict_path_tmp);
 
-            writeDataToFile(disk->getPath() + dict_path_tmp);
+            writeDataToFile(fs::path(disk->getPath()) / dict_path_tmp);
             if (disk->exists(dict_path_tmp))
                 disk->moveFile(dict_path_tmp, file_path);
             else

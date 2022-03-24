@@ -4,6 +4,7 @@
 #include <Interpreters/PartLog.h>
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
+#include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Common/SipHash.h>
 #include <Common/ZooKeeper/KeeperException.h>
@@ -73,6 +74,16 @@ void HaMergeTreeBlockOutputStream::write(const Block & block)
     Stopwatch watch;
     MergeTreeData::MutableDataPartsVector parts;
     auto part_blocks = storage.writer.splitBlockIntoParts(block, max_parts_per_block, metadata_snapshot, context);
+
+    BitEngineDictionaryHaManager::BitEngineLockPtr bitengine_lock;
+    BitEngineDictionaryHaManager * ha_manager = storage.getBitEngineDictionaryHaManager();
+    if (ha_manager)
+    {
+        bitengine_lock = ha_manager->tryGetLock();
+        // double check the status of bitengine manager if the storage is shutdown when it was waitting for the lock
+        if (ha_manager->isStopped())
+            return;
+    }
 
     for (auto & current_block : part_blocks)
     {

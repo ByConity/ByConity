@@ -1325,6 +1325,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         CompressedReadBufferFromFile rows_sources_read_buf(tmp_disk->readFile(fileName(rows_sources_file->path())));
         IMergedBlockOutputStream::WrittenOffsetColumns written_offset_columns;
 
+        MergeTreeWriterSettings writer_settings(
+            new_data_part->storage.getContext()->getSettings(),
+            new_data_part->storage.getSettings(),
+            /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
+            /* rewrite_primary_key = */false,
+            /*blocks_are_granules_size = */ false,
+            /*skip_bitengine_encode = */ true);
+
         for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size(); column_num < gathering_column_names_size;
              ++column_num, ++it_name_and_type)
         {
@@ -1334,11 +1342,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             Float64 progress_before = merge_entry->progress.load(std::memory_order_relaxed);
 
             MergeStageProgress column_progress(progress_before, column_sizes->columnWeight(column_name));
-            auto mergeFunc = [&](const Names & column_names_, const String & name_) {
+            auto mergeFunc = [&](const Names & column_names_, const String & name_,
+                                 BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) {
                 for (size_t part_num = 0; part_num < parts.size(); ++part_num)
                 {
                     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
-                        data, metadata_snapshot, parts[part_num], column_names_, read_with_direct_io, true);
+                        data, metadata_snapshot, parts[part_num], future_part.getDeleteBitmap(parts[part_num]), column_names_, read_with_direct_io,
+                        /*take_column_types_from_storage*/true,
+                        /*quiet=*/ false, /*include_rowid_column=*/ false, /*bitengine_read_type= */ bitengine_read_type);
 
                     column_part_source->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
 
@@ -1350,11 +1361,13 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 }
 
                 rows_sources_read_buf.seek(0, 0);
-                ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf);
+                ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf,
+                                                            /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE, bitengine_read_type);
 
                 MergedColumnOnlyOutputStream column_to(
                     new_data_part,
                     metadata_snapshot,
+                    writer_settings,
                     column_gathered_stream.getHeader(),
                     compression_codec,
                     /// we don't need to recalc indices here
@@ -1463,6 +1476,15 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             else
             {
                 mergeFunc(column_names, column_name);
+
+                /// column_names in merge come from storage schema, unfortunately no encoded bitmap column.
+                /// The 3rd arg `ONLY_ENCODE` tells the input stream and output stream to replace the bitmap column
+                /// in storage with the encoded bitmap column in part. That's to say, the following mergeFunc merges
+                /// the encoded bitmap column in part actually, and the above merges bitmap column in storage
+                if (isBitmap64(column_type) && column_type->isBitEngineEncode())
+                {
+                    mergeFunc(column_names, column_name, BitEngineReadType::ONLY_ENCODE);
+                }
             }
         }
     }
@@ -1879,9 +1901,10 @@ MergeAlgorithm MergeTreeDataMergerMutator::chooseMergeAlgorithm(
     // If there are too many keys, it may exhaust all file handles.
     if (is_supported_storage)
     {
-        for (auto column : gathering_columns)
+        for (const auto & column : gathering_columns)
         {
-            if (column.type->isMap() || column.type->lowCardinality())
+            if (column.type->isMap() || column.type->lowCardinality()
+                || isBitmap64(column.type))
                 return MergeAlgorithm::Vertical;
         }
     }

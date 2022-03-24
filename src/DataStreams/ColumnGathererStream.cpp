@@ -19,7 +19,7 @@ namespace ErrorCodes
 
 ColumnGathererStream::ColumnGathererStream(
         const String & column_name_, const BlockInputStreams & source_streams, ReadBuffer & row_sources_buf_,
-        size_t block_preferred_size_)
+        size_t block_preferred_size_, BitEngineReadType bitengine_read_type)
     : column_name(column_name_), sources(source_streams.size()), row_sources_buf(row_sources_buf_)
     , block_preferred_size(block_preferred_size_), log(&Poco::Logger::get("ColumnGathererStream"))
 {
@@ -27,6 +27,11 @@ ColumnGathererStream::ColumnGathererStream(
         throw Exception("There are no streams to gather", ErrorCodes::EMPTY_DATA_PASSED);
 
     children.assign(source_streams.begin(), source_streams.end());
+
+    if (bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+    {
+        column_name += BITENGINE_COLUMN_EXTENSION;
+    }
 
     for (size_t i = 0; i < children.size(); ++i)
     {

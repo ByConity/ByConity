@@ -30,7 +30,8 @@ public:
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
         bool quiet = false,
-        bool include_rowid_column_ = false);
+        bool include_rowid_column_ = false,
+        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE);
 
     ~MergeTreeSequentialSource() override;
 

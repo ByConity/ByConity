@@ -55,6 +55,14 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.part = command_ast->part;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::PREATTACH_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = PREATTACH_PARTITION;
+        res.partition = command_ast->partition;
+        res.part = command_ast->part;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::MOVE_PARTITION)
     {
         PartitionCommand res;
@@ -148,6 +156,22 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         PartitionCommand res;
         res.type = PartitionCommand::UNFREEZE_ALL_PARTITIONS;
         res.with_name = command_ast->with_name;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::BITENGINE_RECODE_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = BITENGINE_RECODE_PARTITION;
+        res.partition = command_ast->partition;
+        res.detach = command_ast->detach;
+        return res;
+    }
+    else if(command_ast->type == ASTAlterCommand::BITENGINE_RECODE_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = BITENGINE_RECODE_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.detach = command_ast->detach;
         return res;
     }
     else

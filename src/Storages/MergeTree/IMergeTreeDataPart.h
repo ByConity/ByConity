@@ -210,6 +210,10 @@ public:
     /// If true it means that there are no ZooKeeper node for this part, so it should be deleted only from filesystem
     bool is_duplicate = false;
 
+    /// If true it means that this part is under recoding so that we need take care to read this part when the query
+    /// has been rewritten.
+    mutable std::atomic<bool> is_encoding {false};
+
     /// Frozen by ALTER TABLE ... FREEZE ... It is used for information purposes in system.parts table.
     mutable std::atomic<bool> is_frozen {false};
 

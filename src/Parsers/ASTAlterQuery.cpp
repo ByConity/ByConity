@@ -243,6 +243,12 @@ void ASTAlterCommand::formatImpl(
                       << (settings.hilite ? hilite_none : "");
         partition->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::PREATTACH_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "PREATTACH "
+                      << (part ? "PART " : "PARTITION ") << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+    }
     else if (type == ASTAlterCommand::ATTACH_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ATTACH "
@@ -462,6 +468,22 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << "(";
         map_keys->formatImpl(settings, state, frame);
         settings.ostr << ")";
+    }
+    else if (type == ASTAlterCommand::BITENGINE_RECODE_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str <<"BITENGINE RECODE PARTITION WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+        if (detach)
+            settings.ostr << (settings.hilite ? hilite_keyword : "")
+                          << " FROM DETACH" << (settings.hilite ? hilite_none : "");
+    }
+    else if (type == ASTAlterCommand::BITENGINE_RECODE_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "BITENGINE RECODE PARTITION " << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+        if (detach)
+            settings.ostr << (settings.hilite ? hilite_keyword : "")
+                          << " FROM DETACH" << (settings.hilite ? hilite_none : "");
     }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);

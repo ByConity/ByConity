@@ -66,6 +66,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .max_read_buffer_size = settings.max_read_buffer_size,
         .save_marks_in_cache = true,
         .checksum_on_read = settings.checksum_on_read,
+        .read_source_bitmap = !settings.use_encoded_bitmap,
     };
 }
 

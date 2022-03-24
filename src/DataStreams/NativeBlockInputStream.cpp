@@ -178,6 +178,10 @@ Block NativeBlockInputStream::readImpl()
                 column.column = recursiveTypeConversion(column.column, column.type, header.getByPosition(i).type);
                 column.type = header.getByPosition(i).type;
             }
+            else if (header_column.type->isBitEngineEncode())
+            {
+                column.type = header_column.type;
+            }
         }
 
         res.insert(std::move(column));
