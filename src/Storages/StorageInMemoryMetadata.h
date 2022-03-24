@@ -206,7 +206,7 @@ struct StorageInMemoryMetadata
     /// message.
     Block getSampleBlockForColumns(
         const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty(),
-        bool include_rowid_column = false) const;
+        bool include_rowid_column = false, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
 
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;

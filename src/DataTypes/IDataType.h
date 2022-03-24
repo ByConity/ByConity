@@ -278,8 +278,7 @@ public:
   	static String getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path);
 
     /// check the type is marked as BitEngineEncode
-    /// TODO (liuhaoqiang) write a right function logic, in community version, there is no type flag now.
-    bool isBitEngineEncode() const { return getTypeId() == TypeIndex::BitMap64; }
+    bool isBitEngineEncode() const { return flags & TYPE_BITENGINE_ENCODE_FLAG; }
 
     UInt8 getFlags() const { return flags; }
     void setFlags(UInt8 flag) const { checkFlags(flag); flags |= flag; }

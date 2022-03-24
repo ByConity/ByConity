@@ -21,6 +21,10 @@ namespace DB
  *      REFRESH
  */
 
+
+
+/// JUST APPEND after the tail of enum Type, or
+/// the CI test 01604_explain_ast_of_nonselect_query may fail
 class ASTAlterCommand : public IAST
 {
 public:
@@ -75,6 +79,10 @@ public:
         NO_TYPE,
 
         LIVE_VIEW_REFRESH,
+
+        PREATTACH_PARTITION,
+        BITENGINE_RECODE_PARTITION,
+        BITENGINE_RECODE_PARTITION_WHERE,
     };
 
     Type type = NO_TYPE;

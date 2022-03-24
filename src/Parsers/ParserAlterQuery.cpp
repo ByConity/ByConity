@@ -56,8 +56,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_resume("RESUME");
     ParserKeyword s_refresh("REFRESH");
     ParserKeyword s_modify("MODIFY");
+    ParserKeyword s_detach("DETACH");
 
     ParserKeyword s_attach_partition("ATTACH PARTITION");
+    ParserKeyword s_preattach_partition("PREATTACH PARTITION");
     ParserKeyword s_attach_part("ATTACH PART");
     ParserKeyword s_detach_partition("DETACH PARTITION");
     ParserKeyword s_detach_part("DETACH PART");
@@ -76,6 +78,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_freeze("FREEZE");
     ParserKeyword s_unfreeze("UNFREEZE");
     ParserKeyword s_partition("PARTITION");
+    ParserKeyword s_bitengine_recode_partition("BITENGINE RECODE PARTITION");
+    ParserKeyword s_bitengine_recode_partition_where("BITENGINE RECODE PARTITION WHERE");
 
     ParserKeyword s_first("FIRST");
     ParserKeyword s_after("AFTER");
@@ -533,6 +537,13 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 command->type = ASTAlterCommand::ATTACH_PARTITION;
             }
         }
+        else if (s_preattach_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            command->type = ASTAlterCommand::PREATTACH_PARTITION;
+        }
         else if (s_replace_partition.ignore(pos, expected))
         {
             if (!parser_partition.parse(pos, command->partition, expected))
@@ -822,6 +833,36 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (!select_p.parse(pos, command->select, expected))
                 return false;
             command->type = ASTAlterCommand::MODIFY_QUERY;
+        }
+        else if (s_bitengine_recode_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            if (s_from.ignore(pos))
+            {
+                if (s_detach.ignore(pos))
+                    command->detach = true;
+                else
+                    return false;
+            }
+
+            command->type = ASTAlterCommand::BITENGINE_RECODE_PARTITION_WHERE;
+        }
+        else if (s_bitengine_recode_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            if (s_from.ignore(pos))
+            {
+                if (s_detach.ignore(pos))
+                    command->detach = true;
+                else
+                    return false;
+            }
+
+            command->type = ASTAlterCommand::BITENGINE_RECODE_PARTITION;
         }
         else
             return false;

@@ -86,13 +86,20 @@ public:
     Strings getDictKeysVector();
     String allDictNamesToString();
 
-//    MergeTreeData::AlterDataPartTransactionPtr
-//    recodeBitEnginePartInTransaction(const MergeTreeData::DataPartPtr & part,
-//                                     const NamesAndTypesList & columns,
-//                                     const MergeTreeData & merge_tree_data,
-//                                     bool can_skip = false,
-//                                     bool without_lock = false) override;
-
+    MergeTreeData::MutableDataPartPtr
+    encodePartToTemporaryPart(
+        const FutureMergedMutatedPart & future_part,
+        const NamesAndTypesList & encode_columns,
+        const MergeTreeData & merge_tree_data,
+        const ReservationPtr & space_reservation,
+        bool can_skip = false,
+        bool part_in_detach = true,
+        bool without_lock = false) override;
+    void finalizeEncodedPart(
+        const MergeTreeDataPartPtr & source_part,
+        MergeTreeData::MutableDataPartPtr new_data_part,
+        bool need_remove_expired_values,
+        const CompressionCodecPtr & codec);
     bool checkEncodedPart(const MergeTreeData::DataPartPtr & part,
                           const MergeTreeData & merge_tree_data,
                           std::unordered_map<String, MergeTreeData::DataPartPtr> & res_abnormal_parts,
@@ -189,9 +196,9 @@ public:
     bool isStopped() { return stopped; }
 
     void checkBitEnginePart(const MergeTreeData::DataPartPtr & part);
-    bool recodeBitEnginePart(const MergeTreeData::MutableDataPartPtr & part, bool can_skip = false, bool without_lock = false);
-    bool recodeBitEngineParts(const MergeTreeData::MutableDataPartsVector & parts, bool can_skip = false, bool without_lock = false);
-    bool recodeBitEnginePartsParallel(MergeTreeData::MutableDataPartsVector & parts, ContextPtr query_context, bool can_skip = false);
+    bool recodeBitEnginePart(const FutureMergedMutatedPart & part, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
+    bool recodeBitEngineParts(const std::vector<FutureMergedMutatedPart> & parts, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
+    bool recodeBitEnginePartsParallel(const std::vector<FutureMergedMutatedPart> & parts, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
     MergeTreeData::DataPartsVector checkEncodedParts(const MergeTreeData::DataPartsVector & parts, ContextPtr query_context, bool without_lock = false);
 
 private:

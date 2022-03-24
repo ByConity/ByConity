@@ -28,8 +28,7 @@ public:
         MarkCache * mark_cache_,
         const MarkRanges & all_mark_ranges_,
         const MergeTreeReaderSettings & settings_,
-        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
-        bool internal_read = false);
+        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{});
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
@@ -67,6 +66,12 @@ protected:
     NameAndTypePair getColumnFromPart(const NameAndTypePair & required_column) const;
 
     void checkNumberOfColumns(size_t num_columns_to_read) const;
+
+    /// check whether a column is a BitEngine column,
+    /// if it is, the column will be replaced with `BITENGINE_COLUMN_EXTENSION`.
+    /// eg. a field `ids BitMap64 BitEngineEncode` is in the table schema,
+    /// in reading process, we'll read `ids_encoded_bitmap` in disk instead. And that's what we want.
+    bool checkBitEngineColumn(const NameAndTypePair & column) const;
 
     void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
@@ -114,16 +119,9 @@ protected:
 private:
     /// Alter conversions, which must be applied on fly if required
     MergeTreeData::AlterConversions alter_conversions;
-    bool internal_read{false};
 
     /// Actual data type of columns in part
     google::dense_hash_map<StringRef, const DataTypePtr *, StringRefHash> columns_from_part;
-
-    /// check whether a column is a BitEngine column,
-    /// if it is, the column will be replaced with `BITENGINE_COLUMN_EXTENSION`.
-    /// eg. a field `ids BitMap64 BitEngineEncode` is in the table schema,
-    /// in reading process, we'll read `ids_encoded_bitmap` in disk instead. And that's what we want.
-    bool checkBitEngineColumn(const NameAndTypePair & column) const;
 };
 
 }

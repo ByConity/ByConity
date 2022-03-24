@@ -290,6 +290,9 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::ATTACH_PARTITION:
+        case ASTAlterCommand::PREATTACH_PARTITION:
+        case ASTAlterCommand::BITENGINE_RECODE_PARTITION:
+        case ASTAlterCommand::BITENGINE_RECODE_PARTITION_WHERE:
         {
             required_access.emplace_back(AccessType::INSERT, database, table);
             break;

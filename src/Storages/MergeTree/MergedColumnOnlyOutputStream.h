@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Storages/MergeTree/IMergedBlockOutputStream.h>
+#include <Storages/MergeTree/MergeTreeIOSettings.h>
 
 namespace DB
 {
@@ -22,6 +23,16 @@ public:
         WrittenOffsetColumns * offset_columns_ = nullptr,
         const MergeTreeIndexGranularity & index_granularity = {},
         const MergeTreeIndexGranularityInfo * index_granularity_info_ = nullptr);
+
+    MergedColumnOnlyOutputStream(
+        const MergeTreeDataPartPtr & data_part,
+        const StorageMetadataPtr & metadata_snapshot_,
+        const MergeTreeWriterSettings & write_settings,
+        const Block & header_,
+        CompressionCodecPtr default_codec_,
+        const MergeTreeIndices & indices_to_recalc_,
+        WrittenOffsetColumns * offset_columns_ = nullptr,
+        const MergeTreeIndexGranularity & index_granularity = {});
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;

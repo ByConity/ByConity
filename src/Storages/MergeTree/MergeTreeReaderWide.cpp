@@ -98,11 +98,6 @@ MergeTreeReaderWide::MergeTreeReaderWide(
             }
             else if (column.name != "_part_row_number")
             {
-                // TODO
-                //String column_name = column_from_part.name;
-                //if (checkBitEngineColumn(column_from_part))
-                //	column_name = column_from_part.name + BITENGINE_COLUMN_EXTENSION;
-                //addStreams(column_name, *column_from_part.type, profile_callback, clock_type);
                 addStreams(column_from_part, profile_callback_, clock_type_);
             }
         }

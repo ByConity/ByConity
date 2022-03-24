@@ -4,8 +4,14 @@
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
+#include <Storages/MergeTree/MergeTreeSequentialSource.h>
+#include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 
-#include <DataTypes/DataTypeFactory.h>
+#include <Processors/QueryPipeline.h>
+#include <Processors/Executors/PipelineExecutingBlockInputStream.h>
+#include <Parsers/queryToString.h>
+
 #include <DataTypes/DataTypeBitMap64.h>
 #include <Disks/DiskLocal.h>
 #include <IO/ReadBufferFromFile.h>
@@ -21,7 +27,7 @@ class BitEngineDataService;
 ////////////////////////////    StartOf BitEngineDictionaryManager
 BitEngineDictionaryManager::BitEngineDictionaryManager(const String & db_tbl_, const String & disk_name_, const String & dict_path_, ContextPtr context_)
     : BitEngineDictionaryManagerBase<BitEngineDictionaryPtr>(db_tbl_, disk_name_, dict_path_, context_)
-    , version_path(dict_path_ + "bitengine_version")
+    , version_path(dict_path_ + "/bitengine_version")
     , log(&Poco::Logger::get("BitEngineDictionaryManager (" + db_tbl + ")"))
 {
     init();
@@ -85,7 +91,7 @@ void BitEngineDictionaryManager::flushVersion()
             // LOG_DEBUG(log, "there is no {}, will create one", version_path_tmp);
             disk->createFile(version_path_tmp);
         }
-        WriteBufferFromFile out(disk->getPath() + version_path_tmp);
+        WriteBufferFromFile out(fs::path(disk->getPath()) / version_path_tmp);
         writeVarUInt(version, out);
         out.close();
 
@@ -143,7 +149,7 @@ void BitEngineDictionaryManager::updateVersionTo(const size_t version_)
 
         version = version_;
         LOG_TRACE(log, " Recursive Update version of bitengine dictionary to {}", std::to_string(version));
-        for (auto item : dict_containers)
+        for (auto & item : dict_containers)
         {
             if (item.second)
                 item.second->updateVersionTo(version);
@@ -394,6 +400,255 @@ String BitEngineDictionaryManager::allDictNamesToString() {
     res.resize(res.size()-2);
     res += "]";
     return res;
+}
+
+static bool needSyncPart(size_t input_rows, size_t input_bytes, const MergeTreeSettings & settings)
+{
+    return ((settings.min_rows_to_fsync_after_merge && input_rows >= settings.min_rows_to_fsync_after_merge)
+            || (settings.min_compressed_bytes_to_fsync_after_merge && input_bytes >= settings.min_compressed_bytes_to_fsync_after_merge));
+}
+
+MergeTreeData::MutableDataPartPtr
+BitEngineDictionaryManager::encodePartToTemporaryPart(
+    const FutureMergedMutatedPart & future_part,
+    const NamesAndTypesList & encode_columns,
+    const MergeTreeData & merge_tree_data,
+    const ReservationPtr & space_reservation,
+    bool can_skip,
+    bool part_in_detach,
+    bool without_lock)
+{
+    const auto & source_part = future_part.parts[0];
+    auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part);
+    auto context_for_reading = Context::createCopy(context);
+    context_for_reading->setSetting("max_streams_to_max_threads_ratio", 1);
+    context_for_reading->setSetting("max_threads", 1);
+
+    size_t skipped_cnt{0};
+    for (const auto & column : encode_columns)
+    {
+        String original_column_name = column.name;
+        if (can_skip)
+        {
+            auto disk = source_part->volume->getDisk();
+            if (disk->exists(source_part->getFullRelativePath() + original_column_name + BITENGINE_DATA_FILE_EXTENSION)
+                && disk->exists(source_part->getFullRelativePath() + original_column_name + BITENGINE_DATA_MARKS_EXTENSION))
+            {
+                LOG_DEBUG(log, "BitEngine skips encoding column {} of part {}", original_column_name, source_part->name);
+                ++skipped_cnt;
+            }
+        }
+    }
+
+    if (skipped_cnt == encode_columns.size())
+        return nullptr;
+
+    LOG_DEBUG(log, "BitEngine encoding part {} to mutation version {}", source_part->name, future_part.part_info.mutation);
+
+    auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + future_part.name, space_reservation->getDisk(), 0);
+
+    String path = String("tmp_enc_") + future_part.name;
+    if (part_in_detach)
+        path.insert(0, String(MergeTreeData::DETACHED_DIR_NAME).append("/"));
+    auto new_data_part = merge_tree_data.createPart(
+        future_part.name, future_part.type, future_part.part_info, single_disk_volume, path);
+
+    new_data_part->uuid = future_part.uuid;
+    new_data_part->is_temp = true;
+    new_data_part->ttl_infos = source_part->ttl_infos;
+    new_data_part->versions = source_part->versions;
+
+    /// It shouldn't be changed by mutation.
+    const StorageMetadataPtr & metadata_snapshot = merge_tree_data.getInMemoryMetadataPtr();
+    NamesAndTypesList storage_columns = metadata_snapshot->getColumns().getAllPhysical();
+    /// In compact parts we read all columns, because they all stored in a single file
+
+    new_data_part->index_granularity_info = source_part->index_granularity_info;
+    new_data_part->setColumns(storage_columns);
+    new_data_part->partition.assign(source_part->partition);
+
+    auto disk = new_data_part->volume->getDisk();
+    String new_part_tmp_path = new_data_part->getFullRelativePath();
+
+    SyncGuardPtr sync_guard;
+    if (merge_tree_data.getSettings()->fsync_part_directory)
+        sync_guard = disk->getDirectorySyncGuard(new_part_tmp_path);
+
+    /// Don't change granularity type while mutating subset of columns
+    auto mrk_extension = source_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType())
+                                                                         : getNonAdaptiveMrkExtension();
+    bool need_sync = needSyncPart(source_part->rows_count, source_part->getBytesOnDisk(), *merge_tree_data.getSettings());
+    bool need_remove_expired_values = false;
+
+    if (!isWidePart(source_part))
+    {
+        /// TODO (liuhaoqiang) finish this
+//        disk->createDirectories(new_part_tmp_path);
+
+        /// Note: this is done before creating input streams, because otherwise data.data_parts_mutex
+        /// (which is locked in data.getTotalActiveSizeInBytes())
+        /// (which is locked in shared mode when input streams are created) and when inserting new data
+        /// the order is reverse. This annoys TSan even though one lock is locked in shared mode and thus
+        /// deadlock is impossible.
+//        auto compression_codec = merge_tree_data.getCompressionCodecForPart(source_part->getBytesOnDisk(), source_part->ttl_infos, time(nullptr));
+
+//        auto part_indices = getIndicesForNewDataPart(metadata_snapshot->getSecondaryIndices(), for_file_renames);
+//        auto part_projections = getProjectionsForNewDataPart(metadata_snapshot->getProjections(), for_file_renames);
+
+//        mutateAllPartColumns();
+    }
+    else
+    {
+        /// We count total amount of bytes in parts
+        /// and use direct_io + aio if there is more than min_merge_bytes_to_use_direct_io
+        bool read_with_direct_io = false;
+        if (merge_tree_data.getSettings()->min_merge_bytes_to_use_direct_io != 0)
+        {
+            size_t total_size = source_part->getBytesOnDisk();
+            if (total_size >= merge_tree_data.getSettings()->min_merge_bytes_to_use_direct_io)
+            {
+//                LOG_DEBUG(log, "Will encode part reading files in O_DIRECT");
+                read_with_direct_io = true;
+            }
+        }
+
+        /// calculate which columns can be skipped in encoding
+        NameSet files_to_skip = source_part->getFileNamesWithoutChecksums();
+        disk->createDirectories(new_part_tmp_path);
+
+        // Create hardlinks for unchanged files
+        for (auto it = disk->iterateDirectory(source_part->getFullRelativePath()); it->isValid(); it->next())
+        {
+            if (files_to_skip.count(it->name()))
+                continue;
+
+            String file_name = it->name();
+            String destination = new_part_tmp_path + file_name;
+
+            if (!disk->isDirectory(it->path()))
+                disk->createHardLink(it->path(), destination);
+            else if (!startsWith(it->name(), "tmp_"))  // ignore projection tmp merge dir
+            {
+                // it's a projection part directory
+                disk->createDirectories(destination);
+                for (auto p_it = disk->iterateDirectory(it->path()); p_it->isValid(); p_it->next())
+                {
+                    String p_destination = destination + "/";
+                    String p_file_name = p_it->name();
+                    p_destination += p_it->name();
+                    disk->createHardLink(p_it->path(), p_destination);
+                }
+            }
+        }
+
+        new_data_part->checksums = source_part->checksums;
+
+        auto input_source = std::make_unique<MergeTreeSequentialSource>(
+            merge_tree_data, metadata_snapshot, source_part, encode_columns.getNames(), read_with_direct_io, false);
+
+        QueryPipeline pipeline;
+        pipeline.init(Pipe(std::move(input_source)));
+        pipeline.setMaxThreads(1);
+        BlockInputStreamPtr input_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
+
+        IMergedBlockOutputStream::WrittenOffsetColumns unused_written_offsets;
+        const auto & index_factory = MergeTreeIndexFactory::instance();
+        MergeTreeWriterSettings writer_settings(
+            new_data_part->storage.getContext()->getSettings(),
+            new_data_part->storage.getSettings(),
+            /*can_use_adaptive_granularity = */ source_part->index_granularity_info.is_adaptive,
+            /* rewrite_primary_key = */false);
+        writer_settings.bitengine_settings = BitEngineEncodeSettings().bitengineOnlyRecode(true).bitengineEncodeWithoutLock(without_lock);
+
+        MergedColumnOnlyOutputStream out_stream(
+            new_data_part,
+            metadata_snapshot,
+            writer_settings,
+            input_stream->getHeader(),
+            source_part->default_codec,
+            index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
+            nullptr,
+            source_part->index_granularity
+        );
+
+        input_stream->readPrefix();
+        out_stream.writePrefix();
+
+        while (auto block = input_stream->read())
+        {
+            out_stream.write(block);
+        }
+
+        input_stream->readSuffix();
+        // Get the checksums that only contains recoded files.
+        auto changed_checksums = out_stream.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums);
+        new_data_part->checksums.add(std::move(changed_checksums));
+    }
+
+    finalizeEncodedPart(source_part, new_data_part, false, source_part->default_codec);
+    return new_data_part;
+}
+
+void BitEngineDictionaryManager::finalizeEncodedPart(
+    const MergeTreeDataPartPtr & source_part,
+    MergeTreeData::MutableDataPartPtr new_data_part,
+    [[maybe_unused]] bool need_remove_expired_values,
+    const CompressionCodecPtr & codec)
+{
+    auto disk = new_data_part->volume->getDisk();
+
+    if (new_data_part->uuid != UUIDHelpers::Nil)
+    {
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, 4096);
+        HashingWriteBuffer out_hashing(*out);
+        writeUUIDText(new_data_part->uuid, out_hashing);
+        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
+        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_hash = out_hashing.getHash();
+    }
+
+//    if (need_remove_expired_values)
+//    {
+//        /// Write a file with ttl infos in json format.
+//        LOG_DEBUG(log, "Now write ttl.txt");
+//        auto out_ttl = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "ttl.txt", 4096);
+//        HashingWriteBuffer out_hashing(*out_ttl);
+//        new_data_part->ttl_infos.write(out_hashing);
+//        new_data_part->checksums.files["ttl.txt"].file_size = out_hashing.count();
+//        new_data_part->checksums.files["ttl.txt"].file_hash = out_hashing.getHash();
+//    }
+
+    {
+        /// Write file with checksums.
+//        LOG_DEBUG(log, "Now write checksums.txt");
+        auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
+        new_data_part->checksums.versions = new_data_part->versions;
+        new_data_part->checksums.write(*out_checksums);
+    } /// close fd
+
+    {
+//        LOG_DEBUG(log, "Now write codec file name");
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, 4096);
+        DB::writeText(queryToString(codec->getFullCodecDesc()), *out);
+    }
+
+    {
+        /// Write a file with a description of columns.
+//        LOG_DEBUG(log, "Now write columns.txt");
+        auto out_columns = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "columns.txt", 4096);
+        new_data_part->getColumns().writeText(*out_columns);
+    } /// close fd
+
+    new_data_part->rows_count = source_part->rows_count;
+    new_data_part->index_granularity = source_part->index_granularity;
+    new_data_part->index = source_part->index;
+    new_data_part->minmax_idx = source_part->minmax_idx;
+    new_data_part->modification_time = time(nullptr);
+//    new_data_part->loadProjections(false, false);
+    new_data_part->setBytesOnDisk(
+        MergeTreeData::DataPart::calculateTotalSizeOnDisk(new_data_part->volume->getDisk(), new_data_part->getFullRelativePath()));
+    new_data_part->default_codec = codec;
+    new_data_part->calculateColumnsSizesOnDisk();
+    new_data_part->storage.lockSharedData(*new_data_part);
 }
 
 
@@ -666,14 +921,16 @@ void BitEngineDictionaryHaManager::tryUpdateDictFromReplica(const String & repli
     if (!isValid() || replica.empty() || replica == replica_name)
         return;
 
-    LOG_TRACE(log, "Try to get lock before updating dict from replica {}", replica);
+
     // only one can update dict at a time, to avoid race condition
     auto lock = std::lock_guard<std::mutex>(ha_mutex);
 
     auto zookeeper = getZooKeeper();
     size_t version_in_zk = getVersionOfReplica(replica, zookeeper);
 
-    //LOG_TRACE(log, "$$$$$$ version in zk $$$$$$: " << std::to_string(version_in_zk) << " version in local " << std::to_string(version));
+    LOG_TRACE(log, "Try to get lock before updating dict from replica {} of version {} (local version: {})",
+              replica, version_in_zk, version);
+//    LOG_TRACE(log, "$$$$$$ version in zk $$$$$$: {}, version in local: {}", version_in_zk, version);
 
     if (version < version_in_zk && bitengine_dict_exchanger)
     {
@@ -683,7 +940,7 @@ void BitEngineDictionaryHaManager::tryUpdateDictFromReplica(const String & repli
         bitengine_manager->updateVersionTo(version);
         bitengine_manager->updated();
         setVersionOnZookeeper();
-        LOG_DEBUG(log, "Updated bitengine dict to version {}", std::to_string(version));
+        LOG_DEBUG(log, "Updated bitengine dictionary to version {}", std::to_string(version));
     }
 }
 
@@ -966,10 +1223,13 @@ BitEngineDictionaryHaManager::BitEngineLockPtr BitEngineDictionaryHaManager::try
     return std::make_shared<BitEngineLock>(*this, current_lock_path);
 }
 
-bool BitEngineDictionaryHaManager::recodeBitEnginePart(const MergeTreeData::MutableDataPartPtr & part,
-                                                       bool can_skip,
-                                                       bool without_lock)
+bool BitEngineDictionaryHaManager::recodeBitEnginePart(
+    const FutureMergedMutatedPart & part,
+    ContextPtr query_context,
+    bool can_skip,
+    bool part_in_detach)
 {
+    bool without_lock = query_context->getSettingsRef().bitengine_encode_without_lock;
     BitEngineDictionaryHaManager::BitEngineLockPtr bitengine_lock;
     if (!without_lock)
         bitengine_lock = tryGetLock();
@@ -981,8 +1241,8 @@ bool BitEngineDictionaryHaManager::recodeBitEnginePart(const MergeTreeData::Muta
 
     try
     {
-        if (bitengine_manager)
-            bitengine_manager->recodeBitEnginePart(part, storage, can_skip, without_lock);
+       if (bitengine_manager)
+           bitengine_manager->recodeBitEnginePart(part, storage, query_context, can_skip, part_in_detach);
     }catch(...){
         // updateVersion(); // version in zk is updated when releasing the lock
         throw;
@@ -993,15 +1253,18 @@ bool BitEngineDictionaryHaManager::recodeBitEnginePart(const MergeTreeData::Muta
     return true;
 }
 
-bool BitEngineDictionaryHaManager::recodeBitEngineParts(const MergeTreeData::MutableDataPartsVector & parts,
-                                                        bool can_skip,
-                                                        bool without_lock)
+bool BitEngineDictionaryHaManager::recodeBitEngineParts(
+    const std::vector<FutureMergedMutatedPart> & future_parts,
+    ContextPtr query_context,
+    bool can_skip,
+    bool part_in_detach)
 {
-    LOG_DEBUG(log, "Now ecode {} BitEngine parts in one thread. without_lock: {}", parts.size(), without_lock);
+    bool without_lock = query_context->getSettingsRef().bitengine_encode_without_lock;
     BitEngineDictionaryHaManager::BitEngineLockPtr bitengine_lock;
     if (!without_lock)
         bitengine_lock = tryGetLock();
 
+    LOG_DEBUG(log, "Now encode {} BitEngine parts in one thread with {} zk lock", future_parts.size(), (without_lock ? "no" : "a"));
     tryUpdateDict();
     // double check the status of bitengine manager if the storage is shutdown when it was waitting for the lock
     if (isStopped())
@@ -1012,11 +1275,9 @@ bool BitEngineDictionaryHaManager::recodeBitEngineParts(const MergeTreeData::Mut
 
     try
     {
-        for (const auto & part : parts)
+        for (const auto & part : future_parts)
         {
-            Stopwatch watch;
-            bitengine_manager->recodeBitEnginePart(part, storage, can_skip, without_lock);
-            LOG_DEBUG(log, ">>> BitEngine Encode part {} cost {} ms", part->name, watch.elapsedMicroseconds()/1000.0);
+            bitengine_manager->recodeBitEnginePart(part, storage, query_context, can_skip, part_in_detach);
             // updateVersion(); // version in zk is updated when releasing the lock
         }
     }catch(...){
@@ -1030,14 +1291,15 @@ bool BitEngineDictionaryHaManager::recodeBitEngineParts(const MergeTreeData::Mut
     return true;
 }
 
-bool BitEngineDictionaryHaManager::recodeBitEnginePartsParallel(MergeTreeData::MutableDataPartsVector & parts,
-                                                                ContextPtr query_context,
-                                                                bool can_skip)
+bool BitEngineDictionaryHaManager::recodeBitEnginePartsParallel(
+    const std::vector<FutureMergedMutatedPart> & parts,
+    ContextPtr query_context,
+    bool can_skip,
+    bool part_in_detach)
 {
-    LOG_DEBUG(log, "Now recode {} bitengine parts in parallel", parts.size());
-
+    bool without_lock = query_context->getSettingsRef().bitengine_encode_without_lock;
     BitEngineDictionaryHaManager::BitEngineLockPtr bitengine_lock;
-    if (!query_context->getSettingsRef().bitengine_encode_without_lock)
+    if (!without_lock)
         bitengine_lock = tryGetLock();
 
     tryUpdateDict();
@@ -1059,16 +1321,16 @@ bool BitEngineDictionaryHaManager::recodeBitEnginePartsParallel(MergeTreeData::M
 
     auto runRecodeBitEnginePart = [&]()
     {
-        setThreadName("BitEngEnc");
+        setThreadName("ParaEncBtEngPt");
         CurrentThread::attachToIfDetached(thread_group);
-        while (1)
+        while (true)
         {
-            MergeTreeData::MutableDataPartPtr part;
+            FutureMergedMutatedPart * part{nullptr};
             {
                 std::lock_guard<std::mutex> lock(recode_mutex);
                 if (!data_parts.empty())
                 {
-                    part = data_parts.back();
+                    part = &(data_parts.back());
                     data_parts.pop_back();
                 }
                 else
@@ -1081,7 +1343,7 @@ bool BitEngineDictionaryHaManager::recodeBitEnginePartsParallel(MergeTreeData::M
                 return;
 
             try{
-                bitengine_manager->recodeBitEnginePart(part, storage, can_skip, query_context->getSettingsRef().bitengine_encode_without_lock);
+                bitengine_manager->recodeBitEnginePart(*part, storage, query_context, can_skip, part_in_detach);
                 // updateVersion();  // version in zk is updated when releasing the lock
             }
             catch(...){
@@ -1094,6 +1356,9 @@ bool BitEngineDictionaryHaManager::recodeBitEnginePartsParallel(MergeTreeData::M
     size_t max_threads = query_context->getSettingsRef().max_parallel_threads_for_bitengine_recode;
     size_t num_threads = std::min(max_threads, data_parts.size());
     std::unique_ptr<ThreadPool> thread_pool = std::make_unique<ThreadPool>(num_threads);
+    LOG_DEBUG(log, "BitEngine will encode {} parts In Parallel in {} threads with {} zk lock",
+              parts.size(), num_threads, (bitengine_lock ? "a" : "no"));
+
     for (size_t i = 0; i<num_threads; i++)
     {
         thread_pool->scheduleOrThrowOnError(runRecodeBitEnginePart);

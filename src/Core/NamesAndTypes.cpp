@@ -1,6 +1,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeHelper.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -299,7 +300,7 @@ NamesAndTypesList NamesAndTypesList::filter(const Names & names) const
     return filter(NameSet(names.begin(), names.end()));
 }
 
-NamesAndTypesList NamesAndTypesList::addTypes(const Names & names) const
+NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineReadType bitengine_read_type) const
 {
     /// NOTE: It's better to make a map in `IStorage` than to create it here every time again.
 #if !defined(ARCADIA_BUILD)
@@ -315,10 +316,69 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names) const
     NamesAndTypesList res;
     for (const String & name : names)
     {
-        auto it = types.find(name);
-        if (it == types.end())
-            throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-        res.emplace_back(name, *it->second);
+//        if (startsWith(name, "__") && !support_double_underline_name)
+//        {
+//            String mapColName;
+//            bool parseSuccess = parseMapFromImplName(name, mapColName);
+//            if (parseSuccess)
+//            {
+//                auto it = types.find(mapColName);
+//                if (it == types.end())
+//                {
+//                    throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+//                }
+//
+//                //TODO: sanity check DataTypeMap assumption
+//                auto const & map_value = typeid_cast<const DataTypeMap&>(*(*it->second)).getValueType();
+//                if (map_value->lowCardinality())
+//                    res.emplace_back(name, map_value);
+//                else
+//                    res.emplace_back(name, makeNullable(map_value));
+//            }
+//        }
+//        else if (endsWith(name, ".key"))
+//        {
+//            String mapColName = name.substr(0, name.size() - 4);
+//            auto it = types.find(mapColName);
+//            if (it == types.end())
+//                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+//            res.emplace_back(name, typeid_cast<const DataTypeMap&>(*(*it->second)).getKeyStoreType());
+//        }
+//        else if (endsWith(name, ".value"))
+//        {
+//            String mapColName = name.substr(0, name.size() - 6);
+//            auto it = types.find(mapColName);
+//            if (it == types.end())
+//                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+//            res.emplace_back(name, typeid_cast<const DataTypeMap&>(*(*it->second)).getValueStoreType());
+//        }
+//        else
+//        {
+                auto it = types.find(name);
+                if (it == types.end())
+                {
+                    // if (endsWith(name, COMPRESSION_COLUMN_EXTENSION))
+                    //     res.emplace_back(name, std::make_shared<DataTypeUInt16>());
+                    // else
+                        throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+                }
+
+                if (isBitmap64(*it->second) && (*it->second)->isBitEngineEncode())
+                { /// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
+                    if (bitengine_read_type == BitEngineReadType::BOTH && res.contains(name))
+                        res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
+                    else if (bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+                    { // Type `ONLY_ENCODE` used in BitEngine parts merge
+                        res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
+                    }
+                    else // Default type `ONLY_SOURCE` is used in encoding and select
+                        res.emplace_back(name, *it->second);
+                }
+                else
+                {
+                    res.emplace_back(name, *it->second);
+                }
+//        }
     }
 
     return res;

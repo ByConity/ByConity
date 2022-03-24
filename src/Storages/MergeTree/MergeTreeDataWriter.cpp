@@ -359,6 +359,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     ReservationPtr reservation = data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true);
     VolumePtr volume = data.getStoragePolicy()->getVolume(0);
     auto part_type = data.choosePartType(expected_size, block.rows());
+
+    auto all_columns = metadata_snapshot->getColumns().getAllPhysical();
+    bool has_bitmap = std::any_of(all_columns.begin(), all_columns.end(),
+                                  [](const NameAndTypePair & name_type) { return isBitmap64(name_type.type);});
+    if (has_bitmap) part_type = MergeTreeDataPartType::WIDE;
     if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
         // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide

@@ -362,7 +362,7 @@ Block StorageInMemoryMetadata::getSampleBlock(bool include_func_columns) const
 
 Block StorageInMemoryMetadata::getSampleBlockForColumns(
     const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id,
-    bool include_rowid_column) const
+    bool include_rowid_column, BitEngineReadType bitengine_read_type) const
 {
     Block res;
 
@@ -379,7 +379,10 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
         auto column = getColumns().tryGetColumnOrSubcolumn(ColumnsDescription::All, name);
         if (column)
         {
-            res.insert({column->type->createColumn(), column->type, column->name});
+            auto column_name = column->name;
+            if (column->type->isBitEngineEncode() && bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+                column_name += BITENGINE_COLUMN_EXTENSION;
+            res.insert({column->type->createColumn(), column->type, column_name});
         }
         else if (auto it = virtuals_map.find(name); it != virtuals_map.end())
         {

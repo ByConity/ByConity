@@ -30,9 +30,10 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet, bool include_rowid_column_)
+    bool quiet, bool include_rowid_column_,
+    BitEngineReadType bitengine_read_type)
     : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(
-            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), include_rowid_column_))
+            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), include_rowid_column_, bitengine_read_type))
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , data_part(std::move(data_part_))
@@ -43,16 +44,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     , include_rowid_column(include_rowid_column_)
 {
     size_t num_deletes = delete_bitmap ? delete_bitmap->cardinality() : 0;
-    if (!quiet)
-    {
-        /// Print column name but don't pollute logs in case of many columns.
-        if (columns_to_read.size() == 1)
-            LOG_DEBUG(log, "Reading {} marks from part {}, total {} rows starting from the beginning of the part, column {}",
-                data_part->getMarksCount(), data_part->name, data_part->rows_count, columns_to_read.front());
-        else
-            LOG_DEBUG(log, "Reading {} marks from part {}, total {} rows starting from the beginning of the part",
-                data_part->getMarksCount(), data_part->name, data_part->rows_count);
-    }
+
 
     addTotalRowsApprox(data_part->rows_count - num_deletes);
 
@@ -62,11 +54,24 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     if (take_column_types_from_storage)
     {
         columns_for_reader = metadata_snapshot->getColumns().getByNames(ColumnsDescription::AllPhysical, columns_to_read, false);
+        if (bitengine_read_type != BitEngineReadType::ONLY_SOURCE)
+            columns_for_reader = columns_for_reader.addTypes(columns_for_reader.getNames(), bitengine_read_type);
     }
     else
     {
         /// take columns from data_part
-        columns_for_reader = data_part->getColumns().addTypes(columns_to_read);
+        columns_for_reader = data_part->getColumns().addTypes(columns_to_read, bitengine_read_type);
+    }
+
+    if (!quiet)
+    {
+        /// Print column name but don't pollute logs in case of many columns.
+        if (columns_for_reader.size() == 1)
+            LOG_DEBUG(log, "Reading {} marks from part {}, total {} rows starting from the beginning of the part, column {}",
+                      data_part->getMarksCount(), data_part->name, data_part->rows_count, columns_for_reader.getNames().front());
+        else
+            LOG_DEBUG(log, "Reading {} marks from part {}, total {} rows starting from the beginning of the part",
+                      data_part->getMarksCount(), data_part->name, data_part->rows_count);
     }
 
     MergeTreeReaderSettings reader_settings =
@@ -74,7 +79,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         /// bytes to use AIO (this is hack)
         .min_bytes_to_use_direct_io = read_with_direct_io ? 1UL : std::numeric_limits<size_t>::max(),
         .max_read_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
-        .save_marks_in_cache = false
+        .save_marks_in_cache = false,
+        .read_source_bitmap = true,
     };
 
     reader = data_part->getReader(columns_for_reader, metadata_snapshot,
