@@ -56,7 +56,7 @@ else
 fi
 
 # create the `usr/bin` directory to keep it same with old version
-mkdir ../output/usr
+mkdir -p ../output/usr
 mv ../output/bin ../output/usr/
 
 # create symlink to make CI tests happy
