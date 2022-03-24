@@ -3,7 +3,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
-#include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
@@ -103,12 +102,6 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     if (!thread_group)
     {
-        const String & query_id = plan_segment->getQueryId();
-        const String & segment_id = std::to_string(plan_segment->getPlanSegmentId());
-        //TODO: query_id should set by scheduler
-        context->getClientInfo().initial_query_id = query_id;
-        context->getClientInfo().current_query_id = query_id + "_" + segment_id;
-
         if (!CurrentThread::getGroup())
         {
             query_scope.emplace(context); // Running as master query and not initialized
@@ -317,7 +310,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
             return;
         auto address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
 
-        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address, false);
+        std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::SendPlanSegmentStatusRequest request;

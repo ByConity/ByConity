@@ -45,7 +45,7 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
 
                 LOG_WARNING(
                     logger,
-                    "Distributed query with id = {} will be replaced by other coodinator: {}",
+                    "Distributed query with id = {} will be replaced by other coordinator: {}",
                     initial_query_id,
                     plan_segment.getCoordinatorAddress().toString());
                 for (auto & segment_query : segment_group_it->second.segment_queries)

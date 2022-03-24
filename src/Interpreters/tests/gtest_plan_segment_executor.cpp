@@ -88,6 +88,9 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
 
+    context->getClientInfo().initial_query_id = plan_segment.getQueryId();
+    context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
+
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
     exchange_source_step->setPlanSegment(&plan_segment);
@@ -137,7 +140,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
@@ -179,6 +182,9 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     plan_segment.setCoordinatorAddress(coordinator_address);
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
+
+    context->getClientInfo().initial_query_id = plan_segment.getQueryId();
+    context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
 
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
@@ -232,7 +238,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000};
+    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
@@ -275,6 +281,8 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     plan_segment.appendPlanSegmentInputs(inputs);
     plan_segment.setPlanSegmentOutput(output);
 
+    context->getClientInfo().initial_query_id = plan_segment.getQueryId();
+    context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     DataStream datastream{.header = header};
     auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
     exchange_source_step->setPlanSegment(&plan_segment);

@@ -312,7 +312,7 @@ void TCPHandler::runImpl()
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
             if (state.plan_segment)
-                executePlanSegment(std::move(state.plan_segment), query_context, true);
+                executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
             else
                 state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
 
@@ -1295,6 +1295,7 @@ void TCPHandler::receivePlanSegment()
 
     /// Set fields, that are known apriori.
     client_info.interface = ClientInfo::Interface::TCP;
+    client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
 
     /// Per query settings are also passed via TCP.
     /// We need to check them before applying due to they can violate the settings constraints.
@@ -1314,45 +1315,26 @@ void TCPHandler::receivePlanSegment()
     /// Settings
     ///
     auto settings_changes = passed_settings.changes();
-    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
-    {
-        /// Throw an exception if the passed settings violate the constraints.
-        query_context->checkSettingsConstraints(settings_changes);
-    }
-    else
-    {
-        /// Quietly clamp to the constraints if it's not an initial query.
-        query_context->clampToSettingsConstraints(settings_changes);
-    }
+
+    /// Quietly clamp to the constraints if it's not an initial query.
+    query_context->clampToSettingsConstraints(settings_changes);
     query_context->applySettingsChanges(settings_changes);
 
     /// Disable function name normalization when it's a secondary query, because queries are either
     /// already normalized on initiator node, or not normalized and should remain unnormalized for
     /// compatibility.
-    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-    {
-        query_context->setSetting("normalize_function_names", Field(0));
-    }
+    query_context->setSetting("normalize_function_names", Field(0));
 
-    // Use the received query id, or generate a random default. It is convenient
-    // to also generate the default OpenTelemetry trace id at the same time, and
-    // set the trace parent.
-    // Why is this done here and not earlier:
-    // 1) ClientInfo might contain upstream trace id, so we decide whether to use
-    // the default ids after we have received the ClientInfo.
-    // 2) There is the opentelemetry_start_trace_probability setting that
-    // controls when we start a new trace. It can be changed via Native protocol,
-    // so we have to apply the changes first.
-    query_context->setCurrentQueryId(state.query_id);
+    if (!query_context->hasQueryContext())
+        query_context->makeQueryContext();
 
-    // Set parameters of initial query.
-    if (client_info.query_kind == ClientInfo::QueryKind::INITIAL_QUERY)
-    {
-        /// 'Current' fields was set at receiveHello.
-        client_info.initial_user = client_info.current_user;
-        client_info.initial_query_id = client_info.current_query_id;
-        client_info.initial_address = client_info.current_address;
-    }
+    auto plan_segment = PlanSegment::deserializePlanSegment(*in, query_context); 
+
+    const String & query_id = plan_segment->getQueryId();
+    const String & segment_id = std::to_string(plan_segment->getPlanSegmentId());
+
+    client_info.initial_query_id = query_id;
+    client_info.current_query_id = query_id + "_" + segment_id;
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
@@ -1361,10 +1343,7 @@ void TCPHandler::receivePlanSegment()
     const Settings & settings = query_context->getSettingsRef();
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
 
-    if (!query_context->hasQueryContext())
-        query_context->makeQueryContext();
-
-    state.plan_segment = PlanSegment::deserializePlanSegment(*in, query_context);
+    state.plan_segment = std::move(plan_segment);
 }
 
 bool TCPHandler::receiveData(bool scalar)

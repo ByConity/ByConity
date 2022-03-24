@@ -235,7 +235,7 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
 
             if (context->getSettingsRef().debug_plan_generation)
                 break;            
-            res = DB::executePlanSegment(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
+            res = DB::lazyExecutePlanSegmentLocally(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
             break;
         }
     }

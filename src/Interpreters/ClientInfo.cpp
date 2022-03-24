@@ -20,7 +20,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-
+//TODO 
 void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision) const
 {
     if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)

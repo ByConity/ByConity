@@ -1,3 +1,4 @@
+#include <memory>
 #include <set>
 #include <time.h>
 #include <Client/Connection.h>
@@ -6,6 +7,7 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
@@ -691,6 +693,24 @@ void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_con
         connection->getPassword(),
         connection->getExchangePort(),
         connection->getExchangeStatusPort()));
+    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
+    {
+        /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
+        // executePlanSegmentLocally(*plan_segment_ptr, query_context);
+        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
+        if (dag_graph_ptr)
+        {
+            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+            dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
+                connection->getHost(),
+                connection->getPort(),
+                connection->getUser(),
+                connection->getPassword(),
+                connection->getExchangePort(),
+                connection->getExchangeStatusPort()));
+        }
+        return;
+    }
     connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
     connection->poll(1000);
     Packet packet = connection->receivePacket();
@@ -733,6 +753,16 @@ void sendPlanSegmentToRemote(
 {
     // std::cout<<"<<--<< will send remote segment " << plan_segment_ptr->getPlanSegmentId() << " to " << addressinfo.getHostName() << ":" << addressinfo.getPort() << std::endl;
     plan_segment_ptr->setCurrentAddress(addressinfo);
+    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
+    {
+        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
+        if (dag_graph_ptr)
+        {
+            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+            dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
+        }
+        return;
+    }
     auto connection = getConnectionForAddresses(addressinfo, query_context);
     connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
     connection->poll(1000);
@@ -781,6 +811,22 @@ void sendPlanSegmentToRemote(
         connection->getPassword(),
         connection->getExchangePort(),
         connection->getExchangeStatusPort()));
+    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
+    {
+        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
+        if (dag_graph_ptr)
+        {
+            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
+            dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
+                connection->getHost(),
+                connection->getPort(),
+                connection->getUser(),
+                connection->getPassword(),
+                connection->getExchangePort(),
+                connection->getExchangeStatusPort()));
+        }
+        return;
+    }
     connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
     connection->poll(1000);
     Packet packet = connection->receivePacket();

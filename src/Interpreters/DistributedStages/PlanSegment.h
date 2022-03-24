@@ -242,7 +242,7 @@ public:
 
     void setContext(const ContextPtr & context_);
 
-    ContextPtr getContext() const { return context;}
+    ContextMutablePtr getContext() const { return context;}
 
     String toString() const;
 
