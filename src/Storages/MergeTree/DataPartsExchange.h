@@ -37,7 +37,7 @@ public:
     std::string getId(const std::string & node_id) const override;
     void processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response) override;
 
-    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
+    void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally);
     void processQueryPartList(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryExist(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryDeleteFiles(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
@@ -51,8 +51,10 @@ private:
 
     MergeTreeData::DataPart::Checksums sendPartFromDisk(
         const MergeTreeData::DataPartPtr & part,
+        ReadBuffer & body, 
         WriteBuffer & out,
         int client_protocol_version,
+        bool incrementally,
         const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & projections = {});
 
     void sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteBuffer & out);
@@ -88,7 +90,8 @@ public:
         const String & tmp_prefix_ = "",
         std::optional<CurrentlySubmergingEmergingTagger> * tagger_ptr = nullptr,
         bool try_use_s3_copy = true,
-        const DiskPtr disk_s3 = nullptr);
+        const DiskPtr disk_s3 = nullptr,
+        bool incrementally = false);
 
     /// Download delete files for `parts' at `delete_version'. Returns loaded delete bitmap for each part.
     MergeTreeData::DataPartsDeleteSnapshot fetchDeleteFiles(
@@ -129,7 +132,8 @@ private:
             DiskPtr disk,
             PooledReadWriteBufferFromHTTP & in,
             MergeTreeData::DataPart::Checksums & checksums,
-            ThrottlerPtr throttler) const;
+            ThrottlerPtr throttler,
+            const MergeTreeData::DataPartPtr & old_version_part = nullptr) const;
 
 
     MergeTreeData::MutableDataPartPtr downloadPartToDisk(
@@ -142,7 +146,8 @@ private:
             PooledReadWriteBufferFromHTTP & in,
             size_t projections,
             MergeTreeData::DataPart::Checksums & checksums,
-            ThrottlerPtr throttler);
+            ThrottlerPtr throttler,
+            const MergeTreeData::DataPartPtr & old_version_part = nullptr);
 
     MergeTreeData::MutableDataPartPtr downloadPartToMemory(
             const String & part_name,

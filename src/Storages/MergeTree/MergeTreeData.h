@@ -650,6 +650,12 @@ public:
     DataPartPtr getPartIfExists(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
     DataPartPtr getPartIfExistsWithoutLock(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
 
+    /// For a target part that will be fetched from another replica, find whether the local has an old version part.
+    /// When mutating a part, its mutate version will be changed. For example, all_0_0_0 -> all_0_0_0_1, all_0_0_0_1 is the target part, all_0_0_0 is the old version part.
+    /// Due to mutation commands may modify only few files in the old part, so a lot of files are not necessary to transfer. 
+    /// In this case, if the local has an old version part, transfer its checksum to the replica, then the replica will give the information.
+    DataPartPtr getOldVersionPartIfExists(const String & part_name);
+
     DataPartsVector getPartsByPredicate(const ASTPtr & predicate);
 
     /// Split CLEAR COLUMN IN PARTITION WHERE command into multiple CLEAR COLUMN IN PARTITION commands.

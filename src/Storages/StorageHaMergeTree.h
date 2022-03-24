@@ -387,7 +387,8 @@ private:
         const String & part_name,
         const String & backup_replica,
         bool to_detached,
-        size_t quorum = 0);
+        size_t quorum = 0,
+        bool incrementally = false);
 
     bool fetchPart(
         const HaQueueExecutingEntrySetPtr & executing_set,
@@ -395,7 +396,8 @@ private:
         const String & replica_path,
         bool to_detached,
         size_t quorum = 0,
-        bool to_repair = false);
+        bool to_repair = false,
+        bool incrementally = false);
 
     /** Updates the queue.
       */

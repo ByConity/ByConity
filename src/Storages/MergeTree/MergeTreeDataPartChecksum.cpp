@@ -80,6 +80,14 @@ void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & r
     }
 }
 
+bool MergeTreeDataPartChecksums::isEqual(const MergeTreeDataPartChecksums & rhs, const String & col_name) const
+{
+    auto it = files.find(col_name);
+    auto jt = rhs.files.find(col_name);
+    return it != files.end() && jt != rhs.files.end() && it->second.file_size == jt->second.file_size
+        && it->second.file_hash == jt->second.file_hash;
+}
+
 void MergeTreeDataPartChecksums::checkSizes(const DiskPtr & disk, const String & path) const
 {
     for (const auto & it : files)

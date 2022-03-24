@@ -2675,7 +2675,6 @@ MergeTreeData::PartsTemporaryRename::~PartsTemporaryRename()
     }
 }
 
-
 MergeTreeData::DataPartsVector MergeTreeData::getActivePartsToReplace(
     const MergeTreePartInfo & new_part_info,
     const String & new_part_name,
@@ -3504,6 +3503,17 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const Strin
     return getPartIfExistsWithoutLock(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
 }
 
+MergeTreeData::DataPartPtr MergeTreeData::getOldVersionPartIfExists(const String &part_name)
+{
+    auto lock = lockParts();
+
+    auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
+    DataPartPtr covering_part;
+
+    DataPartsVector covered_parts = getActivePartsToReplace(part_info, part_name, covering_part, lock);
+    return covered_parts.size() == 1 ? covered_parts[0] : nullptr;
+}
+
 MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
 {
     DataPartsVector parts = getDataPartsVector();
@@ -3562,8 +3572,9 @@ void MergeTreeData::handleClearColumnInPartitionWhere(MutationCommands & mutatio
     {
         if (alter_cmd.type == AlterCommand::DROP_COLUMN && alter_cmd.partition_predicate)
         {
+            /// Reconstruct command ast
             auto command_ast = alter_cmd.ast->clone();
-            command_ast->as<ASTAlterCommand>()->predicate = nullptr;
+            command_ast->as<ASTAlterCommand>()->predicate = nullptr; /// clear predicate
 
             std::set<String> partitions;
             DataPartsVector parts = getPartsByPredicate(alter_cmd.partition_predicate);
@@ -3580,7 +3591,7 @@ void MergeTreeData::handleClearColumnInPartitionWhere(MutationCommands & mutatio
                 command.partition = partition_ast;
                 command.predicate = nullptr;
 
-                command_ast->as<ASTAlterCommand>()->partition = partition_ast;
+                command_ast->as<ASTAlterCommand>()->partition = partition_ast; /// set partition
                 command.ast = command_ast->clone();
                 mutation_commands.emplace_back(command);
             }

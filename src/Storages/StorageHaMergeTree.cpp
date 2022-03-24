@@ -1942,7 +1942,8 @@ bool StorageHaMergeTree::fetchPartHeuristically(
     const String & part_name,
     const String & backup_replica,
     bool to_detached,
-    size_t quorum)
+    size_t quorum,
+    bool incrementally)
 {
     bool all_success = false;
     auto candidate_replicas = log_exchanger.findActiveContainingPart(part_name, all_success);
@@ -1997,7 +1998,8 @@ bool StorageHaMergeTree::fetchPartHeuristically(
         zookeeper_path + "/replicas/" + replica_to_fetch,
         to_detached,
         quorum,
-        false); // to_repair
+        false,
+        incrementally);
 }
 
 bool StorageHaMergeTree::fetchPart(
@@ -2006,7 +2008,8 @@ bool StorageHaMergeTree::fetchPart(
     const String & source_replica_path,
     bool to_detached,
     size_t quorum,
-    bool to_repair)
+    bool to_repair,
+    bool incrementally)
 {
     std::unique_ptr<FetchingPartToExecutingEntrySet::Handle> handle;
     if (executing_set)
@@ -2067,7 +2070,11 @@ bool StorageHaMergeTree::fetchPart(
             interserver_scheme,
             replicated_fetches_throttler,
             to_detached,
-            "");
+            "",
+            /*tagger_ptr(default)*/ nullptr,
+            /*try_use_s3_copy(default)*/ true,
+            /*disk_s3(default)*/ nullptr,
+            incrementally);
 
         if (to_repair)
         {
@@ -2359,8 +2366,9 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
                 executing_set,
                 new_part_name,
                 entry.source_replica,
-                false, /// detached
-                0); /// quorum
+                /*detached*/false,
+                /*quorum(default)*/0,
+                getContext()->getSettingsRef().enable_fetch_part_incrementally);
             return true;
         }
         catch (Exception & e)
@@ -2375,6 +2383,31 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     }
 
     /// TODO shall we maintain current_mutating_parts?
+
+    /// try to fetch mutated part first
+    if (!getSettings()->prefer_merge_than_fetch && replica_name != entry.source_replica)
+    {
+        try
+        {
+            fetchPartHeuristically(
+                executing_set,
+                new_part_name,
+                entry.source_replica,
+                /*detached*/false,
+                /*quorum(default)*/0,
+                getContext()->getSettingsRef().enable_fetch_part_incrementally);
+            return true;
+        }
+        catch (Exception & e)
+        {
+            if (e.code() != ErrorCodes::NO_REPLICA_HAS_PART)
+                LOG_DEBUG(log, "{}, {} ", __func__, e.displayText());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__ );
+        }
+    }
 
     size_t estimated_space_for_result = MergeTreeDataMergerMutator::estimateNeededDiskSpace({source_part});
 
