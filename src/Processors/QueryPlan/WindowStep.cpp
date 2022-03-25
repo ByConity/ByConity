@@ -63,7 +63,8 @@ WindowStep::WindowStep(const DataStream & input_stream_,
 
 }
 
-void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
+void WindowStep::transformPipeline(QueryPipeline & pipeline,
+                                   const BuildQueryPipelineSettings &s)
 {
     // This resize is needed for cases such as `over ()` when we don't have a
     // sort node, and the input might have multiple streams. The sort node would
@@ -73,7 +74,8 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
     pipeline.addSimpleTransform([&](const Block & /*header*/)
     {
         return std::make_shared<WindowTransform>(input_header,
-            output_stream->header, window_description, window_functions);
+            output_stream->header, window_description, window_functions,
+            s.actions_settings.dialect_type);
     });
 
     assertBlocksHaveEqualStructure(pipeline.getHeader(), output_stream->header,
