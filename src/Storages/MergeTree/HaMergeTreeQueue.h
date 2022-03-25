@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/BackgroundSchedulePool.h>
+#include <Core/Names.h>
 #include <Storages/MergeTree/ActiveDataPartSet.h>
 #include <Storages/MergeTree/HaMergeTreeAltersSequence.h>
 #include <Storages/MergeTree/HaMergeTreeFutureParts.h>
@@ -190,6 +191,8 @@ private:
     size_t insertWithStats(const LogEntryPtr & entry, std::lock_guard<std::mutex> &);
 
     bool canExecuteClone(const HaMergeTreeLogEntryPtr & clone_entry);
+    bool ingestConflictEntry(const HaMergeTreeLogEntryPtr & entry) const;
+    bool checkIngestConflict(const HaMergeTreeLogEntryPtr & entry, const NameSet & ingesting_partitions) const;
 
     /// If there is any alter metadata mutation that can execute according to alter sequence, try execute it.
     void tryExecuteMetadataAlter(bool & some_mutations_are_probably_done, std::lock_guard<std::mutex> & pull_logs_lock);

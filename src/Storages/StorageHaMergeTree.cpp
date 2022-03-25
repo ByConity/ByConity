@@ -4,11 +4,13 @@
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/MutationLog.h>
 #include <Parsers/ASTOptimizeQuery.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/IngestPartition.h>
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
@@ -1885,6 +1887,9 @@ bool StorageHaMergeTree::executeLogEntry(HaQueueExecutingEntrySetPtr & executing
 
         case LogEntry::REPLACE_RANGE:
             return executeReplaceRange(executing_set);
+
+        case LogEntry::INGEST_PARTITION:
+            return executeIngestion(executing_set);
 
         case LogEntry::BAD_LOG:
             return true;
@@ -4109,6 +4114,140 @@ void StorageHaMergeTree::movePartitionFrom(const StoragePtr & source_table, cons
     }
 
     /// TODO: should we detect conflicts ahead ?
+}
+
+void StorageHaMergeTree::ingestPartition(const PartitionCommand & command, ContextPtr query_context)
+{
+    bool async_ingest = true;
+    auto settings = query_context->getSettingsRef();
+    
+    String partition_id = getPartitionIDFromQuery(command.partition, query_context);
+    
+    auto zookeeper = getZooKeeper();
+    Int64 block_number = allocateBlockNumberDirect(zookeeper);
+
+    if (!settings.enable_async_ingest || settings.allow_ingest_empty_partition)
+    {
+        zkutil::EphemeralNodeHolderPtr ingest_task_node_holder_partition = IngestPartition::getIngestTaskLock(zookeeper, zookeeper_path, replica_name, partition_id);
+
+        String from_database = command.from_database.empty() ? query_context->getCurrentDatabase() : command.from_database;
+        auto from_storage = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+        auto ingest_partition = std::make_shared<IngestPartition>(shared_from_this(), from_storage, command.partition, command.column_names, command.key_names, block_number, query_context);
+        if (!ingest_partition->ingestPartition())
+            return;
+        async_ingest = false;
+    }
+
+    const auto & ordered_key_names = IngestPartition::getOrderedKeys(command.key_names, getInMemoryMetadata());
+
+    StorageHaMergeTree::LogEntry log_entry;
+    log_entry.type = LogEntry::INGEST_PARTITION;
+    log_entry.create_time = time(nullptr);
+    log_entry.source_replica = replica_name;
+    log_entry.new_part_name = partition_id;
+    log_entry.column_names = command.column_names;
+    log_entry.key_names = ordered_key_names;
+    log_entry.lsn = allocateLSN();
+    log_entry.block_id = toString(block_number);
+    /***
+     * for async mode, remote log is also executed to ingest data from source table.
+     * for sync mode, remoete log read the data from replicated table.
+     */
+    if (async_ingest)
+    {
+        log_entry.source_database = command.from_database;
+        log_entry.source_table = command.from_table;
+    }
+
+    try
+    {
+        /***
+         * for sync ingest, local server should not execute ingest log, thus mark it as is_executed = true;
+         */
+        if (!async_ingest)
+            log_entry.is_executed = true;
+        else
+            LOG_DEBUG(log, "Executing async ingest mode, log generated");
+        
+        queue.write(log_entry);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        throw;
+    }
+}
+
+bool StorageHaMergeTree::executeIngestion(HaQueueExecutingEntrySetPtr & executing_set)
+{
+    auto & entry = *executing_set->getExecuting();
+
+    if (entry.column_names.empty() || entry.key_names.empty())
+    {
+        throw Exception("Ingest Column Log corrupt", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto partition_id = IngestPartition::parseIngestPartition(entry.new_part_name, format_version);
+
+    // if (is_offline)
+    // {
+    //     LOG_DEBUG(log, "Cancel ingest partition " << partition_id << " since it is offlined");
+    //     return true;
+    // }
+
+    if (hasUnprocessedLogBeforeIngest(partition_id))
+    {
+        throw Exception("There is unprocessed log of this partition id before ingesting, please wait some time and try again.", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto partition = std::make_shared<ASTPartition>();
+    partition->id = partition_id;
+    String from_database = entry.source_database.empty() ? getContext()->getCurrentDatabase() : entry.source_database;
+    Int64 mutation = parse<Int64>(entry.block_id);
+    std::cout<<" block_id: " << entry.block_id << ", mutation: " << mutation << std::endl;
+
+    if (entry.source_replica == replica_name)
+    {
+        zkutil::EphemeralNodeHolderPtr ingest_task_node_holder_partition = IngestPartition::getIngestTaskLock(getZooKeeper(), zookeeper_path, replica_name, partition_id);
+
+        LOG_TRACE(log, replica_name + " will do ingest in local");
+        auto from_storage = DatabaseCatalog::instance().getTable({from_database, entry.source_table}, getContext());
+        auto ingest_partition = std::make_shared<IngestPartition>(shared_from_this(), from_storage, partition, entry.column_names, entry.key_names, mutation, getContext());
+        ingest_partition->ingestPartition();
+        return true;
+    }
+    else
+    {
+        LOG_TRACE(log, replica_name + " will do ingest from source " + entry.source_replica);
+        auto ingest_partition = std::make_shared<IngestPartition>(shared_from_this(), nullptr, partition, entry.column_names, entry.key_names, mutation, getContext());
+        ingest_partition->ingestPartitionFromRemote(entry.source_replica, from_database, entry.source_table);
+        return true;
+    }
+}
+
+bool StorageHaMergeTree::hasUnprocessedLogBeforeIngest(const String & partition_id)
+{
+    LogEntriesData entries;
+    try
+    {
+        queue.getUnprocessedEntries(entries);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+
+    for (auto & entry : entries)
+    {
+        if (entry.type == LogEntry::GET_PART || entry.type == LogEntry::DROP_RANGE || entry.type == LogEntry::CLONE_PART)
+        {
+            auto part_info = MergeTreePartInfo::fromPartName(entry.new_part_name, format_version);
+            if (part_info.partition_id == partition_id)
+                return true;
+        }
+    }
+
+    return false;
 }
 
 MutationCommands StorageHaMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & ) const

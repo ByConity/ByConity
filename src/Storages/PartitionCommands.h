@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Field.h>
+#include <Core/Names.h>
 #include <common/types.h>
 #include <Parsers/IAST.h>
 #include <Storages/IStorage_fwd.h>
@@ -38,6 +39,7 @@ struct PartitionCommand
         PREATTACH_PARTITION,
         BITENGINE_RECODE_PARTITION,
         BITENGINE_RECODE_PARTITION_WHERE,
+        INGEST_PARTITION,
     };
 
     Type type = UNKNOWN;
@@ -67,6 +69,10 @@ struct PartitionCommand
 
     /// For FREEZE PARTITION and UNFREEZE
     String with_name;
+
+    /// columns for INGEST PARTITION
+    Names column_names;
+    Names key_names;
 
     enum MoveDestinationType
     {

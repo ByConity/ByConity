@@ -3,11 +3,15 @@
 #include <Storages/DataDestinationType.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/MapHelpers.h>
 #include <Processors/Chunk.h>
 #include <Processors/Pipe.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+#include <Interpreters/IdentifierSemantic.h>
 
 
 namespace DB
@@ -109,6 +113,65 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.replace = command_ast->replace;
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::INGEST_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = INGEST_PARTITION;
+        res.partition = command_ast->partition;
+
+        const auto & column_expr_list = command_ast->columns->as<ASTExpressionList &>();
+        for (const auto & child : column_expr_list.children)
+        {
+            if (auto * identifier = child->as<ASTIdentifier>())
+            {
+                res.column_names.push_back(identifier->name());
+                continue;
+            }
+            else if (auto * function = child->as<ASTFunction>())
+            {
+                if (startsWith(Poco::toLower(function->name), "mapelement") && function->arguments->children.size() == 2)
+                {
+                    ASTIdentifier * map_col = function->arguments->children[0]->as<ASTIdentifier>();
+                    ASTLiteral * key_lit = function->arguments->children[1]->as<ASTLiteral>(); // Constant Literal
+                    ASTFunction * key_func = function->arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
+
+                    if (map_col && !IdentifierSemantic::isSpecial(*map_col))
+                    {
+                        String key_name;
+                        if (key_lit) // key is literal
+                            key_name = key_lit->getColumnName();
+                        else if (key_func)
+                            throw Exception("Invalid map key for Ingestion", ErrorCodes::BAD_ARGUMENTS);
+
+                        if (!key_name.empty())
+                        {
+                            res.column_names.push_back(getImplicitFileNameForMapKey(map_col->name(), key_name));
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            throw Exception("Illegal column: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
+        }
+
+        if (command_ast->keys)
+        {
+            const auto & key_expr_list = command_ast->keys->as<ASTExpressionList &>();
+            for (const auto & child : key_expr_list.children)
+            {
+                if (auto * identifier = child->as<ASTIdentifier>())
+                    res.key_names.push_back(identifier->name());
+                else
+                    throw Exception("Illegal key: " + child->getColumnName(), ErrorCodes::BAD_ARGUMENTS);
+            }
+        }
+
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::FETCH_PARTITION)
@@ -223,6 +286,8 @@ std::string PartitionCommand::typeToString() const
         return "UNFREEZE ALL";
     case PartitionCommand::Type::REPLACE_PARTITION:
         return "REPLACE PARTITION";
+    case PartitionCommand::Type::INGEST_PARTITION:
+        return "INGEST PARTITION";
     default:
         throw Exception("Uninitialized partition command", ErrorCodes::LOGICAL_ERROR);
     }

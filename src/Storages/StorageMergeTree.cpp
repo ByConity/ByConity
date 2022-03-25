@@ -18,6 +18,7 @@
 #include <Storages/MergeTree/ActiveDataPartSet.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/PartitionCommands.h>
+#include <Storages/IngestPartition.h>
 #include <Storages/MergeTree/MergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Storages/MergeTree/PartitionPruner.h>
@@ -1582,6 +1583,43 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
     catch (...)
     {
         PartLog::addNewParts(getContext(), dst_parts, watch.elapsed(), ExecutionStatus::fromCurrentException());
+        throw;
+    }
+}
+
+void StorageMergeTree::ingestPartition(const PartitionCommand & command, ContextPtr query_context)
+{
+    String from_database = query_context->resolveDatabase(command.from_database);
+    auto source_table = DatabaseCatalog::instance().getTable({from_database, command.from_table}, query_context);
+
+    if (!source_table) return;
+
+    auto partition = command.partition;
+    auto column_names = command.column_names;
+    auto key_names = command.key_names;
+
+    LOG_TRACE(log, "INGEST PARTITION {} from {} with columns {} and keys {}", 
+                    queryToString(partition), 
+                    source_table->getStorageID().getFullTableName(), 
+                    std::to_string(column_names.size()), 
+                    std::to_string(key_names.size()));
+
+    bool old_val = false;
+    if (!ingesting.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
+        throw Exception("only one ongoing ingesting task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
+
+    try
+    {
+        auto merge_mutate_blocker = stopMergesAndWait();
+        auto ingest_partition = std::make_shared<IngestPartition>(shared_from_this(), source_table, partition, column_names, key_names, increment.get(), query_context);
+        ingest_partition->ingestPartition();
+
+        // reset to false
+        ingesting = false;
+    }
+    catch (...)
+    {
+        ingesting = false;
         throw;
     }
 }

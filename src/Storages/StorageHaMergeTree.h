@@ -227,6 +227,7 @@ private:
     friend class HaMergeTreeLogExchangerBase;
     friend class HaMergeTreeLogExchanger;
     friend class MergeTreeData;
+    friend class IngestPartition;
 
     /// using MergeStrategyPicker = ReplicatedMergeTreeMergeStrategyPicker;
 
@@ -375,6 +376,7 @@ private:
     bool executeMutate(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeDropRange(HaQueueExecutingEntrySetPtr & executing_set);
     bool executeReplaceRange(HaQueueExecutingEntrySetPtr & executed_set);
+	bool executeIngestion(HaQueueExecutingEntrySetPtr & executing_set);
 
     void executeMetadataAlter(const MutationEntry & entry);
 
@@ -497,6 +499,9 @@ private:
     FutureMergedMutatedPart transformPartToFuturePart(const DataPartPtr & part);
     void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr query_context, bool can_skip = false) override;
     void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, bool can_skip = false) override;
+
+    void ingestPartition(const PartitionCommand & command, ContextPtr context) override;
+	bool hasUnprocessedLogBeforeIngest(const String & partition_id);
 
     bool checkIfDetachedPartitionExists(const String & partition_name);
 

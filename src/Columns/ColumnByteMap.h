@@ -116,6 +116,8 @@ public:
      */
     void removeKeys(const NameSet & keys);
 
+    void insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns);
+
     /** Access embeded columns*/
     IColumn & getKey() {return keyColumn->assumeMutableRef();}
     const IColumn & getKey() const {return *keyColumn;}

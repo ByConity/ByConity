@@ -124,6 +124,11 @@ void HaMergeTreeLogEntryData::writeText(WriteBuffer & out) const
 
         case INGEST_PARTITION:
             out << "ingest\n";
+            if (format_version >= 5)
+            {
+                out << "source_database " << source_database << "\n";
+                out << "source_table " << source_table << "\n";
+            }
             out << new_part_name << "\n";
             out << "columns " << column_names.size();
             for (auto & s : column_names)
@@ -167,7 +172,7 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     String storage_type_str;
 
     in >> "format version: ha/" >> format_version >> "\n";
-    if (format_version != 1 && format_version != 2 && format_version != 3 && format_version != 4)
+    if (format_version < 1 || format_version > 5)
         throw Exception("Unknown HaMergeTreeLogEntry format version: " + DB::toString(format_version), ErrorCodes::UNKNOWN_FORMAT_VERSION);
 
     LocalDateTime create_time_dt;
@@ -300,6 +305,11 @@ void HaMergeTreeLogEntryData::readText(ReadBuffer & in)
     else if (type_str == "ingest")
     {
         type = INGEST_PARTITION;
+        if (format_version >= 5)
+        {
+            in >> "source_database " >> source_database >> "\n";
+            in >> "source_table " >> source_table >> "\n"; 
+        }
         in >> new_part_name >> "\n";
 
         size_t column_size;
