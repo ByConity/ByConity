@@ -1407,7 +1407,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                     std::vector<MergeTreeIndexPtr>{},
                     &written_offset_columns,
                     to.getIndexGranularity(),
-                    /*index_granularity_info*/nullptr,
                     /*is_merge*/true);
 
                 size_t column_elems_written = 0;

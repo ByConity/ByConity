@@ -55,7 +55,8 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
     CompressionCodecPtr default_codec,
     const MergeTreeIndices & indices_to_recalc,
     WrittenOffsetColumns * offset_columns_,
-    const MergeTreeIndexGranularity & index_granularity)
+    const MergeTreeIndexGranularity & index_granularity,
+    bool is_merge)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , header(header_)
 {
@@ -84,7 +85,7 @@ MergedColumnOnlyOutputStream::MergedColumnOnlyOutputStream(
         throw Exception("MergedColumnOnlyOutputStream supports only parts stored on disk", ErrorCodes::NOT_IMPLEMENTED);
 
     writer_on_disk->setWrittenOffsetColumns(offset_columns_);
-    writer_on_disk->setMergeStatus();
+    writer_on_disk->setMergeStatus(is_merge);
 }
 
 
