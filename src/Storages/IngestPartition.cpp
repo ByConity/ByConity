@@ -1241,8 +1241,6 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
                     auto key = parseKeyFromImplicitMap(it->first, col_name);
                     ColumnWithTypeAndName * col_type_name = res.findByName(col_name);
                     ColumnPtr implicit_col = col_type_name->column;
-                    if (implicit_col->isNullable())
-                        implicit_col = checkAndGetColumn<ColumnNullable>(implicit_col.get())->getNestedColumnPtr();
                     implicit_columns[key] = std::move(implicit_col);
                     res.erase(col_name);
                 }

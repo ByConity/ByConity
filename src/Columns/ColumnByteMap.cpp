@@ -1269,7 +1269,7 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
 /***
  * insert implicit map column from outside, 
  * only when the current ColumnByteMap has the same size with implicit columns. 
- * implicit columns should be non-nullable, if it is nullable, you should remove nullable before this method.
+ * implicit columns should be nullable, if it is nullable, you should make nullable before this method.
  */
 void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)
 {
@@ -1286,17 +1286,27 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
     auto & value_res_col = value_res->assumeMutableRef();
     Offsets& offset_res_col = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
 
+    std::unordered_map<String, const ColumnNullable *> nullable_columns;
+    for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
+    {
+        auto * column = checkAndGetColumn<ColumnNullable>(it->second.get());
+        nullable_columns[it->first] = column;
+    }
+
     if (col_size == 0)
     {
-        col_size = implicit_columns.begin()->second->size();
+        col_size = nullable_columns.begin()->second->size();
         for (size_t i = 0; i < col_size; ++i)
         {
             size_t numKVPairs = 0;
-            for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
+            for (auto it = nullable_columns.begin(); it != nullable_columns.end(); ++it)
             {
-                key_res_col.insert(Field(it->first));
-                value_res_col.insertFrom(*(it->second), i);
-                numKVPairs++;
+                if (!it->second->isNullAt(i))
+                {
+                    key_res_col.insert(Field(it->first));
+                    value_res_col.insertFrom(it->second->getNestedColumn(), i);
+                    numKVPairs++;
+                }
             }
 
             offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
@@ -1304,7 +1314,7 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
     }
     else
     {
-        if (col_size != implicit_columns.begin()->second->size())
+        if (col_size != nullable_columns.begin()->second->size())
             throw Exception("Expect equal size between map and implicit columns", ErrorCodes::LOGICAL_ERROR);
 
         size_t offset = 0;
@@ -1319,8 +1329,7 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
             for (size_t r = 0; r < row_size; ++r)
             {
                 auto tmp_key = keyColumn->getDataAt(offset + r).toString();
-                auto it = implicit_columns.find(tmp_key);
-                if (it == implicit_columns.end())
+                if (!nullable_columns.count(tmp_key))
                 {
                     key_res_col.insertFrom(*keyColumn, offset + r);
                     value_res_col.insertFrom(*valueColumn, offset + r);
@@ -1328,11 +1337,14 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
                 }
             }
 
-            for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
+            for (auto it = nullable_columns.begin(); it != nullable_columns.end(); ++it)
             {
-                key_res_col.insert(Field(it->first));
-                value_res_col.insertFrom(*(it->second), i);
-                numKVPairs++;
+                if (!it->second->isNullAt(i))
+                {
+                    key_res_col.insert(Field(it->first));
+                    value_res_col.insertFrom(it->second->getNestedColumn(), i);
+                    numKVPairs++;
+                }
             }
 
             offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
