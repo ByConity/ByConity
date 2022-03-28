@@ -114,6 +114,9 @@ public:
         const size_t end_vec_offset = row_num == 0 ? 0 : end_offsets[row_num - 1];
         const T* p_cur_end_container = &end_container[0] + end_vec_offset;
 
+        const size_t start_vec_size = (start_offsets[row_num] - start_vec_offset);
+        const size_t end_vec_size = (end_offsets[row_num] - end_vec_offset);
+
         T start_word, end_word;
         const size_t word_size_bit = sizeof(T) << 3;
         const size_t slot_size = slots.size();
@@ -134,7 +137,7 @@ public:
                 // index start from 0, window range is [0, m_retWindow-1]
                 if (slot_j >= m_ret_window) continue;
 
-                for (size_t end_i = (slot_i / word_size_bit); end_i <= (slot_j / word_size_bit) && end_i < m_window_words; ++end_i)
+                for (size_t end_i = (slot_i / word_size_bit); end_i <= (slot_j / word_size_bit) && end_i < m_window_words && end_i < end_vec_size; ++end_i)
                 {
                     end_word = p_cur_end_container[end_i];
                     for (size_t end_ii = 0; end_ii < word_size_bit; ++end_ii)
@@ -154,7 +157,7 @@ public:
         }
 
         size_t iw_offset = 0;
-        for (size_t iw = 0; iw < m_window_words; iw_offset += word_size_bit, iw++)
+        for (size_t iw = 0; iw < m_window_words && iw < start_vec_size; iw_offset += word_size_bit, iw++)
         {
             start_word = p_cur_start_container[iw];
             if (start_word == 0) continue;
@@ -599,7 +602,7 @@ public:
         std::vector<std::vector<String>> start_slots_container(m_ret_window, std::vector<String>());
         std::vector<std::vector<std::set<String>>> end_slots_set(m_ret_window, std::vector<std::set<String>>(end_slot_size, std::set<String>()));
 
-        for (size_t i = 0; i < m_ret_window; ++i)
+        for (size_t i = 0; i < m_ret_window && i < array_column_start.size(); ++i)
         {
             const auto & nested_array = array_column_start[i].get<Array>();
             for (const auto & e : nested_array)
@@ -619,7 +622,7 @@ public:
                 // index start from 0, window range is [0, m_retWindow-1]
                 if (slot_j >= m_ret_window) continue;
 
-                for (size_t end_i = slot_i; end_i <= slot_j && end_i < m_ret_window; ++end_i)
+                for (size_t end_i = slot_i; end_i <= slot_j && end_i < m_ret_window && end_i < array_column_end.size(); ++end_i)
                 {
                     const Array & end_events_array = array_column_end[end_i].get<Array>();
                     for (size_t end_ii = 0; end_ii < end_events_array.size(); ++end_ii)
