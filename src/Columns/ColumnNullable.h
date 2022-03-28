@@ -120,7 +120,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    ColumnPtr selectDefault(const Field) const override { return null_map; }
+    ColumnPtr selectDefault() const override { return null_map; }
 
     ColumnPtr compress() const override;
 

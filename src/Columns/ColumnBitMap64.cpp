@@ -529,7 +529,7 @@ void ColumnBitMap64::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-ColumnPtr ColumnBitMap64::selectDefault(const Field) const
+ColumnPtr ColumnBitMap64::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num, 1);

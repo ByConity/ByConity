@@ -1337,7 +1337,7 @@ bool HaUniqueMergeTreeBlockOutputStream::processPartitionBlockInPartialUpdateMod
                 }
                 else
                 {
-                    ColumnPtr is_default_col = col.column->selectDefault(col.type->getDefault());
+                    ColumnPtr is_default_col = col.column->selectDefault();
                     const IColumn::Filter & is_default_filter = assert_cast<const ColumnUInt8 &>(*is_default_col).getData();
 
                     /// all values are non-default, nothing to replace

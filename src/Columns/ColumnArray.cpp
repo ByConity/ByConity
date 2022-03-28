@@ -1238,7 +1238,7 @@ void ColumnArray::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-ColumnPtr ColumnArray::selectDefault(const Field) const
+ColumnPtr ColumnArray::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num, 1);

@@ -373,7 +373,7 @@ void ColumnDecimal<T>::gather(ColumnGathererStream & gatherer)
 }
 
 template <typename T>
-ColumnPtr ColumnDecimal<T>::selectDefault(const Field) const
+ColumnPtr ColumnDecimal<T>::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num);

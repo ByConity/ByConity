@@ -345,7 +345,10 @@ public:
      * Compare the whole column with the default value.
      * @return Ptr Returns a ColumnUInt8::Ptr that denotes whether the i-th element is default value (1) or not (0).
      */
-    virtual Ptr selectDefault(const Field default_value) const;
+    virtual Ptr selectDefault() const
+    {
+        throw Exception("Method selectDefault is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     /**
      * Return a new column that replace values at `indexes` with values in this column and `rhs`.

@@ -1385,12 +1385,11 @@ void ColumnByteMap::updateHashFast(SipHash &) const
     throw Exception("Map doesn't support updateHashFast", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-ColumnPtr ColumnByteMap::selectDefault(const Field) const
+ColumnPtr ColumnByteMap::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num, 1);
     IColumn::Filter & filter = res->getData();
-    /// TODO: improve by SIMD
     for (size_t i = 0; i < row_num; ++i)
         filter[i] = sizeAt(i) == 0;
     return res;

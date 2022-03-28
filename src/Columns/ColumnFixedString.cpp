@@ -442,12 +442,11 @@ void ColumnFixedString::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-ColumnPtr ColumnFixedString::selectDefault(const Field) const
+ColumnPtr ColumnFixedString::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num, 1);
     IColumn::Filter & filter = res->getData();
-    /// TODO: improve by SIMD
     size_t id = 0, cnt = 0;
     for (size_t i = 0; i < chars.size(); ++i)
     {

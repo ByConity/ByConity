@@ -168,7 +168,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    ColumnPtr selectDefault(const Field) const override;
+    ColumnPtr selectDefault() const override;
 
     bool structureEquals(const IColumn & rhs) const override
     {

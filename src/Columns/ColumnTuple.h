@@ -53,6 +53,8 @@ public:
     Field operator[](size_t n) const override;
     void get(size_t n, Field & res) const override;
 
+    ColumnPtr selectDefault() const override;
+
     StringRef getDataAt(size_t n) const override;
     void insertData(const char * pos, size_t length) override;
     void insert(const Field & x) override;

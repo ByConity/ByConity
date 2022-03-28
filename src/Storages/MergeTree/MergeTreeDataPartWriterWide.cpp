@@ -803,7 +803,7 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         /// write row store meta
         auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_META_NAME, 4096);
         HashingWriteBuffer out_hashing(*out);
-        UniqueRowStoreMeta meta(data_part->getColumns(), {});
+        UniqueRowStoreMeta meta(data_part->getColumns(), {})
         meta.write(out_hashing);
         checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
         checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();

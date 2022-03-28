@@ -31,17 +31,6 @@ void IColumn::insertFrom(const IColumn & src, size_t n)
     insert(src[n]);
 }
 
-ColumnPtr IColumn::selectDefault(const Field default_value) const
-{
-    size_t row_num = size();
-    auto res = ColumnVector<UInt8>::create(row_num);
-    IColumn::Filter & filter = res->getData();
-    /// TODO: improve by SIMD
-    for (size_t i = 0; i < row_num; ++i)
-        filter[i] = (*this)[i] == default_value;
-    return res;
-}
-
 bool isColumnNullable(const IColumn & column)
 {
     return checkColumn<ColumnNullable>(column);

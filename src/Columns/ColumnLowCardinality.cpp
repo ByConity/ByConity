@@ -147,6 +147,17 @@ ColumnPtr ColumnLowCardinality::convertToFullColumn() const
     return nested_column->index(getIndexes(), 0);
 }
 
+ColumnPtr ColumnLowCardinality::selectDefault() const
+{
+    size_t row_num = size();
+    auto res = ColumnVector<UInt8>::create(row_num, 1);
+    IColumn::Filter & filter = res->getData();
+    size_t default_index = getDictionary().getDefaultValueIndex();
+    for (size_t i = 0; i < row_num; ++i)
+        filter[i] = getIndexes().getUInt(i) == default_index;
+    return res;
+}
+
 void ColumnLowCardinality::insert(const Field & x)
 {
     compactIfSharedDictionary();

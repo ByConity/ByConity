@@ -502,7 +502,7 @@ void ColumnVector<T>::gather(ColumnGathererStream & gatherer)
 }
 
 template <typename T>
-ColumnPtr ColumnVector<T>::selectDefault(const Field) const
+ColumnPtr ColumnVector<T>::selectDefault() const
 {
     size_t row_num = data.size();
     auto res = ColumnVector<UInt8>::create(row_num);

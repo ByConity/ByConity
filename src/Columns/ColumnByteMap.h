@@ -94,7 +94,7 @@ public:
     void updateWeakHash32(WeakHash32 & hash) const override;
     void updateHashFast(SipHash & hash) const override;
 
-    ColumnPtr selectDefault(const Field) const override;
+    ColumnPtr selectDefault() const override;
 
     /**
      * Try to replace the current value of current_pos with merging the value and those of two parts. The same target index will appear multiple times in first part and at most once in second part.

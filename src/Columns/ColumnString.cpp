@@ -539,7 +539,7 @@ void ColumnString::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-ColumnPtr ColumnString::selectDefault(const Field) const
+ColumnPtr ColumnString::selectDefault() const
 {
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num);
