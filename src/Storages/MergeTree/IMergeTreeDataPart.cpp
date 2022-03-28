@@ -389,11 +389,18 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
     /// clear cache
     if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        String key = getMemoryAddress();
-        if (storage.unique_row_store_cache)
-            storage.unique_row_store_cache->remove(key);
-        if (uki_type == UkiType::DISK && storage.unique_key_index_cache)
-            storage.unique_key_index_cache->remove(key);
+        try
+        {
+            String key = getMemoryAddress();
+            if (storage.unique_row_store_cache)
+                storage.unique_row_store_cache->remove(key);
+            if (uki_type == UkiType::DISK && storage.unique_key_index_cache)
+                storage.unique_key_index_cache->remove(key);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__, "There is a problem when clearing cache of " + name);
+        }
     }
 }
 
@@ -1320,6 +1327,8 @@ void IMergeTreeDataPart::remove() const
         projection_directories.emplace(p_name + ".proj");
     }
 
+    /// Part of unique table may have multiple delete bitmap files which are not in checksum, so it needs special handling.
+    /// TODO: remove special case of unique
     if (checksums.empty() || storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
@@ -1964,44 +1973,18 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
 
 DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
 {
-    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not load disk unique index for Non-Unique table {}", storage.log_name);
     return std::make_shared<DiskUniqueKeyIndex>(getFullPath() + UKI_FILE_NAME, storage.getContext()->getDiskUniqueKeyIndexBlockCache());
 }
 
 UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
 {
-    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
-    /// get row store columns
-    NamesAndTypesList row_store_columns;
-    {
-        String path = getFullPath() + UNIQUE_ROW_STORE_COLUMNS_NAME;
-        if (!Poco::File(path).exists())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store column file doesn't exist.");
-        auto file = openForReading(volume->getDisk(), path);
-        row_store_columns.readText(*file);
-        assertEOF(*file);
-    }
-
-    /// get delete bitmap of row store columns
-    DeleteBitmapPtr columns_delete_bitmap;
-    {
-        String path = getFullPath() + UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME;
-        if (!Poco::File(path).exists())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delete bitmap of row store column file doesn't exist.");
-        auto file = openForReading(volume->getDisk(), path);
-        size_t buf_size;
-        readIntBinary(buf_size, *file);
-        PODArray<char> buf(buf_size);
-        file->read(buf.data(), buf_size);
-        Roaring bitmap = Roaring::read(buf.data());
-        columns_delete_bitmap = std::make_shared<Roaring>(std::move(bitmap));
-    }
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not load unique row store for Non-Unique table {}", storage.log_name);
 
     return std::make_shared<UniqueRowStore>(
-        getFullPath() + UNIQUE_ROW_STORE_DATA_NAME,
-        storage.getContext()->getDiskUniqueRowStoreBlockCache(),
-        row_store_columns,
-        columns_delete_bitmap);
+        getFullPath() + UNIQUE_ROW_STORE_DATA_NAME, storage.getContext()->getDiskUniqueRowStoreBlockCache());
 }
 
 UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
@@ -2394,6 +2377,34 @@ UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
     String key = getMemoryAddress();
     auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadUniqueRowStore(); };
     return storage.unique_row_store_cache->getOrSet(key, std::move(load_func)).first;
+}
+
+UniqueRowStoreMetaPtr IMergeTreeDataPart::tryGetUniqueRowStoreMeta() const
+{
+    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "tryGetUniqueRowStore of {} which doesn't have unique key", storage.log_name);
+    }
+
+    const String path = fs::path(getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME;
+    if (!volume->getDisk()->exists(path))
+        return nullptr;
+
+    std::lock_guard lock(row_store_meta_mutex);
+    if (!row_store_meta)
+    {
+        row_store_meta = std::make_shared<UniqueRowStoreMeta>();
+        auto buf = openForReading(volume->getDisk(), path);
+        row_store_meta->read(*buf);
+        assertEOF(*buf);
+    }
+    return row_store_meta;
+}
+
+void IMergeTreeDataPart::setUniqueRowStoreMeta(UniqueRowStoreMetaPtr row_store_meta_)
+{
+    std::lock_guard lock(row_store_meta_mutex);
+    row_store_meta = row_store_meta_;
 }
 
 bool IMergeTreeDataPart::getValueFromUniqueIndex(

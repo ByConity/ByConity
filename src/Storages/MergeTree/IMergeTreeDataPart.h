@@ -482,6 +482,11 @@ public:
     /// If row store file exists, return row store. Otherwise, return nullptr.
     UniqueRowStorePtr tryGetUniqueRowStore() const;
 
+    /// If row store meta file exists, return row store meta. Otherwise, return nullpter.
+    UniqueRowStoreMetaPtr tryGetUniqueRowStoreMeta() const;
+
+    void setUniqueRowStoreMeta(UniqueRowStoreMetaPtr row_store_meta);
+
     /// If `key' is found, return true and set its corresponding `rowid' and optional `version' and `is_offline'.
     /// Otherwise return false.
     bool getValueFromUniqueIndex(
@@ -665,6 +670,11 @@ private:
 
     mutable State state{State::Temporary};
 
+    /// Used to prevent concurrent modification to row store mata.
+    mutable std::mutex row_store_meta_mutex;
+    /// Row store meta contains columns and removed columns info
+    mutable UniqueRowStoreMetaPtr row_store_meta;
+    
     /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.
     mutable std::mutex checksums_mutex;

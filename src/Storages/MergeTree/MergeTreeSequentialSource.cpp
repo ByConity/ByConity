@@ -123,10 +123,11 @@ try
         {
 
             size_t num_deleted = 0;
+            ColumnUInt8::MutablePtr delete_column = nullptr;
             if (delete_bitmap)
             {
                 /// construct delete filter for current granule
-                auto delete_column = ColumnUInt8::create(rows_read, 1);
+                delete_column = ColumnUInt8::create(rows_read, 1);
                 UInt8 * filter_data = delete_column->getData().data();
                 size_t start_row = currentMarkStart();
                 size_t end_row = currentMarkEnd();
@@ -161,7 +162,10 @@ try
                 auto column = ColumnUInt32::create(rows_read);
                 for (size_t i = 0; i < rows_read; ++i)
                     column->getData()[i] = static_cast<UInt32>(current_row + i);
-                columns.emplace_back(std::move(column));
+                if (delete_column)
+                    columns.emplace_back(column->filter(delete_column->getData(), rows_read - num_deleted));
+                else
+                    columns.emplace_back(std::move(column));
             }
 
             size_t num_columns = sample.size() + include_rowid_column;

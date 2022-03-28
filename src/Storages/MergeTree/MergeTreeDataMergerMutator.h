@@ -95,10 +95,10 @@ class MergeTreeDataMergerMutator
 public:
     using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String *)>;
     
-    /// The i-th input row is mapped to the RowidMapping[i]-th output row in the merged part
+    /// The i-th row in the merged part is from part PartIdMapping[i]
     using PartIdMapping = PODArray<UInt32, /*INITIAL_SIZE*/1024>;
 
-    MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size, bool build_part_id_mapping = false);
+    MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size);
 
     /** Get maximum total size of parts to do merge, at current moment of time.
       * It depends on number of free threads in background_pool and amount of free space in disk.
@@ -183,14 +183,6 @@ public:
         const String & prefix = "",
         const ActionBlocker * unique_table_blocker = nullptr);
 
-    /// Merge row store for unique part after merging using part_id_mapping when enable_unique_partial_update and enable_unique_row_store
-    void mergeRowStoreIntoNewPart(
-        const FutureMergedMutatedPart & future_part,
-        const PartIdMapping & part_id_mapping,
-        const MergeTreeData::MutableDataPartPtr & new_part,
-        MergeTreeData::DataPart::Checksums & checksums,
-        bool need_sync);
-
     /// Mutate a single data part with the specified commands. Will create and return a temporary part.
     MergeTreeData::MutableDataPartPtr mutatePartToTemporaryPart(
         const FutureMergedMutatedPart & future_part,
@@ -211,6 +203,15 @@ public:
     static size_t estimateNeededDiskSpace(const MergeTreeData::DataPartsVector & source_parts);
 
 private:
+
+    /// Merge row store for unique part after merging using part_id_mapping when enable_unique_partial_update and enable_unique_row_store
+    void mergeRowStoreIntoNewPart(
+        const FutureMergedMutatedPart & future_part,
+        const PartIdMapping & part_id_mapping,
+        const MergeTreeData::MutableDataPartPtr & new_part,
+        MergeTreeData::DataPart::Checksums & checksums,
+        bool need_sync);
+
     /** Select all parts belonging to the same partition.
       */
     MergeTreeData::DataPartsVector selectAllPartsFromPartition(const String & partition_id);
@@ -373,8 +374,6 @@ private:
     ITTLMergeSelector::PartitionIdToTTLs next_recompress_ttl_merge_times_by_partition;
     /// Performing TTL merges independently for each partition guarantees that
     /// there is only a limited number of TTL merges and no partition stores data, that is too stale
-
-    bool build_part_id_mapping;
 };
 
 

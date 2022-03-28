@@ -772,7 +772,12 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     const UniqueRowStorePtr & row_store)
 {
     if (rowid_pairs.empty())
-        return;
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Size of rowid pairs can not be zero.");
+
+    /// Get unique row store meta
+    UniqueRowStoreMetaPtr row_store_meta = part->tryGetUniqueRowStoreMeta();
+    if (!row_store_meta)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store meta can not be null when row store exists for part {}", part->name);
 
     Stopwatch timer;
     size_t block_size_before = to_block.rows();
@@ -796,13 +801,13 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
         mutable_columns[i] = IColumn::mutate(std::move(to_block.getByPosition(i).column));
     std::vector<size_t> column_indexes;
 
-    column_indexes.resize(row_store->columns.size());
+    column_indexes.resize(row_store_meta->columns.size());
     std::vector<SerializationPtr> serializations;
     size_t id = 0;
-    for (auto & name_and_type : row_store->columns)
+    for (auto & name_and_type : row_store_meta->columns)
     {
         /// After drop column, adding this info into columns_delete_bitmap of existing parts is an asynchronous operation, thus the columns_delete_bitmap may be lagging
-        if (row_store->columns_delete_bitmap->contains(id) || !to_block.has(name_and_type.name))
+        if (row_store_meta->removed_columns.count(name_and_type.name) || !to_block.has(name_and_type.name))
             column_indexes[id++] = to_block.columns();
         else
             column_indexes[id++] = to_block.getPositionByName(name_and_type.name);
@@ -814,9 +819,7 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     {
         size_t row = pair.part_rowid;
         row = Endian::big(row);
-        WriteBufferFromOwnString row_buf;
-        writeBinary(row, row_buf);
-        String key = row_buf.str();
+        Slice key(reinterpret_cast<const char *>(&row), sizeof(row));
 
         bool exact_match = false;
         int cmp = comparator->Compare(key, iter->key());
@@ -842,7 +845,7 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
 
         Slice value = iter->value();
         ReadBufferFromMemory buffer(value.data(), value.size());
-        for (size_t i = 0, size = row_store->columns.size(); i < size; ++i)
+        for (size_t i = 0, size = row_store_meta->columns.size(); i < size; ++i)
         {
             Field val;
             serializations[i]->deserializeBinary(val, buffer);

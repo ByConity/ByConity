@@ -6374,36 +6374,28 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
 
     if (part->storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        /// When there has commands of drop column, it's necessary to rewrite delete bitmap of row store columns.
-        UniqueRowStorePtr row_store = part->tryGetUniqueRowStore();
-        if (row_store)
+        /// When there has commands of drop column, it's necessary to rewrite row store meta.
+        UniqueRowStoreMetaPtr current_row_store_meta = part->tryGetUniqueRowStoreMeta();
+        if (current_row_store_meta)
         {
-            Roaring bitmap = *row_store->columns_delete_bitmap;
-            size_t id = 0;
-            for (auto & [name, type] : row_store->columns)
+            UniqueRowStoreMetaPtr new_row_store_meta = std::make_shared<UniqueRowStoreMeta>(*current_row_store_meta);
+            for (auto & [name, type] : new_row_store_meta->columns)
             {
                 if (!new_types.count(name))
-                    bitmap.add(id);
-                id++;
+                    new_row_store_meta->removed_columns.emplace(name);
             }
-            /// write new delete bitmap of row store columns
-            auto columns_bitmap = std::make_shared<Roaring>(bitmap);
-            size_t size = columns_bitmap->getSizeInBytes();
-            PODArray<char> buffer(size);
-            size = columns_bitmap->write(buffer.data());
 
-            /// write to file
+            /// Write to file
             String tmp_suffix = ".tmp";
-            WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME + tmp_suffix, 4096);
+            WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_META_NAME + tmp_suffix, 4096);
             HashingWriteBuffer out_hashing(file);
-            writeIntBinary(size, out_hashing);
-            out_hashing.write(buffer.data(), size);
-            new_checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_size = out_hashing.count();
-            new_checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_hash = out_hashing.getHash();
-            transaction->rename_map[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME + tmp_suffix] = UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME;
+            new_row_store_meta->write(out_hashing);
+            new_checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+            new_checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+            transaction->rename_map[UNIQUE_ROW_STORE_META_NAME + tmp_suffix] = UNIQUE_ROW_STORE_META_NAME;
             
-            /// update delete bitmap of row store columns in memory
-            row_store->columns_delete_bitmap = columns_bitmap;
+            /// Update row store meta in memory immediately, it's ok even transaction failed.
+            const_cast<IMergeTreeDataPart &>(*part).setUniqueRowStoreMeta(new_row_store_meta);
         }
     }
 

@@ -1,4 +1,3 @@
-#include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileReader.h>
 #include <Storages/UniqueRowStore.h>
 #include <Common/Coding.h>
@@ -9,15 +8,13 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int UNKNOWN_EXCEPTION;
+    extern const int UNKNOWN_FORMAT;
 }
 
-UniqueRowStore::UniqueRowStore(
-    const String & file_path, IndexFileBlockCachePtr block_cache, NamesAndTypesList columns_, DeleteBitmapPtr columns_delete_bitmap_)
-    : columns(columns_), columns_delete_bitmap(columns_delete_bitmap_)
+UniqueRowStore::UniqueRowStore(const String & file_path, IndexFileBlockCachePtr block_cache)
 {
     IndexFile::Options options;
     options.block_cache = std::move(block_cache);
-    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
     auto local_reader = std::make_unique<IndexFile::IndexFileReader>(options);
     auto status = local_reader->Open(file_path);
     if (!status.ok())
@@ -39,6 +36,46 @@ std::unique_ptr<IndexFile::Iterator> UniqueRowStore::new_iterator(const IndexFil
 size_t UniqueRowStore::residentMemoryUsage() const
 {
     return index_reader ? index_reader->ResidentMemoryUsage() : sizeof(UniqueRowStore);
+}
+
+void UniqueRowStoreMeta::write(WriteBuffer & to)
+{
+    writeString("unique row store format version: 1\n", to);
+
+    writeVarUInt(columns.size(), to);
+    for (const auto & name_and_type : columns)
+        name_and_type.serialize(to);
+
+    writeVarInt(removed_columns.size(), to);
+    for (const auto & name: removed_columns)
+        writeBinary(name, to);
+}
+
+void UniqueRowStoreMeta::read(ReadBuffer & in)
+{
+    assertString("unique row store format version: ", in);
+    size_t format_version;
+    readText(format_version, in);
+    assertChar('\n', in);
+    if (format_version != 1)
+        throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Bad unique row store format version {}", format_version);
+
+    size_t size;
+    readVarUInt(size, in);
+    for (size_t i = 0; i < size; ++i)
+    {
+        NameAndTypePair elem;
+        elem.deserialize(in);
+        columns.emplace_back(std::move(elem));
+    }
+
+    readVarUInt(size, in);
+    for (size_t i = 0; i < size; ++i)
+    {
+        String name;
+        readBinary(name, in);
+        removed_columns.emplace(name);
+    }
 }
 
 }

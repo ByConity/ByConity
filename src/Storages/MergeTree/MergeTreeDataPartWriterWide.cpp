@@ -376,9 +376,6 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
     {
         /// handle key, mem comparable
         size_t row = Endian::big(i);
-        WriteBufferFromOwnString row_buf;
-        writeBinary(row, row_buf);
-        String key = row_buf.str();
         size_t correct_row = i;
         if (permutation)
             correct_row = (*permutation)[i];
@@ -391,7 +388,7 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
                 rows);
 
         /// insert item
-        status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(serialized_values[i].data(), serialized_values[i].size()));
+        status = row_store_writer.Add(Slice(reinterpret_cast<const char *>(&row), sizeof(row)), Slice(serialized_values[i].data(), serialized_values[i].size()));
         if (!status.ok())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
     }
@@ -803,37 +800,16 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
         checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
 
-        /// write row store columns
-        {
-            auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
-            HashingWriteBuffer out_hashing(*out);
-            data_part->getColumns().writeText(out_hashing);
-            checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
-            checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
-            out->finalize();
-            if (sync)
-                out->sync();
-        }
-
-        /// write delete bitmap of row store columns
-        {
-            /// serialize bitmap to buffer
-            auto columns_bitmap = std::make_shared<Roaring>();
-            size_t size = columns_bitmap->getSizeInBytes();
-            PODArray<char> buffer(size);
-            size = columns_bitmap->write(buffer.data());
-            
-            /// write to file
-            auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME, 4096);
-            HashingWriteBuffer out_hashing(*out);
-            writeIntBinary(size, out_hashing);
-            out_hashing.write(buffer.data(), size);
-            checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_size = out_hashing.count();
-            checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_hash = out_hashing.getHash();
-            out->finalize();
-            if (sync)
-                out->sync();
-        }
+        /// write row store meta
+        auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_META_NAME, 4096);
+        HashingWriteBuffer out_hashing(*out);
+        UniqueRowStoreMeta meta(data_part->getColumns(), {});
+        meta.write(out_hashing);
+        checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+        checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+        out->finalize();
+        if (sync)
+            out->sync();
     }
 }
 

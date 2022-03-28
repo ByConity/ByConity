@@ -11,7 +11,6 @@
 #include <Storages/MergeTree/MergeScheduler.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
-#include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <Storages/IndexFile/Comparator.h>
 #include <Storages/IndexFile/Iterator.h>
@@ -178,14 +177,11 @@ void FutureMergedMutatedPart::updatePath(const MergeTreeData & storage, const Re
     path = storage.getFullPathOnDisk(reservation->getDisk()) + name + "/";
 }
 
-MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size_, bool build_part_id_mapping_)
+MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size_)
     : data(data_)
     , background_pool_size(background_pool_size_)
     , log(&Poco::Logger::get(data.getLogName() + " (MergerMutator)"))
-    , build_part_id_mapping(build_part_id_mapping_)
 {
-    if (build_part_id_mapping && data.merging_params.mode != MergeTreeData::MergingParams::Unique)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Part id mapping is only supported for Unique mode, got {}", data.merging_params.getModeName());
 }
 
 
@@ -1188,6 +1184,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     /// If merge is vertical we cannot calculate it
     bool blocks_are_granules_size = (chosen_merge_algorithm == MergeAlgorithm::Vertical && !isCompactPart(new_data_part));
 
+    bool build_part_id_mapping = data.merging_params.mode == MergeTreeData::MergingParams::Unique
+        && data.getSettings()->enable_unique_partial_update && data.getSettings()->enable_unique_row_store;
     MergingSortedAlgorithm::PartIdMappingCallback part_id_mapping_cb;
     PartIdMapping part_id_mapping;
     if (build_part_id_mapping)
@@ -1622,32 +1620,32 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
      * Phase 2: Get row store of new part.
      * Phase 3: Check metadata of columns.
      * Phase 4: Merge row store according to the match type.
-     * Phase 5: Update checksums: write row store columns and delete bitmap of row store columns.
+     * Phase 5: Update checksums: write row store meta.
      * 
      * Due to add/drop columns command, merge row store should handle three cases:
      * Case1: Exact Match
      * 
      * Origin, there has 3 columns a,b,c and 2 part:
-     * [Part 1]row store columns:a   b   c, delete bitmap: 0   0   0
-     * [Part 2]row store columns:a   b   c, delete bitmap: 0   0   0
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   c}, removed column: {}
      * In this case, we can directly use origin serialized value of each row for two parts and contruct new row store.
      * 
      * Case 2: Prefix Match
      * 
      * Origin, there has 3 columns a,b,c and 1 part:
-     * [Part 1]row store columns:a   b   c, delete bitmap: 0   0   0
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
      * Then add columns d after c, and write a new part:
-     * [Part 1]row store columns:a   b   c, delete bitmap: 0   0   0
-     * [Part 2]row store columns:a   b   c   d, delete bitmap: 0   0   0,   0
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   c   d}, removed column: {}
      * In this case, we can directly use origin serialized value of each row for part 2. 
      * But for part 1, we need to append value using defaule value of column d for each row.
      * 
      * Case 3: Mismatch
      * Origin, there has 3 columns a,b,c and 1 part:
-     * [Part 1]row store columns:a   b   c, delete bitmap: 0   0   0
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
      * Then add columns d before c, and write a new part:
-     * [Part 1]row store columns:a   b   c, delete bitmap: 0   0   0
-     * [Part 2]row store columns:a   b   d   c, delete bitmap: 0   0   0,   0
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   d   c}, removed column: {}
      * In this case, we can directly use origin serialized value of each row for part 2. 
      * But for part 1, we need to rewrite each row.
      **************************************************************************************************/
@@ -1657,14 +1655,20 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
 
     /// 1. Get row store iterator of old parts
     UniqueRowStoreVector row_store_holders;
+    UniqueRowStoreMetaVector row_store_meta_holders;
     row_store_holders.reserve(parts.size());
+    row_store_meta_holders.reserve(parts.size());
     for (auto & part : parts)
     {
         UniqueRowStorePtr row_store = part->tryGetUniqueRowStore();
+        UniqueRowStoreMetaPtr row_store_meta = part->tryGetUniqueRowStoreMeta();
         if (!row_store)
             /// when there has any part without row store, skip the process
             return;
+        if (!row_store_meta)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Row store meta can not be null when row store exists for part {}", part->name);
         row_store_holders.push_back(row_store);
+        row_store_meta_holders.push_back(row_store_meta);
     }
     IndexFileIterators row_store_iters;
     row_store_iters.reserve(parts.size());
@@ -1692,7 +1696,6 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
     auto disk = new_part->volume->getDisk();
     String row_store_file = fullPath(disk, new_part->getFullRelativePath() + UNIQUE_ROW_STORE_DATA_NAME);
     IndexFile::Options options;
-    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
     IndexFile::IndexFileWriter row_store_writer(options);
     auto status = row_store_writer.Open(row_store_file);
     if (!status.ok())
@@ -1709,19 +1712,18 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
         auto columns_end = columns.end();
 
         bool match = true;
-        auto & part_columns = row_store_holders[i]->columns;
+        auto & part_columns = row_store_meta_holders[i]->columns;
         info.column_indexes.reserve(part_columns.size());
         info.column_serializations.reserve(part_columns.size());
-        auto & part_delete_bitmap = row_store_holders[i]->columns_delete_bitmap;
+        auto & removed_columns = row_store_meta_holders[i]->removed_columns;
 
-        size_t part_columns_id = 0, columns_id = 0;
+        size_t columns_id = 0;
         for (auto & part_column : part_columns)
         {
             info.column_serializations.emplace_back(part_column.type->getDefaultSerialization());
-            if (part_delete_bitmap->contains(part_columns_id))
+            if (removed_columns.count(part_column.name))
             {
                 match = false;
-                part_columns_id++;
                 info.column_indexes.emplace_back(columns.size());
                 continue;
             }
@@ -1745,7 +1747,6 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
             info.column_hits[columns_id] = true;
             columns_iter++;
             columns_id++;
-            part_columns_id++;
         }
         if (!match)
             info.match_type = RowStoreColumnsMatchType::Mismatch;
@@ -1779,30 +1780,28 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
                 "Row store iterator is not valid when merging row stores for part {}, old parts {}.",
                 new_part->name,
                 parts.size());
-        auto info = row_store_columns_info_list[part_id];
+        auto & info = row_store_columns_info_list[part_id];
 
         /// handle key, mem comparable
         size_t row = Endian::big(i);
-        WriteBufferFromOwnString row_buf;
-        writeBinary(row, row_buf);
-        String key = row_buf.str();
+        Slice key(reinterpret_cast<const char *>(&row), sizeof(row));
         if (info.match_type == RowStoreColumnsMatchType::ExactMatch)
-            status = row_store_writer.Add(Slice(key.data(), key.size()), row_store_iters[part_id]->value());
+            status = row_store_writer.Add(key, row_store_iters[part_id]->value());
         else if (info.match_type == RowStoreColumnsMatchType::PrefixMatch)
         {
             Slice value = row_store_iters[part_id]->value();
             WriteBufferFromOwnString val_buf;
             val_buf.write(value.data(), value.size());
-            for (size_t j = row_store_holders[part_id]->columns.size(); j < mutable_columns.size(); ++j)
+            for (size_t j = row_store_meta_holders[part_id]->columns.size(); j < mutable_columns.size(); ++j)
                 serializations[j]->serializeBinary(*mutable_columns[j], 0, val_buf);
             String val = val_buf.str();
-            status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
+            status = row_store_writer.Add(key, Slice(val.data(), val.size()));
         }
         else
         {
             Slice value = row_store_iters[part_id]->value();
             ReadBufferFromMemory buffer(value.data(), value.size());
-            for (size_t j = 0; j < row_store_holders[part_id]->columns.size(); ++j)
+            for (size_t j = 0; j < row_store_meta_holders[part_id]->columns.size(); ++j)
             {
                 Field val;
                 info.column_serializations[j]->deserializeBinary(val, buffer);
@@ -1818,7 +1817,7 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
                     serializations[j]->serializeBinary(*mutable_columns[j], 0, val_buf); /// insert default value
             }
             String val = val_buf.str();
-            status = row_store_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
+            status = row_store_writer.Add(key, Slice(val.data(), val.size()));
         }
         if (!status.ok())
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
@@ -1832,42 +1831,19 @@ void MergeTreeDataMergerMutator::mergeRowStoreIntoNewPart(
     LOG_DEBUG(
         log, "Finish merging row store for part {}, old parts: {}, cost {} ms.", new_part->name, parts.size(), timer.elapsedMilliseconds());
 
-    /// 5. Update checksums
+    /// 5. Update checksums and write row store meta
     checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
     checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
 
-    {
-        /// Write row store columns
-        auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_COLUMNS_NAME, 4096);
-        HashingWriteBuffer out_hashing(*out);
-        columns.writeText(out_hashing);
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_size = out_hashing.count();
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_NAME].file_hash = out_hashing.getHash();
-        out->finalize();
-        if (need_sync)
-            out->sync();
-    }
-
-    {
-        /// Write delete bitmap of row store columns
-        /// Serialize bitmap to buffer
-        auto columns_bitmap = std::make_shared<Roaring>();
-        size_t size = columns_bitmap->getSizeInBytes();
-        PODArray<char> buffer(size);
-        size = columns_bitmap->write(buffer.data());
-
-        /// Write to file
-        auto out = new_part->volume->getDisk()->writeFile(
-            fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME, 4096);
-        HashingWriteBuffer out_hashing(*out);
-        writeIntBinary(size, out_hashing);
-        out_hashing.write(buffer.data(), size);
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_size = out_hashing.count();
-        checksums.files[UNIQUE_ROW_STORE_COLUMNS_DELETE_BITMAP_NAME].file_hash = out_hashing.getHash();
-        out->finalize();
-        if (need_sync)
-            out->sync();
-    }
+    auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME, 4096);
+    HashingWriteBuffer out_hashing(*out);
+    UniqueRowStoreMeta meta(columns, {});
+    meta.write(out_hashing);
+    checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+    checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+    out->finalize();
+    if (need_sync)
+        out->sync();
 }
 
 MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTemporaryPart(
