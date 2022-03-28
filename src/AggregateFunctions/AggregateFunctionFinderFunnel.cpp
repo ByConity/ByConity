@@ -1,19 +1,17 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionFinderFunnel.h>
+#include <AggregateFunctions/AggregateFunctionFinderFunnelByTimes.h>
 #include <AggregateFunctions/Helpers.h>
 
 namespace DB
 {
 namespace
 {
-    AggregateFunctionPtr createAggregateFunctionFinderFunnelHelper(const std::string & name, const DataTypes & argument_types, const Array & params)
+    AggregateFunctionPtr createAggregateFunctionFinderFunnelHelper(const std::string & name, const DataTypes & argument_types, const Array & params, bool is_by_times = false)
     {
-        if (params.size() != 4 && params.size() != 5  && params.size() != 6 && params.size() != 7 && params.size() != 8)
-            throw Exception("Funnel function " + name + " requires (windows_in_seconds, start_time, check_granularity, number_check, [related_num], [relative_window_type, time_zone], [time_interval]), "
-                                + "whose optional parameters will be used for attribute association and current day window", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-
-        if (argument_types.size() < 3)
-            throw Exception("Incorrect number of arguments for aggregate function " + name + ", should be at least 3",
+        if (argument_types.size() < 3 || argument_types.size() > 9)
+            throw Exception("Incorrect number of arguments for aggregate function " + name + ", requires " +
+                                "(windows_in_seconds, start_time, check_granularity, number_check, [related_num], [relative_window_type, time_zone], [time_interval [count_group]] should be at least 3",
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         if (!argument_types[0]->equals(*argument_types[1]))
@@ -46,8 +44,8 @@ namespace
         UInt64 watch_step = params[2].safeGet<UInt64>();
         UInt64 watch_numbers = params[3].safeGet<UInt64>();
 
-        if (!watch_numbers)
-            throw Exception("WatchNumber should be greater than 0", ErrorCodes::BAD_ARGUMENTS);
+        if (!watch_numbers || !watch_step)
+            throw Exception("WatchNumber/WatchStep should be greater than 0", ErrorCodes::BAD_ARGUMENTS);
 
         UInt64 window_type = 0;
         String time_zone;
@@ -58,7 +56,6 @@ namespace
             // wind_type = 1: relative window of the same day of the first event to be checked
             if (!(window_type == 0 || window_type == 1))
                 throw Exception("Illegal window_type value", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
             time_zone = params[5].safeGet<String>();
         }
 
@@ -67,12 +64,11 @@ namespace
             window_type = params[5].safeGet<UInt64>();
             if (!(window_type == 0 || window_type == 1))
                 throw Exception("Illegal window_type value", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-
             time_zone = params[6].safeGet<String>();
         }
 
         bool time_interval = false;
-        if (params.size() == 8)
+        if (params.size() == 8 || params.size() == 9)
             time_interval = params[7].safeGet<UInt64>() > 0;
 
         UInt64 num_virts = argument_types.size() - v;
@@ -93,9 +89,25 @@ namespace
             }
         }
 
-        res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnel>(
-            *attr_type, window, watch_start, watch_step,
-            watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+        if (is_by_times)
+        {
+            if (time_interval && params.size() != 9)
+                throw Exception("Need set target calculate interval step on by times funnel" + name,
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            UInt64 target_step = NUMBER_STEPS + 1;
+            if (time_interval) {
+                target_step = params[8].safeGet<UInt64>();
+            }
+
+            res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnelByTimes>(
+                *attr_type, window, watch_start, watch_step,
+                watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, target_step, argument_types, params));
+        }
+        else
+            res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderFunnel>(
+                *attr_type, window, watch_start, watch_step,
+                watch_numbers, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
 
         if (!res)
             throw Exception("Illegal type for aggregate function " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
@@ -108,10 +120,16 @@ namespace
         return createAggregateFunctionFinderFunnelHelper(name, argument_types, params);
     }
 
+    AggregateFunctionPtr createAggregateFunctionFinderFunnelByTimes(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+    {
+        return createAggregateFunctionFinderFunnelHelper(name, argument_types, params, true);
+    }
+
 }
 
 void registerAggregateFunctionFinderFunnel(AggregateFunctionFactory & factory)
 {
     factory.registerFunction("finderFunnel", createAggregateFunctionFinderFunnel, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("finderFunnelByTimes", createAggregateFunctionFinderFunnelByTimes, AggregateFunctionFactory::CaseInsensitive);
 }
 }

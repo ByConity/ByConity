@@ -45,6 +45,7 @@ using LEVELType = UInt8;
 
 const static int INIT_VECTOR_SIZE = 4; // each user have default event size
 const static int NUMBER_STEPS = 64; // support max 64 steps for funnel
+const static String unreach = "unreach";
 
 template <typename ParamType>
 struct TimeEvent
@@ -61,7 +62,7 @@ struct TimeEvent
 };
 
 template <typename ParamType, typename PropType>
-struct TimeEventWithpro_ind
+struct TimeEventWithproInd
 {
     UInt64 ctime; // Client time
     UInt32 event;
@@ -70,10 +71,10 @@ struct TimeEventWithpro_ind
     bool is_null; // used when PropType is numeric
     ParamType param; // Event param for funnel compute
 
-    TimeEventWithpro_ind() = default;
-    TimeEventWithpro_ind(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null, ParamType _param) : ctime(_ctime), event(_event)
+    TimeEventWithproInd() = default;
+    TimeEventWithproInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null, ParamType _param) : ctime(_ctime), event(_event)
             , stime(_stime), pro_ind(_prop), is_null(_is_null), param(std::move(_param)){}
-    TimeEventWithpro_ind(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null) : ctime(_ctime), event(_event)
+    TimeEventWithproInd(UInt64 _ctime, UInt32 _event, UInt32 _stime, PropType _prop, bool _is_null) : ctime(_ctime), event(_event)
             , stime(_stime), pro_ind(_prop), is_null(_is_null) {}
 };
 
@@ -207,7 +208,7 @@ struct AggregateFunctionFinderFunnelData
 };
 
 template<typename ParamType, typename Numeric>
-using EventLists = std::vector<TimeEventWithpro_ind<ParamType, Numeric>, TrackAllocator<TimeEventWithpro_ind<ParamType, Numeric>>>;
+using EventLists = std::vector<TimeEventWithproInd<ParamType, Numeric>, TrackAllocator<TimeEventWithproInd<ParamType, Numeric>>>;
 
 /**
  * Numeric group data
@@ -236,7 +237,7 @@ struct AggregateFunctionFinderFunnelNumericGroupData
     {
         if (!sorted)
         {
-            auto compare = [](const TimeEventWithpro_ind<ParamType, Numeric> &left, const TimeEventWithpro_ind<ParamType, Numeric> &right) {
+            auto compare = [](const TimeEventWithproInd<ParamType, Numeric> &left, const TimeEventWithproInd<ParamType, Numeric> &right) {
                 return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
             };
 
@@ -344,7 +345,7 @@ struct AggregateFunctionFinderFunnelNumericGroupData
         event_lists.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            TimeEventWithpro_ind<ParamType, Numeric> event;
+            TimeEventWithproInd<ParamType, Numeric> event;
             readBinary(event.ctime, buf);
             readBinary(event.event, buf);
             readBinary(event.stime, buf);
@@ -420,7 +421,7 @@ struct AggregateFunctionFinderFunnelStringGroupData
     {
         if (!sorted)
         {
-            auto compare = [](const TimeEventWithpro_ind<ParamType, Int32> &left, const TimeEventWithpro_ind<ParamType, Int32> &right) {
+            auto compare = [](const TimeEventWithproInd<ParamType, Int32> &left, const TimeEventWithproInd<ParamType, Int32> &right) {
                 return (left.ctime < right.ctime) || (left.ctime == right.ctime && left.event < right.event);
             };
 
@@ -556,7 +557,7 @@ struct AggregateFunctionFinderFunnelStringGroupData
         event_lists.reserve(size);
         for (size_t i = 0; i < size; ++i)
         {
-            TimeEventWithpro_ind<ParamType, Int32> event;
+            TimeEventWithproInd<ParamType, Int32> event;
             readBinary(event.ctime, buf);
             readBinary(event.event, buf);
             readBinary(event.stime, buf);
@@ -638,6 +639,23 @@ void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const std::vector<s
     }
     vec_to.insert(array);
 }
+
+using REPType = UInt64;
+class AggregateFunctionFunnelRepData
+{
+public:
+    // using Array = PODArray<REPType, 32>;
+    // Array value;
+    REPType value[1];
+};
+
+class AggregateFunctionFunnelRep2Data
+{
+public:
+    std::vector<REPType> value;
+    std::vector<Arithmetics> ariths;
+};
+
 
 }
 

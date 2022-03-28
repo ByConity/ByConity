@@ -23,32 +23,31 @@ namespace DB
 
 using std::vector;
 using REPType = UInt64;
-const size_t ARITHMETIC_AMOUNT = 6;
+const size_t ARITHMETIC_AMOUNT_SIZE = 6;
 
 /// Convert funnel output to TEA's format, it's aggregation semantics
 template<typename T>
-class AggregateFunctionFunnelRep2 final : public IAggregateFunctionDataHelper<AggregateFunctionFunnelRep2Data, AggregateFunctionFunnelRep2<T>>
+class AggregateFunctionFunnelRep2ByTimes final : public IAggregateFunctionDataHelper<AggregateFunctionFunnelRep2Data, AggregateFunctionFunnelRep2ByTimes<T>>
 {
     UInt32 m_watch_numbers;
     UInt32 m_event_numbers;
-    UInt32 target_step;
     // todo UInt64 -> get from the template
     vector<UInt64> target_interval_group;
     UInt32 group_size;
     UInt32 m_total_size;
     UInt32 ariths_size;
 public:
-    AggregateFunctionFunnelRep2(UInt64 watchNumbers, UInt64 eventNumbers, UInt32 targetStep, vector<UInt64> targetIntervalGroup,
+    AggregateFunctionFunnelRep2ByTimes(UInt64 watch_numbers, UInt64 event_numbers, vector<UInt64> targetIntervalGroup,
                                const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionFunnelRep2Data, AggregateFunctionFunnelRep2<T>>(arguments, params),
-          m_watch_numbers(watchNumbers), m_event_numbers(eventNumbers), target_step(targetStep), target_interval_group(targetIntervalGroup),
-        group_size(target_interval_group.size()-1), m_total_size(group_size * (watchNumbers + 1)), ariths_size(watchNumbers + 1){}
+        : IAggregateFunctionDataHelper<AggregateFunctionFunnelRep2Data, AggregateFunctionFunnelRep2ByTimes<T>>(arguments, params),
+          m_watch_numbers(watch_numbers), m_event_numbers(event_numbers), target_interval_group(targetIntervalGroup),
+        group_size(target_interval_group.size()-1), m_total_size(group_size * (watch_numbers + 1)), ariths_size(watch_numbers + 1){}
 
-    String getName() const override { return "funnelRep2"; }
+    String getName() const override { return "funnelRep2ByTimes"; }
 
     void create(const AggregateDataPtr place) const override
     {
-        auto* d = new (place) AggregateFunctionFunnelRep2Data;
+        auto *d = new (place) AggregateFunctionFunnelRep2Data;
         d->value.resize(m_total_size);
         d->ariths.resize(ariths_size);
     }
@@ -74,7 +73,6 @@ public:
     {
         const ColumnArray &array_column = static_cast<const ColumnArray &>(*columns[0]);
         const IColumn::Offsets & offsets = array_column.getOffsets();
-        auto & input_container = static_cast<const ColumnVector<T> &>(array_column.getData()).getData();
         const size_t input_vec_offset = (row_num == 0 ? 0 : offsets[row_num - 1]);
         const size_t input_vec_size = (offsets[row_num] - input_vec_offset);
 
@@ -84,52 +82,38 @@ public:
         const auto& nest_ariths_arr = nest_ariths_field.safeGet<Array>();
 
         auto& ariths = this->data(place).ariths;
-        size_t level, group_offset, output_offset = group_size;
-        IntervalType cur_interval{};
+        size_t group_offset, output_offset = group_size;
         for (size_t i = 1; i < input_vec_size; output_offset += group_size, i++)
         {
             if (i >= ariths_size) break;
-            level = size_t(input_container[input_vec_offset + i]);
+            const auto& array = nest_ariths_arr[i].safeGet<Array>();
 
-            bool flag = false;
-            // When target_step is 0, accumulate from the first step to the last step; if the last step is not reached, do not sum
-            if (!target_step && level == m_event_numbers)
+            if (!array.empty())
             {
-                const auto& array = nest_ariths_arr[i].safeGet<Array>();
-                for (size_t j = 1; j < array.size(); j++)
-                    cur_interval += array[j].safeGet<IntervalType>();
-                flag = true;
-            }
-            // Otherwise, only count current layer (from step target_step to step target_step+1)
-            if (target_step && level > target_step)
-            {
-                const auto& array = nest_ariths_arr[i].safeGet<Array>();
-                cur_interval = array[target_step].template safeGet<IntervalType>();
-                flag = true;
-            }
-
-            if (flag)
-            {
-                // the group is like [), [), [), []
-                if (unlikely(cur_interval == target_interval_group[target_interval_group.size()-1]))
+                for (const auto & interval : array)
                 {
-                    group_offset = target_interval_group.size()-2;
-                    this->data(place).value[output_offset + group_offset] += 1;
-                    this->data(place).value[group_offset] += 1;
-                }
-                else
-                {
-                    const auto& it = upper_bound(target_interval_group.begin(), target_interval_group.end(), cur_interval);
-                    if (it != target_interval_group.begin() && it != target_interval_group.end())
+                    UInt64 cur_interval = interval.safeGet<UInt64>();
+                    // the group is like [), [), [), []
+                    if (unlikely(cur_interval == target_interval_group[target_interval_group.size()-1]))
                     {
-                        group_offset = it-target_interval_group.begin()-1;
+                        group_offset = target_interval_group.size()-2;
                         this->data(place).value[output_offset + group_offset] += 1;
                         this->data(place).value[group_offset] += 1;
                     }
-                }
+                    else
+                    {
+                        const auto& it = upper_bound(target_interval_group.begin(), target_interval_group.end(), cur_interval);
+                        if (it != target_interval_group.begin() && it != target_interval_group.end())
+                        {
+                            group_offset = it-target_interval_group.begin()-1;
+                            this->data(place).value[output_offset + group_offset] += 1;
+                            this->data(place).value[group_offset] += 1;
+                        }
+                    }
 
-                addArith(cur_interval, i, ariths);
-                addArith(cur_interval, 0, ariths);
+                    addArith(cur_interval, i, ariths);
+                    addArith(cur_interval, 0, ariths);
+                }
             }
         }
     }
@@ -161,7 +145,7 @@ public:
     {
         const auto & value = this->data(place).value;
         const auto & ariths = this->data(place).ariths;
-        //buf.write(reinterpret_cast<const char *>(&value[0]), m_totalSize* sizeof(REPType));
+        //buf.write(reinterpret_cast<const char *>(&value[0]), m_total_size* sizeof(REPType));
         writeBinary(value.size(), buf);
         for (const auto & v : value)
             writeBinary(v, buf);
@@ -181,7 +165,7 @@ public:
     void deserialize(AggregateDataPtr place, ReadBuffer & buf, Arena *arena __attribute__((unused))) const override
     {
         auto & value = this->data(place).value;
-        //buf.read(reinterpret_cast<char *>(&value[0]), m_totalSize * sizeof(REPType));
+        //buf.read(reinterpret_cast<char *>(&value[0]), m_total_size * sizeof(REPType));
         size_t v_size;
         readBinary(v_size, buf);
         value.resize(v_size);
@@ -221,7 +205,6 @@ public:
         for (size_t i = 0; i <= m_watch_numbers; cursor += group_size, i++)
         {
             nested_offsets_to.push_back((nested_offsets_to.empty() ? 0 : nested_offsets_to.back()) + group_size);
-            //data_to.insert(value + cursor, value + cursor + group_size);
             data_to.insert(value.begin() + cursor, value.begin() + cursor + group_size);
         }
 
@@ -245,7 +228,7 @@ public:
                 nested_ariths_offsets_to.push_back(nested_ariths_offsets_to.empty() ? 0 : nested_ariths_offsets_to.back());
                 continue;
             }
-            nested_ariths_offsets_to.push_back((nested_ariths_offsets_to.empty() ? 0 : nested_ariths_offsets_to.back()) + ARITHMETIC_AMOUNT);
+            nested_ariths_offsets_to.push_back((nested_ariths_offsets_to.empty() ? 0 : nested_ariths_offsets_to.back()) + ARITHMETIC_AMOUNT_SIZE);
 
             avg = ariths[i].avg_count ? ariths[i].avg_sum / ariths[i].avg_count : 0;
             const_cast<QuantileTDigest<ArithmeticType>&>(ariths[i].quantileTDigest).getMany(levels, permutation, 3, quantile_res);
@@ -261,7 +244,6 @@ public:
     {
         return true;
     }
-
 };
 
 }
