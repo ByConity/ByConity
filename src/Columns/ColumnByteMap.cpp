@@ -1270,6 +1270,8 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
  * insert implicit map column from outside, 
  * only when the current ColumnByteMap has the same size with implicit columns. 
  * implicit columns should be nullable, if it is nullable, you should make nullable before this method.
+ * 
+ * for lowcardinality, use its full columns and insert by insertFromFullColumn;
  */
 void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)
 {
@@ -1286,10 +1288,14 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
     auto & value_res_col = value_res->assumeMutableRef();
     Offsets& offset_res_col = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
 
+    auto * value_res_col_lowcardinality = typeid_cast<ColumnLowCardinality *>(&value_res_col);
+    bool is_lowcardinality_value = valueColumn->lowCardinality() && value_res_col_lowcardinality;
+
     std::unordered_map<String, const ColumnNullable *> nullable_columns;
     for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
     {
-        auto * column = checkAndGetColumn<ColumnNullable>(it->second.get());
+        auto column_without_lowcardinality = recursiveRemoveLowCardinality(it->second);
+        auto * column = checkAndGetColumn<ColumnNullable>(column_without_lowcardinality.get());
         nullable_columns[it->first] = column;
     }
 
@@ -1304,7 +1310,10 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
                 if (!it->second->isNullAt(i))
                 {
                     key_res_col.insert(Field(it->first));
-                    value_res_col.insertFrom(it->second->getNestedColumn(), i);
+                    if (is_lowcardinality_value)
+                        value_res_col_lowcardinality->insertFromFullColumn(it->second->getNestedColumn(), i);
+                    else
+                        value_res_col.insertFrom(it->second->getNestedColumn(), i);
                     numKVPairs++;
                 }
             }
@@ -1342,7 +1351,10 @@ void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, Co
                 if (!it->second->isNullAt(i))
                 {
                     key_res_col.insert(Field(it->first));
-                    value_res_col.insertFrom(it->second->getNestedColumn(), i);
+                    if (is_lowcardinality_value)
+                        value_res_col_lowcardinality->insertFromFullColumn(it->second->getNestedColumn(), i);
+                    else
+                        value_res_col.insertFrom(it->second->getNestedColumn(), i);
                     numKVPairs++;
                 }
             }

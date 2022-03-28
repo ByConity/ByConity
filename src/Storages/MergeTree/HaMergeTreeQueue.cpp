@@ -1628,7 +1628,7 @@ HaMergeTreeMergePredicate::HaMergeTreeMergePredicate(HaMergeTreeQueue & queue_, 
     log_manager.applyToEntriesFromUpdatedLSNUnsafe([&](const HaMergeTreeLogEntryPtr & entry) {
         if (!entry->is_executed)
         {
-            if (!entry->new_part_name.empty())
+            if (!entry->new_part_name.empty() && entry->type != HaMergeTreeLogEntry::INGEST_PARTITION)
             {
                 part_to_interval.try_emplace(entry->new_part_name, INTERVAL_GAP);
                 future_parts.add(entry->new_part_name);
