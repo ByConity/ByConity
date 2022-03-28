@@ -348,6 +348,14 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "")
                       << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
     }
+    else if (type == ASTAlterCommand::REPAIR_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "REPAIR "
+                      << "PARTITION " << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+                      << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
+    }
     else if (type == ASTAlterCommand::FREEZE_PARTITION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FREEZE PARTITION " << (settings.hilite ? hilite_none : "");

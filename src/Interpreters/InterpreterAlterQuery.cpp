@@ -351,6 +351,11 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_FETCH_PARTITION, database, table);
             break;
         }
+        case ASTAlterCommand::REPAIR_PARTITION:
+        {
+            required_access.emplace_back(AccessType::ALTER_REPAIR_PARTITION, database, table);
+            break;
+        }
         case ASTAlterCommand::FREEZE_PARTITION: [[fallthrough]];
         case ASTAlterCommand::FREEZE_ALL: [[fallthrough]];
         case ASTAlterCommand::UNFREEZE_PARTITION: [[fallthrough]];

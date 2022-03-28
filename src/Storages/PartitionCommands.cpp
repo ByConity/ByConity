@@ -191,6 +191,15 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.from_zookeeper_path = command_ast->from;
         return res;
     }
+    else if (command_ast->type == ASTAlterCommand::REPAIR_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = REPAIR_PARTITION;
+        res.part = command_ast->part;
+        res.partition = command_ast->partition;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
     else if (command_ast->type == ASTAlterCommand::FREEZE_PARTITION)
     {
         PartitionCommand res;

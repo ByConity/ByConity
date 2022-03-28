@@ -3780,6 +3780,11 @@ void MergeTreeData::fetchPartitionWhere(const ASTPtr &, const StorageMetadataPtr
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FETCH PARTITION WHERE is not supported by storage {}", getName());
 }
 
+void MergeTreeData::repairPartition(const ASTPtr & , bool , const String & , ContextPtr)
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "REPAIR PARTITION is not supported by storage {}", getName());
+}
+
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
@@ -3876,6 +3881,10 @@ Pipe MergeTreeData::alterPartition(
 
             case PartitionCommand::FETCH_PARTITION_WHERE:
                 fetchPartitionWhere(command.partition, metadata_snapshot, command.from_zookeeper_path, query_context);
+                break;
+
+            case PartitionCommand::REPAIR_PARTITION:
+                repairPartition(command.partition, command.part, command.from_zookeeper_path, query_context);
                 break;
 
             case PartitionCommand::FREEZE_PARTITION:
@@ -5532,6 +5541,26 @@ MergeTreeData::CurrentlyMovingPartsTaggerPtr MergeTreeData::selectPartsForMove()
 
     parts_mover.selectPartsForMove(parts_to_move, can_move, moving_lock);
     return std::make_shared<CurrentlyMovingPartsTagger>(std::move(parts_to_move), *this);
+}
+
+void MergeTreeData::renamePartAndDropMetadata(const String& name, const DataPartPtr& sourcePart)
+{
+    sourcePart->renameTo(name, true);
+    const_cast<DataPart &>(*sourcePart).is_temp = true;
+
+    modifyPartState(sourcePart, DataPartState::Outdated);
+    auto it = data_parts_by_info.find(sourcePart->info);
+    data_parts_indexes.erase(it);
+}
+
+void MergeTreeData::renamePartAndInsertMetadata(const String& name, const DataPartPtr& sourcePart)
+{
+    sourcePart->renameTo(name, true);
+    const_cast<DataPart &>(*sourcePart).is_temp = false;
+
+    auto s_part = std::const_pointer_cast<DataPart>(sourcePart);
+    s_part->setState(DataPartState::Committed);
+    data_parts_indexes.insert(s_part);
 }
 
 MergeTreeData::CurrentlyMovingPartsTaggerPtr MergeTreeData::checkPartsForMove(const DataPartsVector & parts, SpacePtr space)

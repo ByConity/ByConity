@@ -493,7 +493,9 @@ private:
     void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context) override;
     void fetchPartitionWhere(
         const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context) override;
-    void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context);
+    void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context, bool to_repair = false);
+
+    void repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr) override;
 
     void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context) override;
     FutureMergedMutatedPart transformPartToFuturePart(const DataPartPtr & part);

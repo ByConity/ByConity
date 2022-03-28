@@ -2003,7 +2003,7 @@ bool StorageHaMergeTree::fetchPart(
     const String & source_replica_path,
     bool to_detached,
     size_t quorum,
-    bool)
+    bool to_repair)
 {
     std::unique_ptr<FetchingPartToExecutingEntrySet::Handle> handle;
     if (executing_set)
@@ -2038,6 +2038,10 @@ bool StorageHaMergeTree::fetchPart(
     auto credentials = getContext()->getInterserverCredentials();
     String interserver_scheme = getContext()->getInterserverScheme();
 
+    MergeTreeData::DataPartPtr source_part = nullptr;
+    String repair_tmp_name{};
+    bool move_to_tmp = false;
+
     try
     {
         HaMergeTreeAddress address(zookeeper->get(source_replica_path + "/host"));
@@ -2061,6 +2065,17 @@ bool StorageHaMergeTree::fetchPart(
             replicated_fetches_throttler,
             to_detached,
             "");
+
+        if (to_repair)
+        {
+            source_part = getActiveContainingPart(part_name);
+            if (source_part)
+            {
+                repair_tmp_name = "tmp_outdated_" + std::to_string(time(nullptr)) + "_" + part_name;
+                renamePartAndDropMetadata(repair_tmp_name, source_part);
+            }
+            move_to_tmp = true;
+        }
 
         if (!to_detached)
         {
@@ -2095,6 +2110,9 @@ bool StorageHaMergeTree::fetchPart(
     }
     catch (const Exception & e)
     {
+        if (move_to_tmp && source_part)
+            renamePartAndInsertMetadata(part_name, source_part);
+
         /// The same part is being written right now (but probably it's not committed yet).
         /// We will check the need for fetch later.
         if (e.code() == ErrorCodes::DIRECTORY_ALREADY_EXISTS)
@@ -4021,7 +4039,7 @@ void StorageHaMergeTree::fetchPartitionWhere(
 }
 
 void StorageHaMergeTree::fetchPartitionImpl(
-    const String & partition_id, const String & filter, const String & from, ContextPtr query_context)
+    const String & partition_id, const String & filter, const String & from, ContextPtr query_context, bool to_repair)
 {
     String from_replica_path = zookeeper_path + "/replicas/" + from;
     auto from_replica_address = getReplicaAddress(from);
@@ -4043,12 +4061,12 @@ void StorageHaMergeTree::fetchPartitionImpl(
     for (auto & part_name : part_names)
     {
         auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
-        if (getActiveContainingPart(part_info))
+        if (!to_repair && getActiveContainingPart(part_info))
             continue;
 
         try
         {
-            bool fetched = fetchPart(nullptr, part_name, from_replica_path, false);
+            bool fetched = fetchPart(nullptr, part_name, from_replica_path, false, 0, to_repair);
             if (!fetched)
                 LOG_ERROR(log, "Failed to fetch part {} from {}", part_name, from_replica_path);
         }
@@ -4056,6 +4074,26 @@ void StorageHaMergeTree::fetchPartitionImpl(
         {
             LOG_WARNING(log, e.displayText());
         }
+    }
+}
+
+void StorageHaMergeTree::repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr query_context)
+{
+    if (part)
+    {
+        String part_name = partition->as<ASTLiteral &>().value.safeGet<String>();
+        LOG_INFO(log, "Will fetch part {} from replica {}", part_name, from);
+
+        if (!fetchPart(nullptr, part_name, zookeeper_path + "/replicas/" + from, false, 0, true))
+            throw Exception(ErrorCodes::UNFINISHED, "Failed to fetch part {} from {}", part_name, from);
+    }
+    else
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+
+        LOG_INFO(log, "Will fetch partition {} from replica {}", partition_id, from);
+
+        fetchPartitionImpl(partition_id, {}, from, query_context, true);
     }
 }
 
