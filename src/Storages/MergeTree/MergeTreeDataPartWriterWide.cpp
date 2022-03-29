@@ -198,7 +198,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     if (correct_row >= rows)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
                     WriteBufferFromOwnString val_buf;
-                    for (auto col_with_name: block_columns_with_name)
+                    for (auto & col_with_name: block_columns_with_name)
                     {
                         if (!serializations.count(col_with_name->name))
                             throw Exception(ErrorCodes::LOGICAL_ERROR, "Serializations doesn't contain column {} when serialize value for unique row store", col_with_name->name);
@@ -803,7 +803,7 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         /// write row store meta
         auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_META_NAME, 4096);
         HashingWriteBuffer out_hashing(*out);
-        UniqueRowStoreMeta meta(data_part->getColumns(), {})
+        UniqueRowStoreMeta meta(data_part->getColumns(), {});
         meta.write(out_hashing);
         checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
         checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();

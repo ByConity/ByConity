@@ -6390,8 +6390,8 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
             WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_META_NAME + tmp_suffix, 4096);
             HashingWriteBuffer out_hashing(file);
             new_row_store_meta->write(out_hashing);
-            new_checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
-            new_checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
             transaction->rename_map[UNIQUE_ROW_STORE_META_NAME + tmp_suffix] = UNIQUE_ROW_STORE_META_NAME;
             
             /// Update row store meta in memory immediately, it's ok even transaction failed.

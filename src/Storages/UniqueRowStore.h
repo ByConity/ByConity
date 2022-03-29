@@ -7,9 +7,6 @@
 
 namespace DB
 {
-
-
-
 class UniqueRowStore
 {
 public:
@@ -27,11 +24,12 @@ private:
     std::unique_ptr<IndexFile::IndexFileReader> index_reader;
 };
 
-/// TODO(lta): add comments
 struct UniqueRowStoreMeta
 {
+    /// Column name and type of serialized value in row store, it will be changed by alter commans like rename column, etc.
     NamesAndTypesList columns;
     
+    /// Record the removed columns by alter commands like drop column, clear map key, etc.
     NameSet removed_columns;
 
     UniqueRowStoreMeta() { }

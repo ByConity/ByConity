@@ -784,11 +784,6 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     /// Sort by part_rowid so that we can read row store sequentially
     std::sort(rowid_pairs.begin(), rowid_pairs.end(), [](auto & lhs, auto & rhs) { return lhs.part_rowid < rhs.part_rowid; });
 
-    DeleteBitmapPtr delete_bitmap(new Roaring);
-    for (auto & pair : rowid_pairs)
-        const_cast<Roaring &>(*delete_bitmap).add(pair.part_rowid);
-    const_cast<Roaring &>(*delete_bitmap).flip(0, part->rows_count);
-
     IndexFile::ReadOptions opts;
     opts.fill_cache = true;
     IndexFileIteratorPtr iter = row_store->new_iterator(opts);
@@ -806,7 +801,7 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     size_t id = 0;
     for (auto & name_and_type : row_store_meta->columns)
     {
-        /// After drop column, adding this info into columns_delete_bitmap of existing parts is an asynchronous operation, thus the columns_delete_bitmap may be lagging
+        /// After drop column, adding the info into removed_columns of existing parts is an asynchronous operation, thus the removed_columns may be lagging.
         if (row_store_meta->removed_columns.count(name_and_type.name) || !to_block.has(name_and_type.name))
             column_indexes[id++] = to_block.columns();
         else
@@ -847,10 +842,13 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
         ReadBufferFromMemory buffer(value.data(), value.size());
         for (size_t i = 0, size = row_store_meta->columns.size(); i < size; ++i)
         {
-            Field val;
-            serializations[i]->deserializeBinary(val, buffer);
             if (column_indexes[i] < mutable_columns.size())
-                mutable_columns[column_indexes[i]]->insert(val);
+                serializations[i]->deserializeBinary(*mutable_columns[column_indexes[i]], buffer);
+            else
+            {
+                Field val;
+                serializations[i]->deserializeBinary(val, buffer);
+            }
         }
 
         to_block_rowids.push_back(pair.block_rowid);
@@ -860,6 +858,7 @@ void HaUniqueMergeTreeBlockOutputStream::readColumnsFromRowStore(
     for (size_t i = 0; i < mutable_columns.size(); ++i)
     {
         if (mutable_columns[i]->size() == block_size_before)
+            /// TODO(lta): handle the case that the user specifies the default expression.
             mutable_columns[i]->insertManyDefaults(rowid_pairs.size());
     }
 

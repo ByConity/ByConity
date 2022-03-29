@@ -95,7 +95,7 @@ select '';
 alter table unique_partial_update_alter1 drop column a1, add column a2 Array(Int32);
 insert into unique_partial_update_alter1 values (1, '', {'k5': 50, 'k9': 9}, [100, 200]), (3, 'def', {'k3': 4, 'k4': 3}, [30, 40, 50]);
 optimize table unique_partial_update_alter2 final;
-select 'drop column a1, update one row and insert one new row, then merge';
+select 'drop column a1, update one row and insert one new row, then merge, trigger generating row store from storage';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
 select sleep(3) format Null;

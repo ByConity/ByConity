@@ -1329,7 +1329,7 @@ void IMergeTreeDataPart::remove() const
 
     /// Part of unique table may have multiple delete bitmap files which are not in checksum, so it needs special handling.
     /// TODO: remove special case of unique
-    if (checksums.empty() || storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (checksums->empty() || storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
         disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
@@ -2386,17 +2386,18 @@ UniqueRowStoreMetaPtr IMergeTreeDataPart::tryGetUniqueRowStoreMeta() const
         throw Exception(ErrorCodes::LOGICAL_ERROR, "tryGetUniqueRowStore of {} which doesn't have unique key", storage.log_name);
     }
 
-    const String path = fs::path(getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME;
-    if (!volume->getDisk()->exists(path))
-        return nullptr;
-
     std::lock_guard lock(row_store_meta_mutex);
     if (!row_store_meta)
     {
-        row_store_meta = std::make_shared<UniqueRowStoreMeta>();
+        const String path = fs::path(getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME;
+        if (!volume->getDisk()->exists(path))
+            return nullptr;
+
+        UniqueRowStoreMetaPtr row_store_meta_tmp = std::make_shared<UniqueRowStoreMeta>();
         auto buf = openForReading(volume->getDisk(), path);
-        row_store_meta->read(*buf);
+        row_store_meta_tmp->read(*buf);
         assertEOF(*buf);
+        row_store_meta = std::move(row_store_meta_tmp);
     }
     return row_store_meta;
 }
