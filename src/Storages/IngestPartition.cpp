@@ -895,8 +895,9 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
 
     std::mutex ingest_mutex;
     IngestParts parts = parts_to_ingest;
+
+    MergeTreeData::Transaction transaction(data);
     
-    std::reverse(parts.begin(), parts.end());
     std::atomic<bool> has_ingest_exception = false;
 
     ThreadGroupStatusPtr thread_group = CurrentThread::getGroup();
@@ -926,7 +927,7 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
             try
             {
                 auto ingested_part = ingestPart(data, part, src_blocks, ingest_column_names, ordered_key_names, all_columns, settings);
-                data.renameTempPartAndReplace(ingested_part);
+                data.renameTempPartAndReplace(ingested_part, nullptr, &transaction);
             }
             catch(...)
             {
@@ -946,6 +947,8 @@ void IngestPartition::ingestion(MergeTreeData & data, const IngestParts & parts_
 
     if (has_ingest_exception)
         throw Exception("Ingestion failed", ErrorCodes::ABORTED);
+
+    transaction.commit();
 }
 
 void IngestPartition::ingestWidePart(MergeTreeData & data, 
@@ -1241,8 +1244,6 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
                     auto key = parseKeyFromImplicitMap(it->first, col_name);
                     ColumnWithTypeAndName * col_type_name = res.findByName(col_name);
                     ColumnPtr implicit_col = col_type_name->column;
-                    if (implicit_col->isNullable())
-                        implicit_col = checkAndGetColumn<ColumnNullable>(implicit_col.get())->getNestedColumnPtr();
                     implicit_columns[key] = std::move(implicit_col);
                     res.erase(col_name);
                 }

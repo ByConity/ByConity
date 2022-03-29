@@ -4204,7 +4204,6 @@ bool StorageHaMergeTree::executeIngestion(HaQueueExecutingEntrySetPtr & executin
     partition->id = partition_id;
     String from_database = entry.source_database.empty() ? getContext()->getCurrentDatabase() : entry.source_database;
     Int64 mutation = parse<Int64>(entry.block_id);
-    std::cout<<" block_id: " << entry.block_id << ", mutation: " << mutation << std::endl;
 
     if (entry.source_replica == replica_name)
     {

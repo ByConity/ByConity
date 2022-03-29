@@ -230,6 +230,7 @@ bool PipelineExecutor::prepareProcessor(UInt64 pid, size_t thread_number, Queue 
         try
         {
             node.last_processor_status = node.processor->prepare(node.updated_input_ports, node.updated_output_ports);
+            //LOG_TRACE(log, "prepare processor: {}, {}, {}, {}", pid, node.processor->getName(), thread_number, IProcessor::statusToName(node.last_processor_status));
         }
         catch (...)
         {
