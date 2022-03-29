@@ -145,6 +145,18 @@ void DatabaseWithOwnTablesBase::shutdown()
     tables.clear();
 }
 
+std::map<String, String> DatabaseWithOwnTablesBase::getBrokenTables()
+{
+    std::lock_guard lock(mutex);
+    return brokenTables;
+}
+
+void DatabaseWithOwnTablesBase::clearBrokenTables()
+{
+    std::lock_guard lock(mutex);
+    brokenTables.clear();
+}
+
 DatabaseWithOwnTablesBase::~DatabaseWithOwnTablesBase()
 {
     try

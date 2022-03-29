@@ -109,6 +109,8 @@ if (USE_HDFS)
     add_headers_and_sources(dbms Disks/HDFS)
 endif()
 
+add_headers_and_sources(dbms src/Protos)
+
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
 
@@ -357,6 +359,7 @@ dbms_target_link_libraries (
         ${MYSQLXX_LIBRARY}
         boost::system
         clickhouse_common_io
+        clickhouse_protos_lib
 )
 
 target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core

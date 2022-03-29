@@ -61,8 +61,8 @@ struct MergeTreeDataPartTTLInfos
 
     /// Return the smallest max recompression TTL value
     time_t getMinimalMaxRecompressionTTL() const;
-
-    void read(ReadBuffer & in);
+    /// FIXME: old_meta_format is used to make it compatible with old part metadata. Remove it later.
+    void read(ReadBuffer & in, bool old_meta_format = false);
     void write(WriteBuffer & out) const;
     void update(const MergeTreeDataPartTTLInfos & other_infos);
 

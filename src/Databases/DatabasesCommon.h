@@ -33,11 +33,18 @@ public:
 
     void shutdown() override;
 
+    void clearBrokenTables() override;
+
+    std::map<String, String> getBrokenTables() override;
+
     ~DatabaseWithOwnTablesBase() override;
 
 protected:
     Tables tables;
     Poco::Logger * log;
+
+    /// Information to log broken parts which fails to be loaded
+    std::map<String, String> brokenTables;
 
     DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context);
 

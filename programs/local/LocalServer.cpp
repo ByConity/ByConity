@@ -284,6 +284,16 @@ try
     global_context->setCurrentDatabase(default_database);
     applyCmdOptions(global_context);
 
+    /// init metastore and disk path
+    {
+        String path = global_context->getPath();
+        std::string metastore_path = config().getString("metastore_path", fs::path(path) / "metastore/");
+        global_context->setMetastorePath(metastore_path);
+        fs::create_directories(metastore_path);
+
+        fs::create_directories(fs::path(path) / "disks/");
+    }
+
     if (config().has("path"))
     {
         String path = global_context->getPath();

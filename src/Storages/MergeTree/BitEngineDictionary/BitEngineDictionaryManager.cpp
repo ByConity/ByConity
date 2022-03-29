@@ -541,7 +541,8 @@ BitEngineDictionaryManager::encodePartToTemporaryPart(
             }
         }
 
-        new_data_part->checksums = source_part->checksums;
+        new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
+        *(new_data_part->checksums_ptr) = *(source_part->getChecksums());
 
         auto input_source = std::make_unique<MergeTreeSequentialSource>(
             merge_tree_data, metadata_snapshot, source_part, encode_columns.getNames(), read_with_direct_io, false);
@@ -581,8 +582,8 @@ BitEngineDictionaryManager::encodePartToTemporaryPart(
 
         input_stream->readSuffix();
         // Get the checksums that only contains recoded files.
-        auto changed_checksums = out_stream.writeSuffixAndGetChecksums(new_data_part, new_data_part->checksums);
-        new_data_part->checksums.add(std::move(changed_checksums));
+        auto changed_checksums = out_stream.writeSuffixAndGetChecksums(new_data_part, *(new_data_part->checksums_ptr));
+        new_data_part->checksums_ptr->add(std::move(changed_checksums));
     }
 
     finalizeEncodedPart(source_part, new_data_part, false, source_part->default_codec);
@@ -602,8 +603,8 @@ void BitEngineDictionaryManager::finalizeEncodedPart(
         auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, 4096);
         HashingWriteBuffer out_hashing(*out);
         writeUUIDText(new_data_part->uuid, out_hashing);
-        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
-        new_data_part->checksums.files[IMergeTreeDataPart::UUID_FILE_NAME].file_hash = out_hashing.getHash();
+        new_data_part->getChecksums()->files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
+        new_data_part->getChecksums()->files[IMergeTreeDataPart::UUID_FILE_NAME].file_hash = out_hashing.getHash();
     }
 
 //    if (need_remove_expired_values)
@@ -621,8 +622,8 @@ void BitEngineDictionaryManager::finalizeEncodedPart(
         /// Write file with checksums.
 //        LOG_DEBUG(log, "Now write checksums.txt");
         auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
-        new_data_part->checksums.versions = new_data_part->versions;
-        new_data_part->checksums.write(*out_checksums);
+        new_data_part->getChecksums()->versions = new_data_part->versions;
+        new_data_part->getChecksums()->write(*out_checksums);
     } /// close fd
 
     {

@@ -13,6 +13,25 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+const char * metaOpsToString(MetastoreOperation opt)
+{
+    switch (opt)
+    {
+        case MetastoreOperation::SYNC:
+            return "SYNC";
+        case MetastoreOperation::START_AUTO_SYNC:
+            return "START AUTO SYNC";
+        case MetastoreOperation::STOP_AUTO_SYNC:
+            return "STOP AUTO SYNC";
+        case MetastoreOperation::DROP_ALL_KEY:
+            return "DROP";
+        case MetastoreOperation::DROP_BY_KEY:
+            return "DROP BY KEY";
+        default:
+            throw Exception("Unknown metastore operation.", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 
 const char * ASTSystemQuery::typeToString(Type type)
 {
@@ -32,6 +51,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP UNCOMPRESSED CACHE";
         case Type::DROP_MMAP_CACHE:
             return "DROP MMAP CACHE";
+        case Type::DROP_CHECKSUMS_CACHE:
+            return "DROP CHECKSUMS CACHE";
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE:
             return "DROP COMPILED EXPRESSION CACHE";
@@ -122,6 +143,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RESTART CONSUME";
         case Type::FETCH_PARTS:
             return "FETCH PARTS INTO";
+        case Type::METASTORE:
+            return "METASTORE";
+        case Type::CLEAR_BROKEN_TABLES:
+            return "CLEAR BROKEN TABLES";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -178,6 +203,15 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
                       << (settings.hilite ? hilite_none : "");
     };
 
+    auto print_metastore_options = [&]
+    {
+        settings.ostr << " " << (settings.hilite ? hilite_keyword : "") << metaOpsToString(meta_ops.operation);
+        if (!meta_ops.drop_key.empty())
+        {
+            settings.ostr << " " << quoteString(meta_ops.drop_key);
+        }         
+    };
+
     if (!cluster.empty())
         formatOnCluster(settings);
 
@@ -194,7 +228,8 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         || type == Type::STOP_REPLICATION_QUEUES
         || type == Type::START_REPLICATION_QUEUES
         || type == Type::STOP_DISTRIBUTED_SENDS
-        || type == Type::START_DISTRIBUTED_SENDS)
+        || type == Type::START_DISTRIBUTED_SENDS
+        || type == Type::DROP_CHECKSUMS_CACHE)
     {
         if (!table.empty())
             print_database_table();
@@ -252,6 +287,12 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         print_database_table();
         settings.ostr << " ";
         target_path->formatImpl(settings, state, frame);
+    }
+    else if (type == Type::METASTORE)
+    {
+        print_metastore_options();
+        if (meta_ops.operation > MetastoreOperation::STOP_AUTO_SYNC)
+            print_database_table();
     }
 }
 

@@ -21,6 +21,23 @@ MergeTreeIndexGranularity::MergeTreeIndexGranularity(size_t marks_count, size_t 
 {
 }
 
+std::vector<size_t> MergeTreeIndexGranularity::getIndexGranularities() const
+{
+    std::vector<size_t> index_granularities;
+
+    if (marks_rows_partial_sums.empty())
+        return index_granularities;
+
+    index_granularities.push_back(marks_rows_partial_sums[0]);
+
+    for (size_t i=1; i<marks_rows_partial_sums.size(); i++)
+    {
+        index_granularities.push_back(marks_rows_partial_sums[i]-marks_rows_partial_sums[i-1]);
+    }
+    
+    return index_granularities;
+}
+
 /// Rows after mark to next mark
 size_t MergeTreeIndexGranularity::getMarkRows(size_t mark_index) const
 {

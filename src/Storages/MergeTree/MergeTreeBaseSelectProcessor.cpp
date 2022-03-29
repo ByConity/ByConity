@@ -304,7 +304,7 @@ static void injectVirtualColumnsImpl(
                 if (rows)
                 {
                     NameSet key_set;
-                    for (auto & [file, _] : task->data_part->checksums.files)
+                    for (auto & [file, _] : task->data_part->getChecksums()->files)
                     {
                         if (startsWith(file, "__") && std::string::npos == file.find("_base."))
                             key_set.insert(unescapeForFileName(file));

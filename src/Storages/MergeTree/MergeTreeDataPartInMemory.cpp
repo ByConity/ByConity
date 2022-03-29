@@ -110,8 +110,9 @@ void MergeTreeDataPartInMemory::renameTo(const String & new_relative_path, bool 
 
 void MergeTreeDataPartInMemory::calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const
 {
-    auto it = checksums.files.find("data.bin");
-    if (it != checksums.files.end())
+    auto checksums = getChecksums();
+    auto it = checksums->files.find("data.bin");
+    if (it != checksums->files.end())
         total_size.data_uncompressed += it->second.uncompressed_size;
 
     for (const auto & column : columns)

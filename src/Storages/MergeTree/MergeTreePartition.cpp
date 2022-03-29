@@ -257,7 +257,7 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
         const DataTypePtr & type = partition_key_sample.getByPosition(0).type;
         auto column = type->createColumn();
         column->insert(value[0]);
-        type->getDefaultSerialization()->serializeText(*column, 0, out, format_settings);
+        type->getDefaultSerialization()->serializeTextQuoted(*column, 0, out, format_settings);
     }
     else
     {
@@ -292,6 +292,18 @@ void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & dis
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file);
 }
 
+void MergeTreePartition::load(const MergeTreeData & storage, ReadBuffer & buf)
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    if (!metadata_snapshot->hasPartitionKey())
+        return;
+
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+    value.resize(partition_key_sample.columns());
+    for (size_t i = 0; i < partition_key_sample.columns(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], buf);
+}
+
 void MergeTreePartition::store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
@@ -313,6 +325,18 @@ void MergeTreePartition::store(const Block & partition_key_sample, const DiskPtr
     checksums.files["partition.dat"].file_size = out_hashing.count();
     checksums.files["partition.dat"].file_hash = out_hashing.getHash();
     out->finalize();
+}
+
+void MergeTreePartition::store(const MergeTreeData & storage, WriteBuffer & buf) const
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+
+    if (!partition_key_sample)
+        return;
+    
+    for (size_t i = 0; i < value.size(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->serializeBinary(value[i], buf);
 }
 
 void MergeTreePartition::create(const StorageMetadataPtr & metadata_snapshot, Block block, size_t row, ContextPtr context)
@@ -365,5 +389,35 @@ KeyDescription MergeTreePartition::adjustPartitionKey(const StorageMetadataPtr &
 
     return partition_key;
 }
+
+/** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+/*  compatible with old metastore. remove this later  */
+
+#define META_FIELD_DELIMITER '\0'
+void MergeTreePartition::read(const MergeTreeData & storage, ReadBuffer & buffer)
+{
+    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
+    /// If there is no partition key add 0 as partition row size
+    if (!metadata_snapshot->hasPartitionKey())
+    {
+        size_t partition_row_size;
+        readText(partition_row_size, buffer);
+        assertChar(META_FIELD_DELIMITER, buffer);
+        return;
+    }
+
+    /// firstly, read partition row size.
+    size_t partition_row_size;
+    readText(partition_row_size, buffer);
+    assertChar(META_FIELD_DELIMITER, buffer);
+    if (!partition_row_size)
+        return;
+
+    const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
+    value.resize(partition_key_sample.columns());
+    for (size_t i = 0; i < partition_key_sample.columns(); ++i)
+        partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], buffer);
+}
+/*  -----------------------  COMPATIBLE CODE END -------------------------- */
 
 }

@@ -730,9 +730,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
         TLDListsHolder::getInstance().parseConfig(fs::path(top_level_domains_path) / "", config());
     }
 
+    /// directory for metastore
+    {
+        std::string metastore_path = config().getString("metastore_path", fs::path(path) / "metastore/");
+        global_context->setMetastorePath(metastore_path);
+        fs::create_directories(metastore_path);
+    }
+
     {
         fs::create_directories(fs::path(path) / "data/");
         fs::create_directories(fs::path(path) / "metadata/");
+        /// directory to store disk infos. will dump all disks' info to file after loading disks from config.
+        fs::create_directories(fs::path(path) / "disks/");
 
         /// Directory with metadata of tables, which was marked as dropped by Atomic database
         fs::create_directories(fs::path(path) / "metadata_dropped/");
@@ -921,6 +930,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             formatReadableSizeWithBinarySuffix(mark_cache_size));
     }
     global_context->setMarkCache(mark_cache_size);
+    global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 1024*1024*10));
 
     /// Size of cache for query. It is not necessary.
     size_t query_cache_size = config().getUInt64("query_cache_size", 0);
@@ -1160,6 +1170,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         throw;
     }
     LOG_DEBUG(log, "Loaded metadata.");
+
+    /// start background task to sync metadata automatically. consider to remove it later. 
+    global_context->setMetaChecker();
 
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.

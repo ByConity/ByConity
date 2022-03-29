@@ -339,7 +339,7 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
         }
 
 		//FIXME: data_part->getColumnsReadLock() 
-        bool data_file_exists = data_part->checksums.files.count(implicit_stream_name + DATA_FILE_EXTENSION);
+        bool data_file_exists = data_part->getChecksums()->files.count(implicit_stream_name + DATA_FILE_EXTENSION);
 
         /** If data file is missing then we will not try to open it.
           * It is necessary since it allows to add new column to structure of the table without creating new files for old parts.

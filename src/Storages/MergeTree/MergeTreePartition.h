@@ -36,8 +36,10 @@ public:
     void serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const;
 
     void load(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path);
+    void load(const MergeTreeData & storage, ReadBuffer & buf);
     void store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const;
     void store(const Block & partition_key_sample, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const;
+    void store(const MergeTreeData & storage, WriteBuffer & buf) const;
 
     void assign(const MergeTreePartition & other) { value = other.value; }
 
@@ -48,6 +50,11 @@ public:
 
     /// Make a modified partition key with substitution from modulo to moduloLegacy. Used in paritionPruner.
     static KeyDescription adjustPartitionKey(const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
+
+    /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+    /*  compatible with old metastore. remove this later  */
+    void read(const MergeTreeData & storage, ReadBuffer & buffer);
+    /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 };
 
 }

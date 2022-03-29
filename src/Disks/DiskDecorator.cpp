@@ -8,6 +8,11 @@ DiskDecorator::DiskDecorator(const DiskPtr & delegate_) : delegate(delegate_)
 {
 }
 
+UInt64 DiskDecorator::getID() const
+{
+    return delegate->getID();
+}
+
 const String & DiskDecorator::getName() const
 {
     return delegate->getName();

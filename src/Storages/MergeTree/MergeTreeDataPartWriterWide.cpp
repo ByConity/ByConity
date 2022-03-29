@@ -687,6 +687,7 @@ static void fillIndexGranularityImpl(
 {
     for (size_t current_row = index_offset; current_row < rows_in_block; current_row += index_granularity_for_block)
         index_granularity.appendMark(index_granularity_for_block);
+    index_granularity.setInitialized();
 }
 
 void MergeTreeDataPartWriterWide::fillIndexGranularity(size_t index_granularity_for_block, size_t rows_in_block)

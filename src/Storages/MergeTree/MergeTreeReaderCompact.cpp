@@ -194,7 +194,7 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
                 String implKeyName;
                 {
                     //auto data_lock = data_part->getColumnsReadLock();
-                    for (auto & file : data_part->checksums.files)
+                    for (auto & file : data_part->getChecksums()->files)
                     {
                         //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
                         const String & fileName = file.first;

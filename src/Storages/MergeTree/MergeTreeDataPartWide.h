@@ -58,6 +58,8 @@ public:
 
     bool hasColumnFiles(const NameAndTypePair & column) const override;
 
+    void loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities) override;
+
 private:
     void checkConsistency(bool require_part_metadata) const override;
 

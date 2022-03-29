@@ -57,6 +57,8 @@ public:
 
     DiskPtr getDiskByName(const String & disk_name) const override;
 
+    DiskPtr getDiskByID(const UInt64 & disk_id) const override;
+
     /// Get free space from most free disk
     UInt64 getMaxUnreservedFreeSpace() const override;
 

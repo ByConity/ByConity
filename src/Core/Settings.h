@@ -36,6 +36,7 @@ class IColumn;
     M(UInt64, max_compress_block_size, 1048576, "The maximum size of blocks of uncompressed data before compressing for writing to a table.", 0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \
     M(UInt64, max_insert_block_size, DEFAULT_INSERT_BLOCK_SIZE, "The maximum block size for insertion, if we control the creation of blocks for insertion.", 0) \
+    M(UInt64, max_insert_block_size_bytes, DEFAULT_BLOCK_SIZE_BYTES, "The maximum block bytes for insertion, if we control the creation of blocks for insertion.", 0) \
     M(UInt64, min_insert_block_size_rows, DEFAULT_INSERT_BLOCK_SIZE, "Squash blocks passed to INSERT query to specified size in rows, if blocks are not big enough.", 0) \
     M(UInt64, min_insert_block_size_bytes, (DEFAULT_INSERT_BLOCK_SIZE * 256), "Squash blocks passed to INSERT query to specified size in bytes, if blocks are not big enough.", 0) \
     M(UInt64, min_insert_block_size_rows_for_materialized_views, 0, "Like min_insert_block_size_rows, but applied only during pushing to MATERIALIZED VIEW (default: min_insert_block_size_rows)", 0) \
@@ -519,6 +520,8 @@ class IColumn;
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
     M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
+    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \

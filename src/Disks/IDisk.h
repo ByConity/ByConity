@@ -88,6 +88,9 @@ public:
     /// Default constructor.
     explicit IDisk(std::unique_ptr<Executor> executor_ = std::make_unique<SyncExecutor>()) : executor(std::move(executor_)) { }
 
+    /// calculate unique id (which is presented by uint64_t) for each disk based on the disk type and path.
+    virtual UInt64 getID() const = 0;
+
     /// Root path for all files stored on the disk.
     /// It's not required to be a local filesystem path.
     virtual const String & getPath() const = 0;

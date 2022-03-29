@@ -84,7 +84,7 @@ static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
     std::unordered_map<String, DataTypePtr> column_types;
     for (auto & part : parts)
     {
-        for (auto & [file, _] : part->checksums.files)
+        for (auto & [file, _] : part->getChecksums()->files)
         {
             if (!startsWith(file, "__") || std::string::npos != file.find("_base."))
                 continue;

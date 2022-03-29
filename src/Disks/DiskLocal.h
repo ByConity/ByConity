@@ -28,6 +28,8 @@ public:
             throw Exception("Disk path must end with '/', but '" + disk_path + "' doesn't.", ErrorCodes::LOGICAL_ERROR);
     }
 
+    UInt64 getID() const override;
+
     const String & getName() const override { return name; }
 
     const String & getPath() const override { return disk_path; }

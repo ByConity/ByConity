@@ -304,7 +304,7 @@ void PartMovesBetweenShardsOrchestrator::stepEntry(const Entry & entry, zkutil::
                 /// Attach log entry (all replicas already fetched part)
                 ReplicatedMergeTreeLogEntryData log_entry;
                 log_entry.type = ReplicatedMergeTreeLogEntryData::ATTACH_PART;
-                log_entry.part_checksum = part->checksums.getTotalChecksumHex();
+                log_entry.part_checksum = part->getChecksums()->getTotalChecksumHex();
                 log_entry.create_time = std::time(nullptr);
                 log_entry.new_part_name = part_info.getPartName();
                 ops.emplace_back(zkutil::makeSetRequest(entry.to_shard + "/log", "", -1));

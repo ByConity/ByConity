@@ -24,6 +24,8 @@ class DiskMemory : public IDisk
 public:
     DiskMemory(const String & name_) : name(name_), disk_path("memory://" + name_ + '/') {}
 
+    UInt64 getID() const override;
+
     const String & getName() const override { return name; }
 
     const String & getPath() const override { return disk_path; }

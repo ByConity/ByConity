@@ -43,6 +43,7 @@
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Storages/StorageMergeTree.h>
@@ -184,6 +185,7 @@ MergeTreeData::MergeTreeData(
 {
     const auto settings = getSettings();
     allow_nullable_key = attach || settings->allow_nullable_key;
+    enable_metastore = settings->enable_metastore;
 
     if (relative_data_path.empty())
         throw Exception("MergeTree storages require data path", ErrorCodes::INCORRECT_FILE_NAME);
@@ -247,6 +249,19 @@ MergeTreeData::MergeTreeData(
             version_file = {current_version_file_path, disk};
         }
     }
+
+    if (enable_metastore && !metastore)
+    {
+        String table_metastore_path = getMetastorePath();
+        if (!fs::exists(table_metastore_path))
+        {
+            LOG_DEBUG(log, "Create metastore directory {} for table {}", table_metastore_path, log_name);
+            fs::create_directories(table_metastore_path);
+        }
+        metastore = std::make_shared<MergeTreeMeta>(table_metastore_path, log_name);
+    }
+
+    storage_address = fmt::format("{}", fmt::ptr(this));
 
     /// If not choose any
     if (version_file.first.empty())
@@ -345,6 +360,13 @@ MergeTreeData::MergeTreeData(
 
     // Init version type
     initVersionType();
+}
+
+MergeTreeData::~MergeTreeData()
+{
+    /// clean checksums cache of current storage before destroy. 
+    if (auto cache = getContext()->getChecksumsCache())
+        cache->dropChecksumCache(getStorageUniqueID());
 }
 
 StoragePolicyPtr MergeTreeData::getStoragePolicy() const
@@ -1007,6 +1029,14 @@ String MergeTreeData::MergingParams::getModeName() const
     __builtin_unreachable();
 }
 
+String MergeTreeData::getStorageUniqueID() const
+{
+    if (getStorageID().hasUUID())
+        return toString(getStorageID().uuid);
+    else
+        return storage_address;
+}
+
 Int64 MergeTreeData::getMaxBlockNumber() const
 {
     auto lock = lockParts();
@@ -1093,76 +1123,280 @@ void MergeTreeData::resetUniqueTableToVersion(const DataPartsLock &, UInt64 vers
     LOG_INFO(log, "Takes {} seconds to reload {} delete bitmaps for {} parts", stopwatch.elapsedSeconds(), num_reloaded, snapshot.parts.size());
 }
 
+/** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+/*  compatible with old metastore. remove this later  */
+bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
+{
+    bool res = false;
+    // try to find the old version metastore;
+    String old_version_meta_path;
+    auto disks = getStoragePolicy()->getDisks();
+    for (auto disk_it = disks.begin(); disk_it != disks.end(); ++disk_it)
+    {
+        DiskPtr disk_ptr = *disk_it;
+        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+        {
+            if (it->name() == "catalog.db")
+            {
+                old_version_meta_path = disk_ptr->getPath() + relative_data_path;
+                break;
+            }
+        }
+    }
+
+    if (!old_version_meta_path.empty())
+    {
+        MetaStorePtr old_metastore = std::make_shared<MergeTreeMeta>(old_version_meta_path, log_name + "_OLD");
+        if (old_metastore->checkMetaReady())
+        {
+            try
+            {
+                Stopwatch stopwatch;
+                LOG_DEBUG(log, "[Compatible] Loading parts from old metastore in path {}", old_version_meta_path);
+                /// try to load parts from old metastore.
+                auto [loaded_parts, unloaded_parts] = old_metastore->loadPartFromMetastore(*this);
+                /// add parts which loaded from metastore.
+                auto part_lock = lockParts();
+                data_parts_indexes.clear();
+                for (auto & part : loaded_parts)
+                {
+                    part->setState(DataPartState::Committed);
+                    if (!data_parts_indexes.insert(part).second)
+                        throw Exception("Part " + part->name + " already exists", ErrorCodes::DUPLICATE_DATA_PART);
+
+                    addPartContributionToDataVolume(part);
+                }
+                /// load from file system if there are unloaded parts or wals.
+                if (!unloaded_parts.empty())
+                {
+                    LOG_DEBUG(log, "[Compatible] Loading {} unloaded parts from file system.", unloaded_parts.size());
+                    loadPartsFromFileSystem(unloaded_parts, {}, skip_sanity_checks, attach, part_lock);
+                }
+
+                /// parts have been loaded, sync the metadata to new metastore.
+                for (auto it=data_parts_indexes.begin(); it!=data_parts_indexes.end(); it++)
+                    metastore->addPart(*this, *it);
+
+                LOG_DEBUG(log, "[Compatible] Takes {}ms to load parts from old metastore.", stopwatch.elapsedMilliseconds());
+
+                res = true;
+            }
+            catch (...)
+            {
+                LOG_DEBUG(log, "Exception occurs during loading parts from old metastore.");
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }
+
+        old_metastore->closeMetastore();
+        
+        String path_to_remove = old_version_meta_path + "catalog.db"; 
+        LOG_DEBUG(log, "[Compatible] Removing old metastore path {}", path_to_remove);
+        fs::remove_all(path_to_remove);
+    }
+
+    return res;
+}
+/*  -----------------------  COMPATIBLE CODE END -------------------------- */
+
+/// if metastore is enabled and ready for use, it will try to load parts from metastore first. Other wise, load parts from file system.
 void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
 {
-    LOG_DEBUG(log, "Loading data parts");
-
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    const auto settings = getSettings();
-    std::vector<std::pair<String, DiskPtr>> part_names_with_disks;
-    MutableDataPartsVector parts_from_wal;
-    Strings part_file_names;
-
-    auto disks = getStoragePolicy()->getDisks();
-
-    /// Only check if user did touch storage configuration for this table.
-    if (!getStoragePolicy()->isDefaultPolicy() && !skip_sanity_checks)
+    /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+    bool loaded_from_old_metastore = false;
+    if (metastore)
     {
-        /// Check extra parts at different disks, in order to not allow to miss data parts at undefined disks.
-        std::unordered_set<String> defined_disk_names;
-        for (const auto & disk_ptr : disks)
-            defined_disk_names.insert(disk_ptr->getName());
+        /// try to load parts from metastore with old metastore format. will transform metadata from old version to new after loading.
+        loaded_from_old_metastore = preLoadDataParts(skip_sanity_checks, attach);
+    }
+    /*  -----------------------  COMPATIBLE CODE END -------------------------- */
+    if (loaded_from_old_metastore)
+    {
+        /// has already sync metadata into new metastore. set metastore status.
+        metastore->setMetastoreStatus(*this);
+    }
+    /// if metastore is enabled and has not been loaded as old metastore format, try load from metastore normally
+    else if (metastore && metastore->checkMetastoreStatus(*this))
+    {
+        LOG_DEBUG(log, "Start loading data parts from metastore.");
+        Stopwatch stopwatch;
+        /// Load part from metastore;
+        auto [loaded_parts, unloaded_parts] = metastore->loadFromMetastore(*this);
+        /// get wal logs if any
+        auto wals_with_disks = metastore->getWriteAheadLogs(*this);
 
-        for (const auto & [disk_name, disk] : getContext()->getDisksMap())
+        /// add parts which loaded from metastore.
+        auto part_lock = lockParts();
+        data_parts_indexes.clear();
+        for (auto & part : loaded_parts)
         {
-            if (defined_disk_names.count(disk_name) == 0 && disk->exists(relative_data_path))
+            part->setState(DataPartState::Committed);
+            if (!data_parts_indexes.insert(part).second)
+                throw Exception("Part " + part->name + " already exists", ErrorCodes::DUPLICATE_DATA_PART);
+
+            addPartContributionToDataVolume(part);
+        }
+
+        /// load projections immediately after loading data parts.
+        metastore->loadProjections(*this);
+
+        /// load from file system if there are unloaded parts or wals.
+        if (!unloaded_parts.empty() || !wals_with_disks.empty())
+        {
+            LOG_DEBUG(log, "Loading {} unloaded parts from file system.", unloaded_parts.size());
+            loadPartsFromFileSystem(unloaded_parts, wals_with_disks, skip_sanity_checks, attach, part_lock);
+        }
+        LOG_DEBUG(log, "Takes {}ms to load parts from metastore.", stopwatch.elapsedMilliseconds());
+    }
+    else
+    {
+        LOG_DEBUG(log, "Start loading data parts from filesystem.");
+        Stopwatch stopwatch;
+
+        const auto settings = getSettings();
+
+        PartNamesWithDisks part_names_with_disks;
+        PartNamesWithDisks wal_name_with_disks;
+
+        auto disks = getStoragePolicy()->getDisks();
+
+        /// Only check if user did touch storage configuration for this table.
+        if (!getStoragePolicy()->isDefaultPolicy() && !skip_sanity_checks)
+        {
+            /// Check extra parts at different disks, in order to not allow to miss data parts at undefined disks.
+            std::unordered_set<String> defined_disk_names;
+            for (const auto & disk_ptr : disks)
+                defined_disk_names.insert(disk_ptr->getName());
+
+            for (const auto & [disk_name, disk] : getContext()->getDisksMap())
             {
-                for (const auto it = disk->iterateDirectory(relative_data_path); it->isValid(); it->next())
+                if (defined_disk_names.count(disk_name) == 0 && disk->exists(relative_data_path))
                 {
-                    MergeTreePartInfo part_info;
-                    if (MergeTreePartInfo::tryParsePartName(it->name(), &part_info, format_version))
-                        throw Exception("Part " + backQuote(it->name()) + " was found on disk " + backQuote(disk_name) + " which is not defined in the storage policy", ErrorCodes::UNKNOWN_DISK);
+                    for (const auto it = disk->iterateDirectory(relative_data_path); it->isValid(); it->next())
+                    {
+                        MergeTreePartInfo part_info;
+                        if (MergeTreePartInfo::tryParsePartName(it->name(), &part_info, format_version))
+                            throw Exception("Part " + backQuote(it->name()) + " was found on disk " + backQuote(disk_name) + " which is not defined in the storage policy", ErrorCodes::UNKNOWN_DISK);
+                    }
                 }
             }
         }
+
+        /// Reversed order to load part from low priority disks firstly.
+        /// Used for keep part on low priority disk if duplication found
+        for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
+        {
+            auto disk_ptr = *disk_it;
+            for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+            {
+                /// Skip temporary directories, file 'format_version.txt' and directory 'detached'.
+                if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME || it->name() == MergeTreeData::DETACHED_DIR_NAME)
+                    continue;
+
+                if (!startsWith(it->name(), MergeTreeWriteAheadLog::WAL_FILE_NAME))
+                    part_names_with_disks.emplace_back(it->name(), disk_ptr);
+                else if (it->name() == MergeTreeWriteAheadLog::DEFAULT_WAL_FILE_NAME && settings->in_memory_parts_enable_wal)
+                {
+                    wal_name_with_disks.emplace_back(it->name(), disk_ptr);
+                }
+                else if (settings->in_memory_parts_enable_wal)
+                {
+                    wal_name_with_disks.emplace_back(it->name(), disk_ptr);
+                }
+            }
+        }
+
+        auto part_lock = lockParts();
+        data_parts_indexes.clear();
+
+        if (part_names_with_disks.empty() && wal_name_with_disks.empty())
+        {
+            LOG_DEBUG(log, "There are no data parts");
+            return;
+        }
+
+        /// build up metastore
+        if (enable_metastore && metastore)
+            metastore->cleanMetastore();
+
+        loadPartsFromFileSystem(part_names_with_disks, wal_name_with_disks, skip_sanity_checks, attach, part_lock);
+
+        if (metastore)
+            metastore->setMetastoreStatus(*this);
+
+        LOG_DEBUG(log, "Takes {}ms to load parts from file system.", stopwatch.elapsedMilliseconds());
     }
 
-    /// Reversed order to load part from low priority disks firstly.
-    /// Used for keep part on low priority disk if duplication found
-    for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
-    {
-        auto disk_ptr = *disk_it;
-        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
-        {
-            /// Skip temporary directories, file 'format_version.txt' and directory 'detached'.
-            if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME || it->name() == MergeTreeData::DETACHED_DIR_NAME)
-                continue;
+    /// Delete from the set of current parts those parts that are covered by another part (those parts that
+    /// were merged), but that for some reason are still not deleted from the filesystem.
+    /// Deletion of files will be performed later in the clearOldParts() method.
 
-            if (!startsWith(it->name(), MergeTreeWriteAheadLog::WAL_FILE_NAME))
-                part_names_with_disks.emplace_back(it->name(), disk_ptr);
-            else if (it->name() == MergeTreeWriteAheadLog::DEFAULT_WAL_FILE_NAME && settings->in_memory_parts_enable_wal)
+    if (data_parts_indexes.size() >= 2)
+    {
+        /// Now all parts are committed, so data_parts_by_state_and_info == committed_parts_range
+        auto prev_jt = data_parts_by_state_and_info.begin();
+        auto curr_jt = std::next(prev_jt);
+
+        auto deactivate_part = [&] (DataPartIteratorByStateAndInfo it)
+        {
+            (*it)->remove_time.store((*it)->modification_time, std::memory_order_relaxed);
+            modifyPartState(it, DataPartState::Outdated);
+            removePartContributionToDataVolume(*it);
+        };
+
+        (*prev_jt)->assertState({DataPartState::Committed});
+
+        while (curr_jt != data_parts_by_state_and_info.end() && (*curr_jt)->getState() == DataPartState::Committed)
+        {
+            /// Don't consider data parts belonging to different partitions.
+            if ((*curr_jt)->info.partition_id != (*prev_jt)->info.partition_id)
             {
-                /// Create and correctly initialize global WAL object
-                write_ahead_log = std::make_shared<MergeTreeWriteAheadLog>(*this, disk_ptr, it->name());
-                for (auto && part : write_ahead_log->restore(metadata_snapshot, getContext()))
-                    parts_from_wal.push_back(std::move(part));
+                ++prev_jt;
+                ++curr_jt;
+                continue;
             }
-            else if (settings->in_memory_parts_enable_wal)
+
+            if ((*curr_jt)->contains(**prev_jt))
             {
-                MergeTreeWriteAheadLog wal(*this, disk_ptr, it->name());
-                for (auto && part : wal.restore(metadata_snapshot, getContext()))
-                    parts_from_wal.push_back(std::move(part));
+                deactivate_part(prev_jt);
+                prev_jt = curr_jt;
+                ++curr_jt;
+            }
+            else if ((*prev_jt)->contains(**curr_jt))
+            {
+                auto next = std::next(curr_jt);
+                deactivate_part(curr_jt);
+                curr_jt = next;
+            }
+            else
+            {
+                ++prev_jt;
+                ++curr_jt;
             }
         }
     }
 
-    auto part_lock = lockParts();
-    data_parts_indexes.clear();
+    calculateColumnSizesImpl();
 
-    if (part_names_with_disks.empty() && parts_from_wal.empty())
+
+    LOG_DEBUG(log, "Loaded data parts ({} items)", data_parts_indexes.size());
+}
+
+void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_disks, PartNamesWithDisks wal_with_disks, bool skip_sanity_checks, bool attach, DataPartsLock & part_lock)
+{
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    const auto settings = getSettings();
+
+    MutableDataPartsVector parts_from_wal;
+    for (auto & [wal_name, disk_ptr] : wal_with_disks)
     {
-        LOG_DEBUG(log, "There are no data parts");
-        return;
+        MergeTreeWriteAheadLog wal(*this, disk_ptr, wal_name);
+        for (auto && part : wal.restore(metadata_snapshot, getContext()))
+            parts_from_wal.push_back(std::move(part));
+
+        /// add wal info into metastore if enabled.
+        if (metastore)
+            addWriteAheadLog(wal_name, disk_ptr);
     }
 
     /// Parallel loading of data parts.
@@ -1247,6 +1481,10 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
             std::lock_guard loading_lock(mutex);
             if (!data_parts_indexes.insert(part).second)
                 throw Exception("Part " + part->name + " already exists", ErrorCodes::DUPLICATE_DATA_PART);
+
+            /// add part into metastore if enabled.
+            if (metastore)
+                metastore->addPart(*this, part);
 
             addPartContributionToDataVolume(part);
         });
@@ -1512,6 +1750,9 @@ void MergeTreeData::removePartsFinally(const MergeTreeData::DataPartsVector & pa
             (*it)->assertState({DataPartState::Deleting});
 
             data_parts_indexes.erase(it);
+
+            if (metastore)
+                metastore->dropPart(*this, part);
         }
     }
 
@@ -1657,6 +1898,7 @@ void MergeTreeData::clearOldWriteAheadLogs()
             {
                 LOG_DEBUG(log, "Removing from filesystem the outdated WAL file " + it->name());
                 disk_ptr->removeFile(relative_data_path + it->name());
+                removeWriteAheadLog(it->name());
             }
         }
     }
@@ -1692,6 +1934,17 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
         disk->moveDirectory(relative_data_path, new_table_path);
     }
 
+    /// move metastore dir if exists. make sure metastore closed before moving
+    if (metastore)
+    {
+        metastore->closeMetastore();
+        String new_metastore_path = getContext()->getMetastorePath() + new_table_path;
+        if (fs::exists(new_metastore_path))
+            throw Exception("Metastore path already exists : " + new_metastore_path, ErrorCodes::DIRECTORY_ALREADY_EXISTS);
+        fs::create_directories(new_metastore_path);
+        fs::rename(fs::path(getMetastorePath()) / "catalog.db", fs::path(new_metastore_path) / "catalog.db");
+    }
+
     if (!getStorageID().hasUUID())
         getContext()->dropCaches();
 
@@ -1700,6 +1953,10 @@ void MergeTreeData::rename(const String & new_table_path, const StorageID & new_
 
     relative_data_path = new_table_path;
     renameInMemory(new_table_id);
+
+    /// reopen metastore to make table be ready for use.
+    if (enable_metastore)
+        metastore = std::make_shared<MergeTreeMeta>(getMetastorePath(), log_name);
 
     if (bitengine_dictionary_manager)
     {
@@ -1725,6 +1982,7 @@ void MergeTreeData::dropAllData()
     DataPartsVector all_parts(data_parts_by_info.begin(), data_parts_by_info.end());
 
     data_parts_indexes.clear();
+
     column_sizes.clear();
 
     /// Tables in atomic databases have UUID and stored in persistent locations.
@@ -1753,6 +2011,15 @@ void MergeTreeData::dropAllData()
             else
                 throw;
         }
+    }
+
+    /// remove metastore if exists. make sure the metastore is closed before remove metadata.
+    String metastore_path = getContext()->getMetastorePath() + getRelativeDataPath();
+    if (fs::exists(metastore_path))
+    {
+        if (metastore)
+            metastore->closeMetastore();
+        fs::remove_all(getContext()->getMetastorePath() + getRelativeDataPath());
     }
 
     setDataVolume(0, 0, 0);
@@ -2575,6 +2842,8 @@ bool MergeTreeData::renameTempPartAndReplace(
     part->renameTo(part_name, true);
 
     auto part_it = data_parts_indexes.insert(part).first;
+    if (metastore && !isInMemoryPart(part))
+        metastore->addPart(*this, part);
 
     if (out_transaction)
     {
@@ -2705,6 +2974,9 @@ void MergeTreeData::removePartsFromWorkingSetImmediatelyAndSetTemporaryState(con
         modifyPartState(part, IMergeTreeDataPart::State::Temporary);
         /// Erase immediately
         data_parts_indexes.erase(it_part);
+
+        if (metastore)
+            metastore->dropPart(*this, part);
     }
 }
 
@@ -2823,6 +3095,8 @@ restore_covered)
     part->renameToDetached(prefix);
 
     data_parts_indexes.erase(it_part);
+    if (metastore)
+        metastore->dropPart(*this, part_to_detach);
 
     if (restore_covered && part->info.level == 0)
     {
@@ -3149,10 +3423,13 @@ void MergeTreeData::swapActivePart(MergeTreeData::DataPartPtr part_copy)
 
             modifyPartState(original_active_part, DataPartState::DeleteOnDestroy);
             data_parts_indexes.erase(active_part_it);
+            if (metastore)
+                metastore->dropPart(*this, original_active_part);
 
             auto part_it = data_parts_indexes.insert(part_copy).first;
             modifyPartState(part_it, DataPartState::Committed);
-
+            if (metastore)
+                metastore->addPart(*this, part_copy);
             removePartContributionToDataVolume(original_active_part);
             addPartContributionToDataVolume(part_copy);
 
@@ -3198,7 +3475,11 @@ MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVectorInPartition(Merg
 MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const MergeTreePartInfo & part_info, const MergeTreeData::DataPartStates & valid_states)
 {
     auto lock = lockParts();
+    return getPartIfExistsWithoutLock(part_info, valid_states);
+}
 
+MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const MergeTreePartInfo & part_info, const MergeTreeData::DataPartStates & valid_states)
+{
     auto it = data_parts_by_info.find(part_info);
     if (it == data_parts_by_info.end())
         return nullptr;
@@ -3213,6 +3494,11 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const MergeTreePartInf
 MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const String & part_name, const MergeTreeData::DataPartStates & valid_states)
 {
     return getPartIfExists(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
+}
+
+MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const String & part_name, const MergeTreeData::DataPartStates & valid_states)
+{
+    return getPartIfExistsWithoutLock(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
 }
 
 MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
@@ -4849,6 +5135,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeData::cloneAndLoadDataPartOnSameDisk(
     return dst_data_part;
 }
 
+String MergeTreeData::getMetastorePath() const
+{
+    return getContext()->getMetastorePath() + getRelativeDataPath();
+}
+
 String MergeTreeData::getFullPathOnDisk(const DiskPtr & disk) const
 {
     return disk->getPath() + relative_data_path;
@@ -5620,6 +5911,7 @@ ReservationPtr MergeTreeData::balancedReservation(
     return reserved_space;
 }
 
+
 bool MergeTreeData::isBitEngineEncodeColumn([[maybe_unused]] const String & name) const
 {
     //TODO (liuhaoqiang)
@@ -5627,6 +5919,194 @@ bool MergeTreeData::isBitEngineEncodeColumn([[maybe_unused]] const String & name
     if (column.has_value())
         return column.value().type->isBitEngineEncode();
     return false;
+}
+
+void MergeTreeData::searchAllPartsOnFilesystem(std::map<String, DiskPtr> & parts_with_disks, std::map<String, DiskPtr> & wal_with_disks) const
+{
+    auto disks = getStoragePolicy()->getDisks();
+
+    for (auto disk_it = disks.rbegin(); disk_it != disks.rend(); ++disk_it)
+    {
+        auto disk_ptr = *disk_it;
+        for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
+        {
+            /// Skip temporary directories, file 'format_version.txt', WAL and directory 'detached'.
+            if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME 
+                || it->name() == MergeTreeData::DETACHED_DIR_NAME)
+                continue;
+
+            if (it->name() == MergeTreeWriteAheadLog::DEFAULT_WAL_FILE_NAME || startsWith(it->name(), MergeTreeWriteAheadLog::WAL_FILE_NAME))
+                wal_with_disks.emplace(it->name(), disk_ptr);
+            else
+                parts_with_disks.emplace(it->name(), disk_ptr);
+        }
+    }
+}
+
+void MergeTreeData::syncMetaData()
+{
+    auto lock = lockParts();
+    syncMetaImpl(lock);
+}
+
+void MergeTreeData::trySyncMetaData()
+{
+    auto lock = DataPartsLock(data_parts_mutex, std::defer_lock);
+
+    /// Since is uncommon that data parts on disk differ from those in metastore, we can skip the synchronization
+    /// if fail to get parts lock and finish the task as soon as possible.
+    if (lock.try_lock())
+        syncMetaImpl(lock);
+}
+
+void MergeTreeData::syncMetaImpl(DataPartsLock & lock)
+{
+    /// skip sync meta if the metastore is not enabled or the metastore is not ready for use.
+    if (!metastore || !metastore->checkMetastoreStatus(*this))
+        return;
+
+    LOG_DEBUG(log, "Starting sync meta");
+
+    std::map<String, DiskPtr> existing_parts_with_disks;
+    std::map<String, DiskPtr> existing_wals_with_disks;
+
+    searchAllPartsOnFilesystem(existing_parts_with_disks, existing_wals_with_disks);
+    /// sync wals with metastore
+    PartNamesWithDisks wal_from_metastore = metastore->getWriteAheadLogs(*this);
+    std::map<String, MutableDataPartPtr> parts_from_wal;
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    for (auto & [wal_file, disk] : wal_from_metastore)
+    {
+        auto found = existing_wals_with_disks.find(wal_file);
+        if (found != existing_wals_with_disks.end() && found->second->getName() == disk->getName())
+        {
+            existing_wals_with_disks.erase(found);
+            MergeTreeWriteAheadLog wal(*this, disk, wal_file);
+            for (auto && part : wal.restore(metadata_snapshot, getContext()))
+                parts_from_wal.emplace(part->name ,std::move(part));
+        }
+        else
+        {
+            metastore->removeWAL(*this, wal_file);
+        }
+    }
+    /// sync existing parts on disks 
+    for (auto it = data_parts_by_info.begin(); it != data_parts_by_info.end(); )
+    {
+        const String & part_name = (*it)->name;
+        auto found = existing_parts_with_disks.find(part_name);
+
+        if (found != existing_parts_with_disks.end() && found->second->getName() == (*it)->volume->getDisk()->getName())
+        {
+            /// the part can be found both in part index and file system, remove from existing_parts_with_disks
+            existing_parts_with_disks.erase(found);
+            it++;
+        }
+        else if (parts_from_wal.count(part_name))
+        {
+            /// parts from wal has no corresponding part file;
+            it++;
+        }
+        else
+        {
+            /// If the parts neither exists on disk nor in WAL, consider to remove it from part index.
+            /// skip part whose state is deleting.
+            if ((*it)->getState() == DataPartState::Deleting)
+            {
+                it++;
+                continue;
+            }
+            /// part maybe already be deleted, remove it from part index and metastore.
+            LOG_WARNING(log, "Removing part '{}' (Disk name: {}) from metastore because of metadata mismatch.", part_name, (*it)->volume->getDisk()->getName());
+            metastore->dropPart(*this, *it);
+            it = data_parts_by_info.erase(it);
+        }
+    }
+
+    PartNamesWithDisks parts_with_disks;
+    PartNamesWithDisks wals_with_disks;
+
+    for (auto & [part_file, disk] : existing_parts_with_disks)
+    {
+        if (MergeTreePartInfo::tryParsePartName(part_file, nullptr, format_version))
+            parts_with_disks.emplace_back(part_file, disk);
+    }
+
+    for (auto & [wal_file, disk] : existing_wals_with_disks)
+    {
+        /// add missing wal to metastore;
+        addWriteAheadLog(wal_file, disk);
+        wals_with_disks.emplace_back(wal_file, disk);
+    }
+
+    /// now, we should load those missing parts into metastore.
+    if (!parts_with_disks.empty() || !wals_with_disks.empty())
+    {
+        LOG_DEBUG(log, "Reloading {} missing parts and {} missing wal from file system.", parts_with_disks.size(), wals_with_disks.size());
+        loadPartsFromFileSystem(parts_with_disks, wals_with_disks, true, false, lock);
+
+        if (data_parts_indexes.size() >= 2)
+        {
+            auto committed_range = getDataPartsStateRange(DataPartState::Committed);
+            auto prev_jt = committed_range.begin();
+            auto curr_jt = std::next(prev_jt);
+
+            auto deactivate_part = [&] (DataPartIteratorByStateAndInfo it)
+            {
+                (*it)->remove_time.store((*it)->modification_time, std::memory_order_relaxed);
+                modifyPartState(it, DataPartState::Outdated);
+                removePartContributionToDataVolume(*it);
+            };
+
+            (*prev_jt)->assertState({DataPartState::Committed});
+
+            while (curr_jt != committed_range.end() && (*curr_jt)->getState() == DataPartState::Committed)
+            {
+                /// Don't consider data parts belonging to different partitions.
+                if ((*curr_jt)->info.partition_id != (*prev_jt)->info.partition_id)
+                {
+                    ++prev_jt;
+                    ++curr_jt;
+                    continue;
+                }
+
+                if ((*curr_jt)->contains(**prev_jt))
+                {
+                    deactivate_part(prev_jt);
+                    prev_jt = curr_jt;
+                    ++curr_jt;
+                }
+                else if ((*prev_jt)->contains(**curr_jt))
+                {
+                    auto next = std::next(curr_jt);
+                    deactivate_part(curr_jt);
+                    curr_jt = next;
+                }
+                else
+                {
+                    ++prev_jt;
+                    ++curr_jt;
+                }
+            }
+        }
+    }
+
+    calculateColumnSizesImpl();
+
+    LOG_DEBUG(log, "Sync meta done");
+}
+
+void MergeTreeData::addWriteAheadLog(const String & file_name, const DiskPtr & disk) const
+{
+    if (metastore)
+        metastore->addWAL(*this, file_name, disk);
+}
+
+void MergeTreeData::removeWriteAheadLog(const String & file_name) const
+{
+    if (metastore)
+        metastore->removeWAL(*this, file_name);
 }
 
 CurrentlySubmergingEmergingTagger::~CurrentlySubmergingEmergingTagger()
@@ -5777,7 +6257,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
                 auto map_key_prefix = genMapKeyFilePrefix(column.name);
                 auto map_base_prefix = genMapBaseFilePrefix(column.name);
 
-                for (const auto & [file, _]: part->checksums.files)
+                for (const auto & [file, _]: part->getChecksums()->files)
                 {
                     if (startsWith(file, map_key_prefix))
                     {
@@ -5807,24 +6287,25 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
     }
 
     /// Update the checksums.
-    DataPart::Checksums new_checksums = part->checksums;
+    IMergeTreeDataPart::ChecksumsPtr new_checksums = std::make_shared<IMergeTreeDataPart::Checksums>();
+    *new_checksums = *(part->getChecksums());
     for (auto it : transaction->rename_map)
     {
         if (it.second.empty())
-            new_checksums.files.erase(it.first);
+            new_checksums->files.erase(it.first);
     }
 
     /// Write the checksums to the temporary file.
     bool checksums_empty = false;
     {
         // auto lock = part->getColumnsReadLock();
-        checksums_empty = part->checksums.empty();
+        checksums_empty = part->getChecksums()->empty();
     }
     if (!checksums_empty)
     {
-        transaction->new_checksums = new_checksums;
+        transaction->new_checksums = *new_checksums;
         WriteBufferFromFile checksums_file(part->getFullPath() + "checksums.txt.tmp", 4096);
-        new_checksums.write(checksums_file);
+        new_checksums->write(checksums_file);
         transaction->rename_map["checksums.txt.tmp"] = "checksums.txt";
     }
 
@@ -5864,7 +6345,8 @@ void MergeTreeData::AlterDataPartTransaction::innerCommit()
     }
 
     auto & mutable_part = const_cast<DataPart &>(*data_part);
-    mutable_part.checksums = new_checksums;
+    mutable_part.checksums_ptr = std::make_shared<IMergeTreeDataPart::Checksums>();
+    *mutable_part.checksums_ptr = new_checksums;
     mutable_part.columns = new_columns;
 
     /// 3) Delete the old files.

@@ -361,6 +361,11 @@ void DatabaseOnDisk::dropTable(ContextPtr local_context, const String & table_na
         fs::path table_data_dir(local_context->getPath() + table_data_path_relative);
         if (fs::exists(table_data_dir))
             fs::remove_all(table_data_dir);
+
+        /// remove metastore
+        fs::path table_metastore_dir(local_context->getMetastorePath() + table_data_path_relative);
+        if (fs::exists(table_metastore_dir))
+            fs::remove_all(table_metastore_dir);
     }
     catch (...)
     {
@@ -462,6 +467,9 @@ void DatabaseOnDisk::renameTable(
         /// Better diagnostics.
         throw Exception{Exception::CreateFromPocoTag{}, e};
     }
+
+    /// remove metastore of old table.
+    fs::remove_all(getContext()->getMetastorePath() + table_data_relative_path);
 
     /// Now table data are moved to new database, so we must add metadata and attach table to new database
     to_database.createTable(local_context, to_table_name, table, attach_query);

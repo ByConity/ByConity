@@ -1,4 +1,3 @@
 send_timeout	300	0		\N	\N	0	Seconds
-min_drop_ranges_to_enable_cleanup	365	0		UInt64
 1
 1

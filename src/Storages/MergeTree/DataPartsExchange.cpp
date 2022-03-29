@@ -247,7 +247,7 @@ void Service::processQueryPart(
         CurrentMetrics::Increment metric_increment{CurrentMetrics::ReplicatedSend};
 
         if (client_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_SIZE)
-            writeBinary(part->checksums.getTotalSizeOnDisk(), out);
+            writeBinary(part->getChecksums()->getTotalSizeOnDisk(), out);
 
         if (client_protocol_version >= REPLICATION_PROTOCOL_VERSION_WITH_PARTS_SIZE_AND_TTL_INFOS)
         {
@@ -393,7 +393,7 @@ void Service::sendPartFromMemory(
             throw Exception("Projection " + name + " of part " + part->name + " is not stored in memory", ErrorCodes::LOGICAL_ERROR);
 
         writeStringBinary(name, out);
-        projection->checksums.write(out);
+        projection->getChecksums()->write(out);
         NativeBlockOutputStream block_out(out, 0, projection_sample_block);
         block_out.write(part_in_memory->block);
     }
@@ -403,7 +403,7 @@ void Service::sendPartFromMemory(
         throw Exception("Part " + part->name + " is not stored in memory", ErrorCodes::LOGICAL_ERROR);
 
     NativeBlockOutputStream block_out(out, 0, metadata_snapshot->getSampleBlock());
-    part->checksums.write(out);
+    part->getChecksums()->write(out);
     block_out.write(part_in_memory->block);
 
     data.getSendsThrottler()->add(part_in_memory->block.bytes());
@@ -416,7 +416,7 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
     const std::map<String, std::shared_ptr<IMergeTreeDataPart>> & projections)
 {
     /// We'll take a list of files from the list of checksums.
-    MergeTreeData::DataPart::Checksums checksums = part->checksums;
+    MergeTreeData::DataPart::Checksums checksums = *(part->getChecksums());
     /// Add files that are not in the checksum list.
     auto file_names_without_checksums = part->getFileNamesWithoutChecksums();
     for (const auto & file_name : file_names_without_checksums)
@@ -440,10 +440,10 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
             MergeTreeData::DataPart::Checksums projection_checksum = sendPartFromDisk(it->second, out, client_protocol_version);
             data_checksums.addFile(name + ".proj", projection_checksum.getTotalSizeOnDisk(), projection_checksum.getTotalChecksumUInt128());
         }
-        else if (part->checksums.has(name + ".proj"))
+        else if (part->getChecksums()->has(name + ".proj"))
         {
             // We don't send this projection, just add out checksum to bypass the following check
-            const auto & our_checksum = part->checksums.files.find(name + ".proj")->second;
+            const auto & our_checksum = part->getChecksums()->files.find(name + ".proj")->second;
             data_checksums.addFile(name + ".proj", our_checksum.file_size, our_checksum.file_hash);
         }
     }
@@ -515,14 +515,14 @@ MergeTreeData::DataPart::Checksums Service::sendPartFromDisk(
             data_checksums.addFile(file_name, hashing_out.count(), hashing_out.getHash());
     }
 
-    part->checksums.checkEqual(data_checksums, false);
+    part->getChecksums()->checkEqual(data_checksums, false);
     return data_checksums;
 }
 
 void Service::sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteBuffer & out)
 {
     /// We'll take a list of files from the list of checksums.
-    MergeTreeData::DataPart::Checksums checksums = part->checksums;
+    MergeTreeData::DataPart::Checksums checksums = *(part->getChecksums());
     /// Add files that are not in the checksum list.
     auto file_names_without_checksums = part->getFileNamesWithoutChecksums();
     for (const auto & file_name : file_names_without_checksums)
@@ -1000,7 +1000,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
         part_out.writePrefix();
         part_out.write(block);
         part_out.writeSuffixAndFinalizePart(new_projection_part);
-        new_projection_part->checksums.checkEqual(checksums, /* have_uncompressed = */ true);
+        new_projection_part->getChecksums()->checkEqual(checksums, /* have_uncompressed = */ true);
         new_data_part->addProjectionPart(projection_name, std::move(new_projection_part));
     }
 
@@ -1023,7 +1023,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
     part_out.writePrefix();
     part_out.write(block);
     part_out.writeSuffixAndFinalizePart(new_data_part);
-    new_data_part->checksums.checkEqual(checksums, /* have_uncompressed = */ true);
+    new_data_part->getChecksums()->checkEqual(checksums, /* have_uncompressed = */ true);
 
     return new_data_part;
 }
@@ -1178,7 +1178,7 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToDisk(
     new_data_part->is_temp = true;
     new_data_part->modification_time = time(nullptr);
     new_data_part->loadColumnsChecksumsIndexes(true, false);
-    new_data_part->checksums.checkEqual(checksums, false);
+    new_data_part->getChecksums()->checkEqual(checksums, false);
     return new_data_part;
 }
 

@@ -201,7 +201,7 @@ void StorageSystemParts::processNextStorage(
         {
             MinimalisticDataPartChecksums helper;
             if (columns_mask[src_index] || columns_mask[src_index + 1] || columns_mask[src_index + 2])
-                helper.computeTotalChecksums(part->checksums);
+                helper.computeTotalChecksums(*(part->getChecksums()));
 
             if (columns_mask[src_index++])
             {

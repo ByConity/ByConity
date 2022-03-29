@@ -44,6 +44,8 @@
     M(MarkCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
+    M(ChecksumsCacheHits, "") \
+    M(ChecksumsCacheMisses, "") \
     M(CreatedReadBufferOrdinary, "") \
     M(CreatedReadBufferAIO, "") \
     M(CreatedReadBufferAIOFailed, "") \

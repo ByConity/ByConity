@@ -12,6 +12,7 @@ class DiskDecorator : public IDisk
 {
 public:
     explicit DiskDecorator(const DiskPtr & delegate_);
+    UInt64 getID() const override;
     const String & getName() const override;
     ReservationPtr reserve(UInt64 bytes) override;
     ~DiskDecorator() override = default;

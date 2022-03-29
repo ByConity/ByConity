@@ -1668,9 +1668,9 @@ CheckResults StorageMergeTree::checkData(const ASTPtr & query, ContextPtr local_
             try
             {
                 auto calculated_checksums = checkDataPart(part, false);
-                calculated_checksums.checkEqual(part->checksums, true);
+                calculated_checksums.checkEqual(*(part->getChecksums()), true);
                 auto out = disk->writeFile(tmp_checksums_path, 4096);
-                part->checksums.write(*out);
+                part->getChecksums()->write(*out);
                 disk->moveFile(tmp_checksums_path, checksums_path);
                 results.emplace_back(part->name, true, "Checksums recounted and written to disk.");
             }

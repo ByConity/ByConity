@@ -80,7 +80,8 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
     const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const
 {
     ColumnSize size;
-    if (checksums.empty())
+    auto checksums = getChecksums();
+    if (checksums->empty())
         return size;
 
     auto serialization = getSerializationForColumn(column);
@@ -91,15 +92,15 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
         if (processed_substreams && !processed_substreams->insert(file_name).second)
             return;
 
-        auto bin_checksum = checksums.files.find(file_name + ".bin");
-        if (bin_checksum != checksums.files.end())
+        auto bin_checksum = checksums->files.find(file_name + ".bin");
+        if (bin_checksum != checksums->files.end())
         {
             size.data_compressed += bin_checksum->second.file_size;
             size.data_uncompressed += bin_checksum->second.uncompressed_size;
         }
 
-        auto mrk_checksum = checksums.files.find(file_name + index_granularity_info.marks_file_extension);
-        if (mrk_checksum != checksums.files.end())
+        auto mrk_checksum = checksums->files.find(file_name + index_granularity_info.marks_file_extension);
+        if (mrk_checksum != checksums->files.end())
             size.marks += mrk_checksum->second.file_size;
     }, {});
 
@@ -152,6 +153,24 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     index_granularity.setInitialized();
 }
 
+void MergeTreeDataPartWide::loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities)
+{
+    /// The empty marks means using fixed index granularity
+    if (index_granularities.empty())
+        index_granularity_info.setNonAdaptive(); 
+
+    if (!index_granularity_info.is_adaptive)
+    {
+        index_granularity.resizeWithFixedGranularity(marks_count, index_granularity_info.fixed_index_granularity);
+    }
+    else
+    {
+        for (auto & granularity : index_granularities)
+            index_granularity.appendMark(granularity);
+    }
+    index_granularity.setInitialized();
+}
+
 MergeTreeDataPartWide::~MergeTreeDataPartWide()
 {
     removeIfNeeded();
@@ -161,8 +180,8 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
 {
     checkConsistencyBase();
     String path = getFullRelativePath();
-
-    if (!checksums.empty())
+    auto checksums = getChecksums();
+    if (!checksums->empty())
     {
         if (require_part_metadata)
         {
@@ -178,10 +197,10 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
                     String file_name = ISerialization::getFileNameForStream(name_type, substream_path);
                     String mrk_file_name = file_name + index_granularity_info.marks_file_extension;
                     String bin_file_name = file_name + DATA_FILE_EXTENSION;
-                    if (!checksums.files.count(mrk_file_name))
+                    if (!checksums->files.count(mrk_file_name))
                         throw Exception("No " + mrk_file_name + " file checksum for column " + name_type.name + " in part " + fullPath(volume->getDisk(), path),
                             ErrorCodes::NO_FILE_IN_DATA_PART);
-                    if (!checksums.files.count(bin_file_name))
+                    if (!checksums->files.count(bin_file_name))
                         throw Exception("No " + bin_file_name + " file checksum for column " + name_type.name + " in part " + fullPath(volume->getDisk(), path),
                             ErrorCodes::NO_FILE_IN_DATA_PART);
                 });
@@ -233,10 +252,11 @@ bool MergeTreeDataPartWide::hasColumnFiles(const NameAndTypePair & column) const
 {
     auto check_stream_exists = [this](const String & stream_name)
     {
-        auto bin_checksum = checksums.files.find(stream_name + DATA_FILE_EXTENSION);
-        auto mrk_checksum = checksums.files.find(stream_name + index_granularity_info.marks_file_extension);
+        auto checksums = getChecksums();
+        auto bin_checksum = checksums->files.find(stream_name + DATA_FILE_EXTENSION);
+        auto mrk_checksum = checksums->files.find(stream_name + index_granularity_info.marks_file_extension);
 
-        return bin_checksum != checksums.files.end() && mrk_checksum != checksums.files.end();
+        return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
     bool res = true;

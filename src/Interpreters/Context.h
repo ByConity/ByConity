@@ -117,6 +117,7 @@ using PartUUIDsPtr = std::shared_ptr<PartUUIDs>;
 class KeeperStorageDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
+class ChecksumsCache;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -337,6 +338,7 @@ public:
     String getFlagsPath() const;
     String getUserFilesPath() const;
     String getDictionariesLibPath() const;
+    String getMetastorePath() const;
 
     VolumePtr getTemporaryVolume() const;
 
@@ -344,6 +346,7 @@ public:
     void setFlagsPath(const String & path);
     void setUserFilesPath(const String & path);
     void setDictionariesLibPath(const String & path);
+    void setMetastorePath(const String & path);
 
     VolumePtr setTemporaryStorage(const String & path, const String & policy_name = "");
 
@@ -357,6 +360,10 @@ public:
     /// HDFS nnproxy
     void setHdfsNNProxy(const String & name);
     String getHdfsNNProxy() const;
+
+    /// create backgroud task to synchronize metadata table by table
+    void setMetaChecker();
+    void setMetaCheckerStatus(bool stop);
 
     using ConfigurationPtr = Poco::AutoPtr<Poco::Util::AbstractConfiguration>;
 
@@ -887,6 +894,10 @@ public:
 
     String getKMSKeyCache(const String & config_name) const;
     void addKMSKeyCache(const String & config_name, const String & key) const;
+
+    void setChecksumsCache(size_t cache_size_in_bytes);
+    std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

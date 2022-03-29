@@ -97,19 +97,19 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         MergeTreeData::DataPart::Checksums * additional_column_checksums)
 {
     /// Finish write and get checksums.
-    MergeTreeData::DataPart::Checksums checksums;
+    MergeTreeData::DataPart::ChecksumsPtr checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
 
     if (additional_column_checksums)
-        checksums = std::move(*additional_column_checksums);
+        *checksums_ptr = std::move(*additional_column_checksums);
 
     /// Finish columns serialization.
-    writer->finish(checksums, sync);
+    writer->finish(*checksums_ptr, sync);
 
     for (const auto & [projection_name, projection_part] : new_part->getProjectionParts())
-        checksums.addFile(
+        checksums_ptr->addFile(
             projection_name + ".proj",
-            projection_part->checksums.getTotalSizeOnDisk(),
-            projection_part->checksums.getTotalChecksumUInt128());
+            projection_part->getChecksums()->getTotalSizeOnDisk(),
+            projection_part->getChecksums()->getTotalChecksumUInt128());
 
     NamesAndTypesList part_columns;
     if (!total_columns_list)
@@ -118,14 +118,14 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         part_columns = *total_columns_list;
 
     if (new_part->isStoredOnDisk())
-        finalizePartOnDisk(new_part, part_columns, checksums, sync);
+        finalizePartOnDisk(new_part, part_columns, *checksums_ptr, sync);
 
     new_part->setColumns(part_columns);
     new_part->rows_count = rows_count;
     new_part->modification_time = time(nullptr);
-    new_part->index = writer->releaseIndexColumns();
-    new_part->checksums = checksums;
-    new_part->setBytesOnDisk(checksums.getTotalSizeOnDisk());
+    *(new_part->index) = writer->releaseIndexColumns();
+    new_part->checksums_ptr = checksums_ptr;
+    new_part->setBytesOnDisk(checksums_ptr->getTotalSizeOnDisk());
     new_part->index_granularity = writer->getIndexGranularity();
     new_part->calculateColumnsSizesOnDisk();
     if (default_codec != nullptr)

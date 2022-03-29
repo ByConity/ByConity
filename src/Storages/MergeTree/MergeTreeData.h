@@ -22,6 +22,7 @@
 #include <Storages/MergeTree/MergeTreeWriteAheadLog.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/MergeTree/ManifestStore.h>
+#include <Storages/MergeTree/MergeTreeMeta.h>
 #include <Interpreters/PartLog.h>
 #include <Disks/StoragePolicy.h>
 #include <Interpreters/Aggregator.h>
@@ -160,6 +161,7 @@ public:
     using PinnedPartUUIDsPtr = std::shared_ptr<const PinnedPartUUIDs>;
 
     using BitEngineDictionaryManagerPtr = std::shared_ptr<IBitEngineDictionaryManager>;
+    using MetaStorePtr = std::shared_ptr<MergeTreeMeta>;
 
     constexpr static auto FORMAT_VERSION_FILE_NAME = "format_version.txt";
     constexpr static auto DETACHED_DIR_NAME = "detached";
@@ -542,6 +544,8 @@ public:
                   bool attach,
                   BrokenPartCallback broken_part_callback_ = [](const String &){});
 
+    ~MergeTreeData() override;
+
     bool getQueryProcessingStageWithAggregateProjection(
         ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info) const;
 
@@ -577,7 +581,20 @@ public:
     /// Load the set of data parts from disk. Call once - immediately after the object is created.
     void loadDataParts(bool skip_sanity_checks, bool attach = false);
 
+    /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
+    /*  compatible with old metastore. remove this later  */
+
+    /// load data parts from old version metastore and copy the metadata into new metastore.
+    bool preLoadDataParts(bool skip_sanity_checks, bool attach);
+    /*  -----------------------  COMPATIBLE CODE END -------------------------- */
+
+    /// load parts from file system;
+    void loadPartsFromFileSystem(PartNamesWithDisks part_names_with_disks, PartNamesWithDisks wal_with_disks, bool skip_sanity_checks, bool attach, DataPartsLock &);
+
     String getLogName() const { return log_name; }
+
+    /// A global unique id for the storage. If storage UUID is not empty, use the storage UUID. Otherwise, use the address of current object.
+    String getStorageUniqueID() const;
 
     Int64 getMaxBlockNumber() const;
 
@@ -629,7 +646,9 @@ public:
 
     /// Returns the part with the given name and state or nullptr if no such part.
     DataPartPtr getPartIfExists(const String & part_name, const DataPartStates & valid_states);
+    DataPartPtr getPartIfExistsWithoutLock(const String & part_name, const DataPartStates & valid_states);
     DataPartPtr getPartIfExists(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
+    DataPartPtr getPartIfExistsWithoutLock(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
 
     DataPartsVector getPartsByPredicate(const ASTPtr & predicate);
 
@@ -863,6 +882,12 @@ public:
         return storage_settings.get();
     }
 
+    /// expose the metastore for metadata management. may return nullptr if enable_metastore is not set.
+    MetaStorePtr getMetastore() const {return metastore; }
+
+    /// get metastore path
+    String getMetastorePath() const;
+
     String getRelativeDataPath() const { return relative_data_path; }
 
     /// Get table path on disk
@@ -1011,6 +1036,17 @@ public:
     bool scheduleDataMovingJob(IBackgroundJobExecutor & executor);
     bool areBackgroundMovesNeeded() const;
 
+    /// used for sync metadata manually by `system sync meatadata db.table`
+    void syncMetaData();
+
+    void trySyncMetaData();
+
+    /// add wal information to metastore when new wal file is created.
+    void addWriteAheadLog(const String & file_name, const DiskPtr & disk) const;
+
+    /// remove wal information from metastore if it is deleted from filesystem.
+    void removeWriteAheadLog(const String & file_name) const;
+
     /// Lock part in zookeeper for use common S3 data in several nodes
     /// Overridden in StorageReplicatedMergeTree
     virtual void lockSharedData(const IMergeTreeDataPart &) const {}
@@ -1082,6 +1118,9 @@ protected:
 
     /// Engine-specific methods
     BrokenPartCallback broken_part_callback;
+
+    /// physical address of current object. used as identifier of the MergeTreeData if UUID doesn't exits.
+    String storage_address;
 
     String log_name;
     Poco::Logger * log;
@@ -1302,6 +1341,8 @@ protected:
     ThrottlerPtr replicated_fetches_throttler;
     ThrottlerPtr replicated_sends_throttler;
 
+    MetaStorePtr metastore;
+
 private:
     /// RAII Wrapper for atomic work with currently moving parts
     /// Acquire them in constructor and remove them in destructor
@@ -1320,6 +1361,8 @@ private:
     /// Move selected parts to corresponding disks
     bool moveParts(const CurrentlyMovingPartsTaggerPtr & moving_tagger);
 
+    void syncMetaImpl(DataPartsLock &);
+
     /// Select parts for move and disks for them. Used in background moving processes.
     CurrentlyMovingPartsTaggerPtr selectPartsForMove();
 
@@ -1328,12 +1371,17 @@ private:
 
     bool canUsePolymorphicParts(const MergeTreeSettings & settings, String * out_reason = nullptr) const;
 
+    /// collect all existing parts as well as wals from filesystem.
+    void searchAllPartsOnFilesystem(std::map<String, DiskPtr> & parts_with_disks, std::map<String, DiskPtr> & wal_with_disks) const;
+
     std::mutex write_ahead_log_mutex;
     WriteAheadLogPtr write_ahead_log;
 
     virtual void startBackgroundMovesIfNeeded() = 0;
 
     bool allow_nullable_key{};
+
+    bool enable_metastore{};
 
     void addPartContributionToDataVolume(const DataPartPtr & part);
     void removePartContributionToDataVolume(const DataPartPtr & part);

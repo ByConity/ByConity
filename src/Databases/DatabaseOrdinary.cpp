@@ -160,13 +160,21 @@ void DatabaseOrdinary::loadStoredObjects(ContextMutablePtr local_context, bool h
         {
             pool.scheduleOrThrowOnError([&]()
             {
-                tryAttachTable(
-                    local_context,
-                    create_query,
-                    *this,
-                    database_name,
-                    getMetadataPath() + name_with_query.first,
-                    has_force_restore_data_flag);
+                try
+                {
+                    tryAttachTable(
+                        local_context,
+                        create_query,
+                        *this,
+                        database_name,
+                        getMetadataPath() + name_with_query.first,
+                        has_force_restore_data_flag);
+                }
+                catch (Exception & e)
+                {
+                    LOG_ERROR(log, e.displayText());
+                    brokenTables[create_query.table] = e.displayText();
+                }
 
                 /// Messages, so that it's not boring to wait for the server to load for a long time.
                 logAboutProgress(log, ++tables_processed, total_tables, watch);
@@ -219,7 +227,16 @@ void DatabaseOrdinary::startupTables(ThreadPool & thread_pool)
 
     auto startup_one_table = [&](const StoragePtr & table)
     {
-        table->startup();
+        try
+        {
+            table->startup();
+        }
+        catch(Exception & e)
+        {
+            LOG_ERROR(log, "Fail to start up table {}, reason : {}", table->getStorageID().getTableName(), e.displayText());
+            brokenTables[table->getStorageID().getTableName()] = e.displayText();
+        }
+
         logAboutProgress(log, ++tables_processed, total_tables, watch);
     };
 
