@@ -4,7 +4,7 @@ trigger:
     branches: ["ce-dev"]
     types: ["create", "push", "submit"]
 jobs:
-  scm_build:    
+  scm_build:
     name: SCM Build for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
     steps:
@@ -153,7 +153,7 @@ jobs:
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
-  scm_build_ASAN:
+  scm_build_ASAN: #Build will be skipped by default
     name: SCM Build_ASAN for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
     if: ${{ false }}
@@ -172,11 +172,11 @@ jobs:
           envs:
             CUSTOM_SANITIZE: "address"
 
-  FuntionalStatelessTest-ASAN:
+  FuntionalStatelessTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
     name: FuntionalStatelessTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
     depends: [scm_build_ASAN]
-    if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
+    if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
@@ -213,11 +213,11 @@ jobs:
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
-  FuntionalStatefulTest-ASAN:
+  FuntionalStatefulTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
     name: FuntionalStatefulTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
     depends: [scm_build_ASAN]
-    if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
+    if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
     steps:
