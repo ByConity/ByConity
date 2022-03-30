@@ -1274,6 +1274,9 @@ protected:
         DataPartPtr & out_covering_part,
         DataPartsLock & data_parts_lock) const;
 
+    void renamePartAndDropMetadata(const String& name, const DataPartPtr& sourcePart);
+    void renamePartAndInsertMetadata(const String& name, const DataPartPtr& sourcePart);
+
     /// Checks whether the column is in the primary key, possibly wrapped in a chain of functions with single argument.
     bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const;
 
@@ -1303,6 +1306,8 @@ protected:
         ContextPtr query_context);
     virtual void fetchPartitionWhere(
         const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context);
+
+    virtual void repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr);
 
     virtual void movePartitionToShard(const ASTPtr & partition, bool move_part, const String & to, ContextPtr query_context);
 
