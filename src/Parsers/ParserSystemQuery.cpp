@@ -169,14 +169,14 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
                 return false;
             if (!ParserKeyword("OF").ignore(pos, expected))
                 return false;
-            if (!parseIdentifierOrStringLiteral(pos, expected, res->user))
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->replica))
                 return false;
             break;
         }
         case Type::OFFLINE_NODE:
         case Type::ONLINE_NODE:
         {
-            if (!parseIdentifierOrStringLiteral(pos, expected, res->user))
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->replica))
                 return false;
             break;
         }

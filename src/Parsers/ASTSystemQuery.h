@@ -114,8 +114,6 @@ public:
     String disk;
     UInt64 seconds{};
 
-    String user;
-
     // For execute/reload mutation
     String mutation_id;
 

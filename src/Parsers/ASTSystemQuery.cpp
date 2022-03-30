@@ -274,24 +274,22 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (type == Type::OFFLINE_REPLICA)
     {
         print_database_table();
-        // reuse user to record replica name
-        settings.ostr << " OF " << backQuoteIfNeed(user);
+        settings.ostr << " OF " << backQuoteIfNeed(replica);
     }
     else if (type == Type::ONLINE_REPLICA)
     {
         print_database_table();
-        // reuse user to record replica name
-        settings.ostr << " OF " << backQuoteIfNeed(user);
+        settings.ostr << " OF " << backQuoteIfNeed(replica);
     }
     else if (type == Type::OFFLINE_NODE)
     {
-        // reuse user to record node 'ip'
-        settings.ostr << " " << backQuoteIfNeed(user);
+        // reuse replica to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(replica);
     }
     else if (type == Type::ONLINE_NODE)
     {
-        // reuse user to record node 'ip'
-        settings.ostr << " " << backQuoteIfNeed(user);
+        // reuse replica to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(replica);
     }
     else if (type == Type::SUSPEND)
     {

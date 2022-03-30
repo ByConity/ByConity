@@ -839,7 +839,7 @@ void InterpreterSystemQuery::offlineHa(DB::ASTSystemQuery& query, bool is_node)
                 auto table = iterator->table();
                 auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
                 if (ha_table)
-                    ha_table->offlineNodePhaseOne(query.user);
+                    ha_table->offlineNodePhaseOne(query.replica);
             }
         }
 
@@ -850,7 +850,7 @@ void InterpreterSystemQuery::offlineHa(DB::ASTSystemQuery& query, bool is_node)
                 auto table = iterator->table();
                 auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
                 if (ha_table)
-                    ha_table->offlineNodePhaseTwo(query.user);
+                    ha_table->offlineNodePhaseTwo(query.replica);
             }
         }
     }
@@ -858,7 +858,7 @@ void InterpreterSystemQuery::offlineHa(DB::ASTSystemQuery& query, bool is_node)
     {
         String & database = query.database;
         String & table = query.table;
-        String & replica = query.user;
+        String & replica = query.replica;
         if (database.empty() || table.empty() || replica.empty())
             throw Exception("Database, table, replica must be specified when offline table.", ErrorCodes::LOGICAL_ERROR);
 
@@ -884,7 +884,7 @@ void InterpreterSystemQuery::onlineHa(DB::ASTSystemQuery& query, bool is_node)
                 StoragePtr table = iterator->table();
                 auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
                 if (ha_table)
-                    ha_table->onlineNode(query.user);
+                    ha_table->onlineNode(query.replica);
             }
         }
     }
@@ -892,7 +892,7 @@ void InterpreterSystemQuery::onlineHa(DB::ASTSystemQuery& query, bool is_node)
     {
         String & database = query.database;
         String & table = query.table;
-        String & replica = query.user;
+        String & replica = query.replica;
         if (database.empty() || table.empty() || replica.empty())
             throw Exception("Database, table, replica must be specified when online table.", ErrorCodes::LOGICAL_ERROR);
 
