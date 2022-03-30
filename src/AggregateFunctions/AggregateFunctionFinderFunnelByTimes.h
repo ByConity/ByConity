@@ -22,8 +22,8 @@ namespace DB
 {
 
 template <typename ParamType>
-class AggregateFunctionFinderFunnel final : public IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
-                                                                                AggregateFunctionFinderFunnel<ParamType>>
+class AggregateFunctionFinderFunnelByTimes final : public IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
+                                                                                       AggregateFunctionFinderFunnelByTimes<ParamType> >
 {
 private:
     // Parameters got from agg function
@@ -42,6 +42,7 @@ private:
 
     bool time_interval = false;
     mutable bool is_step = false;
+    UInt32 target_step;
 
     /*
      * The main loop for funnel calculate:
@@ -52,8 +53,9 @@ private:
     void calculateFunnel(const AggregateFunctionFinderFunnelData<ParamType> & data,  LEVELType * levels, std::vector<Times>& intervals,
                          [[maybe_unused]] size_t start_step_num = 0, [[maybe_unused]] size_t end_step_num = 0) const
     {
-        const_cast<AggregateFunctionFinderFunnelData<ParamType>&>(data).sort();
-        auto const & events = data.event_lists;
+        auto &data_origin = const_cast<AggregateFunctionFinderFunnelData<ParamType>&>(data);
+        data_origin.sort();
+        auto & events = data_origin.event_lists;
         size_t num_events = events.size();
 
         if (num_events == 0) return;
@@ -65,27 +67,56 @@ private:
         [[maybe_unused]] ssize_t truncate_index = -1;
 
         size_t i = 0;
-        std::vector<std::vector<size_t>> funnel_index;
-        std::vector<size_t> s1, s2;
-        funnel_index.reserve(2);
-        s1.reserve(m_num_events);
-        s2.reserve(m_num_events);
+        std::vector<size_t> funnel_index;
 
-        funnel_index.emplace_back(s1);
-        funnel_index.emplace_back(s2);
-        std::vector<size_t> current_window_funnel;
+        auto countFunnel = [&](std::vector<size_t> &current_window_funnel, UInt32 slot_idx)
+        {
+            auto funnel  = current_window_funnel.size();
+            if (funnel > 0)
+            {
+                // first the total count
+                for (size_t e = 0; e < m_num_events; e++)
+                    levels[e] += (funnel > e);
+
+                // the slot count
+                size_t output_offset = (slot_idx + 1) * m_num_events;
+                for (size_t e = 0; e < m_num_events; e++)
+                    levels[output_offset + e] += (funnel > e);
+
+                if constexpr (with_time)
+                {
+                    if (target_step == 0 && funnel == m_num_events)
+                    {
+                        UInt64 interval = 0;
+                        for (size_t ii = 0; ii < funnel - 1; ii++)
+                            interval += events[current_window_funnel[ii+1]].ctime - events[current_window_funnel[ii]].ctime;
+
+                        intervals[slot_idx + 1].push_back(interval);
+                    }
+
+                    if (target_step > 0 && funnel > target_step)
+                    {
+                        UInt64 interval = events[current_window_funnel[target_step]].ctime - events[current_window_funnel[target_step-1]].ctime;
+                        intervals[slot_idx + 1].push_back(interval);
+                    }
+                }
+
+                for (const auto index : current_window_funnel)
+                    events[index].event = 0;
+
+                current_window_funnel.resize(0);
+            }
+        };
 
         while (true)
         {
-            size_t next_seq = 0;
             UInt32 slot_begin = 0, slot_end = 0, slot_idx = 0; // count base by slot
             UInt64 window_start = 0;
             UInt64 window_end = 0;
             int last_start = -1; // for slot smaller than window, need recheck within window start event
             // attribute related
-            [[maybe_unused]] ParamType attr_check[2] = {};
-            [[maybe_unused]] bool      attr_set[2] = {false, false};
-            UInt64 start_window[2] = {0ULL,0ULL};
+            [[maybe_unused]] ParamType attr_check = {};
+            [[maybe_unused]] bool      attr_set = {false};
 
             if (i < num_events)
                 slot_idx = events[i].stime / m_watch_step;
@@ -95,10 +126,6 @@ private:
                 if (unlikely(i == num_events)) // finish loop
                 {
                     if (last_start == -1) ++i; // no start event in new slot
-                    size_t max_arr = funnel_index[1].size() < funnel_index[0].size() ? 0 : 1;
-                    if (current_window_funnel.size() < funnel_index[max_arr].size())
-                        current_window_funnel.swap(funnel_index[max_arr]);
-
                     break;
                 }
 
@@ -106,71 +133,22 @@ private:
                 auto ctime = events[i].ctime;
                 auto event = events[i].event;
 
-                // found best funnel
-                if (funnel_index[next_seq].size() == m_num_events)
-                {
-                    current_window_funnel.swap(funnel_index[next_seq]);
+                // found best funnel, stop and count
+                if (funnel_index.size() == m_num_events)
                     break;
-                }
 
                 // check valid window
                 if (window_start && (ctime > window_end))
                 {
                     // 1. record the current max funnel
-                    size_t max_arr = funnel_index[1].size() < funnel_index[0].size() ? 0 : 1;
-                    if (current_window_funnel.size() < funnel_index[max_arr].size())
-                        current_window_funnel = funnel_index[max_arr]; // need copy here
-
-                    // find the longest funnel in the slot
-                    if (current_window_funnel.size() == m_num_events)
-                        break;
-
-                    // 2. drop the outside window seq
-                    size_t drop = start_window[0] > start_window[1] ? 1 : 0;
-
-                    // still in the same slot goto next
-                    size_t op = !drop;
-                    bool has_second_chance = false;
-                    if (start_window[op])
+                    countFunnel(funnel_index, slot_idx);
+                    if ((stime >= slot_begin && stime < slot_end))
                     {
-                        slot_begin = slot_idx * m_watch_step;
-                        if (is_relative_window)
-                        {
-                            funnel_window = setValidWindow(start_window[op], date_lut);
-                            slot_end = slot_begin + funnel_window/1000 + 1; // exclusive
-                        }
-                        else
-                            slot_end = slot_begin + m_watch_step; // exclusive
-
-                        has_second_chance = (ctime <= (start_window[op] + funnel_window));
-                    }
-
-                    if ((stime >= slot_begin && stime < slot_end) || has_second_chance)
-                    {
-                        funnel_index[drop].resize(0);
                         window_start = 0; // new window
-
-                        // fix
-                        if (has_second_chance)
-                        {
-                            window_start = start_window[op];
-                            window_end   = window_start + funnel_window;
-                            next_seq = op;
-                        }
-                        else
-                        {
-                            funnel_index[op].resize(0);
-                            if constexpr (with_attr)
-                            {
-                                attr_check[op] = {};
-                                attr_set[op] = false;
-                            }
-                        }
-
                         if constexpr (with_attr)
                         {
-                            attr_check[drop] = {};
-                            attr_set[drop] = false;
+                            attr_check = {};
+                            attr_set = false;
                         }
                     }
                     else
@@ -200,40 +178,48 @@ private:
                     }
 
                     // the start event must be in the same slot
-                    if ((stime / m_watch_step) == slot_idx || (event > 1 && !funnel_index[next_seq].empty()))
+                    if ((stime / m_watch_step) == slot_idx || (event > 1 && !funnel_index.empty()))
                     {
+                        if (event == 1 && !funnel_index.empty())
+                        {
+                            // new start A event
+                            if (last_start == -1) last_start = i;
+                            ++i;
+                            continue;
+                        }
+
                         //funnel for same event
-                        if (event > 1 && !funnel_index[next_seq].empty() && isNextLevel(event, funnel_index[next_seq].size()))
+                        if (event > 1 && !funnel_index.empty() && isNextLevel(event, funnel_index.size()))
                         {
                             bool is_legal = true;
                             if constexpr (with_attr)
                             {
                                 if (event & attr_related)
                                 {
-                                    if (attr_set[next_seq])
+                                    if (attr_set)
                                     {
-                                        if (attr_check[next_seq] != events[i].param) // attr not match
+                                        if (attr_check != events[i].param) // attr not match
                                             is_legal = false;
                                     }
                                     else
                                     {
-                                        attr_check[next_seq] = events[i].param;
-                                        attr_set[next_seq] = true;
+                                        attr_check = events[i].param;
+                                        attr_set = true;
                                     }
                                 }
                             }
 
                             if (is_legal)
                             {
-                                if (funnel_index[next_seq].size() == 1)
+                                if (funnel_index.size() == 1)
                                     if (last_start == -1) last_start = i;
 
-                                funnel_index[next_seq].push_back(i);
+                                funnel_index.push_back(i);
                             }
                             ++i;
                             continue;
                         }
-                        else if (event > 1 && !funnel_index[next_seq].empty())
+                        else if (event > 1 && !funnel_index.empty())
                         {
                             // for A->A->A ..., only use one seq
                             ++i;
@@ -242,7 +228,7 @@ private:
 
                         if constexpr (with_attr)
                         {
-                            if (!funnel_index[0].empty() && !funnel_index[1].empty())
+                            if (!funnel_index.empty())
                             {
                                 // may have different attr from start event
                                 if (last_start == -1) last_start = i;
@@ -251,69 +237,27 @@ private:
                             }
                         }
 
-                        next_seq = funnel_index[0].size() > funnel_index[1].size() ? 1 : 0;
-                        bool need_update_window = false;
-                        if (funnel_index[next_seq].size() > 1)
+                        funnel_index.push_back(i);
+                        window_start = ctime;
+
+                        slot_begin = slot_idx * m_watch_step;
+
+                        if (is_relative_window)
                         {
-                            if (funnel_index[0].size() != funnel_index[1].size())
-                            {
-                                if (last_start == -1) last_start = i;
-                                ++i;
-                                continue;
-                            }
-                            else
-                            {
-                                next_seq = start_window[0] > start_window[1] ? 1 : 0;
-                                need_update_window = true;
-                            }
+                            funnel_window = setValidWindow(window_start, date_lut);
+                            slot_end = slot_begin + funnel_window/1000 + 1; // exclusive
                         }
-                        else if (funnel_index[next_seq].size() == 1 && funnel_index[!next_seq].size() == 1)
-                        {
-                            next_seq = start_window[0] > start_window[1] ? 1 : 0; // new start replace the old one
-                            need_update_window = true;
-                        }
+                        else
+                            slot_end = slot_begin + m_watch_step; // exclusive
 
-                        funnel_index[next_seq].resize(0);
-                        funnel_index[next_seq].push_back(i);
-                        start_window[next_seq] = ctime;
-
-                        if (window_start == 0 || need_update_window)
-                        {
-                            window_start = start_window[!next_seq] ? start_window[!next_seq] : ctime;
-                            slot_begin = slot_idx * m_watch_step;
-
-                            if (is_relative_window)
-                            {
-                                funnel_window = setValidWindow(window_start, date_lut);
-                                slot_end = slot_begin + funnel_window/1000 + 1; // exclusive
-                            }
-                            else
-                                slot_end = slot_begin + m_watch_step; // exclusive
-
-                            window_end = window_start + funnel_window;
-                        }
-                        else if (window_start != start_window[0] && window_start != start_window[1])
-                        {
-                            window_start = start_window[0] >  start_window[1] ? start_window[1] : start_window[0];
-                            slot_begin = slot_idx * m_watch_step;
-
-                            if (is_relative_window)
-                            {
-                                funnel_window = setValidWindow(window_start, date_lut);
-                                slot_end = slot_begin + funnel_window/1000 + 1; // exclusive
-                            }
-                            else
-                                slot_end = slot_begin + m_watch_step; // exclusive
-
-                            window_end = window_start + funnel_window;
-                        }
+                        window_end = window_start + funnel_window;
 
                         if constexpr (with_attr)
                         {
                             if (event & attr_related)
                             {
-                                attr_check[next_seq] = events[i].param;
-                                attr_set[next_seq] = true;
+                                attr_check = events[i].param;
+                                attr_set = true;
                             }
                         }
                     }
@@ -323,133 +267,46 @@ private:
                             last_start = i;
                     }
                 }
-                else if (isNextLevel(event, funnel_index[next_seq].size()))
+                else if (isNextLevel(event, funnel_index.size()))
                 {
                     if constexpr (with_attr)
                     {
                         if (event & attr_related)
                         {
-                            if (attr_set[next_seq])
+                            if (attr_set)
                             {
-                                if (attr_check[next_seq] != events[i].param) // attr not match
+                                if (attr_check != events[i].param) // attr not match
                                 {
-                                    // check the other seq with attr
-                                    if (isNextLevel(event, funnel_index[!next_seq].size()))
-                                    {
-                                        if (attr_set[!next_seq] && attr_check[!next_seq] == events[i].param)
-                                            funnel_index[!next_seq].push_back(i);
-                                    }
                                     ++i;
                                     continue;
                                 }
                             }
                             else
                             {
-                                attr_check[next_seq] = events[i].param;
-                                attr_set[next_seq] = true;
+                                attr_check = events[i].param;
+                                attr_set = true;
                             }
                         }
                     }
 
-                    funnel_index[next_seq].push_back(i);
-                    // same middle event : ((flag_event & 1) == 0) && (flag_event & (flag_event - 1))
-                    if ((event & (event - 1)) && isNextLevel(event, funnel_index[!next_seq].size()))
-                    {
-                        // this event can be reuse in the other seq
-                        if constexpr (with_attr)
-                        {
-                            if (event & attr_related)
-                            {
-                                if (attr_set[!next_seq])
-                                {
-                                    if (attr_check[!next_seq] != events[i].param) // attr not match
-                                    {
-                                        ++i;
-                                        continue;
-                                    }
-                                }
-                                else
-                                {
-                                    attr_check[!next_seq] = events[i].param;
-                                    attr_set[!next_seq] = true;
-                                }
-                            }
-                        }
-
-                        funnel_index[!next_seq].push_back(i);
-                    }
+                    funnel_index.push_back(i);
                 }
-                else if (isNextLevel(event, funnel_index[!next_seq].size()))
+                else
                 {
-                    if constexpr (with_attr)
-                    {
-                        if (event & attr_related)
-                        {
-                            if (attr_set[!next_seq])
-                            {
-                                if (attr_check[!next_seq] != events[i].param) // attr not match
-                                {
-                                    ++i;
-                                    continue;
-                                }
-                            }
-                            else
-                            {
-                                attr_check[!next_seq] = events[i].param;
-                                attr_set[!next_seq] = true;
-                            }
-                        }
-                    }
-
-                    funnel_index[!next_seq].push_back(i);
                 }
 
                 ++i;
             }
 
-            // one slot end, count funnel
-            auto funnel  = current_window_funnel.size();
-            if (funnel > 0)
-            {
-                levels[0] = std::max<UInt64>(levels[0], funnel);
-                // # per day funnel level
-                if (levels[slot_idx + 1] < funnel)
-                {
-                    levels[slot_idx + 1] = funnel;
-                    if constexpr (with_time)
-                    {
-                        // time interval
-                        Times cur_times;
-                        for (const auto & index : current_window_funnel)
-                        {
-                            cur_times.push_back(events[index].ctime);
-                        }
-                        intervals[slot_idx + 1] = std::move(cur_times);
-                    }
-                }
-                // levels[slot_idx + 1] = std::max<UInt64>(levels[slot_idx + 1], funnel);
-            }
-
-            // skip to next slot index
-            if (!is_relative_window && last_start == -1)
-            {
-                while (i < num_events)
-                {
-                    if ((events[i].stime / m_watch_step) <= slot_idx)
-                        ++i;
-                    else
-                        break;
-                }
-            }
+            // count funnel
+            countFunnel(funnel_index, slot_idx);
 
             // start new round
             i = last_start != -1 ? last_start : i;
             if (i >= num_events)
                 break;
 
-            funnel_index[0].resize(0);
-            funnel_index[1].resize(0);
-            current_window_funnel.resize(0);
+            funnel_index.resize(0);
         }
 
         if constexpr (is_step)
@@ -461,15 +318,15 @@ private:
 
 public:
 
-    AggregateFunctionFinderFunnel(UInt64 window, UInt64 watchStart, UInt64 watchStep,
-                                  UInt64 watchNumbers, UInt64 window_type, String time_zone_,
-                                  UInt64 numVirts, UInt32 attr_related_, bool time_interval_,
-                                  const DataTypes & arguments, const Array & params) :
+    AggregateFunctionFinderFunnelByTimes(UInt64 window, UInt64 watch_start, UInt64 watch_step,
+                                         UInt64 watch_numbers, UInt64 window_type, String time_zone_,
+                                         UInt64 numVirts, UInt32 attr_related_, bool time_interval_, UInt32 target_step_,
+                                         const DataTypes & arguments, const Array & params) :
         IAggregateFunctionDataHelper<AggregateFunctionFinderFunnelData<ParamType>,
-                                     AggregateFunctionFinderFunnel<ParamType> >(arguments, params),
-        m_watch_start(watchStart), m_watch_step(watchStep), m_watch_numbers(watchNumbers),
+                                     AggregateFunctionFinderFunnelByTimes<ParamType> >(arguments, params),
+        m_watch_start(watch_start), m_watch_step(watch_step), m_watch_numbers(watch_numbers),
         m_window(window), m_window_type(window_type), time_zone(time_zone_), m_num_events(numVirts),
-        date_lut(DateLUT::instance(time_zone_)), attr_related(attr_related_), time_interval(time_interval_)
+        date_lut(DateLUT::instance(time_zone_)), attr_related(attr_related_), time_interval(time_interval_), target_step(target_step_)
     {
         related_num = attr_related ? __builtin_popcount(attr_related) + 2 : 2;
     }
@@ -508,7 +365,9 @@ public:
 
         // Ignore those columns which start earlier than watch point
         if (unlikely(s_time < m_watch_start))
+        {
             return;
+        }
 
         UInt32 stime = static_cast<UInt32>(s_time - m_watch_start);
 
@@ -558,17 +417,13 @@ public:
     void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool, Arena * arena) const override
     {
         is_step = true;
-        if (this->data(place).levels.size() != (m_watch_numbers + 1))
-        {
-            this->data(place).levels.resize_fill(m_watch_numbers + 1, 0, arena);
-        }
+        if (this->data(place).levels.size() != (m_watch_numbers + 1) * m_num_events)
+            this->data(place).levels.resize_fill((m_watch_numbers + 1) * m_num_events, 0, arena);
 
         if (time_interval)
         {
             if (this->data(place).intervals.size() != (m_watch_numbers + 1))
-            {
                 this->data(place).intervals.resize(m_watch_numbers + 1);
-            }
 
             if (attr_related > 0)
                 calculateFunnel<true, true, true>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
@@ -589,23 +444,19 @@ public:
         ColumnArray& levels_to = static_cast<ColumnArray &>(tuple_to.getColumn(0));
         ColumnArray::Offsets& levels_to_offset = levels_to.getOffsets();
         size_t prev_offset = (levels_to_offset.empty() ? 0 : levels_to_offset.back());
-        levels_to_offset.push_back(prev_offset + m_watch_numbers + 1);
+        levels_to_offset.push_back(prev_offset + (m_watch_numbers  + 1) * m_num_events);
 
         auto& data_to = static_cast<ColumnVector<LEVELType> &>(levels_to.getData()).getData();
-        data_to.insert_nzero(m_watch_numbers + 1);
+        data_to.insert_nzero((m_watch_numbers  + 1) * m_num_events);
         LEVELType* levels = &(data_to[prev_offset]);
         ColumnArray& intervals_to = static_cast<ColumnArray &>(tuple_to.getColumn(1));
 
         if (is_step)
         {
             const LEVELs & data_levels = this->data(place).levels;
-            auto min_size = std::min<size_t>(data_levels.size(), (m_watch_numbers  + 1));
+            auto min_size = std::min<size_t>(data_levels.size(), (m_watch_numbers  + 1) * m_num_events);
             std::memcpy(levels, data_levels.data(), min_size * sizeof(LEVELType));
-
             auto & data_intervals = const_cast<std::vector<Times> &>(this->data(place).intervals);
-            for (Times& times : data_intervals)
-                adjacent_difference(times.begin(), times.end(), times.begin());
-
             insertNestedVectorNumberIntoColumn(intervals_to, data_intervals);
         }
         else
@@ -617,9 +468,6 @@ public:
                 calculateFunnel<false, true, true>(this->data(place), levels, intervals);
             else
                 calculateFunnel<false, true, false>(this->data(place), levels, intervals);
-
-            for (Times& times : intervals)
-                adjacent_difference(times.begin(), times.end(), times.begin());
 
             insertNestedVectorNumberIntoColumn(intervals_to, intervals);
         }
@@ -637,16 +485,16 @@ public:
             ColumnArray & arr_to = static_cast<ColumnArray &>(to);
             ColumnArray::Offsets& offsets_to = arr_to.getOffsets();
             size_t prev_offset = (offsets_to.empty() ? 0 : offsets_to.back());
-            offsets_to.push_back(prev_offset + m_watch_numbers + 1);
+            offsets_to.push_back(prev_offset + (m_watch_numbers  + 1) * m_num_events);
 
             typename ColumnVector<LEVELType>::Container& data_to = static_cast<ColumnVector<LEVELType> &>(arr_to.getData()).getData();
-            data_to.insert_nzero(m_watch_numbers + 1);
+            data_to.insert_nzero((m_watch_numbers  + 1) * m_num_events);
             LEVELType* levels = &(data_to[prev_offset]);
 
             if (is_step)
             {
                 const LEVELs & data_levels = this->data(place).levels;
-                auto min_size = std::min<size_t>(data_levels.size(), (m_watch_numbers  + 1));
+                auto min_size = std::min<size_t>(data_levels.size(), (m_watch_numbers  + 1) * m_num_events);
                 std::memcpy(levels, data_levels.data(), min_size * sizeof(LEVELType));
             }
             else
@@ -662,14 +510,11 @@ public:
 
     static void addFree(const IAggregateFunction * that, AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena * arena)
     {
-        static_cast<const AggregateFunctionFinderFunnel<ParamType> &>(*that).add(place, columns, row_num, arena);
+        static_cast<const AggregateFunctionFinderFunnelByTimes<ParamType> &>(*that).add(place, columns, row_num, arena);
     }
 
     IAggregateFunction::AddFunc getAddressOfAddFunction() const override final { return &addFree; }
 
-    bool allocatesMemoryInArena() const override
-    {
-        return true;
-    }
+    bool allocatesMemoryInArena() const override { return true; }
 };
 }

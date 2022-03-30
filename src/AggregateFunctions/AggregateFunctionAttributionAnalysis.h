@@ -45,6 +45,42 @@ struct AttrAnalysisEvent
     AttrAnalysisEvent() = default;
     AttrAnalysisEvent(UInt64 event_time_, String event_name_, String event_type_, UInt64 type_index_, String event_attribution_value_string_, Float64 event_attribution_value_float_) : event_time(event_time_), event_name(event_name_), event_type(event_type_), type_index(type_index_), event_attribution_value_string(event_attribution_value_string_), event_attribution_value_float(event_attribution_value_float_) {}
     AttrAnalysisEvent(UInt64 event_time_, String event_name_, String event_type_, UInt64 type_index_, String event_attribution_value_string_, Float64 event_attribution_value_float_, std::vector<Field> relation_attr_) : event_time(event_time_), event_name(event_name_), event_type(event_type_), type_index(type_index_), event_attribution_value_string(event_attribution_value_string_), event_attribution_value_float(event_attribution_value_float_), relation_attr(relation_attr_) {}
+
+    void eventSerialize(WriteBuffer & buf) const
+    {
+        writeBinary(event_time, buf);
+        writeBinary(event_name, buf);
+        writeBinary(event_type, buf);
+        writeBinary(type_index, buf);
+        writeBinary(event_attribution_value_string, buf);
+        writeBinary(event_attribution_value_float, buf);
+
+        writeBinary(relation_attr.size(), buf);
+        for (const auto & attr : relation_attr)
+            writeFieldBinary(attr, buf);
+    }
+
+    void eventDeserialize(ReadBuffer & buf)
+    {
+        readBinary(event_time, buf);
+        readBinary(event_name, buf);
+        readBinary(event_type, buf);
+        readBinary(type_index, buf);
+        readBinary(event_attribution_value_string, buf);
+        readBinary(event_attribution_value_float, buf);
+
+        size_t size;
+        readBinary(size, buf);
+        relation_attr.clear();
+        relation_attr.reserve(size);
+        for (size_t i = 0; i < size; i++)
+        {
+            Field attr;
+            readFieldBinary(attr, buf);
+            relation_attr.emplace_back(attr);
+        }
+    }
+
 };
 
 using Events = std::vector<AttrAnalysisEvent>;
@@ -94,12 +130,7 @@ struct AggregateFunctionAttributionAnalysisData
         writeBinary(events.size(), buf);
         for (const auto & event : events)
         {
-            writeBinary(event.event_time, buf);
-            writeBinary(event.event_name, buf);
-            writeBinary(event.event_type, buf);
-            writeBinary(event.event_attribution_value_string, buf);
-            writeBinary(event.event_attribution_value_float, buf);
-            writePODBinary(event.relation_attr, buf);
+            event.eventSerialize(buf);
         }
     }
 
@@ -115,12 +146,7 @@ struct AggregateFunctionAttributionAnalysisData
 
         for (size_t i = 0; i < size; ++i)
         {
-            readBinary(event.event_time, buf);
-            readBinary(event.event_name, buf);
-            readBinary(event.event_type, buf);
-            readBinary(event.event_attribution_value_string, buf);
-            readBinary(event.event_attribution_value_float, buf);
-            readPODBinary(event.relation_attr, buf);
+            event.eventDeserialize(buf);
             events.insert(lower_bound(events.begin(), events.end(), event), event);
         }
     }

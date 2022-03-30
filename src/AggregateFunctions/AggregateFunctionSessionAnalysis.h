@@ -428,7 +428,7 @@ public:
 
     bool allocatesMemoryInArena() const override { return true; }
 
-//    bool handleNullItSelf() override { return true; }
+    bool handleNullItSelf() const override { return true; }
 
 };
 

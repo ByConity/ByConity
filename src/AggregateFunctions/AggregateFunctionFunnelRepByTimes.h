@@ -20,18 +20,18 @@ namespace DB
 
 /// Convert funnel output to TEA's format, it's aggregation semantics
 template<typename T>
-class AggregateFunctionFunnelRep final : public IAggregateFunctionDataHelper<AggregateFunctionFunnelRepData, AggregateFunctionFunnelRep<T>>
+class AggregateFunctionFunnelRepByTimes final : public IAggregateFunctionDataHelper<AggregateFunctionFunnelRepData, AggregateFunctionFunnelRepByTimes<T>>
 {
-    UInt32 m_watch_numbers;
-    UInt32 m_event_numbers;
-    UInt32 m_total_size;
+    size_t m_watch_numbers;
+    size_t m_event_numbers;
+    size_t m_total_size;
 public:
-    AggregateFunctionFunnelRep(UInt64 watchNumbers, UInt64 eventNumbers,
+    AggregateFunctionFunnelRepByTimes(UInt64 watch_numbers, UInt64 event_numbers,
                                const DataTypes & arguments, const Array & params)
-        : IAggregateFunctionDataHelper<AggregateFunctionFunnelRepData, AggregateFunctionFunnelRep<T>>(arguments, params),
-          m_watch_numbers(watchNumbers), m_event_numbers(eventNumbers), m_total_size(eventNumbers * (watchNumbers + 1)){}
+        : IAggregateFunctionDataHelper<AggregateFunctionFunnelRepData, AggregateFunctionFunnelRepByTimes<T>>(arguments, params),
+          m_watch_numbers(watch_numbers), m_event_numbers(event_numbers), m_total_size(event_numbers * (watch_numbers + 1)){}
 
-    String getName() const override { return "funnelRep"; }
+    String getName() const override { return "funnelRepByTimes"; }
 
     void create(const AggregateDataPtr place) const override
     {
@@ -46,35 +46,23 @@ public:
 
     DataTypePtr getReturnType() const override
     {
-        return std::make_shared<DataTypeArray>(
-                 std::make_shared<DataTypeArray>(
-                    std::make_shared<DataTypeNumber<REPType>>()));
+        return std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeNumber<REPType>>()));
     }
 
     void add(AggregateDataPtr place, const IColumn** columns, size_t row_num, Arena * arena __attribute__((unused))) const override
     {
-          const ColumnArray &array_column = static_cast<const ColumnArray &>(*columns[0]);
-          const IColumn::Offsets & offsets = array_column.getOffsets();
-          auto & input_container = static_cast<const ColumnVector<T> &>(array_column.getData()).getData();
-          const size_t input_vec_offset = (row_num == 0 ? 0 : offsets[row_num - 1]);
-          const size_t input_vec_size = (offsets[row_num] - input_vec_offset);
-          // Calculate TEA Count Ouput. e.g. [3, 2, 1, 0, 2], [3, 2, 1, 0, 1]
-          // will be converted to:
-          // [[2,2,2], [2,2,0], [2,0,0], [0,0,0], [2,1,0]]
-          // Rule: Given input[watchIndex], output[watchIndex] is an array:
-          // for (auto i : range(m_eventNumbers))
-          // output[watchIndex][i] += input[watchIndex] > i ? 1 : 0;
+        const ColumnArray &array_column = static_cast<const ColumnArray &>(*columns[0]);
+        const IColumn::Offsets & offsets = array_column.getOffsets();
+        auto & input_container = static_cast<const ColumnVector<T> &>(array_column.getData()).getData();
+        const size_t input_vec_offset = (row_num == 0 ? 0 : offsets[row_num - 1]);
+        const size_t input_vec_size = (offsets[row_num] - input_vec_offset);
+        size_t size = std::min<size_t>(input_vec_size, m_total_size); // input_vec_size should same as m_total_size
 
-          size_t max_level{};
-          size_t output_offset{};
-
-          for (size_t i = 0; i < input_vec_size; output_offset += m_event_numbers, i++)
-          {
-              max_level = size_t(input_container[input_vec_offset + i]);
-
-              for (size_t e = 0; e < m_event_numbers; e++)
-                  this->data(place).value[output_offset + e] += (max_level > e);
-          }
+        for (size_t i = 0; i < size;  i++)
+        {
+            size_t count = input_container[input_vec_offset + i];
+            this->data(place).value[i] += count;
+        }
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena * arena __attribute__((unused))) const override
@@ -82,7 +70,9 @@ public:
         auto& cur_elems = this->data(place).value;
         auto& rhs_elems = this->data(rhs).value;
         for(size_t i = 0; i < m_total_size; i++)
+        {
             cur_elems[i] += rhs_elems[i];
+        }
     }
 
     void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
@@ -123,7 +113,6 @@ public:
     {
         return true;
     }
-
 };
 
 }
