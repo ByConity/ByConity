@@ -240,6 +240,7 @@ namespace Protocol
         constexpr UInt64 CheckPartsExist = 2016;
         constexpr UInt64 GetLSNStatus = 2017;
         constexpr UInt64 FindActiveContainingPart = 2018;
+        constexpr UInt64 DependedNumLog = 2019;
 
         constexpr UInt64 PutOffsetLog = 2020;
 
@@ -269,6 +270,7 @@ namespace Protocol
                 CASE_RETURN(CheckPartsExist)
                 CASE_RETURN(GetLSNStatus)
                 CASE_RETURN(PutOffsetLog)
+                CASE_RETURN(DependedNumLog)
                 default: return "Unknown packet";
             }
         }

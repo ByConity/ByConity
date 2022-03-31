@@ -103,6 +103,7 @@ public:
     std::vector<HaMergeTreeLogEntryPtr> fetchLogEntries(const std::vector<UInt64> & lsns, bool & all_success);
 
     std::vector<std::pair<String, Int64>> getDelays();
+    std::vector<std::pair<String, Int64>> getDependedNumLogs(String target_replica);
     std::vector<std::pair<String, UInt64>> checkPartExist(const String & part_name);
 
     struct ReplicaWithPartAndPayload

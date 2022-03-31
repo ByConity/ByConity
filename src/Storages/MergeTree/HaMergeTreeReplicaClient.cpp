@@ -67,6 +67,21 @@ Int64 HaMergeTreeReplicaClient::getDelay()
     return delay;
 }
 
+Int64 HaMergeTreeReplicaClient::getDependedNumLog(String target_replica)
+{
+    TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
+
+    writeVarUInt(Protocol::HaClient::DependedNumLog, *out);
+    writeStringBinary(target_replica, *out);
+    out->next();
+
+    receivePacketTypeOrThrow(Protocol::HaServer::Data);
+
+    Int64 depended_num_log {0};
+    readVarUInt(depended_num_log, *in);
+    return depended_num_log;
+}
+
 bool HaMergeTreeReplicaClient::checkPartExist(const String & name, UInt64 & remote_num_send)
 {
     TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);
