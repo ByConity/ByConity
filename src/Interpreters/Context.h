@@ -180,6 +180,26 @@ private:
     std::unique_ptr<ContextSharedPart> shared;
 };
 
+template<class T>
+class CopyableAtomic : public std::atomic<T>
+{
+public:
+    CopyableAtomic() = default;
+
+    constexpr CopyableAtomic(T desired) :
+        std::atomic<T>(desired)
+    {}
+
+    constexpr CopyableAtomic(const CopyableAtomic<T>& other) :
+        CopyableAtomic(other.load(std::memory_order_acquire))
+    {}
+
+    CopyableAtomic& operator=(const CopyableAtomic<T>& other) {
+        this->store(other.load(std::memory_order_acquire), std::memory_order_relaxed);
+        return *this;
+    }
+};
+
 /** A set of known objects that can be used in the query.
   * Consists of a shared part (always common to all sessions and queries)
   *  and copied part (which can be its own for each session or query).
@@ -202,7 +222,7 @@ private:
     bool use_default_roles = false;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
-    InternalResourceGroup* resourceGroup = nullptr; /// Current resource group.
+    CopyableAtomic<InternalResourceGroup*> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings;  /// Setting for query execution.
 

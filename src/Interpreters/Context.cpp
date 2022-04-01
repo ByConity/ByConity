@@ -911,17 +911,15 @@ ConfigurationPtr Context::getUsersConfig()
 
 void Context::setResourceGroup(const IAST *ast)
 {
-    auto lock = getLock();
-    if (shared->resource_group_manager.isInUse())
-        resourceGroup = shared->resource_group_manager.selectGroup(*this, ast);
+    if (auto lock = getLock(); shared->resource_group_manager.isInUse())
+        resource_group = shared->resource_group_manager.selectGroup(*this, ast);
     else
-        resourceGroup = nullptr;
+        resource_group = nullptr;
 }
 
 InternalResourceGroup* Context::getResourceGroup() const
 {
-    auto lock = getLock();
-    return resourceGroup;
+    return resource_group.load(std::memory_order_acquire);
 }
 
 ResourceGroupManager& Context::getResourceGroupManager() { return shared->resource_group_manager; }
