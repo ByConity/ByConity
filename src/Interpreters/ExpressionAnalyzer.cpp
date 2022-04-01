@@ -160,6 +160,12 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     /// the global subquery will be replaced with a temporary table, resulting in aggregate_descriptions
     /// will contain out-of-date information, which will lead to an error when the query is executed.
     analyzeAggregation();
+
+    /**
+     * check query that satisfing some preconditions
+     * 1. sample optimization is legal
+     **/
+    checkQuery();
 }
 
 
@@ -303,6 +309,73 @@ void ExpressionAnalyzer::analyzeAggregation()
     }
 }
 
+void ExpressionAnalyzer::checkQuery()
+{
+    const auto * select_query = query->as<ASTSelectQuery>();
+
+    if (!select_query)
+        return;
+    /// check whether to optimize sample
+    checkSampleOptimizeIsLegal();
+}
+
+void ExpressionAnalyzer::checkSampleOptimizeIsLegal()
+{
+    auto * select_query = query->as<ASTSelectQuery>();
+
+    if (!storage() || !select_query) return;
+
+    std::map<String, size_t> sampled_table;
+
+    checkSample(query, sampled_table);
+
+    for (const auto & item : sampled_table)
+    {
+        if (item.second > 1)
+        {
+            const Settings & settings = getContext()->getSettings();
+            const_cast<Settings &>(settings).enable_sample_by_range = false;
+            break;
+        }
+    }
+}
+
+void ExpressionAnalyzer::checkSample(ASTPtr & ast, std::map<String, size_t> & sampled_table)
+{
+    if (!ast)
+        return;
+
+    if (ASTSelectQuery * select = typeid_cast<ASTSelectQuery *>(ast.get()))
+    {
+        if (select->sampleSize())
+        {
+            auto db_and_table = getDatabaseAndTable(*select, 0);
+            if (!db_and_table.has_value())
+                return;
+            auto select_database = db_and_table->database;
+            auto select_table = db_and_table->table;
+            String db_and_table_key = "";
+
+            if (!select_table.empty())
+            {
+                String database = !select_database.empty() ? select_database : "default";
+                db_and_table_key = database + ":" + select_table;
+            }
+
+            if (!db_and_table_key.empty())
+            {
+                sampled_table[db_and_table_key] += 1;
+
+                // If offset is provided, disable sample optimization
+                if (select->sampleOffset())
+                    sampled_table[db_and_table_key] += 1;
+            }
+        }
+    }
+
+    for (auto & child : ast->children)
+        checkSample(child, sampled_table);
+}
 
 void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables(bool do_global)
 {

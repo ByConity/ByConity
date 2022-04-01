@@ -580,6 +580,11 @@ class IColumn;
     M(String, geoip_city_file, "GeoIP2-City", "GeoIP DB file for city", 0)\
     M(String, geoip_isp_file, "GeoIP2-ISP", "GeoIP DB file for ISP", 0)\
     M(String, geoip_asn_file, "GeoLite2-ASN", "GeoIP DB file for ASN", 0)\
+    \
+    /** Sample setttings */ \
+    M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
+    M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
+    M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */
 
 
