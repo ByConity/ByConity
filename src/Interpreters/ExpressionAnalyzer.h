@@ -169,6 +169,9 @@ protected:
     const std::vector<const ASTFunction *> & aggregates() const { return syntax->aggregates; }
     /// Find global subqueries in the GLOBAL IN/JOIN sections. Fills in external_tables.
     void initGlobalSubqueriesAndExternalTables(bool do_global);
+    void checkQuery();
+    void checkSampleOptimizeIsLegal();
+    void checkSample(ASTPtr & ast, std::map<String, size_t> & sampled_table);
 
     ArrayJoinActionPtr addMultipleArrayJoinAction(ActionsDAGPtr & actions, bool is_left) const;
 

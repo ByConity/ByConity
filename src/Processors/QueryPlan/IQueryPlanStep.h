@@ -109,6 +109,7 @@ public:
         M(SettingQuotaAndLimits) \
         M(TotalsHaving) \
         M(Union) \
+        M(FinalSample) \
         M(Window)
 
     #define ENUM_DEF(ITEM) ITEM,

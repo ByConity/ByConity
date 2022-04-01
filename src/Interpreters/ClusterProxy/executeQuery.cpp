@@ -6,6 +6,8 @@
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/OptimizeShardingKeyRewriteInVisitor.h>
+#include <Parsers/ASTSampleRatio.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Processors/Pipe.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
@@ -99,6 +101,28 @@ ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr c
     return new_context;
 }
 
+// For distributed query, rewrite sample ast by dividing sample_size.
+// We assume data is evenly distributed and it is reasonable to divided sample_size into several parts.
+ASTPtr rewriteSampleForDistributedTable(const ASTPtr & query_ast, size_t shard_size)
+{
+    ASTPtr rewrite_ast = query_ast->clone();
+    ASTSelectQuery * select = rewrite_ast->as<ASTSelectQuery>();
+    if (select && select->sampleSize())
+    {
+        ASTSampleRatio * sample = select->sampleSize()->as<ASTSampleRatio>();
+        if (!sample)
+            return rewrite_ast;
+
+        ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
+        ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
+        if (numerator <= 1 || denominator > 1)
+            return rewrite_ast;
+
+        sample->ratio.numerator = (sample->ratio.numerator + 1) / shard_size;
+    }
+    return rewrite_ast;
+}
+
 void executeQuery(
     QueryPlan & query_plan,
     IStreamFactory & stream_factory, Poco::Logger * log,
@@ -139,13 +163,18 @@ void executeQuery(
     else
         throttler = user_level_throttler;
 
+    ASTPtr rewrite_ast = query_ast;
     size_t shards = query_info.getCluster()->getShardCount();
+
+    if (!settings.enable_final_sample)
+        rewrite_ast = rewriteSampleForDistributedTable(query_ast, shards);
+
     for (const auto & shard_info : query_info.getCluster()->getShardsInfo())
     {
         ASTPtr query_ast_for_shard;
         if (query_info.optimized_cluster && settings.optimize_skip_unused_shards_rewrite_in && shards > 1)
         {
-            query_ast_for_shard = query_ast->clone();
+            query_ast_for_shard = rewrite_ast->clone();
 
             OptimizeShardingKeyRewriteInVisitor::Data visitor_data{
                 sharding_key_expr,
@@ -158,7 +187,7 @@ void executeQuery(
             visitor.visit(query_ast_for_shard);
         }
         else
-            query_ast_for_shard = query_ast;
+            query_ast_for_shard = rewrite_ast;
 
         stream_factory.createForShard(shard_info,
             query_ast_for_shard,

@@ -914,7 +914,10 @@ ReadFromMergeTree::AnalysisResult ReadFromMergeTree::selectRangesToRead(MergeTre
         log,
         requested_num_streams,
         result.index_stats,
-        true);
+        true,
+        result.sampling.use_sampling,
+        result.sampling.relative_sample_size);
+
 
     size_t sum_marks_pk = total_marks_pk;
     for (const auto & stat : result.index_stats)
@@ -974,7 +977,8 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
 
     Names column_names_to_read = std::move(result.column_names_to_read);
     const auto & select = query_info.query->as<ASTSelectQuery &>();
-    if (!select.final() && result.sampling.use_sampling)
+    if (!select.final() && result.sampling.use_sampling && !context->getSettingsRef().enable_sample_by_range
+        && !context->getSettingsRef().enable_deterministic_sample_by_range)
     {
         /// Add columns needed for `sample_by_ast` to `column_names_to_read`.
         /// Skip this if final was used, because such columns were already added from PK.
@@ -1041,7 +1045,7 @@ void ReadFromMergeTree::initializePipeline(QueryPipeline & pipeline, const Build
         return;
     }
 
-    if (result.sampling.use_sampling)
+    if (result.sampling.use_sampling && !settings.enable_sample_by_range && !settings.enable_deterministic_sample_by_range)
     {
         auto sampling_actions = std::make_shared<ExpressionActions>(result.sampling.filter_expression);
         pipe.addSimpleTransform([&](const Block & header)

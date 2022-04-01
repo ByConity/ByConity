@@ -101,9 +101,6 @@ size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
     return rows_count;
 }
 
-
-using RelativeSize = boost::rational<ASTSampleRatio::BigNum>;
-
 static std::string toString(const RelativeSize & x)
 {
     return ASTSampleRatio::toString(x.numerator()) + "/" + ASTSampleRatio::toString(x.denominator());
@@ -507,8 +504,10 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
 
     sampling.use_sampling = relative_sample_size > 0 || (settings.parallel_replicas_count > 1 && data.supportsSampling());
     bool no_data = false;   /// There is nothing left after sampling.
+    if (settings.enable_final_sample)
+        sampling.use_sampling = false;
 
-    if (sampling.use_sampling)
+    if (sampling.use_sampling && !settings.enable_sample_by_range && !settings.enable_deterministic_sample_by_range)
     {
         if (sample_factor_column_queried && relative_sample_size != RelativeSize(0))
             sampling.used_sample_factor = 1.0 / boost::rational_cast<Float64>(relative_sample_size);
@@ -579,7 +578,7 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
         {
             sampling.use_sampling = false;
         }
-        else
+        else if (!settings.enable_sample_by_range && !settings.enable_deterministic_sample_by_range)
         {
             /// Let's add the conditions to cut off something else when the index is scanned again and when the request is processed.
 
@@ -656,6 +655,7 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
         sampling.read_nothing = true;
     }
 
+    sampling.relative_sample_size = relative_sample_size;
     return sampling;
 }
 
@@ -789,7 +789,9 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     Poco::Logger * log,
     size_t num_streams,
     ReadFromMergeTree::IndexStats & index_stats,
-    bool use_skip_indexes)
+    bool use_skip_indexes,
+    bool use_sampling,
+    RelativeSize relative_sample_size)
 {
     RangesInDataParts parts_with_ranges(parts.size());
     const Settings & settings = context->getSettingsRef();
@@ -887,6 +889,12 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             if (!ranges.ranges.empty())
                 sum_parts_pk.fetch_add(1, std::memory_order_relaxed);
+
+            if (use_sampling && (settings.enable_sample_by_range || settings.enable_deterministic_sample_by_range))
+            {
+                MarkRanges sampled_ranges = sampleByRange(ranges.ranges, relative_sample_size, settings.enable_deterministic_sample_by_range);
+                ranges.ranges = std::move(sampled_ranges);
+            }
 
             for (auto & index_and_condition : useful_indices)
             {
@@ -1008,6 +1016,77 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     }
 
     return parts_with_ranges;
+}
+
+MarkRanges MergeTreeDataSelectExecutor::sampleByRange(const MarkRanges & ranges, const RelativeSize & relative_sample_size, bool deterministic)
+{
+    MarkRanges new_ranges;
+
+    for (const MarkRange & range : ranges)
+    {
+        // Compute sampled size
+        size_t marks_size = range.end - range.begin;
+        RelativeSize total_size = RelativeSize(marks_size);
+        UInt64 sampled_size = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * total_size + RelativeSize(1)));
+
+        // Slice the range via a computed step length
+        MarkRanges sliced_ranges = sliceRange(range, sampled_size);
+
+        RelativeSize sliced_ranges_size = RelativeSize(sliced_ranges.size());
+        UInt64 sampled_ranges_size
+            = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * sliced_ranges_size + RelativeSize(1)));
+
+        if (deterministic)
+        {
+            size_t sample_step = sliced_ranges.size() / sampled_ranges_size;
+            for (size_t i = 0; i < sliced_ranges.size(); i += sample_step)
+            {
+                new_ranges.push_back(sliced_ranges[i]);
+            }
+        }
+        else
+        {
+            // Sample sliced ranges
+            MarkRanges sampled_ranges;
+            std::sample(
+                sliced_ranges.begin(),
+                sliced_ranges.end(),
+                std::back_inserter(sampled_ranges),
+                sampled_ranges_size,
+                std::mt19937{std::random_device{}()});
+            std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
+                return lhs.begin < rhs.begin;
+            });
+            // Construct new ranges
+            for (const MarkRange & sampled_range : sampled_ranges)
+            {
+                new_ranges.push_back(sampled_range);
+            }
+        }
+    }
+
+    return new_ranges;
+}
+
+MarkRanges MergeTreeDataSelectExecutor::sliceRange(const MarkRange & range, const UInt64 & sample_size)
+{
+    // Get sample step
+    size_t step = std::sqrt(sample_size);
+
+    MarkRanges ret_ranges;
+    size_t begin = range.begin;
+    size_t end = range.end;
+
+    // Slice range
+    while (begin < end)
+    {
+        size_t step_end = (begin + step < end) ? begin + step : end;
+        MarkRange step_range(begin, step_end);
+        ret_ranges.push_back(step_range);
+        begin = step_end;
+    }
+
+    return ret_ranges;
 }
 
 std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
@@ -1194,7 +1273,9 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
         log,
         num_streams,
         index_stats,
-        false);
+        false,
+        sampling.use_sampling,
+        sampling.relative_sample_size);
 
     return index_stats.back().num_granules_after;
 }

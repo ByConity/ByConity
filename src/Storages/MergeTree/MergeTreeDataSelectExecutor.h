@@ -5,13 +5,17 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/PartitionPruner.h>
+#include <Parsers/ASTSampleRatio.h>
 #include <Processors/QueryPlan/ReadFromMergeTree.h>
-
+#include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 
 namespace DB
 {
 
 class KeyCondition;
+
+using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
+using RelativeSize = boost::rational<ASTSampleRatio::BigNum>;
 
 struct MergeTreeDataSelectSamplingData
 {
@@ -20,9 +24,8 @@ struct MergeTreeDataSelectSamplingData
     Float64 used_sample_factor = 1.0;
     std::shared_ptr<ASTFunction> filter_function;
     ActionsDAGPtr filter_expression;
+    RelativeSize relative_sample_size = 0;
 };
-
-using PartitionIdToMaxBlock = std::unordered_map<String, Int64>;
 
 /** Executes SELECT queries on data from the merge tree.
   */
@@ -185,7 +188,9 @@ public:
         Poco::Logger * log,
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
-        bool use_skip_indexes);
+        bool use_skip_indexes,
+        bool use_sampling,
+        RelativeSize relative_sample_size);
 
     /// Create expression for sampling.
     /// Also, calculate _sample_factor if needed.
@@ -200,6 +205,9 @@ public:
         ContextPtr context,
         bool sample_factor_column_queried,
         Poco::Logger * log);
+
+    static MarkRanges sampleByRange(const MarkRanges & ranges, const RelativeSize & relative_sample_size, bool deterministic);
+    static MarkRanges sliceRange(const MarkRange & range, const UInt64 & sample_size);
 
     /// Check query limits: max_partitions_to_read, max_concurrent_queries.
     /// Also, return QueryIdHolder. If not null, we should keep it until query finishes.

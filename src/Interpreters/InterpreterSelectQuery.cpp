@@ -7,6 +7,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTOrderByElement.h>
+#include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ExpressionListParsers.h>
@@ -49,6 +50,7 @@
 #include <Processors/QueryPlan/ExtremesStep.h>
 #include <Processors/QueryPlan/FillingStep.h>
 #include <Processors/QueryPlan/FilterStep.h>
+#include <Processors/QueryPlan/FinalSampleStep.h>
 #include <Processors/QueryPlan/FinishSortingStep.h>
 #include <Processors/QueryPlan/JoinStep.h>
 #include <Processors/QueryPlan/LimitByStep.h>
@@ -57,21 +59,21 @@
 #include <Processors/QueryPlan/MergingAggregatedStep.h>
 #include <Processors/QueryPlan/MergingSortedStep.h>
 #include <Processors/QueryPlan/OffsetStep.h>
+#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/QueryPlan/PartialSortingStep.h>
 #include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/QueryPlan/ReadNothingStep.h>
 #include <Processors/QueryPlan/RollupStep.h>
 #include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <Processors/QueryPlan/SubstitutionStep.h>
 #include <Processors/QueryPlan/TotalsHavingStep.h>
 #include <Processors/QueryPlan/WindowStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
-#include <Processors/QueryPlan/SubstitutionStep.h>
 
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/IStorage.h>
@@ -638,6 +640,23 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 
         auto converting = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), convert_actions_dag);
         query_plan.addStep(std::move(converting));
+    }
+
+    if (context->getSettingsRef().enable_final_sample)
+    {
+        auto & query = getSelectQuery();
+        if (query.sampleSize())
+        {
+            ASTSampleRatio * sample = query.sampleSize()->as<ASTSampleRatio>();
+            ASTSampleRatio::BigNum numerator = sample->ratio.numerator;
+            ASTSampleRatio::BigNum denominator = sample->ratio.denominator;
+            if (numerator <= 1 || denominator > 1)
+                return;
+
+            auto sampling
+                = std::make_unique<FinalSampleStep>(query_plan.getCurrentDataStream(), numerator, context->getSettingsRef().max_block_size);
+            query_plan.addStep(std::move(sampling));
+        }
     }
 }
 
