@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -252,6 +253,7 @@ private:
     static constexpr auto CanBeReinterpretedAsNumeric =
         IsDataTypeDecimalOrNumber<T> ||
         std::is_same_v<T, DataTypeDate> ||
+        std::is_same_v<T, DataTypeTime> ||
         std::is_same_v<T, DataTypeDateTime> ||
         std::is_same_v<T, DataTypeUUID>;
 
@@ -260,6 +262,7 @@ private:
         return type.isUInt() ||
             type.isInt() ||
             type.isDate() ||
+            type.isTime() ||
             type.isDateTime() ||
             type.isDateTime64() ||
             type.isFloat() ||

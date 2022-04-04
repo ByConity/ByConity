@@ -801,6 +801,31 @@ inline void writeDateTimeText(DateTime64 datetime64, UInt32 scale, WriteBuffer &
     }
 }
 
+/// In the format HH:MM:SS.NNNNNNNNN, according to SQL standard.
+template <char time_delimeter = ':', char fractional_time_delimiter = '.'>
+inline void writeTimeText(Decimal64 time, UInt32 scale, WriteBuffer & buf)
+{
+    static constexpr UInt32 MaxScale = DecimalUtils::max_precision<Decimal64>;
+    scale = scale > MaxScale ? MaxScale : scale;
+
+    auto components = DecimalUtils::split(time, scale);
+    memcpy(buf.position(), &digits100[(components.whole/3600) * 2], 2);
+    buf.position() += 2;
+    *buf.position() = time_delimeter;
+    ++buf.position();
+    memcpy(buf.position(), &digits100[((components.whole/60) % 60) * 2], 2);
+    buf.position() += 2;
+    *buf.position() = time_delimeter;
+    ++buf.position();
+    memcpy(buf.position(), &digits100[(components.whole % 60) * 2], 2);
+    buf.position() += 2;
+    if (scale > 0)
+    {
+        buf.write(fractional_time_delimiter);
+        writeDateTime64FractionalText<Decimal64>(components.fractional, scale, buf);
+    }
+}
+
 /// In the RFC 1123 format: "Tue, 03 Dec 2019 00:11:50 GMT". You must provide GMT DateLUT.
 /// This is needed for HTTP requests.
 inline void writeDateTimeTextRFC1123(time_t datetime, WriteBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())

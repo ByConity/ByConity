@@ -2,6 +2,7 @@
 #include <common/DateLUTImpl.h>
 
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 
@@ -12,6 +13,7 @@
 #include <Functions/castTypeToEither.h>
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/TransformDateTime64.h>
+#include <Functions/TransformTime.h>
 #include <Functions/FunctionsConversion.h>
 
 #include <IO/WriteHelpers.h>
@@ -36,7 +38,15 @@ namespace ErrorCodes
 /// Please note that INPUT and OUTPUT types may differ, e.g.:
 ///  - 'AddSecondsImpl::execute(UInt32, ...) -> UInt32' is available to the ClickHouse users as 'addSeconds(DateTime, ...) -> DateTime'
 ///  - 'AddSecondsImpl::execute(UInt16, ...) -> UInt32' is available to the ClickHouse users as 'addSeconds(Date, ...) -> DateTime'
-
+/// Manipulation of Time data type.
+///  - 'executeTime' function is used to define operation on Time data type.
+///  - In case of time data type, addition with delta < 0 can result in negative time.
+///  - We are taking mod by 86400 so, time value is always between -86399 and +86399 i.e. -23:59:59 to +23:59:59
+///  - When the result is negative, we add +86400 to make the time dimension positive.
+///  - For example, for time '05:05:00' - 06 hours should result in '23:05:00' of the previous day.
+///  - or, (5*3600 + 5*60) - 6*3600 = -3300 seconds i.e. -00:55 hours.
+///  - -3300 is not a valid time dimension as time can't be negative, so we add 86400 sec
+///  - to make it represent time of previous day i.e. 23:05:00
 struct AddSecondsImpl
 {
     static constexpr auto name = "addSeconds";
@@ -45,6 +55,16 @@ struct AddSecondsImpl
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
     {
         return {t.whole + delta, t.fractional};
+    }
+
+    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64 delta, const DateLUTImpl &)
+    {
+        Int64 x = (t.whole + delta) % 86400;
+        if (x < 0) {
+            x += 86400;
+        }
+        return {x,  t.fractional};
     }
 
     static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
@@ -68,6 +88,16 @@ struct AddMinutesImpl
         return {t.whole + delta * 60, t.fractional};
     }
 
+    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64 delta, const DateLUTImpl &)
+    {
+        Int64 x = (t.whole + delta * 60) % 86400;
+        if (x < 0) {
+            x += 86400;
+        }
+        return {x,  t.fractional};
+    }
+
     static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
     {
         return t + delta * 60;
@@ -88,6 +118,17 @@ struct AddHoursImpl
     {
         return {t.whole + delta * 3600, t.fractional};
     }
+
+    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64 delta, const DateLUTImpl &)
+    {
+        Int64 x = (t.whole + delta * 3600) % 86400;
+        if (x < 0) {
+            x += 86400;
+        }
+        return {x,  t.fractional};
+    }
+
     static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &)
     {
         return t + delta * 3600;
@@ -107,6 +148,12 @@ struct AddDaysImpl
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return {time_zone.addDays(t.whole, delta), t.fractional};
+    }
+
+    static inline DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64, const DateLUTImpl &)
+    {
+        return t;
     }
 
     static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
@@ -151,6 +198,12 @@ struct AddMonthsImpl
         return {time_zone.addMonths(t.whole, delta), t.fractional};
     }
 
+    static inline DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64, const DateLUTImpl &)
+    {
+        return t;
+    }
+
     static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return time_zone.addMonths(t, delta);
@@ -191,6 +244,12 @@ struct AddYearsImpl
     execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl & time_zone)
     {
         return {time_zone.addYears(t.whole, delta), t.fractional};
+    }
+
+    static inline DecimalUtils::DecimalComponents<Decimal64>
+    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64, const DateLUTImpl &)
+    {
+        return t;
     }
 
     static inline UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl & time_zone)
@@ -237,12 +296,25 @@ template <typename Transform>
 struct SubtractIntervalImpl : public Transform
 {
     using Transform::Transform;
-
     template <typename T>
     inline NO_SANITIZE_UNDEFINED auto execute(T t, Int64 delta, const DateLUTImpl & time_zone) const
     {
         /// Signed integer overflow is Ok.
         return Transform::execute(t, -delta, time_zone);
+    }
+
+    inline NO_SANITIZE_UNDEFINED auto executeTime(DecimalUtils::DecimalComponents<Decimal64> t,
+                                            Int64 delta, const DateLUTImpl & time_zone) const
+    {
+        if constexpr (HasExecuteTime<Transform, DecimalUtils::DecimalComponents<Decimal64>,
+                    Int64, DateLUTImpl>::value) {
+            return Transform::executeTime(t, -delta, time_zone);
+        } else {
+            throw Exception("Time type is not supported for function "
+                            + std::string(Transform::name),
+                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            return 0;
+        }
     }
 };
 
@@ -418,7 +490,9 @@ public:
 
         if (arguments.size() == 2)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type) && !isString(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isString(arguments[0].type)
+                && !isTime(arguments[0].type))
                 throw Exception{"Illegal type " + arguments[0].type->getName() + " of first argument of function " + getName() +
                     ". Should be a date or a date with time", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         }
@@ -447,6 +521,11 @@ public:
                 return resolveReturnType<DataTypeDateTime>(arguments);
             case TypeIndex::DateTime64:
                 return resolveReturnType<DataTypeDateTime64>(arguments);
+            case TypeIndex::Time:
+            {
+                const auto & t = assert_cast<const DataTypeTime &>(*arguments[0].type);
+                return std::make_shared<DataTypeTime>(t.getScale());
+            }
             default:
             {
                 throw Exception("Invalid type of 1st argument of function " + getName() + ": "
@@ -519,6 +598,13 @@ public:
         {
             return DateTimeAddIntervalImpl<DataTypeDateTime, TransformResultDataType<DataTypeDateTime>, Transform>::execute(
                 Transform{}, arguments, result_type);
+        }
+        else if (which.isTime())
+        {
+            const auto * time_type = assert_cast<const DataTypeTime *>(from_type);
+            using WrappedTransformType = TransformTime<Transform>;
+            return DateTimeAddIntervalImpl<DataTypeTime, DataTypeTime, WrappedTransformType>::execute(
+                    WrappedTransformType{time_type->getScale()}, arguments, result_type);
         }
         else if (const auto * datetime64_type = assert_cast<const DataTypeDateTime64 *>(from_type))
         {

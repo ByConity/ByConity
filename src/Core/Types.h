@@ -62,6 +62,7 @@ enum class TypeIndex
     Map,
     ByteMap,
     BitMap64,
+    Time,
 };
 #if !defined(__clang__)
 #pragma GCC diagnostic pop
@@ -298,6 +299,7 @@ inline constexpr const char * getTypeName(TypeIndex idx)
         case TypeIndex::Float32:    return "Float32";
         case TypeIndex::Float64:    return "Float64";
         case TypeIndex::Date:       return "Date";
+        case TypeIndex::Time:       return "Time";
         case TypeIndex::DateTime:   return "DateTime";
         case TypeIndex::DateTime64: return "DateTime64";
         case TypeIndex::String:     return "String";

@@ -40,6 +40,7 @@ void registerFunctionToRelativeSecondNum(FunctionFactory &);
 void registerFunctionToTime(FunctionFactory &);
 void registerFunctionNow(FunctionFactory &);
 void registerFunctionNow64(FunctionFactory &);
+void registerFunctionCurrentTime(FunctionFactory &);
 void registerFunctionToday(FunctionFactory &);
 void registerFunctionYesterday(FunctionFactory &);
 void registerFunctionTimeSlot(FunctionFactory &);
@@ -113,6 +114,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionToTime(factory);
     registerFunctionNow(factory);
     registerFunctionNow64(factory);
+    registerFunctionCurrentTime(factory);
     registerFunctionToday(factory);
     registerFunctionYesterday(factory);
     registerFunctionTimeSlot(factory);
