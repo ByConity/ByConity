@@ -285,6 +285,9 @@ void StorageMergeTree::alter(
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
     auto maybe_mutation_commands = commands.getMutationCommands(new_metadata, local_context->getSettingsRef().materialize_ttl_after_modify, local_context);
+    /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
+    handleClearColumnInPartitionWhere(maybe_mutation_commands, commands);
+
     String mutation_file_name;
     Int64 mutation_version = -1;
 

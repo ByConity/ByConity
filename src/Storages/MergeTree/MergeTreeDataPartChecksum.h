@@ -69,6 +69,9 @@ struct MergeTreeDataPartChecksums
     /// Otherwise, it compares only the checksums of the files.
     void checkEqual(const MergeTreeDataPartChecksums & rhs, bool have_uncompressed) const;
 
+    /// Return if the checksums of the target column are same.
+    bool isEqual(const MergeTreeDataPartChecksums & rhs, const String & col_name) const;
+
     static bool isBadChecksumsErrorCode(int code);
 
     /// Checks that the directory contains all the needed files of the correct size. Does not check the checksum.

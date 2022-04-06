@@ -42,30 +42,7 @@ bool HaMergeTreeMutationEntry::extractPartitionIds(MergeTreeData & storage, Cont
         {
             case MutationCommand::FAST_DELETE:
                 if (command.partition)
-                {
                     partition_ids.emplace(storage.getPartitionIDFromQuery(command.partition, context));
-                }
-                break;
-            case MutationCommand::DROP_COLUMN:
-                if (command.partition)
-                {
-                    if (command.clear)
-                    {
-                        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-                        /// MergeTreeData::DataPartsVector clear_parts = storage.getPartsByPredicate(command.partition);
-                        /// /// No part will apply this mutation, just ignore and return.
-                        /// if (clear_parts.empty())
-                        ///     return false;
-                        /// for (auto & part : clear_parts)
-                        /// {
-                        ///     partition_ids.emplace(part->info.partition_id);
-                        /// }
-                    }
-                    else
-                    {
-                        partition_ids.emplace(storage.getPartitionIDFromQuery(command.partition, context));
-                    }
-                }
                 break;
             default:
                 break;

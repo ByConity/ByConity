@@ -131,6 +131,8 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         if (command_ast->partition)
             command.partition = command_ast->partition;
+        else if (command_ast->predicate)
+            command.partition_predicate = command_ast->predicate;
         return command;
     }
     else if (command_ast->type == ASTAlterCommand::MODIFY_COLUMN)
@@ -746,6 +748,10 @@ bool AlterCommand::isRequireMutationStage(const StorageInMemoryMetadata & metada
     if (isRemovingProperty() || type == REMOVE_TTL)
         return false;
 
+    /// CLEAR COLUMN IN PARTITION WHERE command will be handled separately.
+    if (type == DROP_COLUMN && partition_predicate)
+        return false;
+
     if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN || type == CLEAR_MAP_KEY)
         return true;
 
@@ -1221,8 +1227,8 @@ void AlterCommands::validate(const StorageID & storage_id, const StorageInMemory
                                     ErrorCodes::ILLEGAL_COLUMN);
                         }
                     }
+                    all_columns.remove(command.column_name);
                 }
-                all_columns.remove(command.column_name);
             }
             else if (!command.if_exists)
                 throw Exception(

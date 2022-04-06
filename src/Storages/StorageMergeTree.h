@@ -39,6 +39,8 @@ public:
 
     bool supportsIndexForIn() const override { return true; }
 
+    bool supportsClearColumnInPartitionWhere() const override { return true; }
+
     Pipe read(
         const Names & column_names,
         const StorageMetadataPtr & /*metadata_snapshot*/,

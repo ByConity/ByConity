@@ -2318,6 +2318,9 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
                 }
             }
 
+            if (command.partition_predicate && !supportsClearColumnInPartitionWhere())
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CLEAR COLUMN IN PARTITION WHERE is not supported by storage {}", getName());
+
             dropped_columns.emplace(command.column_name);
         }
         else if (command.isRequireMutationStage(getInMemoryMetadata()))
@@ -2671,7 +2674,6 @@ MergeTreeData::PartsTemporaryRename::~PartsTemporaryRename()
         }
     }
 }
-
 
 MergeTreeData::DataPartsVector MergeTreeData::getActivePartsToReplace(
     const MergeTreePartInfo & new_part_info,
@@ -3501,6 +3503,17 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const Strin
     return getPartIfExistsWithoutLock(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
 }
 
+MergeTreeData::DataPartPtr MergeTreeData::getOldVersionPartIfExists(const String &part_name)
+{
+    auto lock = lockParts();
+
+    auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
+    DataPartPtr covering_part;
+
+    DataPartsVector covered_parts = getActivePartsToReplace(part_info, part_name, covering_part, lock);
+    return covered_parts.size() == 1 ? covered_parts[0] : nullptr;
+}
+
 MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr & predicate_)
 {
     DataPartsVector parts = getDataPartsVector();
@@ -3552,6 +3565,40 @@ MergeTreeData::DataPartsVector MergeTreeData::getPartsByPredicate(const ASTPtr &
 
     return res;
 }
+
+void MergeTreeData::handleClearColumnInPartitionWhere(MutationCommands & mutation_commands, const AlterCommands & alter_commands)
+{
+    for (const auto & alter_cmd : alter_commands)
+    {
+        if (alter_cmd.type == AlterCommand::DROP_COLUMN && alter_cmd.partition_predicate)
+        {
+            /// Reconstruct command ast
+            auto command_ast = alter_cmd.ast->clone();
+            command_ast->as<ASTAlterCommand>()->predicate = nullptr; /// clear predicate
+
+            std::set<String> partitions;
+            DataPartsVector parts = getPartsByPredicate(alter_cmd.partition_predicate);
+            for (auto & part : parts)
+                partitions.emplace(part->info.partition_id);
+            for(const auto & partition: partitions)
+            {
+                auto partition_ast = std::make_shared<ASTPartition>();
+                partition_ast->id = partition;
+                MutationCommand command;
+                command.type = MutationCommand::Type::DROP_COLUMN;
+                command.column_name = alter_cmd.column_name;
+                command.clear = true;
+                command.partition = partition_ast;
+                command.predicate = nullptr;
+
+                command_ast->as<ASTAlterCommand>()->partition = partition_ast; /// set partition
+                command.ast = command_ast->clone();
+                mutation_commands.emplace_back(command);
+            }
+        }
+    }
+}
+
 
 static void loadPartAndFixMetadataImpl(MergeTreeData::MutableDataPartPtr part)
 {
