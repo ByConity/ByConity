@@ -68,6 +68,7 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/HaReplicaHandler.h>
+#include <Interpreters/ResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
@@ -116,6 +117,8 @@
 #include <Poco/Util/Application.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
 #include <Common/Config/ConfigProcessor.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
+#include <Common/CGroup/CpuSetScaleManager.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/Macros.h>
 #include <Common/RemoteHostFilter.h>
@@ -438,6 +441,7 @@ struct ContextSharedPart
     String system_profile_name;                             /// Profile used by system processes
     String buffer_profile_name;                             /// Profile used by Buffer engine for flushing to the underlying
     AccessControlManager access_control_manager;
+    ResourceGroupManager resource_group_manager;              /// Known resource groups
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;                      /// Cache of queries' results.
@@ -507,6 +511,8 @@ struct ContextSharedPart
 
     mutable IndexFileBlockCachePtr unique_row_store_block_cache; /// Shared block cache of unique row stores
     mutable DiskUniqueRowStoreCachePtr unique_row_store_cache; /// Shared object cache of unique row stores
+
+    CpuSetScaleManagerPtr cpu_set_scale_manager;
 
     bool shutdown_called = false;
 
@@ -894,6 +900,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     auto lock = getLock();
     shared->users_config = config;
     shared->access_control_manager.setUsersConfig(*shared->users_config);
+    shared->resource_group_manager.loadFromConfig(*shared->users_config);
 }
 
 ConfigurationPtr Context::getUsersConfig()
@@ -902,6 +909,24 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::setResourceGroup(const IAST *ast)
+{
+    if (auto lock = getLock(); shared->resource_group_manager.isInUse())
+        resource_group = shared->resource_group_manager.selectGroup(*this, ast);
+    else
+        resource_group = nullptr;
+}
+
+InternalResourceGroup* Context::getResourceGroup() const
+{
+    return resource_group.load(std::memory_order_acquire);
+}
+
+ResourceGroupManager& Context::getResourceGroupManager() { return shared->resource_group_manager; }
+const ResourceGroupManager& Context::getResourceGroupManager() const { return shared->resource_group_manager; }
+
+void Context::startResourceGroup() { shared->resource_group_manager.enable(); }
+void Context::stopResourceGroup() { shared->resource_group_manager.disable(); }
 
 void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address)
 {
@@ -1850,9 +1875,18 @@ BackgroundSchedulePool & Context::getMessageBrokerSchedulePool() const
 BackgroundSchedulePool & Context::getConsumeSchedulePool() const
 {
     auto lock = getLock();
-    if (!shared->extra_schedule_pools[SchedulePool::Consume])
+    LOG_DEBUG(&Poco::Logger::get("BackgroundSchedulePool"), "getConsumeSchedulePool");
+    if (!shared->extra_schedule_pools[SchedulePool::Consume]) {
+        CpuSetPtr cpu_set;
+        if (auto & cgroup_manager = CGroupManagerFactory::instance(); cgroup_manager.isInit())
+        {
+            cpu_set = cgroup_manager.getCpuSet("hakafka");
+        }
+
         shared->extra_schedule_pools[SchedulePool::Consume].emplace(
-            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool");
+            settings.background_consume_schedule_pool_size, CurrentMetrics::BackgroundConsumeSchedulePoolTask, "BgConsumePool", std::move(cpu_set));
+    }
+
     return *shared->extra_schedule_pools[SchedulePool::Consume];
 }
 
@@ -3255,6 +3289,25 @@ std::shared_ptr<DiskUniqueRowStoreCache> Context::getDiskUniqueRowStoreCache() c
 {
     auto lock = getLock();
     return shared->unique_row_store_cache;
+}
+
+void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)
+{
+    if (config.has("enable_cpu_scale") && config.getBool("enable_cpu_scale"))
+    {
+        if (nullptr != shared->cpu_set_scale_manager)
+            return;
+        LOG_INFO(&Poco::Logger::get("CpuSetScaleManager"), "Init CpuSetScaleManager");
+        BackgroundSchedulePool & schedule_pool = getSchedulePool();
+        shared->cpu_set_scale_manager = std::make_shared<CpuSetScaleManager>(schedule_pool);
+        shared->cpu_set_scale_manager->loadCpuSetFromConfig(config);
+        shared->cpu_set_scale_manager->run();
+    }
+    else
+    {
+        if (nullptr != shared->cpu_set_scale_manager)
+            shared->cpu_set_scale_manager = nullptr;
+    }
 }
 
 }

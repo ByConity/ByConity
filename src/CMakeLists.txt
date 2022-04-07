@@ -74,6 +74,7 @@ set(dbms_sources)
 
 add_headers_and_sources(clickhouse_common_io Common)
 add_headers_and_sources(clickhouse_common_io Common/HashTable)
+add_headers_and_sources(clickhouse_common_io Common/CGroup)
 add_headers_and_sources(clickhouse_common_io Common/Brpc)
 add_headers_and_sources(clickhouse_common_io IO)
 add_headers_and_sources(clickhouse_common_io IO/S3)
@@ -268,6 +269,8 @@ target_include_directories (clickhouse_common_io PUBLIC "${ClickHouse_SOURCE_DIR
 # FIXME (UNIQUE KEY): Find a better place to locate this
 target_include_directories(clickhouse_common_io PUBLIC "${SNAPPY_INCLUDE_DIR}") # uses some includes from core
 
+target_include_directories(clickhouse_common_io PUBLIC "${LIBNUMA_INCLUDE_DIR}") # libnuma
+
 if (USE_EMBEDDED_COMPILER)
     dbms_target_link_libraries (PRIVATE ${REQUIRED_LLVM_LIBRARIES})
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${LLVM_INCLUDE_DIRS})
@@ -287,6 +290,7 @@ target_link_libraries (clickhouse_common_io
             ${LINK_LIBRARIES_ONLY_ON_X86_64}
         PUBLIC
             common
+            dbms
             ${DOUBLE_CONVERSION_LIBRARIES}
             dragonbox_to_chars
 )
@@ -310,6 +314,7 @@ target_link_libraries(clickhouse_common_io
             pcg_random
             Poco::Foundation
             roaring
+            ${LIBNUMA_LIBRARY}
             ${CPPKMS_LIBRARIES}
             ipdb
             maxminddb
@@ -506,7 +511,7 @@ if (ENABLE_TESTS AND USE_GTEST)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
     target_include_directories(unit_tests_dbms PRIVATE ${dbms_gtest_headers})
-    
+
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
         -Wno-zero-as-null-pointer-constant

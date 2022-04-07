@@ -6,6 +6,7 @@
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
+#include <Interpreters/ResourceGroupManager.h>
 #include <Storages/IStorage_fwd.h>
 #include <bthread/mtx_cv_base.h>
 #include <Poco/Condition.h>
@@ -96,6 +97,7 @@ protected:
     OverflowMode overflow_mode;
 
     QueryPriorities::Handle priority_handle;
+    InternalResourceGroup::Handle resource_group_handle;
 
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
 
@@ -105,12 +107,12 @@ protected:
     /// Be careful using it. For example, queries field of ProcessListForUser could be modified concurrently.
     const ProcessListForUser * getUserProcessList() const { return user_process_list; }
 
-    
+
     mutable bthread::Mutex executors_mutex;
 
     /// Array of PipelineExecutors to be cancelled when a cancelQuery is received
     std::vector<PipelineExecutor *> executors;
-    
+
     mutable bthread::Mutex query_streams_mutex;
 
     /// Streams with query results, point to BlockIO from executeQuery()
@@ -138,7 +140,8 @@ public:
         ContextPtr context_,
         const String & query_,
         const ClientInfo & client_info_,
-        QueryPriorities::Handle && priority_handle_);
+        QueryPriorities::Handle && priority_handle_,
+        InternalResourceGroup::Handle && resource_group_handle_);
 
     ~QueryStatus();
 
@@ -208,6 +211,7 @@ public:
     bool checkTimeLimit();
     /// Same as checkTimeLimit but it never throws
     [[nodiscard]] bool checkTimeLimitSoft();
+    Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }
 };
 
 
