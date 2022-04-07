@@ -186,14 +186,11 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
             if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
             {
                 // Scan the directory to get all implicit columns(stream) for the map type
-                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*column_from_part.type);
-                //auto& keyType = type_map.getKeyType();
-                auto& valueType = type_map.getValueType();
+                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
 
                 String key_name;
                 String impl_key_name;
                 {
-                    //auto data_lock = data_part->getColumnsReadLock();
                     for (auto & file : data_part->getChecksums()->files)
                     {
                         //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
@@ -208,15 +205,10 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
                                 dup_implicit_keys.insert(impl_key_name);
                             }
 
-                            if (type_map.valueTypeIsLC())
-                                addByteMapStreams({impl_key_name, valueType}, column.name, profile_callback_, clock_type_);
-                            else
-                                addByteMapStreams({impl_key_name, makeNullable(valueType)}, column.name, profile_callback_, clock_type_);
-
+                            addByteMapStreams(
+                                {impl_key_name, type_map.getValueTypeForImplicitColumn()}, column.name, profile_callback_, clock_type_);
                             map_column_keys.insert({column.name, key_name});
                         }
-
-                        //TBD: it's possible that no relevant streams for MAP type column. Do we need any special handling??
                     }
                 }
             }
@@ -282,7 +274,6 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     while (read_rows < max_rows_to_read)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(from_mark);
-        size_t read_rows_in_column = 0;
 
         std::unordered_map<String, ISerialization::SubstreamsCache> caches;
         int row_number_column_pos = -1;
@@ -294,6 +285,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
             const auto & [name, type] = column_from_part;
             size_t pos = res_col_to_idx[name];
 
+            /// This case will happen when querying the column that is not included after adding new column.
             if (!res_columns[pos])
                 continue;
 
@@ -311,54 +303,10 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                 auto & cache = caches[column_from_part.getNameInStorage()];
 
                 if (type->isMap() && !type->isMapKVStore())
-                {
-                    // collect all the substreams based on map column's name and its keys substream.
-                    // and somehow construct runtime two implicit columns(key&value) representation.
-                    auto keysIter = map_column_keys.equal_range(name);
-                    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*type);
-                    auto & valueType = type_map.getValueType();
-
-                    DataTypePtr implValueType;
-                    if (type_map.valueTypeIsLC())
-                        implValueType = valueType;
-                    else
-                        implValueType = makeNullable(valueType);
-
-                    std::map<String, std::pair<size_t, const IColumn *>> implKeyValues;
-                    std::list<ColumnPtr> implKeyColHolder;
-                    String impl_key_name;
-                    for (auto kit = keysIter.first; kit != keysIter.second; ++kit)
-                    {
-                        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
-                        NameAndTypePair implicit_key_name_and_type{impl_key_name, implValueType};
-                        cache = caches[implicit_key_name_and_type.getNameInStorage()];
-
-                        // If MAP implicit column and MAP column co-exist in columns, implicit column should
-                        // only read only once.
-                        if (dup_implicit_keys.count(impl_key_name) !=0)
-                        {
-                            auto idx = res_col_to_idx[impl_key_name];
-                            if (res_columns[idx] == nullptr)
-                                throw Exception("Column of implicit key " + impl_key_name + " is nullptr.", ErrorCodes::LOGICAL_ERROR);
-                            implKeyValues[kit->second] = std::pair<size_t, const IColumn*>(column_size_before_reading, res_columns[idx].get());
-                            continue;
-                        }
-
-                        implKeyColHolder.push_back(implValueType->createColumn());
-                        auto& implValueColumn = implKeyColHolder.back();
-                        readData(implicit_key_name_and_type,
-								 implValueColumn, from_mark, continue_reading,
-							     rows_to_read, cache);
-                        implKeyValues[kit->second] = {0, &(*implValueColumn)};
-                    }
-
-                    // after reading all implicit values columns based files(built by keys), it's time to
-                    // construct runtime ColumnMap(keyColumn, valueColumn).
-                    dynamic_cast<ColumnByteMap*>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, implKeyValues);
-
-                }
-				else if (isMapImplicitKeyNotKV(name))
-                	readData(column_from_part, column, from_mark, continue_reading, rows_to_read, cache);
+                    readMapDataNotKV(
+                        column_from_part, column, from_mark, continue_reading, rows_to_read, caches, res_col_to_idx, res_columns);
+                else if (isMapImplicitKeyNotKV(name))
+                    readData(column_from_part, column, from_mark, continue_reading, rows_to_read, cache);
                 else
                 {
                     if (!data_reader)
@@ -391,13 +339,21 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
                 }
 
                 if (column->empty())
-                    column = nullptr;
+                {
+                    /// The case will happen in the following cases:
+                    /// 1. When query a map implicit column that doesn't exist.
+                    /// 2. When query a map column that doesn't have any key.
+                    res_columns[pos] = nullptr;
+                }
                 else
                 {
-                    read_rows_in_column = column->size() - column_size_before_reading;
+                    size_t read_rows_in_column = column->size() - column_size_before_reading;
                     if (read_rows_in_column < rows_to_read)
-                        throw Exception("Cannot read all data in MergeTreeReaderCompact. Rows read: " + toString(read_rows_in_column) +
-                            ". Rows expected: " + toString(rows_to_read) + ".", ErrorCodes::CANNOT_READ_ALL_DATA);
+                        throw Exception(
+                            ErrorCodes::CANNOT_READ_ALL_DATA,
+                            "Cannot read all data in MergeTreeReaderCompact. Rows read: {}. Rows expected: {}.",
+                            read_rows_in_column,
+                            rows_to_read);
                 }
             }
             catch (Exception & e)

@@ -2,7 +2,6 @@
 
 #include <DataTypes/Serializations/SerializationByteMap.h>
 #include <DataTypes/Serializations/SerializationArray.h>
-#include <DataTypes/Serializations/SerializationTuple.h>
 #include <DataTypes/Serializations/SerializationLowCardinality.h>
 
 #include <Common/StringUtils/StringUtils.h>
@@ -169,11 +168,7 @@ void SerializationByteMap::deserializeBinary(IColumn & column, ReadBuffer & istr
 
 template <typename KeyWriter, typename ValueWriter>
 void SerializationByteMap::serializeTextImpl(
-    const IColumn & column,
-    size_t row_num,
-    WriteBuffer & ostr,
-    KeyWriter && key_writer,
-    ValueWriter && value_writer) const
+    const IColumn & column, size_t row_num, WriteBuffer & ostr, KeyWriter && key_writer, ValueWriter && value_writer) const
 {
     const auto & column_map = assert_cast<const ColumnByteMap &>(column);
 
@@ -196,8 +191,8 @@ void SerializationByteMap::serializeTextImpl(
 }
 
 template <typename KeyReader, typename ValueReader>
-void SerializationByteMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
-                    KeyReader && key_reader, ValueReader && value_reader) const
+void SerializationByteMap::deserializeTextImpl(
+    IColumn & column, ReadBuffer & istr, KeyReader && key_reader, ValueReader && value_reader) const
 {
     auto & column_map = assert_cast<ColumnByteMap &>(column);
 
@@ -251,8 +246,7 @@ void SerializationByteMap::deserializeTextImpl(IColumn & column, ReadBuffer & is
 
 void SerializationByteMap::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
-    auto writer = [&settings](WriteBuffer & buf, const SerializationPtr & subcolumn_serialization, const IColumn & subcolumn, size_t pos)
-    {
+    auto writer = [&settings](WriteBuffer & buf, const SerializationPtr & subcolumn_serialization, const IColumn & subcolumn, size_t pos) {
         subcolumn_serialization->serializeTextQuoted(subcolumn, pos, buf, settings);
     };
 
@@ -261,18 +255,17 @@ void SerializationByteMap::serializeText(const IColumn & column, size_t row_num,
 
 void SerializationByteMap::deserializeText(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn)
-        {
-            subcolumn_serialization->deserializeTextQuoted(subcolumn, buf, settings);
-        };
+    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn) {
+        subcolumn_serialization->deserializeTextQuoted(subcolumn, buf, settings);
+    };
 
     deserializeTextImpl(column, istr, reader, reader);
 }
 
-void SerializationByteMap::serializeTextJSON(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
+void SerializationByteMap::serializeTextJSON(
+    const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const
 {
-    auto writer = [&settings](WriteBuffer & buf, const SerializationPtr & subcolumn_serialization, const IColumn & subcolumn, size_t pos)
-    {
+    auto writer = [&settings](WriteBuffer & buf, const SerializationPtr & subcolumn_serialization, const IColumn & subcolumn, size_t pos) {
         subcolumn_serialization->serializeTextJSON(subcolumn, pos, buf, settings);
     };
 
@@ -281,10 +274,9 @@ void SerializationByteMap::serializeTextJSON(const IColumn & column, size_t row_
 
 void SerializationByteMap::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn)
-        {
-            subcolumn_serialization->deserializeTextJSON(subcolumn, buf, settings);
-        };
+    auto reader = [&settings](ReadBuffer & buf, const SerializationPtr & subcolumn_serialization, IColumn & subcolumn) {
+        subcolumn_serialization->deserializeTextJSON(subcolumn, buf, settings);
+    };
 
     deserializeTextImpl(column, istr, reader, reader);
 }
@@ -343,6 +335,96 @@ void SerializationByteMap::enumerateStreams(const StreamCallback & callback, Sub
     path.pop_back();
 }
 
+struct SerializeBinaryBulkStateByteMap : public ISerialization::SerializeBinaryBulkState
+{
+    /// Record key state and value state separately.
+    ISerialization::SerializeBinaryBulkStatePtr key_state, value_state;
+};
+
+struct DeserializeBinaryBulkStateByteMap : public ISerialization::DeserializeBinaryBulkState
+{
+    /// Record key state and value state separately.
+    ISerialization::DeserializeBinaryBulkStatePtr key_state, value_state;
+};
+
+static SerializeBinaryBulkStateByteMap * checkAndGetByteMapSerializeState(ISerialization::SerializeBinaryBulkStatePtr & state)
+{
+    if (!state)
+        throw Exception("Got empty state for DataTypeByteMap.", ErrorCodes::LOGICAL_ERROR);
+
+    auto * map_state = typeid_cast<SerializeBinaryBulkStateByteMap *>(state.get());
+    if (!map_state)
+    {
+        auto & state_ref = *state;
+        throw Exception("Invalid SerializeBinaryBulkState for DataTypeByteMap. Expected: "
+                        + demangle(typeid(SerializeBinaryBulkStateByteMap).name()) + ", got "
+                        + demangle(typeid(state_ref).name()), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return map_state;
+}
+
+static DeserializeBinaryBulkStateByteMap * checkAndGetByteMapDeserializeState(ISerialization::DeserializeBinaryBulkStatePtr & state)
+{
+    if (!state)
+        throw Exception("Got empty state for DataTypeByteMap.", ErrorCodes::LOGICAL_ERROR);
+
+    auto * map_state = typeid_cast<DeserializeBinaryBulkStateByteMap *>(state.get());
+    if (!map_state)
+    {
+        auto & state_ref = *state;
+        throw Exception("Invalid DeserializeBinaryBulkState for DataTypeByteMap. Expected: "
+                        + demangle(typeid(DeserializeBinaryBulkStateByteMap).name()) + ", got "
+                        + demangle(typeid(state_ref).name()), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    return map_state;
+}
+
+void SerializationByteMap::serializeBinaryBulkStatePrefix(
+    SerializeBinaryBulkSettings & settings,
+    SerializeBinaryBulkStatePtr & state) const
+{
+    auto map_state = std::make_shared<SerializeBinaryBulkStateByteMap>();
+    settings.path.push_back(Substream::MapKeyElements);
+    key->serializeBinaryBulkStatePrefix(settings, map_state->key_state);
+
+    settings.path.back() = Substream::MapValueElements;
+    value->serializeBinaryBulkStatePrefix(settings, map_state->value_state);
+
+    settings.path.pop_back();
+    state = std::move(map_state);
+}
+
+void SerializationByteMap::serializeBinaryBulkStateSuffix(
+    SerializeBinaryBulkSettings & settings,
+    SerializeBinaryBulkStatePtr & state) const
+{
+    auto * map_state = checkAndGetByteMapSerializeState(state);
+    settings.path.push_back(Substream::MapKeyElements);
+    key->serializeBinaryBulkStateSuffix(settings, map_state->key_state);
+
+    settings.path.back() = Substream::MapValueElements;
+    value->serializeBinaryBulkStateSuffix(settings, map_state->value_state);
+
+    settings.path.pop_back();
+}
+
+void SerializationByteMap::deserializeBinaryBulkStatePrefix(
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state) const
+{
+    auto map_state = std::make_shared<DeserializeBinaryBulkStateByteMap>();
+    settings.path.push_back(Substream::MapKeyElements);
+    key->deserializeBinaryBulkStatePrefix(settings, map_state->key_state);
+
+    settings.path.back() = Substream::MapValueElements;
+    value->deserializeBinaryBulkStatePrefix(settings, map_state->value_state);
+
+    settings.path.pop_back();
+    state = std::move(map_state);
+}
+
 void SerializationByteMap::serializeBinaryBulkWithMultipleStreams(
     const IColumn & column,
     size_t offset,
@@ -351,7 +433,7 @@ void SerializationByteMap::serializeBinaryBulkWithMultipleStreams(
     SerializeBinaryBulkStatePtr & state) const
 {
     const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(column);
-
+    auto * map_state = checkAndGetByteMapSerializeState(state);
     // Current design is as below:
     // - While one data block is written into part(new part), it only explore its up-to-date keys information
     //   in this block. i.e. collect all uniq keys to generate their files(.bin, .mrk ....)
@@ -370,43 +452,28 @@ void SerializationByteMap::serializeBinaryBulkWithMultipleStreams(
         if (settings.position_independent_encoding)
             serializeMapSizesPositionIndependent(column_map, *stream, offset, limit);
         else
-            SerializationNumber<ColumnByteMap::Offset>().serializeBinaryBulk(column_map.getOffsetsColumn(),
-                                                                     *stream, offset, limit);
+            SerializationNumber<ColumnByteMap::Offset>().serializeBinaryBulk(column_map.getOffsetsColumn(), *stream, offset, limit);
     }
 
     /// Then serialize map key
     settings.path.back() = Substream::MapKeyElements;
     auto & offset_values = column_map.getOffsets();
 
-    if (offset > offset_values.size()) return;
+    if (offset > offset_values.size())
+        return;
 
     size_t end = std::min(offset + limit, offset_values.size());
     size_t key_offset = offset ? offset_values[offset - 1] : 0;
     size_t key_limit = limit ? offset_values[end - 1] - key_offset : 0;
 
     if (limit == 0 || key_limit)
-        key->serializeBinaryBulkWithMultipleStreams
-            (column_map.getKey(), key_offset, key_limit, settings, state);
-
-    if (dynamic_cast<const SerializationLowCardinality*>(value.get()))
-    {
-        value->serializeBinaryBulkStatePrefix(settings, state);
-    }
+        key->serializeBinaryBulkWithMultipleStreams(column_map.getKey(), key_offset, key_limit, settings, map_state->key_state);
 
     /// Then serialize map value
     settings.path.back() = Substream::MapValueElements;
-
-    if (limit ==0 || key_limit)
-        value->serializeBinaryBulkWithMultipleStreams
-            (column_map.getValue(), key_offset, key_limit, settings, state);
-
+    if (limit == 0 || key_limit)
+        value->serializeBinaryBulkWithMultipleStreams(column_map.getValue(), key_offset, key_limit, settings, map_state->value_state);
     settings.path.pop_back();
-
-    if (dynamic_cast<const SerializationLowCardinality*>(value.get()))
-    {
-        value->serializeBinaryBulkStateSuffix(settings, state);
-    }
-
 }
 
 void SerializationByteMap::deserializeBinaryBulkWithMultipleStreams(
@@ -418,6 +485,7 @@ void SerializationByteMap::deserializeBinaryBulkWithMultipleStreams(
 {
     auto mutable_column = column->assumeMutable();
     ColumnByteMap & column_map = typeid_cast<ColumnByteMap &>(*mutable_column);
+    auto * map_state = checkAndGetByteMapDeserializeState(state);
 
     settings.path.push_back(Substream::MapSizes);
     if (auto stream = settings.getter(settings.path))
@@ -425,8 +493,7 @@ void SerializationByteMap::deserializeBinaryBulkWithMultipleStreams(
         if (settings.position_independent_encoding)
             deserializeMapSizesPositionIndependent(column_map, *stream, limit);
         else
-            SerializationNumber<ColumnByteMap::Offset>().deserializeBinaryBulk(column_map.getOffsetsColumn(),
-                                                                      *stream, limit, 0);
+            SerializationNumber<ColumnByteMap::Offset>().deserializeBinaryBulk(column_map.getOffsetsColumn(), *stream, limit, 0);
     }
 
     settings.path.back() = Substream::MapKeyElements;
@@ -437,19 +504,10 @@ void SerializationByteMap::deserializeBinaryBulkWithMultipleStreams(
     if (last_offset < key_column->size())
         throw Exception("Nested column is longer than last offset", ErrorCodes::LOGICAL_ERROR);
     size_t key_limit = last_offset - key_column->size();
-    key->deserializeBinaryBulkWithMultipleStreams(key_column, key_limit, settings, state, cache);
-
-    if (dynamic_cast<const SerializationLowCardinality*>(value.get()))
-    {
-        value->deserializeBinaryBulkStatePrefix(settings, state);
-    }
+    key->deserializeBinaryBulkWithMultipleStreams(key_column, key_limit, settings, map_state->key_state, cache);
 
     settings.path.back() = Substream::MapValueElements;
-    value->deserializeBinaryBulkWithMultipleStreams(column_map.getValuePtr(), key_limit,
-                                                        settings, state, cache);
-
+    value->deserializeBinaryBulkWithMultipleStreams(column_map.getValuePtr(), key_limit, settings, map_state->value_state, cache);
     settings.path.pop_back();
-
 }
-
 }

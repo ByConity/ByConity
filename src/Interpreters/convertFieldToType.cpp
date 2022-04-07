@@ -6,6 +6,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -335,6 +336,35 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
                     have_unconvertible_element = true;
 
                 res[i] = updated_entry;
+            }
+
+            return have_unconvertible_element ? Field(Null()) : Field(res);
+        }
+    }
+    else if (const DataTypeByteMap * byte_type_map = typeid_cast<const DataTypeByteMap *>(&type))
+    {
+        if (src.getType() == Field::Types::ByteMap)
+        {
+            const auto & key_type = *byte_type_map->getKeyType();
+            const auto & value_type = *byte_type_map->getValueType();
+
+            const auto & map = src.get<ByteMap>();
+            size_t map_size = map.size();
+
+            ByteMap res(map_size);
+
+            bool have_unconvertible_element = false;
+            for (size_t i = 0; i < map_size; ++i)
+            {
+                const auto & key = map[i].first;
+                const auto & value = map[i].second;
+
+                res[i] = {convertFieldToType(key, key_type), convertFieldToType(value, value_type)};
+                if (res[i].first.isNull() && !key_type.isNullable())
+                    have_unconvertible_element = true;
+
+                if (res[i].second.isNull() && !value_type.isNullable())
+                    have_unconvertible_element = true;
             }
 
             return have_unconvertible_element ? Field(Null()) : Field(res);

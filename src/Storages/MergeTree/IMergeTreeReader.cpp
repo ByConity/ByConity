@@ -1,8 +1,10 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeArray.h>
+#include <DataTypes/MapHelpers.h>
 #include <Common/escapeForFileName.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Columns/ColumnArray.h>
+#include <Columns/ColumnByteMap.h>
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -322,7 +324,7 @@ void IMergeTreeReader::checkNumberOfColumns(size_t num_columns_to_read) const
                         "got " + toString(num_columns_to_read), ErrorCodes::LOGICAL_ERROR);
 }
 
-void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, [[maybe_unused]]const String & col_name,
+void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
 	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
@@ -331,17 +333,10 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
         if (streams.count(implicit_stream_name))
             return;
 
-        String col_stream_name;
+        String col_stream_name = implicit_stream_name;
         if (data_part->versions->enable_compact_map_data)
-        {
-            col_stream_name = IDataType::getFileNameForStream(col_name, substream_path);
-        }
-        else
-        {
-            col_stream_name = implicit_stream_name;
-        }
+            col_stream_name = ISerialization::getFileNameForStream(col_name, substream_path);
 
-		//FIXME: data_part->getColumnsReadLock() 
         bool data_file_exists = data_part->getChecksums()->files.count(implicit_stream_name + DATA_FILE_EXTENSION);
 
         /** If data file is missing then we will not try to open it.
@@ -377,6 +372,51 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
 
 }
 
+void IMergeTreeReader::readMapDataNotKV(
+    const NameAndTypePair & name_and_type, ColumnPtr & column,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+    std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+    std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns)
+{
+    size_t column_size_before_reading = column->size();
+    const auto & [name, type] = name_and_type;
+
+    // collect all the substreams based on map column's name and its keys substream.
+    // and somehow construct runtime two implicit columns(key&value) representation.
+    auto keys_iter = map_column_keys.equal_range(name);
+    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
+
+    std::map<String, std::pair<size_t, const IColumn *>> impl_key_values;
+    std::list<ColumnPtr> impl_key_col_holder;
+    String impl_key_name;
+    for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
+    {
+        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
+        NameAndTypePair implicit_key_name_and_type{impl_key_name, impl_value_type};
+        auto cache = caches[implicit_key_name_and_type.getNameInStorage()];
+
+        // If MAP implicit column and MAP column co-exist in columns, implicit column should
+        // only read only once.
+
+        if (dup_implicit_keys.count(impl_key_name) != 0)
+        {
+            auto idx = res_col_to_idx[impl_key_name];
+            impl_key_values[kit->second] = std::pair<size_t, const IColumn *>(column_size_before_reading, res_columns[idx].get());
+            continue;
+        }
+
+
+        impl_key_col_holder.push_back(impl_value_type->createColumn());
+        auto & implValueColumn = impl_key_col_holder.back();
+        readData(implicit_key_name_and_type, implValueColumn, from_mark, continue_reading, max_rows_to_read, cache);
+        impl_key_values[kit->second] = {0, &(*implValueColumn)};
+    }
+
+    // after reading all implicit values columns based files(built by keys), it's time to
+    // construct runtime ColumnMap(key_column, value_column).
+    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, impl_key_values);
+}
 
 void IMergeTreeReader::readData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,

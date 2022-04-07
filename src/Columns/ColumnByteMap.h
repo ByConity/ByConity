@@ -19,8 +19,8 @@ private:
 
     using RowValue = std::map<Field, Field>;
 
-    WrappedPtr keyColumn;
-    WrappedPtr valueColumn;
+    WrappedPtr key_column;
+    WrappedPtr value_column;
     WrappedPtr offsets;
 
     /** Create an map column with key, value, offsets information */
@@ -46,18 +46,15 @@ public:
 
     using ColumnOffsets = ColumnVector<Offset>;
 
-    static Ptr create(const ColumnPtr & key_column, const ColumnPtr & value_column, const ColumnPtr& offsets_column)
+    static Ptr create(const ColumnPtr & key_column, const ColumnPtr & value_column, const ColumnPtr & offsets_column)
     {
-        return ColumnByteMap::create(key_column->assumeMutable(),
-                value_column->assumeMutable(),
-                offsets_column->assumeMutable());
+        return ColumnByteMap::create(key_column->assumeMutable(), value_column->assumeMutable(), offsets_column->assumeMutable());
     }
 
 
     static Ptr create(const ColumnPtr & key_column, const ColumnPtr & value_column)
     {
-        return ColumnByteMap::create(key_column->assumeMutable(),
-                                 value_column->assumeMutable());
+        return ColumnByteMap::create(key_column->assumeMutable(), value_column->assumeMutable());
     }
 
     template <typename ... Args, typename = typename std::enable_if<IsMutableColumns<Args ...>::value>::type>
@@ -134,10 +131,14 @@ public:
     size_t allocatedBytes() const override;
     void protect() override;
 
+    /** Read limited implicit column for the given key. */
     ColumnPtr getValueColumnByKey(const StringRef & key, size_t rows_to_read = 0) const;
-    ColumnPtr getValueColumnByKeyForLC(const StringRef & key, size_t rows_to_read = 0) const;
 
-    void fillByExpandedColumns(const DataTypeByteMap&, const std::map<String, std::pair<size_t, const IColumn*> >&);
+    /** Read all data and construct implicit columns */
+    void constructAllImplicitColumns(
+        std::unordered_map<StringRef, String> & key_name_map, std::unordered_map<StringRef, ColumnPtr> & value_columns) const;
+
+    void fillByExpandedColumns(const DataTypeByteMap &, const std::map<String, std::pair<size_t, const IColumn *>> &);
 
     /**
      * Remove data of map keys from the column. 
@@ -148,20 +149,22 @@ public:
     void insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns);
 
     /** Access embeded columns*/
-    IColumn & getKey() {return keyColumn->assumeMutableRef();}
-    const IColumn & getKey() const {return *keyColumn;}
+    IColumn & getKey() {return key_column->assumeMutableRef();}
+    const IColumn & getKey() const {return *key_column;}
 
-    ColumnPtr& getKeyPtr() {return keyColumn;}
-    const ColumnPtr& getKeyPtr() const {return keyColumn;}
+    ColumnPtr& getKeyPtr() {return key_column;}
+    const ColumnPtr& getKeyPtr() const {return key_column;}
 
-    IColumn & getValue() {return valueColumn->assumeMutableRef();}
-    const IColumn & getValue() const {return *valueColumn;}
-    
+    IColumn & getValue() {return value_column->assumeMutableRef();}
+    const IColumn & getValue() const { return *value_column; }
+    /** Make column nullable for implicit column */
+    ColumnPtr createEmptyImplicitColumn() const;
+
     ColumnPtr getKeyStorePtr() const { return ColumnArray::create(getKeyPtr(), getOffsetsPtr()); }
     ColumnPtr getValueStorePtr() const { return ColumnArray::create(getValuePtr(), getOffsetsPtr()); }
 
-    ColumnPtr& getValuePtr() {return valueColumn;}
-    const ColumnPtr& getValuePtr() const {return valueColumn;}
+    ColumnPtr& getValuePtr() {return value_column;}
+    const ColumnPtr& getValuePtr() const {return value_column;}
 
     ColumnPtr& getOffsetsPtr() {return offsets;}
     const ColumnPtr& getOffsetsPtr() const {return offsets;}

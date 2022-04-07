@@ -45,11 +45,6 @@ void checkAndSetMapSeparator(const String & map_separator_)
     map_separator = map_separator_;
 }
 
-String convertKeyNameToVisitorString(const IDataType * key_type, String key_name)
-{
-    return key_type->stringToVisitorField(key_name).safeGet<String>();
-}
-
 std::string_view ExtractMapColumn::apply(std::string_view src)
 {
     if (src.size() < std::string(getMapSeparator() + "M" + getMapSeparator() + "1.bin").size()) /// minimum example
@@ -202,6 +197,16 @@ String parseKeyNameFromImplicitColName(const String & implicit_col, const String
     return implicit_col.substr(prefix.size(), implicit_col.size() - prefix.size());
 }
 
+String parseMapNameFromImplicitKVName(const String & implicit_col)
+{
+    if (endsWith(implicit_col, ".key"))
+        return implicit_col.substr(0, implicit_col.size() - 4);
+    else if (endsWith(implicit_col, ".value"))
+        return implicit_col.substr(0, implicit_col.size() - 6);
+    else
+        throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implciti kv name {} when parsing map name", implicit_col);
+}
+
 String getMapFileNameFromImplicitFileName(const String & implicit_file_name)
 {
     String map_name = parseMapNameFromImplicitFileName(implicit_file_name);
@@ -221,6 +226,11 @@ bool isMapImplicitKey(const String & map_col)
     return startsWith(map_col, getMapSeparator()) || endsWith(map_col, ".key") || endsWith(map_col, ".value");
 }
 
+bool isMapImplicitKeyOfSpecialMapName(const String & implicit_col, const String & map_col)
+{
+    return startsWith(implicit_col, getMapKeyPrefix(map_col)); 
+}
+
 bool isMapImplicitKeyNotKV(const String & map_col)
 {
     return startsWith(map_col, getMapSeparator());
@@ -229,6 +239,11 @@ bool isMapImplicitKeyNotKV(const String & map_col)
 bool isMapKV(const String & map_col)
 {
     return endsWith(map_col, ".key") || endsWith(map_col, ".value");
+}
+
+bool isMapKVOfSpecialMapName(const String & implicit_col, const String & map_col)
+{
+    return implicit_col == map_col + ".key" || implicit_col == map_col + ".value";
 }
 
 bool isMapImplicitDataFileNameNotBaseOfSpecialMapName(const String file_name, const String map_col)

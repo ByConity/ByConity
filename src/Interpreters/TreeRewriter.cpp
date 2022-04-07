@@ -816,47 +816,22 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 
     if (storage)
     {
-		// @ByteMap: special handling map implicit column
+        // @ByteMap: special handling map implicit column
         for (auto it = unknown_required_source_columns.begin(); it != unknown_required_source_columns.end(); ++it)
-		{
+        {
             if (isMapImplicitKeyNotKV(*it))
             {
                 String map_name = parseMapNameFromImplicitColName(*it);
-                if (source_column_names.count(map_name))
-                {
-                    for (auto it2 = source_columns.begin(); it2 != source_columns.end(); ++it2)
-                    {
-                        if (it2->name == map_name && it2->type->isMap())
-                        {
-                            auto const & map_value_type = dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getValueType();
-                            if (map_value_type->lowCardinality())
-                                source_columns.emplace_back(*it, map_value_type);
-                            else
-                                source_columns.emplace_back(*it, makeNullable(map_value_type));
-                            break;
-                        }
-                    }
-                }
+                auto column = source_columns.tryGetByName(map_name);
+                if (column && column->type->isMap() && !column->type->isMapKVStore())
+                    source_columns.emplace_back(*it, typeid_cast<const DataTypeByteMap &>(*column->type).getValueTypeForImplicitColumn());
             }
-            else if (isMapImplicitKey(*it)) /// handle KV Store
+            else if (isMapKV(*it)) /// handle KV Store
             {
-                // Look through all Map COLs to check if it matches its piece
-                for (auto it2 = source_columns.begin(); it2 != source_columns.end(); ++it2)
-                {
-                    if (it2->type->isMapKVStore())
-                    {
-                        if (*it == it2->name + ".key")
-                        {
-                            source_columns.emplace_back(*it, dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getKeyStoreType());
-                            break;
-                        }
-                        else if (*it == it2->name + ".value")
-                        {
-                            source_columns.emplace_back(*it, dynamic_cast<const DataTypeByteMap*>(it2->type.get())->getValueStoreType());
-                            break;
-                        }
-                    }
-                }
+                String map_name = parseMapNameFromImplicitKVName(*it);
+                auto column = source_columns.tryGetByName(map_name);
+                if (column && column->type->isMap() && column->type->isMapKVStore())
+                    source_columns.emplace_back(*it, typeid_cast<const DataTypeByteMap &>(*column->type).getMapStoreType(*it));
             }
         }
     }
@@ -1176,7 +1151,6 @@ void TreeRewriter::normalize(
         FunctionNameNormalizer().visit(query.get());
 
     /// Common subexpression elimination. Rewrite rules.
-	/// TODO: @qianlixiang rewrite_map_col
     QueryNormalizer::Data normalizer_data(aliases, source_columns_set, ignore_alias, settings, allow_self_aliases, context_, storage_, metadata_snapshot_);
     QueryNormalizer(normalizer_data).visit(query);
 }

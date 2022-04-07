@@ -19,72 +19,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-namespace
-{
-//constexpr auto INDEX_FILE_EXTENSION = ".idx";
-
-static void constructImplicitValueColumns(
-    const ColumnByteMap & column_map,
-    std::unordered_map<StringRef, String> & key_name_map,
-    std::unordered_map<StringRef, ColumnPtr> & value_columns)
-{
-    /// Stopwatch stopwatch;
-
-    /// Construct value columns to write
-    auto & column_map_key = column_map.getKey();
-    auto & column_map_value = column_map.getValue();
-    auto & column_offsets = column_map.getOffsets();
-    const size_t num_map_rows = column_map.size();
-
-    /// This is an one-pass algorithm, to minimize the cost of traversing all key-value pairs:
-    /// 1) Names of key and implicit value columns are created lazily;
-    /// 2) NULLs are filled as need before non-null values inserted or in the end.
-    for (size_t r = 0; r < num_map_rows; ++r)
-    {
-        const size_t offset = column_offsets[r - 1]; /// -1th index is Ok, see PaddedPODArray
-        const size_t curr_num_pair = column_offsets[r] - offset;
-
-        for (size_t p = 0; p < curr_num_pair; ++p)
-        {
-            auto tmp_key = column_map_key.getDataAt(offset + p);
-            auto iter = value_columns.find(tmp_key);
-
-            if (iter == value_columns.end())
-            {
-                key_name_map[tmp_key] = applyVisitor(DB::FieldVisitorToString(), column_map_key[offset + p]);
-
-                /// TODO(lta): check
-                ColumnPtr new_column = makeNullable(column_map_value.cloneEmpty());
-                new_column->assumeMutableRef().reserve(num_map_rows);
-
-                iter = value_columns.try_emplace(tmp_key, new_column).first;
-            }
-
-            auto & impl_value_column = static_cast<ColumnNullable &>(iter->second->assumeMutableRef());
-            /// Fill NULLs as need
-            while (impl_value_column.size() < r)
-                impl_value_column.insert(Null());
-
-            /// Handle duplicated keys in map
-            if (likely(impl_value_column.size() == r))
-            {
-                impl_value_column.getNestedColumn().insertFrom(column_map_value, offset + p);
-                impl_value_column.getNullMapData().push_back(0);
-            }
-        }
-    }
-
-    /// Fill NULLs until all columns reach the same size
-    for (auto & [k, column] : value_columns)
-    {
-        auto & impl_value_column = column->assumeMutableRef();
-        while (impl_value_column.size() < num_map_rows)
-            impl_value_column.insert(Null());
-    }
-}
-
-}
-
 void MergeTreeDataPartWriterOnDisk::Stream::finalize()
 {
     compressed.next();
@@ -206,6 +140,8 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     if (settings.rewrite_primary_key)
         initPrimaryIndex();
     initSkipIndices();
+
+    optimize_map_column_serialization = settings.optimize_map_column_serialization;
 }
 
 // Implementation is split into static functions for ability
@@ -474,15 +410,9 @@ void MergeTreeDataPartWriterOnDisk::addByteMapStreams(
             compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
 
         // check map impl version
-        String col_stream_name;
+        String col_stream_name = stream_name;
         if (data_part->versions->enable_compact_map_data)
-        {
-            col_stream_name = IDataType::getFileNameForStream(col_name, substream_path);
-        }
-        else
-        {
-            col_stream_name = stream_name;
-        }
+            col_stream_name = ISerialization::getFileNameForStream(col_name, substream_path);
 
         column_streams[stream_name] = std::make_unique<Stream>(
             stream_name,
@@ -505,7 +435,6 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     const Granules & granules)
 {
     const auto & [name, type] = name_and_type;
-    const auto & global_settings = storage.getContext()->getSettingsRef();
 
     // I would like to move map type serialize (expanded) logic from DataTypeMap.cpp to here because it
     // tightly bind to MergeTree storage model.
@@ -513,13 +442,9 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(column);
     const auto type_map = std::dynamic_pointer_cast<const DataTypeByteMap>(type);
 
-    String mapBaseStreamName = getBaseNameForMapCol(name);
+    String map_base_stream_name = getBaseNameForMapCol(name);
 
-    DataTypePtr nullValTypePtr;
-    if (type_map->valueTypeIsLC())
-        nullValTypePtr = type_map->getValueType();
-    else
-        nullValTypePtr = makeNullable(type_map->getValueType());
+    DataTypePtr null_val_type_ptr = type_map->getValueTypeForImplicitColumn();
 
     /********************************************************************************************************
      * For MAP datatype expanded model, the case might be tricky here because multiple streams (e.g.
@@ -543,8 +468,8 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     // Look through key column to get unique keys and build corresponding implicit ColumnStream?
     // ** i.e. information in current block **
 
-    std::set<String> & existKeyNames = existKeysNames[name];
-    std::set<String> blockKeyNames;
+    std::set<String> & exist_key_names = exist_keys_names[name];
+    std::set<String> block_key_names;
 
     // Write Map implicit columns in three steps:
     // 1. fix new keys
@@ -552,11 +477,11 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     // 3. write missing columns
 
     // A bit Hack logic here as we know mapBaseStream is Nullable stream, and its two
-    // substream is nested and nullmap. The stream name is generated in IDataType::getFileNameForStream,
+    // substream is nested and nullmap. The stream name is generated in ISerialization::getFileNameForStream,
     // we hardcode it here for simplity.
-    String mapBaseStreamNameData = escapeForFileName(mapBaseStreamName);
+    String map_base_stream_name_data = escapeForFileName(map_base_stream_name);
     // check whether this is new Key
-    bool mapBaseStreamExist = column_streams.count(mapBaseStreamNameData);
+    bool map_base_stream_exist = column_streams.count(map_base_stream_name_data);
 
     /// 1. It's faster to use StringRef as key of unordered_map than Field if type of map key is String
     /// 2. And it would be better to use integer when the type of map key belongs to integer class,
@@ -565,11 +490,8 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     std::unordered_map<StringRef, String> key_name_map;
     std::unordered_map<StringRef, ColumnPtr> value_columns;
 
-    /// TODO(lta): check and support
     if (optimize_map_column_serialization)
-    {
-        constructImplicitValueColumns(column_map, key_name_map, value_columns);
-    }
+        column_map.constructAllImplicitColumns(key_name_map, value_columns);
     else
     {
         auto & column_map_key = column_map.getKey();
@@ -585,33 +507,32 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     // checkMapKey(name, key_name_map);
     ISerialization::SerializeBinaryBulkSettings serialize_settings;
 
-	auto nullValSerial = nullValTypePtr->getDefaultSerialization();
+    auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
 
     // We should construct or build WriteBuffer(ColumnStream) based on unique keys
     for (auto & k_n : key_name_map)
     {
-        String implicitStreamName = getImplicitColNameForMapKey(name, k_n.second);
+        String implicit_stream_name = getImplicitColNameForMapKey(name, k_n.second);
 
-        if (escapeForFileName(implicitStreamName).size() > DBMS_MAX_FILE_NAME_LENGTH)
+        if (escapeForFileName(implicit_stream_name).size() > DBMS_MAX_FILE_NAME_LENGTH)
         {
-            LOG_WARNING(getLogger(), "The file name of map key is too long, more than {}, discard key: {}",
-					    DBMS_MAX_FILE_NAME_LENGTH, k_n.second);
+            LOG_WARNING(
+                getLogger(), "The file name of map key is too long, more than {}, discard key: {}", DBMS_MAX_FILE_NAME_LENGTH, k_n.second);
             continue;
         }
 
-        blockKeyNames.insert(k_n.second);
-        bool needFixNewKey = (!existKeyNames.count(k_n.second) && mapBaseStreamExist);
+        block_key_names.insert(k_n.second);
+        bool need_fix_new_key = (!exist_key_names.count(k_n.second) && map_base_stream_exist);
 
-    	auto [it, inserted] = serialization_states.emplace(implicitStreamName, nullptr);
-		serializations.emplace(implicitStreamName, nullValSerial);
+        serializations.emplace(implicit_stream_name, null_val_serial);
 
-        NameAndTypePair implicit_column{implicitStreamName, nullValTypePtr};
-        if (!existKeyNames.count(k_n.second))
+        NameAndTypePair implicit_column{implicit_stream_name, null_val_type_ptr};
+        if (!exist_key_names.count(k_n.second))
             implicit_columns_list.emplace_back(implicit_column);
-
-        if (needFixNewKey)
+ 
+        if (need_fix_new_key)
         {
-            this->deepCopyAndAdd(mapBaseStreamName, implicitStreamName, *nullValTypePtr);
+            this->deepCopyAndAdd(map_base_stream_name, implicit_stream_name, *null_val_type_ptr);
         }
         else
         {
@@ -619,22 +540,14 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
         }
 
 
-        ColumnPtr implicitValueCol;
+        ColumnPtr implicit_value_col;
         if (optimize_map_column_serialization)
-            implicitValueCol = value_columns[k_n.first];
+            implicit_value_col = value_columns[k_n.first];
         else
-            implicitValueCol = column_map.getValueColumnByKey(k_n.first);
+            implicit_value_col = column_map.getValueColumnByKey(k_n.first);
 
         // Invoke writeColumn for those generated implicit value column
-        if (type_map->valueTypeIsLC())
-        {
-            serialize_settings.getter = createStreamGetter(implicit_column,  offset_columns);
-            serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
-            serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
-            nullValSerial->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
-        }
-
-        this->writeColumn(implicit_column, *implicitValueCol, offset_columns, granules);
+        this->writeColumn(implicit_column, *implicit_value_col, offset_columns, granules);
     }
 
     // construct a fake column, could be optimized here.
@@ -643,61 +556,36 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
     // into part could cause checksum mismatch among replicas even the data is ok for use.
     // Part merge logic will check checksum among replicas and report ERROR in log. this will
     // block merge process somehow in case checksum mismatch happens.
-    //
-    //auto fakeCol = makeNullable(column_map.getValuePtr()->cloneResized(column_map.size()));
-    //const_cast<ColumnNullable&>(typeid_cast<const ColumnNullable&>(*fakeCol)).makeAllNulls();
 
-    ColumnPtr fakeCol;
-    if (type_map->valueTypeIsLC())
-        fakeCol = column_map.getValuePtr()->cloneEmpty();
-    else
-        fakeCol = makeNullable(column_map.getValuePtr()->cloneEmpty());
-
-    fakeCol = fakeCol->cloneResized(column_map.size());
+    ColumnPtr fake_col = column_map.createEmptyImplicitColumn();
+    fake_col = fake_col->cloneResized(column_map.size());
 
     // Fix missing columns
-    for (auto & ek : existKeyNames)
+    for (auto & ek : exist_key_names)
     {
-        if (!blockKeyNames.count(ek))
+        if (!block_key_names.count(ek))
         {
-            String  streamName = getImplicitColNameForMapKey(name, ek);
+            String stream_name = getImplicitColNameForMapKey(name, ek);
+            serializations.emplace(stream_name, null_val_serial);
 
-    		auto [it2, inserted2] = serialization_states.emplace(streamName, nullptr);
-			serializations.emplace(streamName, nullValSerial);
-
-            NameAndTypePair implicit_column{streamName, nullValTypePtr};
+            NameAndTypePair implicit_column{stream_name, null_val_type_ptr};
             this->addStreams(implicit_column, default_codec->getFullCodecDesc());
-
-            if (type_map->valueTypeIsLC())
-            {
-                serialize_settings.getter = createStreamGetter(implicit_column, offset_columns);
-                nullValSerial->serializeBinaryBulkStatePrefix(serialize_settings, it2->second);
-            }
-
-            this->writeColumn(implicit_column, *fakeCol, offset_columns, granules);
-
+            this->writeColumn(implicit_column, *fake_col, offset_columns, granules);
         }
     }
 
     // append info into map base implicit column
-    auto [it3, inserted3] = serialization_states.emplace(mapBaseStreamName, nullptr);
-    serializations.emplace(mapBaseStreamName, nullValSerial);
+    serializations.emplace(map_base_stream_name, null_val_serial);
 
-    NameAndTypePair base_column{mapBaseStreamName, nullValTypePtr};
-    if (!mapBaseStreamExist)
+    NameAndTypePair base_column{map_base_stream_name, null_val_type_ptr};
+    if (!map_base_stream_exist)
         implicit_columns_list.emplace_back(base_column);
 
     this->addStreams(base_column, default_codec->getFullCodecDesc());
-    if (type_map->valueTypeIsLC())
-    {
-        serialize_settings.getter = createStreamGetter(base_column, offset_columns);
-        nullValSerial->serializeBinaryBulkStatePrefix(serialize_settings, it3->second);
-    }
-
-    this->writeColumn(base_column, *fakeCol, offset_columns, granules);
+    this->writeColumn(base_column, *fake_col, offset_columns, granules);
 
     // after write this map column, update exist keys for next block check
-    existKeyNames.insert(blockKeyNames.begin(), blockKeyNames.end());
+    exist_key_names.insert(block_key_names.begin(), block_key_names.end());
 }
 
 void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
@@ -747,7 +635,7 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
     const auto type_map = std::dynamic_pointer_cast<const DataTypeByteMap>(type);
 
     // NOTE: for business reason, LC is considered not very useful
-    DataTypePtr nullValTypePtr = makeNullable(type_map->getValueType());
+    DataTypePtr null_val_type_ptr = type_map->getValueTypeForImplicitColumn();
 
     /// 1. It's faster to use StringRef as key of unordered_map than Field if type of map key is String
     /// 2. And it would be better to use integer when the type of map key belongs to integer class,
@@ -757,9 +645,7 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
     std::unordered_map<StringRef, ColumnPtr> value_columns;
 
     if (optimize_map_column_serialization)
-    {
-        constructImplicitValueColumns(column_map, key_name_map, value_columns);
-    }
+        column_map.constructAllImplicitColumns(key_name_map, value_columns);
     else
     {
         auto & column_map_key = column_map.getKey();
@@ -775,13 +661,13 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
     // checkMapKey(name, key_name_map);
     ISerialization::SerializeBinaryBulkSettings serialize_settings;
 
-	auto nullValSerial = nullValTypePtr->getDefaultSerialization();
+	auto null_val_serial = null_val_type_ptr->getDefaultSerialization();
 
     for (auto & k_n : key_name_map)
     {
-        String implicitStreamName = getImplicitColNameForMapKey(name, k_n.second);
+        String implicit_stream_name = getImplicitColNameForMapKey(name, k_n.second);
 
-        if (escapeForFileName(implicitStreamName).size() > DBMS_MAX_FILE_NAME_LENGTH)
+        if (escapeForFileName(implicit_stream_name).size() > DBMS_MAX_FILE_NAME_LENGTH)
         {
             LOG_WARNING(getLogger(), "The file name of map key is too long, more than {}, discard key: {}",
                         DBMS_MAX_FILE_NAME_LENGTH, k_n.second);
@@ -789,27 +675,164 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
         }
 
         // Fill up implicit column info in auxilary structures
-        serialization_states.emplace(implicitStreamName, nullptr);
-		serializations.emplace(implicitStreamName, nullValSerial);
+        serialization_states.emplace(implicit_stream_name, nullptr);
+		serializations.emplace(implicit_stream_name, null_val_serial);
 
         // All implicit column data store in the same file
-        this->addByteMapStreams({implicitStreamName, nullValTypePtr}, name, default_codec->getFullCodecDesc());
+        this->addByteMapStreams({implicit_stream_name, null_val_type_ptr}, name, default_codec->getFullCodecDesc());
 
-        ColumnPtr implicitValueCol;
+        ColumnPtr implicit_value_col;
         if (optimize_map_column_serialization)
-            implicitValueCol = value_columns[k_n.first];
+            implicit_value_col = value_columns[k_n.first];
         else
-            implicitValueCol = column_map.getValueColumnByKey(k_n.first);
+            implicit_value_col = column_map.getValueColumnByKey(k_n.first);
 
         // Invoke writeData for those generated implicit value column
         this->writeColumn(
-            {implicitStreamName, nullValTypePtr},
-            *implicitValueCol,
+            {implicit_stream_name, null_val_type_ptr},
+            *implicit_value_col,
             offset_columns,
             granules,
             !is_merge); // Since all implicit column data store in the same file, after all blocks of the same implicit column data are written, it is necessary to release resources and persist the data to disk. Otherwise, the offset is incorrect.
                         // But when it's in merge status, it uses vertical merge algorithm and will close the writer after each implicit column finishes, so it's no need to finalize stream. Because the granules is not fixed, so finalizing stream will get different granules int the same part.
     }
+}
+
+/// Column must not be empty. (column.size() !== 0)
+void MergeTreeDataPartWriterOnDisk::writeColumn(
+    const NameAndTypePair & name_and_type,
+    const IColumn & column,
+    WrittenOffsetColumns & offset_columns,
+    const Granules & granules,
+    bool need_finalize)
+{
+    if (granules.empty())
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Empty granules for column {}, current mark {}",
+            backQuoteIfNeed(name_and_type.name),
+            getCurrentMark());
+
+    const auto & [name, type] = name_and_type;
+
+    // special code path for ByteMap data type in flatten model
+    if (type->isMap() && column.size() > 0 && !type->isMapKVStore())
+    {
+        if (data_part->versions->enable_compact_map_data)
+            writeCompactedByteMapColumn(name_and_type, column, offset_columns, granules);
+        else
+            writeUncompactedByteMapColumn(name_and_type, column, offset_columns, granules);
+        return;
+    }
+
+    auto [it, inserted] = serialization_states.emplace(name, nullptr);
+
+    if (inserted)
+    {
+        ISerialization::SerializeBinaryBulkSettings serialize_settings;
+        serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
+        serializations[name]->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
+    }
+
+    const auto & global_settings = storage.getContext()->getSettingsRef();
+    ISerialization::SerializeBinaryBulkSettings serialize_settings;
+    serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
+    serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
+    serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
+
+    for (const auto & granule : granules)
+    {
+        data_written = true;
+
+        if (granule.mark_on_start)
+        {
+            if (last_non_written_marks.count(name))
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "We have to add new mark for column, but already have non written mark. Current mark {}, total marks {}, offset {}",
+                    getCurrentMark(),
+                    index_granularity.getMarksCount(),
+                    getRowsWrittenInLastMark());
+            last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
+        }
+        else if (isMapImplicitKeyNotKV(name) && !last_non_written_marks.count(name))
+        {
+            /// This case maybe happen when writing uncompact map data during merging.
+            /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream.
+            /// Thus, it may not exist in last_non_written_marks, we need to fill its mark info using the mark info of base stream.
+            String col = parseMapNameFromImplicitColName(name);
+            String map_base_stream_name = getBaseNameForMapCol(col);
+            if (!last_non_written_marks.count(map_base_stream_name))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Map base stream is not in last_non_written_marks.");
+
+            last_non_written_marks[name] = copyLastNonWrittenMarks(
+                {map_base_stream_name, type},
+                last_non_written_marks[map_base_stream_name],
+                name_and_type,
+                offset_columns,
+                serialize_settings.path);
+        }
+
+        writeSingleGranule(name_and_type, column, offset_columns, it->second, serialize_settings, granule);
+
+        if (granule.is_complete)
+        {
+            auto marks_it = last_non_written_marks.find(name);
+            if (marks_it == last_non_written_marks.end())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
+
+            for (const auto & mark : marks_it->second)
+                flushMarkToFile(mark, index_granularity.getMarkRows(granule.mark_number));
+            last_non_written_marks.erase(marks_it);
+        }
+        else
+        {
+            if (!canGranuleNotComplete())
+                throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    // When enable compact map data, it need to flush all data in the buffer to disk. Otherwise, the offset of the implicit column may be wrong.
+    if (need_finalize)
+    {
+        if (is_merge)
+            throw Exception("Can not finialize stream early in merge process.", ErrorCodes::LOGICAL_ERROR);
+
+        // for compacted map, we need to handle final marks here
+        auto last_granule = granules.back();
+        if (!last_granule.is_complete)
+        {
+            if (!canGranuleNotComplete())
+                throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
+
+            auto rows_in_last_mark = granules.back().rows_to_write;
+            auto marks_it = last_non_written_marks.find(name);
+            if (marks_it == last_non_written_marks.end())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
+
+            for (const auto & mark : marks_it->second)
+                flushMarkToFile(mark, rows_in_last_mark);
+            last_non_written_marks.erase(marks_it);
+        }
+
+        bool write_final_mark = (with_final_mark && data_written);
+
+        if (write_final_mark)
+            writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
+
+        serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
+    }
+
+    serializations[name]->enumerateStreams(
+        [&](const ISerialization::SubstreamPath & substream_path) {
+            bool is_offsets = !substream_path.empty() && substream_path.back().type == ISerialization::Substream::ArraySizes;
+            if (is_offsets)
+            {
+                String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+                offset_columns.insert(stream_name);
+            }
+        },
+        serialize_settings.path);
 }
 
 ISerialization::StreamCallback MergeTreeDataPartWriterOnDisk::finalizeStreams(const String & name)
@@ -822,10 +845,7 @@ ISerialization::StreamCallback MergeTreeDataPartWriterOnDisk::finalizeStreams(co
     };
 }
 
-void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(
-	const String & sourceName,
-	const String & targetName,
-	const IDataType & type)
+void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(const String & source_name, const String & target_name, const IDataType & type)
 {
     // This is done in three steps:
     // 1. copy synced data in file
@@ -833,41 +853,43 @@ void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(
     try
     {
         type.enumerateStreams(
-			type.getDefaultSerialization(),
-            [&](const ISerialization::SubstreamPath& substream_path, const IDataType&)
-            {
-                auto sourceStreamName = IDataType::getFileNameForStream(sourceName, substream_path);
-                auto targetStreamName = IDataType::getFileNameForStream(targetName, substream_path);
-                if (!column_streams.count(sourceStreamName) ||
-                    column_streams.count(targetStreamName))
+            type.getDefaultSerialization(),
+            [&](const ISerialization::SubstreamPath & substream_path, const IDataType &) {
+                auto source_stream_name = ISerialization::getFileNameForStream(source_name, substream_path);
+                auto target_stream_name = ISerialization::getFileNameForStream(target_name, substream_path);
+                if (!column_streams.count(source_stream_name) || column_streams.count(target_stream_name))
                 {
-                    throw Exception("prerequist is not matched while calling IMergedBlockOutputStream::deepCopyAndAdd", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "Prerequist is not matched while calling MergeTreeDataPartWriterOnDisk::deepCopyAndAdd", ErrorCodes::LOGICAL_ERROR);
                 }
 
-                column_streams[sourceStreamName]->sync();
+                column_streams[source_stream_name]->sync();
 
                 // copy flushed files
-                if (Poco::File(part_path + sourceStreamName + DATA_FILE_EXTENSION).exists())
-                    Poco::File(part_path + sourceStreamName + DATA_FILE_EXTENSION).copyTo(
-                            part_path + targetStreamName + DATA_FILE_EXTENSION);
-                if (Poco::File(part_path + sourceStreamName + marks_file_extension).exists())
-                    Poco::File(part_path + sourceStreamName + marks_file_extension).copyTo(
-                            part_path + targetStreamName + marks_file_extension);
+                if (Poco::File(part_path + source_stream_name + DATA_FILE_EXTENSION).exists())
+                    Poco::File(part_path + source_stream_name + DATA_FILE_EXTENSION)
+                        .copyTo(part_path + target_stream_name + DATA_FILE_EXTENSION);
+                if (Poco::File(part_path + source_stream_name + marks_file_extension).exists())
+                    Poco::File(part_path + source_stream_name + marks_file_extension)
+                        .copyTo(part_path + target_stream_name + marks_file_extension);
 
                 // addStreams
-                column_streams[targetStreamName] = std::make_unique<Stream>(
-                        targetStreamName,
-						data_part->volume->getDisk(),
-                        part_path + targetStreamName, DATA_FILE_EXTENSION,
-                        part_path + targetStreamName, marks_file_extension,
-                        default_codec,
-                        settings.max_compress_block_size);
+                column_streams[target_stream_name] = std::make_unique<Stream>(
+                    target_stream_name,
+                    data_part->volume->getDisk(),
+                    part_path + target_stream_name,
+                    DATA_FILE_EXTENSION,
+                    part_path + target_stream_name,
+                    marks_file_extension,
+                    default_codec,
+                    settings.max_compress_block_size);
 
                 // copy buffered stream and its info
-                column_streams[sourceStreamName]->deepCopyTo(*column_streams[targetStreamName]);
-            }, {});
+                column_streams[source_stream_name]->deepCopyTo(*column_streams[target_stream_name]);
+            },
+            {});
     }
-    catch(Exception& e)
+    catch (Exception & e)
     {
         e.addMessage("MergeTreeDataPartWriterWide::deepCopyAndAdd fail");
         throw;
@@ -886,7 +908,9 @@ ISerialization::OutputStreamGetter MergeTreeDataPartWriterOnDisk::createStreamGe
         /// Don't write offsets more than one time for Nested type.
         if (is_offsets && offset_columns.count(stream_name))
             return nullptr;
-
+        
+        if (!column_streams.count(stream_name))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Try to get stream {} but not found, it's a bug", stream_name);
         return &column_streams.at(stream_name)->compressed;
     };
 }

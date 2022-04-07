@@ -1274,6 +1274,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
         compression_codec,
         blocks_are_granules_size,
+        context->getSettingsRef().optimize_map_column_serialization,
         /*is_merge*/true};
 
     merged_stream->readPrefix();
@@ -1359,7 +1360,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
             /*can_use_adaptive_granularity = */ new_data_part->index_granularity_info.is_adaptive,
             /* rewrite_primary_key = */false,
             /*blocks_are_granules_size = */ false,
-            /*skip_bitengine_encode = */ true);
+            /*skip_bitengine_encode = */ true,
+            context->getSettingsRef().optimize_map_column_serialization);
 
         for (size_t column_num = 0, gathering_column_names_size = gathering_column_names.size(); column_num < gathering_column_names_size;
              ++column_num, ++it_name_and_type)
@@ -1493,7 +1495,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                         }
                         else
                         {
-                            //auto data_lock = data_part->getColumnsReadLock();
                             const auto & checksums = part->getChecksums();
                             for (const auto & it : checksums->files)
                             {

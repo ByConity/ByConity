@@ -72,52 +72,44 @@ private:
 String QueryNormalizer::getMapKeyName(ASTFunction & node, Data & data)
 {
     ASTLiteral * key_lit = node.arguments->children[1]->as<ASTLiteral>(); // Constant Literal
-    ASTFunction* key_func = node.arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
+    ASTFunction * key_func = node.arguments->children[1]->as<ASTFunction>(); // for constant foldable functions' case
 
-    String keyName;
+    String key_name;
     if (key_lit) // key is literal
     {
-        keyName = key_lit->getColumnName();
+        key_name = key_lit->getColumnName();
     }
     else if (key_func)
     {
         // check whether key_func's inputs are all constant literal, if yes, invoke constant folding logic.
         // This handling is specially added for Date key which is toDate('YYYY-MM_DD') in SQL
-        bool allInputConst = true;
-        for (auto& c : key_func->arguments->children)
+        bool all_input_const = true;
+        for (auto & c : key_func->arguments->children)
         {
-            if(!c->as<ASTLiteral>())
+            if (!c->as<ASTLiteral>())
             {
-                allInputConst = false;
+                all_input_const = false;
                 break;
             }
         }
 
-        if (allInputConst)
+        if (all_input_const)
         {
-            std::pair<Field, DataTypePtr> value_raw =
-                evaluateConstantExpression( node.arguments->children[1], data.context);
-            keyName = applyVisitor(DB::FieldVisitorToString(), value_raw.first);
+            std::pair<Field, DataTypePtr> value_raw = evaluateConstantExpression(node.arguments->children[1], data.context);
+            key_name = applyVisitor(DB::FieldVisitorToString(), value_raw.first);
         }
-    } 
+    }
 
-    return keyName;
+    return key_name;
 }
 
-void QueryNormalizer::rewriteMapElement(ASTFunction & node, ASTPtr & ast, const String & key_name)
+void QueryNormalizer::rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name)
 {
-    // get colname and key
-    ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
-
     String my_alias = ast->tryGetAlias();
-
-    if (!map_col)
-        return;
-    
     if (!key_name.empty())
     {
         // create identifier
-        String implicit_name = getImplicitColNameForMapKey(map_col->name(), key_name);
+        String implicit_name = getImplicitColNameForMapKey(map_name, key_name);
         ast = std::make_shared<ASTIdentifier>(implicit_name);
         ast->as<ASTIdentifier>()->is_implicit_map_key = true;
         //set alias back
@@ -225,47 +217,53 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
         node.setAlias(old_col_name_or_alias);
     }
 #endif
-    // rewrite mapElement(c, k) to implicit column __c__k
-    else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapelement") && node.arguments->children.size() == 2
-             && ((data.storage && data.storage->supportsMapImplicitColumn()) /*|| data.plan_segment_analyzer*/))
-    {
-        // get colname and key
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
-
-        if (map_col 
-            && !IdentifierSemantic::isSpecial(*map_col))
-        {
-            String key_name = getMapKeyName(node, data);
-            if ((data.storage && data.metadata_snapshot->columns.hasPhysical(map_col->name()) && !data.metadata_snapshot->columns.getPhysical(map_col->name()).type->isMapKVStore())
-                /*|| (data.plan_segment_analyzer && data.plan_segment_analyzer->hasColumn(getImplicitColNameForMapKey(map_col->name, key_name)))*/)
-            {
-                rewriteMapElement(node, ast, key_name);
-            }
-        }
-    }
-    // Support square bracket for map element. Just convert it into mapElement function. 
-    // Rewrite arrayElement(c, k) to implicit column __c__k
-    else if (data.rewrite_map_col && startsWith(func_name_lowercase, "arrayelement") && node.arguments->children.size() == 2
-             && ((data.storage && data.storage->supportsMapImplicitColumn()) /*|| data.plan_segment_analyzer*/))
+    // Rewrite mapElement(c, 'k') to implicit column __c__'k'
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapelement") && node.arguments->children.size() == 2 && data.storage
+        && data.storage->supportsMapImplicitColumn())
     {
         ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
 
-        if (map_col 
-            && !IdentifierSemantic::isSpecial(*map_col))
+        if (map_col && !IdentifierSemantic::isSpecial(*map_col))
         {
             String key_name = getMapKeyName(node, data);
-            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_col->name()) && data.metadata_snapshot->columns.getPhysical(map_col->name()).type->isMap())
+            String map_name = map_col->name();
+            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
             {
-                node.name = "mapElement";
-                if (!data.metadata_snapshot->columns.getPhysical(map_col->name()).type->isMapKVStore())
-                    rewriteMapElement(node, ast, key_name);
+                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
+                if (map_type->isMap() && !map_type->isMapKVStore())
+                    rewriteMapElement(ast, map_name, key_name);
             }
-            
         }
     }
+    // Support square bracket for map element. Just convert it into mapElement function.
+    // Rewrite arrayElement(c, 'k') to implicit column __c__'k'
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "arrayelement") && node.arguments->children.size() == 2 && data.storage
+        && data.storage->supportsMapImplicitColumn())
+    {
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
+
+        if (map_col && !IdentifierSemantic::isSpecial(*map_col))
+        {
+            String key_name = getMapKeyName(node, data);
+            String map_name = map_col->name();
+            if (data.storage && data.metadata_snapshot->columns.hasPhysical(map_name))
+            {
+                auto map_type = data.metadata_snapshot->columns.getPhysical(map_name).type;
+                if (map_type->isMap())
+                {
+                    node.name = "mapElement"; /// convert array element to mapelement for map type
+                    if (!map_type->isMapKVStore())
+                        rewriteMapElement(ast, map_name, key_name);
+                }
+            }
+        }
+    }
+    // Rewrite mapKeys(c) to implicite column c.key for KV store map
     else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapkeys") && node.arguments->children.size() == 1 && data.storage)
     {
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>(); // Column
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
         if (map_col)
         {
             DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
@@ -277,9 +275,10 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
             }
         }
     }
+    // Rewrite mapValues(c) to implicite column c.value for KV store map
     else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapvalues") && node.arguments->children.size() == 1 && data.storage)
     {
-        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>(); // Column
+        ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
         if (map_col)
         {
             DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;

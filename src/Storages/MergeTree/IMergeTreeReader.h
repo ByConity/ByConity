@@ -81,6 +81,12 @@ protected:
     void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 
+    void readMapDataNotKV(
+        const NameAndTypePair & name_and_type, ColumnPtr & column,
+        size_t from_mark, bool continue_reading, size_t max_rows_to_read,
+        std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+        std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns);
+
     void readData(
         const NameAndTypePair & name_and_type, ColumnPtr & column,
         size_t from_mark, bool continue_reading, size_t max_rows_to_read,

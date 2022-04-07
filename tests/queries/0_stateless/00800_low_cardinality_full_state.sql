@@ -67,17 +67,17 @@ select d2 from test.lc_dict where strlc in ('one','two') and d2 >= 0 order by st
 drop table if exists test.lc_dict;
 drop table if exists test.lc_dict2;
 
--- select 'compact part test';
--- drop table if exists test.events_compact;
--- CREATE TABLE test.events_compact
--- (
---     `app_id` UInt32,
---     `string_params` Map(String, LowCardinality(Nullable(String)))
--- )
--- ENGINE = MergeTree
--- PARTITION BY app_id
--- ORDER BY app_id
--- SETTINGS index_granularity = 8192;
--- insert into test.events_compact format JSONEachRow {"app_id":10000000,"string_params":{"__is_history":"true"}};
--- select * from test.events_compact format Null;
--- drop table if exists test.events_compact;
+select 'compact part test';
+drop table if exists test.events_compact;
+CREATE TABLE test.events_compact
+(
+    `app_id` UInt32,
+    `string_params` Map(String, LowCardinality(Nullable(String)))
+)
+ENGINE = MergeTree
+PARTITION BY app_id
+ORDER BY app_id
+SETTINGS index_granularity = 8192;
+insert into test.events_compact format JSONEachRow {"app_id":10000000,"string_params":{"__is_history":"true"}};
+select * from test.events_compact;
+drop table if exists test.events_compact;

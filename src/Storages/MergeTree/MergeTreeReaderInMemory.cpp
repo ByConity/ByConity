@@ -133,7 +133,7 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
                     else
                     {
                         auto const & map_key_type = dynamic_cast<const DataTypeByteMap*>(col->type.get())->getKeyType();
-                        key_name = convertKeyNameToVisitorString(map_key_type.get(), key_name);
+                        key_name = map_key_type->stringToVisitorString(key_name);
                     }
                     res_columns[i] = column_map.getValueColumnByKey(key_name, rows_to_read);
                 }

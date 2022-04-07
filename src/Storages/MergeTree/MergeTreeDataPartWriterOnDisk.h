@@ -158,12 +158,16 @@ protected:
     /// Write data of one column.
     /// Return how many marks were written and
     /// how many rows were written for last mark
-    virtual void writeColumn(
+    void writeColumn(
         const NameAndTypePair & name_and_type,
         const IColumn & column,
         WrittenOffsetColumns & offset_columns,
         const Granules & granules,
-        bool need_finalize = false) = 0;
+        bool need_finalize = false);
+
+    virtual bool canGranuleNotComplete() { return false; }
+
+    virtual size_t getRowsWrittenInLastMark() { return 0; }
 
     /// Write data of one bytemap column.
     /// Return how many marks were written and
@@ -180,7 +184,7 @@ protected:
         WrittenOffsetColumns & offset_columns,
         const Granules & granules);
 
-	void deepCopyAndAdd(const String& sourceStreamName, const String& targetStreamName, const IDataType& type);
+    void deepCopyAndAdd(const String & source_stream_name, const String & target_stream_name, const IDataType & type);
 
     ISerialization::OutputStreamGetter createStreamGetter(const NameAndTypePair & column, WrittenOffsetColumns & offset_columns) const;
 
@@ -223,7 +227,6 @@ protected:
         const NameAndTypePair & column,
         WrittenOffsetColumns & offset_columns,
         ISerialization::SubstreamPath & path);
-
 
     virtual Poco::Logger * getLogger() = 0; 
 
@@ -270,7 +273,7 @@ protected:
     using MarksForColumns = std::unordered_map<String, StreamsWithMarks>;
     MarksForColumns last_non_written_marks;
 
-    MapColumnsKeys existKeysNames;
+    MapColumnsKeys exist_keys_names;
 	NamesAndTypesList implicit_columns_list;
 
     bool optimize_map_column_serialization = false;

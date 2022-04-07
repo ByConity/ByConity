@@ -25,6 +25,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     const MergeTreeIndices & skip_indices,
     CompressionCodecPtr default_codec_,
     bool blocks_are_granules_size,
+    bool optimize_map_column_serialization,
     bool is_merge)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , columns_list(columns_list_)
@@ -35,7 +36,9 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         storage.getSettings(),
         data_part->index_granularity_info.is_adaptive,
         /* rewrite_primary_key = */ true,
-        blocks_are_granules_size);
+        blocks_are_granules_size,
+        /* skip_bitengine_encode(default)*/false,
+        optimize_map_column_serialization);
 
     if (!part_path.empty())
         volume->getDisk()->createDirectories(part_path);

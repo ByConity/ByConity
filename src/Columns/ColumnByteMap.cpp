@@ -12,6 +12,7 @@
 
 #include <Common/typeid_cast.h>
 #include <IO/WriteHelpers.h> // toString func
+#include <Common/FieldVisitorToString.h>
 
 
 namespace DB
@@ -30,16 +31,16 @@ std::string ColumnByteMap::getName() const
     return "Map("+ getKey().getName() + "," + getValue().getName() + ")" ;
 }
 
-ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column, MutableColumnPtr && value_column, MutableColumnPtr && offsets_column)
-    :keyColumn(std::move(key_column)), valueColumn(std::move(value_column)), offsets(std::move(offsets_column))
+ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column_, MutableColumnPtr && value_column_, MutableColumnPtr && offsets_column)
+    :key_column(std::move(key_column_)), value_column(std::move(value_column_)), offsets(std::move(offsets_column))
 {
 }
 
-ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column, MutableColumnPtr && value_column)
-    :keyColumn(std::move(key_column)), valueColumn(std::move(value_column))
+ColumnByteMap::ColumnByteMap(MutableColumnPtr && key_column_, MutableColumnPtr && value_column_)
+    :key_column(std::move(key_column_)), value_column(std::move(value_column_))
 {
-    if (!keyColumn->empty() || !valueColumn->empty())
-       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(keyColumn->size()) + " : " + toString(valueColumn->size()),
+    if (!key_column->empty() || !value_column->empty())
+       throw Exception("Not empty key, value passed to ColumnByteMap, but no offsets passed " + toString(key_column_->size()) + " : " + toString(value_column_->size()),
                ErrorCodes::BAD_ARGUMENTS);
     offsets = ColumnOffsets::create();
 }
@@ -315,18 +316,18 @@ ColumnPtr ColumnByteMap::filter(const Filter & filt, ssize_t result_size_hint) c
     size_t size = getOffsets().size();
     if (size == 0)
     {
-        return ColumnByteMap::create(keyColumn, valueColumn);
+        return ColumnByteMap::create(key_column, value_column);
     }
     // There are two implicit columns that need to be filtered, and Offsets need adjustments.
-    auto res = ColumnByteMap::create(keyColumn->cloneEmpty(), valueColumn->cloneEmpty());
+    auto res = ColumnByteMap::create(key_column->cloneEmpty(), value_column->cloneEmpty());
 
     Offsets & res_offsets = res->getOffsets();
 
     // Handle implicit key column
-    ColumnByteMap::filter(keyColumn, res->getKeyPtr(), getOffsets(), filt, result_size_hint);
+    ColumnByteMap::filter(key_column, res->getKeyPtr(), getOffsets(), filt, result_size_hint);
 
     // Handle implicit value column
-    ColumnByteMap::filter(valueColumn, res->getValuePtr(), getOffsets(), filt, result_size_hint);
+    ColumnByteMap::filter(value_column, res->getValuePtr(), getOffsets(), filt, result_size_hint);
 
     // Handle Offsets explicitly
     size_t current_offset = 0;
@@ -491,12 +492,12 @@ ColumnPtr ColumnByteMap::permute(const Permutation & perm, size_t limit) const
 
     if (limit == 0)
     {
-        return ColumnByteMap::create(keyColumn, valueColumn);
+        return ColumnByteMap::create(key_column, value_column);
     }
 
     Permutation nested_perm(getOffsets().back());
 
-    auto res = ColumnByteMap::create(keyColumn->cloneEmpty(), valueColumn->cloneEmpty());
+    auto res = ColumnByteMap::create(key_column->cloneEmpty(), value_column->cloneEmpty());
     Offsets& res_offsets = res->getOffsets();
     res_offsets.resize(limit);
 
@@ -511,8 +512,8 @@ ColumnPtr ColumnByteMap::permute(const Permutation & perm, size_t limit) const
 
     if (current_offset != 0)
     {
-        res->keyColumn = keyColumn->permute(nested_perm, current_offset);
-        res->valueColumn = valueColumn->permute(nested_perm, current_offset);
+        res->key_column = key_column->permute(nested_perm, current_offset);
+        res->value_column = value_column->permute(nested_perm, current_offset);
     }
 
     return res;
@@ -520,8 +521,8 @@ ColumnPtr ColumnByteMap::permute(const Permutation & perm, size_t limit) const
 
 ColumnPtr ColumnByteMap::index(const IColumn & indexes, size_t limit) const
 {
-    auto key_index_column = keyColumn->index(indexes, limit);
-    auto value_index_column = valueColumn->index(indexes, limit);
+    auto key_index_column = key_column->index(indexes, limit);
+    auto value_index_column = value_column->index(indexes, limit);
     return ColumnByteMap::create(key_index_column, value_index_column);
 }
 
@@ -543,7 +544,7 @@ ColumnPtr ColumnByteMap::replicate(const Offsets & replicate_offsets) const
     size_t col_size = size();
     if (col_size != replicate_offsets.size())
         throw Exception("Size of offsets doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-    auto res = ColumnByteMap::create(keyColumn->cloneEmpty(), valueColumn->cloneEmpty());
+    auto res = ColumnByteMap::create(key_column->cloneEmpty(), value_column->cloneEmpty());
     if (col_size == 0)
     {
         return res;
@@ -551,8 +552,8 @@ ColumnPtr ColumnByteMap::replicate(const Offsets & replicate_offsets) const
 
     Offsets & res_offsets = res->getOffsets();
 
-    ColumnByteMap::replicate(keyColumn, res->getKeyPtr(), getOffsets(), replicate_offsets);
-    ColumnByteMap::replicate(valueColumn, res->getValuePtr(), getOffsets(), replicate_offsets);
+    ColumnByteMap::replicate(key_column, res->getKeyPtr(), getOffsets(), replicate_offsets);
+    ColumnByteMap::replicate(value_column, res->getValuePtr(), getOffsets(), replicate_offsets);
 
     // Handle offsets explicitly
     const Offsets & src_offsets = getOffsets();
@@ -672,19 +673,18 @@ void ColumnByteMap::replicateNumber(const ColumnPtr& implCol, ColumnPtr& implRes
     const typename ColumnVector<T>::Container& src_data =
         typeid_cast<const ColumnVector<T> &>(*implCol).getData();
 
-    typename ColumnVector<T>::Container& res_data =
-        typeid_cast<ColumnVector<T>&>(implResCol->assumeMutableRef()).getData();
+    typename ColumnVector<T>::Container & res_data = typeid_cast<ColumnVector<T> &>(implResCol->assumeMutableRef()).getData();
 
     res_data.reserve(implCol->size() / col_size * replicate_offsets.back());
 
     Offset prev_replicate_offset = 0;
     Offset prev_data_offset = 0;
     Offset current_new_offset = 0;
-    for (size_t i = 0; i<col_size; ++i)
+    for (size_t i = 0; i < col_size; ++i)
     {
         size_t size_to_replicate = replicate_offsets[i] - prev_replicate_offset;
         size_t value_size = src_offsets[i] - prev_data_offset;
-        for (size_t j = 0; j<size_to_replicate; ++j)
+        for (size_t j = 0; j < size_to_replicate; ++j)
         {
             current_new_offset += value_size;
             res_data.resize(res_data.size() + value_size);
@@ -1015,79 +1015,74 @@ void ColumnByteMap::protect()
 void ColumnByteMap::forEachSubcolumn(ColumnCallback callback)
 {
     callback(offsets);
-    callback(keyColumn);
-    callback(valueColumn);
+    callback(key_column);
+    callback(value_column);
+}
+
+namespace
+{
+    ColumnPtr makeNullableForMapValue(const ColumnPtr & column)
+    {
+        /// When column is low cardinality, its dictionary type must be nullable, see more detail in DataTypeLowCardinality::canBeMapValueType()
+        return column->lowCardinality() ? column : makeNullable(column);
+    }
+
+    /**
+     * Column could be in the following two mode:
+     * 1. Column is low cardinality type and its dictionary type is nullable, see more detail in DataTypeLowCardinality::canBeMapValueType()
+     * 2. Column is other type column, i.e. String, Numbers which can be inside nullable and need to be wrapped in Nullable again for querying implicit column.
+     * For the first mode, we can use value column type directly when querying implicit column.
+     */
+    bool needAddNullable(const ColumnPtr & column) { return !column->lowCardinality(); }
+
+    /**
+     * Check if new column which will be inserted has obeyed the above rules.
+     */
+    void checkNewColumnCanBeInserted(const ColumnPtr & value_column, bool add_nullable, const IColumn & new_column)
+    {
+        if (add_nullable)
+        {
+            const auto * nullable_value_column = dynamic_cast<const ColumnNullable *>(&new_column);
+            if (!nullable_value_column)
+            {
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "The new column can not be cast to nullable, its name is {}, map value column name is {}",
+                    new_column.getName(),
+                    value_column->getName());
+            }
+            if (nullable_value_column->getNestedColumnPtr()->getDataType() != value_column->getDataType())
+            {
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "The nested column type {} of nullable column is not equal to map value column type {}",
+                    nullable_value_column->getNestedColumnPtr()->getName(),
+                    value_column->getName());
+            }
+        }
+        else if (new_column.getDataType() != value_column->getDataType())
+        {
+            throw Exception(
+                ErrorCodes::BAD_ARGUMENTS,
+                "The new column type {} is not equal to map value column type {}",
+                new_column.getName(),
+                value_column->getName());
+        }
+    }
 }
 
 /**
- * The low cardinality value column compose by a dictionary and a index array. And the memory layout as the following:
- *    dict                 index
- * |"abc"   |             | 1 |
- * |"abcd"  |             | 2 |
- * |"abcde" |             | 3 |
- *                        | 1 |
- *                        | 3 |
- * And usually, the index would be type of uint_8, the dict be the type of ColumnUnique<String>
- */
-ColumnPtr ColumnByteMap::getValueColumnByKeyForLC(const StringRef & key, size_t rows_to_read) const
-{
-    // check whether valueColumn is Nullable
-    ColumnPtr res = valueColumn->cloneEmpty();
-    size_t col_size = size();
-
-    const Offsets & offsets_ = getOffsets();
-
-    if (col_size == 0)
-        return res;
-    auto & res_col = res->assumeMutableRef();
-    res_col.reserve(col_size);
-    size_t offset = 0;
-
-    size_t row_size = offsets_[0];
-    bool found_key = false;
-
-    size_t rows = rows_to_read == 0 ? col_size: std::min(rows_to_read, col_size);
-    for (size_t i = 0; i < rows; ++i)
-    {
-        found_key = false;
-        offset = offsets_[i - 1];
-        row_size = offsets_[i] - offset;
-
-        for (size_t r = 0; r < row_size; ++r)
-        {
-            auto tmp_key = keyColumn->getDataAt(offset + r);
-            if (tmp_key == key)
-            {
-                found_key = true;
-                res_col.insertFrom(*valueColumn, offset + r);
-                break;
-            }
-        }
-
-        if (!found_key)
-        {
-            res_col.insert(Null());
-        }
-    }
-
-    return res;
-}
-
-/** Generic implementation of get implicit value column based on key value.
+ * Generic implementation of get implicit value column based on key value.
  * TODO: specialize this function for Number type and String type.
  */
 ColumnPtr ColumnByteMap::getValueColumnByKey(const StringRef & key, size_t rows_to_read) const
 {
-    // check whether if lc column type
-    if (valueColumn->lowCardinality())
-        return getValueColumnByKeyForLC(key, rows_to_read);
-
-    // check whether valueColumn is Nullable
-    ColumnPtr res = valueColumn->cloneEmpty();
     size_t col_size = size();
 
     const Offsets & offsets_ = getOffsets();
-    res = makeNullable(res);
+    /// Mark whether res has been wrapped nullable explicitly.
+    bool add_nullable = needAddNullable(value_column);
+    ColumnPtr res = createEmptyImplicitColumn();
 
     if (col_size == 0)
         return res;
@@ -1098,7 +1093,7 @@ ColumnPtr ColumnByteMap::getValueColumnByKey(const StringRef & key, size_t rows_
     size_t row_size = offsets_[0];
     bool found_key = false;
 
-    size_t rows = rows_to_read == 0 ? col_size: std::min(rows_to_read, col_size);
+    size_t rows = rows_to_read == 0 ? col_size : std::min(rows_to_read, col_size);
     for (size_t i = 0; i < rows; ++i)
     {
         found_key = false;
@@ -1107,12 +1102,18 @@ ColumnPtr ColumnByteMap::getValueColumnByKey(const StringRef & key, size_t rows_
 
         for (size_t r = 0; r < row_size; ++r)
         {
-            auto tmp_key = keyColumn->getDataAt(offset + r);
+            auto tmp_key = key_column->getDataAt(offset + r);
             if (tmp_key == key)
             {
                 found_key = true;
-                static_cast<ColumnNullable &>(res_col).getNestedColumn().insertFrom(*valueColumn, offset + r);
-                static_cast<ColumnNullable &>(res_col).getNullMapData().push_back(0);
+                /// Handle lowcardinality type
+                if (!add_nullable)
+                    res_col.insertFrom(*value_column, offset + r);
+                else
+                {
+                    static_cast<ColumnNullable &>(res_col).getNestedColumn().insertFrom(*value_column, offset + r);
+                    static_cast<ColumnNullable &>(res_col).getNullMapData().push_back(0);
+                }
                 break;
             }
         }
@@ -1126,100 +1127,147 @@ ColumnPtr ColumnByteMap::getValueColumnByKey(const StringRef & key, size_t rows_
     return res;
 }
 
-/**
- * This routine will reconsturct MAP column based on its implicit columns.
- * \param implKeyValues is the collection of {key_name, {offset, key_column}}
- * and this routine will be compatible with non-zero offset. non-zero offset
- * could happen for scenario that map column and implicit column are both
- * referenced in the same query, e.g.
- * select map from table where map{key} =1
- * In the above case, MergeTreeReader will use the same stream __map__key for
- * both keys, while reconstructing(append) map column, size of implicit column
- * __map__key was accumulated.
- */
-void ColumnByteMap::fillByExpandedColumns(
-     const DataTypeByteMap& mapType,
-     const std::map<String, std::pair<size_t, const IColumn*> >& implKeyValues
-)
+void ColumnByteMap::constructAllImplicitColumns(
+    std::unordered_map<StringRef, String> & key_name_map, std::unordered_map<StringRef, ColumnPtr> & value_columns) const
 {
-    // Append to ends of this ColumnByteMap
-    if (implKeyValues.empty()) return;
+    /// This is an one-pass algorithm, to minimize the cost of traversing all key-value pairs:
+    /// 1) Names of key and implicit value columns are created lazily;
+    /// 2) NULLs are filled as need before non-null values inserted or in the end.
 
-    if (implKeyValues.begin()->second.second->size() < implKeyValues.begin()->second.first)
+    const Offsets & offsets_ = getOffsets();
+    /// Mark whether res has been wrapped nullable explicitly
+    bool add_nullable = needAddNullable(value_column);
+    size_t col_size = size();
+
+    for (size_t r = 0; r < col_size; ++r)
     {
-        throw Exception("MAP implicit key size is slow than offset " +
-                        toString(implKeyValues.begin()->second.second->size()) + " " + toString(implKeyValues.begin()->second.first),
-                        ErrorCodes::LOGICAL_ERROR);
+        const size_t offset = offsets_[r - 1]; /// -1th index is Ok, see PaddedPODArray
+        const size_t curr_num_pair = offsets_[r] - offset;
+
+        for (size_t p = 0; p < curr_num_pair; ++p)
+        {
+            auto tmp_key = key_column->getDataAt(offset + p);
+            auto iter = value_columns.find(tmp_key);
+
+            if (iter == value_columns.end())
+            {
+                key_name_map[tmp_key] = applyVisitor(DB::FieldVisitorToString(), (*key_column)[offset + p]);
+                ColumnPtr new_column = createEmptyImplicitColumn();
+                new_column->assumeMutableRef().reserve(col_size);
+
+                iter = value_columns.try_emplace(tmp_key, new_column).first;
+            }
+
+            auto & impl_value_column = iter->second->assumeMutableRef();
+            /// Fill NULLs as need
+            while (impl_value_column.size() < r)
+                impl_value_column.insert(Null());
+
+            /// Handle duplicated keys in map
+            if (!add_nullable)
+                impl_value_column.insertFrom(*value_column, offset + r);
+            else
+            {
+                static_cast<ColumnNullable &>(impl_value_column).getNestedColumn().insertFrom(*value_column, offset + p);
+                static_cast<ColumnNullable &>(impl_value_column).getNullMapData().push_back(0);
+            }
+        }
     }
 
-    size_t rows = implKeyValues.begin()->second.second->size() - implKeyValues.begin()->second.first;
-
-
-    IColumn& keyCol = getKey();
-    IColumn& valueCol = getValue();
-    Offsets& offsets_ = getOffsets();
-    size_t allKeysNum = implKeyValues.size();
-    std::vector<Field> keys;
-    keys.reserve(allKeysNum);
-
-    auto& keyType = mapType.getKeyType();
-
-    //Intepreter Key columns
-    for (auto& kv : implKeyValues)
+    /// Fill NULLs until all columns reach the same size
+    for (auto & [k, column] : value_columns)
     {
-        keys.push_back(keyType->stringToVisitorField(kv.first));
+        auto & impl_value_column = column->assumeMutableRef();
+        while (impl_value_column.size() < col_size)
+            impl_value_column.insert(Null());
+    }
+}
+
+/**
+ * This routine will reconsturct MAP column based on its implicit columns.
+ * \param impl_key_values is the collection of {key_name, {offset, key_column}}
+ * and this routine will be compatible with non-zero offset. key_name has been escaped.
+ * non-zero offset could happen for scenario that map column and implicit column are both
+ * referenced in the same query, e.g.
+ *                  select map from table where map{'key'} =1
+ * In the above case, MergeTreeReader will use the same stream __map__%27key%27 for
+ * both keys, while reconstructing(append) map column, size of implicit column
+ * __map__%27key%27 was accumulated.
+ */
+void ColumnByteMap::fillByExpandedColumns(
+    const DataTypeByteMap & map_type, const std::map<String, std::pair<size_t, const IColumn *>> & impl_key_values)
+{
+    // Append to ends of this ColumnByteMap
+    if (impl_key_values.empty())
+        return;
+
+    if (impl_key_values.begin()->second.second->size() < impl_key_values.begin()->second.first)
+    {
+        throw Exception(
+            "MAP implicit key size is slow than offset " + toString(impl_key_values.begin()->second.second->size()) + " "
+                + toString(impl_key_values.begin()->second.first),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    size_t rows = impl_key_values.begin()->second.second->size() - impl_key_values.begin()->second.first;
+
+
+    IColumn & key_col = getKey();
+    IColumn & value_col = getValue();
+    Offsets & offsets_ = getOffsets();
+    size_t all_keys_num = impl_key_values.size();
+    std::vector<Field> keys;
+    keys.reserve(all_keys_num);
+
+    auto & key_type = map_type.getKeyType();
+
+    //Intepreter key columns
+    for (auto & kv : impl_key_values)
+    {
+        keys.push_back(key_type->stringToVisitorField(kv.first));
         // Sanity check that all implicit columns(plus offset) are the same size
         if (rows + kv.second.first != kv.second.second->size())
         {
-            throw Exception("implicit column is with different size " +
-                            toString(kv.second.second->size()) + " " + toString(rows + kv.second.first),
-                            ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "implicit column is with different size " + toString(kv.second.second->size()) + " " + toString(rows + kv.second.first),
+                ErrorCodes::LOGICAL_ERROR);
         }
     }
 
-    if (mapType.valueTypeIsLC())
+    std::vector<const IColumn *> nested_columns;
+    /// Mark whether res has been wrapped nullable explicitly in order to use insertFrom method instead of insert and [] method to improve performance.
+    bool add_nullable = needAddNullable(value_column);
+    /// Check type of input columns and prepare nest columns for the columns whose type is neither nullable or low cardinality.
+    for (auto it = impl_key_values.begin(); it != impl_key_values.end(); ++it)
     {
-        for (size_t i = 0; i< rows; i++)
+        checkNewColumnCanBeInserted(value_column, add_nullable, *it->second.second);
+        if (add_nullable)
         {
-            size_t numKVPairs = 0;
-            size_t iterIdx = 0;
-            for (auto it = implKeyValues.begin(); it != implKeyValues.end(); ++it, ++iterIdx)
-            {
-                size_t implOffset = it->second.first;
-                const ColumnLowCardinality & implValueCol = typeid_cast<const ColumnLowCardinality &>(*it->second.second);
-                // ignore those input where value is NULL.
-                if (implValueCol.isNullAt(i+ implOffset))  continue;
-
-                // TODO: could be optimized
-                keyCol.insert(keys[iterIdx]);
-                valueCol.insert(implValueCol[i + implOffset]);
-                numKVPairs++;
-            }
-            offsets_.push_back((offsets_.size() == 0 ? 0 : offsets_.back()) + numKVPairs);
+            const auto & inner_value_column = typeid_cast<const ColumnNullable &>(*it->second.second);
+            nested_columns.emplace_back(&inner_value_column.getNestedColumn());
         }
     }
-    else
+    for (size_t i = 0; i < rows; i++)
     {
-        for (size_t i = 0; i< rows; i++)
+        size_t num_kv_pairs = 0;
+        size_t iter_idx = 0;
+        for (auto it = impl_key_values.begin(); it != impl_key_values.end(); ++it, ++iter_idx)
         {
-            size_t numKVPairs = 0;
-            size_t iterIdx = 0;
-            for (auto it = implKeyValues.begin(); it != implKeyValues.end(); ++it, ++iterIdx)
-            {
-                size_t implOffset = it->second.first;
-                //TODO: optimize it without typeid_cast
-                const ColumnNullable& implValueCol = typeid_cast<const ColumnNullable&>(*it->second.second);
+            size_t impl_offset = it->second.first;
+            const IColumn & impl_value_col = *it->second.second;
 
-                // ignore those input where value is NULL.
-                if (implValueCol.isNullAt(i+ implOffset))  continue;
+            // Ignore those input whose value is NULL.
+            if (impl_value_col.isNullAt(i + impl_offset))
+                continue;
 
-                // TODO: could be optimized
-                keyCol.insert(keys[iterIdx]);
-                valueCol.insert(implValueCol[i + implOffset]);
-                numKVPairs++;
-            }
-            offsets_.push_back((offsets_.size() == 0 ? 0 : offsets_.back()) + numKVPairs);
+            key_col.insert(keys[iter_idx]);
+            if (add_nullable)
+                value_col.insertFrom(*nested_columns[iter_idx], i + impl_offset);
+            else
+                value_col.insertFrom(impl_value_col, i + impl_offset);
+            num_kv_pairs++;
         }
+        offsets_.push_back((offsets_.size() == 0 ? 0 : offsets_.back()) + num_kv_pairs);
     }
 }
 
@@ -1229,8 +1277,8 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
     if (col_size == 0)
         return;
 
-    ColumnPtr key_res = keyColumn->cloneEmpty();
-    ColumnPtr value_res = valueColumn->cloneEmpty();
+    ColumnPtr key_res = key_column->cloneEmpty();
+    ColumnPtr value_res = value_column->cloneEmpty();
     ColumnPtr offset_res = offsets->cloneEmpty();
     
     const Offsets & offsets_ = getOffsets();
@@ -1247,126 +1295,107 @@ void ColumnByteMap::removeKeys(const NameSet & keys)
         offset = offsets_[i - 1];
         row_size = offsets_[i] - offset;
 
-        size_t numKVPairs = 0;
+        size_t num_kv_pairs = 0;
         for (size_t r = 0; r < row_size; ++r)
         {
-            auto tmp_key = keyColumn->getDataAt(offset + r).toString();
+            auto tmp_key = key_column->getDataAt(offset + r).toString();
             if (!keys.count(tmp_key))
             {
-                key_res_col.insertFrom(*keyColumn, offset + r);
-                value_res_col.insertFrom(*valueColumn, offset + r);
-                numKVPairs++;
+                key_res_col.insertFrom(*key_column, offset + r);
+                value_res_col.insertFrom(*value_column, offset + r);
+                num_kv_pairs++;
             }
         }
-        offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
+        offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + num_kv_pairs);
     }
 
-    keyColumn = std::move(key_res);
-    valueColumn = std::move(value_res);
+    key_column = std::move(key_res);
+    value_column = std::move(value_res);
     offsets = std::move(offset_res);
 }
 
-/***
- * insert implicit map column from outside, 
- * only when the current ColumnByteMap has the same size with implicit columns. 
- * implicit columns should be nullable, if it is nullable, you should make nullable before this method.
+/**
+ * Insert implicit map column from outside, only when the current ColumnByteMap has the same size with implicit columns.
+ * Currently, this method works for ingestion column feature.
  * 
- * for lowcardinality, use its full columns and insert by insertFromFullColumn;
+ * @param implicit_columns it should has the same type with return value of ColumnByteMap::getValueColumnByKey. Otherwise, throw exception.
  */
 void ColumnByteMap::insertImplicitMapColumns(const std::unordered_map<String, ColumnPtr> & implicit_columns)
 {
     if (implicit_columns.empty())
         return;
     
-    size_t col_size = size();
-
-    ColumnPtr key_res = keyColumn->cloneEmpty();
-    ColumnPtr value_res = valueColumn->cloneEmpty();
+    size_t origin_size = size();
+    ColumnPtr key_res = key_column->cloneEmpty();
+    ColumnPtr value_res = value_column->cloneEmpty();
     ColumnPtr offset_res = offsets->cloneEmpty();
     const Offsets & offsets_ = getOffsets();
     auto & key_res_col = key_res->assumeMutableRef();
     auto & value_res_col = value_res->assumeMutableRef();
-    Offsets& offset_res_col = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
+    Offsets & offset_res_col = static_cast<ColumnOffsets &>(offset_res->assumeMutableRef()).getData();
 
-    auto * value_res_col_lowcardinality = typeid_cast<ColumnLowCardinality *>(&value_res_col);
-    bool is_lowcardinality_value = valueColumn->lowCardinality() && value_res_col_lowcardinality;
-
-    std::unordered_map<String, const ColumnNullable *> nullable_columns;
+    /// Mark whether res has been wrapped nullable explicitly.
+    bool add_nullable = needAddNullable(value_column);
+    std::vector<const IColumn *> nested_columns;
+    /// Check type of input columns and prepare nested columns for the columns whose type is neither nullable or low cardinality.
     for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it)
     {
-        auto column_without_lowcardinality = recursiveRemoveLowCardinality(it->second);
-        auto * column = checkAndGetColumn<ColumnNullable>(column_without_lowcardinality.get());
-        nullable_columns[it->first] = column;
-    }
-
-    if (col_size == 0)
-    {
-        col_size = nullable_columns.begin()->second->size();
-        for (size_t i = 0; i < col_size; ++i)
+        checkNewColumnCanBeInserted(value_column, add_nullable, *it->second);
+        if (add_nullable)
         {
-            size_t numKVPairs = 0;
-            for (auto it = nullable_columns.begin(); it != nullable_columns.end(); ++it)
-            {
-                if (!it->second->isNullAt(i))
-                {
-                    key_res_col.insert(Field(it->first));
-                    if (is_lowcardinality_value)
-                        value_res_col_lowcardinality->insertFromFullColumn(it->second->getNestedColumn(), i);
-                    else
-                        value_res_col.insertFrom(it->second->getNestedColumn(), i);
-                    numKVPairs++;
-                }
-            }
-
-            offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
-        }
-    }
-    else
-    {
-        if (col_size != nullable_columns.begin()->second->size())
-            throw Exception("Expect equal size between map and implicit columns", ErrorCodes::LOGICAL_ERROR);
-
-        size_t offset = 0;
-        size_t row_size = offsets_[0];
-
-        for (size_t i = 0; i < col_size; ++i)
-        {
-            offset = offsets_[i - 1];
-            row_size = offsets_[i] - offset;
-
-            size_t numKVPairs = 0;
-            for (size_t r = 0; r < row_size; ++r)
-            {
-                auto tmp_key = keyColumn->getDataAt(offset + r).toString();
-                if (!nullable_columns.count(tmp_key))
-                {
-                    key_res_col.insertFrom(*keyColumn, offset + r);
-                    value_res_col.insertFrom(*valueColumn, offset + r);
-                    numKVPairs++;
-                }
-            }
-
-            for (auto it = nullable_columns.begin(); it != nullable_columns.end(); ++it)
-            {
-                if (!it->second->isNullAt(i))
-                {
-                    key_res_col.insert(Field(it->first));
-                    if (is_lowcardinality_value)
-                        value_res_col_lowcardinality->insertFromFullColumn(it->second->getNestedColumn(), i);
-                    else
-                        value_res_col.insertFrom(it->second->getNestedColumn(), i);
-                    numKVPairs++;
-                }
-            }
-
-            offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + numKVPairs);
+            const auto & inner_value_column = typeid_cast<const ColumnNullable &>(*it->second);
+            nested_columns.emplace_back(&inner_value_column.getNestedColumn());
         }
     }
 
+    size_t add_size = implicit_columns.begin()->second->size();
+    if (origin_size != 0 && origin_size != add_size)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR, "Expect equal size between map and implicit columns, but got {}/{}", origin_size, add_size);
 
-    keyColumn = std::move(key_res);
-    valueColumn = std::move(value_res);
+    size_t offset = 0;
+    size_t row_size = offsets_[0];
+    /// Handle each row data
+    for (size_t i = 0; i < add_size; ++i)
+    {
+        /// Handle the case that origin column is empty
+        offset = origin_size == 0 ? 0 : offsets_[i - 1];
+        row_size = origin_size == 0 ? 0 : (offsets_[i] - offset);
+
+        size_t num_kv_pairs = 0;
+        for (size_t r = 0; r < row_size; ++r)
+        {
+            auto tmp_key = key_column->getDataAt(offset + r).toString();
+            if (!implicit_columns.count(tmp_key))
+            {
+                key_res_col.insertFrom(*key_column, offset + r);
+                value_res_col.insertFrom(*value_column, offset + r);
+                num_kv_pairs++;
+            }
+        }
+
+        size_t id = 0;
+        for (auto it = implicit_columns.begin(); it != implicit_columns.end(); ++it, ++id)
+        {
+            /// we ignore null value due to it's meaningless.
+            if (!it->second->isNullAt(i))
+            {
+                key_res_col.insert(Field(it->first));
+                value_res_col.insertFrom(add_nullable ? *nested_columns[id]: *it->second, i);
+                num_kv_pairs++;
+            }
+        }
+        offset_res_col.push_back((offset_res_col.size() == 0 ? 0 : offset_res_col.back()) + num_kv_pairs);
+    }
+
+    key_column = std::move(key_res);
+    value_column = std::move(value_res);
     offsets = std::move(offset_res);
+}
+
+ColumnPtr ColumnByteMap::createEmptyImplicitColumn() const
+{
+    return makeNullableForMapValue(value_column->cloneEmpty());
 }
 
 // this optimization mostly not work for Map type
@@ -1380,9 +1409,11 @@ void ColumnByteMap::updateWeakHash32(WeakHash32 &) const
     throw Exception("Map doesn't support updateWeakHash32", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void ColumnByteMap::updateHashFast(SipHash &) const
+void ColumnByteMap::updateHashFast(SipHash & hash) const
 {
-    throw Exception("Map doesn't support updateHashFast", ErrorCodes::NOT_IMPLEMENTED);
+    offsets->updateHashFast(hash);
+    key_column->updateHashFast(hash);
+    value_column->updateHashFast(hash);
 }
 
 ColumnPtr ColumnByteMap::selectDefault() const

@@ -12,11 +12,8 @@ private:
     SerializationPtr key;
     SerializationPtr value;
 
-    /// 'nested' is an Tuple(Array(key_type), Array(value_type))
-    //SerializationPtr nested;
-
 public:
-    SerializationByteMap(const SerializationPtr & key_type_, const SerializationPtr & value_type_/*, const SerializationPtr & nested_*/);
+    SerializationByteMap(const SerializationPtr & key_type_, const SerializationPtr & value_type_);
 
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
@@ -35,25 +32,15 @@ public:
 
     void serializeBinaryBulkStatePrefix(
         SerializeBinaryBulkSettings &,
-        SerializeBinaryBulkStatePtr &) const override
-    {
-        // do nothing
-    }
+        SerializeBinaryBulkStatePtr &) const override;
 
     void serializeBinaryBulkStateSuffix(
         SerializeBinaryBulkSettings &,
-        SerializeBinaryBulkStatePtr &) const override
-    {
-        // do nothing
-    }
-
+        SerializeBinaryBulkStatePtr &) const override;
 
     void deserializeBinaryBulkStatePrefix(
         DeserializeBinaryBulkSettings &,
-        DeserializeBinaryBulkStatePtr &) const override
-    { 
-        // do nothing
-    }
+        DeserializeBinaryBulkStatePtr &) const override;
 
     void serializeBinaryBulkWithMultipleStreams(
         const IColumn & column,

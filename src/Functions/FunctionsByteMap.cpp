@@ -80,56 +80,62 @@ public:
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
 
+    bool useDefaultImplementationForLowCardinalityColumns() const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         const IDataType * map_col = arguments[0].type.get();
         const DataTypeByteMap * map = checkAndGetDataType<DataTypeByteMap>(map_col);
 
         if (!map)
-            throw Exception("First argument for function " + getName() + " must be map.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "First argument for function {} must be map.", getName());
 
+        /// TODO: fix Map<Int32, Int32> KV case
         if (map->getKeyType()->getName() != arguments[1].type->getName())
-            throw Exception("Second argument for function " + getName() + " does not match map key type.", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Second argument which type is {} for function {} does not match map key type {}.",
+                arguments[1].type->getName(),
+                getName(),
+                map->getKeyType()->getName());
 
-        if (map->valueTypeIsLC())
-            return map->getValueType();
-
-        return makeNullable(map->getValueType());
+        return map->getValueTypeForImplicitColumn();
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t /*input_rows_count*/) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
     {
         const ColumnByteMap * col_map = checkAndGetColumn<ColumnByteMap>(arguments[0].column.get());
-        auto& col_sel = arguments[1].column;
+        auto & col_sel = arguments[1].column;
         if (!col_map)
             throw Exception("Input column doesn't match", ErrorCodes::LOGICAL_ERROR);
 
-        auto& keyColumn = col_map->getKey();
-        auto& valueColumn = col_map->getValue();
+        auto & key_column = col_map->getKey();
+        auto & value_column = col_map->getValue();
 
         // fix result type for low cardinality
-        auto col_res = [&]() {
-            if (valueColumn.lowCardinality())
-                return result_type->createColumn()->assumeMutable();
-            else
-                return makeNullable(valueColumn.cloneEmpty())->assumeMutable();
-        }();
+        auto col_res = col_map->createEmptyImplicitColumn()->assumeMutable();
+        bool add_nullable = !col_res->lowCardinality();
 
         auto & offsets = col_map->getOffsets();
         size_t size = offsets.size();
 
         ColumnByteMap::Offset src_prev_offset = 0;
 
-        // TODO: below is generic implementation, and could be optimized.
         for (size_t i = 0; i < size; ++i)
         {
             bool found = false;
             for (size_t j = src_prev_offset; j < offsets[i]; ++j)
             {
                 // locate if key match input
-                if (keyColumn[j] == (*col_sel)[i])
+                if (key_column[j] == (*col_sel)[i])
                 {
-                    col_res->insert(valueColumn[j]);
+                    if (!add_nullable)
+                        col_res->insertFrom(value_column, j);
+                    else
+                    {
+                        static_cast<ColumnNullable &>(*col_res).getNestedColumn().insertFrom(value_column, j);
+                        static_cast<ColumnNullable &>(*col_res).getNullMapData().push_back(0);
+                    }
                     found = true;
                     break;
                 }
@@ -446,7 +452,9 @@ public:
 
     bool useDefaultImplementationForNulls() const override { return false; }
 
-    /// pasr map(k1, v1, k2, v2 ...)
+    bool useDefaultImplementationForConstants() const override { return true; }
+
+    /// parse map(k1, v1, k2, v2 ...)
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if ((arguments.size() & 1) || arguments.empty())

@@ -1,7 +1,9 @@
 #include <Core/NamesAndTypes.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeHelper.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/MapHelpers.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
@@ -320,69 +322,63 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineRead
     NamesAndTypesList res;
     for (const String & name : names)
     {
-//        if (isMapImplicitKeyNotKV(name) && !support_double_underline_name)
-//        {
-//            String mapColName;
-//            bool parseSuccess = parseMapFromImplName(name, mapColName);
-//            if (parseSuccess)
-//            {
-//                auto it = types.find(mapColName);
-//                if (it == types.end())
-//                {
-//                    throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-//                }
-//
-//                //TODO: sanity check DataTypeMap assumption
-//                auto const & map_value = typeid_cast<const DataTypeMap&>(*(*it->second)).getValueType();
-//                if (map_value->lowCardinality())
-//                    res.emplace_back(name, map_value);
-//                else
-//                    res.emplace_back(name, makeNullable(map_value));
-//            }
-//        }
-//        else if (endsWith(name, ".key"))
-//        {
-//            String mapColName = name.substr(0, name.size() - 4);
-//            auto it = types.find(mapColName);
-//            if (it == types.end())
-//                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-//            res.emplace_back(name, typeid_cast<const DataTypeMap&>(*(*it->second)).getKeyStoreType());
-//        }
-//        else if (endsWith(name, ".value"))
-//        {
-//            String mapColName = name.substr(0, name.size() - 6);
-//            auto it = types.find(mapColName);
-//            if (it == types.end())
-//                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-//            res.emplace_back(name, typeid_cast<const DataTypeMap&>(*(*it->second)).getValueStoreType());
-//        }
-//        else
-//        {
-                auto it = types.find(name);
-                if (it == types.end())
-                {
-                    // if (endsWith(name, COMPRESSION_COLUMN_EXTENSION))
-                    //     res.emplace_back(name, std::make_shared<DataTypeUInt16>());
-                    // else
-                        throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
-                }
+        if (isMapImplicitKeyNotKV(name))
+        {
+            String map_name = parseMapNameFromImplicitColName(name);
+            auto it = types.find(map_name);
+            if (it == types.end())
+                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handing implicit column {}", map_name, name);
+            if (!(*it->second)->isMap() || (*it->second)->isMapKVStore())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Data type {} of column {} is not MapNotKV as expected when handling implicit column {}.",
+                    (*it->second)->getName(),
+                    map_name,
+                    name);
+            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getValueTypeForImplicitColumn());
+        }
+        else if (isMapKV(name))
+        {
+            String map_name = parseMapNameFromImplicitKVName(name);
+            auto it = types.find(map_name);
+            if (it == types.end())
+                throw Exception(ErrorCodes::THERE_IS_NO_COLUMN, "No column {} when handling implicit kv column {}", map_name, name);
+            if (!(*it->second)->isMap() || !(*it->second)->isMapKVStore())
+                throw Exception(
+                    ErrorCodes::BAD_ARGUMENTS,
+                    "Data type {} of column {} is not MapKV as expected when handing implicit kv column {}.",
+                    (*it->second)->getName(),
+                    map_name,
+                    name);
+            res.emplace_back(name, typeid_cast<const DataTypeByteMap &>(*(*it->second)).getMapStoreType(name));
+        }
+        else
+        {
+            auto it = types.find(name);
+            if (it == types.end())
+            {
+                // if (endsWith(name, COMPRESSION_COLUMN_EXTENSION))
+                //     res.emplace_back(name, std::make_shared<DataTypeUInt16>());
+                // else
+                throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
+            }
 
-                if (isBitmap64(*it->second) && (*it->second)->isBitEngineEncode())
-                { /// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
-                    if (bitengine_read_type == BitEngineReadType::BOTH && res.contains(name))
-                        res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
-                    else if (bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
-                    { // Type `ONLY_ENCODE` used in BitEngine parts merge
-                        res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
-                    }
-                    else // Default type `ONLY_SOURCE` is used in encoding and select
-                        res.emplace_back(name, *it->second);
+            if (isBitmap64(*it->second) && (*it->second)->isBitEngineEncode())
+            { /// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
+                if (bitengine_read_type == BitEngineReadType::BOTH && res.contains(name))
+                    res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
+                else if (bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+                { // Type `ONLY_ENCODE` used in BitEngine parts merge
+                    res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
                 }
-                else
-                {
+                else // Default type `ONLY_SOURCE` is used in encoding and select
                     res.emplace_back(name, *it->second);
-                }
-//        }
+            }
+            else
+            {
+                res.emplace_back(name, *it->second);
+            }
+        }
     }
 
     return res;

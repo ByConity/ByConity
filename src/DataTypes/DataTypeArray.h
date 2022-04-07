@@ -67,7 +67,8 @@ public:
     /// 1 for plain array, 2 for array of arrays and so on.
     size_t getNumberOfDimensions() const;
 
-     bool canBeMapKVType() const override { return true; }
+    bool canBeMapValueType() const override { return true; }
+
 private:
     ColumnPtr getSubcolumnImpl(const String & subcolumn_name, const IColumn & column, size_t level) const;
     DataTypePtr tryGetSubcolumnTypeImpl(const String & subcolumn_name, size_t level) const;

@@ -43,16 +43,6 @@ private:
     /// Also validate written data in debug mode
     void finishDataSerialization(IMergeTreeDataPart::Checksums & checksums, bool sync);
 
-    /// Write data of one column.
-    /// Return how many marks were written and
-    /// how many rows were written for last mark
-    void writeColumn(
-        const NameAndTypePair & name_and_type,
-        const IColumn & column,
-        WrittenOffsetColumns & offset_columns,
-        const Granules & granules,
-        bool need_finalize = false) override;
-
     /// Write row store data for unique table to speed up lookup based on row number
     void writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool);
 
@@ -82,6 +72,10 @@ private:
     void adjustLastMarkIfNeedAndFlushToDisk(size_t new_rows_in_last_mark);
 
     void init();
+
+    bool canGranuleNotComplete() override { return true; }
+
+    size_t getRowsWrittenInLastMark() override { return rows_written_in_last_mark; }
 
     Poco::Logger * getLogger() override { return log; }
 

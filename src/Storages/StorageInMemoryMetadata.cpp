@@ -387,22 +387,12 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
             bool found = false;
             for (const auto & column_inner: getColumns())
             {
-                if (column_inner.type->isMap() && column_inner.type->isMapKVStore())
+                if (column_inner.type->isMap() && column_inner.type->isMapKVStore() && isMapKVOfSpecialMapName(name, column_inner.name))
                 {
-                    if (name == column_inner.name + ".key")
-                    {
-                        auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getKeyStoreType();
-                        res.insert({type->createColumn(), type, name});
-                        found = true;
-                        break;
-                    }
-                    else if (name == column_inner.name + ".value")
-                    {
-                        auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getValueStoreType();
-                        res.insert({type->createColumn(), type, name});
-                        found = true;
-                        break;
-                    }
+                    auto type = typeid_cast<const DataTypeByteMap &>(*column_inner.type).getMapStoreType(name);
+                    res.insert({type->createColumn(), type, name});
+                    found = true;
+                    break;
                 }
             }
             if (!found)

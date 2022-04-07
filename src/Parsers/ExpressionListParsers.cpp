@@ -608,7 +608,6 @@ bool ParserArrayElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 {
     return ParserLeftAssociativeBinaryOperatorList{
         operators,
-        // std::make_unique<ParserCastExpression>(),
         std::make_unique<ParserMapElementExpression>(dt),
         std::make_unique<ParserExpressionWithOptionalAlias>(false, dt)
     }.parse(pos, node, expected);

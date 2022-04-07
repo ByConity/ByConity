@@ -1,7 +1,6 @@
 #include <Storages/MergeTree/MergeTreeReaderWide.h>
 
 #include <Columns/ColumnArray.h>
-#include <Columns/ColumnByteMap.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -59,16 +58,14 @@ MergeTreeReaderWide::MergeTreeReaderWide(
             if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
             {
                 // Scan the directory to get all implicit columns(stream) for the map type
-                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*column_from_part.type);
-                auto & value_type = type_map.getValueType();
+                const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
 
                 String key_name;
                 String impl_key_name;
                 {
-                    //auto data_lock = data_part->getColumnsReadLock();
                     for (auto & file : data_part->getChecksums()->files)
                     {
-                        //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+                        // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
                         const String & file_name = file.first;
                         if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
                         {
@@ -80,11 +77,8 @@ MergeTreeReaderWide::MergeTreeReaderWide(
                                 dup_implicit_keys.insert(impl_key_name);
                             }
 
-                            if (type_map.valueTypeIsLC())
-                                addByteMapStreams({impl_key_name, value_type}, column.name, profile_callback_, clock_type_);
-                            else
-                                addByteMapStreams({impl_key_name, makeNullable(value_type)}, column.name, profile_callback_, clock_type_);
-
+                            addByteMapStreams(
+                                {impl_key_name, type_map.getValueTypeForImplicitColumn()}, column.name, profile_callback_, clock_type_);
                             map_column_keys.insert({column.name, key_name});
                         }
                     }
@@ -163,57 +157,12 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
             {
                 size_t column_size_before_reading = column->size();
                 auto & cache = caches[column_from_part.getNameInStorage()];
-				if (type->isMap() && !type->isMapKVStore())
-                {
-                    // collect all the substreams based on map column's name and its keys substream.
-                    // and somehow construct runtime two implicit columns(key&value) representation.
-                    auto keysIter = map_column_keys.equal_range(name);
-                    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap&>(*type);
-                    auto & value_type = type_map.getValueType();
+                if (type->isMap() && !type->isMapKVStore())
+                    readMapDataNotKV(
+                        column_from_part, column, from_mark, continue_reading, max_rows_to_read, caches, res_col_to_idx, res_columns);
+                else
+                    readData(column_from_part, column, from_mark, continue_reading, max_rows_to_read, cache);
 
-                    DataTypePtr impl_value_type;
-                    if (type_map.valueTypeIsLC())
-                        impl_value_type = value_type;
-                    else
-                        impl_value_type = makeNullable(value_type);
-
-                    std::map<String, std::pair<size_t, const IColumn *>> impl_key_values;
-                    std::list<ColumnPtr> impl_key_col_holder;
-                    String impl_key_name;
-                    for (auto kit = keysIter.first; kit != keysIter.second; ++kit)
-                    {
-                        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
-                        NameAndTypePair implicit_key_name_and_type{impl_key_name, impl_value_type};
-                        cache = caches[implicit_key_name_and_type.getNameInStorage()];
-
-                        // If MAP implicit column and MAP column co-exist in columns, implicit column should
-                        // only read only once.
-
-                        if (dup_implicit_keys.count(impl_key_name) !=0)
-                        {
-                            auto idx = res_col_to_idx[impl_key_name];
-                            impl_key_values[kit->second] = std::pair<size_t, const IColumn*>(column_size_before_reading, res_columns[idx].get());
-                            continue;
-                        }
-
-
-                        impl_key_col_holder.push_back(impl_value_type->createColumn());
-                        auto& implValueColumn = impl_key_col_holder.back();
-                        readData(implicit_key_name_and_type,
-								 implValueColumn, from_mark, continue_reading,
-							     max_rows_to_read, cache);
-                        impl_key_values[kit->second] = {0, &(*implValueColumn)};
-                    }
-
-                    // after reading all implicit values columns based files(built by keys), it's time to
-                    // construct runtime ColumnMap(keyColumn, valueColumn).
-                    dynamic_cast<ColumnByteMap*>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, impl_key_values);
-
-                }
-				else
-				{
-                	readData(column_from_part, column, from_mark, continue_reading, max_rows_to_read, cache);
-				}
                 /// For elements of Nested, column_size_before_reading may be greater than column size
                 ///  if offsets are not empty and were already read, but elements are empty.
                 if (!column->empty())

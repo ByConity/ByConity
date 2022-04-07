@@ -465,10 +465,12 @@ void readIntTextUnsafe(T & x, ReadBuffer & buf)
         ///  if (c < 10)
         /// for unknown reason on Xeon E5645.
 
-        if ((*buf.position() & 0xF0) == 0x30) /// It makes sense to have this condition inside loop.
+        // Note: the following logic is not correct while handle character between 0x3A - 0x3F
+        auto c = *buf.position();
+        if ((c & 0xF0) == 0x30 && c < 0x3A) /// It makes sense to have this condition inside loop.
         {
             res *= 10;
-            res += *buf.position() & 0x0F;
+            res += c & 0x0F;
             ++buf.position();
         }
         else

@@ -61,19 +61,28 @@ public:
         const StorageMetadataPtr metadata_snapshot;
         bool rewrite_map_col;
 
-        Data(const Aliases & aliases_, const NameSet & source_columns_set_, bool ignore_alias_, ExtractedSettings && settings_, bool allow_self_aliases_,
-			const ContextPtr & context_ = {}, ConstStoragePtr storage_ = nullptr, const StorageMetadataPtr & metadata_snapshot_ = {}, bool rewrite_map_col_ = true)
+        Data(
+            const Aliases & aliases_,
+            const NameSet & source_columns_set_,
+            bool ignore_alias_,
+            ExtractedSettings && settings_,
+            bool allow_self_aliases_,
+            const ContextPtr & context_ = {},
+            ConstStoragePtr storage_ = nullptr,
+            const StorageMetadataPtr & metadata_snapshot_ = {},
+            bool rewrite_map_col_ = true)
             : aliases(aliases_)
             , source_columns_set(source_columns_set_)
             , settings(settings_)
             , level(0)
             , ignore_alias(ignore_alias_)
             , allow_self_aliases(allow_self_aliases_)
-			, context(context_)
-			, storage(storage_)
+            , context(context_)
+            , storage(storage_)
             , metadata_snapshot(metadata_snapshot_)
-			, rewrite_map_col(rewrite_map_col_)
-        {}
+            , rewrite_map_col(rewrite_map_col_)
+        {
+        }
     };
 
     explicit QueryNormalizer(Data & data)
@@ -98,7 +107,7 @@ private:
     static void visitChildren(IAST * node, Data & data);
 
     static String getMapKeyName(ASTFunction & node, Data & data);
-    static void rewriteMapElement(ASTFunction & node, ASTPtr & ast, const String & key_name);
+    static void rewriteMapElement(ASTPtr & ast, const String & map_name, const String & key_name);
 };
 
 }
