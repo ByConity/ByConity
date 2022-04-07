@@ -92,14 +92,12 @@ namespace
 
 void SerializationByteMap::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
-    const auto & map = get<const Map &>(field);
+    const auto & map = get<const ByteMap &>(field);
     writeVarUInt(map.size(), ostr);
     for (const auto & elem : map)
     {
-        const auto & tuple = elem.safeGet<const Tuple>();
-        assert(tuple.size() == 2);
-        key->serializeBinary(tuple[0], ostr);
-        value->serializeBinary(tuple[1], ostr);
+        key->serializeBinary(elem.first, ostr);
+        value->serializeBinary(elem.second, ostr);
     }
 }
 
@@ -107,13 +105,11 @@ void SerializationByteMap::deserializeBinary(Field & field, ReadBuffer & istr) c
 {
     size_t size;
     readVarUInt(size, istr);
-    field = Map(size);
-    for (auto & elem : field.get<Map &>())
+    field = ByteMap(size);
+    for (auto & elem : field.get<ByteMap &>())
     {
-        Tuple tuple(2);
-        key->deserializeBinary(tuple[0], istr);
-        value->deserializeBinary(tuple[1], istr);
-        elem = std::move(tuple);
+        key->deserializeBinary(elem.first, istr);
+        value->deserializeBinary(elem.second, istr);
     }
 }
 
@@ -132,7 +128,7 @@ void SerializationByteMap::serializeBinary(const IColumn & column, size_t row_nu
 
     writeVarUInt(size, ostr);
 
-    for (size_t i = offset; i<next_offset; ++i)
+    for (size_t i = offset; i < next_offset; ++i)
     {
         key->serializeBinary(key_column, i, ostr);
         value->serializeBinary(value_column, i, ostr);

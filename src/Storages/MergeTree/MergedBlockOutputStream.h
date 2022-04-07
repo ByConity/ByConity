@@ -19,7 +19,8 @@ public:
         const NamesAndTypesList & columns_list_,
         const MergeTreeIndices & skip_indices,
         CompressionCodecPtr default_codec_,
-        bool blocks_are_granules_size = false);
+        bool blocks_are_granules_size = false,
+        bool is_merge = false);
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
 
@@ -40,6 +41,8 @@ public:
             const NamesAndTypesList * total_columns_list = nullptr,
             MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
 
+    size_t getRowsCount() const { return rows_count; }
+
 private:
     /** If `permutation` is given, it rearranges the values in the columns when writing.
       * This is necessary to not keep the whole block in the RAM to sort it.
@@ -51,9 +54,6 @@ private:
             NamesAndTypesList & part_columns,
             MergeTreeData::DataPart::Checksums & checksums,
             bool sync);
-
-    /// whether to generate unique key index for unique table
-    bool enable_disk_based_key_index = false;
 
 private:
     NamesAndTypesList columns_list;

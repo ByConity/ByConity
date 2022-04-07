@@ -24,6 +24,23 @@ enum class SelectPartsDecision
     NOTHING_TO_MERGE = 2,
 };
 
+enum class RowStoreColumnsMatchType
+{
+    Mismatch = 0,
+    PrefixMatch = 1,
+    ExactMatch = 2,
+};
+
+struct RowStoreColumnsInfo
+{
+    RowStoreColumnsMatchType match_type;
+    std::vector<size_t> column_indexes;
+    std::vector<bool> column_hits;
+    std::vector<SerializationPtr> column_serializations;
+};
+
+using RowStoreColumnsInfoList = std::vector<RowStoreColumnsInfo>;
+
 /// Auxiliary struct holding metainformation for the future merged or mutated part.
 struct FutureMergedMutatedPart
 {
@@ -77,6 +94,9 @@ class MergeTreeDataMergerMutator
 {
 public:
     using AllowedMergingPredicate = std::function<bool (const MergeTreeData::DataPartPtr &, const MergeTreeData::DataPartPtr &, String *)>;
+    
+    /// The i-th row in the merged part is from part PartIdMapping[i]
+    using PartIdMapping = PODArray<UInt32, /*INITIAL_SIZE*/1024>;
 
     MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size);
 
@@ -183,6 +203,57 @@ public:
     static size_t estimateNeededDiskSpace(const MergeTreeData::DataPartsVector & source_parts);
 
 private:
+    /*
+     * Performance test result: https://bytedance.feishu.cn/docs/doccnilaBbofUvfnQ3zBuLQKjFe#o66usm
+     * Based on the performance test result of writing row store, serialize value step is the most time-consuming, so it's necessary to use the serialized value in row store of old parts.
+     * 
+     * Due to add/drop columns command, merge row store should handle three cases:
+     * Case1: Exact Match
+     * 
+     * Origin, there has 3 columns a,b,c and 2 part:
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   c}, removed column: {}
+     * In this case, we can directly use origin serialized value of each row for two parts and contruct new row store.
+     * 
+     * Case 2: Prefix Match
+     * 
+     * Origin, there has 3 columns a,b,c and 1 part:
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * Then add columns d after c, and write a new part:
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   c   d}, removed column: {}
+     * In this case, we can directly use origin serialized value of each row for part 2. 
+     * But for part 1, we need to append value using defaule value of column d for each row.
+     * 
+     * Case 3: Mismatch
+     * Origin, there has 3 columns a,b,c and 1 part:
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * Then add columns d before c, and write a new part:
+     * [Part 1]row store columns:{a   b   c}, removed column: {}
+     * [Part 2]row store columns:{a   b   d   c}, removed column: {}
+     * In this case, we can directly use origin serialized value of each row for part 2. 
+     * But for part 1, we need to rewrite each row.
+     * 
+     * In the fact that rewrite case need to take twice time to write row store, thus (Condition 1)if Mismatch row number is more than half of the total row number, it is better to generating row store from storage.
+     * 
+     * We divide the process into several phases:
+     * Phase 1: Get row store meta and row count of old parts. If any part doesn't have row store, return false to generate row store from storage.
+     * Phase 2: Check metadata of columns. If it match Condition 1, return false to generate row store from storage.
+     * Phase 3: Get row store iterator of old parts and new part.
+     * Phase 4: Merge row store according to the match type.
+     * Phase 5: Update checksums and write row store meta.
+     */
+    bool tryMergeRowStoreIntoNewPart(
+        const FutureMergedMutatedPart & future_part,
+        const PartIdMapping & part_id_mapping,
+        const MergeTreeData::MutableDataPartPtr & new_part,
+        MergeTreeData::DataPart::Checksums & checksums,
+        bool need_sync);
+
+    void generateRowStoreFromStorage(MergeTreeData::MutableDataPartPtr & new_part, bool need_sync);
+
+    bool checkIfBuildRowStore();
+
     /** Select all parts belonging to the same partition.
       */
     MergeTreeData::DataPartsVector selectAllPartsFromPartition(const String & partition_id);

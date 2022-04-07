@@ -3,6 +3,7 @@
 #include <memory>
 
 #include <Core/Types.h>
+#include <Storages/IndexFile/Iterator.h>
 #include <Storages/IndexFile/Options.h>
 #include <Storages/IndexFile/Status.h>
 #include <Common/Slice.h>
@@ -30,6 +31,10 @@ public:
     ///
     /// May return some other Status on an error.
     Status Get(const ReadOptions & options, const Slice & key, String * value);
+
+    /// Return an iterator over KVs in this file.
+    /// Note: client should make sure this IndexFileRead lives longer than the returned iterator.
+    Status NewIterator(const ReadOptions & options, std::unique_ptr<Iterator> * out);
 
     /// Return bytes of resident memory usage.
     size_t ResidentMemoryUsage() const;

@@ -114,9 +114,9 @@ public:
         written_offset_columns = written_offset_columns_;
     }
 
-    void setMergeStatus()
+    void setMergeStatus(bool is_merge_)
     {
-        is_merge = true;
+        is_merge = is_merge_;
     }
 
 protected:
@@ -275,6 +275,10 @@ protected:
 
     bool optimize_map_column_serialization = false;
 
+    /// This parameter is used in following cases:
+    /// 1. write compact map
+    /// 2. write row store for unique table
+    /// In other cases, this parameter can not reflect the correct merge status.
     bool is_merge = false;
 
 private:

@@ -36,8 +36,6 @@ public:
 
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
 
-    void setEnableDiskBasedKeyIndex(bool enable_disk_based_key_index_) { enable_disk_based_key_index = enable_disk_based_key_index_; }
-
 private:
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
@@ -52,6 +50,15 @@ private:
         WrittenOffsetColumns & offset_columns,
         const Granules & granules,
         bool need_finalize = false) override;
+
+    /// Write row store data for unique table to speed up lookup based on row number
+    void writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool);
+
+    bool shouldWriteRowStore()
+    {
+        /// When it's under merge status, it'll generate row store later via merging all origin row stores directly.
+        return enable_unique_row_store && !is_merge;
+    }
 
     /// Method for self check (used in debug-build only). Checks that written
     /// data and corresponding marks are consistent. Otherwise throws logical
@@ -72,6 +79,8 @@ private:
     /// Also useful to have exact amount of rows in last (non-final) mark.
     void adjustLastMarkIfNeedAndFlushToDisk(size_t new_rows_in_last_mark);
 
+    void init();
+
     Poco::Logger * getLogger() override { return log; } 
 
     /// How many rows we have already written in the current mark.
@@ -85,8 +94,14 @@ private:
     void writeFinalUniqueKeyIndex(IndexFile::IndexFileInfo & file_info);
     void closeTempUniqueKeyIndex();
 
+    /// whether to generate unique key index for unique table
     bool enable_disk_based_key_index = false;
 
+    /// whether to generate row store for unique table
+    bool enable_unique_row_store = false;
+    /// generate row store to speed up lookup based on row number
+    IndexFile::IndexFileInfo unique_row_store_file_info;
+    
     size_t rows_count = 0;
 
     /// If the part contains only one block (normal insert case), we generate the key index file

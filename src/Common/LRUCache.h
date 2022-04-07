@@ -242,7 +242,6 @@ public:
         out_misses = misses;
     }
 
-    /// FIXME (UNIQUE KEY): double check later
     void remove(const Key & key)
     {
         std::lock_guard<std::mutex> lock(mutex);

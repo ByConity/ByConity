@@ -60,6 +60,9 @@ class ASTStorage;
     M(String, auto_offset_reset, "", "Librdkafka config: action to take when there is no initial offset in offset store or the desired offset is out of range", 0) \
     M(String, extra_librdkafka_config, "", "Extra configuration for librdkafka, in JSON format", 0) \
     M(Bool, librdkafka_enable_debug_log, false, "Enable librdkafka debug level logs", 0) \
+    /** Settings for Unique Table */ \
+    M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+
 
 
     /** TODO: */

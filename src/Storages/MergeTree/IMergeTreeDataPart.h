@@ -20,6 +20,7 @@
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 
 #include <Storages/UniqueKeyIndex.h>
+#include <Storages/UniqueRowStore.h>
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
 #include <common/types.h>
@@ -53,9 +54,6 @@ using Roaring = roaring::Roaring;
 using DeleteBitmapPtr = std::shared_ptr<const Roaring>;
 using MutableDeleteBitmapPtr = std::shared_ptr<Roaring>;
 using DeleteBitmapsVector = std::vector<DeleteBitmapPtr>;
-
-/// name of unique key index file
-const String uki_file_name = "unique_key.idx";
 
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
@@ -481,6 +479,14 @@ public:
     /// If uki type is "UNKNOWN", change it to either "MEMORY" or "DISK" depending on whether uki file exists.
     UniqueKeyIndexPtr getUniqueKeyIndex() const;
 
+    /// If row store file exists, return row store. Otherwise, return nullptr.
+    UniqueRowStorePtr tryGetUniqueRowStore() const;
+
+    /// If row store meta file exists, return row store meta. Otherwise, return nullpter.
+    UniqueRowStoreMetaPtr tryGetUniqueRowStoreMeta() const;
+
+    void setUniqueRowStoreMeta(UniqueRowStoreMetaPtr row_store_meta);
+
     /// If `key' is found, return true and set its corresponding `rowid' and optional `version' and `is_offline'.
     /// Otherwise return false.
     bool getValueFromUniqueIndex(
@@ -501,7 +507,7 @@ public:
     std::atomic<size_t> unique_index_size{0};
     std::atomic<size_t> unique_index_memory_size{0};
     /// type of unique key index
-    UkiType uki_type = UkiType::UNKNOWN;
+    mutable UkiType uki_type = UkiType::UNKNOWN;
 
     // FIXME (UNIQUE KEY): Put this into metainfo leter
     mutable std::mutex unique_index_mutex;
@@ -554,6 +560,9 @@ public:
 
     /// Return disk unique key index (corresponding to unique_key.idx) if the part has unique key.
     DiskUniqueKeyIndexPtr loadDiskUniqueIndex();
+
+    /// Return unique row store (corresponding to row_store.data) if the part has unique row store.
+    UniqueRowStorePtr loadUniqueRowStore();
 
     String ALWAYS_INLINE getMemoryAddress() const
     {
@@ -661,6 +670,11 @@ private:
 
     mutable State state{State::Temporary};
 
+    /// Used to prevent concurrent modification to row store mata.
+    mutable std::mutex row_store_meta_mutex;
+    /// Row store meta contains columns and removed columns info
+    mutable UniqueRowStoreMetaPtr row_store_meta;
+    
     /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.
     mutable std::mutex checksums_mutex;

@@ -178,6 +178,7 @@ MergeTreeData::MergeTreeData(
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     , parts_mover(this)
     , unique_key_index_cache(context_->getDiskUniqueKeyIndexCache())
+    , unique_row_store_cache(context_->getDiskUniqueRowStoreCache())
     , replicated_fetches_throttler(std::make_shared<Throttler>(
           getSettings()->max_replicated_fetches_network_bandwidth, getContext()->getReplicatedFetchesThrottler()))
     , replicated_sends_throttler(
@@ -6369,6 +6370,33 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
     {
         if (it.second.empty())
             new_checksums->files.erase(it.first);
+    }
+
+    if (part->storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        /// When there has commands of drop column, it's necessary to rewrite row store meta.
+        UniqueRowStoreMetaPtr current_row_store_meta = part->tryGetUniqueRowStoreMeta();
+        if (current_row_store_meta)
+        {
+            UniqueRowStoreMetaPtr new_row_store_meta = std::make_shared<UniqueRowStoreMeta>(*current_row_store_meta);
+            for (auto & [name, type] : new_row_store_meta->columns)
+            {
+                if (!new_types.count(name))
+                    new_row_store_meta->removed_columns.emplace(name);
+            }
+
+            /// Write to file
+            String tmp_suffix = ".tmp";
+            WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_META_NAME + tmp_suffix, 4096);
+            HashingWriteBuffer out_hashing(file);
+            new_row_store_meta->write(out_hashing);
+            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+            transaction->rename_map[UNIQUE_ROW_STORE_META_NAME + tmp_suffix] = UNIQUE_ROW_STORE_META_NAME;
+            
+            /// Update row store meta in memory immediately, it's ok even transaction failed.
+            const_cast<IMergeTreeDataPart &>(*part).setUniqueRowStoreMeta(new_row_store_meta);
+        }
     }
 
     /// Write the checksums to the temporary file.

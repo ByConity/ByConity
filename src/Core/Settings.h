@@ -502,7 +502,7 @@ class IColumn;
     M(String, blacklist_for_merge_task_regex, "CHTMP$", "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", 0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     M(UInt64, max_insert_wait_seconds_for_unique_table_leader, 0, "The maximum seconds to block insert statement on HaUniqueMergeTree until leader is found", 0) \
-    M(Bool, enable_disk_based_unique_key_index_method, 0, "Whether to allow unique table using disk based unique key index method.", 0) \
+    M(Bool, enable_disk_based_unique_key_index_method, true, "Whether to allow unique table using disk based unique key index method.", 0) \
     M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
     M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
@@ -524,6 +524,8 @@ class IColumn;
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     \
+    /** Settings for Unique Table */ \
+    M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
     \

@@ -81,6 +81,11 @@ void ColumnMap::get(size_t n, Field & res) const
         getNestedData().get(offset + i, map[i]);
 }
 
+ColumnPtr ColumnMap::selectDefault() const
+{
+    return nested->selectDefault();
+}
+
 StringRef ColumnMap::getDataAt(size_t) const
 {
     throw Exception("Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
