@@ -1,7 +1,7 @@
 USE test;
 
-DROP TABLE IF EXISTS funnel_test;
-CREATE TABLE funnel_test
+DROP TABLE IF EXISTS funnel_time_test;
+CREATE TABLE funnel_time_test
 (
     `uid` UInt32 DEFAULT 1,
     `timestamp` UInt64,
@@ -9,13 +9,13 @@ CREATE TABLE funnel_test
     `prop` String DEFAULT 'x'
 )
 ENGINE = MergeTree  order by uid;
-INSERT INTO funnel_test (timestamp, event) values (86400,'A'),(86402,'B'),(86404,'A'),(86458,'B'),(86459,'C'),(86461,'A'),(86462,'B'),(86463,'B'),(86465,'C'),(86467,'A'),(86468,'C'),(86469,'D'),(86518,'C');
-SELECT uid, finderFunnelByTimes(60, 86400, 86400, 1)(timestamp, timestamp, event = 'A',event='B',event='C') FROM funnel_test GROUP BY uid;
-select funnelRepByTimes(1,3)(res) from (SELECT  finderFunnelByTimes(60, 86400, 86400, 1)(timestamp, timestamp, event = 'A', event = 'B', event = 'C') as res FROM funnel_test GROUP BY uid );
+INSERT INTO funnel_time_test (timestamp, event) values (86400,'A'),(86402,'B'),(86404,'A'),(86458,'B'),(86459,'C'),(86461,'A'),(86462,'B'),(86463,'B'),(86465,'C'),(86467,'A'),(86468,'C'),(86469,'D'),(86518,'C');
+SELECT uid, finderFunnelByTimes(60, 86400, 86400, 1)(timestamp, timestamp, event = 'A',event='B',event='C') FROM funnel_time_test GROUP BY uid;
+select funnelRepByTimes(1,3)(res) from (SELECT  finderFunnelByTimes(60, 86400, 86400, 1)(timestamp, timestamp, event = 'A', event = 'B', event = 'C') as res FROM funnel_time_test GROUP BY uid );
 
-DROP TABLE funnel_test;
+DROP TABLE funnel_time_test;
+
 DROP TABLE IF EXISTS funnel_app_test;
-
 CREATE TABLE funnel_app_test
 (
     `hash_uid` UInt64 DEFAULT 1,
@@ -35,5 +35,7 @@ select     funnel_res.1 AS col1,     funnelRep2ByTimes(1, 3,[0, 3600000, 7200000
 --select     funnel_res.1 AS col1,     funnelRepByTimes(1, 3)(funnel_res.2) AS col2     from( SELECT     hash_uid,     arrayJoin(finderGroupFunnelByTimes(600000, 1644076800, 86400, 1, 1, 0, 0, 'Asia/Shanghai')(multiIf(server_time < 1609948800, server_time, time > 2000000000, toUInt32(time / 1000), time), multiIf(time <= 2000000000, time * 1000, time), if(event = 'app_launch', prop, NULL), unifyNull(event = 'app_launch'), unifyNull(event = 'generateOrder'), unifyNull(event = 'paySuccess'))) AS funnel_res FROM funnel_app_test AS et GROUP BY hash_uid) group by col1 order by col1;
 --select     funnel_res.1 AS col1,     funnelRep2ByTimes(1, 3,[0, 3600000, 7200000, 10800000, 14400000, 18000000, 21600000, 25200000, 28800000, 32400000, 36000000, 39600000, 43200000, 46800000, 50400000, 54000000, 57600000, 61200000, 64800000, 68400000, 72000000, 75600000, 79200000, 82800000, 86400000])(funnel_res.2,funnel_res.3) AS col2     from( SELECT     hash_uid,     arrayJoin(finderGroupFunnelByTimes(600000, 1644076800, 86400, 1, 1, 0, 0, 'Asia/Shanghai',1,0)(multiIf(server_time < 1609948800, server_time, time > 2000000000, toUInt32(time / 1000), time), multiIf(time <= 2000000000, time * 1000, time), if(event = 'app_launch', prop, NULL), unifyNull(event = 'app_launch'), unifyNull(event = 'generateOrder'), unifyNull(event = 'paySuccess'))) AS funnel_res FROM funnel_app_test AS et GROUP BY hash_uid) group by col1 order by col1;
 
-
 -- for step execute
+
+DROP TABLE funnel_app_test;
+
