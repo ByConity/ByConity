@@ -177,6 +177,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
     ThreadPool serialized_values_pool(thread_num);
     std::vector<const ColumnWithTypeAndName *> block_columns_with_name;
     block_columns_with_name.resize(block.columns());
+    // Due to serializations may insert some new elements when handling map column, it may cause data race, so we need to copy it.
+    SerializationsMap serializations_copy(serializations);
     if (shouldWriteRowStore())
     {
         serialized_values.resize(rows);
@@ -200,9 +202,9 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                     WriteBufferFromOwnString val_buf;
                     for (auto & col_with_name: block_columns_with_name)
                     {
-                        if (!serializations.count(col_with_name->name))
+                        if (!serializations_copy.count(col_with_name->name))
                             throw Exception(ErrorCodes::LOGICAL_ERROR, "Serializations doesn't contain column {} when serialize value for unique row store", col_with_name->name);
-                        serializations[col_with_name->name]->serializeBinary(*col_with_name->column, correct_row, val_buf);
+                        serializations_copy[col_with_name->name]->serializeBinary(*col_with_name->column, correct_row, val_buf);
                     }
                     serialized_values[j] = val_buf.str();
                 }
@@ -910,6 +912,13 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
     for (auto & col_name : metadata_snapshot->getUniqueKeyColumns())
         key_columns.emplace_back(block.getByName(col_name));
 
+    /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+    for (auto & col : key_columns)
+    {
+        if (!serializations.count(col.name))
+            serializations.emplace(col.name, col.type->getDefaultSerialization());
+    }
+
     rocksdb::WriteOptions opts;
     opts.disableWAL = true;
 
@@ -925,10 +934,7 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
     {
         WriteBufferFromOwnString key_buf;
         for (auto & col : key_columns)
-        {
-            auto serial = col.type->getDefaultSerialization();
-            serial->serializeMemComparable(*col.column, i, key_buf);
-        }
+            serializations[col.name]->serializeMemComparable(*col.column, i, key_buf);
 
         String value;
         auto rid = static_cast<UInt32>(first_rid + i);
@@ -994,6 +1000,13 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
         for (auto & col_name : unique_key_columns)
             key_columns.emplace_back(buffered_unique_key_block.getByName(col_name));
 
+        /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+        for (auto & col : key_columns)
+        {
+            if (!serializations.count(col.name))
+                serializations.emplace(col.name, col.type->getDefaultSerialization());
+        }
+
         String extra_column_name = metadata_snapshot->extra_column_name;
         size_t extra_column_size = metadata_snapshot->extra_column_size;
 
@@ -1006,10 +1019,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
             size_t idx = unique_key_perm_ptr ? unique_key_perm[rid] : rid;
             WriteBufferFromOwnString key_buf;
             for (auto & col : key_columns)
-            {
-                auto serial = col.type->getDefaultSerialization();
-                serial->serializeMemComparable(*col.column, idx, key_buf);
-            }
+                serializations[col.name]->serializeMemComparable(*col.column, idx, key_buf);
             String value;
             PutVarint32(&value, static_cast<UInt32>(idx));
 
