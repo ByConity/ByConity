@@ -81,6 +81,33 @@ void HaMergeTreeQueue::load(zkutil::ZooKeeperPtr zookeeper)
     }
 }
 
+static std::vector<std::pair<UInt64, UInt64>> getTimeInterval(const String & times)
+{
+    String time_interval_str = times;
+    boost::trim_if(time_interval_str, boost::is_any_of(" "));
+    std::vector<String> time_intervals_vec;
+    if (!time_interval_str.empty())
+        boost::split(time_intervals_vec, time_interval_str, boost::is_any_of(","), boost::token_compress_on);
+    std::vector<std::pair<UInt64, UInt64>> time_intervals;
+
+    if (time_intervals_vec.size() % 2 == 0)
+    {
+        for (size_t i = 0; i < time_intervals_vec.size(); i += 2)
+        {
+            UInt64 start = std::stoi(time_intervals_vec[i]);
+            UInt64 end = std::stoi(time_intervals_vec[i+1]);
+
+            time_intervals.emplace_back(start, end);
+        }
+    }
+    else
+    {
+        LOG_DEBUG(&Poco::Logger::get("getTimeInterval"), "Error config for clone strategy, the size of time interval should be multiple of 2");
+    }
+
+    return time_intervals;
+}
+
 /**
  * Only skip clone logs with the current time is between utc_time_to_stop_clone and utc_time_to_start_clone.
  * utc_time_interval_allow_clone / utc_time_interval_stop_clone is a string consists of a list of UTC time.
@@ -95,8 +122,7 @@ bool HaMergeTreeQueue::canExecuteClone(const HaMergeTreeLogEntryPtr & clone_entr
     if (!clone_entry || clone_entry->type != LogEntry::CLONE_PART)
         return true;
 
-    /* TODO:
-    auto & settings = storage.global_context.getSettingsRef();
+    auto & settings = storage.getContext()->getSettingsRef();
 
     if (!settings.stop_clone_in_utc_time)
         return true;
@@ -129,8 +155,6 @@ bool HaMergeTreeQueue::canExecuteClone(const HaMergeTreeLogEntryPtr & clone_entr
         return false;
     }
 
-
-    */
     return true;
 }
 
@@ -1532,33 +1556,6 @@ size_t HaMergeTreeQueue::getQueueSize() const
 {
     std::lock_guard state_lock(state_mutex);
     return unprocessed_queue.size();
-}
-
-[[maybe_unused]]static std::vector<std::pair<UInt64, UInt64>> getTimeInterval(const String & times)
-{
-    String time_interval_str = times;
-    boost::trim_if(time_interval_str, boost::is_any_of(" "));
-    std::vector<String> time_intervals_vec;
-    if (!time_interval_str.empty())
-        boost::split(time_intervals_vec, time_interval_str, boost::is_any_of(","), boost::token_compress_on);
-    std::vector<std::pair<UInt64, UInt64>> time_intervals;
-
-    if (time_intervals_vec.size() % 2 == 0)
-    {
-        for (size_t i = 0; i < time_intervals_vec.size(); i += 2)
-        {
-            UInt64 start = std::stoi(time_intervals_vec[i]);
-            UInt64 end = std::stoi(time_intervals_vec[i+1]);
-
-            time_intervals.emplace_back(start, end);
-        }
-    }
-    else
-    {
-        LOG_DEBUG(&Poco::Logger::get("getTimeInterval"), "Error config for clone strategy, the size of time interval should be multiple of 2");
-    }
-
-    return time_intervals;
 }
 
 void HaMergeTreeQueue::checkAddMetadataAlter(const MutationCommands & commands) const

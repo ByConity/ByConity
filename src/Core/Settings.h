@@ -590,6 +590,13 @@ class IColumn;
     M(Bool, enable_sample_by_range, false, "Sample by range if it is true", 0) \
     M(Bool, enable_deterministic_sample_by_range, false, "Deterministic sample by range if it is true", 0) \
     M(Bool, enable_final_sample, false, "Sample from result rows if it is true", 0) \
+    \
+    /** clone strategy **/ \
+    M(Bool, stop_clone_in_utc_time, false, "enable stop executing clone log in utc time", 0) \
+    M(UInt64, utc_time_to_stop_clone, 2, "the hour of UTC time, if current time is greater than it, clone is stopepd", 0) \
+    M(UInt64, utc_time_to_start_clone, 12, "the hour of UTC time, if current time is greater than it, clone is started", 0) \
+    M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
+    M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */
 
 
