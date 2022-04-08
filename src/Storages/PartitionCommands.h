@@ -41,6 +41,7 @@ struct PartitionCommand
         BITENGINE_RECODE_PARTITION,
         BITENGINE_RECODE_PARTITION_WHERE,
         INGEST_PARTITION,
+        SAMPLE_PARTITION_WHERE,
     };
 
     Type type = UNKNOWN;
@@ -74,6 +75,9 @@ struct PartitionCommand
     /// columns for INGEST PARTITION
     Names column_names;
     Names key_names;
+
+    /// expression for sample / split / resharding
+    ASTPtr sharding_exp;
 
     enum MoveDestinationType
     {

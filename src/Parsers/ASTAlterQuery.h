@@ -86,6 +86,8 @@ public:
         PREATTACH_PARTITION,
         BITENGINE_RECODE_PARTITION,
         BITENGINE_RECODE_PARTITION_WHERE,
+
+        SAMPLE_PARTITION_WHERE,
     };
 
     Type type = NO_TYPE;
@@ -177,6 +179,9 @@ public:
     ASTPtr columns;
     /// For Ingestion columns
     ASTPtr keys;
+
+    /// For sample / split / resharding expression
+    ASTPtr with_sharding_exp;
 
     bool detach = false;        /// true for DETACH PARTITION
 

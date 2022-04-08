@@ -384,6 +384,12 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_CLEAR_MAP_KEY, database, table, column_name());
             break;
         }
+        case ASTAlterCommand::SAMPLE_PARTITION_WHERE:
+        {
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, command.from_database, command.from_table);
+            required_access.emplace_back(AccessType::SELECT | AccessType::INSERT, database, table);
+            break;
+        }
         case ASTAlterCommand::NO_TYPE: break;
     }
 

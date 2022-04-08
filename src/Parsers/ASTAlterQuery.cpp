@@ -516,6 +516,20 @@ void ASTAlterCommand::formatImpl(
             settings.ostr << (settings.hilite ? hilite_keyword : "")
                           << " FROM DETACH" << (settings.hilite ? hilite_none : "");
     }
+    else if (type == ASTAlterCommand::SAMPLE_PARTITION_WHERE)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "SAMPLE PARTITION WITH " << (settings.hilite ? hilite_none : "");
+        with_sharding_exp->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " WHERE " << (settings.hilite ? hilite_none : "");
+        predicate->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "");
+        if (!from_database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_database)
+                          << (settings.hilite ? hilite_none : "") << ".";
+        }
+        settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(from_table) << (settings.hilite ? hilite_none : "");
+    }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }

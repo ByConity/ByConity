@@ -246,6 +246,16 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.detach = command_ast->detach;
         return res;
     }
+    else if(command_ast->type == ASTAlterCommand::SAMPLE_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = SAMPLE_PARTITION_WHERE;
+        res.sharding_exp = command_ast->with_sharding_exp;
+        res.partition = command_ast->predicate;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        return res;
+    }
     else
         return {};
 }

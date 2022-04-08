@@ -178,6 +178,9 @@ public:
 
     Int64 getClientID();
 
+    /// Get hosts of zookeeper
+    Strings getHosts() { return hosts; }
+
     /// Remove the node with the subtree. If someone concurrently adds or removes a node
     /// in the subtree, the result is undefined.
     void removeRecursive(const std::string & path);

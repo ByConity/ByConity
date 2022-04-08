@@ -3979,7 +3979,12 @@ Pipe MergeTreeData::alterPartition(
             {
                 ingestPartition(command, query_context);
             }
-
+            break;
+            case PartitionCommand::SAMPLE_PARTITION_WHERE:
+            {
+                String dst_database = command.from_database.empty() ? query_context->getCurrentDatabase() : command.from_database;
+                samplePartitionWhere(dst_database, command.from_table, command.sharding_exp, command.partition, query_context);
+            }
             break;
 
             default:
