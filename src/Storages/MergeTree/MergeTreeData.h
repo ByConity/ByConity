@@ -245,15 +245,17 @@ public:
     using DataParts = std::set<DataPartPtr, LessDataPart>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    using DataPartsLock = std::unique_lock<std::mutex>;
+    using DataPartsLock = std::unique_lock<std::shared_mutex>;
+    using DataPartsReadLock = std::shared_lock<std::shared_mutex>;
     DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
+    DataPartsReadLock lockPartsRead() const { return DataPartsReadLock(data_parts_mutex); }
 
     using DeleteBitmapGetter = std::function<DeleteBitmapPtr(const DataPartPtr &)>;
     using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
     DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
     {
         DataPartsDeleteSnapshot res;
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         for (auto & part : parts) {
             res.insert({part, part->getDeleteBitmap()});
         }
@@ -852,14 +854,14 @@ public:
 
     size_t getColumnCompressedSize(const std::string & name) const
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         const auto it = column_sizes.find(name);
         return it == std::end(column_sizes) ? 0 : it->second.data_compressed;
     }
 
     ColumnSizeByName getColumnSizes() const override
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         return column_sizes;
     }
 
@@ -1177,7 +1179,7 @@ protected:
     >;
 
     /// Current set of data parts.
-    mutable std::mutex data_parts_mutex;
+    mutable std::shared_mutex data_parts_mutex;
     DataPartsIndexes data_parts_indexes;
     DataPartsIndexes::index<TagByInfo>::type & data_parts_by_info;
     DataPartsIndexes::index<TagByStateAndInfo>::type & data_parts_by_state_and_info;
