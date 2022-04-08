@@ -6449,9 +6449,12 @@ void MergeTreeData::AlterDataPartTransaction::innerCommit()
     }
 
     auto & mutable_part = const_cast<DataPart &>(*data_part);
-    mutable_part.checksums_ptr = std::make_shared<IMergeTreeDataPart::Checksums>();
-    *mutable_part.checksums_ptr = new_checksums;
-    mutable_part.columns = new_columns;
+    {
+        std::lock_guard lock(mutable_part.checksums_mutex);
+        mutable_part.checksums_ptr = std::make_shared<IMergeTreeDataPart::Checksums>(new_checksums);
+        /// FIXME: this may cause UB to set column directly. Currently, only unique table alter drop column may cause this case, it's necessary to reimpl it.
+        mutable_part.columns = new_columns;
+    }
 
     /// 3) Delete the old files.
     for (const auto & from_to : rename_map)
