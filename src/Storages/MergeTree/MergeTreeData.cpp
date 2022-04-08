@@ -1040,7 +1040,7 @@ String MergeTreeData::getStorageUniqueID() const
 
 Int64 MergeTreeData::getMaxBlockNumber() const
 {
-    auto lock = lockParts();
+    auto lock = lockPartsRead();
 
     Int64 max_block_num = 0;
     for (const DataPartPtr & part : data_parts_by_info)
@@ -2761,7 +2761,7 @@ bool MergeTreeData::renameTempPartAndAdd(MutableDataPartPtr & part, SimpleIncrem
 
 bool MergeTreeData::renameTempPartAndReplace(
     MutableDataPartPtr & part, SimpleIncrement * increment, Transaction * out_transaction,
-    std::unique_lock<std::mutex> & lock, DataPartsVector * out_covered_parts, MergeTreeDeduplicationLog * deduplication_log)
+    DataPartsLock & lock, DataPartsVector * out_covered_parts, MergeTreeDeduplicationLog * deduplication_log)
 {
     if (out_transaction && &out_transaction->data != this)
         throw Exception("MergeTreeData::Transaction for one table cannot be used with another. It is a bug.",
@@ -3253,7 +3253,7 @@ size_t MergeTreeData::getPartsCount() const
 
 size_t MergeTreeData::getMaxPartsCountForPartitionWithState(DataPartState state) const
 {
-    auto lock = lockParts();
+    auto lock = lockPartsRead();
 
     size_t res = 0;
     size_t cur_count = 0;
@@ -3292,7 +3292,7 @@ size_t MergeTreeData::getMaxInactivePartsCountForPartition() const
 
 std::optional<Int64> MergeTreeData::getMinPartDataVersion() const
 {
-    auto lock = lockParts();
+    auto lock = lockPartsRead();
 
     std::optional<Int64> result;
     for (const auto & part : getDataPartsStateRange(DataPartState::Committed))
@@ -3469,7 +3469,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVectorInPartition(Merg
 {
     DataPartStateAndPartitionID state_with_partition{state, partition_id};
 
-    auto lock = lockParts();
+    auto lock = lockPartsRead();
     return DataPartsVector(
         data_parts_by_state_and_info.lower_bound(state_with_partition),
         data_parts_by_state_and_info.upper_bound(state_with_partition));
@@ -3477,7 +3477,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVectorInPartition(Merg
 
 MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const MergeTreePartInfo & part_info, const MergeTreeData::DataPartStates & valid_states)
 {
-    auto lock = lockParts();
+    auto lock = lockPartsRead();
     return getPartIfExistsWithoutLock(part_info, valid_states);
 }
 
@@ -4098,7 +4098,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVector(
     DataPartsVector res;
     DataPartsVector buf;
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
 
         for (auto state : affordable_states)
         {
@@ -4145,7 +4145,7 @@ MergeTreeData::getAllDataPartsVector(MergeTreeData::DataPartStateVector * out_st
     DataPartsVector res;
     if (require_projection_parts)
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         for (const auto & part : data_parts_by_info)
         {
             for (const auto & [p_name, projection_part] : part->getProjectionParts())
@@ -4161,7 +4161,7 @@ MergeTreeData::getAllDataPartsVector(MergeTreeData::DataPartStateVector * out_st
     }
     else
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         res.assign(data_parts_by_info.begin(), data_parts_by_info.end());
 
         if (out_states != nullptr)
@@ -4522,7 +4522,7 @@ MergeTreeData::DataParts MergeTreeData::getDataParts(const DataPartStates & affo
 {
     DataParts res;
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         for (auto state : affordable_states)
         {
             auto range = getDataPartsStateRange(state);

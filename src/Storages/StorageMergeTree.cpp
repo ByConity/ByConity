@@ -1568,7 +1568,7 @@ void StorageMergeTree::movePartitionToTable(const StoragePtr & dest_table, const
             auto src_data_parts_lock = lockParts();
             auto dest_data_parts_lock = dest_table_storage->lockParts();
 
-            std::mutex mutex;
+            std::shared_mutex mutex;
             DataPartsLock lock(mutex);
 
             for (MutableDataPartPtr & part : dst_parts)
