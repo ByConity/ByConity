@@ -128,6 +128,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionFinalizeAggregation(factory);
     registerFunctionToLowCardinality(factory);
     registerFunctionLowCardinalityIndices(factory);
+    registerFunctionLowCardinalityKeys(factory);
     registerFunctionLowCardinalityIsNoneEncoded(factory);
     registerFunctionsIn(factory);
     registerFunctionJoinGet(factory);

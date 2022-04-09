@@ -498,7 +498,6 @@ void SerializationLowCardinality::serializeBinaryBulkWithMultipleStreams(
     auto * indexes_stream = settings.getter(settings.path);
     settings.path.pop_back();
 
-    const ColumnLowCardinality & low_cardinality_column = typeid_cast<const ColumnLowCardinality &>(column);
     if (!keys_stream && !indexes_stream)
         return;
 
@@ -508,6 +507,7 @@ void SerializationLowCardinality::serializeBinaryBulkWithMultipleStreams(
     if (!indexes_stream)
         throw Exception("Got empty stream for SerializationLowCardinality indexes.", ErrorCodes::LOGICAL_ERROR);
 
+    const ColumnLowCardinality & low_cardinality_column = typeid_cast<const ColumnLowCardinality &>(column);
     auto * low_cardinality_state = checkAndGetLowCardinalitySerializeState(state);
     auto & global_dictionary = low_cardinality_state->shared_dictionary;
     KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
