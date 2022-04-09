@@ -426,6 +426,18 @@ public:
         this->c_end = this->c_start + this->byte_size(n);
     }
 
+    template <typename ... TAllocatorParams>
+    void resize_fill(size_t n, const T & value, TAllocatorParams &&... allocator_params)
+    {
+        size_t old_size = this->size();
+        if (n > old_size)
+        {
+            this->reserve(n, std::forward<TAllocatorParams>(allocator_params)...);
+            std::fill(t_end(), t_end() + n - old_size, value);
+        }
+        this->c_end = this->c_start + this->byte_size(n);
+    }
+
     template <typename U, typename ... TAllocatorParams>
     void push_back(U && x, TAllocatorParams &&... allocator_params)
     {

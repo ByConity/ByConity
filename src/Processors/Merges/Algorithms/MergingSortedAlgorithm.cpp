@@ -17,13 +17,15 @@ MergingSortedAlgorithm::MergingSortedAlgorithm(
     size_t max_block_size,
     UInt64 limit_,
     WriteBuffer * out_row_sources_buf_,
-    bool use_average_block_sizes)
+    bool use_average_block_sizes,
+    PartIdMappingCallback part_id_mapping_cb_)
     : merged_data(header.cloneEmptyColumns(), use_average_block_sizes, max_block_size)
     , description(std::move(description_))
     , limit(limit_)
     , out_row_sources_buf(out_row_sources_buf_)
     , current_inputs(num_inputs)
     , cursors(num_inputs)
+    , part_id_mapping_cb(part_id_mapping_cb_)
 {
     /// Replace column names in description to positions.
     for (auto & column_description : description)
@@ -148,6 +150,9 @@ IMergingAlgorithm::Status MergingSortedAlgorithm::mergeImpl(TSortingHeap & queue
             out_row_sources_buf->write(row_source.data);
         }
 
+        if (part_id_mapping_cb)
+            part_id_mapping_cb(current.impl->order, 1);
+
         if (limit && merged_data.totalMergedRows() >= limit)
             return Status(merged_data.pull(), true);
 
@@ -198,6 +203,8 @@ IMergingAlgorithm::Status MergingSortedAlgorithm::insertFromChunk(size_t source_
         for (size_t i = 0; i < num_rows; ++i)
             out_row_sources_buf->write(row_source.data);
     }
+    if (part_id_mapping_cb)
+        part_id_mapping_cb(source_num, num_rows);
 
     auto status = Status(merged_data.pull(), is_finished);
 

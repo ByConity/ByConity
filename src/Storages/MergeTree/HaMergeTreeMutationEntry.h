@@ -47,8 +47,8 @@ struct HaMergeTreeMutationEntry
     Int64 block_number = 0; /// acting as mutation version
     MutationCommands commands;
 
-    /// record partition_ids when mutation type is FASTDELETE or CLEAR_COLUMN.
-    /// if partition_ids is empty, it means that user doesn't specify a partition.
+    /// Record partition_ids when mutation type is FASTDELETE. If partition_ids is empty, it means that user doesn't specify a partition.
+    /// The size of partition_ids is at most 1, using set just adapts to previous impl. Previous impl also used this for CLEAR COLUMN and CLEAR COLUMN IN PARTITION WHERE which later may have multiple partition ids.
     NameOrderedSet partition_ids;
 
     struct AlterMetadataInfo

@@ -14,6 +14,8 @@
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/HaMergeTreeReplicaEndpoint.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
+
 
 #include <regex>
 
@@ -80,6 +82,7 @@ namespace ActionLocks
 [[maybe_unused]] static const auto MERGE_SELECTING_SLEEP_MS           = 5 * 1000;
 [[maybe_unused]] static const auto MUTATIONS_FINALIZING_SLEEP_MS      = 1 * 1000;
 [[maybe_unused]] static const auto MUTATIONS_FINALIZING_IDLE_SLEEP_MS = 5 * 1000;
+extern const time_t OFFLINE_DELAY;
 
 void StorageHaMergeTree::setZooKeeper()
 {
@@ -1029,6 +1032,7 @@ BlockOutputStreamPtr StorageHaMergeTree::write(const ASTPtr & /*query*/, [[maybe
 {
     const auto storage_settings_ptr = getSettings();
     assertNotReadonly();
+    assertNotOffline();
 
     const Settings & query_settings = query_context->getSettingsRef();
     [[maybe_unused]] bool deduplicate = storage_settings_ptr->replicated_deduplication_window != 0 && query_settings.insert_deduplicate;
@@ -1179,6 +1183,9 @@ void StorageHaMergeTree::alter(
     auto current_metadata = getInMemoryMetadataPtr();
     auto mutation_commands
         = commands.getMutationCommands(*current_metadata, query_context->getSettingsRef().materialize_ttl_after_modify, query_context);
+
+    /// Handle CLEAR COLUMN IN PARTITION WHERE command seperately.
+    handleClearColumnInPartitionWhere(mutation_commands, commands);
 
     queue.pullLogs(zookeeper);
     queue.checkAddMetadataAlter(mutation_commands);
@@ -1688,7 +1695,11 @@ void StorageHaMergeTree::getQueue(LogEntriesData & res, String & out_replica_nam
 
 time_t StorageHaMergeTree::getAbsoluteDelay() const
 {
-    return queue.getAbsoluteDelay().first;
+    auto absolute_delay = queue.getAbsoluteDelay().first;
+    if (is_offline)
+        absolute_delay = OFFLINE_DELAY;
+
+    return absolute_delay;
 }
 
 void StorageHaMergeTree::getReplicaDelays(time_t & out_absolute_delay, time_t & out_relative_delay)
@@ -1708,6 +1719,21 @@ void StorageHaMergeTree::getReplicaDelays(time_t & out_absolute_delay, time_t & 
             out_relative_delay = std::max(static_cast<Int64>(out_relative_delay),
                                           static_cast<Int64>(out_absolute_delay - peer_delay.second));
     }
+}
+
+Int64 StorageHaMergeTree::getDependedNumLogFrom(const String & replica) const
+{
+    Int64 depended_num_log {0};
+    {
+        auto log_lock = log_manager->lockMe();
+        auto & entry_list = log_manager->getEntryListUnsafe();
+        for (const auto & entry : entry_list)
+        {
+            if (entry->from_replica == replica && entry->willHinderOffline())
+                depended_num_log++;
+        }
+    }
+    return depended_num_log;
 }
 
 CheckResults StorageHaMergeTree::checkData([[maybe_unused]]const ASTPtr & query, [[maybe_unused]]ContextPtr query_context)
@@ -1905,6 +1931,12 @@ bool StorageHaMergeTree::executeFetch(HaQueueExecutingEntrySetPtr & executing_se
     auto & entry = executing_set->getExecuting();
     auto new_part_name = entry->new_part_name;
 
+    if (is_offline)
+    {
+        LOG_DEBUG(log, "Cancel fetching part " + new_part_name + " since it is offline node");
+        return true;
+    }
+
     /// Some part has already covered this one, DO NOT fetch it.
     if (auto covered_part = getActiveContainingPart(new_part_name))
     {
@@ -1939,7 +1971,8 @@ bool StorageHaMergeTree::fetchPartHeuristically(
     const String & part_name,
     const String & backup_replica,
     bool to_detached,
-    size_t quorum)
+    size_t quorum,
+    bool incrementally)
 {
     bool all_success = false;
     auto candidate_replicas = log_exchanger.findActiveContainingPart(part_name, all_success);
@@ -1994,7 +2027,8 @@ bool StorageHaMergeTree::fetchPartHeuristically(
         zookeeper_path + "/replicas/" + replica_to_fetch,
         to_detached,
         quorum,
-        false); // to_repair
+        false,
+        incrementally);
 }
 
 bool StorageHaMergeTree::fetchPart(
@@ -2003,7 +2037,8 @@ bool StorageHaMergeTree::fetchPart(
     const String & source_replica_path,
     bool to_detached,
     size_t quorum,
-    bool)
+    bool to_repair,
+    bool incrementally)
 {
     std::unique_ptr<FetchingPartToExecutingEntrySet::Handle> handle;
     if (executing_set)
@@ -2038,6 +2073,10 @@ bool StorageHaMergeTree::fetchPart(
     auto credentials = getContext()->getInterserverCredentials();
     String interserver_scheme = getContext()->getInterserverScheme();
 
+    MergeTreeData::DataPartPtr source_part = nullptr;
+    String repair_tmp_name{};
+    bool move_to_tmp = false;
+
     try
     {
         HaMergeTreeAddress address(zookeeper->get(source_replica_path + "/host"));
@@ -2060,7 +2099,22 @@ bool StorageHaMergeTree::fetchPart(
             interserver_scheme,
             replicated_fetches_throttler,
             to_detached,
-            "");
+            "",
+            /*tagger_ptr(default)*/ nullptr,
+            /*try_use_s3_copy(default)*/ true,
+            /*disk_s3(default)*/ nullptr,
+            incrementally);
+
+        if (to_repair)
+        {
+            source_part = getActiveContainingPart(part_name);
+            if (source_part)
+            {
+                repair_tmp_name = "tmp_outdated_" + std::to_string(time(nullptr)) + "_" + part_name;
+                renamePartAndDropMetadata(repair_tmp_name, source_part);
+            }
+            move_to_tmp = true;
+        }
 
         if (!to_detached)
         {
@@ -2095,6 +2149,9 @@ bool StorageHaMergeTree::fetchPart(
     }
     catch (const Exception & e)
     {
+        if (move_to_tmp && source_part)
+            renamePartAndInsertMetadata(part_name, source_part);
+
         /// The same part is being written right now (but probably it's not committed yet).
         /// We will check the need for fetch later.
         if (e.code() == ErrorCodes::DIRECTORY_ALREADY_EXISTS)
@@ -2338,8 +2395,9 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
                 executing_set,
                 new_part_name,
                 entry.source_replica,
-                false, /// detached
-                0); /// quorum
+                /*detached*/false,
+                /*quorum(default)*/0,
+                getContext()->getSettingsRef().enable_fetch_part_incrementally);
             return true;
         }
         catch (Exception & e)
@@ -2354,6 +2412,31 @@ bool StorageHaMergeTree::executeMutate(HaQueueExecutingEntrySetPtr & executing_s
     }
 
     /// TODO shall we maintain current_mutating_parts?
+
+    /// try to fetch mutated part first
+    if (!getSettings()->prefer_merge_than_fetch && replica_name != entry.source_replica)
+    {
+        try
+        {
+            fetchPartHeuristically(
+                executing_set,
+                new_part_name,
+                entry.source_replica,
+                /*detached*/false,
+                /*quorum(default)*/0,
+                getContext()->getSettingsRef().enable_fetch_part_incrementally);
+            return true;
+        }
+        catch (Exception & e)
+        {
+            if (e.code() != ErrorCodes::NO_REPLICA_HAS_PART)
+                LOG_DEBUG(log, "{}, {} ", __func__, e.displayText());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__ );
+        }
+    }
 
     size_t estimated_space_for_result = MergeTreeDataMergerMutator::estimateNeededDiskSpace({source_part});
 
@@ -3073,6 +3156,11 @@ void StorageHaMergeTree::cloneReplicaIfNeeded(zkutil::ZooKeeperPtr zookeeper)
 
 void StorageHaMergeTree::enterLeaderElection()
 {
+    // Offline node cannot enter leader election
+    tryGetOffline();
+    if (is_offline)
+        return;
+
     auto callback = [this]()
     {
         LOG_INFO(log, "Became leader");
@@ -4021,7 +4109,7 @@ void StorageHaMergeTree::fetchPartitionWhere(
 }
 
 void StorageHaMergeTree::fetchPartitionImpl(
-    const String & partition_id, const String & filter, const String & from, ContextPtr query_context)
+    const String & partition_id, const String & filter, const String & from, ContextPtr query_context, bool to_repair)
 {
     String from_replica_path = zookeeper_path + "/replicas/" + from;
     auto from_replica_address = getReplicaAddress(from);
@@ -4043,12 +4131,12 @@ void StorageHaMergeTree::fetchPartitionImpl(
     for (auto & part_name : part_names)
     {
         auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
-        if (getActiveContainingPart(part_info))
+        if (!to_repair && getActiveContainingPart(part_info))
             continue;
 
         try
         {
-            bool fetched = fetchPart(nullptr, part_name, from_replica_path, false);
+            bool fetched = fetchPart(nullptr, part_name, from_replica_path, false, 0, to_repair);
             if (!fetched)
                 LOG_ERROR(log, "Failed to fetch part {} from {}", part_name, from_replica_path);
         }
@@ -4056,6 +4144,26 @@ void StorageHaMergeTree::fetchPartitionImpl(
         {
             LOG_WARNING(log, e.displayText());
         }
+    }
+}
+
+void StorageHaMergeTree::repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr query_context)
+{
+    if (part)
+    {
+        String part_name = partition->as<ASTLiteral &>().value.safeGet<String>();
+        LOG_INFO(log, "Will fetch part {} from replica {}", part_name, from);
+
+        if (!fetchPart(nullptr, part_name, zookeeper_path + "/replicas/" + from, false, 0, true))
+            throw Exception(ErrorCodes::UNFINISHED, "Failed to fetch part {} from {}", part_name, from);
+    }
+    else
+    {
+        String partition_id = getPartitionIDFromQuery(partition, query_context);
+
+        LOG_INFO(log, "Will fetch partition {} from replica {}", partition_id, from);
+
+        fetchPartitionImpl(partition_id, {}, from, query_context, true);
     }
 }
 
@@ -4374,6 +4482,250 @@ void StorageHaMergeTree::markLost()
         return;
 
     current_zookeeper->set(zookeeper_path + "/replicas/" + replica_name + "/is_lost", "1", -1);
+}
+
+String StorageHaMergeTree::getReplicaName(const String & replica_name_)
+{
+    String replica_host_path = zookeeper_path + "/replicas";
+
+    std::vector<std::string> replicas = getZooKeeper()->getChildren(replica_host_path);
+    for (auto & replica : replicas)
+    {
+        if (replica_name_ == replica || replica_name_ == getReplicaAddress(replica).host)
+            return replica;
+    }
+
+    throw Exception("Replica not found", ErrorCodes::LOGICAL_ERROR);
+}
+
+void StorageHaMergeTree::trySetNodeOffline(const String & node_replica_name, bool current_node)
+{
+    if (!current_zookeeper || current_zookeeper->expired())
+        return;
+
+    auto table_id = getStorageID();
+    LOG_DEBUG(log, "Will offline table " + table_id.database_name + "." + table_id.table_name + ", zookeeper_path = " + zookeeper_path);
+
+    String offline_path = zookeeper_path + "/replicas/" + node_replica_name + "/is_offline";
+    if (current_zookeeper->exists(offline_path))
+        current_zookeeper->trySet(offline_path, "1");
+    else
+        current_zookeeper->createIfNotExists(offline_path, "1");
+
+    if (current_node)
+    {
+        is_offline = true;
+        is_offlining = true;
+    }
+}
+
+void StorageHaMergeTree::trySetNodeOnline(const String & node_replica_name, bool current_node)
+{
+    if (!current_zookeeper || current_zookeeper->expired())
+        return;
+
+    auto table_id = getStorageID();
+    LOG_DEBUG(log, "Will online table " + table_id.database_name + "." + table_id.table_name);
+    current_zookeeper->trySet(zookeeper_path + "/replicas/" + node_replica_name + "/is_offline", "0");
+
+    if (current_node)
+    {
+        is_offline = false;
+        is_offlining = false;
+    }
+}
+
+void StorageHaMergeTree::tryGetOffline()
+{
+    if (!current_zookeeper || current_zookeeper->expired())
+        return;
+
+    if (is_offline)
+        return;
+
+    Coordination::Stat stat{};
+    String value;
+    current_zookeeper->tryGet(zookeeper_path + "/replicas/" + replica_name + "/is_offline", value, &stat);
+    if (value == "1")
+        is_offline = true;
+}
+
+void StorageHaMergeTree::assertNotOffline()
+{
+    if (is_offline)
+        throw Exception("Table is in offline mode", ErrorCodes::LOGICAL_ERROR);
+}
+
+void StorageHaMergeTree::offlineReplica(const String & replica)
+{
+    offlineNodePhaseOne(replica);
+    offlineNodePhaseTwo(replica);
+}
+
+/*
+* Online:
+* 1. set is_offline as true
+* 2. set is_offline as true in zookeeper
+* 3. start to clone replicas
+* 4. if it has no replicas, set its is_lost = 0
+*/
+void StorageHaMergeTree::onlineNode(const String & target_replica)
+{
+    bool current_node = (target_replica == replica_name);
+    if (!current_node)
+    {
+        // In some cases, replica_name is not ip so that we should extract ip from zookeeper.
+        if (target_replica == getReplicaAddress(replica_name).host)
+            current_node = true;
+    }
+
+    auto replica = current_node ? replica_name : getReplicaName(target_replica);
+
+    if (!current_node)
+    {
+        trySetNodeOnline(replica, false);
+        return;
+    }
+
+    auto zookeeper = getZooKeeper();
+    Strings active_replicas = log_exchanger.getActiveReplicas();
+
+    if (active_replicas.empty())
+    {
+        log_exchanger.sendPing();
+        active_replicas = log_exchanger.getActiveReplicas();
+        if (active_replicas.empty())
+        {
+            LOG_DEBUG(log, "There is no active replicas when online replica " + replica_name);
+            zookeeper->set(replica_path + "/is_lost", "0");
+            trySetNodeOnline(replica, true);
+            return;
+        }
+    }
+
+    zookeeper->set(replica_path + "/is_lost", "0");
+
+    // clone replica if needed
+    String source_replica;
+    Coordination::Stat source_is_lost_stat{};
+    getReplicaToClone(zookeeper, source_replica, source_is_lost_stat);
+    cloneReplica(source_replica, source_is_lost_stat, zookeeper);
+
+    trySetNodeOnline(replica, true);
+}
+
+/*
+ * Offline:
+ * 1. set table to be is_offline mode to avoid writing and altering, including fetching parts from replicas and merging.
+ * 2. mark all its log as executed so that no more job will be scheduled
+ * 3. waiting all the replicas to commit its lsn ==> now is to check that there is no dependency log from target replica
+ * 4. mark the node as is_lost in zookeeper
+ * 5. exit leader election
+ * 6. set a very absolute_delay to make query route to other replicas
+ *    -- absolute_delay was set in getAbsoluteDelay if the replica is is_offline mode
+ */
+void StorageHaMergeTree::offlineNodePhaseOne(const String & target_replica)
+{
+    bool current_node = (target_replica == replica_name);
+    if (!current_node)
+    {
+        // In some cases, replica_name is not ip so that we should extract ip from zookeeper.
+        if (target_replica == getReplicaAddress(replica_name).host)
+            current_node = true;
+    }
+
+    auto replica = current_node ? replica_name : getReplicaName(target_replica);
+    if (!current_node)
+    {
+        trySetNodeOffline(replica, false);
+        return;
+    }
+
+    // The current table has been offlined so that we can skip it.
+    // If the current table cannot be offlined (has a smaller lsn), an exception will be throw.
+    // If user run offline again, the offlined tables will be offlined again (since in this case we cannot distinguish
+    // whether the table has finished phase two), the total elapsed time will be too long to retry this command.
+    // Thus, we introduce is_offlining flag to indicate that phase two has been finished so that offlined table will not be retry.
+    if (is_offline && !is_offlining)
+        return;
+
+    trySetNodeOffline(replica, true);
+
+    // mark all log as executed
+    std::vector<LogEntryPtr> entries;
+    {
+        auto log_lock = log_manager->lockMe();
+        const auto & entry_list = log_manager->getEntryListUnsafe();
+        for (const auto & entry : entry_list)
+        {
+            // Only skip get, clone log to avoid fetching parts from replicas
+            // which can reduce io load of replicas
+            if (!entry->is_executed && (entry->type == LogEntry::GET_PART || entry->type == LogEntry::CLONE_PART || entry->type == LogEntry::INGEST_PARTITION))
+                entries.push_back(entry);
+        }
+    }
+    queue.removeProcessedEntries(entries);
+    exitLeaderElection();
+}
+
+void StorageHaMergeTree::offlineNodePhaseTwo(const String & target_replica)
+{
+    bool current_node = (target_replica == replica_name);
+    if (!current_node)
+    {
+        // In some cases, replica_name is not ip so that we should extract ip from zookeeper.
+        if (target_replica == getReplicaAddress(replica_name).host)
+            current_node = true;
+    }
+
+    if (!current_node)
+        return;
+
+    // The current table has been offlined so that we can skip it.
+    if (is_offline && !is_offlining)
+        return;
+
+    Strings active_replicas = log_exchanger.getActiveReplicas();
+
+    if (active_replicas.empty())
+    {
+        log_exchanger.sendPing();
+        active_replicas = log_exchanger.getActiveReplicas();
+        if (active_replicas.empty())
+        {
+            LOG_DEBUG(log, "There is no active replicas when offline replica " + replica_name + ", engine will offline this node by setting is_lost = 1");
+            markLost();
+            is_offlining = false;
+            return;
+        }
+    }
+
+    // If there is dependency log, which means there are some replicas depending this replica,
+    // throw an exception to tell user that we cannot offline this replica currently.
+    auto dependency_log_statuses = log_exchanger.getDependedNumLogs(replica_name);
+    for (auto & [replica, log_status] : dependency_log_statuses)
+    {
+        if (log_status)
+        {
+            auto table_id = getStorageID();
+            throw Exception(table_id.database_name + "." + table_id.table_name + ": cannot offline replica " + replica_name + " since replica " + replica +
+                                " still depends on target replica", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+
+    /// For BitEngine, check whether the local replica is the only one has the max version
+    /// If so, notify other replicas and throw an exception to wait
+    if (isBitEngineMode())
+    {
+        // todo: for BitEngineMode
+    }
+
+    // If there is no dependency log, this replica can be marked as is_lost in zookeeper
+    markLost();
+    is_offlining = false;
+
+    auto table_id = getStorageID();
+    LOG_DEBUG(log, "Offlined table " + table_id.database_name + "." + table_id.table_name + " on replica " + replica_name);
 }
 
 /// allocLSNAndSet() need two separated ZK operations which cannot be packed.

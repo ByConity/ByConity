@@ -361,3 +361,4 @@ endif()
 
 add_subdirectory(infsec-cmake)
 add_subdirectory(cppkms-cmake)
+add_subdirectory(numactl-cmake)

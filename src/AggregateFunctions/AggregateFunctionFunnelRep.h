@@ -1,7 +1,7 @@
 #pragma once
 
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/AggregateRetentionCommon.h>
+#include <AggregateFunctions/AggregateFunnelCommon.h>
 
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
@@ -13,20 +13,10 @@
 #include <DataTypes/DataTypesNumber.h>
 
 #include <Columns/ColumnArray.h>
-#include <Common/SpaceSaving.h>
 #include <Functions/FunctionHelpers.h>
 
 namespace DB
 {
-
-using REPType = UInt64;
-class AggregateFunctionFunnelRepData
-{
-public:
-   // using Array = PODArray<REPType, 32>;
-   // Array value;
-   REPType value[1];
-};
 
 /// Convert funnel output to TEA's format, it's aggregation semantics
 template<typename T>
@@ -45,7 +35,7 @@ public:
 
     void create(const AggregateDataPtr place) const override
     {
-        auto d = new (place) AggregateFunctionFunnelRepData;
+        auto *d = new (place) AggregateFunctionFunnelRepData;
         std::fill(d->value, d->value + m_total_size, 0);
     }
 

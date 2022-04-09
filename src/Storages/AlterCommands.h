@@ -70,6 +70,9 @@ struct AlterCommand
     /// For DROP/CLEAR COLUMN/INDEX ... IN PARTITION
     ASTPtr partition;
 
+    /// For CLEAR COLUMN IN PARTITION WHERE
+    ASTPtr partition_predicate;
+
     /// For ADD and MODIFY, a new column type.
     DataTypePtr data_type = nullptr;
 

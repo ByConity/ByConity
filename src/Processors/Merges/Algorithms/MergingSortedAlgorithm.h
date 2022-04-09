@@ -13,6 +13,11 @@ namespace DB
 class MergingSortedAlgorithm final : public IMergingAlgorithm
 {
 public:
+
+    /// Used for building part id mappings between input streams and output.
+    /// Different from row sources in that there is no limit on the number of input parts.
+    using PartIdMappingCallback = std::function<void(size_t part_index, size_t nrows)>;
+
     MergingSortedAlgorithm(
         const Block & header,
         size_t num_inputs,
@@ -20,7 +25,8 @@ public:
         size_t max_block_size,
         UInt64 limit_ = 0,
         WriteBuffer * out_row_sources_buf_ = nullptr,
-        bool use_average_block_sizes = false);
+        bool use_average_block_sizes = false,
+        PartIdMappingCallback part_id_mapping_cb_ = nullptr);
 
     void addInput();
 
@@ -54,6 +60,8 @@ private:
 
     template <typename TSortingHeap>
     Status mergeImpl(TSortingHeap & queue);
+
+    PartIdMappingCallback part_id_mapping_cb;
 };
 
 }

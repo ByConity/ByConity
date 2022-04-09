@@ -1,15 +1,16 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionFinderGroupFunnel.h>
+#include <AggregateFunctions/AggregateFunctionFinderGroupFunnelByTimes.h>
 #include <AggregateFunctions/Helpers.h>
 
 namespace DB
 {
 namespace
 {
-    AggregateFunctionPtr createAggregateFunctionFinderGroupFunnel(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+    AggregateFunctionPtr createAggregateFunctionFinderGroupFunnel(const std::string & name, const DataTypes & argument_types, const Array & params, bool is_by_times = false)
     {
         // The fuction signature is vvfunnelOpt(_,_,_,_,UIDX)(T, CT, U, _, ....)
-        if (params.size() != 5 && params.size() != 6  && params.size() != 7 && params.size() != 8 && params.size() != 9)
+        if (params.size() < 5 || params.size() > 10)
             throw Exception("Aggregate function " + name + " requires (windows_in_seconds, start_time, check_granularity, number_check, [related_num], [relative_window_type, time_zone], [time_interval]), "
                                 + "whose optional parameters will be used for attribute association and current day window", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
@@ -26,7 +27,7 @@ namespace
                             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
         UInt64 attr_related = 0;
-        if (params.size() == 6 || params.size() == 8 || params.size() == 9)
+        if (params.size() == 6 || params.size() == 8 || params.size() == 9 || params.size() == 10)
             attr_related = params[5].safeGet<UInt64>();
 
         size_t v = attr_related ?  __builtin_popcount(attr_related)+3 : 3;
@@ -48,6 +49,9 @@ namespace
         UInt64 watch_numbers = params[3].safeGet<UInt64>();
         UInt64 user_pro_idx = params[4].safeGet<UInt64>();
 
+        if (!watch_step)
+            throw Exception("WatchStep should be greater than 0", ErrorCodes::BAD_ARGUMENTS);
+
         UInt64 window_type = 0;
         String time_zone;
         if (params.size() == 7)
@@ -60,7 +64,7 @@ namespace
             time_zone = params[6].safeGet<String>();
         }
 
-        if (params.size() == 8 || params.size() == 9)
+        if (params.size() == 8 || params.size() == 9 || params.size() == 10)
         {
             window_type = params[6].safeGet<UInt64>();
             if (!(window_type == 0 || window_type == 1))
@@ -69,13 +73,14 @@ namespace
         }
 
         bool time_interval = false;
-        if (params.size() == 9)
+        if (params.size() == 9 || params.size() == 10)
             time_interval = params[8].safeGet<UInt64>() > 0;
 
         UInt64 num_virts = argument_types.size() - v;
         // Limitation right now, we only support up to 64 events.
         if (num_virts > NUMBER_STEPS)
             throw Exception("Too many events checked in " + name, ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        
         if (user_pro_idx > num_virts || user_pro_idx < 1)
             throw Exception("Wrong input for user property index, 1-based.",ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
@@ -95,18 +100,46 @@ namespace
             }
         }
 
-        if (typeid_cast<const DataTypeString*>(user_pro_type.get()) ||
-            typeid_cast<const DataTypeFixedString*>(user_pro_type.get()))
+        if (is_by_times)
         {
-            res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderGroupFunnel>(
-                *attr_type, window, watch_start, watch_step,
-                watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+            if (time_interval && params.size() != 10)
+                throw Exception("Need set target calculate interval step on by times funnel " + name,
+                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+            UInt64 target_step = NUMBER_STEPS + 1;
+            if (time_interval) {
+                target_step = params[9].safeGet<UInt64>();
+            }
+
+            if (typeid_cast<const DataTypeString*>(user_pro_type.get()) ||
+                typeid_cast<const DataTypeFixedString*>(user_pro_type.get()))
+            {
+                res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderGroupFunnelByTimes>(
+                    *attr_type, window, watch_start, watch_step,
+                    watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, target_step, argument_types, params));
+            }
+            else
+            {
+                res.reset(createWithTypesAndIntegerType<AggregateFunctionFinderGroupNumFunnelByTimes>(
+                    *user_pro_type, *attr_type, window, watch_start, watch_step,
+                    watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, target_step, argument_types, params));
+            }
         }
         else
         {
-            res.reset(createWithTypesAndIntegerType<AggregateFunctionFinderGroupNumFunnel>(
-                *user_pro_type, *attr_type, window, watch_start, watch_step,
-                watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+            if (typeid_cast<const DataTypeString*>(user_pro_type.get()) ||
+                typeid_cast<const DataTypeFixedString*>(user_pro_type.get()))
+            {
+                res.reset(createWithSingleTypeLastKnown<AggregateFunctionFinderGroupFunnel>(
+                    *attr_type, window, watch_start, watch_step,
+                    watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+            }
+            else
+            {
+                res.reset(createWithTypesAndIntegerType<AggregateFunctionFinderGroupNumFunnel>(
+                    *user_pro_type, *attr_type, window, watch_start, watch_step,
+                    watch_numbers, user_pro_idx, window_type, time_zone, num_virts, attr_related, time_interval, argument_types, params));
+            }
         }
 
         if (!res)
@@ -114,10 +147,22 @@ namespace
 
         return res;
     }
+
+    AggregateFunctionPtr createAggregateFunctionFinderGroupFunnelHelper(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+    {
+        return createAggregateFunctionFinderGroupFunnel(name, argument_types, params);
+    }
+
+    AggregateFunctionPtr createAggregateFunctionFinderGroupFunnelByTimesHelper(const std::string & name, const DataTypes & argument_types, const Array & params, const Settings *)
+    {
+        return createAggregateFunctionFinderGroupFunnel(name, argument_types, params, true);
+    }
+
 }
 
 void registerAggregateFunctionFinderGroupFunnel(AggregateFunctionFactory & factory)
 {
-    factory.registerFunction("finderGroupFunnel", createAggregateFunctionFinderGroupFunnel, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("finderGroupFunnel", createAggregateFunctionFinderGroupFunnelHelper, AggregateFunctionFactory::CaseInsensitive);
+    factory.registerFunction("finderGroupFunnelByTimes", createAggregateFunctionFinderGroupFunnelByTimesHelper, AggregateFunctionFactory::CaseInsensitive);
 }
 }

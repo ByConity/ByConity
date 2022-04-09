@@ -47,6 +47,10 @@ void HaMergeTreeReplicaEndpoint::processPacket(UInt64 packet_type, ReadBuffer & 
             onGetDelay(in, out);
             return;
 
+        case Protocol::HaClient::DependedNumLog:
+            onDependedNumLog(in, out);
+            return;
+
         case Protocol::HaClient::CheckPartsExist:
             onCheckPartsExist(in, out);
             return;
@@ -122,6 +126,18 @@ void HaMergeTreeReplicaEndpoint::onGetDelay(ReadBuffer & , WriteBuffer & out)
     Int64 absolute_delay = storage.getAbsoluteDelay();
     writeVarUInt(Protocol::HaServer::Data, out);
     writeVarUInt(absolute_delay, out);
+    out.next();
+}
+
+void HaMergeTreeReplicaEndpoint::onDependedNumLog(ReadBuffer & in, WriteBuffer & out)
+{
+    String target_replica;
+    readStringBinary(target_replica, in);
+
+    Int64 log_status = storage.getDependedNumLogFrom(target_replica);
+
+    writeVarUInt(Protocol::HaServer::Data, out);
+    writeVarUInt(log_status, out);
     out.next();
 }
 

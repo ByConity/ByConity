@@ -927,9 +927,7 @@ bool StorageHaKafka::hasUniqueTableDependencies()
         if (!target_table)
             continue;
 
-        /// FIXME: support unique merge tree
-        ///if (auto unique = dynamic_cast<StorageHaUniqueMergeTree *>(target_table.get()); unique != nullptr)
-        if (auto merge_tree = dynamic_cast<StorageMergeTree *>(target_table.get()); merge_tree == nullptr)
+        if (auto unique = dynamic_cast<StorageHaUniqueMergeTree *>(target_table.get()); unique != nullptr)
             return true;
     }
     return false;
@@ -1107,6 +1105,9 @@ bool StorageHaKafka::streamToViews(const Names & /*required_column_names*/, size
     auto consume_context = Context::createCopy(getContext());
     consume_context->makeQueryContext();
     consume_context->setSetting("min_insert_block_size_rows", UInt64(1));
+    /// set whether to use partial update mode for unique table
+    bool enable_unique_partial_update = settings.enable_unique_partial_update;
+    consume_context->setSetting("enable_unique_partial_update", enable_unique_partial_update);
     consume_context->applySettingsChanges(settings_adjustments);
 
     try

@@ -96,13 +96,17 @@ void ASTAlterCommand::formatImpl(
     }
     else if (type == ASTAlterCommand::DROP_COLUMN)
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
-                      << (clear_column ? "CLEAR " : "DROP ") << "COLUMN " << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << (clear_column ? "CLEAR " : "DROP ") << "COLUMN "
+                      << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
         column->formatImpl(settings, state, frame);
-        if (partition)
+        if (partition || predicate)
         {
-            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " IN PARTITION " << (settings.hilite ? hilite_none : "");
-            partition->formatImpl(settings, state, frame);
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str
+                        << (predicate ? " IN PARTITION WHERE " : " IN PARTITION ") << (settings.hilite ? hilite_none : "");
+            if (partition)
+                partition->formatImpl(settings, state, frame);
+            else if (predicate)
+                predicate->formatImpl(settings, state, frame);
         }
     }
     else if (type == ASTAlterCommand::MODIFY_COLUMN)
@@ -345,6 +349,14 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FETCH "
                       << "PARTITION WHERE " << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+                      << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
+    }
+    else if (type == ASTAlterCommand::REPAIR_PARTITION)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "REPAIR "
+                      << "PARTITION " << (settings.hilite ? hilite_none : "");
+        partition->formatImpl(settings, state, frame);
         settings.ostr << (settings.hilite ? hilite_keyword : "")
                       << " FROM " << (settings.hilite ? hilite_none : "") << DB::quote << from;
     }

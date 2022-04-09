@@ -12,6 +12,7 @@
 #include <Common/UnicodeBar.h>
 #include <Common/TerminalSize.h>
 #include <IO/Operators.h>
+#include <Interpreters/Context.h>
 
 
 namespace ProfileEvents

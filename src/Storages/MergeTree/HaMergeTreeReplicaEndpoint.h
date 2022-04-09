@@ -30,6 +30,7 @@ private:
     void onPutLogEntries(ReadBuffer & in, WriteBuffer & out);
     void onFetchLogEntries(ReadBuffer & in, WriteBuffer & out);
     void onGetDelay(ReadBuffer & in, WriteBuffer & out);
+    void onDependedNumLog(ReadBuffer & in, WriteBuffer & out);
     void onCheckPartsExist(ReadBuffer & in, WriteBuffer & out);
     void onFindActiveContainingPart(ReadBuffer & in, WriteBuffer & out);
     void onGetLSNStatus(ReadBuffer & in, WriteBuffer & out);

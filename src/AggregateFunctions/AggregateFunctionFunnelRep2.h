@@ -25,13 +25,6 @@ using std::vector;
 using REPType = UInt64;
 const size_t ARITHMETIC_AMOUNT = 6;
 
-class AggregateFunctionFunnelRep2Data
-{
-public:
-    vector<REPType> value;
-    vector<Arithmetics> ariths;
-};
-
 /// Convert funnel output to TEA's format, it's aggregation semantics
 template<typename T>
 class AggregateFunctionFunnelRep2 final : public IAggregateFunctionDataHelper<AggregateFunctionFunnelRep2Data, AggregateFunctionFunnelRep2<T>>
@@ -127,7 +120,7 @@ public:
                 else
                 {
                     const auto& it = upper_bound(target_interval_group.begin(), target_interval_group.end(), cur_interval);
-                    if (it != target_interval_group.begin())
+                    if (it != target_interval_group.begin() && it != target_interval_group.end())
                     {
                         group_offset = it-target_interval_group.begin()-1;
                         this->data(place).value[output_offset + group_offset] += 1;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <stddef.h>
 
@@ -101,6 +102,8 @@ struct Options
     std::shared_ptr<const FilterPolicy> filter_policy = nullptr;
 };
 
+using Predicate = std::function<bool(const Slice & key, const Slice & val)>;
+
 // Options that control read operations
 struct ReadOptions
 {
@@ -113,6 +116,10 @@ struct ReadOptions
     // Callers may wish to set this field to false for bulk scans.
     // Default: true
     bool fill_cache = true;
+
+    // If not empty, all the KVs not satisfying the predicate will be skipped in this iteration.
+    // Default: empty
+    Predicate select_predicate;
 };
 
 }

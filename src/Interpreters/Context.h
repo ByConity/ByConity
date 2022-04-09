@@ -11,6 +11,7 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
@@ -97,6 +98,8 @@ using ActionLocksManagerPtr = std::shared_ptr<ActionLocksManager>;
 class ShellCommand;
 class ICompressionCodec;
 class AccessControlManager;
+class InternalResourceGroup;
+class ResourceGroupManager;
 class Credentials;
 class GSSAcceptorContext;
 class SettingsConstraints;
@@ -146,7 +149,9 @@ using ReadTaskCallback = std::function<String()>;
 class DeleteBitmapCache;
 /// Used in unique table for caching unique key
 class DiskUniqueKeyIndexCache;
-using DiskUniqueKeyIndexBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
+/// Used in unique table for caching unique row store
+class DiskUniqueRowStoreCache;
+using IndexFileBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
 
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
@@ -175,6 +180,26 @@ private:
     std::unique_ptr<ContextSharedPart> shared;
 };
 
+template<class T>
+class CopyableAtomic : public std::atomic<T>
+{
+public:
+    CopyableAtomic() = default;
+
+    constexpr CopyableAtomic(T desired) :
+        std::atomic<T>(desired)
+    {}
+
+    constexpr CopyableAtomic(const CopyableAtomic<T>& other) :
+        CopyableAtomic(other.load(std::memory_order_acquire))
+    {}
+
+    CopyableAtomic& operator=(const CopyableAtomic<T>& other) {
+        this->store(other.load(std::memory_order_acquire), std::memory_order_relaxed);
+        return *this;
+    }
+};
+
 /** A set of known objects that can be used in the query.
   * Consists of a shared part (always common to all sessions and queries)
   *  and copied part (which can be its own for each session or query).
@@ -197,6 +222,7 @@ private:
     bool use_default_roles = false;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
+    CopyableAtomic<InternalResourceGroup*> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings;  /// Setting for query execution.
 
@@ -456,6 +482,13 @@ public:
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
 
+    void setResourceGroup(const IAST *ast);
+    InternalResourceGroup* getResourceGroup() const;
+    ResourceGroupManager & getResourceGroupManager();
+    const ResourceGroupManager & getResourceGroupManager() const;
+    void startResourceGroup();
+    void stopResourceGroup();
+
     enum StorageNamespace
     {
          ResolveGlobal = 1u,                                           /// Database name must be specified
@@ -653,7 +686,7 @@ public:
 
     void setProcessListEntry(std::shared_ptr<ProcessListEntry> prcess_list_entry_);
     std::weak_ptr<ProcessListEntry> getProcessListEntry();
-    
+
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in IBlockInputStream,
       *  to update and monitor information about the total number of resources spent for the query.
       */
@@ -886,7 +919,7 @@ public:
 
     /// Create a memory cache of data blocks reading from unique key index files.
     void setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes);
-    DiskUniqueKeyIndexBlockCachePtr getDiskUniqueKeyIndexBlockCache() const;
+    IndexFileBlockCachePtr getDiskUniqueKeyIndexBlockCache() const;
 
     /// Create a cache of UniqueKeyIndex objects.
     void setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size);
@@ -898,6 +931,16 @@ public:
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
+    /// Create a memory cache of data blocks reading from unique key row store files.
+    void setDiskUniqueRowStoreBlockCache(size_t cache_size_in_bytes);
+    IndexFileBlockCachePtr getDiskUniqueRowStoreBlockCache() const;
+
+    /// Create a cache of UniqueKeyRowStore objects.
+    /// urs: unique row store
+    void setDiskUniqueRowStoreCache(size_t disk_urs_meta_cache_size, size_t disk_urs_file_cache_size);
+    std::shared_ptr<DiskUniqueRowStoreCache> getDiskUniqueRowStoreCache() const;
+
+    void setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config);
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

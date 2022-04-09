@@ -43,6 +43,7 @@ class MutationCommands;
 class Context;
 struct JobAndPool;
 class DiskUniqueKeyIndexCache;
+class DiskUniqueRowStoreCache;
 
 /// Auxiliary struct holding information about the future merged or mutated part.
 struct EmergingPartInfo
@@ -244,15 +245,17 @@ public:
     using DataParts = std::set<DataPartPtr, LessDataPart>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    using DataPartsLock = std::unique_lock<std::mutex>;
+    using DataPartsLock = std::unique_lock<std::shared_mutex>;
+    using DataPartsReadLock = std::shared_lock<std::shared_mutex>;
     DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
+    DataPartsReadLock lockPartsRead() const { return DataPartsReadLock(data_parts_mutex); }
 
     using DeleteBitmapGetter = std::function<DeleteBitmapPtr(const DataPartPtr &)>;
     using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
     DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
     {
         DataPartsDeleteSnapshot res;
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         for (auto & part : parts) {
             res.insert({part, part->getDeleteBitmap()});
         }
@@ -650,7 +653,16 @@ public:
     DataPartPtr getPartIfExists(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
     DataPartPtr getPartIfExistsWithoutLock(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
 
+    /// For a target part that will be fetched from another replica, find whether the local has an old version part.
+    /// When mutating a part, its mutate version will be changed. For example, all_0_0_0 -> all_0_0_0_1, all_0_0_0_1 is the target part, all_0_0_0 is the old version part.
+    /// Due to mutation commands may modify only few files in the old part, so a lot of files are not necessary to transfer. 
+    /// In this case, if the local has an old version part, transfer its checksum to the replica, then the replica will give the information.
+    DataPartPtr getOldVersionPartIfExists(const String & part_name);
+
     DataPartsVector getPartsByPredicate(const ASTPtr & predicate);
+
+    /// Split CLEAR COLUMN IN PARTITION WHERE command into multiple CLEAR COLUMN IN PARTITION commands.
+    void handleClearColumnInPartitionWhere(MutationCommands & mutation_commands, const AlterCommands & alter_commands);
 
     /// Total size of active parts in bytes.
     size_t getTotalActiveSizeInBytes() const;
@@ -766,6 +778,8 @@ public:
     /// If something is wrong, throws an exception.
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
 
+    virtual bool supportsClearColumnInPartitionWhere() const { return false; }
+
     /// Checks if the Mutation can be performed.
     /// (currently no additional checks: always ok)
     void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
@@ -840,14 +854,14 @@ public:
 
     size_t getColumnCompressedSize(const std::string & name) const
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         const auto it = column_sizes.find(name);
         return it == std::end(column_sizes) ? 0 : it->second.data_compressed;
     }
 
     ColumnSizeByName getColumnSizes() const override
     {
-        auto lock = lockParts();
+        auto lock = lockPartsRead();
         return column_sizes;
     }
 
@@ -1165,7 +1179,7 @@ protected:
     >;
 
     /// Current set of data parts.
-    mutable std::mutex data_parts_mutex;
+    mutable std::shared_mutex data_parts_mutex;
     DataPartsIndexes data_parts_indexes;
     DataPartsIndexes::index<TagByInfo>::type & data_parts_by_info;
     DataPartsIndexes::index<TagByStateAndInfo>::type & data_parts_by_state_and_info;
@@ -1237,6 +1251,7 @@ protected:
     mutable std::mutex delete_file_gc_mutex;
 
     std::shared_ptr<DiskUniqueKeyIndexCache> unique_key_index_cache;
+    std::shared_ptr<DiskUniqueRowStoreCache> unique_row_store_cache;
 
     /// write lock for unique table to prevent concurrent insert & merge.
     /// lock order: merge select lock -> table structure lock -> unique write lock
@@ -1274,6 +1289,9 @@ protected:
         DataPartPtr & out_covering_part,
         DataPartsLock & data_parts_lock) const;
 
+    void renamePartAndDropMetadata(const String& name, const DataPartPtr& sourcePart);
+    void renamePartAndInsertMetadata(const String& name, const DataPartPtr& sourcePart);
+
     /// Checks whether the column is in the primary key, possibly wrapped in a chain of functions with single argument.
     bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const;
 
@@ -1303,6 +1321,8 @@ protected:
         ContextPtr query_context);
     virtual void fetchPartitionWhere(
         const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context);
+
+    virtual void repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr);
 
     virtual void movePartitionToShard(const ASTPtr & partition, bool move_part, const String & to, ContextPtr query_context);
 

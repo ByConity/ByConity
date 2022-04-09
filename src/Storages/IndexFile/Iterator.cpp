@@ -59,6 +59,7 @@ namespace
         void SeekToFirst() override { }
         void SeekToLast() override { }
         void Next() override { assert(false); }
+        void NextUntil(const Slice &, bool &) override { }
         void Prev() override { assert(false); }
         Slice key() const override
         {

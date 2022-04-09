@@ -74,6 +74,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_fetch_partition("FETCH PARTITION");
     ParserKeyword s_fetch_part("FETCH PART");
     ParserKeyword s_fetch_partition_where("FETCH PARTITION WHERE");
+    ParserKeyword s_repair_partition("REPAIR PARTITION");
+    ParserKeyword s_repair_part("REPAIR PART");
     ParserKeyword s_replace_partition("REPLACE PARTITION");
     ParserKeyword s_ingest_partition("INGEST PARTITION");
     ParserKeyword s_freeze("FREEZE");
@@ -270,7 +272,12 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             if (s_in_partition.ignore(pos, expected))
             {
-                if (!parser_partition.parse(pos, command->partition, expected))
+                if (s_where.ignore(pos, expected))
+                {
+                    if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                        return false;
+                }
+                else if (!parser_partition.parse(pos, command->partition, expected))
                     return false;
             }
         }
@@ -623,6 +630,37 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->from = ast_from->as<ASTLiteral &>().value.get<const String &>();
             command->type = ASTAlterCommand::FETCH_PARTITION;
+        }
+        else if (s_repair_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            if (!s_from.ignore(pos, expected))
+                return false;
+
+            ASTPtr ast_from;
+            if (!parser_string_literal.parse(pos, ast_from, expected))
+                return false;
+
+            command->from = ast_from->as<ASTLiteral &>().value.get<const String &>();
+            command->type = ASTAlterCommand::REPAIR_PARTITION;
+        }
+        else if (s_repair_part.ignore(pos, expected))
+        {
+            if (!parser_string_literal.parse(pos, command->partition, expected))
+                return false;
+
+            if (!s_from.ignore(pos, expected))
+                return false;
+
+            ASTPtr ast_from;
+            if (!parser_string_literal.parse(pos, ast_from, expected))
+                return false;
+
+            command->part = true;
+            command->from = ast_from->as<ASTLiteral &>().value.get<const String &>();
+            command->type = ASTAlterCommand::REPAIR_PARTITION;
         }
         else if (s_fetch_part.ignore(pos, expected))
         {

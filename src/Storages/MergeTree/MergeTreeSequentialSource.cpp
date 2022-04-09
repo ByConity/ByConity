@@ -123,10 +123,11 @@ try
         {
 
             size_t num_deleted = 0;
+            ColumnUInt8::MutablePtr delete_column = nullptr;
             if (delete_bitmap)
             {
                 /// construct delete filter for current granule
-                auto delete_column = ColumnUInt8::create(rows_read, 1);
+                delete_column = ColumnUInt8::create(rows_read, 1);
                 UInt8 * filter_data = delete_column->getData().data();
                 size_t start_row = currentMarkStart();
                 size_t end_row = currentMarkEnd();
@@ -138,7 +139,6 @@ try
                     filter_data[*iter - start_row] = 0;
                     num_deleted++;
                 }
-                delete_column->getData().resize(rows_read);
                 for (auto & column : columns)
                 {
                     /// The column is nullptr when it doesn't exist in the data_part, this case will happen when the table has applied operations of adding columns.
@@ -148,7 +148,7 @@ try
             }
 
             bool should_evaluate_missing_defaults = false;
-            reader->fillMissingColumns(columns, should_evaluate_missing_defaults, rows_read);
+            reader->fillMissingColumns(columns, should_evaluate_missing_defaults, rows_read - num_deleted);
 
             if (should_evaluate_missing_defaults)
             {
@@ -162,7 +162,10 @@ try
                 auto column = ColumnUInt32::create(rows_read);
                 for (size_t i = 0; i < rows_read; ++i)
                     column->getData()[i] = static_cast<UInt32>(current_row + i);
-                columns.emplace_back(std::move(column));
+                if (delete_column)
+                    columns.emplace_back(column->filter(delete_column->getData(), rows_read - num_deleted));
+                else
+                    columns.emplace_back(std::move(column));
             }
 
             size_t num_columns = sample.size() + include_rowid_column;
@@ -191,7 +194,14 @@ try
             current_row += rows_read;
             current_mark += (rows_to_read == rows_read);
 
-            //LOG_TRACE(log, "Try to read rows {}, actual read rows {}, delete {} row from part {}", rows_to_read, rows_read, num_deleted, data_part->name);
+            LOG_DEBUG(
+                log,
+                "Try to read rows {}, actual read rows {}, delete {} row, remaining rows {} from part {}",
+                rows_to_read,
+                rows_read,
+                num_deleted,
+                rows_read - num_deleted,
+                data_part->name);
             return Chunk(std::move(res_columns), rows_read - num_deleted);
         }
     }

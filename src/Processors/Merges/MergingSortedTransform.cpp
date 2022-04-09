@@ -16,7 +16,8 @@ MergingSortedTransform::MergingSortedTransform(
     WriteBuffer * out_row_sources_buf_,
     bool quiet_,
     bool use_average_block_sizes,
-    bool have_all_inputs_)
+    bool have_all_inputs_,
+    MergingSortedAlgorithm::PartIdMappingCallback part_id_mapping_cb_)
     : IMergingTransform(
         num_inputs, header, header, have_all_inputs_,
         header,
@@ -25,7 +26,8 @@ MergingSortedTransform::MergingSortedTransform(
         max_block_size,
         limit_,
         out_row_sources_buf_,
-        use_average_block_sizes)
+        use_average_block_sizes,
+        part_id_mapping_cb_)
     , quiet(quiet_)
 {
 }

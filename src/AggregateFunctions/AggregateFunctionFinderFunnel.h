@@ -1,7 +1,5 @@
 #pragma once
 
-#include <numeric>
-
 #include <unordered_set>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
@@ -215,9 +213,7 @@ private:
                                     if (attr_set[next_seq])
                                     {
                                         if (attr_check[next_seq] != events[i].param) // attr not match
-                                        {
                                             is_legal = false;
-                                        }
                                     }
                                     else
                                     {
@@ -230,9 +226,7 @@ private:
                             if (is_legal)
                             {
                                 if (funnel_index[next_seq].size() == 1)
-                                {
                                     if (last_start == -1) last_start = i;
-                                }
 
                                 funnel_index[next_seq].push_back(i);
                             }
@@ -343,9 +337,7 @@ private:
                                     if (isNextLevel(event, funnel_index[!next_seq].size()))
                                     {
                                         if (attr_set[!next_seq] && attr_check[!next_seq] == events[i].param)
-                                        {
                                             funnel_index[!next_seq].push_back(i);
-                                        }
                                     }
                                     ++i;
                                     continue;
@@ -360,7 +352,7 @@ private:
                     }
 
                     funnel_index[next_seq].push_back(i);
-                    // same middle event : ((flagEvent & 1) == 0) && (flagEvent & (flagEvent - 1))
+                    // same middle event : ((flag_event & 1) == 0) && (flag_event & (flag_event - 1))
                     if ((event & (event - 1)) && isNextLevel(event, funnel_index[!next_seq].size()))
                     {
                         // this event can be reuse in the other seq
@@ -435,7 +427,7 @@ private:
                         intervals[slot_idx + 1] = std::move(cur_times);
                     }
                 }
-                // levels[slotIdx + 1] = std::max<UInt64>(levels[slotIdx + 1], funnel);
+                // levels[slot_idx + 1] = std::max<UInt64>(levels[slot_idx + 1], funnel);
             }
 
             // skip to next slot index
@@ -520,11 +512,11 @@ public:
 
         UInt32 stime = static_cast<UInt32>(s_time - m_watch_start);
 
-        UInt32 flag_event = 0;
+        UInt64 flag_event = 0;
         int event_index_offset = attr_related ? related_num : 2; // start offset of event flag column, need skip the attr column
         for(size_t i = 0; i < m_num_events; i++)
         {
-            UInt32 flag = (static_cast<const ColumnVector<UInt8> *>(columns[i + event_index_offset])->getData()[row_num] != 0);
+            UInt64 flag = (static_cast<const ColumnVector<UInt8> *>(columns[i + event_index_offset])->getData()[row_num] != 0);
             flag_event |= (flag << i);
         }
 
@@ -558,36 +550,39 @@ public:
         this->data(place).deserialize(buf, arena);
     }
 
-//    todo stepExecute
-//    inline bool needCalculateStep(AggregateDataPtr place) const override
-//    {
-//        return !this->data(place).event_lists.empty();
-//    }
-//
-//    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool, Arena * arena) const override
-//    {
-//        is_step = true;
-//        if (this->data(place).levels.size() != (m_watch_numbers + 1))
-//            this->data(place).levels.resize_fill(m_watch_numbers + 1, 0, arena);
-//
-//        if (time_interval)
-//        {
-//            if (this->data(place).intervals.size() != (m_watch_numbers + 1))
-//                this->data(place).intervals.resize(m_watch_numbers + 1);
-//
-//            if (attr_related > 0)
-//                calculateFunnel<true, true, true>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
-//            else
-//                calculateFunnel<true, true, false>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
-//        }
-//        else
-//        {
-//            if (attr_related > 0)
-//                calculateFunnel<true, false, true>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
-//            else
-//                calculateFunnel<true, false, false>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
-//        }
-//    }
+    inline bool needCalculateStep(AggregateDataPtr place) const override
+    {
+        return !this->data(place).event_lists.empty();
+    }
+
+    void calculateStepResult(AggregateDataPtr place, size_t start_step_num, size_t end_step_num, bool, Arena * arena) const override
+    {
+        is_step = true;
+        if (this->data(place).levels.size() != (m_watch_numbers + 1))
+        {
+            this->data(place).levels.resize_fill(m_watch_numbers + 1, 0, arena);
+        }
+
+        if (time_interval)
+        {
+            if (this->data(place).intervals.size() != (m_watch_numbers + 1))
+            {
+                this->data(place).intervals.resize(m_watch_numbers + 1);
+            }
+
+            if (attr_related > 0)
+                calculateFunnel<true, true, true>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
+            else
+                calculateFunnel<true, true, false>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
+        }
+        else
+        {
+            if (attr_related > 0)
+                calculateFunnel<true, false, true>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
+            else
+                calculateFunnel<true, false, false>(this->data(place), &(this->data(place).levels[0]), this->data(place).intervals, start_step_num, end_step_num);
+        }
+    }
 
     void insertResultWithIntervals(ConstAggregateDataPtr place, ColumnTuple & tuple_to) const
     {

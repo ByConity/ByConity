@@ -100,6 +100,7 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         index_granularity_)
     , log(&Poco::Logger::get(storage.getLogName() + " (WriterWide)"))
 {
+    init();
     const auto & columns = metadata_snapshot->getColumns();
     for (const auto & it : columns_list)
     {
@@ -110,6 +111,18 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
             addByteMapStreams({it}, parseColNameFromImplicitName(it.name), default_codec->getFullCodecDesc());
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
+    }
+}
+
+void MergeTreeDataPartWriterWide::init()
+{
+    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    {
+        if (storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method
+            && storage.getSettings()->enable_disk_based_unique_key_index)
+            enable_disk_based_key_index = true;
+        if (storage.getSettings()->enable_unique_partial_update && storage.getSettings()->enable_unique_row_store)
+            enable_unique_row_store = true;
     }
 }
 
@@ -157,6 +170,47 @@ void MergeTreeDataPartWriterWide::shiftCurrentMark(const Granules & granules_wri
 void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Permutation * permutation)
 {
     size_t rows = block.rows();
+
+    // pre-serialize value with multiple threads to improve performance
+    std::vector<String> serialized_values;
+    size_t thread_num = 8;
+    ThreadPool serialized_values_pool(thread_num);
+    std::vector<const ColumnWithTypeAndName *> block_columns_with_name;
+    block_columns_with_name.resize(block.columns());
+    // Due to serializations may insert some new elements when handling map column, it may cause data race, so we need to copy it.
+    SerializationsMap serializations_copy(serializations);
+    if (shouldWriteRowStore())
+    {
+        serialized_values.resize(rows);
+        auto & columns = data_part->getColumns();
+        if (columns.size() != block.columns())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Column in data part {} doesn't match block", data_part->name);
+        size_t id = 0;
+        /// Obey the order in metadata snapshot.
+        for (auto & col : columns)
+            block_columns_with_name[id++] = &block.getByName(col.name);
+        for (size_t i = 0; i < thread_num; ++i)
+        {
+            serialized_values_pool.scheduleOrThrowOnError([&, i]() {
+                for (size_t j = i; j < rows; j += thread_num)
+                {
+                    size_t correct_row = j;
+                    if (permutation)
+                        correct_row = (*permutation)[j];
+                    if (correct_row >= rows)
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}", j, correct_row, rows);
+                    WriteBufferFromOwnString val_buf;
+                    for (auto & col_with_name: block_columns_with_name)
+                    {
+                        if (!serializations_copy.count(col_with_name->name))
+                            throw Exception(ErrorCodes::LOGICAL_ERROR, "Serializations doesn't contain column {} when serialize value for unique row store", col_with_name->name);
+                        serializations_copy[col_with_name->name]->serializeBinary(*col_with_name->column, correct_row, val_buf);
+                    }
+                    serialized_values[j] = val_buf.str();
+                }
+            });
+        }
+    }
 
     /// Fill index granularity for this block
     /// if it's unknown (in case of insert data or horizontal merge,
@@ -277,7 +331,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 opts.create_if_missing = true;
                 opts.error_if_exists = true;
                 opts.write_buffer_size = 16 << 20; /// 16MB
-                temp_unique_key_index_dir = data_part->getFullPath() + "TEMP_unique_key_index";
+                temp_unique_key_index_dir = fullPath(data_part->volume->getDisk(), part_path + "TEMP_unique_key_index");
                 auto status = rocksdb::DB::Open(opts, temp_unique_key_index_dir, &temp_unique_key_index);
                 if (!status.ok())
                     throw Exception("Can't create temp unique key index at " + temp_unique_key_index_dir, ErrorCodes::LOGICAL_ERROR);
@@ -292,8 +346,69 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
             writeToTempUniqueKeyIndex(unique_key_block, /*first_rid=*/rows_count, *temp_unique_key_index);
         }
     }
+    writeRowStoreIfNeed(block, permutation, serialized_values, serialized_values_pool);
 
     rows_count += rows;
+}
+
+void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool)
+{
+    if (!shouldWriteRowStore())
+        return;
+
+    Stopwatch timer;
+    LOG_DEBUG(log, "Start to write row store for part {}, rows {}.", data_part->name, block.rows());
+
+    auto disk = data_part->volume->getDisk();
+    String row_store_file = fullPath(disk, part_path + UNIQUE_ROW_STORE_DATA_NAME);
+    IndexFile::Options options;
+
+    IndexFile::IndexFileWriter row_store_writer(options);
+    auto status = row_store_writer.Open(row_store_file);
+    if (!status.ok())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", row_store_file, status.ToString());
+
+    /// wait serialized value to finish
+    Stopwatch serialize_value_timer;
+    serialized_values_pool.wait();
+    size_t serialize_value_cost = serialize_value_timer.elapsedMilliseconds();
+
+    size_t rows = block.rows();
+    for (size_t i = 0; i < rows; ++i)
+    {
+        /// handle key, mem comparable
+        size_t row = Endian::big(i);
+        size_t correct_row = i;
+        if (permutation)
+            correct_row = (*permutation)[i];
+        if (correct_row >= rows)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Wrong row index when write row store. Handle index {}, permutation index {}, max index {}",
+                i,
+                correct_row,
+                rows);
+
+        /// insert item
+        status = row_store_writer.Add(Slice(reinterpret_cast<const char *>(&row), sizeof(row)), Slice(serialized_values[i].data(), serialized_values[i].size()));
+        if (!status.ok())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", row_store_file, status.ToString());
+    }
+
+    Stopwatch finish_timer;
+    status = row_store_writer.Finish(&unique_row_store_file_info);
+    size_t finish_cost = finish_timer.elapsedMilliseconds();
+    if (!status.ok())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", row_store_file, status.ToString());
+
+    LOG_DEBUG(
+        log,
+        "Finish writing row store for part {}, rows {}, serialize value cost {} ms, finish cost {} ms, total cost {} ms.",
+        data_part->name,
+        block.rows(),
+        serialize_value_cost,
+        finish_cost,
+        timer.elapsedMilliseconds());
 }
 
 /// Column must not be empty. (column.size() !== 0)
@@ -697,6 +812,24 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
             checksums.files[UKI_FILE_NAME].file_hash = file_info.file_hash;
         }
     }
+
+    /// The checksum of unique row store has already handled in merge status, we can not set the value in the case.
+    if (enable_unique_row_store && !is_merge)
+    {
+        checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
+        checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
+
+        /// write row store meta
+        auto out = data_part->volume->getDisk()->writeFile(fs::path(part_path) / UNIQUE_ROW_STORE_META_NAME, 4096);
+        HashingWriteBuffer out_hashing(*out);
+        UniqueRowStoreMeta meta(data_part->getColumns(), {});
+        meta.write(out_hashing);
+        checksums.files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
+        checksums.files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
+        out->finalize();
+        if (sync)
+            out->sync();
+    }
 }
 
 static void fillIndexGranularityImpl(
@@ -796,6 +929,13 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
     for (auto & col_name : metadata_snapshot->getUniqueKeyColumns())
         key_columns.emplace_back(block.getByName(col_name));
 
+    /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+    for (auto & col : key_columns)
+    {
+        if (!serializations.count(col.name))
+            serializations.emplace(col.name, col.type->getDefaultSerialization());
+    }
+
     rocksdb::WriteOptions opts;
     opts.disableWAL = true;
 
@@ -811,10 +951,7 @@ void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_
     {
         WriteBufferFromOwnString key_buf;
         for (auto & col : key_columns)
-        {
-            auto serial = col.type->getDefaultSerialization();
-            serial->serializeMemComparable(*col.column, i, key_buf);
-        }
+            serializations[col.name]->serializeMemComparable(*col.column, i, key_buf);
 
         String value;
         auto rid = static_cast<UInt32>(first_rid + i);
@@ -847,7 +984,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
         return;
 
     /// write unique_key -> rowid mappings to key index file
-    String unique_key_index_file = data_part->getFullPath() + UKI_FILE_NAME;
+    String unique_key_index_file = fullPath(data_part->volume->getDisk(), part_path + UKI_FILE_NAME);
     IndexFile::Options options;
     options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
     IndexFile::IndexFileWriter index_writer(options);
@@ -880,6 +1017,13 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
         for (auto & col_name : unique_key_columns)
             key_columns.emplace_back(buffered_unique_key_block.getByName(col_name));
 
+        /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+        for (auto & col : key_columns)
+        {
+            if (!serializations.count(col.name))
+                serializations.emplace(col.name, col.type->getDefaultSerialization());
+        }
+
         String extra_column_name = metadata_snapshot->extra_column_name;
         size_t extra_column_size = metadata_snapshot->extra_column_size;
 
@@ -892,10 +1036,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndex(IndexFile::IndexFileI
             size_t idx = unique_key_perm_ptr ? unique_key_perm[rid] : rid;
             WriteBufferFromOwnString key_buf;
             for (auto & col : key_columns)
-            {
-                auto serial = col.type->getDefaultSerialization();
-                serial->serializeMemComparable(*col.column, idx, key_buf);
-            }
+                serializations[col.name]->serializeMemComparable(*col.column, idx, key_buf);
             String value;
             PutVarint32(&value, static_cast<UInt32>(idx));
 

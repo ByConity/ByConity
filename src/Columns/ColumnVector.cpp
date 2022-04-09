@@ -502,6 +502,19 @@ void ColumnVector<T>::gather(ColumnGathererStream & gatherer)
 }
 
 template <typename T>
+ColumnPtr ColumnVector<T>::selectDefault() const
+{
+    size_t row_num = data.size();
+    auto res = ColumnVector<UInt8>::create(row_num);
+    IColumn::Filter & filter = res->getData();
+    T default_value{};
+    /// TODO: improve by SIMD
+    for (size_t i = 0; i < row_num; ++i)
+        filter[i] = data[i] == default_value;
+    return res;
+}
+
+template <typename T>
 void ColumnVector<T>::getExtremes(Field & min, Field & max) const
 {
     size_t size = data.size();

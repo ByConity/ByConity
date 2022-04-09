@@ -162,6 +162,8 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     , cleanup_thread(*this)
     , restarting_thread(*this)
 {
+    checkPartialUpdateConstraint();
+
     auto db_table = getStorageID().database_name + "." + getStorageID().table_name;
     repair_data_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (RepairData)", [this] { return repairDataTask(); });
     become_leader_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (BecomeLeader)", [this] { return becomeLeaderTask(); });
@@ -348,6 +350,24 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     increment.set(getMaxBlockNumber());
 }
 
+void StorageHaUniqueMergeTree::checkPartialUpdateConstraint()
+{
+    if (!getSettings()->enable_unique_partial_update)
+        return;
+    if (!getSettings()->partition_level_unique_keys)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Not support table level unique keys when enable unique partial update.");
+    auto metadata = getInMemoryMetadataPtr();
+    auto order_by_keys = metadata->getSortingKeyColumns();
+    auto unique_keys = metadata->getUniqueKeyColumns();
+    if (order_by_keys.size() < unique_keys.size())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unique key should be prefix of order by when enable unique partial update.");
+    for (size_t i = 0, size = unique_keys.size(); i < size; ++i)
+    {
+        if (unique_keys[i] != order_by_keys[i])
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unique key should be prefix of order by when enable unique partial update.");
+    }
+}
+
 bool StorageHaUniqueMergeTree::checkFixedGranularityInZookeeper()
 {
     auto zookeeper = getZooKeeper();
@@ -523,10 +543,11 @@ void StorageHaUniqueMergeTree::assertNotReadonly() const
 
 BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
+    const auto & query_settings = query_context->getSettingsRef();
     /// mainly used for tests and for create temporary table to delay inserts until leader is selected
     auto settings = getSettings();
     auto wait_timeout = std::max(
-        query_context->getSettingsRef().max_insert_wait_seconds_for_unique_table_leader, settings->unique_engine_temp_table_wait_interval);
+        query_settings.max_insert_wait_seconds_for_unique_table_leader, settings->unique_engine_temp_table_wait_interval);
     if (wait_timeout > 0)
     {
         LOG_DEBUG(log, "Wait until leader election for {} seconds.", wait_timeout);
@@ -546,9 +567,9 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
         }
     }
 
-    /// TODO offline node handling
+    bool enable_partial_update = query_settings.enable_unique_partial_update && settings->enable_unique_partial_update; 
     return std::make_shared<HaUniqueMergeTreeBlockOutputStream>(
-        *this, metadata_snapshot, query_context, query_context->getSettingsRef().max_partitions_per_insert_block);
+        *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block, enable_partial_update);
 }
 
 void StorageHaUniqueMergeTree::drop()

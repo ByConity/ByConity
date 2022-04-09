@@ -72,6 +72,8 @@ struct HaMergeTreeLogEntryData
     /// If true, should skip the log if the new part is covered by or conflicted with committed parts.
     bool willCommitNewPart() const { return type == GET_PART || type == CLONE_PART || type == MERGE_PARTS || type == MUTATE_PART; }
 
+    bool willHinderOffline() const { return type == GET_PART || type == CLONE_PART || type == INGEST_PARTITION; }
+
     bool isAlterMutation() const { return type == MUTATE_PART && alter_version != -1; }
 
     /// serialization

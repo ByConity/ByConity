@@ -71,6 +71,8 @@ public:
         DROP_PARTITION_WHERE,
         FETCH_PARTITION_WHERE,
 
+        REPAIR_PARTITION,
+
         DELETE,
         FAST_DELETE,
         UPDATE,
@@ -178,7 +180,7 @@ public:
 
     bool detach = false;        /// true for DETACH PARTITION
 
-    bool part = false;          /// true for ATTACH PART, DROP DETACHED PART and MOVE
+    bool part = false;          /// true for ATTACH PART, DROP DETACHED PART, REPAIR PART and MOVE
 
     bool clear_column = false;  /// for CLEAR COLUMN (do not drop column from metadata)
 

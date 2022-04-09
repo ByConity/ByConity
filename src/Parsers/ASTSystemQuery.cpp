@@ -41,6 +41,14 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SHUTDOWN";
         case Type::KILL:
             return "KILL";
+        case Type::OFFLINE_REPLICA:
+            return "OFFLINE REPLICA";
+        case Type::ONLINE_REPLICA:
+            return "ONLINE REPLICA";
+        case Type::OFFLINE_NODE:
+            return "OFFLINE NODE";
+        case Type::ONLINE_NODE:
+            return "ONLINE NODE";
         case Type::SUSPEND:
             return "SUSPEND";
         case Type::DROP_DNS_CACHE:
@@ -79,6 +87,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "RELOAD MUTATION";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
+        case Type::START_RESOURCE_GROUP:
+            return "START RESOURCE GROUP";
+        case Type::STOP_RESOURCE_GROUP:
+            return "STOP RESOURCE GROUP";
         case Type::RELOAD_DICTIONARY:
             return "RELOAD DICTIONARY";
         case Type::RELOAD_DICTIONARIES:
@@ -262,6 +274,26 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (type == Type::DROP_REPLICA)
     {
         print_drop_replica();
+    }
+    else if (type == Type::OFFLINE_REPLICA)
+    {
+        print_database_table();
+        settings.ostr << " OF " << backQuoteIfNeed(replica);
+    }
+    else if (type == Type::ONLINE_REPLICA)
+    {
+        print_database_table();
+        settings.ostr << " OF " << backQuoteIfNeed(replica);
+    }
+    else if (type == Type::OFFLINE_NODE)
+    {
+        // reuse replica to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(replica);
+    }
+    else if (type == Type::ONLINE_NODE)
+    {
+        // reuse replica to record node 'ip'
+        settings.ostr << " " << backQuoteIfNeed(replica);
     }
     else if (type == Type::SUSPEND)
     {

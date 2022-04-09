@@ -89,6 +89,8 @@ public:
 
     void alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & table_lock_holder) override;
 
+    bool supportsClearColumnInPartitionWhere() const override { return true; }
+
     void mutate(const MutationCommands & commands, ContextPtr context) override;
     void waitMutation(const String & znode_name, bool is_alter_metadata, size_t mutations_sync, UInt64 timeout_seconds) const;
     std::vector<MergeTreeMutationStatus> getMutationsStatus() const override;
@@ -162,6 +164,8 @@ public:
     /// NOTE: Will communicate to ZooKeeper to calculate relative delay.
     void getReplicaDelays(time_t & out_absolute_delay, time_t & out_relative_delay);
 
+    Int64 getDependedNumLogFrom(const String & replica = "") const;
+
     /// Add a part to the queue of parts whose data you want to check in the background thread.
     void enqueuePartForCheck([[maybe_unused]] const String & part_name, [[maybe_unused]] time_t delay_to_check_seconds = 0)
     {
@@ -205,6 +209,18 @@ public:
 
     void markLost();
 
+    String getReplicaName(const String & replica_name_);
+
+    void trySetNodeOffline(const String & node_replica_name, bool current_node);
+    void trySetNodeOnline(const String & node_replica_name, bool current_node);
+    void tryGetOffline();
+    void assertNotOffline();
+
+    void offlineReplica(const String & replica);
+    void onlineNode(const String & target_replica);
+    void offlineNodePhaseOne(const String & node);
+    void offlineNodePhaseTwo(const String & node);
+
     zkutil::ZooKeeperPtr getZooKeeper() const;
 
     /************  BitEngine Related functions ******/
@@ -242,6 +258,9 @@ private:
     std::atomic_bool is_readonly {false};
     /// If false - ZooKeeper is available, but there is no table metadata. It's safe to drop table in this case.
     bool has_metadata_in_zookeeper = true;
+
+    std::atomic_bool is_offline {false};
+    std::atomic_bool is_offlining {false};
 
     static constexpr auto default_zookeeper_name = "default";
     String zookeeper_name;
@@ -340,8 +359,6 @@ private:
 
     time_t last_check_hang_mutation_time {0};
 
-    bool is_offline = false;
-
     template <class Func>
     void foreachCommittedParts(Func && func, bool select_sequential_consistency) const;
 
@@ -385,7 +402,8 @@ private:
         const String & part_name,
         const String & backup_replica,
         bool to_detached,
-        size_t quorum = 0);
+        size_t quorum = 0,
+        bool incrementally = false);
 
     bool fetchPart(
         const HaQueueExecutingEntrySetPtr & executing_set,
@@ -393,7 +411,8 @@ private:
         const String & replica_path,
         bool to_detached,
         size_t quorum = 0,
-        bool to_repair = false);
+        bool to_repair = false,
+        bool incrementally = false);
 
     /** Updates the queue.
       */
@@ -493,7 +512,9 @@ private:
     void fetchPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, const String & from, bool fetch_part, ContextPtr query_context) override;
     void fetchPartitionWhere(
         const ASTPtr & predicate, const StorageMetadataPtr & metadata_snapshot, const String & from, ContextPtr query_context) override;
-    void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context);
+    void fetchPartitionImpl(const String & partition_id, const String & filter, const String & from, ContextPtr query_context, bool to_repair = false);
+
+    void repairPartition(const ASTPtr & partition, bool part, const String & from, ContextPtr) override;
 
     void movePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, ContextPtr query_context) override;
     FutureMergedMutatedPart transformPartToFuturePart(const DataPartPtr & part);

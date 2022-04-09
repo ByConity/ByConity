@@ -372,6 +372,19 @@ std::vector<std::pair<String, Int64>> HaMergeTreeLogExchanger::getDelays()
     return delays;
 }
 
+std::vector<std::pair<String, Int64>> HaMergeTreeLogExchanger::getDependedNumLogs(String target_replica)
+{
+    std::lock_guard lock(client_mutex);
+
+    std::vector<std::pair<String, Int64>> depended_num_logs;
+    requestUnlocked(lock, true, nullptr, [&depended_num_logs, &target_replica](auto & connection) {
+        auto res = connection.getDependedNumLog(target_replica);
+        depended_num_logs.emplace_back(connection.getRemoteReplica(), res);
+    });
+
+    return depended_num_logs;
+}
+
 std::vector<std::pair<String, UInt64>> HaMergeTreeLogExchanger::checkPartExist(const String & part_name)
 {
     std::lock_guard lock(client_mutex);

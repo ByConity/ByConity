@@ -22,6 +22,7 @@ public:
     std::vector<HaMergeTreeLogEntryPtr> fetchLogEntries(const std::vector<UInt64> & lsns);
 
     Int64 getDelay();
+    Int64 getDependedNumLog(String target_replica);
     bool checkPartExist(const String & name, UInt64 & remote_num_send);
     Strings findActiveContainingPart(const Strings & names, UInt64 & remote_num_send);
     LSNStatus getLSNStatus();

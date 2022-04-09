@@ -15,6 +15,8 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
 #include <Common/ThreadPool.h>
+#include <Common/CGroup/CGroupManager.h>
+#include <Common/CGroup/CGroupManagerFactory.h>
 
 
 namespace DB
@@ -51,7 +53,7 @@ public:
     size_t getNumberOfThreads() const { return size; }
 
     /// thread_name_ cannot be longer then 13 bytes (2 bytes is reserved for "/D" suffix for delayExecutionThreadFunction())
-    BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_);
+    BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_, CpuSetPtr cpu_set_ = nullptr);
     ~BackgroundSchedulePool();
 
 private:
@@ -86,6 +88,7 @@ private:
 
     CurrentMetrics::Metric tasks_metric;
     std::string thread_name;
+    CpuSetPtr cpu_set;
 
     void attachToThreadGroup();
 };
