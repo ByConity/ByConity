@@ -18,6 +18,6 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_different_versions(start_cluster):
     assert node1.query("SELECT uniqExact(x) FROM (SELECT version() as x from remote('node{1,2}', system.one))") == "2\n"

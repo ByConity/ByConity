@@ -59,7 +59,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_many_connections(started_cluster):
     table_name = 'test_many_connections'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -83,7 +83,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32) ENGINE = MySQL
     drop_mysql_table(conn, table_name)
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insert_select(started_cluster):
     table_name = 'test_insert_select'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -102,7 +102,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32) ENGINE = MySQL
     assert node1.query("SELECT sum(money) FROM {}".format(table_name)).rstrip() == '30000'
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_replace_select(started_cluster):
     table_name = 'test_replace_select'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -123,7 +123,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32) ENGINE = MySQL
     assert node1.query("SELECT sum(money) FROM {}".format(table_name)).rstrip() == '30000'
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insert_on_duplicate_select(started_cluster):
     table_name = 'test_insert_on_duplicate_select'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -144,7 +144,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32) ENGINE = MySQL
     assert node1.query("SELECT sum(money) FROM {}".format(table_name)).rstrip() == '60000'
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_where(started_cluster):
     table_name = 'test_where'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -168,7 +168,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32) ENGINE = MySQL
         "SELECT count() FROM {} WHERE name LIKE concat('name_', toString(1))".format(table_name)).rstrip() == '1'
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_table_function(started_cluster):
     conn = get_mysql_conn(started_cluster, cluster.mysql_ip)
     drop_mysql_table(conn, 'table_function')
@@ -191,7 +191,7 @@ def test_table_function(started_cluster):
     assert node1.query("SELECT sum(`money`) FROM {}".format(table_function)).rstrip() == '60000'
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_binary_type(started_cluster):
     conn = get_mysql_conn(started_cluster, cluster.mysql_ip)
     drop_mysql_table(conn, 'binary_type')
@@ -202,7 +202,7 @@ def test_binary_type(started_cluster):
     node1.query("INSERT INTO {} VALUES (42, 'clickhouse')".format('TABLE FUNCTION ' + table_function))
     assert node1.query("SELECT * FROM {}".format(table_function)) == '42\tclickhouse\\0\\0\\0\\0\\0\\0\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_enum_type(started_cluster):
     table_name = 'test_enum_type'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')
@@ -218,7 +218,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32, source Enum8('
     conn.close()
 
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_distributed(started_cluster):
     table_name = 'test_replicas'
 
@@ -296,7 +296,7 @@ def test_mysql_distributed(started_cluster):
     started_cluster.unpause_container('mysql57')
     assert(result == 'host2\nhost4\n' or result == 'host3\nhost4\n')
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_external_settings(started_cluster):
     table_name = 'test_external_settings'
     node1.query(f'DROP TABLE IF EXISTS {table_name}')

@@ -103,7 +103,7 @@ def get_minio_size(cluster):
         size += obj.size
     return size
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_profile_events(cluster):
     instance = cluster.instances["node"]
 

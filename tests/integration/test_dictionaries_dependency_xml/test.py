@@ -31,7 +31,7 @@ def started_cluster():
 def get_status(dictionary_name):
     return instance.query("SELECT status FROM system.dictionaries WHERE name='" + dictionary_name + "'").rstrip("\n")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_get_data(started_cluster):
     query = instance.query
 

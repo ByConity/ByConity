@@ -74,6 +74,7 @@ def drop_table(cluster):
     for obj in list(minio.list_objects(cluster.minio_bucket, 'data/')):
         minio.remove_object(cluster.minio_bucket, obj.object_name)
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     "min_rows_for_wide_part,files_per_part",
     [

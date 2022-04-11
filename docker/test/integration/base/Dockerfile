@@ -1,5 +1,6 @@
 # docker build -t yandex/clickhouse-integration-test .
-FROM yandex/clickhouse-test-base
+ARG TAG=stable
+FROM hub.byted.org/bytehouse/clickhouse-test-base:${TAG}
 
 SHELL ["/bin/bash", "-c"]
 
@@ -13,6 +14,7 @@ RUN apt-get update \
         gdb \
         unixodbc \
         odbcinst \
+        rpm2cpio \
         libsqlite3-dev \
         libsqliteodbc \
         odbc-postgresql \
@@ -31,8 +33,22 @@ RUN rm -rf \
         /tmp/* \
 RUN apt-get clean
 
-# Install MySQL ODBC driver
-RUN curl 'https://cdn.mysql.com//Downloads/Connector-ODBC/8.0/mysql-connector-odbc-8.0.21-linux-glibc2.12-x86-64bit.tar.gz' --output 'mysql-connector.tar.gz' && tar -xzf mysql-connector.tar.gz && cd mysql-connector-odbc-8.0.21-linux-glibc2.12-x86-64bit/lib && mv * /usr/local/lib && ln -s /usr/local/lib/libmyodbc8a.so /usr/lib/x86_64-linux-gnu/odbc/libmyodbc.so
+# Architecture of the image when BuildKit/buildx is used
+ARG TARGETARCH
+
+# Install MySQL ODBC driver from RHEL rpm
+RUN arch=${TARGETARCH:-amd64} \
+  && case $arch in \
+      amd64) rarch=x86_64 ;; \
+      arm64) rarch=aarch64 ;; \
+    esac \
+  && cd /tmp \
+  && curl -o mysql-odbc.rpm "https://cdn.mysql.com/Downloads/Connector-ODBC/8.0/mysql-connector-odbc-8.0.27-1.el8.${rarch}.rpm" \
+  && rpm2archive mysql-odbc.rpm \
+  && tar xf mysql-odbc.rpm.tgz -C / ./usr/lib64/ \
+  && LINK_DIR=$(dpkg -L libodbc1 | grep '^/usr/lib/.*-linux-gnu/odbc$') \
+  && ln -s /usr/lib64/libmyodbc8a.so "$LINK_DIR" \
+  && ln -s /usr/lib64/libmyodbc8a.so "$LINK_DIR"/libmyodbc.so
 
 # Unfortunately this is required for a single test for conversion data from zookeeper to clickhouse-keeper.
 # ZooKeeper is not started by default, but consumes some space in containers.

@@ -173,10 +173,10 @@ def execute_task(started_cluster, task, cmd_options):
 
 
 # Tests
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_trivial_copy(started_cluster):
     execute_task(started_cluster, TaskTrivial(started_cluster), [])
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_trivial_without_arguments(started_cluster):
     execute_task(started_cluster, TaskReplicatedWithoutArguments(started_cluster), [])

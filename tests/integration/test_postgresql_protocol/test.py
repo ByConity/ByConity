@@ -71,7 +71,7 @@ def java_container():
 def test_psql_is_ready(psql_server):
     pass
 
-
+@pytest.mark.skip(reason="manifest unknown")
 def test_psql_client(psql_client, server_address):
     cmd_prefix = 'psql "sslmode=require host={server_address} port={server_port} user=default dbname=default password=123" ' \
         .format(server_address=server_address, server_port=server_port)
@@ -109,7 +109,7 @@ def test_psql_client(psql_client, server_address):
     )
     assert stdout.decode() == '\n'.join(['tmp_column', '0', '1', '(2 rows)', ''])
 
-
+@pytest.mark.skip(reason="manifest unknown")
 def test_python_client(server_address):
     with pytest.raises(py_psql.InternalError) as exc_info:
         ch = py_psql.connect(host=server_address, port=server_port, user='default', password='123', database='')
@@ -137,7 +137,7 @@ def test_python_client(server_address):
         '44', 534324234, 0.32423423, 'hello', datetime.date(2019, 1, 23), decimal.Decimal('0.3333330000'),
         uuid.UUID('61f0c404-5cb3-11e7-907b-a6006ad3dba0'))
 
-
+@pytest.mark.skip(reason="manifest unknown")
 def test_java_client(server_address, java_container):
     with open(os.path.join(SCRIPT_DIR, 'java.reference')) as fp:
         reference = fp.read()

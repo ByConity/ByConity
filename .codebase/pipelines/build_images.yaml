@@ -8,6 +8,15 @@ trigger:
       - "docker/test/stateful/*"
       - "docker/test/stress/*"
       - "docker/test/certificate/*"
+      - "docker/test/integration/runner/*"
+      - "docker/test/integration/base/*"
+      - "docker/test/integration/helper_container/*"
+      - "docker/test/integration/kerberos_kdc/*"
+      - "docker/test/integration/mysql_golang_client/*"
+      - "docker/test/integration/mysql_java_client/*"
+      - "docker/test/integration/mysql_js_client/*"
+      - "docker/test/integration/mysql_php_client/*"
+      - "docker/test/integration/postgresql_java_client/*"
 
 jobs:
   build_test_base_image:
@@ -60,6 +69,88 @@ jobs:
           image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:stable
           build-args:
             - TAG=stable
+      - id: clickhouse-integration-tests-runner
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/runner
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-tests-runner:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-mysql-golang-client
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/mysql_golang_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-golang-client:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-mysql-java-client
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/mysql_java_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-java-client:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-mysql-js-client
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/mysql_js_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-js-client:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-mysql-php-client
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/mysql_php_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-php-client:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-postgresql-java-client
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/postgresql_java_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-postgresql-java-client:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-integration-test-base
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/base
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-test-base:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-kerberos-kdc
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/kerberos_kdc
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-kerberos-kdc:stable
+          build-args:
+            - TAG=stable  
+      - id: clickhouse-integration-helper
+        uses: actions/buildkit@v1
+        inputs:
+          context: docker/test/integration/helper_container
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-helper:stable
+          build-args:
+            - TAG=stable  
     services:
       - id: buildkit
         image: hub.byted.org/pipeline/buildkit
+        

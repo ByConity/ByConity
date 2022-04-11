@@ -31,7 +31,7 @@ def assert_objects_count(started_cluster, objects_count, path='data/'):
     hdfs_objects = fs.listdir('/clickhouse')
     assert objects_count == len(hdfs_objects)
 
-
+@pytest.mark.skip(reason="THDFS service not up")
 @pytest.mark.parametrize(
     "log_engine,files_overhead,files_overhead_per_insert",
     [("TinyLog", 1, 1), ("Log", 2, 1), ("StripeLog", 1, 2)])

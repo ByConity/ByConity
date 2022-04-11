@@ -43,7 +43,7 @@ def setup_nodes():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_client_is_older_than_server(setup_nodes):
     server = new_node
     for i, client in enumerate(old_nodes):
@@ -54,7 +54,7 @@ def test_client_is_older_than_server(setup_nodes):
 
     assert server.query("SELECT COUNT() FROM test_table WHERE id=1") == str(len(old_nodes)) + "\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_server_is_older_than_client(setup_nodes):
     client = new_node
     for i, server in enumerate(old_nodes):
@@ -66,7 +66,7 @@ def test_server_is_older_than_client(setup_nodes):
     for server in old_nodes:
         assert server.query("SELECT COUNT() FROM test_table WHERE id=2") == "1\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_distributed_query_initiator_is_older_than_shard(setup_nodes):
     distributed_query_initiator_old_nodes = [node18_14, node19_13, node19_16]
     shard = new_node

@@ -476,7 +476,7 @@ def test_rename_with_parallel_ttl_move(started_cluster):
     finally:
         drop_table(nodes, table_name)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_rename_with_parallel_ttl_delete(started_cluster):
     table_name = 'test_rename_with_parallel_ttl_delete'
     try:

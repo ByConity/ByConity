@@ -1,0 +1,21 @@
+{
+    "context_name": "check_name",
+    "commit": "pr_info.sha",
+    "pull_request": "pr_info.number",
+    "pr_info": "{'changed_files' : list(pr_info.changed_files)}",
+    "docker_images_with_versions": [
+        "hub.byted.org/bytehouse/clickhouse-mysql-golang-client:stable",
+        "hub.byted.org/bytehouse/clickhouse-mysql-java-client:stable",
+        "hub.byted.org/bytehouse/clickhouse-mysql-js-client:stable",
+        "hub.byted.org/bytehouse/clickhouse-mysql-php-client:stable",
+        "hub.byted.org/bytehouse/clickhouse-postgresql-java-client:stable",                
+        "hub.byted.org/bytehouse/clickhouse-integration-test-base:stable",
+        "hub.byted.org/bytehouse/clickhouse-kerberos-kdc:stable",
+        "hub.byted.org/bytehouse/clickhouse-kerberized-hadoop:stable",
+        "hub.byted.org/bytehouse/clickhouse-dotnet-client:stable"],
+    "shuffle_test_groups": "False",
+    "use_tmpfs": "False",
+    "disable_net_host": "True",
+    "run_by_hash_total": "RUN_BY_HASH_TOTAL",
+    "run_by_hash_num": "RUN_BY_HASH_NUM"
+}

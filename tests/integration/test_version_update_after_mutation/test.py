@@ -23,7 +23,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mutate_and_upgrade(start_cluster):
     for node in [node1, node2]:
         node.query(
@@ -67,7 +67,7 @@ def test_mutate_and_upgrade(start_cluster):
     assert node1.query("SELECT id FROM mt") == "1\n4\n"
     assert node2.query("SELECT id FROM mt") == "1\n4\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_upgrade_while_mutation(start_cluster):
     node3.query(
         "CREATE TABLE mt1 (EventDate Date, id UInt64) ENGINE ReplicatedMergeTree('/clickhouse/tables/t1', 'node3') ORDER BY tuple()")

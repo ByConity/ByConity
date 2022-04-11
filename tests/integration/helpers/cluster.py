@@ -226,7 +226,7 @@ class ClickHouseCluster:
 
         custom_dockerd_host = custom_dockerd_host or os.environ.get('CLICKHOUSE_TESTS_DOCKERD_HOST')
         self.docker_api_version = os.environ.get("DOCKER_API_VERSION")
-        self.docker_base_tag = os.environ.get("DOCKER_BASE_TAG", "latest")
+        self.docker_base_tag = os.environ.get("DOCKER_BASE_TAG", "stable")
 
         self.base_cmd = ['docker-compose']
         if custom_dockerd_host:
@@ -513,7 +513,7 @@ class ClickHouseCluster:
             binary_path = binary_path[:-len('-server')]
 
         env_variables['keeper_binary'] = binary_path
-        env_variables['image'] = "yandex/clickhouse-integration-test:" + self.docker_base_tag
+        env_variables['image'] = "hub.byted.org/bytehouse/clickhouse-integration-test-base:" + self.docker_base_tag
         env_variables['user'] = str(os.getuid())
         env_variables['keeper_fs'] = 'bind'
         for i in range(1, 4):
@@ -719,7 +719,7 @@ class ClickHouseCluster:
                      with_kafka=False, with_kerberized_kafka=False, with_rabbitmq=False, clickhouse_path_dir=None,
                      with_odbc_drivers=False, with_postgres=False, with_postgres_cluster=False, with_hdfs=False, with_kerberized_hdfs=False, with_mongo=False,
                      with_redis=False, with_minio=False, with_cassandra=False, with_jdbc_bridge=False,
-                     hostname=None, env_variables=None, image="yandex/clickhouse-integration-test", tag=None,
+                     hostname=None, env_variables=None, image="hub.byted.org/bytehouse/clickhouse-integration-test-base", tag=None,
                      stay_alive=False, ipv4_address=None, ipv6_address=None, with_installed_binary=False, tmpfs=None,
                      zookeeper_docker_compose_path=None, minio_certs_dir=None, use_keeper=True,
                      main_config_name="config.xml", users_config_name="users.xml", copy_common_configs=True):
@@ -1714,7 +1714,7 @@ class ClickHouseInstance:
             clickhouse_start_command=CLICKHOUSE_START_COMMAND,
             main_config_name="config.xml", users_config_name="users.xml", copy_common_configs=True,
             hostname=None, env_variables=None,
-            image="yandex/clickhouse-integration-test", tag="latest",
+            image="hub.byted.org/bytehouse/clickhouse-integration-test-base", tag="stable",
             stay_alive=False, ipv4_address=None, ipv6_address=None, with_installed_binary=False, tmpfs=None):
 
         self.name = name
@@ -2144,12 +2144,10 @@ class ClickHouseInstance:
 
         os.makedirs(self.path)
 
-        instance_config_dir = p.abspath(p.join(self.path, 'configs'))
+        instance_config_dir = p.abspath(p.join(self.path, 'configs'))        
         os.makedirs(instance_config_dir)
-
-        print(f"Copy common default production configuration from {self.base_config_dir}. Files: {self.main_config_name}, {self.users_config_name}")
-
-        shutil.copyfile(p.join(self.base_config_dir, self.main_config_name), p.join(instance_config_dir, self.main_config_name))
+        print(f"Copy common default production configuration from {self.base_config_dir}. Files: {self.main_config_name}, {self.users_config_name}")               
+        shutil.copyfile(p.join(self.base_config_dir, self.main_config_name), p.join(instance_config_dir, self.main_config_name))        
         shutil.copyfile(p.join(self.base_config_dir, self.users_config_name), p.join(instance_config_dir, self.users_config_name))
 
         logging.debug("Create directory for configuration generated in this helper")

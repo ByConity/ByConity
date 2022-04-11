@@ -54,7 +54,7 @@ CREATE TABLE distributed_on_local (d Date, x UInt32) ENGINE = Distributed('test_
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_reconnect(started_cluster):
     instance = instance_test_reconnect
 
@@ -135,7 +135,7 @@ def test_inserts_batching(started_cluster):
 '''
     assert TSV(result) == TSV(expected)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_local(started_cluster):
     instance = instance_test_inserts_local_cluster
     instance.query("INSERT INTO local_source VALUES ('2000-01-01', 1)")

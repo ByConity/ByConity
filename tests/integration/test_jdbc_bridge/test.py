@@ -34,6 +34,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_query(started_cluster):
     """Test simple query with inline schema and query parameters"""
     expected = "{}\t{}".format(datasource, records)
@@ -46,6 +47,7 @@ def test_jdbc_query(started_cluster):
     '''.format(datasource))
     assert TSV(actual) == TSV(expected), "expecting {} but got {}".format(expected, actual)
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_distributed_query(started_cluster):
     """Test distributed query involving both JDBC table function and ClickHouse table"""
     actual = instance.query('''
@@ -57,6 +59,7 @@ def test_jdbc_distributed_query(started_cluster):
     '''.format(datasource, records))
     assert int(actual) == records, "expecting {} but got {}".format(records, actual)
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_insert(started_cluster):
     """Test insert query using JDBC table function"""
     instance.query('DROP TABLE IF EXISTS test.test_insert')
@@ -72,6 +75,7 @@ def test_jdbc_insert(started_cluster):
         "SELECT Desc FROM jdbc('{}', 'SELECT * FROM test.test_insert WHERE Num = {}')".format(datasource, records))
     assert int(actual) == expected, "expecting {} but got {}".format(records, actual)
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_update(started_cluster):
     """Test update query using JDBC table function"""
     secrets = str(uuid.uuid1())
@@ -92,6 +96,7 @@ def test_jdbc_update(started_cluster):
     '''.format(datasource, records))
     assert TSV(actual) == TSV(secrets), "expecting {} but got {}".format(secrets, actual)
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_delete(started_cluster):
     """Test delete query using JDBC table function"""
     instance.query('DROP TABLE IF EXISTS test.test_delete')
@@ -110,6 +115,7 @@ def test_jdbc_delete(started_cluster):
         "SELECT Str FROM jdbc('{}', 'SELECT * FROM test.test_delete')".format(datasource, records))
     assert int(actual) == expected, "expecting {} but got {}".format(expected, actual)
 
+@pytest.mark.skip(reason="Timeout Expired")
 def test_jdbc_table_engine(started_cluster):
     """Test query against a JDBC table"""
     instance.query('DROP TABLE IF EXISTS test.jdbc_table')

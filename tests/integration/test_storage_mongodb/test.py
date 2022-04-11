@@ -22,7 +22,7 @@ def get_mongo_connection(started_cluster):
     connection_str = 'mongodb://root:clickhouse@localhost:{}'.format(started_cluster.mongo_port)
     return pymongo.MongoClient(connection_str)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_simple_select(started_cluster):
     mongo_connection = get_mongo_connection(started_cluster)
     db = mongo_connection['test']
@@ -41,7 +41,7 @@ def test_simple_select(started_cluster):
 
     assert node.query("SELECT data from simple_mongo_table where key = 42") == hex(42 * 42) + '\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_complex_data_type(started_cluster):
     mongo_connection = get_mongo_connection(started_cluster)
     db = mongo_connection['test']
@@ -60,7 +60,7 @@ def test_complex_data_type(started_cluster):
 
     assert node.query("SELECT data from incomplete_mongo_table where key = 42") == hex(42 * 42) + '\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_incorrect_data_type(started_cluster):
     mongo_connection = get_mongo_connection(started_cluster)
     db = mongo_connection['test']

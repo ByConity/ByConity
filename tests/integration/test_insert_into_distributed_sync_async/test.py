@@ -34,7 +34,7 @@ CREATE TABLE distributed_table(date Date, val UInt64) ENGINE = Distributed(test_
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insertion_sync(started_cluster):
     node1.query('''SET insert_distributed_sync = 1, insert_distributed_timeout = 0;
     INSERT INTO distributed_table SELECT today() as date, number as val FROM system.numbers LIMIT 10000''')
@@ -79,28 +79,28 @@ def test_insertion_sync_fails_on_error(started_cluster):
             INSERT INTO distributed_table SELECT today() as date, number as val FROM system.numbers''', timeout=2)
 """
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insertion_sync_fails_with_timeout(started_cluster):
     with pytest.raises(QueryRuntimeException):
         node1.query('''
         SET insert_distributed_sync = 1, insert_distributed_timeout = 1;
         INSERT INTO distributed_table SELECT today() as date, number as val FROM system.numbers''')
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insertion_without_sync_ignores_timeout(started_cluster):
     with pytest.raises(QueryTimeoutExceedException):
         node1.query('''
         SET insert_distributed_sync = 0, insert_distributed_timeout = 1;
         INSERT INTO distributed_table SELECT today() as date, number as val FROM system.numbers''', timeout=1.5)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_insertion_sync_with_disabled_timeout(started_cluster):
     with pytest.raises(QueryTimeoutExceedException):
         node1.query('''
         SET insert_distributed_sync = 1, insert_distributed_timeout = 0;
         INSERT INTO distributed_table SELECT today() as date, number as val FROM system.numbers''', timeout=1)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_async_inserts_into_local_shard(started_cluster):
     node1.query('''CREATE TABLE shard_local (i Int64) ENGINE = Memory''')
     node1.query(

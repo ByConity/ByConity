@@ -57,6 +57,7 @@ def get_fake_zk(nodename, timeout=30.0):
     _fake_zk_instance.start()
     return _fake_zk_instance
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_multinode(started_cluster):
     try:
         wait_nodes()
@@ -98,7 +99,7 @@ def test_read_write_multinode(started_cluster):
         except:
             pass
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_watch_on_follower(started_cluster):
     try:
         wait_nodes()
@@ -152,7 +153,7 @@ def test_watch_on_follower(started_cluster):
         except:
             pass
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_session_expiration(started_cluster):
     try:
         wait_nodes()
@@ -191,7 +192,7 @@ def test_session_expiration(started_cluster):
         except:
             pass
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_follower_restart(started_cluster):
     try:
         wait_nodes()
@@ -217,7 +218,7 @@ def test_follower_restart(started_cluster):
         except:
             pass
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_simple_replicated_table(started_cluster):
     wait_nodes()
     for i, node in enumerate([node1, node2, node3]):

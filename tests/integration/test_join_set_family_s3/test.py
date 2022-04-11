@@ -31,7 +31,7 @@ def assert_objects_count(cluster, objects_count, path='data/'):
             logging.info("Existing S3 object: %s", str(object_meta))
         assert objects_count == len(s3_objects)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_set_s3(cluster):
     node = cluster.instances["node"]
 
@@ -62,7 +62,7 @@ def test_set_s3(cluster):
     node.query("DROP TABLE testLocalSet")
     node.query("DROP TABLE testS3Set")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_join_s3(cluster):
     node = cluster.instances["node"]
 

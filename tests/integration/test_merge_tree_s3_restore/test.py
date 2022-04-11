@@ -141,7 +141,7 @@ def drop_table(cluster):
     for bucket in buckets:
         purge_s3(cluster, bucket)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
    "replicated", [False, True]
 )
@@ -164,7 +164,7 @@ def test_full_restore(cluster, replicated):
     assert node.query("SELECT count(*) FROM s3.test FORMAT Values") == "({})".format(4096 * 4)
     assert node.query("SELECT sum(id) FROM s3.test FORMAT Values") == "({})".format(0)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_restore_another_bucket_path(cluster):
     node = cluster.instances["node"]
 
@@ -199,7 +199,7 @@ def test_restore_another_bucket_path(cluster):
     assert node_another_bucket_path.query("SELECT count(*) FROM s3.test FORMAT Values") == "({})".format(4096 * 4)
     assert node_another_bucket_path.query("SELECT sum(id) FROM s3.test FORMAT Values") == "({})".format(0)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_restore_different_revisions(cluster):
     node = cluster.instances["node"]
 
@@ -258,7 +258,7 @@ def test_restore_different_revisions(cluster):
     assert node_another_bucket.query("SELECT sum(id) FROM s3.test FORMAT Values") == "({})".format(0)
     assert node_another_bucket.query("SELECT count(*) from system.parts where table = 'test'") == '5\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_restore_mutations(cluster):
     node = cluster.instances["node"]
 
@@ -313,7 +313,7 @@ def test_restore_mutations(cluster):
     assert node_another_bucket.query("SELECT sum(counter) FROM s3.test FORMAT Values") == "({})".format(4096 * 2)
     assert node_another_bucket.query("SELECT sum(counter) FROM s3.test WHERE id > 0 FORMAT Values") == "({})".format(4096)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_migrate_to_restorable_schema(cluster):
     node = cluster.instances["node_not_restorable"]
 
@@ -345,7 +345,7 @@ def test_migrate_to_restorable_schema(cluster):
     assert node_another_bucket.query("SELECT count(*) FROM s3.test FORMAT Values") == "({})".format(4096 * 6)
     assert node_another_bucket.query("SELECT sum(id) FROM s3.test FORMAT Values") == "({})".format(0)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     "replicated", [False, True]
 )

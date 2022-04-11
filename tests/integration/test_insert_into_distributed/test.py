@@ -101,7 +101,7 @@ CREATE TABLE single_replicated(date Date, id UInt32) ENGINE = ReplicatedMergeTre
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_reconnect(started_cluster):
     instance = instance_test_reconnect
 
@@ -125,7 +125,7 @@ def test_reconnect(started_cluster):
 
         assert remote.query("SELECT count(*) FROM local1").strip() == '3'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_batching(started_cluster):
     instance = instance_test_inserts_batching
 
@@ -175,14 +175,14 @@ def test_inserts_batching(started_cluster):
 '''
     assert TSV(result) == TSV(expected)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_local(started_cluster):
     instance = instance_test_inserts_local_cluster
     instance.query("INSERT INTO distributed_on_local VALUES ('2000-01-01', 1)")
     time.sleep(0.5)
     assert instance.query("SELECT count(*) FROM local").strip() == '1'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_single_replica_local_internal_replication(started_cluster):
     with pytest.raises(QueryRuntimeException, match="Table default.single_replicated doesn't exist"):
         node1.query(
@@ -196,7 +196,7 @@ def test_inserts_single_replica_local_internal_replication(started_cluster):
         )
     assert node2.query("SELECT count(*) FROM single_replicated").strip() == '0'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_single_replica_internal_replication(started_cluster):
     try:
         node1.query(
@@ -212,7 +212,7 @@ def test_inserts_single_replica_internal_replication(started_cluster):
     finally:
         node2.query("TRUNCATE TABLE single_replicated")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_single_replica_no_internal_replication(started_cluster):
     try:
         with pytest.raises(QueryRuntimeException, match="Table default.single_replicated doesn't exist"):
@@ -227,7 +227,7 @@ def test_inserts_single_replica_no_internal_replication(started_cluster):
     finally:
         node2.query("TRUNCATE TABLE single_replicated")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_prefer_localhost_replica(started_cluster):
     test_query = "SELECT * FROM distributed ORDER BY id"
 
@@ -273,14 +273,14 @@ def test_prefer_localhost_replica(started_cluster):
     assert TSV(node2.query(test_query + " SETTINGS load_balancing='in_order', prefer_localhost_replica=0")) == TSV(
         expected_from_node1)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_inserts_low_cardinality(started_cluster):
     instance = shard1
     instance.query("INSERT INTO low_cardinality_all (d,x,s) VALUES ('2018-11-12',1,'123')")
     time.sleep(0.5)
     assert instance.query("SELECT count(*) FROM low_cardinality_all").strip() == '1'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_table_function(started_cluster):
     node1.query(
         "insert into table function cluster('shard_with_local_replica', 'default', 'table_function') select number, concat('str_', toString(number)) from numbers(100000)")

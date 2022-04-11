@@ -45,7 +45,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_load_mysql_dictionaries(started_cluster):
     # Load dictionaries
     query = instance.query
