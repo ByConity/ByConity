@@ -78,6 +78,6 @@ drop table if exists test.lc_dict2;
 -- PARTITION BY app_id
 -- ORDER BY app_id
 -- SETTINGS index_granularity = 8192;
--- insert into test.events_compact format JSONEachRow {"app_id":10000000,"string_params":{"__is_history":"true","activity_name":"清仓活动","ad_id":"0","app_channel":"线下扫码下载","app_language":"zh_CN","app_region":"China","app_version":"0.4.5","browser":"safari","browser_version":"10.1.2","client_ip":"114.101.236.169","device_brand":"apple","device_model":"iphone 5s","entry_name":"首页","getui_client_id":"88589756-75F8-45F0-BCAE-0EF61EF3BB6B","language":"zh","loc_city_id":"1788080","loc_country_id":"1814991","loc_province_id":"1818058","network_carrier":"sprint","network_type":"wifi","os_name":"ios","os_version":"11.4.0","package":"ios.package","platform":"ios","platform_type":"web\/h5","region":"China","resolution":"2240*1080","session_id":"662f667c6fea5648b16b25a6e31dae0ee414","timezone":"8.0","user_agent":"Mozilla\/5.0 (iPhone; CPU iPhone OS 11_4_0 like Mac OS X) AppleWebKit\/605.1.15 (KHTML, like Gecko) Version\/13.0.3 Mobile\/15E148 Safari\/604.1"}};
+-- insert into test.events_compact format JSONEachRow {"app_id":10000000,"string_params":{"__is_history":"true"}};
 -- select * from test.events_compact format Null;
 -- drop table if exists test.events_compact;

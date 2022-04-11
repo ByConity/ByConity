@@ -475,6 +475,23 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns, index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec);
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
 
+    // pre-handle low-cardinality fall-back
+    for (auto const &column : columns)
+    {
+        if (column.type->lowCardinality())
+        {
+            auto const &col = block.getByName(column.name);
+            auto const *lc = typeid_cast<const ColumnLowCardinality *>(col.column.get());
+            if (lc->isFullState())
+            {
+                auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(column.type.get());
+                // lc full column need switch type
+                NameAndTypePair pair(column.name,  lc_type->getFullLowCardinalityTypePtr());
+                out.updateWriterStream(pair);
+            }
+        }
+    }
+
     out.writePrefix();
     out.writeWithPermutation(block, perm_ptr);
     out.writeSuffixAndFinalizePart(new_data_part, sync_on_insert);

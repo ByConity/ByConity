@@ -429,23 +429,6 @@ void MergeTreeDataPartWriterWide::writeColumn(
     const auto & [name, type] = name_and_type;
     auto [it, inserted] = serialization_states.emplace(name, nullptr);
 
-    // in case of low cardinality column fallback
-    if (column.lowCardinality())
-    {
-        if (auto const *low_col = checkAndGetColumn<ColumnLowCardinality>(column))
-        {
-            if (low_col->isFullState())
-            {
-                auto const *data_type = typeid_cast<const DataTypeLowCardinality *>(name_and_type.type.get());
-                if (data_type)
-                {
-                    (const_cast<NameAndTypePair &>(name_and_type)).type = data_type->getFullLowCardinalityTypePtr();
-                    serializations[name] = name_and_type.type->getDefaultSerialization();
-                }
-            }
-        }
-    }
-
     if (inserted)
     {
         ISerialization::SerializeBinaryBulkSettings serialize_settings;
