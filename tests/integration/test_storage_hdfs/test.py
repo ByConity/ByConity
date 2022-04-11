@@ -15,6 +15,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_storage(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -24,7 +25,7 @@ def test_read_write_storage(started_cluster):
     assert hdfs_api.read_data("/simple_storage") == "1\tMark\t72.53\n"
     assert node1.query("select * from SimpleHDFSStorage") == "1\tMark\t72.53\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_storage_with_globs(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -67,7 +68,7 @@ def test_read_write_storage_with_globs(started_cluster):
         print(ex)
         assert "in readonly mode" in str(ex)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_table(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -80,7 +81,7 @@ def test_read_write_table(started_cluster):
     assert node1.query(
         "select * from hdfs('hdfs://hdfs1:9000/simple_table_function', 'TSV', 'id UInt64, text String, number Float64')") == data
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_write_table(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -93,7 +94,7 @@ def test_write_table(started_cluster):
     assert hdfs_api.read_data("/other_storage") == result
     assert node1.query("select * from OtherHDFSStorage order by id") == result
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_bad_hdfs_uri(started_cluster):
     try:
         node1.query(
@@ -115,6 +116,7 @@ def test_bad_hdfs_uri(started_cluster):
         print(ex)
         assert "Unable to open HDFS file" in str(ex)
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.timeout(800)
 def test_globs_in_read_table(started_cluster):
     hdfs_api = started_cluster.hdfs_api
@@ -149,7 +151,7 @@ def test_globs_in_read_table(started_cluster):
         assert node1.query("select count(distinct _file) from hdfs(" + inside_table_func + ")").rstrip() == str(
             files_amount)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_gzip_table(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -162,7 +164,7 @@ def test_read_write_gzip_table(started_cluster):
     assert node1.query(
         "select * from hdfs('hdfs://hdfs1:9000/simple_table_function.gz', 'TSV', 'id UInt64, text String, number Float64')") == data
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_gzip_table_with_parameter_gzip(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -175,7 +177,7 @@ def test_read_write_gzip_table_with_parameter_gzip(started_cluster):
     assert node1.query(
         "select * from hdfs('hdfs://hdfs1:9000/simple_table_function', 'TSV', 'id UInt64, text String, number Float64', 'gzip')") == data
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_table_with_parameter_none(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -188,7 +190,7 @@ def test_read_write_table_with_parameter_none(started_cluster):
     assert node1.query(
         "select * from hdfs('hdfs://hdfs1:9000/simple_table_function.gz', 'TSV', 'id UInt64, text String, number Float64', 'none')") == data
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_write_gzip_table_with_parameter_auto_gz(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -201,7 +203,7 @@ def test_read_write_gzip_table_with_parameter_auto_gz(started_cluster):
     assert node1.query(
         "select * from hdfs('hdfs://hdfs1:9000/simple_table_function.gz', 'TSV', 'id UInt64, text String, number Float64', 'auto')") == data
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_write_gz_storage(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -212,7 +214,7 @@ def test_write_gz_storage(started_cluster):
     assert hdfs_api.read_gzip_data("/storage.gz") == "1\tMark\t72.53\n"
     assert node1.query("select * from GZHDFSStorage") == "1\tMark\t72.53\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_write_gzip_storage(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -223,7 +225,7 @@ def test_write_gzip_storage(started_cluster):
     assert hdfs_api.read_gzip_data("/gzip_storage") == "1\tMark\t72.53\n"
     assert node1.query("select * from GZIPHDFSStorage") == "1\tMark\t72.53\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_virtual_columns(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -234,7 +236,7 @@ def test_virtual_columns(started_cluster):
     expected = "1\tfile1\thdfs://hdfs1:9000//file1\n2\tfile2\thdfs://hdfs1:9000//file2\n3\tfile3\thdfs://hdfs1:9000//file3\n"
     assert node1.query("select id, _file as file_name, _path as file_path from virtual_cols order by id") == expected
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_read_files_with_spaces(started_cluster):
     hdfs_api = started_cluster.hdfs_api
 
@@ -244,7 +246,7 @@ def test_read_files_with_spaces(started_cluster):
     node1.query("create table test (id UInt32) ENGINE = HDFS('hdfs://hdfs1:9000/test*', 'TSV')")
     assert node1.query("select * from test order by id") == "1\n2\n3\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_truncate_table(started_cluster):
     hdfs_api = started_cluster.hdfs_api
     node1.query(

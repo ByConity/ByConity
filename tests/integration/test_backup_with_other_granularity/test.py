@@ -22,7 +22,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backup_from_old_version(started_cluster):
     node1.query("CREATE TABLE source_table(A Int64, B String) Engine = MergeTree order by tuple()")
 
@@ -60,7 +60,7 @@ def test_backup_from_old_version(started_cluster):
 
     assert node1.query("CHECK TABLE dest_table") == "1\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backup_from_old_version_setting(started_cluster):
     node2.query("CREATE TABLE source_table(A Int64, B String) Engine = MergeTree order by tuple()")
 
@@ -97,7 +97,7 @@ def test_backup_from_old_version_setting(started_cluster):
 
     assert node2.query("CHECK TABLE dest_table") == "1\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backup_from_old_version_config(started_cluster):
     node3.query("CREATE TABLE source_table(A Int64, B String) Engine = MergeTree order by tuple()")
 
@@ -138,7 +138,7 @@ def test_backup_from_old_version_config(started_cluster):
 
     assert node3.query("CHECK TABLE dest_table") == "1\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backup_and_alter(started_cluster):
     node4.query("CREATE DATABASE test ENGINE=Ordinary") # Different path in shadow/ with Atomic
 

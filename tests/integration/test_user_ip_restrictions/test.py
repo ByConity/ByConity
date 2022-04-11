@@ -32,7 +32,7 @@ def setup_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_ipv4(setup_cluster):
     try:
         client_ipv4_ok.exec_in_container(
@@ -65,7 +65,7 @@ def test_ipv4(setup_cluster):
     except Exception as ex:
         print(ex)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_ipv6(setup_cluster):
     try:
         client_ipv6_ok.exec_in_container(

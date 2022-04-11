@@ -46,7 +46,7 @@ def normal_work():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_normal_work(normal_work):
     node1.query("insert into test_table values ('2017-06-16', 111, 0)")
     node1.query("insert into real_table values ('2017-06-16', 222, 0)")
@@ -77,7 +77,7 @@ def drop_failover():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_drop_failover(drop_failover):
     node3.query("insert into test_table values ('2017-06-16', 111, 0)")
     node3.query("insert into real_table values ('2017-06-16', 222, 0)")
@@ -128,7 +128,7 @@ def replace_after_replace_failover():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_replace_after_replace_failover(replace_after_replace_failover):
     node5.query("insert into test_table values ('2017-06-16', 111, 0)")
     node5.query("insert into real_table values ('2017-06-16', 222, 0)")

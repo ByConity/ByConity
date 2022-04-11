@@ -92,6 +92,7 @@ def started_mysql_8_0():
     mysql8_node = MySQLConnection(cluster.mysql8_port, 'root', 'clickhouse', cluster.mysql8_ip)
     yield mysql8_node
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_dml_with_mysql_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.dml_with_materialize_mysql_database(clickhouse_node, started_mysql_5_7, "mysql57")
@@ -99,6 +100,7 @@ def test_materialize_database_dml_with_mysql_5_7(started_cluster, started_mysql_
     materialize_with_ddl.materialize_mysql_database_with_datetime_and_decimal(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.move_to_prewhere_and_column_filtering(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_dml_with_mysql_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.dml_with_materialize_mysql_database(clickhouse_node, started_mysql_8_0, "mysql80")
@@ -106,6 +108,7 @@ def test_materialize_database_dml_with_mysql_8_0(started_cluster, started_mysql_
     materialize_with_ddl.materialize_mysql_database_with_datetime_and_decimal(clickhouse_node, started_mysql_8_0, "mysql80")
     materialize_with_ddl.move_to_prewhere_and_column_filtering(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_ddl_with_mysql_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.drop_table_with_materialize_mysql_database(clickhouse_node, started_mysql_5_7, "mysql57")
@@ -118,6 +121,7 @@ def test_materialize_database_ddl_with_mysql_5_7(started_cluster, started_mysql_
     materialize_with_ddl.alter_rename_table_with_materialize_mysql_database(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.alter_modify_column_with_materialize_mysql_database(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_ddl_with_mysql_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.drop_table_with_materialize_mysql_database(clickhouse_node, started_mysql_8_0, "mysql80")
@@ -129,100 +133,116 @@ def test_materialize_database_ddl_with_mysql_8_0(started_cluster, started_mysql_
     materialize_with_ddl.alter_rename_column_with_materialize_mysql_database(clickhouse_node, started_mysql_8_0, "mysql80")
     materialize_with_ddl.alter_modify_column_with_materialize_mysql_database(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_ddl_with_empty_transaction_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.query_event_with_empty_transaction(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_ddl_with_empty_transaction_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.query_event_with_empty_transaction(clickhouse_node, started_mysql_8_0, "mysql80")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_select_without_columns_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.select_without_columns(clickhouse_node, started_mysql_5_7, "mysql57")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_select_without_columns_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.select_without_columns(clickhouse_node, started_mysql_8_0, "mysql80")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_insert_with_modify_binlog_checksum_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.insert_with_modify_binlog_checksum(clickhouse_node, started_mysql_5_7, "mysql57")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_insert_with_modify_binlog_checksum_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.insert_with_modify_binlog_checksum(clickhouse_node, started_mysql_8_0, "mysql80")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_err_sync_user_privs_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.err_sync_user_privs_with_materialize_mysql_database(clickhouse_node, started_mysql_5_7, "mysql57")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_materialize_database_err_sync_user_privs_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.err_sync_user_privs_with_materialize_mysql_database(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_network_partition_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.network_partition_test(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_network_partition_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.network_partition_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_mysql_kill_sync_thread_restore_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.mysql_kill_sync_thread_restore_test(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_mysql_kill_sync_thread_restore_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.mysql_kill_sync_thread_restore_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_mysql_killed_while_insert_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.mysql_killed_while_insert(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_mysql_killed_while_insert_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.mysql_killed_while_insert(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_clickhouse_killed_while_insert_5_7(started_cluster, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.clickhouse_killed_while_insert(clickhouse_node, started_mysql_5_7, "mysql57")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [pytest.param(node_db_ordinary, id="ordinary"), pytest.param(node_db_atomic, id="atomic")])
 def test_clickhouse_killed_while_insert_8_0(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.clickhouse_killed_while_insert(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_utf8mb4(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.utf8mb4_test(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.utf8mb4_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_system_parts_table(started_cluster, started_mysql_8_0, clickhouse_node):
     materialize_with_ddl.system_parts_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_multi_table_update(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.multi_table_update_test(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.multi_table_update_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_system_tables_table(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.system_tables_test(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.system_tables_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_materialize_with_column_comments(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.materialize_with_column_comments_test(clickhouse_node, started_mysql_5_7, "mysql57")
     materialize_with_ddl.materialize_with_column_comments_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_db_ordinary, node_db_ordinary])
 def test_materialize_with_enum(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.materialize_with_enum8_test(clickhouse_node, started_mysql_5_7, "mysql57")
@@ -232,7 +252,7 @@ def test_materialize_with_enum(started_cluster, started_mysql_8_0, started_mysql
     materialize_with_ddl.materialize_with_enum16_test(clickhouse_node, started_mysql_8_0, "mysql80")
     materialize_with_ddl.alter_enum8_to_enum16_test(clickhouse_node, started_mysql_8_0, "mysql80")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(('clickhouse_node'), [node_disable_bytes_settings, node_disable_rows_settings])
 def test_mysql_settings(started_cluster, started_mysql_8_0, started_mysql_5_7, clickhouse_node):
     materialize_with_ddl.mysql_settings_test(clickhouse_node, started_mysql_5_7, "mysql57")

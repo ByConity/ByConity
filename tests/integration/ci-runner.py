@@ -10,21 +10,26 @@ from collections import defaultdict
 import random
 import json
 import csv
-
+import zlib
 
 MAX_RETRY = 3
 NUM_WORKERS = 5
 SLEEP_BETWEEN_RETRIES = 5
-PARALLEL_GROUP_SIZE = 100
-CLICKHOUSE_BINARY_PATH = "/usr/bin/clickhouse"
-CLICKHOUSE_ODBC_BRIDGE_BINARY_PATH = "/usr/bin/clickhouse-odbc-bridge"
-CLICKHOUSE_LIBRARY_BRIDGE_BINARY_PATH = "/usr/bin/clickhouse-library-bridge"
+PARALLEL_GROUP_SIZE = 50
+CLICKHOUSE_BINARY_PATH = "/clickhouse/bin/clickhouse-server"
+CLICKHOUSE_ODBC_BRIDGE_BINARY_PATH = "/clickhouse/bin/clickhouse-odbc-bridge"
+CLICKHOUSE_LIBRARY_BRIDGE_BINARY_PATH = "/clickhouse/bin/clickhouse-library-bridge"
 
 TRIES_COUNT = 10
 MAX_TIME_SECONDS = 3600
 
 MAX_TIME_IN_SANDBOX = 20 * 60   # 20 minutes
 TASK_TIMEOUT = 8 * 60 * 60      # 8 hours
+
+NO_CHANGES_MSG = "Nothing to run"
+
+def stringhash(s):
+    return zlib.crc32(s.encode("utf-8"))
 
 def get_tests_to_run(pr_info):
     result = set([])
@@ -63,7 +68,7 @@ def parse_test_results_output(fname):
     read = False
     description_output = []
     with open(fname, 'r') as out:
-        for line in out:
+        for line in out:            
             if read and line.strip() and not line.startswith('=='):
                 description_output.append(line.strip())
             if 'short test summary info' in line:
@@ -121,7 +126,7 @@ def get_test_times(output):
     return result
 
 
-def clear_ip_tables_and_restart_daemons():
+def clear_ip_tables_and_restart_daemons():    
     logging.info("Dump iptables after run %s", subprocess.check_output("iptables -L", shell=True))
     try:
         logging.info("Killing all alive docker containers")
@@ -155,7 +160,7 @@ def clear_ip_tables_and_restart_daemons():
             raise Exception("Docker daemon doesn't responding")
     except subprocess.CalledProcessError as err:
         logging.info("Can't reload docker: " + str(err))
-
+    
     iptables_iter = 0
     try:
         for i in range(1000):
@@ -178,6 +183,13 @@ class ClickhouseIntegrationTestsRunner:
         self.start_time = time.time()
         self.soft_deadline_time = self.start_time + (TASK_TIMEOUT - MAX_TIME_IN_SANDBOX)
 
+        if "run_by_hash_total" in self.params:
+            self.run_by_hash_total = int(os.getenv(self.params["run_by_hash_total"]))
+            self.run_by_hash_num = int(os.getenv(self.params["run_by_hash_num"]))
+        else:
+            self.run_by_hash_total = 0
+            self.run_by_hash_num = 0
+
     def path(self):
         return self.result_path
 
@@ -187,12 +199,12 @@ class ClickhouseIntegrationTestsRunner:
     def should_skip_tests(self):
         return []
 
-    def get_image_with_version(self, name):
+    def get_image_with_version(self, name):        
         if name in self.image_versions:
-            return name + ":" + self.image_versions[name]
+            return name #+ ":" + self.image_versions[name]
         logging.warn("Cannot find image %s in params list %s", name, self.image_versions)
         if ':' not in name:
-            return name + ":latest"
+            return name + ":stable"
         return name
 
     def get_single_image_version(self):
@@ -200,18 +212,20 @@ class ClickhouseIntegrationTestsRunner:
         if name in self.image_versions:
             return self.image_versions[name]
         logging.warn("Cannot find image %s in params list %s", name, self.image_versions)
-        return 'latest'
+        return 'stable'
 
     def shuffle_test_groups(self):
         return self.shuffle_groups != 0
 
     @staticmethod
     def get_images_names():
-        return ["yandex/clickhouse-integration-tests-runner", "yandex/clickhouse-mysql-golang-client",
-                "yandex/clickhouse-mysql-java-client", "yandex/clickhouse-mysql-js-client",
-                "yandex/clickhouse-mysql-php-client", "yandex/clickhouse-postgresql-java-client",
-                "yandex/clickhouse-integration-test", "yandex/clickhouse-kerberos-kdc",
-                "yandex/clickhouse-integration-helper", ]
+        return ["hub.byted.org/bytehouse/clickhouse-mysql-golang-client:stable",
+                "hub.byted.org/bytehouse/clickhouse-mysql-java-client:stable",
+                "hub.byted.org/bytehouse/clickhouse-mysql-js-client:stable",
+                "hub.byted.org/bytehouse/clickhouse-mysql-php-client:stable",
+                "hub.byted.org/bytehouse/clickhouse-postgresql-java-client:stable",
+                "hub.byted.org/bytehouse/clickhouse-integration-test-base:stable",
+                "hub.byted.org/bytehouse/clickhouse-kerberos-kdc:stable"]
 
 
     def _can_run_with(self, path, opt):
@@ -222,33 +236,19 @@ class ClickhouseIntegrationTestsRunner:
         return False
 
     def _install_clickhouse(self, debs_path):
-        for package in ('clickhouse-common-static_', 'clickhouse-server_', 'clickhouse-client', 'clickhouse-common-static-dbg_'):  # order matters
-            logging.info("Installing package %s", package)
-            for f in os.listdir(debs_path):
-                if package in f:
-                    full_path = os.path.join(debs_path, f)
-                    logging.info("Package found in %s", full_path)
-                    log_name = "install_" + f + ".log"
-                    log_path = os.path.join(str(self.path()), log_name)
-                    with open(log_path, 'w') as log:
-                        cmd = "dpkg -i {}".format(full_path)
-                        logging.info("Executing installation cmd %s", cmd)
-                        retcode = subprocess.Popen(cmd, shell=True, stderr=log, stdout=log).wait()
-                        if retcode == 0:
-                            logging.info("Instsallation of %s successfull", full_path)
-                        else:
-                            raise Exception("Installation of %s failed", full_path)
-                    break
-            else:
-                raise Exception("Package with {} not found".format(package))
-        logging.info("Unstripping binary")
-        # logging.info("Unstring %s", subprocess.check_output("eu-unstrip /usr/bin/clickhouse {}".format(CLICKHOUSE_BINARY_PATH), shell=True))
-
+        cmd = "sudo /clickhouse/bin/clickhouse install"
+        logging.info("Installing Clickhouse")
+        logging.info("Executing installation cmd %s", cmd)
+        retcode = subprocess.Popen(cmd, shell=True).wait()
+        if retcode == 0:
+            logging.info("Instsallation of %s successfull", cmd)
+        else:
+            raise Exception("Installation of %s failed", cmd)
         logging.info("All packages installed")
-        os.chmod(CLICKHOUSE_BINARY_PATH, 0o777)
-        os.chmod(CLICKHOUSE_ODBC_BRIDGE_BINARY_PATH, 0o777)
-        os.chmod(CLICKHOUSE_LIBRARY_BRIDGE_BINARY_PATH, 0o777)
-        result_path_bin = os.path.join(str(self.base_path()), "clickhouse")
+        CLICKHOUSE_BINARY_PATH = "/clickhouse/bin/clickhouse-server"
+        CLICKHOUSE_ODBC_BRIDGE_BINARY_PATH = "/clickhouse/bin/clickhouse-odbc-bridge"
+        CLICKHOUSE_LIBRARY_BRIDGE_BINARY_PATH = "/clickhouse/bin/clickhouse-library-bridge"
+        result_path_bin = os.path.join(str(self.base_path()), "clickhouse")        
         result_path_odbc_bridge = os.path.join(str(self.base_path()), "clickhouse-odbc-bridge")
         result_path_library_bridge = os.path.join(str(self.base_path()), "clickhouse-library-bridge")
         shutil.copy(CLICKHOUSE_BINARY_PATH, result_path_bin)
@@ -264,7 +264,8 @@ class ClickhouseIntegrationTestsRunner:
         cmd = "cd {}/tests/integration && ./runner --tmpfs {} ' --setup-plan' | grep '::' | sed 's/ (fixtures used:.*//g' | sed 's/^ *//g' | sed 's/ *$//g' | grep -v 'SKIPPED' | sort -u  > all_tests.txt".format(repo_path, image_cmd)
         logging.info("Getting all tests with cmd '%s'", cmd)
         subprocess.check_call(cmd, shell=True)  # STYLE_CHECK_ALLOW_SUBPROCESS_CHECK_CALL
-
+        cp_all_test = "cp /home/code/tests/integration/all_tests.txt /test_output"
+        subprocess.check_call(cp_all_test, shell=True)
         all_tests_file_path = "{}/tests/integration/all_tests.txt".format(repo_path)
         if not os.path.isfile(all_tests_file_path) or os.path.getsize(all_tests_file_path) == 0:
             raise Exception("There is something wrong with getting all tests list: file '{}' is empty or does not exist.".format(all_tests_file_path))
@@ -324,7 +325,7 @@ class ClickhouseIntegrationTestsRunner:
         image_cmd = ''
         if self._can_run_with(os.path.join(repo_path, "tests/integration", "runner"), '--docker-image-version'):
             for img in self.get_images_names():
-                if img == "yandex/clickhouse-integration-tests-runner":
+                if img == "hub.byted.org/bytehouse/clickhouse-integration-tests-runner":
                     runner_version = self.get_single_image_version()
                     logging.info("Can run with custom docker image version %s", runner_version)
                     image_cmd += ' --docker-image-version={} '.format(runner_version)
@@ -400,7 +401,7 @@ class ClickhouseIntegrationTestsRunner:
 
             test_cmd = ' '.join([test for test in sorted(test_names)])
             parallel_cmd = " --parallel {} ".format(num_workers) if num_workers > 0 else ""
-            cmd = "cd {}/tests/integration && ./runner --tmpfs {} -t {} {} '-rfEp --run-id={} --color=no --durations=0 {}' | tee {}".format(
+            cmd = "cd {}/tests/integration && ./runner --binary /clickhouse/bin/clickhouse-server --tmpfs {} -t {} {} '-rfEp --run-id={} --color=no --durations=0 {}' | tee {}".format(
                 repo_path, image_cmd, test_cmd, parallel_cmd, i, _get_deselect_option(self.should_skip_tests()), info_path)
 
             log_basename = test_group_str + "_" + str(i) + ".log"
@@ -527,13 +528,24 @@ class ClickhouseIntegrationTestsRunner:
         if self.flaky_check:
             return self.run_flaky_check(repo_path, build_path)
 
-        self._install_clickhouse(build_path)
+        self._install_clickhouse(build_path)        
         logging.info("Dump iptables before run %s", subprocess.check_output("iptables -L", shell=True))
+
         all_tests = self._get_all_tests(repo_path)
-        parallel_skip_tests = self._get_parallel_tests_skip_list(repo_path)
+
+        if self.run_by_hash_total != 0:
+            grouped_tests = self.group_test_by_file(all_tests)
+            all_filtered_by_hash_tests = []
+            for group, tests_in_group in grouped_tests.items():
+                if stringhash(group) % self.run_by_hash_total == self.run_by_hash_num:
+                    all_filtered_by_hash_tests += tests_in_group
+            all_tests = sorted(all_filtered_by_hash_tests)
+
+        
+        parallel_skip_tests = self._get_parallel_tests_skip_list(repo_path)        
         logging.info("Found %s tests first 3 %s", len(all_tests), ' '.join(all_tests[:3]))
-        filtered_sequential_tests = list(filter(lambda test: test in all_tests, parallel_skip_tests))
-        filtered_parallel_tests = list(filter(lambda test: test not in parallel_skip_tests, all_tests))
+        filtered_sequential_tests = list(filter(lambda test: test in all_tests, parallel_skip_tests))        
+        filtered_parallel_tests = list(filter(lambda test: test not in parallel_skip_tests, all_tests))        
         not_found_tests = list(filter(lambda test: test not in all_tests, parallel_skip_tests))
         logging.info("Found %s tests first 3 %s, parallel %s, other %s", len(all_tests), ' '.join(all_tests[:3]), len(filtered_parallel_tests), len(filtered_sequential_tests))
         logging.info("Not found %s tests first 3 %s", len(not_found_tests), ' '.join(not_found_tests[:3]))
@@ -544,7 +556,7 @@ class ClickhouseIntegrationTestsRunner:
             grouped_tests["parallel{}".format(i)] = par_group
             i+=1
         logging.info("Found %s tests groups", len(grouped_tests))
-
+        
         counters = {
             "ERROR": [],
             "PASSED": [],
@@ -555,12 +567,13 @@ class ClickhouseIntegrationTestsRunner:
         tests_times = defaultdict(float)
         tests_log_paths = defaultdict(list)
 
-        items_to_run = list(grouped_tests.items())
+        items_to_run = sorted(list(grouped_tests.items()))
 
         logging.info("Total test groups %s", len(items_to_run))
-        if self.shuffle_test_groups():
-            logging.info("Shuffling test groups")
-            random.shuffle(items_to_run)
+        # if self.shuffle_test_groups():
+        #     logging.info("Shuffling test groups")
+        #     random.shuffle(items_to_run)
+        #print("\n**************sorted test group-items_to_run********\n",items_to_run)
 
         for group, tests in items_to_run:
             logging.info("Running test group %s countaining %s tests", group, len(tests))

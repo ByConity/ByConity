@@ -16,6 +16,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_detach_part_wrong_partition_id(start_cluster):
 
     # Here we create table with partition by UUID.

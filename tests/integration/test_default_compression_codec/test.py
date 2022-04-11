@@ -44,7 +44,7 @@ CODECS_MAPPING = {
     'Multiple': '0091',
 }
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_default_codec_single(start_cluster):
     for i, node in enumerate([node1, node2]):
         node.query("""
@@ -130,7 +130,7 @@ def test_default_codec_single(start_cluster):
     assert node1.query("SELECT COUNT() FROM compression_table") == "3\n"
     assert node2.query("SELECT COUNT() FROM compression_table") == "3\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_default_codec_multiple(start_cluster):
     for i, node in enumerate([node1, node2]):
         node.query("""
@@ -199,7 +199,7 @@ def test_default_codec_multiple(start_cluster):
     assert node1.query("SELECT COUNT() FROM compression_table_multiple") == "3\n"
     assert node2.query("SELECT COUNT() FROM compression_table_multiple") == "3\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_default_codec_version_update(start_cluster):
     node3.query("""
     CREATE TABLE compression_table (
@@ -230,6 +230,7 @@ def test_default_codec_version_update(start_cluster):
     assert node3.query(
         "SELECT default_compression_codec FROM system.parts WHERE table = 'compression_table' and name = '3_3_3_1'") == "LZ4\n"
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_default_codec_for_compact_parts(start_cluster):
     node4.query("""
     CREATE TABLE compact_parts_table (

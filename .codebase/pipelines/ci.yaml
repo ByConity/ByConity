@@ -213,6 +213,86 @@ jobs:
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
+  IntegrationTestsRelease0:
+    name: IntegrationTestRelease0        
+    image: minikube:1.22.0
+    timeout: 360
+    runs-on:
+      linux: {}
+    depends: [scm_build]
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - name: Download From SCM
+        commands:
+          - echo $(pwd)
+          - cd /
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_PREFIX="clickhouse"
+          - mkdir -p $CLICKHOUSE_PREFIX
+          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
+          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz          
+      - name: Run IntegrationTest-CI-Runner
+        continue-on-error: true        
+        commands:
+          - minikube start
+          - export RUN_BY_HASH_NUM=0
+          - export RUN_BY_HASH_TOTAL=2          
+          - /bin/bash /home/code/tests/integration/run.sh          
+      - name: Upload Artifact
+        continue-on-error: true
+        uses: actions/upload-artifact
+        inputs:
+          name: test_output
+          path: /test_output
+      - name: Analyse Result
+        continue-on-error: true
+        commands:
+          - /bin/bash /home/code/docker/test/result.sh
+
+  IntegrationTestsRelease1:
+    name: IntegrationTestRelease1    
+    image: minikube:1.22.0
+    timeout: 360
+    runs-on:
+      linux: {}
+    depends: [scm_build]
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - name: Download From SCM
+        commands:
+          - echo $(pwd)
+          - cd /
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_PREFIX="clickhouse"
+          - mkdir -p $CLICKHOUSE_PREFIX
+          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
+          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz          
+      - name: Run IntegrationTest-CI-Runner
+        continue-on-error: true        
+        commands:
+          - minikube start
+          - export RUN_BY_HASH_NUM=1
+          - export RUN_BY_HASH_TOTAL=2          
+          - /bin/bash /home/code/tests/integration/run.sh          
+      - name: Upload Artifact
+        continue-on-error: true
+        uses: actions/upload-artifact
+        inputs:
+          name: test_output
+          path: /test_output
+      - name: Analyse Result
+        continue-on-error: true
+        commands:
+          - /bin/bash /home/code/docker/test/result.sh
+
   FuntionalStatefulTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
     name: FuntionalStatefulTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable

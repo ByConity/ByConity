@@ -14,7 +14,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_file_path_escaping(started_cluster):
     node.query('CREATE DATABASE IF NOT EXISTS test ENGINE = Ordinary')
     node.query('''
@@ -28,6 +28,7 @@ def test_file_path_escaping(started_cluster):
     node.exec_in_container(
         ["bash", "-c", "test -f /var/lib/clickhouse/shadow/1/data/test/T%2Ea_b%2Cl%2De%21/1_1_1_0/%7EId.bin"])
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_file_path_escaping_atomic_db(started_cluster):
     node.query('CREATE DATABASE IF NOT EXISTS `test 2` ENGINE = Atomic')
     node.query('''

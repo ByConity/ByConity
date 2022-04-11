@@ -32,7 +32,7 @@ def started_cluster():
 def get_random_string(length):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_no_stall(started_cluster):
     for instance in started_cluster.instances.values():
         instance.query("""

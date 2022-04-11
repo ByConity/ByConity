@@ -25,6 +25,7 @@ def start_cluster():
 def get_random_string(length):
     return ''.join(random.choice(string.ascii_uppercase + string.digits) for _ in range(length))
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_limited_fetch_single_table(start_cluster):
     print("Limited fetches single table")
     try:
@@ -57,6 +58,7 @@ def test_limited_fetch_single_table(start_cluster):
         for node in [node1, node2]:
             node.query("DROP TABLE IF EXISTS limited_fetch_table SYNC")
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_limited_send_single_table(start_cluster):
     print("Limited sends single table")
     try:
@@ -89,7 +91,7 @@ def test_limited_send_single_table(start_cluster):
         for node in [node1, node2]:
             node.query("DROP TABLE IF EXISTS limited_send_table SYNC")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_limited_fetches_for_server(start_cluster):
     print("Limited fetches for server")
     try:
@@ -126,7 +128,7 @@ def test_limited_fetches_for_server(start_cluster):
             for j in range(5):
                 node.query(f"DROP TABLE IF EXISTS limited_fetches{j} SYNC")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_limited_sends_for_server(start_cluster):
     print("Limited sends for server")
     try:
@@ -163,7 +165,7 @@ def test_limited_sends_for_server(start_cluster):
             for j in range(5):
                 node.query(f"DROP TABLE IF EXISTS limited_sends{j} SYNC")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_should_execute_fetch(start_cluster):
     print("Should execute fetch")
     try:

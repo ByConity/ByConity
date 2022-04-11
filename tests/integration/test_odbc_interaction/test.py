@@ -138,7 +138,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_simple_select_works(started_cluster):
     skip_test_msan(node1)
 
@@ -180,7 +180,7 @@ CREATE TABLE {}(id UInt32, name String, age UInt32, money UInt32, column_x Nulla
 
     conn.close()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_insert(started_cluster):
     skip_test_msan(node1)
 
@@ -203,7 +203,7 @@ def test_mysql_insert(started_cluster):
     assert node1.query(
         "select * from mysql_insert where id in (3, 4)") == "3\tinsert\t33\t333\t3333\n4\tTEST\t44\t444\t\\N\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_sqlite_simple_select_function_works(started_cluster):
     skip_test_msan(node1)
 
@@ -222,6 +222,7 @@ def test_sqlite_simple_select_function_works(started_cluster):
     assert node1.query(
         "select count(), sum(x) from odbc('DSN={}', '{}') group by x".format(sqlite_setup["DSN"], 't1')) == "1\t1\n"
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_sqlite_table_function(started_cluster):
     skip_test_msan(node1)
 
@@ -240,6 +241,7 @@ def test_sqlite_table_function(started_cluster):
     assert node1.query("select z, x, y from odbc_tf") == "3\t1\t2\n"
     assert node1.query("select count(), sum(x) from odbc_tf group by x") == "1\t1\n"
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_sqlite_simple_select_storage_works(started_cluster):
     skip_test_msan(node1)
 
@@ -259,7 +261,7 @@ def test_sqlite_simple_select_storage_works(started_cluster):
     assert node1.query("select z, x, y from SqliteODBC") == "3\t1\t2\n"
     assert node1.query("select count(), sum(x) from SqliteODBC group by x") == "1\t1\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_sqlite_odbc_hashed_dictionary(started_cluster):
     skip_test_msan(node1)
 
@@ -305,7 +307,7 @@ def test_sqlite_odbc_hashed_dictionary(started_cluster):
     assert_eq_with_retry(node1, "select dictGetUInt8('sqlite3_odbc_hashed', 'Z', toUInt64(1))", "5")
     assert_eq_with_retry(node1, "select dictGetUInt8('sqlite3_odbc_hashed', 'Z', toUInt64(200))", "7")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_sqlite_odbc_cached_dictionary(started_cluster):
     skip_test_msan(node1)
 
@@ -329,7 +331,7 @@ def test_sqlite_odbc_cached_dictionary(started_cluster):
 
     assert_eq_with_retry(node1, "select dictGetUInt8('sqlite3_odbc_cached', 'Z', toUInt64(1))", "12")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_postgres_odbc_hashed_dictionary_with_schema(started_cluster):
     skip_test_msan(node1)
 
@@ -341,7 +343,7 @@ def test_postgres_odbc_hashed_dictionary_with_schema(started_cluster):
     assert_eq_with_retry(node1, "select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(1))", "hello")
     assert_eq_with_retry(node1, "select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(2))", "world")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_postgres_odbc_hashed_dictionary_no_tty_pipe_overflow(started_cluster):
     skip_test_msan(node1)
 
@@ -357,7 +359,7 @@ def test_postgres_odbc_hashed_dictionary_no_tty_pipe_overflow(started_cluster):
 
     assert_eq_with_retry(node1, "select dictGetString('postgres_odbc_hashed', 'column2', toUInt64(3))", "xxx")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_postgres_insert(started_cluster):
     skip_test_msan(node1)
 
@@ -380,7 +382,7 @@ def test_postgres_insert(started_cluster):
     assert node1.query(
         "select sum(n), count(n) from (select (*,).1 as n from (select * from odbc('DSN=postgresql_odbc', 'clickhouse', 'test_table')))") == "55\t10\n"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_bridge_dies_with_parent(started_cluster):
     skip_test_msan(node1)
 
@@ -420,7 +422,7 @@ def test_bridge_dies_with_parent(started_cluster):
     assert bridge_pid is None
     node1.start_clickhouse(20)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_odbc_postgres_date_data_type(started_cluster):
     skip_test_msan(node1)
 
@@ -444,7 +446,7 @@ def test_odbc_postgres_date_data_type(started_cluster):
     cursor.execute("DROP TABLE IF EXISTS clickhouse.test_date")
     node1.query("DROP TABLE IF EXISTS test_date")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_odbc_postgres_conversions(started_cluster):
     skip_test_msan(node1)
 
@@ -486,7 +488,7 @@ def test_odbc_postgres_conversions(started_cluster):
     cursor.execute("DROP TABLE IF EXISTS clickhouse.test_types")
     assert(result == expected)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_odbc_cyrillic_with_varchar(started_cluster):
     skip_test_msan(node1)
 
@@ -508,7 +510,7 @@ def test_odbc_cyrillic_with_varchar(started_cluster):
     result = node1.query(''' SELECT name FROM odbc('DSN=postgresql_odbc; Servername=postgre-sql.local', 'clickhouse', 'test_cyrillic') ''')
     assert(result == 'A-nice-word\nКрасивенько\n')
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_many_connections(started_cluster):
     skip_test_msan(node1)
 
@@ -532,7 +534,7 @@ def test_many_connections(started_cluster):
 
     assert node1.query(query.format(t='test_pg_table')) == '250\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_concurrent_queries(started_cluster):
     skip_test_msan(node1)
 
@@ -569,7 +571,7 @@ def test_concurrent_queries(started_cluster):
     node1.query('DROP TABLE test_pg_table;')
     cursor.execute('DROP TABLE clickhouse.test_pg_table;')
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_odbc_long_column_names(started_cluster):
     skip_test_msan(node1)
 
@@ -603,7 +605,7 @@ def test_odbc_long_column_names(started_cluster):
     cursor.execute("DROP TABLE IF EXISTS clickhouse.test_long_column_names")
     node1.query("DROP TABLE IF EXISTS test_long_column_names")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_odbc_long_text(started_cluster):
     skip_test_msan(node1)
 

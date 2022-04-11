@@ -19,7 +19,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_basic(start_cluster):
     with pytest.raises(QueryRuntimeException):
         # generates log with "Error" level

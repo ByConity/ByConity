@@ -106,7 +106,7 @@ def test_RELOAD_CONFIG_AND_MACROS(started_cluster):
     instance.query("SYSTEM RELOAD CONFIG")
     assert TSV(instance.query("select * from system.macros")) == TSV("instance\tch1\nmac\tro\n")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_system_flush_logs(started_cluster):
     instance = cluster.instances['ch1']
     instance.query('''

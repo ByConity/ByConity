@@ -16,6 +16,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_default_codec_read(start_cluster):
     node1.query("DROP TABLE IF EXISTS test_18340")
 

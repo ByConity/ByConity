@@ -19,7 +19,7 @@ CONFIG_DIR_IN_REPO = "programs/server"
 INTERGATION_DIR_IN_REPO = "tests/integration"
 SRC_DIR_IN_REPO = "src"
 
-DIND_INTEGRATION_TESTS_IMAGE_NAME = "yandex/clickhouse-integration-tests-runner"
+DIND_INTEGRATION_TESTS_IMAGE_NAME = "hub.byted.org/bytehouse/clickhouse-integration-tests-runner"
 
 def check_args_and_update_paths(args):
     if args.clickhouse_root:
@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--docker-image-version",
-        default="latest",
+        default="stable",
         help="Version of docker image which runner will use to run tests")
 
     parser.add_argument(
@@ -219,19 +219,19 @@ if __name__ == "__main__":
     if args.docker_compose_images_tags is not None:
         for img_tag in args.docker_compose_images_tags:
             [image, tag] = img_tag.split(":")
-            if image == "yandex/clickhouse-mysql-golang-client":
+            if image == "hub.byted.org/bytehouse/clickhouse-mysql-golang-client":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_GOLANG_CLIENT_TAG", tag)
-            elif image == "yandex/clickhouse-mysql-java-client":
+            elif image == "hub.byted.org/bytehouse/clickhouse-mysql-java-client":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_JAVA_CLIENT_TAG", tag)
-            elif image == "yandex/clickhouse-mysql-js-client":
+            elif image == "hub.byted.org/bytehouse/clickhouse-mysql-js-client":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_JS_CLIENT_TAG", tag)
-            elif image == "yandex/clickhouse-mysql-php-client":
+            elif image == "hub.byted.org/bytehouse/clickhouse-mysql-php-client":
                 env_tags += "-e {}={} ".format("DOCKER_MYSQL_PHP_CLIENT_TAG", tag)
-            elif image == "yandex/clickhouse-postgresql-java-client":
+            elif image == "hub.byted.org/bytehouse/clickhouse-postgresql-java-client":
                 env_tags += "-e {}={} ".format("DOCKER_POSTGRESQL_JAVA_CLIENT_TAG", tag)
-            elif image == "yandex/clickhouse-integration-test":
+            elif image == "hub.byted.org/bytehouse/clickhouse-integration-test-base":
                 env_tags += "-e {}={} ".format("DOCKER_BASE_TAG", tag)
-            elif image == "yandex/clickhouse-kerberos-kdc":
+            elif image == "hub.byted.org/bytehouse/clickhouse-kerberos-kdc":
                 env_tags += "-e {}={}".format("DOCKER_KERBEROS_KDC_TAG", tag)
             else:
                 logging.info("Unknown image %s" % (image))
@@ -263,9 +263,9 @@ if __name__ == "__main__":
         os.remove(old_log_path)
 
     cmd = "docker run {net} {tty} --rm --name {name} --privileged \
-        --volume={odbc_bridge_bin}:/clickhouse-odbc-bridge --volume={bin}:/clickhouse \
-        --volume={library_bridge_bin}:/clickhouse-library-bridge --volume={bin}:/clickhouse \
-        --volume={base_cfg}:/clickhouse-config --volume={cases_dir}:/ClickHouse/tests/integration \
+        --volume={odbc_bridge_bin}:/clickhouse/bin/clickhouse-odbc-bridge --volume={bin}:/clickhouse/bin/clickhouse-server --volume=/clickhouse/bin/:/clickhouse/bin/ \
+        --volume={library_bridge_bin}:/clickhouse/bin/clickhouse-library-bridge --volume={bin}:/clickhouse/bin/clickhouse-client \
+        --volume={base_cfg}:/clickhouse/etc/clickhouse-server --volume={cases_dir}:/home/code/tests/integration/ \
         --volume={src_dir}/Server/grpc_protos:/ClickHouse/src/Server/grpc_protos \
         {dockerd_internal_volume} -e DOCKER_CLIENT_TIMEOUT=300 -e COMPOSE_HTTP_TIMEOUT=600 \
         {env_tags} {env_cleanup} -e PYTEST_OPTS='{parallel} {opts} {tests_list}' {img} {command}".format(

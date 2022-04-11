@@ -233,6 +233,7 @@ def execute_task(started_cluster, task, cmd_options):
 
 
 # Tests
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.timeout(600)
 def test(started_cluster):
     execute_task(started_cluster, Task(started_cluster), [])

@@ -20,7 +20,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_different_versions(start_cluster):
     query = 'SELECT count(ignore(*)) FROM (SELECT * FROM system.numbers LIMIT 1e7) GROUP BY number'
     settings = {

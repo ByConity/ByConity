@@ -3,7 +3,7 @@ FROM ubuntu:20.04
 
 RUN sed -i 's|http://archive|http://ru.archive|g' /etc/apt/sources.list
 
-RUN apt-get update \
+RUN apt-get update && apt-get upgrade -y \
     && env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
     ca-certificates \
     bash \
@@ -15,6 +15,7 @@ RUN apt-get update \
     pigz \
     wget \
     git \
+    vim \
     iproute2 \
     cgroupfs-mount \
     python3-pip \

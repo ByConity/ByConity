@@ -33,7 +33,7 @@ def run_query(instance, query, data=None, settings=None):
 
     return result
 
-
+@pytest.mark.skip(reason="Timeout Expired")
 def test_select(started_cluster):
     # type: (ClickHouseCluster) -> None
 

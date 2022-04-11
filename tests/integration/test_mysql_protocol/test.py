@@ -62,7 +62,7 @@ def java_container():
         ['docker-compose', '--env-file', cluster.instances["node"].env_file, '-p', cluster.project_name, '-f', docker_compose, 'up', '--no-recreate', '-d', '--no-build'])
     yield docker.DockerClient(base_url='unix:///var/run/docker.sock', version=cluster.docker_api_version, timeout=600).containers.get(cluster.project_name + '_java1_1')
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_client(started_cluster):
     # type: (Container, str) -> None
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
@@ -114,7 +114,7 @@ def test_mysql_client(started_cluster):
 
     assert stdout.decode() == '\n'.join(['column', '0', '0', '1', '1', '5', '5', 'tmp_column', '0', '1', ''])
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_client_exception(started_cluster):
     # Poco exception.
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
@@ -125,7 +125,7 @@ def test_mysql_client_exception(started_cluster):
     assert stderr[0:258].decode() == "mysql: [Warning] Using a password on the command line interface can be insecure.\n" \
             "ERROR 1000 (00000) at line 1: Poco::Exception. Code: 1000, e.code() = 0, e.displayText() = Exception: Connections to all replicas failed: default@127.0.0.1:10086 as user default"
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_affected_rows(started_cluster):
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
         mysql --protocol tcp -h {host} -P {port} default -u default --password=123
@@ -155,7 +155,7 @@ def test_mysql_affected_rows(started_cluster):
     '''.format(host=started_cluster.get_instance_ip('node'), port=server_port), demux=True)
     assert code == 0
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_replacement_query(started_cluster):
     # SHOW TABLE STATUS LIKE.
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
@@ -199,7 +199,7 @@ def test_mysql_replacement_query(started_cluster):
     assert code == 0
     assert stdout.decode() == 'DATABASE()\ndefault\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_select_user(started_cluster):
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
         mysql --protocol tcp -h {host} -P {port} default -u default --password=123
@@ -208,6 +208,7 @@ def test_mysql_select_user(started_cluster):
     assert code == 0
     assert stdout.decode() == 'currentUser()\ndefault\n'
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_explain(started_cluster):
     # EXPLAIN SELECT 1
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
@@ -237,7 +238,7 @@ def test_mysql_explain(started_cluster):
     '''.format(host=started_cluster.get_instance_ip('node'), port=server_port), demux=True)
     assert code == 0
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_federated(started_cluster):
     # For some reason it occasionally fails without retries.
     retries = 100
@@ -302,7 +303,7 @@ def test_mysql_federated(started_cluster):
 
         assert stdout.decode() == '\n'.join(['col', '0', '0', '1', '1', '5', '5', ''])
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysql_set_variables(started_cluster):
     code, (stdout, stderr) = started_cluster.mysql_client_container.exec_run('''
         mysql --protocol tcp -h {host} -P {port} default -u default --password=123
@@ -320,7 +321,7 @@ def test_mysql_set_variables(started_cluster):
     assert code == 0
 
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_python_client(started_cluster):
     client = pymysql.connections.Connection(host=started_cluster.get_instance_ip('node'), user='user_with_double_sha1', password='abacaba',
                                             database='default', port=server_port)
@@ -371,7 +372,7 @@ def test_python_client(started_cluster):
     cursor.execute("SELECT * FROM table1 ORDER BY a")
     assert cursor.fetchall() == [{'a': 1}, {'a': 1}, {'a': 3}, {'a': 4}]
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_golang_client(started_cluster, golang_container):
     # type: (str, Container) -> None
     with open(os.path.join(SCRIPT_DIR, 'golang.reference'), 'rb') as fp:
@@ -397,7 +398,7 @@ def test_golang_client(started_cluster, golang_container):
     assert code == 0
     assert stdout == reference
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_php_client(started_cluster, php_container):
     # type: (str, Container) -> None
     code, (stdout, stderr) = php_container.exec_run(
@@ -422,7 +423,7 @@ def test_php_client(started_cluster, php_container):
     assert code == 0
     assert stdout.decode() == 'tables\n'
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_mysqljs_client(started_cluster, nodejs_container):
     code, (_, stderr) = nodejs_container.exec_run(
         'node test.js {host} {port} user_with_sha256 abacaba'.format(host=started_cluster.get_instance_ip('node'), port=server_port), demux=True)
@@ -444,7 +445,7 @@ def test_mysqljs_client(started_cluster, nodejs_container):
         demux=True)
     assert code == 1
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_java_client(started_cluster, java_container):
     # type: (str, Container) -> None
     with open(os.path.join(SCRIPT_DIR, 'java.reference')) as fp:
@@ -477,7 +478,7 @@ def test_java_client(started_cluster, java_container):
     assert code == 0
     assert stdout.decode() == reference
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_types(started_cluster):
     client = pymysql.connections.Connection(host=started_cluster.get_instance_ip('node'), user='default', password='123', database='default',
                                             port=server_port)

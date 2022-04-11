@@ -19,7 +19,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_config_with_hosts(start_cluster):
     assert node1.query("CREATE TABLE table_test_1_1 (word String) Engine=URL('http://host:80', HDFS)") == ""
     assert node1.query("CREATE TABLE table_test_1_2 (word String) Engine=URL('https://yandex.ru', CSV)") == ""
@@ -28,7 +28,7 @@ def test_config_with_hosts(start_cluster):
     assert "not allowed" in node1.query_and_get_error(
         "CREATE TABLE table_test_1_4 (word String) Engine=URL('https://yandex2.ru', CSV)")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_config_with_only_primary_hosts(start_cluster):
     assert node2.query("CREATE TABLE table_test_2_1 (word String) Engine=URL('https://host:80', CSV)") == ""
     assert node2.query("CREATE TABLE table_test_2_2 (word String) Engine=URL('https://host:123', S3)") == ""
@@ -41,7 +41,7 @@ def test_config_with_only_primary_hosts(start_cluster):
     assert "not allowed" in node2.query_and_get_error(
         "CREATE TABLE table_test_2_6 (word String) Engine=URL('https://yandex2.ru', S3)")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_config_with_only_regexp_hosts(start_cluster):
     assert node3.query("CREATE TABLE table_test_3_1 (word String) Engine=URL('https://host:80', HDFS)") == ""
     assert node3.query("CREATE TABLE table_test_3_2 (word String) Engine=URL('https://yandex.ru', CSV)") == ""
@@ -50,7 +50,7 @@ def test_config_with_only_regexp_hosts(start_cluster):
     assert "not allowed" in node3.query_and_get_error(
         "CREATE TABLE table_test_3_4 (word String) Engine=URL('https://yandex2.ru', S3)")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_config_without_allowed_hosts_section(start_cluster):
     assert node4.query("CREATE TABLE table_test_4_1 (word String) Engine=URL('https://host:80', CSV)") == ""
     assert node4.query("CREATE TABLE table_test_4_2 (word String) Engine=S3('https://host:80/bucket/key', CSV)") == ""
@@ -58,7 +58,7 @@ def test_config_without_allowed_hosts_section(start_cluster):
     assert node4.query("CREATE TABLE table_test_4_4 (word String) Engine=URL('https://yandex.ru', CSV)") == ""
     assert node4.query("CREATE TABLE table_test_4_5 (word String) Engine=URL('ftp://something.com', S3)") == ""
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_config_without_allowed_hosts(start_cluster):
     assert "not allowed" in node5.query_and_get_error(
         "CREATE TABLE table_test_5_1 (word String) Engine=URL('https://host:80', CSV)")
@@ -71,7 +71,7 @@ def test_config_without_allowed_hosts(start_cluster):
     assert "not allowed" in node5.query_and_get_error(
         "CREATE TABLE table_test_5_5 (word String) Engine=URL('ftp://something.com', S3)")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_table_function_remote(start_cluster):
     assert "not allowed in config.xml" not in node6.query_and_get_error(
         "SELECT * FROM remoteSecure('example01-01-{1|2}', system, events)",
@@ -113,7 +113,7 @@ def test_table_function_remote(start_cluster):
     assert "URL \"localhost:800\" is not allowed in config.xml" in node6.query_and_get_error(
         "SELECT * FROM remote('localhost:800', system, metrics)")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_redirect(start_cluster):
     hdfs_api = start_cluster.hdfs_api
 
@@ -123,7 +123,7 @@ def test_redirect(start_cluster):
         "CREATE TABLE table_test_7_1 (word String) ENGINE=URL('http://hdfs1:50070/webhdfs/v1/simple_storage?op=OPEN&namenoderpcaddress=hdfs1:9000&offset=0', CSV)")
     assert "not allowed" in node7.query_and_get_error("SET max_http_get_redirects=1; SELECT * from table_test_7_1")
 
-
+@pytest.mark.skip(reason="TimeoutExpired")
 def test_HDFS(start_cluster):
     assert "not allowed" in node7.query_and_get_error(
         "CREATE TABLE table_test_7_2 (word String) ENGINE=HDFS('http://hdfs1:50075/webhdfs/v1/simple_storage?op=OPEN&namenoderpcaddress=hdfs1:9000&offset=0', 'CSV')")

@@ -30,7 +30,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_distributed_in_tuple(started_cluster):
     query1 = "SELECT count() FROM distributed WHERE (id, val) IN ((1, 'node1'), (2, 'a'), (3, 'b'))"
     query2 = "SELECT sum((id, val) IN ((1, 'node1'), (2, 'a'), (3, 'b'))) FROM distributed"

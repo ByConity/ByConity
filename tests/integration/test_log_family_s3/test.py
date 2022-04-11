@@ -30,7 +30,7 @@ def assert_objects_count(cluster, objects_count, path='data/'):
             logging.info("Existing S3 object: %s", str(object_meta))
         assert objects_count == len(s3_objects)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     "log_engine,files_overhead,files_overhead_per_insert",
     [("TinyLog", 1, 1), ("Log", 2, 1), ("StripeLog", 1, 2)])

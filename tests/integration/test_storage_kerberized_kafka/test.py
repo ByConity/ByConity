@@ -66,7 +66,7 @@ def kafka_setup_teardown():
     yield  # run test
 
 # Tests
-
+@pytest.mark.skip(reason="Kafka not starting up")
 def test_kafka_json_as_string(kafka_cluster):
     kafka_produce(kafka_cluster, 'kafka_json_as_string', ['{"t": 123, "e": {"x": "woof"} }', '', '{"t": 124, "e": {"x": "test"} }', '{"F1":"V1","F2":{"F21":"V21","F22":{},"F23":"V23","F24":"2019-12-24T16:28:04"},"F3":"V3"}'])
 
@@ -91,6 +91,7 @@ def test_kafka_json_as_string(kafka_cluster):
     assert TSV(result) == TSV(expected)
     assert instance.contains_in_log("Parsing of message (topic: kafka_json_as_string, partition: 0, offset: 1) return no rows")
 
+@pytest.mark.skip(reason="Kafka not starting up")
 def test_kafka_json_as_string_no_kdc(kafka_cluster):
     kafka_produce(kafka_cluster, 'kafka_json_as_string_no_kdc', ['{"t": 123, "e": {"x": "woof"} }', '', '{"t": 124, "e": {"x": "test"} }', '{"F1":"V1","F2":{"F21":"V21","F22":{},"F23":"V23","F24":"2019-12-24T16:28:04"},"F3":"V3"}'])
 

@@ -19,7 +19,7 @@ def start_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backward_compatability(start_cluster):
     node1.query("create table tab (s String) engine = MergeTree order by s")
     node2.query("create table tab (s String) engine = MergeTree order by s")

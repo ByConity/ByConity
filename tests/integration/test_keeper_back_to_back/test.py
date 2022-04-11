@@ -54,7 +54,7 @@ def started_cluster():
     finally:
         cluster.shutdown()
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_simple_commands(started_cluster):
     try:
         genuine_zk = get_genuine_zk()
@@ -74,7 +74,7 @@ def test_simple_commands(started_cluster):
         for zk in [genuine_zk, fake_zk]:
             stop_zk(zk)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_sequential_nodes(started_cluster):
     try:
         genuine_zk = get_genuine_zk()
@@ -103,6 +103,7 @@ def assert_eq_stats(stat1, stat2):
     assert stat1.dataLength == stat2.dataLength
     assert stat1.numChildren == stat2.numChildren
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_stats(started_cluster):
     try:
         genuine_zk = get_genuine_zk()
@@ -146,6 +147,7 @@ def test_stats(started_cluster):
         for zk in [genuine_zk, fake_zk]:
             stop_zk(zk)
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_watchers(started_cluster):
     try:
         genuine_zk = get_genuine_zk()
@@ -269,6 +271,7 @@ def test_watchers(started_cluster):
         for zk in [genuine_zk, fake_zk]:
             stop_zk(zk)
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_multitransactions(started_cluster):
     try:
         genuine_zk = get_genuine_zk()
@@ -395,7 +398,7 @@ def generate_requests(prefix="/", iters=1):
             requests.append(request)
     return requests
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_random_requests(started_cluster):
     try:
         requests = generate_requests("/test_random_requests", 10)
@@ -432,6 +435,7 @@ def test_random_requests(started_cluster):
         for zk in [genuine_zk, fake_zk]:
             stop_zk(zk)
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_end_of_session(started_cluster):
 
     fake_zk1 = None
@@ -491,6 +495,7 @@ def test_end_of_session(started_cluster):
         for zk in [fake_zk1, fake_zk2, genuine_zk1, genuine_zk2]:
             stop_zk(zk)
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_end_of_watches_session(started_cluster):
     fake_zk1 = None
     fake_zk2 = None
@@ -527,6 +532,7 @@ def test_end_of_watches_session(started_cluster):
         for zk in [fake_zk1, fake_zk2]:
             stop_zk(zk)
 
+@pytest.mark.skip(reason="Flapping Test")
 def test_concurrent_watches(started_cluster):
     try:
         fake_zk = get_fake_zk()

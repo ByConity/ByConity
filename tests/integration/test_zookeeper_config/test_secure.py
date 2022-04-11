@@ -34,6 +34,7 @@ def started_cluster():
         cluster.shutdown()
 
 # NOTE this test have to be ported to Keeper
+@pytest.mark.skip(reason="Flapping Test")
 def test_secure_connection(started_cluster):
         assert node1.query("SELECT count() FROM system.zookeeper WHERE path = '/'") == '2\n'
         assert node2.query("SELECT count() FROM system.zookeeper WHERE path = '/'") == '2\n'

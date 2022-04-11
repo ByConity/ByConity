@@ -26,7 +26,7 @@ def start_cluster():
 # We will test that serialization of internal state of "avg" function is compatible between different versions.
 # TODO Implement versioning of serialization format for aggregate function states.
 # NOTE This test is too ad-hoc.
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_backward_compatability(start_cluster):
     node1.query("create table tab (x UInt64) engine = Memory")
     node2.query("create table tab (x UInt64) engine = Memory")

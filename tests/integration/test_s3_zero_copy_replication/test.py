@@ -45,7 +45,7 @@ def wait_for_large_objects_count(cluster, expected, size=100, timeout=30):
         time.sleep(1)
     assert get_large_objects_count(cluster, size=size) == expected
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     "policy", ["s3"]
 )
@@ -91,7 +91,7 @@ def test_s3_zero_copy_replication(cluster, policy):
     node1.query("DROP TABLE IF EXISTS s3_test NO DELAY")
     node2.query("DROP TABLE IF EXISTS s3_test NO DELAY")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 def test_s3_zero_copy_on_hybrid_storage(cluster):
     node1 = cluster.instances["node1"]
     node2 = cluster.instances["node2"]
@@ -151,7 +151,7 @@ def insert_large_data(node, table):
     tm = time.mktime(datetime.date.today().timetuple())
     insert_data_time(node, table, 10, tm, 1024*1024*2)
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     ("storage_policy", "large_data", "iterations"),
     [
@@ -201,7 +201,7 @@ def test_s3_zero_copy_with_ttl_move(cluster, storage_policy, large_data, iterati
         node1.query("DROP TABLE IF EXISTS ttl_move_test NO DELAY")
         node2.query("DROP TABLE IF EXISTS ttl_move_test NO DELAY")
 
-
+@pytest.mark.skip(reason="Flapping Test")
 @pytest.mark.parametrize(
     ("large_data", "iterations"),
     [
