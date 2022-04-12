@@ -3,6 +3,7 @@
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -142,6 +143,7 @@ namespace DB
             switch (which.idx)
             {
             case TypeIndex::Date:       f(TypeTag<DataTypeDate>());       break;
+            case TypeIndex::Time:       f(TypeTag<DataTypeTime>());       break;
             case TypeIndex::DateTime:   f(TypeTag<DataTypeDateTime>());   break;
             case TypeIndex::DateTime64: f(TypeTag<DataTypeDateTime64>()); break;
             default:

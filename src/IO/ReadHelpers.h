@@ -99,6 +99,10 @@ inline void readChar(char & x, ReadBuffer & buf)
         throwReadAfterEOF();
 }
 
+inline bool isQuoted(char x)
+{
+    return x == '\'' || x == '\"';
+}
 
 /// Read POD-type in native format
 template <typename T>
@@ -741,6 +745,35 @@ static inline bool hasTzSign(const char *c)
     return *c == '+' || *c  == '-';
 }
 
+inline bool parseFractionalSeconds(Int64 &fraction, UInt32 scale, ReadBuffer & buf)
+{
+    if (buf.eof() || *buf.position() != '.') {
+        return false;
+    }
+    ++buf.position();
+
+    /// Read digits, up to 'scale' positions.
+    for (size_t i = 0; i < scale; ++i)
+    {
+        if (!buf.eof() && isNumericASCII(*buf.position()))
+        {
+            fraction *= 10;
+            fraction += *buf.position() - '0';
+            ++buf.position();
+        }
+        else
+        {
+            /// Adjust to scale.
+            fraction *= 10;
+        }
+    }
+
+    /// Ignore digits that are out of precision.
+    while (!buf.eof() && isNumericASCII(*buf.position()))
+        ++buf.position();
+    return true;
+}
+
 inline bool parseTimezoneOffset(Int32 &t, ReadBuffer & buf, UInt8 i = 0) {
     const char * s = buf.position() + i;
     if (buf.buffer().end() < s + TIME_ZONE_STRING_INPUT_SIZE) {
@@ -871,32 +904,7 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
 
     DB::DecimalUtils::DecimalComponents<DateTime64> components{static_cast<DateTime64::NativeType>(whole), 0};
 
-    if (!buf.eof() && *buf.position() == '.')
-    {
-        ++buf.position();
-
-        /// Read digits, up to 'scale' positions.
-        for (size_t i = 0; i < scale; ++i)
-        {
-            if (!buf.eof() && isNumericASCII(*buf.position()))
-            {
-                components.fractional *= 10;
-                components.fractional += *buf.position() - '0';
-                ++buf.position();
-            }
-            else
-            {
-                /// Adjust to scale.
-                components.fractional *= 10;
-            }
-        }
-
-        /// Ignore digits that are out of precision.
-        while (!buf.eof() && isNumericASCII(*buf.position()))
-            ++buf.position();
-    }
-    /// 9908870400 is time_t value for 2184-01-01 UTC (a bit over the last year supported by DateTime64)
-    else if (whole >= 9908870400LL)
+    if (!parseFractionalSeconds(components.fractional, scale, buf) && whole >= 9908870400LL)
     {
         /// Unix timestamp with subsecond precision, already scaled to integer.
         /// For disambiguation we support only time since 2001-09-09 01:46:40 UTC and less than 30 000 years in future.
@@ -919,6 +927,46 @@ inline ReturnType readDateTimeTextImpl(DateTime64 & datetime64, UInt32 scale, Re
     return ReturnType(true);
 }
 
+// Parse format HH:MM:SS.NNNNNNNNN (SQL Standard)
+inline bool readTimeTextImpl(time_t & t, ReadBuffer & buf)
+{
+    static constexpr auto TimeStringInputSize = 8;
+    const char * s = buf.position();
+    if (buf.buffer().end() < s + TimeStringInputSize) {
+        return false;
+    }
+    if (s[2] != ':' && s[5] != ':') {
+        return false;
+    }
+
+    UInt8 hour = (s[0] - '0') * 10 + (s[1] - '0');
+    UInt8 minute = (s[3] - '0') * 10 + (s[4] - '0');
+    UInt8 sec = (s[6] - '0') * 10 + (s[7] - '0');
+
+    if (unlikely(hour >= 24 || minute > 60 || sec > 60)) {
+        return false;
+    }
+
+    t = (hour * 3600 + minute * 60 + sec);
+    buf.position() += TimeStringInputSize;
+    return true;
+}
+
+template <typename ReturnType>
+inline ReturnType readTimeTextImpl(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    time_t whole;
+
+    if (!readTimeTextImpl(whole, buf)) {
+        return ReturnType(false);
+    }
+
+    DB::DecimalUtils::DecimalComponents<Decimal64> components{static_cast<Decimal64::NativeType>(whole), 0};
+    parseFractionalSeconds(components.fractional, scale, buf);
+    time = DecimalUtils::decimalFromComponents<Decimal64>(components, scale);
+    return ReturnType(true);
+}
+
 inline void readDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())
 {
     readDateTimeTextImpl<void>(datetime, buf, time_zone);
@@ -927,6 +975,16 @@ inline void readDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTI
 inline void readDateTime64Text(DateTime64 & datetime64, UInt32 scale, ReadBuffer & buf, const DateLUTImpl & date_lut = DateLUT::instance())
 {
     readDateTimeTextImpl<void>(datetime64, scale, buf, date_lut);
+}
+
+inline void readTimeText(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    readTimeTextImpl<void>(time, scale, buf);
+}
+
+inline bool tryReadTimeText(Decimal64 & time, UInt32 scale, ReadBuffer & buf)
+{
+    return readTimeTextImpl<bool>(time, scale, buf);
 }
 
 inline bool tryReadDateTimeText(time_t & datetime, ReadBuffer & buf, const DateLUTImpl & time_zone = DateLUT::instance())

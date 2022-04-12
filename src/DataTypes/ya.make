@@ -16,6 +16,7 @@ SRCS(
     DataTypeCustomIPv4AndIPv6.cpp
     DataTypeCustomSimpleAggregateFunction.cpp
     DataTypeDate.cpp
+    DataTypeTime.cpp
     DataTypeDateTime.cpp
     DataTypeDateTime64.cpp
     DataTypeDecimalBase.cpp
@@ -45,6 +46,7 @@ SRCS(
     Serializations/SerializationArray.cpp
     Serializations/SerializationCustomSimpleText.cpp
     Serializations/SerializationDate.cpp
+    Serializations/SerializationTime.cpp
     Serializations/SerializationDateTime.cpp
     Serializations/SerializationDateTime64.cpp
     Serializations/SerializationDecimal.cpp

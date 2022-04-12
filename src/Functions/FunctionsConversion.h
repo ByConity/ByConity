@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -284,6 +285,80 @@ struct ConvertImpl
 template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name, ConvertDefaultBehaviorTag>
     : DateTimeTransformImpl<DataTypeDateTime, DataTypeDate, ToDateImpl> {};
 
+struct ToTimeTransform
+{
+    static constexpr auto name = "toTimeType";
+
+    const Decimal64::NativeType time_scale_multiplier = 1;
+    Decimal64::NativeType scale_change = 1;
+
+    ToTimeTransform(UInt32 time_scale = 0, UInt32 dt64_scale = 0)
+        : time_scale_multiplier(DecimalUtils::scaleMultiplier<Decimal64>(time_scale))
+    {
+        int scale_arg = time_scale - dt64_scale;
+        if (scale_arg > 0)
+            scale_change = intExp10(scale_arg);
+        else
+            scale_change = intExp10(-scale_arg);
+    }
+
+    static inline Decimal64::NativeType toSeconds(Decimal64::NativeType t, const DateLUTImpl & time_zone)  {
+        UInt16 h = time_zone.toHour(t);
+        UInt16 m = time_zone.toMinute(t);
+        UInt16 s = time_zone.toSecond(t);
+        return h * 3600L + m * 60L + s;
+    }
+
+    inline Decimal64::NativeType execute(const DateTime64 t, Int64 dt_scale_multiplier, const DateLUTImpl & time_zone) const
+    {
+        auto components = DecimalUtils::splitWithScaleMultiplier(t, dt_scale_multiplier);
+
+        if (dt_scale_multiplier < time_scale_multiplier)
+            components.fractional *= scale_change;
+        else if (dt_scale_multiplier > time_scale_multiplier)
+            components.fractional /= scale_change;
+
+        return DecimalUtils::decimalFromComponentsWithMultiplier<Decimal64>(
+                                toSeconds(components.whole, time_zone),
+                                components.fractional, time_scale_multiplier);
+    }
+
+    inline Decimal64::NativeType execute(UInt32 t, const DateLUTImpl & time_zone) const
+    {
+        return DecimalUtils::decimalFromComponentsWithMultiplier<Decimal64>(
+                                toSeconds(t, time_zone),
+                                0, time_scale_multiplier);
+    }
+};
+
+/** Conversion of DateTime to Time: throw off date component.
+  */
+template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeTime, Name, ConvertDefaultBehaviorTag>
+    : DateTimeTransformImpl<DataTypeDateTime, DataTypeTime, ToTimeTransform> {};
+
+/** Conversion of DateTime64 to Time: throw off date component.
+  */
+template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Name, ConvertDefaultBehaviorTag>
+{
+    static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, UInt16 scale)
+    {
+        const auto * dt64 = assert_cast<const DataTypeDateTime64 *>(arguments[0].type.get());
+        const ToTimeTransform time_trasformer(scale, dt64->getScale());
+        const TransformDateTime64<decltype(time_trasformer)> t64_transformer(dt64->getScale(), time_trasformer);
+        return DateTimeTransformImpl<DataTypeDateTime64, DataTypeTime, decltype(t64_transformer)>::execute(arguments, result_type, input_rows_count, t64_transformer);
+    }
+};
+
+/** Conversion of Time to other temporal types which needs date is not valid
+  */
+template <typename ToDataType, typename Name>
+struct ConvertImpl<std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std::is_same_v<ToDataType, DataTypeTime>, DataTypeTime>, ToDataType, Name, ConvertDefaultBehaviorTag>
+{
+    static ColumnPtr execute(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t , UInt16 = 0)
+    {
+        throw Exception("Conversion from time to other temporal types is not supported", ErrorCodes::CANNOT_CONVERT_TYPE);
+    }
+};
 
 /** Conversion of Date to DateTime: adding 00:00:00 time component.
   */
@@ -595,6 +670,15 @@ struct FormatImpl<DataTypeDate>
 };
 
 template <>
+struct FormatImpl<DataTypeTime>
+{
+    static void execute(const DataTypeTime::FieldType x, WriteBuffer & wb, const DataTypeTime * type, const DateLUTImpl *)
+    {
+        writeTimeText(Decimal64(x), type->getScale(), wb);
+    }
+};
+
+template <>
 struct FormatImpl<DataTypeDateTime>
 {
     static void execute(const DataTypeDateTime::FieldType x, WriteBuffer & wb, const DataTypeDateTime *, const DateLUTImpl * time_zone)
@@ -674,6 +758,8 @@ struct ConvertImpl<FromDataType, std::enable_if_t<!std::is_same_v<FromDataType, 
                 data_to.resize(size * (strlen("YYYY-MM-DD hh:mm:ss") + 1));
             else if constexpr (std::is_same_v<FromDataType, DataTypeDateTime64>)
                 data_to.resize(size * (strlen("YYYY-MM-DD hh:mm:ss.") + vec_from.getScale() + 1));
+            else if constexpr (std::is_same_v<FromDataType, DataTypeTime>)
+                data_to.resize(size * (strlen("hh:mm:ss.") + vec_from.getScale() + 1));
             else
                 data_to.resize(size * 3);   /// Arbitrary
 
@@ -859,7 +945,7 @@ struct ConvertThroughParsing
         "ConvertThroughParsing is only applicable for String or FixedString data types");
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
-
+    static constexpr bool to_time = std::is_same_v<ToDataType, DataTypeTime>;
     // using ToFieldType = typename ToDataType::FieldType;
 
     static bool isAllRead(ReadBuffer & in)
@@ -927,8 +1013,9 @@ struct ConvertThroughParsing
             if constexpr (to_datetime64)
             {
                 ToDataType check_bounds_in_ctor(scale, local_time_zone ? local_time_zone->getTimeZone() : String{});
-            }
-            else
+            } else if constexpr (to_time) {
+                ToDataType check_bounds_in_ctor(scale);
+            } else
             {
                 ToDataType check_bounds_in_ctor(ToDataType::maxPrecision(), scale);
             }
@@ -1010,6 +1097,10 @@ struct ConvertThroughParsing
                         DateTime64 value = 0;
                         readDateTime64Text(value, vec_to.getScale(), read_buffer, *local_time_zone);
                         vec_to[i] = value;
+                    } else if constexpr (to_time) {
+                        Decimal64 value = 0;
+                        readTimeText(value, vec_to.getScale(), read_buffer);
+                        vec_to[i] = value;
                     }
                     else if constexpr (IsDataTypeDecimal<ToDataType>)
                         SerializationDecimal<typename ToDataType::FieldType>::readText(
@@ -1052,6 +1143,10 @@ struct ConvertThroughParsing
                     {
                         DateTime64 value = 0;
                         parsed = tryReadDateTime64Text(value, vec_to.getScale(), read_buffer, *local_time_zone);
+                        vec_to[i] = value;
+                    } else if constexpr (to_time) {
+                        Decimal64 value = 0;
+                        parsed = tryReadTimeText(value, vec_to.getScale(), read_buffer);
                         vec_to[i] = value;
                     }
                     else if constexpr (IsDataTypeDecimal<ToDataType>)
@@ -1215,6 +1310,7 @@ struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBeha
 
 /// Declared early because used below.
 struct NameToDate { static constexpr auto name = "toDate"; };
+struct NameToTime { static constexpr auto name = "toTimeType"; };
 struct NameToDateTime { static constexpr auto name = "toDateTime"; };
 struct NameToDateTime32 { static constexpr auto name = "toDateTime32"; };
 struct NameToDateTime64 { static constexpr auto name = "toDateTime64"; };
@@ -1273,6 +1369,7 @@ public:
          || std::is_same_v<Name, NameToDecimal128> || std::is_same_v<Name, NameToDecimal256>;
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
+    static constexpr bool to_time = std::is_same_v<ToDataType, DataTypeTime>;
 
     static constexpr bool to_string_or_fixed_string = std::is_same_v<ToDataType, DataTypeFixedString> ||
                                                       std::is_same_v<ToDataType, DataTypeString>;
@@ -1327,7 +1424,7 @@ public:
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
 
-        if (!to_decimal && isDateTime64<Name, ToDataType>(arguments))
+        if (!to_decimal && (isDateTime64<Name, ToDataType>(arguments) || to_time))
         {
             mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
@@ -1386,9 +1483,15 @@ public:
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
             }
 
+            if constexpr (to_time) {
+                scale = static_cast<UInt32>(arguments[1].column->get64(0));
+                return std::make_shared<DataTypeTime>(scale);
+            }
+
             if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
                 return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
-            else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
+            else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>
+                                || std::is_same_v<ToDataType, DataTypeTime>)
                 throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
             else
                 return std::make_shared<ToDataType>();
@@ -1994,6 +2097,7 @@ using FunctionToDate = FunctionConvert<DataTypeDate, NameToDate, ToDateMonotonic
 using FunctionToDateTime = FunctionConvert<DataTypeDateTime, NameToDateTime, ToDateTimeMonotonicity>;
 using FunctionToDateTime32 = FunctionConvert<DataTypeDateTime, NameToDateTime32, ToDateTimeMonotonicity>;
 using FunctionToDateTime64 = FunctionConvert<DataTypeDateTime64, NameToDateTime64, UnknownMonotonicity>;
+using FunctionToTime = FunctionConvert<DataTypeTime, NameToTime, UnknownMonotonicity>;
 using FunctionToUUID = FunctionConvert<DataTypeUUID, NameToUUID, ToNumberMonotonicity<UInt128>>;
 using FunctionToString = FunctionConvert<DataTypeString, NameToString, ToStringMonotonicity>;
 using FunctionToUnixTimestamp = FunctionConvert<DataTypeUInt32, NameToUnixTimestamp, ToNumberMonotonicity<UInt32>>;
@@ -2022,6 +2126,7 @@ template <> struct FunctionTo<DataTypeFloat64> { using Type = FunctionToFloat64;
 template <> struct FunctionTo<DataTypeDate> { using Type = FunctionToDate; };
 template <> struct FunctionTo<DataTypeDateTime> { using Type = FunctionToDateTime; };
 template <> struct FunctionTo<DataTypeDateTime64> { using Type = FunctionToDateTime64; };
+template <> struct FunctionTo<DataTypeTime> { using Type = FunctionToTime; };
 template <> struct FunctionTo<DataTypeUUID> { using Type = FunctionToUUID; };
 template <> struct FunctionTo<DataTypeString> { using Type = FunctionToString; };
 template <> struct FunctionTo<DataTypeFixedString> { using Type = FunctionToFixedString; };
@@ -2408,8 +2513,11 @@ private:
         UInt32 scale = to_type->getScale();
 
         WhichDataType which(type_index);
-        bool ok = which.isNativeInt() || which.isNativeUInt() || which.isDecimal() || which.isFloat() || which.isDate() || which.isDateTime() || which.isDateTime64()
-            || which.isStringOrFixedString();
+        bool ok = which.isNativeInt() || which.isNativeUInt()
+                    || which.isDecimal() || which.isFloat()
+                    || which.isDate() || which.isDateTime()
+                    || which.isDateTime64() || which.isStringOrFixedString()
+                    || which.isTime();
         if (!ok)
         {
             if (cast_type == CastType::accurateOrNull)
@@ -2431,7 +2539,10 @@ private:
                 using LeftDataType = typename Types::LeftType;
                 using RightDataType = typename Types::RightType;
 
-                if constexpr (IsDataTypeDecimalOrNumber<LeftDataType> && IsDataTypeDecimalOrNumber<RightDataType> && !std::is_same_v<DataTypeDateTime64, RightDataType>)
+                if constexpr (IsDataTypeDecimalOrNumber<LeftDataType>
+                                && IsDataTypeDecimalOrNumber<RightDataType>
+                                && !std::is_same_v<DataTypeDateTime64, RightDataType>
+                                && !std::is_same_v<DataTypeTime, RightDataType>)
                 {
                     if (wrapper_cast_type == CastType::accurate)
                     {
@@ -3088,7 +3199,8 @@ private:
                 std::is_same_v<ToDataType, DataTypeDecimal<Decimal64>> ||
                 std::is_same_v<ToDataType, DataTypeDecimal<Decimal128>> ||
                 std::is_same_v<ToDataType, DataTypeDecimal<Decimal256>> ||
-                std::is_same_v<ToDataType, DataTypeDateTime64>)
+                std::is_same_v<ToDataType, DataTypeDateTime64> ||
+                std::is_same_v<ToDataType, DataTypeTime>)
             {
                 ret = createDecimalWrapper(from_type, checkAndGetDataType<ToDataType>(to_type.get()), requested_result_is_nullable);
                 return true;

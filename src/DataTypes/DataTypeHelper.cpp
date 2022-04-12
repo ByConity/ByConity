@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeCustom.h>
 #include <DataTypes/DataTypeCustomGeo.h>
 #include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDecimalBase.h>
@@ -100,6 +101,11 @@ DataTypePtr deserializeDataTypeV1V1(ReadBuffer & buf)
             readBinary(scale, buf);
             readBinary(time_zone, buf);
             return std::make_shared<DataTypeDateTime64>(scale, time_zone);
+        }
+        case TypeIndex::Time: {
+            UInt32 scale;
+            readBinary(scale, buf);
+            return std::make_shared<DataTypeTime>(scale);
         }
         case TypeIndex::FixedString: {
             size_t n;
@@ -242,6 +248,11 @@ void serializeDataTypeV1(const DataTypePtr & data_type, WriteBuffer & buf)
             auto type = std::dynamic_pointer_cast<const DataTypeDateTime64>(data_type);
             writeBinary(type->getScale(), buf);
             writeBinary(type->getTimeZone().getTimeZone(), buf);
+            return;
+        }
+        case TypeIndex::Time: {
+            auto type = std::dynamic_pointer_cast<const DataTypeTime>(data_type);
+            writeBinary(type->getScale(), buf);
             return;
         }
         case TypeIndex::FixedString: {

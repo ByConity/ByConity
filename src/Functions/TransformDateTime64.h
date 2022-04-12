@@ -44,8 +44,9 @@ public:
     static constexpr auto name = Transform::name;
 
     // non-explicit constructor to allow creating from scale value (or with no scale at all), indispensable in some contexts.
-    TransformDateTime64(UInt32 scale_ = 0)
-        : scale_multiplier(DecimalUtils::scaleMultiplier<DateTime64::NativeType>(scale_))
+    TransformDateTime64(UInt32 scale_ = 0, Transform t = {})
+        : scale_multiplier(DecimalUtils::scaleMultiplier<DateTime64::NativeType>(scale_)),
+        wrapped_transform(t)
     {}
 
     template <typename ... Args>
@@ -89,7 +90,7 @@ public:
 
 private:
     DateTime64::NativeType scale_multiplier = 1;
-    Transform wrapped_transform = {};
+    Transform wrapped_transform;
 };
 
 }

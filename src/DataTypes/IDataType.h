@@ -351,6 +351,7 @@ struct WhichDataType
     constexpr bool isEnum() const { return isEnum8() || isEnum16(); }
 
     constexpr bool isDate() const { return idx == TypeIndex::Date; }
+    constexpr bool isTime() const { return idx == TypeIndex::Time; }
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
 
@@ -376,6 +377,8 @@ struct WhichDataType
 
 template <typename T>
 inline bool isDate(const T & data_type) { return WhichDataType(data_type).isDate(); }
+template <typename T>
+inline bool isTime(const T & data_type) { return WhichDataType(data_type).isTime(); }
 template <typename T>
 inline bool isDateTime(const T & data_type) { return WhichDataType(data_type).isDateTime(); }
 template <typename T>
@@ -442,14 +445,17 @@ template <typename T>
 inline bool isColumnedAsNumber(const T & data_type)
 {
     WhichDataType which(data_type);
-    return which.isInt() || which.isUInt() || which.isFloat() || which.isDate() || which.isDateTime() || which.isDateTime64() || which.isUUID();
+    return which.isInt() || which.isUInt() || which.isFloat()
+          || which.isDate() || which.isDateTime()
+          || which.isDateTime64() || which.isUUID()
+          || which.isTime();
 }
 
 template <typename T>
 inline bool isColumnedAsDecimal(const T & data_type)
 {
     WhichDataType which(data_type);
-    return which.isDecimal() || which.isDateTime64();
+    return which.isDecimal() || which.isDateTime64() || which.isTime();
 }
 
 // Same as isColumnedAsDecimal but also checks value type of underlyig column.
@@ -457,7 +463,7 @@ template <typename T, typename DataType>
 inline bool isColumnedAsDecimalT(const DataType & data_type)
 {
     const WhichDataType which(data_type);
-    return (which.isDecimal() || which.isDateTime64()) && which.idx == TypeId<T>;
+    return (which.isDecimal() || which.isDateTime64() || which.isTime()) && which.idx == TypeId<T>;
 }
 
 template <typename T>
@@ -509,16 +515,19 @@ template <typename T>
 class DataTypeNumber;
 
 class DataTypeDate;
+class DataTypeTime;
 class DataTypeDateTime;
 class DataTypeDateTime64;
 
 template <typename T> constexpr bool IsDataTypeDecimal<DataTypeDecimal<T>> = true;
 template <> inline constexpr bool IsDataTypeDecimal<DataTypeDateTime64> = true;
+template <> inline constexpr bool IsDataTypeDecimal<DataTypeTime> = true;
 
 template <typename T> constexpr bool IsDataTypeNumber<DataTypeNumber<T>> = true;
 
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDate> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime> = true;
 template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeDateTime64> = true;
+template <> inline constexpr bool IsDataTypeDateOrDateTime<DataTypeTime> = true;
 
 }

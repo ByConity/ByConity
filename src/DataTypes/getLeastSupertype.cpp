@@ -15,6 +15,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypesDecimal.h>
@@ -279,15 +280,16 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         UInt32 have_date = type_ids.count(TypeIndex::Date);
         UInt32 have_datetime = type_ids.count(TypeIndex::DateTime);
         UInt32 have_datetime64 = type_ids.count(TypeIndex::DateTime64);
+        UInt32 have_time = type_ids.count(TypeIndex::Time);
 
-        if (have_date || have_datetime || have_datetime64)
+        if (have_date || have_datetime || have_datetime64 || have_time)
         {
-            bool all_date_or_datetime = type_ids.size() == (have_date + have_datetime + have_datetime64);
+            bool all_date_or_datetime = type_ids.size() == (have_date + have_datetime + have_datetime64 + have_time);
             if (!all_date_or_datetime)
                 throw Exception(getExceptionMessagePrefix(types) + " because some of them are Date/DateTime/DateTime64 and some of them are not",
                     ErrorCodes::NO_COMMON_TYPE);
 
-            if (have_datetime64 == 0)
+            if (have_datetime64 == 0 && have_time == 0)
             {
                 for (const auto & type : types)
                 {
@@ -298,22 +300,11 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                 return std::make_shared<DataTypeDateTime>();
             }
 
-            UInt8 max_scale = 0;
-            size_t max_scale_date_time_index = 0;
-
-            for (size_t i = 0; i < types.size(); ++i)
-            {
-                const auto & type = types[i];
-
-                if (const auto * date_time64_type = typeid_cast<const DataTypeDateTime64 *>(type.get()))
-                {
-                    const auto scale = date_time64_type->getScale();
-                    if (scale >= max_scale)
-                    {
-                        max_scale_date_time_index = i;
-                        max_scale = scale;
-                    }
-                }
+            size_t max_scale_date_time_index;
+            if (have_datetime64) {
+                max_scale_date_time_index = getMaxScaleIndex<DataTypeDateTime64>(types);
+            } else {
+                max_scale_date_time_index = getMaxScaleIndex<DataTypeTime>(types);
             }
 
             return types[max_scale_date_time_index];

@@ -5,6 +5,7 @@
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeTime.h>
 #include <DataTypes/DataTypeFactory.h>
 
 namespace DB
@@ -104,6 +105,24 @@ static DataTypePtr create64(const ASTPtr & arguments)
     const auto timezone = getArgument<String, ArgumentKind::Optional>(arguments, 1, "timezone", "DateTime64");
 
     return std::make_shared<DataTypeDateTime64>(scale, timezone.value_or(String{}));
+}
+
+static DataTypePtr createTime(const ASTPtr & arguments)
+{
+    if (!arguments || arguments->children.empty())
+        return std::make_shared<DataTypeTime>(DataTypeTime::default_scale);
+
+    if (arguments->children.size() > 1)
+        throw Exception("Time data type can optionally have one argument - scale", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    const auto scale = getArgument<UInt64, ArgumentKind::Mandatory>(arguments, 0, "scale", "Time");
+
+    return std::make_shared<DataTypeTime>(scale);
+}
+
+void registerDataTypeTime(DataTypeFactory & factory)
+{
+    factory.registerDataType("Time", createTime, DataTypeFactory::CaseInsensitive);
 }
 
 void registerDataTypeDateTime(DataTypeFactory & factory)

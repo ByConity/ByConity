@@ -6,7 +6,9 @@
 #include <Functions/extractTimeZoneFromFunctionArguments.h>
 #include <Functions/DateTimeTransforms.h>
 #include <Functions/TransformDateTime64.h>
+#include <Functions/TransformTime.h>
 #include <IO/WriteHelpers.h>
+#include "DataTypes/DataTypeTime.h"
 
 
 namespace DB
@@ -38,7 +40,9 @@ public:
     {
         if (arguments.size() == 1)
         {
-            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type) && !isDateTime64(arguments[0].type) && !isString(arguments[0].type))
+            if (!isDate(arguments[0].type) && !isDateTime(arguments[0].type)
+                && !isDateTime64(arguments[0].type) && !isString(arguments[0].type)
+                && !isTime(arguments[0].type))
                 throw Exception(
                     "Illegal type " + arguments[0].type->getName() + " of argument of function " + getName()
                         + ". Should be a string, a date or a date with time",
@@ -81,6 +85,14 @@ public:
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
             return std::make_shared<ToDataType>(time_zone);
         }
+        if constexpr (std::is_same_v<ToDataType, DataTypeTime>)
+        {
+            Int64 scale = DataTypeTime::default_scale;
+            if (const auto * t =  checkAndGetDataType<DataTypeTime>(arguments[0].type.get()))
+                scale = t->getScale();
+
+            return std::make_shared<ToDataType>(scale);
+        }
         if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
         {
             Int64 scale = DataTypeDateTime64::default_scale;
@@ -111,6 +123,12 @@ public:
 
             const TransformDateTime64<Transform> transformer(scale);
             return DateTimeTransformImpl<DataTypeDateTime64, ToDataType, decltype(transformer)>::execute(arguments, result_type, input_rows_count, transformer);
+        }
+        else if (which.isTime())
+        {
+            const auto scale = static_cast<const DataTypeTime *>(from_type)->getScale();
+            const TransformTime<Transform> transformer(scale);
+            return DateTimeTransformImpl<DataTypeTime, ToDataType, decltype(transformer)>::execute(arguments, result_type, input_rows_count, transformer);
         }
         else
             throw Exception("Illegal type " + arguments[0].type->getName() + " of argument of function " + getName(),
