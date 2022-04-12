@@ -1390,7 +1390,9 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
 
                 rows_sources_read_buf.seek(0, 0);
                 ColumnGathererStream column_gathered_stream(name_, column_part_streams, rows_sources_read_buf,
-                                                            /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE, bitengine_read_type);
+                    context->getSettingsRef().enable_low_cardinality_merge_new_algo,
+                    context->getSettingsRef().low_cardinality_distinct_threshold,
+                    /*block_preferred_size_ =*/ DEFAULT_BLOCK_SIZE, bitengine_read_type);
 
                 MergedColumnOnlyOutputStream column_to(
                     new_data_part,
@@ -1411,6 +1413,18 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 column_to.writePrefix();
                 while (!merges_blocker.isCancelled() && (block = column_gathered_stream.read()))
                 {
+                    // check lc switch at the very beginning
+                    if (!column_elems_written && column_gathered_stream.isSwitchedToFullLowCardinality())
+                    {
+                        auto *lc_col  = block.findByName(name_);
+                        if (auto const *lc_type = typeid_cast<const DataTypeLowCardinality  *>(lc_col->type.get()))
+                        {
+                            // lc full column need switch type
+                            NameAndTypePair pair(name_,  lc_type->getFullLowCardinalityTypePtr());
+                            column_to.updateWriterStream(pair);
+                        }
+
+                    }
                     column_elems_written += block.rows();
                     column_to.write(block);
                 }
@@ -2439,7 +2453,7 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
     {
         if (command.type != MutationCommand::Type::CLEAR_MAP_KEY)
             continue;
-        auto files = source_part->getChecksums()->files; 
+        auto files = source_part->getChecksums()->files;
 
         /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
         NameSet file_set;

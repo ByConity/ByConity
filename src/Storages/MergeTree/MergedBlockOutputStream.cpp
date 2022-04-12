@@ -57,7 +57,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
 
     if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
     {
-        auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get()); 
+        auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
         if (!writer_wide)
             throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
         writer_wide->setMergeStatus(is_merge);
@@ -248,6 +248,11 @@ void MergedBlockOutputStream::writeImpl(const Block & block, const IColumn::Perm
 
     writer->write(block, permutation);
     rows_count += rows;
+}
+
+void  MergedBlockOutputStream::updateWriterStream(const NameAndTypePair &pair)
+{
+    writer->updateWriterStream(pair);
 }
 
 }

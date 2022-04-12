@@ -3020,7 +3020,7 @@ private:
             ColumnPtr res_indexes;
             /// For some types default can't be casted (for example, String to Int). In that case convert column to full.
             bool src_converted_to_full_column = false;
-
+            bool is_full_state = false;
             {
                 auto tmp_rows_count = input_rows_count;
 
@@ -3029,21 +3029,29 @@ private:
 
                 if (from_low_cardinality)
                 {
-                    const auto * col_low_cardinality = typeid_cast<const ColumnLowCardinality *>(arguments[0].column.get());
+                    auto * col_low_cardinality = typeid_cast<const ColumnLowCardinality *>(arguments[0].column.get());
 
                     if (skip_not_null_check && col_low_cardinality->containsNull())
                         throw Exception{"Cannot convert NULL value to non-Nullable type",
                                         ErrorCodes::CANNOT_INSERT_NULL_IN_ORDINARY_COLUMN};
 
-                    arg.column = col_low_cardinality->getDictionary().getNestedColumn();
+                    is_full_state = col_low_cardinality->isFullState();
+                    if (is_full_state)
+                        arg.column = col_low_cardinality->getNestedColumnPtr();
+                    else
+                        arg.column = col_low_cardinality->getDictionary().getNestedColumn();
+
                     arg.type = from_low_cardinality->getDictionaryType();
 
                     /// TODO: Make map with defaults conversion.
                     src_converted_to_full_column = !removeNullable(arg.type)->equals(*removeNullable(res_type));
-                    if (src_converted_to_full_column)
-                        arg.column = arg.column->index(col_low_cardinality->getIndexes(), 0);
-                    else
-                        res_indexes = col_low_cardinality->getIndexesPtr();
+                    if (!is_full_state)
+                    {
+                        if (src_converted_to_full_column)
+                            arg.column = arg.column->index(col_low_cardinality->getIndexes(), 0);
+                        else
+                            res_indexes = col_low_cardinality->getIndexesPtr();
+                    }
 
                     tmp_rows_count = arg.column->size();
                 }
@@ -3056,17 +3064,24 @@ private:
             {
                 auto res_column = to_low_cardinality->createColumn();
                 auto * col_low_cardinality = typeid_cast<ColumnLowCardinality *>(res_column.get());
-
-                if (from_low_cardinality && !src_converted_to_full_column)
+                if (is_full_state)
                 {
-                    col_low_cardinality->insertRangeFromDictionaryEncodedColumn(*converted_column, *res_indexes);
+                    col_low_cardinality->switchToFull();
+                    col_low_cardinality->insertRangeFromFullColumn(*converted_column, 0, converted_column->size());
                 }
                 else
-                    col_low_cardinality->insertRangeFromFullColumn(*converted_column, 0, converted_column->size());
+                {
+                    if (from_low_cardinality && !src_converted_to_full_column)
+                    {
+                        col_low_cardinality->insertRangeFromDictionaryEncodedColumn(*converted_column, *res_indexes);
+                    }
+                    else
+                        col_low_cardinality->insertRangeFromFullColumn(*converted_column, 0, converted_column->size());
+                }
 
                 return res_column;
             }
-            else if (!src_converted_to_full_column)
+            else if (!src_converted_to_full_column && !is_full_state)
                 return converted_column->index(*res_indexes, 0);
             else
                 return converted_column;

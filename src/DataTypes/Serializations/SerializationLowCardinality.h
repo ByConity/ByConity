@@ -10,7 +10,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 
 class SerializationLowCardinality : public ISerialization
 {
-private:
+protected:
     DataTypePtr dictionary_type;
     SerializationPtr dict_inner_serialization;
 
@@ -64,7 +64,7 @@ public:
     void serializeMemComparable(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;
     void deserializeMemComparable(IColumn & column, ReadBuffer & istr) const override;
 
-private:
+protected:
     template <typename ... Params>
     using SerializeFunctionPtr = void (ISerialization::*)(const IColumn &, size_t, Params ...) const;
 
@@ -79,6 +79,41 @@ private:
 
     // template <typename Creator>
     // static MutableColumnUniquePtr createColumnUniqueImpl(const IDataType & keys_type, const Creator & creator);
+};
+
+class SerializationFullLowCardinality : public SerializationLowCardinality
+{
+public:
+    SerializationFullLowCardinality(const DataTypePtr & dictionary_type);
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
+
+
+    void serializeBinaryBulkStatePrefix(
+            SerializeBinaryBulkSettings & settings,
+            SerializeBinaryBulkStatePtr & state) const override;
+
+    void serializeBinaryBulkStateSuffix(
+            SerializeBinaryBulkSettings & settings,
+            SerializeBinaryBulkStatePtr & state) const override;
+
+    void deserializeBinaryBulkStatePrefix(
+            DeserializeBinaryBulkSettings & settings,
+            DeserializeBinaryBulkStatePtr & state) const override;
+
+    void serializeBinaryBulkWithMultipleStreams(
+            const IColumn & column,
+            size_t offset,
+            size_t limit,
+            SerializeBinaryBulkSettings & settings,
+            SerializeBinaryBulkStatePtr & state) const override;
+
+    void deserializeBinaryBulkWithMultipleStreams(
+            ColumnPtr & column,
+            size_t limit,
+            DeserializeBinaryBulkSettings & settings,
+            DeserializeBinaryBulkStatePtr & state,
+            SubstreamsCache * cache) const override;
+
 };
 
 }

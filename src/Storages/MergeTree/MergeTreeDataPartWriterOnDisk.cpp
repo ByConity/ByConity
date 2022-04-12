@@ -120,7 +120,7 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     compressed_buf(plain_hashing, compression_codec_, max_compress_block_size_),
     compressed(compressed_buf),
     marks_file(disk_->writeFile(marks_path_ + marks_file_extension, 4096, is_compact_map ? WriteMode::Append: WriteMode::Rewrite)), marks(*marks_file),
-    data_file_offset(is_compact_map ? disk_->getFileSize(data_path_ + data_file_extension): 0), 
+    data_file_offset(is_compact_map ? disk_->getFileSize(data_path_ + data_file_extension): 0),
     marks_file_offset(is_compact_map ? disk_->getFileSize(marks_path_ + marks_file_extension): 0)
 {
 }
@@ -199,7 +199,9 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
         disk->createDirectories(part_path);
 
     for (const auto & column : columns_list)
+    {
         serializations.emplace(column.name, column.type->getDefaultSerialization());
+    }
 
     if (settings.rewrite_primary_key)
         initPrimaryIndex();
@@ -602,11 +604,11 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
 
     	auto [it, inserted] = serialization_states.emplace(implicitStreamName, nullptr);
 		serializations.emplace(implicitStreamName, nullValSerial);
-        
+
         NameAndTypePair implicit_column{implicitStreamName, nullValTypePtr};
         if (!existKeyNames.count(k_n.second))
             implicit_columns_list.emplace_back(implicit_column);
- 
+
         if (needFixNewKey)
         {
             this->deepCopyAndAdd(mapBaseStreamName, implicitStreamName, *nullValTypePtr);
@@ -740,7 +742,7 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
     {
         throw Exception("Data whose type is not map is processed in method `writeCompactedByteMapColumn`", ErrorCodes::LOGICAL_ERROR);
     }
-	
+
     const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(column);
     const auto type_map = std::dynamic_pointer_cast<const DataTypeByteMap>(type);
 
@@ -781,11 +783,11 @@ void MergeTreeDataPartWriterOnDisk::writeCompactedByteMapColumn(
 
         if (escapeForFileName(implicitStreamName).size() > DBMS_MAX_FILE_NAME_LENGTH)
         {
-            LOG_WARNING(getLogger(), "The file name of map key is too long, more than {}, discard key: {}", 
+            LOG_WARNING(getLogger(), "The file name of map key is too long, more than {}, discard key: {}",
                         DBMS_MAX_FILE_NAME_LENGTH, k_n.second);
             continue;
         }
-        
+
         // Fill up implicit column info in auxilary structures
         serialization_states.emplace(implicitStreamName, nullptr);
 		serializations.emplace(implicitStreamName, nullValSerial);
@@ -817,11 +819,11 @@ ISerialization::StreamCallback MergeTreeDataPartWriterOnDisk::finalizeStreams(co
 
         auto & stream = *column_streams[stream_name];
         stream.finalize();
-    };    
+    };
 }
 
 void MergeTreeDataPartWriterOnDisk::deepCopyAndAdd(
-	const String & sourceName, 
+	const String & sourceName,
 	const String & targetName,
 	const IDataType & type)
 {

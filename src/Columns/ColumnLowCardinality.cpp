@@ -131,24 +131,39 @@ namespace
 
 ColumnLowCardinality::ColumnLowCardinality(MutableColumnPtr && column_unique_, MutableColumnPtr && indexes_, bool is_shared)
     : dictionary(std::move(column_unique_), is_shared), idx(std::move(indexes_))
+    , nested_column(getDictionary().getNestedColumn()->cloneEmpty()), full_state(false)
 {
     // idx.check(getDictionary().size());
 }
 
 ColumnPtr ColumnLowCardinality::convertToFullColumn() const
 {
-    const ColumnPtr & nested_column = getDictionary().getNestedColumn();
+    if (full_state)
+        return getNestedColumnPtr();
+
+    const ColumnPtr & nested_column_ptr = getDictionary().getNestedColumn();
     // if nested column only has two element and first one is 0 and second is 1, we can return index column directly
-    if (nested_column->getDataType() == TypeIndex::UInt8 && nested_column->getDataType() == getIndexes().getDataType()
-        && nested_column->size() == 2 && nested_column->get64(0) == 0 && nested_column->get64(1) == 1)
+    if (nested_column_ptr->getDataType() == TypeIndex::UInt8 && nested_column_ptr->getDataType() == getIndexes().getDataType()
+        && nested_column_ptr->size() == 2 && nested_column_ptr->get64(0) == 0 && nested_column_ptr->get64(1) == 1)
     {
         return getIndexes().getPtr();
     }
-    return nested_column->index(getIndexes(), 0);
+    return nested_column_ptr->index(getIndexes(), 0);
 }
+
+ColumnLowCardinality::ColumnLowCardinality(MutableColumnPtr && column_unique_, MutableColumnPtr && indexes_, MutableColumnPtr && nest_column_)
+        : dictionary(std::move(column_unique_), false), idx(std::move(indexes_)), nested_column(std::move(nest_column_)), full_state(true)
+{
+}
+
 
 ColumnPtr ColumnLowCardinality::selectDefault() const
 {
+    if (full_state)
+    {
+        return getNestedColumn().selectDefault();
+    }
+
     size_t row_num = size();
     auto res = ColumnVector<UInt8>::create(row_num, 1);
     IColumn::Filter & filter = res->getData();
@@ -160,6 +175,12 @@ ColumnPtr ColumnLowCardinality::selectDefault() const
 
 void ColumnLowCardinality::insert(const Field & x)
 {
+    if (full_state)
+    {
+        getNestedColumn().insert(x);
+        return ;
+    }
+
     compactIfSharedDictionary();
     idx.insertPosition(dictionary.getColumnUnique().uniqueInsert(x));
     // idx.check(getDictionary().size());
@@ -167,7 +188,56 @@ void ColumnLowCardinality::insert(const Field & x)
 
 void ColumnLowCardinality::insertDefault()
 {
+    if (full_state)
+    {
+        getNestedColumn().insertDefault();
+        return ;
+    }
+
     idx.insertPosition(getDictionary().getDefaultValueIndex());
+}
+
+void ColumnLowCardinality::mergeGatherColumn(const IColumn &src, std::unordered_map<UInt64, UInt64> &reverseIndex)
+{
+    auto * low_src = typeid_cast<const ColumnLowCardinality *>(&src);
+    if (dictionary.getColumnUnique().isEmpty())
+    {
+        dictionary.getColumnUnique().uniqueInsertRangeFrom(*low_src->getDictionary().getNestedColumn()->getPtr(), 0, low_src->getDictionary().size());
+        return ;
+    }
+
+    dictionary.getColumnUnique().insertWithDiffIndex(*low_src->getDictionary().getNestedColumn()->getPtr(), 0, low_src->getDictionary().size(), reverseIndex);
+}
+
+void ColumnLowCardinality::loadDictionaryFrom(const IColumn &src)
+{
+    auto * low_src = typeid_cast<const ColumnLowCardinality *>(&src);
+
+    if (!low_src)
+        throw Exception("Expected ColumnLowCardinality, got" + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    dictionary.getColumnUnique().uniqueInsertRangeFrom(*low_src->getDictionary().getNestedColumn()->getPtr(), 0, low_src->getDictionary().size());
+}
+
+void ColumnLowCardinality::insertIndexFrom(const IColumn &src, size_t n)
+{
+    auto * low_cardinality_src = typeid_cast<const ColumnLowCardinality *>(&src);
+
+    if (!low_cardinality_src)
+        throw Exception("Expected ColumnLowCardinality, got" + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    size_t position = low_cardinality_src->getIndexes().getUInt(n);
+    idx.insertPosition(position);
+}
+
+void ColumnLowCardinality::insertIndexRangeFrom(const IColumn &src, size_t start, size_t length)
+{
+    auto * low_cardinality_src = typeid_cast<const ColumnLowCardinality *>(&src);
+
+    if (!low_cardinality_src)
+        throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    idx.insertPositionsRange(low_cardinality_src->getIndexes(), start, length);
 }
 
 void ColumnLowCardinality::insertFrom(const IColumn & src, size_t n)
@@ -176,6 +246,25 @@ void ColumnLowCardinality::insertFrom(const IColumn & src, size_t n)
 
     if (!low_cardinality_src)
         throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    if (low_cardinality_src->isFullState())
+    {
+        insertFromFullColumn(low_cardinality_src->getNestedColumn(), n);
+        return;
+    }
+
+    if (full_state)
+    {
+        if (low_cardinality_src->isFullState())
+        {
+            getNestedColumn().insertFrom(low_cardinality_src->getNestedColumn(), n);
+        }
+        else
+        {
+            getNestedColumn().insertFrom(*low_cardinality_src->getDictionary().getNestedColumn(), low_cardinality_src->getIndexes().getUInt(n));
+        }
+        return;
+    }
 
     size_t position = low_cardinality_src->getIndexes().getUInt(n);
 
@@ -196,6 +285,12 @@ void ColumnLowCardinality::insertFrom(const IColumn & src, size_t n)
 
 void ColumnLowCardinality::insertFromFullColumn(const IColumn & src, size_t n)
 {
+    if (full_state)
+    {
+        getNestedColumn().insertFrom(src, n);
+        return;
+    }
+
     compactIfSharedDictionary();
     idx.insertPosition(dictionary.getColumnUnique().uniqueInsertFrom(src, n));
     // idx.check(getDictionary().size());
@@ -207,6 +302,31 @@ void ColumnLowCardinality::insertRangeFrom(const IColumn & src, size_t start, si
 
     if (!low_cardinality_src)
         throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    if (low_cardinality_src->isFullState())
+    {
+        insertRangeFromFullColumn(low_cardinality_src->getNestedColumn(), start, length);
+        return;
+    }
+
+    if (full_state)
+    {
+        if (low_cardinality_src->isFullState())
+        {
+            getNestedColumn().insertRangeFrom(low_cardinality_src->getNestedColumn(), start, length);
+        }
+        else
+        {
+            const ColumnPtr & dict_col = low_cardinality_src->getDictionary().getNestedColumn();
+            const IColumn & index = low_cardinality_src->getIndexes();
+            for (size_t i = start; i < (start + length); ++i)
+            {
+                getNestedColumn().insertFrom(*dict_col, index.getUInt(i));
+            }
+        }
+
+        return;
+    }
 
     if (&low_cardinality_src->getDictionary() == &getDictionary())
     {
@@ -233,6 +353,12 @@ void ColumnLowCardinality::insertRangeFrom(const IColumn & src, size_t start, si
 
 void ColumnLowCardinality::insertRangeFromFullColumn(const IColumn & src, size_t start, size_t length)
 {
+    if (full_state)
+    {
+        getNestedColumn().insertRangeFrom(src, start, length);
+        return;
+    }
+
     compactIfSharedDictionary();
     auto inserted_indexes = dictionary.getColumnUnique().uniqueInsertRangeFrom(src, start, length);
     idx.insertPositionsRange(*inserted_indexes, 0, length);
@@ -273,6 +399,10 @@ static void checkPositionsAreLimited(const IColumn & positions, UInt64 limit)
 
 void ColumnLowCardinality::insertRangeFromDictionaryEncodedColumn(const IColumn & keys, const IColumn & positions)
 {
+    if (full_state)
+    {
+        throw Exception("Method insertRangeFromDictionaryEncodedColumn is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
     checkPositionsAreLimited(positions, keys.size());
     compactIfSharedDictionary();
     auto inserted_indexes = dictionary.getColumnUnique().uniqueInsertRangeFrom(keys, 0, keys.size());
@@ -283,10 +413,23 @@ void ColumnLowCardinality::insertRangeFromDictionaryEncodedColumn(const IColumn 
 void ColumnLowCardinality::insertRangeSelective(
     const IColumn & src, const IColumn::Selector & selector, size_t selector_start, size_t length)
 {
-    
+
     const auto * low_cardinality_src = typeid_cast<const ColumnLowCardinality *>(&src);
     if (!low_cardinality_src)
         throw Exception("Expected ColumnLowCardinality, got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    if (full_state)
+    {
+        if (low_cardinality_src->isFullState())
+        {
+            getNestedColumn().insertRangeSelective(low_cardinality_src->getNestedColumn(), selector, selector_start, length);
+        }
+        else
+        {
+            getNestedColumn().insertRangeSelective(*low_cardinality_src->convertToFullColumn(), selector, selector_start, length);
+        }
+        return ;
+    }
 
     const IColumn & src_index = low_cardinality_src->getIndexes();
 
@@ -313,6 +456,11 @@ void ColumnLowCardinality::insertRangeSelective(
 
 void ColumnLowCardinality::insertData(const char * pos, size_t length)
 {
+    if (full_state)
+    {
+        throw Exception("Method insertData is not supported for full state" + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     compactIfSharedDictionary();
     idx.insertPosition(dictionary.getColumnUnique().uniqueInsertData(pos, length));
     // idx.check(getDictionary().size());
@@ -320,11 +468,19 @@ void ColumnLowCardinality::insertData(const char * pos, size_t length)
 
 StringRef ColumnLowCardinality::serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const
 {
-    return getDictionary().serializeValueIntoArena(getIndexes().getUInt(n), arena, begin);
+    if (full_state)
+        return getNestedColumn().serializeValueIntoArena(n, arena, begin);
+    else
+        return getDictionary().serializeValueIntoArena(getIndexes().getUInt(n), arena, begin);
 }
 
 const char * ColumnLowCardinality::deserializeAndInsertFromArena(const char * pos)
 {
+    if (full_state)
+    {
+        return getNestedColumn().deserializeAndInsertFromArena(pos);
+    }
+
     compactIfSharedDictionary();
 
     const char * new_pos;
@@ -341,6 +497,12 @@ const char * ColumnLowCardinality::skipSerializedInArena(const char * pos) const
 
 void ColumnLowCardinality::updateWeakHash32(WeakHash32 & hash) const
 {
+    if (full_state)
+    {
+        getNestedColumn().updateWeakHash32(hash);
+        return ;
+    }
+
     auto s = size();
 
     if (hash.getData().size() != s)
@@ -356,17 +518,31 @@ void ColumnLowCardinality::updateWeakHash32(WeakHash32 & hash) const
 
 void ColumnLowCardinality::updateHashFast(SipHash & hash) const
 {
+    if (full_state)
+    {
+        getNestedColumn().updateHashFast(hash);
+        return ;
+    }
     idx.getPositions()->updateHashFast(hash);
     getDictionary().getNestedColumn()->updateHashFast(hash);
 }
 
 void ColumnLowCardinality::gather(ColumnGathererStream & gatherer)
 {
-    gatherer.gather(*this);
+    gatherer.gatherLowCardinality(*this);
 }
 
 MutableColumnPtr ColumnLowCardinality::cloneResized(size_t size) const
 {
+    if (full_state)
+    {
+          if (size == 0)
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(), getIndexes().cloneEmpty());
+        else
+            return ColumnLowCardinality::create(dictionary.getColumnUniquePtr()->cloneEmpty(),
+                                            getIndexes().cloneEmpty(), getNestedColumn().cloneResized(size));
+    }
+
     auto unique_ptr = dictionary.getColumnUniquePtr();
     if (size == 0)
         unique_ptr = unique_ptr->cloneEmpty();
@@ -377,6 +553,17 @@ MutableColumnPtr ColumnLowCardinality::cloneResized(size_t size) const
 int ColumnLowCardinality::compareAtImpl(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint, const Collator * collator) const
 {
     const auto & low_cardinality_column = assert_cast<const ColumnLowCardinality &>(rhs);
+    if (full_state)
+    {
+        if (low_cardinality_column.isFullState())
+            return getNestedColumn().compareAtWithCollation(n, m, low_cardinality_column.getNestedColumn(), nan_direction_hint, *collator);
+        else
+        {
+            size_t m_index = low_cardinality_column.getIndexes().getUInt(m);
+            return getNestedColumn().compareAtWithCollation(n, m_index, low_cardinality_column.getDictionary(), nan_direction_hint, *collator);
+        }
+    }
+
     size_t n_index = getIndexes().getUInt(n);
     size_t m_index = low_cardinality_column.getIndexes().getUInt(m);
     if (collator)
@@ -386,6 +573,21 @@ int ColumnLowCardinality::compareAtImpl(size_t n, size_t m, const IColumn & rhs,
 
 int ColumnLowCardinality::compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const
 {
+    const auto & low_cardinality_column = static_cast<const ColumnLowCardinality &>(rhs);
+    if (full_state)
+    {
+        if (low_cardinality_column.isFullState())
+            return getNestedColumn().compareAt(n, m, low_cardinality_column.getNestedColumn(), nan_direction_hint);
+        else
+        {
+            size_t m_index = low_cardinality_column.getIndexes().getUInt(m);
+            return getNestedColumn().compareAt(n, m_index, *low_cardinality_column.getDictionary().getNestedColumn(), nan_direction_hint);
+        }
+    } else if (low_cardinality_column.isFullState())
+    {
+        // TODO: performance risk if have many parts mixed with full and none full
+        return convertToFullColumn()->compareAt(n, m, low_cardinality_column.getNestedColumn(), nan_direction_hint);
+    }
     return compareAtImpl(n, m, rhs, nan_direction_hint);
 }
 
@@ -405,6 +607,9 @@ void ColumnLowCardinality::compareColumn(const IColumn & rhs, size_t rhs_row_num
 
 bool ColumnLowCardinality::hasEqualValues() const
 {
+    if (full_state)
+        return getNestedColumn().hasEqualValues();
+
     if (getDictionary().size() <= 1)
         return true;
     return getIndexes().hasEqualValues();
@@ -412,6 +617,15 @@ bool ColumnLowCardinality::hasEqualValues() const
 
 void ColumnLowCardinality::getPermutationImpl(bool reverse, size_t limit, int nan_direction_hint, Permutation & res, const Collator * collator) const
 {
+    if (full_state)
+    {
+        if (limit == 0)
+            limit = getNestedColumn().size();
+        getNestedColumn().getPermutation(reverse, limit, nan_direction_hint, res);
+
+        return;
+    }
+
     if (limit == 0)
         limit = size();
 
@@ -530,6 +744,12 @@ void ColumnLowCardinality::getPermutation(bool reverse, size_t limit, int nan_di
 
 void ColumnLowCardinality::updatePermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res, EqualRanges & equal_ranges) const
 {
+    if (full_state)
+    {
+        getNestedColumn().updatePermutation(reverse, limit, nan_direction_hint, res, equal_ranges);
+        return ;
+    }
+
     auto comparator = [this, nan_direction_hint, reverse](size_t lhs, size_t rhs)
     {
         int ret = getDictionary().compareAt(getIndexes().getUInt(lhs), getIndexes().getUInt(rhs), getDictionary(), nan_direction_hint);
@@ -546,6 +766,12 @@ void ColumnLowCardinality::getPermutationWithCollation(const Collator & collator
 
 void ColumnLowCardinality::updatePermutationWithCollation(const Collator & collator, bool reverse, size_t limit, int nan_direction_hint, Permutation & res, EqualRanges & equal_ranges) const
 {
+    if (full_state)
+    {
+        getNestedColumn().updatePermutationWithCollation(collator, reverse, limit, nan_direction_hint, res, equal_ranges);
+        return ;
+    }
+
     auto comparator = [this, &collator, reverse, nan_direction_hint](size_t lhs, size_t rhs)
     {
         int ret = getDictionary().getNestedColumn()->compareAtWithCollation(getIndexes().getUInt(lhs), getIndexes().getUInt(rhs), *getDictionary().getNestedColumn(), nan_direction_hint, collator);
@@ -557,6 +783,11 @@ void ColumnLowCardinality::updatePermutationWithCollation(const Collator & colla
 
 std::vector<MutableColumnPtr> ColumnLowCardinality::scatter(ColumnIndex num_columns, const Selector & selector) const
 {
+    if (full_state)
+    {
+        return getNestedColumn().scatter(num_columns, selector);
+    }
+
     auto columns = getIndexes().scatter(num_columns, selector);
     for (auto & column : columns)
     {
@@ -569,6 +800,11 @@ std::vector<MutableColumnPtr> ColumnLowCardinality::scatter(ColumnIndex num_colu
 
 void ColumnLowCardinality::setSharedDictionary(const ColumnPtr & column_unique)
 {
+    if (full_state)
+    {
+        throw Exception("Method setSharedDictionary is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     if (!empty())
         throw Exception("Can't set ColumnUnique for ColumnLowCardinality because is't not empty.",
                         ErrorCodes::LOGICAL_ERROR);
@@ -578,6 +814,11 @@ void ColumnLowCardinality::setSharedDictionary(const ColumnPtr & column_unique)
 
 ColumnLowCardinality::MutablePtr ColumnLowCardinality::cutAndCompact(size_t start, size_t length) const
 {
+    if (full_state)
+    {
+        throw Exception("Method cutAndCompact is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     auto sub_positions = IColumn::mutate(idx.getPositions()->cut(start, length));
     /// Create column with new indexes and old dictionary.
     /// Dictionary is shared, but will be recreated after compactInplace call.
@@ -590,6 +831,11 @@ ColumnLowCardinality::MutablePtr ColumnLowCardinality::cutAndCompact(size_t star
 
 void ColumnLowCardinality::compactInplace()
 {
+    if (full_state)
+    {
+        throw Exception("Method compactInplace is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     auto positions = idx.detachPositions();
     dictionary.compact(positions);
     idx.attachPositions(std::move(positions));
@@ -597,6 +843,11 @@ void ColumnLowCardinality::compactInplace()
 
 void ColumnLowCardinality::compactIfSharedDictionary()
 {
+    if (full_state)
+    {
+        throw Exception("Method compactIfSharedDictionary is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     if (dictionary.isShared())
         compactInplace();
 }
@@ -605,6 +856,11 @@ void ColumnLowCardinality::compactIfSharedDictionary()
 ColumnLowCardinality::DictionaryEncodedColumn
 ColumnLowCardinality::getMinimalDictionaryEncodedColumn(UInt64 offset, UInt64 limit) const
 {
+    if (full_state)
+    {
+        throw Exception("Method getMinimalDictionaryEncodedColumn is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     MutableColumnPtr sub_indexes = IColumn::mutate(idx.getPositions()->cut(offset, limit));
     auto indexes_map = mapUniqueIndex(*sub_indexes);
     auto sub_keys = getDictionary().getNestedColumn()->index(*indexes_map, 0);
@@ -614,8 +870,13 @@ ColumnLowCardinality::getMinimalDictionaryEncodedColumn(UInt64 offset, UInt64 li
 
 ColumnPtr ColumnLowCardinality::countKeys() const
 {
-    const auto & nested_column = getDictionary().getNestedColumn();
-    size_t dict_size = nested_column->size();
+    if (full_state)
+    {
+        throw Exception("Method countKeys is not supported for full state", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    const auto & nested_column_ptr = getDictionary().getNestedColumn();
+    size_t dict_size = nested_column_ptr->size();
 
     auto counter = ColumnUInt64::create(dict_size, 0);
     idx.countKeys(counter->getData());
@@ -625,6 +886,11 @@ ColumnPtr ColumnLowCardinality::countKeys() const
 bool ColumnLowCardinality::containsNull() const
 {
     return getDictionary().nestedColumnIsNullable() && idx.containsDefault();
+}
+
+void ColumnLowCardinality::transformIndex(std::unordered_map<UInt64, UInt64> &trans, size_t max_size)
+{
+    idx.transformIndex(trans, max_size);
 }
 
 
@@ -896,6 +1162,39 @@ void ColumnLowCardinality::Index::updateWeakHash(WeakHash32 & hash, WeakHash32 &
     callForType(std::move(update_weak_hash), size_of_type);
 }
 
+void ColumnLowCardinality::Index::transformIndex(std::unordered_map<UInt64, UInt64> &trans, size_t max_size)
+{
+    for (auto const& it : trans)
+    {
+        while (it.second > getMaxPositionForCurrentType())
+            expandType();
+    }
+
+    auto transform = [&](auto x)
+    {
+        using CurIndexType = decltype(x);
+        auto & data = getPositionsData<CurIndexType>();
+        size_t size = data.size();
+
+        /// TODO: Optimize with SSE?
+        for (size_t i = 0; i < size; ++i)
+        {
+            const auto it = trans.find(data[i]);
+            if (it != trans.end())
+            {
+                auto ind = trans[data[i]];
+                data[i] = ind;
+            }
+
+            if (data[i] > max_size)
+                throw Exception("Index overflow max size:" + std::to_string(max_size) + " ind:" + std::to_string(data[i]), ErrorCodes::ILLEGAL_COLUMN);
+        }
+    };
+
+    callForType(std::move(transform), size_of_type);
+
+    checkSizeOfType();
+}
 
 ColumnLowCardinality::Dictionary::Dictionary(MutableColumnPtr && column_unique_, bool is_shared)
     : column_unique(std::move(column_unique_)), shared(is_shared)

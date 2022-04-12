@@ -129,4 +129,10 @@ MergedColumnOnlyOutputStream::writeSuffixAndGetChecksums(
     return checksums;
 }
 
+void MergedColumnOnlyOutputStream::updateWriterStream(const NameAndTypePair &pair)
+{
+    writer->updateWriterStream(pair);
+}
+
+
 }

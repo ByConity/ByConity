@@ -1091,4 +1091,32 @@ void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
         }
     }
 }
+
+void MergeTreeDataPartWriterWide::updateWriterStream(const NameAndTypePair &pair)
+{
+    serializations[pair.name] = pair.type->getDefaultSerialization();
+    const auto & columns = metadata_snapshot->getColumns();
+    auto effective_codec_desc = columns.getCodecDescOrDefault(pair.name, default_codec);
+
+    IDataType::StreamCallbackWithType callback = [&] (const ISerialization::SubstreamPath & substream_path, const IDataType & substream_type)
+    {
+        String stream_name = ISerialization::getFileNameForStream(pair.getNameInStorage(), substream_path);
+        CompressionCodecPtr compression_codec;
+        /// If we can use special codec then just get it
+        if (ISerialization::isSpecialCompressionAllowed(substream_path))
+            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, &substream_type, default_codec);
+        else /// otherwise return only generic codecs and don't use info about the` data_type
+            compression_codec = CompressionCodecFactory::instance().get(effective_codec_desc, nullptr, default_codec, true);
+
+        column_streams[stream_name] = std::make_unique<Stream>(
+            stream_name,
+            data_part->volume->getDisk(),
+            part_path + stream_name, DATA_FILE_EXTENSION,
+            part_path + stream_name, marks_file_extension,
+            compression_codec,
+            settings.max_compress_block_size);
+    };
+
+    pair.type->enumerateStreams(serializations[pair.name], callback);
+}
 }

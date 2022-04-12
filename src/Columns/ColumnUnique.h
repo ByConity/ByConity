@@ -56,6 +56,7 @@ public:
     size_t uniqueInsert(const Field & x) override;
     size_t uniqueInsertFrom(const IColumn & src, size_t n) override;
     MutableColumnPtr uniqueInsertRangeFrom(const IColumn & src, size_t start, size_t length) override;
+    void insertWithDiffIndex(const IColumn & src, size_t start, size_t length, std::unordered_map<UInt64, UInt64>& diff) override;
     IColumnUnique::IndexesWithOverflow uniqueInsertRangeWithOverflow(const IColumn & src, size_t start, size_t length,
                                                                      size_t max_dictionary_size) override;
     size_t uniqueInsertData(const char * pos, size_t length) override;
@@ -139,6 +140,9 @@ public:
 
         return {};
     }
+
+    bool isEmpty() const override { return !(column_holder->size() -  numSpecialValues()); }
+
 
 private:
     IColumn::WrappedPtr column_holder;
@@ -576,6 +580,51 @@ MutableColumnPtr ColumnUnique<ColumnType>::uniqueInsertRangeImpl(
 
     // checkIndexes(*positions_column, column->size() + (overflowed_keys ? overflowed_keys->size() : 0));
     return std::move(positions_column);
+}
+
+template <typename ColumnType>
+void ColumnUnique<ColumnType>::insertWithDiffIndex(const IColumn &src, size_t start, size_t length,
+                                                   std::unordered_map<UInt64, UInt64>& diff)
+{
+    const ColumnType * src_column;
+    const NullMap * null_map = nullptr;
+    if (auto * nullable_column = checkAndGetColumn<ColumnNullable>(src))
+    {
+        src_column = typeid_cast<const ColumnType *>(&nullable_column->getNestedColumn());
+        null_map = &nullable_column->getNullMapData();
+    }
+    else
+        src_column = typeid_cast<const ColumnType *>(&src);
+
+    if (src_column == nullptr)
+        throw Exception("Invalid column type for ColumnUnique::insertWithDiffIndex. Expected " + column_holder->getName() +
+                        ", got " + src.getName(), ErrorCodes::ILLEGAL_COLUMN);
+
+    auto column = getRawColumnPtr();
+    for (size_t row = start; row < (start + length); ++row)
+    {
+        if (null_map && (*null_map)[row])
+            continue;
+        else if (column->compareAt(getNestedTypeDefaultValueIndex(), row, *src_column, 1) == 0)
+            continue;
+        else
+        {
+            auto ref = src_column->getDataAt(row);
+            auto insertion_point = reverse_index.getInsertionPoint(ref);
+
+            if (insertion_point == reverse_index.lastInsertionPoint()) // new key
+            {
+                reverse_index.insert(ref);
+                diff[row] = insertion_point;
+            }
+            else if (insertion_point != row) // two different dict
+            {
+                diff[row] = insertion_point;
+            }
+        }
+    }
+
+    updateNullMask();
 }
 
 template <typename ColumnType>

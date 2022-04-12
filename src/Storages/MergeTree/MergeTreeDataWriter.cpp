@@ -15,6 +15,7 @@
 #include <DataStreams/ITTLAlgorithm.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
+#include <DataTypes/DataTypeByteMap.h>
 
 #include <Parsers/queryToString.h>
 
@@ -369,6 +370,23 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
         part_type = MergeTreeDataPartType::WIDE;
     }
+
+    /// TODO: @litianan will remove it when compact mode work for lc
+    bool has_lc_in_map = std::any_of(all_columns.begin(), all_columns.end(),
+                                  [](const NameAndTypePair & name_type)
+    {
+        if (name_type.type->isMap())
+        {
+            const auto * type_map = typeid_cast<const DataTypeByteMap *>(name_type.type.get());
+            if (type_map->valueTypeIsLC())
+                return true;
+        }
+        return false;
+    });
+
+    if (has_lc_in_map)
+        part_type = MergeTreeDataPartType::WIDE;
+
    auto new_data_part = data.createPart(
        part_name,
        part_type,
@@ -453,8 +471,26 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     auto compression_codec = data.getContext()->chooseCompressionCodec(0, 0);
 
     const auto & index_factory = MergeTreeIndexFactory::instance();
+
     MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns, index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec);
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
+
+    // pre-handle low-cardinality fall-back
+    for (auto const &column : columns)
+    {
+        if (column.type->lowCardinality())
+        {
+            auto const &col = block.getByName(column.name);
+            auto const *lc = typeid_cast<const ColumnLowCardinality *>(col.column.get());
+            if (lc->isFullState())
+            {
+                auto const *lc_type = typeid_cast<const DataTypeLowCardinality *>(column.type.get());
+                // lc full column need switch type
+                NameAndTypePair pair(column.name,  lc_type->getFullLowCardinalityTypePtr());
+                out.updateWriterStream(pair);
+            }
+        }
+    }
 
     out.writePrefix();
     out.writeWithPermutation(block, perm_ptr);

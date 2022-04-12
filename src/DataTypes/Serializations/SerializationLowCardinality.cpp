@@ -45,7 +45,10 @@ void SerializationLowCardinality::enumerateStreams(const StreamCallback & callba
     path.push_back(Substream::DictionaryKeys);
     dict_inner_serialization->enumerateStreams(callback, path);
     path.back() = Substream::DictionaryIndexes;
-    callback(path);
+    // for fall-back compatibility
+    dictionary_type->getDefaultSerialization()->enumerateStreams(callback, path);
+    // callback(path);
+
     path.pop_back();
 }
 
@@ -58,13 +61,15 @@ struct KeysSerializationVersion
         /// Dictionary can be shared for continuous range of granules, so some marks may point to the same position.
         /// Shared dictionary is stored in state and is read once.
         SharedDictionariesWithAdditionalKeys = 1,
+        /// If Dictionary in full state, the Low cardinality column won't do encoding anymore.
+        DictionariesInFullState = 2,
     };
 
     Value value;
 
     static void checkVersion(UInt64 version)
     {
-        if (version != SharedDictionariesWithAdditionalKeys)
+        if (version != SharedDictionariesWithAdditionalKeys && version != DictionariesInFullState)
             throw Exception("Invalid version for SerializationLowCardinality key column.", ErrorCodes::INCORRECT_DATA);
     }
 
@@ -256,7 +261,6 @@ void SerializationLowCardinality::serializeBinaryBulkStatePrefix(
 
     /// Write version and create SerializeBinaryBulkState.
     UInt64 key_version = KeysSerializationVersion::SharedDictionariesWithAdditionalKeys;
-
     writeIntBinary(key_version, *stream);
 
     state = std::make_shared<SerializeStateLowCardinality>(key_version);
@@ -504,7 +508,6 @@ void SerializationLowCardinality::serializeBinaryBulkWithMultipleStreams(
         throw Exception("Got empty stream for SerializationLowCardinality indexes.", ErrorCodes::LOGICAL_ERROR);
 
     const ColumnLowCardinality & low_cardinality_column = typeid_cast<const ColumnLowCardinality &>(column);
-
     auto * low_cardinality_state = checkAndGetLowCardinalitySerializeState(state);
     auto & global_dictionary = low_cardinality_state->shared_dictionary;
     KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
@@ -605,6 +608,14 @@ void SerializationLowCardinality::deserializeBinaryBulkWithMultipleStreams(
         throw Exception("Got empty stream for SerializationLowCardinality indexes.", ErrorCodes::LOGICAL_ERROR);
 
     auto * low_cardinality_state = checkAndGetLowCardinalityDeserializeState(state);
+    if (low_cardinality_state->key_version.value == KeysSerializationVersion::Value::DictionariesInFullState)
+    {
+        auto serial_ptr = dictionary_type->getDefaultSerialization();
+        serial_ptr->deserializeBinaryBulkWithMultipleStreams(low_cardinality_column.getNestedColumnPtr(), limit, settings, state, nullptr);
+        low_cardinality_column.setFullState(true);
+        return;
+    }
+
     KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
 
     auto read_dictionary = [this, low_cardinality_state, keys_stream]()
@@ -817,6 +828,13 @@ void SerializationLowCardinality::serializeImpl(
     const IColumn & column, size_t row_num, SerializationLowCardinality::SerializeFunctionPtr<Params...> func, Args &&... args) const
 {
     const auto & low_cardinality_column = getColumnLowCardinality(column);
+    if (low_cardinality_column.isFullState())
+    {
+        auto serialization = dictionary_type->getDefaultSerialization();
+        (serialization.get()->*func)(low_cardinality_column.getNestedColumn(), row_num, std::forward<Args>(args)...);
+        return;
+    }
+
     size_t unique_row_number = low_cardinality_column.getIndexes().getUInt(row_num);
     auto serialization = dictionary_type->getDefaultSerialization();
     (serialization.get()->*func)(*low_cardinality_column.getDictionary().getNestedColumn(), unique_row_number, std::forward<Args>(args)...);
@@ -848,5 +866,94 @@ void SerializationLowCardinality::serializeMemComparable(const IColumn & column,
 void SerializationLowCardinality::deserializeMemComparable(IColumn & column, ReadBuffer & istr) const
 {
     deserializeImpl(column, &ISerialization::deserializeMemComparable, istr);
+}
+
+SerializationFullLowCardinality::SerializationFullLowCardinality(const DataTypePtr & dictionary_type_)
+    : SerializationLowCardinality(dictionary_type_)
+{
+    dict_inner_serialization = dictionary_type_->getDefaultSerialization();
+}
+
+void SerializationFullLowCardinality::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
+{
+    dict_inner_serialization->enumerateStreams(callback, path);
+    path.push_back(Substream::DictionaryKeys);
+    callback(path);
+    path.pop_back();
+}
+
+void SerializationFullLowCardinality::serializeBinaryBulkStatePrefix(
+        SerializeBinaryBulkSettings & settings,
+        SerializeBinaryBulkStatePtr & state) const
+{
+    settings.path.push_back(Substream::DictionaryKeys);
+    auto * stream = settings.getter(settings.path);
+    settings.path.pop_back();
+
+    if (!stream)
+        throw Exception("Got empty stream in DataTypeLowCardinality::serializeBinaryBulkStatePrefix",
+                        ErrorCodes::LOGICAL_ERROR);
+
+    /// Write version and create SerializeBinaryBulkState.
+    UInt64 key_version;
+    key_version = KeysSerializationVersion::DictionariesInFullState;
+    dict_inner_serialization->serializeBinaryBulkStatePrefix(settings, state);
+
+    writeIntBinary(key_version, *stream);
+
+    state = std::make_shared<SerializeStateLowCardinality>(key_version);
+}
+
+void SerializationFullLowCardinality::serializeBinaryBulkStateSuffix(
+        SerializeBinaryBulkSettings & settings,
+        SerializeBinaryBulkStatePtr & state) const
+{
+    auto * low_cardinality_state = checkAndGetLowCardinalitySerializeState(state);
+    KeysSerializationVersion::checkVersion(low_cardinality_state->key_version.value);
+    dict_inner_serialization->serializeBinaryBulkStateSuffix(settings, state);
+}
+
+void SerializationFullLowCardinality::deserializeBinaryBulkStatePrefix(
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state) const
+{
+    settings.path.push_back(Substream::DictionaryKeys);
+    auto * stream = settings.getter(settings.path);
+    settings.path.pop_back();
+
+    if (!stream)
+        return;
+
+    UInt64 keys_version;
+    readIntBinary(keys_version, *stream);
+    dict_inner_serialization->deserializeBinaryBulkStatePrefix(settings, state);
+
+    state = std::make_shared<DeserializeStateLowCardinality>(keys_version);
+}
+
+void SerializationFullLowCardinality::serializeBinaryBulkWithMultipleStreams(
+        const IColumn & column,
+        size_t offset,
+        size_t limit,
+        SerializeBinaryBulkSettings & settings,
+        SerializeBinaryBulkStatePtr & state) const
+{
+    const ColumnLowCardinality &low_cardinality_column = typeid_cast<const ColumnLowCardinality &>(column);
+    dict_inner_serialization->serializeBinaryBulkWithMultipleStreams(low_cardinality_column.getNestedColumn(), offset,
+                                                            limit,
+                                                            settings, state);
+}
+
+void SerializationFullLowCardinality::deserializeBinaryBulkWithMultipleStreams(
+        ColumnPtr & column,
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state,
+        SubstreamsCache * /* cache */) const
+{
+    auto mutable_column = column->assumeMutable();
+    ColumnLowCardinality & low_cardinality_column = typeid_cast<ColumnLowCardinality &>(*mutable_column);
+    dict_inner_serialization->deserializeBinaryBulkWithMultipleStreams(low_cardinality_column.getNestedColumnPtr(), limit, settings, state, nullptr);
+    low_cardinality_column.setFullState(true);
 }
 }

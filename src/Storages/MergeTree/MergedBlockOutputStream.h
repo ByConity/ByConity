@@ -42,6 +42,7 @@ public:
             MergeTreeData::DataPart::Checksums * additional_column_checksums = nullptr);
 
     size_t getRowsCount() const { return rows_count; }
+    void updateWriterStream(const NameAndTypePair &pair) override;
 
 private:
     /** If `permutation` is given, it rearranges the values in the columns when writing.

@@ -9,7 +9,7 @@ namespace DB
 
 class DataTypeLowCardinality : public IDataType
 {
-private:
+protected:
     DataTypePtr dictionary_type;
 
 public:
@@ -23,6 +23,7 @@ public:
     }
     const char * getFamilyName() const override { return "LowCardinality"; }
     TypeIndex getTypeId() const override { return TypeIndex::LowCardinality; }
+    DataTypePtr getFullLowCardinalityTypePtr() const;
 
     MutableColumnPtr createColumn() const override;
 
@@ -56,7 +57,7 @@ public:
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type, MutableColumnPtr && keys);
 
     bool canBeMapKVType() const override { return dictionary_type->canBeMapKVType(); }
-private:
+protected:
     SerializationPtr doGetDefaultSerialization() const override;
 
     template <typename ... Params>
@@ -73,6 +74,23 @@ private:
 
     template <typename Creator>
     static MutableColumnUniquePtr createColumnUniqueImpl(const IDataType & keys_type, const Creator & creator);
+};
+
+/**
+ * For Low Cardinality column fall-back, this type only live in serialize process.
+ * Deserialize still use the parent type, and the dict version help to work properly.
+ */
+class DataTypeFullLowCardinality : public DataTypeLowCardinality
+{
+public:
+    DataTypeFullLowCardinality(DataTypePtr dictionary_type_);
+    String doGetName() const override
+    {
+        return "FullLowCardinality(" + dictionary_type->getName() + ")";
+    }
+
+protected:
+    SerializationPtr doGetDefaultSerialization() const override;
 };
 
 /// Returns dictionary type if type is DataTypeLowCardinality, type otherwise.

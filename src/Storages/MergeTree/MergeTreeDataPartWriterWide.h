@@ -36,6 +36,8 @@ public:
 
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
 
+    void updateWriterStream(const NameAndTypePair &pair) override;
+
 private:
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
@@ -81,7 +83,7 @@ private:
 
     void init();
 
-    Poco::Logger * getLogger() override { return log; } 
+    Poco::Logger * getLogger() override { return log; }
 
     /// How many rows we have already written in the current mark.
     /// More than zero when incoming blocks are smaller then their granularity.
@@ -101,7 +103,7 @@ private:
     bool enable_unique_row_store = false;
     /// generate row store to speed up lookup based on row number
     IndexFile::IndexFileInfo unique_row_store_file_info;
-    
+
     size_t rows_count = 0;
 
     /// If the part contains only one block (normal insert case), we generate the key index file
