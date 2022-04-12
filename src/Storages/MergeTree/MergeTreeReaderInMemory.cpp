@@ -119,13 +119,22 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
             auto & part_all_columns = part_in_memory->getColumns();
             if (isMapImplicitKeyNotKV(name_type.name))
             {
-                auto map_column_name = parseColNameFromImplicitName(name_type.name);
-                auto key_name = parseKeyFromImplicitMap(map_column_name, name_type.name);
+                auto map_column_name = parseMapNameFromImplicitColName(name_type.name);
+                auto key_name = parseKeyNameFromImplicitColName(name_type.name, map_column_name);
                 auto map_column = std::find_if(part_all_columns.begin(), part_all_columns.end(), [&](auto & val) { return val.name == map_column_name; });
                 if (map_column != part_all_columns.end())
                 {
                     auto block_column = getColumnFromBlock(part_in_memory->block, *map_column);
                     const ColumnByteMap & column_map = typeid_cast<const ColumnByteMap &>(*block_column);
+
+                    /// Attention: key_name has been quoted, we need to remove the quote.
+                    if (auto col = part_columns.tryGetByName(map_column_name); !col.has_value() || !col->type->isMap())
+                        throw Exception(ErrorCodes::LOGICAL_ERROR, "Map column '{}' doesn't exist", map_column_name);
+                    else
+                    {
+                        auto const & map_key_type = dynamic_cast<const DataTypeByteMap*>(col->type.get())->getKeyType();
+                        key_name = convertKeyNameToVisitorString(map_key_type.get(), key_name);
+                    }
                     res_columns[i] = column_map.getValueColumnByKey(key_name, rows_to_read);
                 }
             }

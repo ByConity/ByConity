@@ -1,5 +1,3 @@
-USE test;
-
 DROP TABLE IF EXISTS funnel_test;
 CREATE TABLE funnel_test (uid UInt32 default 1, timestamp UInt64, event UInt32, prop String) engine=Log;
 INSERT INTO funnel_test (timestamp, event, prop) values (86400,1000,'a'),(86401,1001,'b'),(86402,1002,'c'),(86403,1003,'d'),(86404,1004,'e'),(86405,1005,'f'),(86406,1006,'g');

@@ -130,7 +130,7 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
         if (column.type->isMap() && !column.type->isMapKVStore())
             continue;
         else if (isMapImplicitKeyNotKV(column.name))
-            addByteMapStreams({column}, parseColNameFromImplicitName(column.name), default_codec->getFullCodecDesc());
+            addByteMapStreams({column}, parseMapNameFromImplicitColName(column.name), default_codec->getFullCodecDesc());
         else
         {
             if (!data_writer)

@@ -1352,7 +1352,7 @@ void IMergeTreeDataPart::remove() const
                 {
                     /// When enable compact map data, all implicit column data of the same map column store in a file.
                     /// Thus, we only need to remove the file once.
-                    String file_name = getColFileNameFromImplicitColFileName(file);
+                    String file_name = getMapFileNameFromImplicitFileName(file);
                     if (file_set.count(file_name))
                     {
                         continue;
@@ -1423,7 +1423,7 @@ void IMergeTreeDataPart::projectionRemove(const String & parent_to, bool keep_sh
                 {
                     /// When enable compact map data, all implicit column data of the same map column store in a file.
                     /// Thus, we only need to remove the file once.
-                    String file_name = getColFileNameFromImplicitColFileName(file);
+                    String file_name = getMapFileNameFromImplicitFileName(file);
                     if (file_set.count(file_name))
                     {
                         continue;

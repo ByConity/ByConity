@@ -108,7 +108,7 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         if (it.type->isMap() && !it.type->isMapKVStore())
             continue;
         else if (isMapImplicitKeyNotKV(it.name))
-            addByteMapStreams({it}, parseColNameFromImplicitName(it.name), default_codec->getFullCodecDesc());
+            addByteMapStreams({it}, parseMapNameFromImplicitColName(it.name), default_codec->getFullCodecDesc());
         else
             addStreams(it, columns.getCodecDescOrDefault(it.name, default_codec));
     }
@@ -476,7 +476,7 @@ void MergeTreeDataPartWriterWide::writeColumn(
             /// This case maybe happen when writing uncompact map data during merging.
             /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream.
             /// Thus, it may not exist in last_non_written_marks, we need to fill its mark info using the mark info of base stream.
-            String col = parseColNameFromImplicitName(name);
+            String col = parseMapNameFromImplicitColName(name);
             String map_base_stream_name = getBaseNameForMapCol(col);
             if (!last_non_written_marks.count(map_base_stream_name))
                 throw Exception(

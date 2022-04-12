@@ -86,7 +86,7 @@ static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
     {
         for (auto & [file, _] : part->getChecksums()->files)
         {
-            if (!startsWith(file, "__") || std::string::npos != file.find("_base."))
+            if (!isMapImplicitKeyNotKV(file) || isMapBaseFile(file))
                 continue;
 
             std::string unescaped_file = unescapeForFileName(file);

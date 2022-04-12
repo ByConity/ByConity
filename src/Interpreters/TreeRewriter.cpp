@@ -821,7 +821,7 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
 		{
             if (isMapImplicitKeyNotKV(*it))
             {
-                String map_name = parseColNameFromImplicitName(*it);
+                String map_name = parseMapNameFromImplicitColName(*it);
                 if (source_column_names.count(map_name))
                 {
                     for (auto it2 = source_columns.begin(); it2 != source_columns.end(); ++it2)

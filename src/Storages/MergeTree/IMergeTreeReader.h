@@ -90,10 +90,9 @@ protected:
     NamesAndTypesList columns;
     NamesAndTypesList part_columns;
 
-	//TODO whether we will move it to ReaderWide class
     /// Map ColumnMap to its keys sub columns
-    MapColumnKeys mapColumnKeys;
-    std::set<String> dupImplicitKeys;
+    MapColumnKeys map_column_keys;
+    std::set<String> dup_implicit_keys;
     Names names; // only initialized if duplicate implicit key exit
 
     UncompressedCache * uncompressed_cache;

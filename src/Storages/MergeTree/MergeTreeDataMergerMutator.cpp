@@ -1457,7 +1457,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                 }
                 else
                 {
-                    std::set<String> implicit_names;
+                    std::unordered_set<String> implicit_names;
                     for (const auto & part : parts)
                     {
                         if (isInMemoryPart(part))
@@ -1471,7 +1471,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                                     for (size_t i = 0; i < column_map_key.size(); ++i)
                                     {
                                         auto key_name = applyVisitor(DB::FieldVisitorToString(), column_map_key[i]);
-                                        String implicit_name = getImplicitFileNameForMapKey(column.name, key_name);
+                                        String implicit_name = getImplicitColNameForMapKey(column.name, key_name);
                                         implicit_names.insert(implicit_name);
                                     }
                                 }
@@ -1483,12 +1483,11 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                             const auto & checksums = part->getChecksums();
                             for (const auto & it : checksums->files)
                             {
-                                String key_name;
                                 const auto & file_name = it.first;
-                                bool parse_success = parseKeyFromImplicitFileName(column_name, file_name, key_name);
-                                if (parse_success)
+                                if (isMapImplicitDataFileNameOfSpecialMapName(file_name, column_name))
                                 {
-                                    String implicit_name = getImplicitFileNameForMapKey(column_name, key_name);
+                                    String key_name = parseKeyNameFromImplicitFileName(file_name, column_name);
+                                    String implicit_name = getImplicitColNameForMapKey(column_name, key_name);
                                     implicit_names.insert(implicit_name);
                                 }
                             }
@@ -2449,14 +2448,14 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
         for (const auto & mapKeyAst : command.map_keys->children)
         {
             const auto & key = typeid_cast<const ASTLiteral &>(*mapKeyAst).value.get<std::string>();
-            String implicitKeyName = getImplicitFileNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
+            String implicitKeyName = getImplicitColNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
             for (const auto & [file, _] : source_part->getChecksums()->files)
             {
                 if (startsWith(file, implicitKeyName))
                 {
                     if (source_part->versions->enable_compact_map_data)
                     {
-                        String file_name = getColFileNameFromImplicitColFileName(file);
+                        String file_name = getMapFileNameFromImplicitFileName(file);
                         if (!file_set.count(file_name))
                             file_set.insert(file_name);
                     }
@@ -2469,9 +2468,10 @@ NameSet MergeTreeDataMergerMutator::collectFilesForClearMapKey(MergeTreeData::Da
         {
             /// Check if all implicit keys of the map column have removed
             bool has_other_implicit_column = false;
+            auto map_key_prefix = genMapKeyFilePrefix(command.column_name);
             for (const auto & [file, _]: files)
             {
-                if (startsWith(file, String("__" + command.column_name + "__")))
+                if (startsWith(file, map_key_prefix))
                 {
                     has_other_implicit_column = true;
                     break;

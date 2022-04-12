@@ -65,16 +65,15 @@ int IngestPartition::compare(Columns & target_key_cols, Columns & src_key_cols, 
 
 std::optional<NameAndTypePair> IngestPartition::tryGetMapColumn(const StorageInMemoryMetadata & meta_data, const String & col_name)
 {
-    if (!meta_data.getColumns().hasPhysical(col_name) && isMapImplicitKeyNotKV(col_name))
+    if (!meta_data.getColumns().hasPhysical(col_name) && isMapImplicitKey(col_name))
     {
         auto & columns = meta_data.getColumns();
         for (auto & nt : (columns.getOrdinary()))
         {
             if (nt.type->isMap())
             {
-                if (nt.type->isMapKVStore()
-                    ? (col_name == nt.name + ".key" || col_name == nt.name + ".value")
-                    : startsWith(col_name, String("__") + nt.name + String("__")))
+                if (nt.type->isMapKVStore() ? (col_name == nt.name + ".key" || col_name == nt.name + ".value")
+                                            : startsWith(col_name, getMapKeyPrefix(nt.name)))
                 {
                     return nt;
                 }
@@ -83,13 +82,6 @@ std::optional<NameAndTypePair> IngestPartition::tryGetMapColumn(const StorageInM
     }
 
     return std::nullopt;
-}
-
-String IngestPartition::getMapKey(const String & map_col_name, const String & map_implicit_name)
-{
-    String prefix = String("__") + map_col_name + "__";
-    size_t key_len = map_implicit_name.size() - prefix.size();
-    return map_implicit_name.substr(prefix.size(), key_len);
 }
 
 void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, const IngestPartition::IngestSources & src_blocks, BlockOutputStreamPtr & output, Names & all_columns_with_partition_key)
@@ -127,7 +119,7 @@ void IngestPartition::writeNewPart(const StorageInMemoryMetadata & meta_data, co
                     key_types.emplace(map_col.name, map_col_type.getKeyType());
                 }
 
-                auto map_key = getMapKey(map_col.name, column_type_name.name);
+                auto map_key = parseKeyNameFromImplicitColName(column_type_name.name, map_col.name);
                 src_columns[map_col.name][map_key] = column_type_name.column;
             }
             else
@@ -512,7 +504,7 @@ bool IngestPartition::ingestPartition()
         auto column_name = name;
         /// No need to add implicit map column
         if (isMapImplicitKeyNotKV(name))
-            column_name = parseColNameFromImplicitName(name);
+            column_name = parseMapNameFromImplicitColName(name);
         auto column = target_meta->getColumns().getColumnOrSubcolumn(ColumnsDescription::GetFlags::AllPhysical, column_name);
         ingested_header.insertUnique(ColumnWithTypeAndName(column.type, column.name));
     }
@@ -1217,7 +1209,7 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
         {
             if (isMapImplicitKeyNotKV(col_name))
             {
-                auto map_col_name = parseColNameFromImplicitName(col_name);
+                auto map_col_name = parseMapNameFromImplicitColName(col_name);
                 implicit_names_mapping[map_col_name].push_back(col_name);
             }
         }
@@ -1241,12 +1233,16 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
             if (it != implicit_names_mapping.end() && map_column)
             {
                 std::unordered_map<String, ColumnPtr> implicit_columns;
+                auto const & map_key_type = dynamic_cast<const DataTypeByteMap*>(column_with_type_name.type.get())->getKeyType();
                 for (auto & col_name : it->second)
                 {
-                    auto key = parseKeyFromImplicitMap(it->first, col_name);
+                    /// Attention: key_name has been quoted, we need to remove the quote.
+                    auto key_name = parseKeyNameFromImplicitColName(col_name, it->first);
                     ColumnWithTypeAndName * col_type_name = res.findByName(col_name);
                     ColumnPtr implicit_col = col_type_name->column;
-                    implicit_columns[key] = std::move(implicit_col);
+                    
+                    key_name = convertKeyNameToVisitorString(map_key_type.get(), key_name);
+                    implicit_columns[key_name] = std::move(implicit_col);
                     res.erase(col_name);
                 }
 

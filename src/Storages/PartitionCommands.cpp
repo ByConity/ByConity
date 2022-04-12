@@ -147,7 +147,7 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
 
                         if (!key_name.empty())
                         {
-                            res.column_names.push_back(getImplicitFileNameForMapKey(map_col->name(), key_name));
+                            res.column_names.push_back(getImplicitColNameForMapKey(map_col->name(), key_name));
                             continue;
                         }
                     }

@@ -199,7 +199,7 @@ void IDataType::enumerateStreams(const SerializationPtr & serialization, const S
 
 Field IDataType::stringToVisitorField(const String &) const
 {
-        throw Exception("stringToVisitorField not implemented for Data type" + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    throw Exception("stringToVisitorField not implemented for Data type" + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
 String IDataType::getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path)

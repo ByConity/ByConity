@@ -117,7 +117,7 @@ void QueryNormalizer::rewriteMapElement(ASTFunction & node, ASTPtr & ast, const 
     if (!key_name.empty())
     {
         // create identifier
-        String implicit_name = getImplicitFileNameForMapKey(map_col->name(), key_name);
+        String implicit_name = getImplicitColNameForMapKey(map_col->name(), key_name);
         ast = std::make_shared<ASTIdentifier>(implicit_name);
         ast->as<ASTIdentifier>()->is_implicit_map_key = true;
         //set alias back
@@ -237,7 +237,7 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
         {
             String key_name = getMapKeyName(node, data);
             if ((data.storage && data.metadata_snapshot->columns.hasPhysical(map_col->name()) && !data.metadata_snapshot->columns.getPhysical(map_col->name()).type->isMapKVStore())
-                /*|| (data.plan_segment_analyzer && data.plan_segment_analyzer->hasColumn(getImplicitFileNameForMapKey(map_col->name, key_name)))*/)
+                /*|| (data.plan_segment_analyzer && data.plan_segment_analyzer->hasColumn(getImplicitColNameForMapKey(map_col->name, key_name)))*/)
             {
                 rewriteMapElement(node, ast, key_name);
             }
