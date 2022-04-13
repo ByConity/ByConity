@@ -107,6 +107,19 @@ static DataTypePtr create64(const ASTPtr & arguments)
     return std::make_shared<DataTypeDateTime64>(scale, timezone.value_or(String{}));
 }
 
+static DataTypePtr create64WithoutTz(const ASTPtr & arguments)
+{
+    if (!arguments || arguments->children.empty())
+        return std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale, "UTC");
+
+    if (arguments->children.size() > 1)
+        throw Exception("DateTimeWithoutTz data type can optionally have one argument - scale ", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+    const auto scale = getArgument<UInt64, ArgumentKind::Mandatory>(arguments, 0, "scale", "DateTimeWithoutTz");
+
+    return std::make_shared<DataTypeDateTime64>(scale, "UTC");
+}
+
 static DataTypePtr createTime(const ASTPtr & arguments)
 {
     if (!arguments || arguments->children.empty())
@@ -130,6 +143,7 @@ void registerDataTypeDateTime(DataTypeFactory & factory)
     factory.registerDataType("DateTime", create, DataTypeFactory::CaseInsensitive);
     factory.registerDataType("DateTime32", create32, DataTypeFactory::CaseInsensitive);
     factory.registerDataType("DateTime64", create64, DataTypeFactory::CaseInsensitive);
+    factory.registerDataType("DateTimeWithoutTz", create64WithoutTz, DataTypeFactory::CaseInsensitive);
 
     factory.registerAlias("TIMESTAMP", "DateTime", DataTypeFactory::CaseInsensitive);
 }
