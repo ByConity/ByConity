@@ -1092,6 +1092,9 @@ void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
     }
 }
 
+/// Update the column_streams according to new type of the column name,
+/// For LowCardinality fall-back, the type need switch to DataTypeFullLowCardinality,
+/// and update the serialization correspond to the type.
 void MergeTreeDataPartWriterWide::updateWriterStream(const NameAndTypePair &pair)
 {
     serializations[pair.name] = pair.type->getDefaultSerialization();
