@@ -361,7 +361,7 @@ SELECT formatDateTime(N, \'%C %d %D %e %F %H %I %j %m %M %p %R %S %T %u %V %w %y
 SELECT N -  N
 "Int32",0
 "Int32",0
-Code: 43
+"IntervalSecond",0
 ------------------------------------------
 SELECT N +  N
 Code: 43
@@ -421,12 +421,12 @@ Code: 43
 SELECT N - DT64
 Code: 43
 Code: 43
-Code: 43
+"IntervalSecond",0
 ------------------------------------------
 SELECT DT64 - N
 Code: 43
 Code: 43
-Code: 43
+"IntervalSecond",0
 ------------------------------------------
 SELECT N != DT
 "UInt8",1
