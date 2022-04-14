@@ -211,7 +211,7 @@ BlockIO InterpreterDistributedStages::executePlanSegment()
     PlanSegmentsStatusPtr scheduler_status;
     
     if (plan_segment_tree->getNodes().size() > 1)
-        scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getClientInfo().initial_query_id, plan_segment_tree.get(), context);
+        scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getCurrentQueryId(), plan_segment_tree.get(), context);
     else
     {
         scheduler_status = std::make_shared<PlanSegmentsStatus>();

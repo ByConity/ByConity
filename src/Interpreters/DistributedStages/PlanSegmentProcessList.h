@@ -33,10 +33,11 @@ class PlanSegmentProcessListEntry
 private:
     PlanSegmentProcessList & parent;
     QueryStatus * status;
+    String initial_query_id;
     size_t segment_id;
 
 public:
-    explicit PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, size_t segment_id_);
+    PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, String initial_query_id_, size_t segment_id_);
     ~PlanSegmentProcessListEntry();
     QueryStatus * operator->() { return status; }
     const QueryStatus * operator->() const { return status; }
