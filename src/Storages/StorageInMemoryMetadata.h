@@ -110,9 +110,6 @@ struct StorageInMemoryMetadata
     /// Returns combined set of columns
     const ColumnsDescription & getColumns() const;
 
-    /// Returns combined set of columns and with a extra row id column
-    ColumnsDescription getColumnsWithRowid() const;
-
     bool hasEncryptColumn() const;
     bool hasSecurityColumn() const;
     ColumnsWithTypeAndName getEncryptColumns() const;
@@ -177,9 +174,6 @@ struct StorageInMemoryMetadata
     Block getSampleBlockWithVirtuals(const NamesAndTypesList & virtuals) const;
 
 
-    /// NOTE: (Unique Table Only), Reversed name for rowid column if need
-    static constexpr auto rowid_column_name = "_rowid_";
-
     /// NOTE: (Unique Table Only), Reserved name for delete flag.
     static constexpr auto delete_flag_column_name = "_delete_flag_";
 
@@ -206,7 +200,7 @@ struct StorageInMemoryMetadata
     /// message.
     Block getSampleBlockForColumns(
         const Names & column_names, const NamesAndTypesList & virtuals = {}, const StorageID & storage_id = StorageID::createEmpty(),
-        bool include_rowid_column = false, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
+        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
 
     /// Returns structure with partition key.
     const KeyDescription & getPartitionKey() const;

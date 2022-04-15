@@ -20,7 +20,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool quiet)
     : MergeTreeSequentialSource(storage_, metadata_snapshot_,
     data_part_, data_part_->getDeleteBitmap(), columns_to_read_, read_with_direct_io_,
-    take_column_types_from_storage, quiet, false) {}
+    take_column_types_from_storage, quiet) {}
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
     const MergeTreeData & storage_,
@@ -30,10 +30,10 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
-    bool quiet, bool include_rowid_column_,
+    bool quiet,
     BitEngineReadType bitengine_read_type)
     : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(
-            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), include_rowid_column_, bitengine_read_type))
+            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), bitengine_read_type))
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , data_part(std::move(data_part_))
@@ -41,10 +41,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     , columns_to_read(std::move(columns_to_read_))
     , read_with_direct_io(read_with_direct_io_)
     , mark_cache(storage.getContext()->getMarkCache())
-    , include_rowid_column(include_rowid_column_)
 {
     size_t num_deletes = delete_bitmap ? delete_bitmap->cardinality() : 0;
-
 
     addTotalRowsApprox(data_part->rows_count - num_deletes);
 
@@ -121,13 +119,11 @@ try
 
         if (rows_read)
         {
-
             size_t num_deleted = 0;
-            ColumnUInt8::MutablePtr delete_column = nullptr;
             if (delete_bitmap)
             {
                 /// construct delete filter for current granule
-                delete_column = ColumnUInt8::create(rows_read, 1);
+                ColumnUInt8::MutablePtr delete_column = ColumnUInt8::create(rows_read, 1);
                 UInt8 * filter_data = delete_column->getData().data();
                 size_t start_row = currentMarkStart();
                 size_t end_row = currentMarkEnd();
@@ -157,44 +153,21 @@ try
 
             reader->performRequiredConversions(columns);
 
-            if (include_rowid_column)
-            {
-                auto column = ColumnUInt32::create(rows_read);
-                for (size_t i = 0; i < rows_read; ++i)
-                    column->getData()[i] = static_cast<UInt32>(current_row + i);
-                if (delete_column)
-                    columns.emplace_back(column->filter(delete_column->getData(), rows_read - num_deleted));
-                else
-                    columns.emplace_back(std::move(column));
-            }
-
-            size_t num_columns = sample.size() + include_rowid_column;
-            if (include_rowid_column && sample.size() + 1 != num_columns)
-            {
-                throw Exception("Shoule have rowid column exist", ErrorCodes::MEMORY_LIMIT_EXCEEDED);
-            }
-
             Columns res_columns;
-            res_columns.reserve(num_columns);
+            res_columns.reserve(sample.size());
 
             auto it = sample.begin();
-            for (size_t i = 0; i < num_columns; ++i)
+            for (size_t i = 0; i < sample.size(); ++i)
             {
-                if (it != sample.end() && header.has(it->name)) {
+                if (header.has(it->name))
                     res_columns.emplace_back(std::move(columns[i]));
-                    ++it;
-                }
-                else if (it == sample.end()) {
-                    if (!include_rowid_column)
-                        throw Exception("The last column should be row_id column", ErrorCodes::MEMORY_LIMIT_EXCEEDED);
-                    res_columns.emplace_back(std::move(columns[i]));
-                }
+                ++it;
             }
 
             current_row += rows_read;
             current_mark += (rows_to_read == rows_read);
 
-            LOG_DEBUG(
+            LOG_TRACE(
                 log,
                 "Try to read rows {}, actual read rows {}, delete {} row, remaining rows {} from part {}",
                 rows_to_read,

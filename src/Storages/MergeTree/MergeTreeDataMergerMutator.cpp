@@ -1204,7 +1204,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         case MergeTreeData::MergingParams::Ordinary:
         case MergeTreeData::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
-                header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(), 
+                header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(),
                 true, blocks_are_granules_size, /*have_all_inputs*/true, /*part_id_mapping_cb*/part_id_mapping_cb);
             break;
 
@@ -1377,7 +1377,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                     auto column_part_source = std::make_shared<MergeTreeSequentialSource>(
                         data, metadata_snapshot, parts[part_num], future_part.getDeleteBitmap(parts[part_num]), column_names_, read_with_direct_io,
                         /*take_column_types_from_storage*/true,
-                        /*quiet=*/ false, /*include_rowid_column=*/ false, /*bitengine_read_type= */ bitengine_read_type);
+                        /*quiet=*/ false, /*bitengine_read_type= */ bitengine_read_type);
 
                     column_part_source->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, column_progress));
 
@@ -1916,7 +1916,7 @@ bool MergeTreeDataMergerMutator::tryMergeRowStoreIntoNewPart(
                     serializations[j]->serializeBinary(*mutable_columns[j], mutable_columns[j]->size() - 1, val_buf);
                 else
                     serializations[j]->serializeBinary(*mutable_columns[j], 0, val_buf); /// insert default value
-                
+
                 /// Check and clear column data in order to avoid using too much memory
                 if (mutable_columns[j]->size() > DEFAULT_MERGE_BLOCK_SIZE)
                 {

@@ -162,7 +162,7 @@ void IMergeTreeDataPart::MinMaxIndex::store(const MergeTreeData & data, const St
     if (!initialized)
         throw Exception("Attempt to store uninitialized MinMax index for part " + part_path + ". This is a bug.",
             ErrorCodes::LOGICAL_ERROR);
-    
+
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
 
@@ -1717,11 +1717,11 @@ void IMergeTreeDataPart::storePartitionAndMinMaxIndex(WriteBuffer & buf) const
     {
         if (!parent_part)
             partition.store(storage, buf);
-        
+
         if (!isEmpty())
         {
             if (!parent_part)
-               minmax_idx.store(storage, name, buf); 
+               minmax_idx.store(storage, name, buf);
         }
     }
 }
@@ -1749,7 +1749,7 @@ void IMergeTreeDataPart::loadPartitionAndMinMaxIndex(ReadBuffer & buf)
     {
         if (!parent_part)
             partition.load(storage, buf);
-        
+
         if (!isEmpty())
         {
             if (parent_part)
@@ -1775,7 +1775,7 @@ void IMergeTreeDataPart::loadPartitionAndMinMaxIndex(ReadBuffer & buf)
 }
 
 void IMergeTreeDataPart::loadTTLInfos(ReadBuffer & buf, bool old_meta_format)
-{   
+{
     assertString("ttl format version: ", buf);
     size_t format_version;
     readText(format_version, buf);
@@ -1887,17 +1887,17 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
     if (!extra_column_name.empty() && std::find(read_columns.begin(), read_columns.end(), extra_column_name) == read_columns.end())
         read_columns.push_back(extra_column_name);
 
-    /// FIXME (UNIQUE KEY): Use delete bitmap to filter deleted rows, need to change
-    ///     read logic inside MergeTreeSequentialSource
+    /// Read parts with row id included.
+    read_columns.push_back("_part_row_number");
+
     Pipes pipes;
     auto source = std::make_unique<MergeTreeSequentialSource>(
             storage, metadata_snapshot, shared_from_this(),
-            /*delete_bitmap=*/nullptr,
+            /*delete_bitmap=*/delete_bitmap,
             read_columns,
             /*direct_io=*/ false,
             /*take_column_types_from_storage=*/true,
-            /*quite=*/false,
-            /*include_rowid_column=*/true);
+            /*quite=*/false);
     pipes.emplace_back(Pipe(std::move(source)));
 
     QueryPipeline pipeline;
@@ -1918,7 +1918,7 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
         const ColumnWithTypeAndName * extra_column = nullptr;
         if (!extra_column_name.empty())
             extra_column = &block.getByName(extra_column_name);
-        auto & rowid_column = block.getByName(StorageInMemoryMetadata::rowid_column_name);
+        auto & rowid_column = block.getByName("_part_row_number");
 
         size_t rows = block.rows();
         for (size_t i = 0; i < rows; ++i)
@@ -1962,6 +1962,8 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
     auto memory_bytes = new_unique_index_arena->size() + memory_unique_index->getBufferSizeInBytes();
     memory_unique_index->setMemoryBytes(memory_bytes);
     memory_unique_index->setAccessTime(time(nullptr));
+    unique_index_size.store(memory_unique_index->size(), std::memory_order_relaxed);
+    unique_index_memory_size.store(memory_bytes, std::memory_order_relaxed);
     LOG_DEBUG(
         storage.log,
         "loaded unique index ({}): size={}, memory={}, duration={}ms",
@@ -2010,6 +2012,8 @@ UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_
     if (force_unload || num_rows == 0 || idle_timeout)
     {
         memory_unique_index.reset();
+        unique_index_memory_size.store(0, std::memory_order_relaxed);
+        unique_index_size.store(0, std::memory_order_relaxed);
         String reason = force_unload ? "force" : (num_rows == 0 ? "all rows have been deleted" : "idle timeout");
         LOG_DEBUG(storage.log, "unload unique index of {}, reason: {}", name, reason);
         return memory_bytes_before;
@@ -2038,6 +2042,8 @@ UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_
     memory_unique_index = std::move(new_unique_index);
     auto memory_bytes_after = new_unique_index_arena->size() + memory_unique_index->getBufferSizeInBytes();
     memory_unique_index->setMemoryBytes(memory_bytes_after);
+    unique_index_size.store(memory_unique_index->size(), std::memory_order_relaxed);
+    unique_index_memory_size.store(memory_bytes_after, std::memory_order_relaxed);
     auto duration = watch.elapsedMilliseconds();
     if (duration >= 100)
         LOG_DEBUG(

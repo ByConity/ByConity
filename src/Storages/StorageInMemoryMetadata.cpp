@@ -130,13 +130,6 @@ const ColumnsDescription & StorageInMemoryMetadata::getColumns() const
     return columns;
 }
 
-ColumnsDescription StorageInMemoryMetadata::getColumnsWithRowid() const
-{
-    auto ans = columns;
-    ans.add(ColumnDescription(rowid_column_name, DataTypeFactory::instance().get("UInt32")));
-    return ans;
-}
-
 bool StorageInMemoryMetadata::hasEncryptColumn() const
 {
     return columns.hasEncryptColumn();
@@ -362,7 +355,7 @@ Block StorageInMemoryMetadata::getSampleBlock(bool include_func_columns) const
 
 Block StorageInMemoryMetadata::getSampleBlockForColumns(
     const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id,
-    bool include_rowid_column, BitEngineReadType bitengine_read_type) const
+    BitEngineReadType bitengine_read_type) const
 {
     Block res;
 
@@ -417,15 +410,6 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
                     "Column " + backQuote(name) + " not found in table " + (storage_id.empty() ? "" : storage_id.getNameForLogs()),
                     ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK);
         }
-    }
-
-    if (include_rowid_column)
-    {
-        ColumnWithTypeAndName rowid_column;
-        rowid_column.name = rowid_column_name;
-        rowid_column.type = DataTypeFactory::instance().get("UInt32");
-        rowid_column.column = rowid_column.type->createColumn();
-        res.insert(rowid_column);
     }
 
     return res;
