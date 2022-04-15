@@ -74,9 +74,8 @@ PlanSegmentProcessList::insert(const PlanSegment & plan_segment, ContextMutableP
     else
         entry = query_context->getProcessList().insert("\n" + pipeline_string, nullptr, query_context, force);
 
+    auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, &entry->get(), initial_query_id, plan_segment.getPlanSegmentId());
 
-    auto res = std::make_unique<PlanSegmentProcessListEntry>(*this, &entry->get(), plan_segment.getPlanSegmentId());
-    
     std::unique_lock lock(mutex);
     if (need_wait_cancel)
     {
@@ -169,23 +168,23 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
     return res;
 }
 
-PlanSegmentProcessListEntry::PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, size_t segment_id_)
-    : parent(parent_), status(status_), segment_id(segment_id_)
+PlanSegmentProcessListEntry::PlanSegmentProcessListEntry(
+    PlanSegmentProcessList & parent_, QueryStatus * status_, String initial_query_id_, size_t segment_id_)
+    : parent(parent_), status(status_), initial_query_id(std::move(initial_query_id_)), segment_id(segment_id_)
 {
 }
 
 PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
 {
-    const String & inital_query_id = status->getClientInfo().initial_query_id;
     ProcessList::EntryPtr found_entry;
     {
         std::unique_lock lock(parent.mutex);
 
-        const auto segment_group_it = parent.initail_query_to_groups.find(inital_query_id);
+        const auto segment_group_it = parent.initail_query_to_groups.find(initial_query_id);
 
         if (segment_group_it == parent.initail_query_to_groups.end())
         {
-            LOG_ERROR(parent.logger, "Logical error: Cannot found query: {} in PlanSegmentProcessList", inital_query_id);
+            LOG_ERROR(parent.logger, "Logical error: Cannot found query: {} in PlanSegmentProcessList", initial_query_id);
             std::terminate();
         }
 
@@ -202,7 +201,7 @@ PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
                     parent.logger,
                     "Remove segment {} for distributed query {}@{} from PlanSegmentProcessList",
                     segment_id,
-                    inital_query_id,
+                    initial_query_id,
                     segment_group.coordinator_address);
             }
         }
@@ -210,7 +209,7 @@ PlanSegmentProcessListEntry::~PlanSegmentProcessListEntry()
         if (segment_group.segment_queries.empty())
         {
             LOG_TRACE(
-                parent.logger, "Remove segment group for distributed query {}@{}", inital_query_id, segment_group.coordinator_address);
+                parent.logger, "Remove segment group for distributed query {}@{}", initial_query_id, segment_group.coordinator_address);
             parent.initail_query_to_groups.erase(segment_group_it);
             parent.remove_group.notify_all();
         }
