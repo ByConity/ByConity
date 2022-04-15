@@ -438,9 +438,9 @@ public:
     /// --------------------
     DeleteBitmapPtr getDeleteBitmap() const;
 
-    std::atomic<UInt64> & getDeleteVersion() const
+    UInt64 getDeleteVersion() const
     {
-        return delete_version;
+        return delete_version.load(std::memory_order_relaxed);
     }
 
     String getDeleteFilePathWithVersion(UInt64 version) const
@@ -674,7 +674,7 @@ private:
     mutable std::mutex row_store_meta_mutex;
     /// Row store meta contains columns and removed columns info
     mutable UniqueRowStoreMetaPtr row_store_meta;
-    
+
     /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
     /// to prevent checksums_ptr from being modified and corvered by multiple threads.
     mutable std::mutex checksums_mutex;

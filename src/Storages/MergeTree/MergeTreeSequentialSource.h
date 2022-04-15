@@ -12,6 +12,8 @@ namespace DB
 class MergeTreeSequentialSource : public SourceWithProgress
 {
 public:
+    /// NOTE: in case you want to read part with row id included, please add extra `_part_row_number` to
+    /// the columns you want to read.
     MergeTreeSequentialSource(
         const MergeTreeData & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
@@ -30,7 +32,6 @@ public:
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
         bool quiet = false,
-        bool include_rowid_column_ = false,
         BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE);
 
     ~MergeTreeSequentialSource() override;
@@ -71,9 +72,6 @@ private:
 
     /// current row at which we stop reading
     size_t current_row = 0;
-
-    /// Should return an additional rowid column named `rowid_column_name`
-    bool include_rowid_column{false};
 
 private:
     /// Closes readers and unlock part locks

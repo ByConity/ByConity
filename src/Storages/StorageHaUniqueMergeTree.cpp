@@ -567,7 +567,7 @@ BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const
         }
     }
 
-    bool enable_partial_update = query_settings.enable_unique_partial_update && settings->enable_unique_partial_update; 
+    bool enable_partial_update = query_settings.enable_unique_partial_update && settings->enable_unique_partial_update;
     return std::make_shared<HaUniqueMergeTreeBlockOutputStream>(
         *this, metadata_snapshot, query_context, query_settings.max_partitions_per_insert_block, enable_partial_update);
 }
@@ -2992,6 +2992,9 @@ PartitionCommandsResultInfo StorageHaUniqueMergeTree::attachPartition(
     PartitionCommandsResultInfo results;
     PartsTemporaryRename renamed_parts(*this, "detached/");
     MutableDataPartsVector loaded_parts = tryLoadPartsToAttach(partition, attach_part, local_context, renamed_parts);
+
+    if (loaded_parts.empty())
+        return results;
 
     auto zookeeper = getZooKeeper();
     {
