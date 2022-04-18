@@ -1,7 +1,11 @@
 # docker build -t yandex/clickhouse-integration-tests-runner .
 FROM ubuntu:20.04
 
-RUN sed -i 's|http://archive|http://ru.archive|g' /etc/apt/sources.list
+RUN sed -i 's|http://archive|http://cn.archive|g' /etc/apt/sources.list
+
+ENV http_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV https_proxy=http://sys-proxy-rd-relay.byted.org:8118
+ENV no_proxy=.byted.org
 
 RUN apt-get update && apt-get upgrade -y \
     && env DEBIAN_FRONTEND=noninteractive apt-get install --yes \
@@ -85,6 +89,11 @@ RUN python3 -m pip install \
     urllib3 \
     requests-kerberos \
     pyhdfs
+
+# unset http proxy env
+ENV http_proxy=
+ENV https_proxy=
+ENV no_proxy=
 
 COPY modprobe.sh /usr/local/bin/modprobe
 COPY dockerd-entrypoint.sh /usr/local/bin/

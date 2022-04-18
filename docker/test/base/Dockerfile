@@ -56,6 +56,18 @@ RUN apt-get update \
         vim \
         --yes --no-install-recommends
 
+# Upgrade to gdb 11.2
+RUN apt-get update \
+    && apt-get install libgmp-dev \
+        build-essential \
+        --yes --no-install-recommends
+
+RUN wget https://ftp.gnu.org/gnu/gdb/gdb-11.2.tar.gz \
+    && tar -xvzf gdb-11.2.tar.gz \
+    && cd gdb-11.2 \
+    && ./configure && make && make install \
+    && cd .. && rm -rf gdb-11.2.tar.gz gdb-11.2
+
 # Sanitizer options for services (clickhouse-server)
 RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=1 history_size=7'" >> /etc/environment; \
   echo "UBSAN_OPTIONS='print_stacktrace=1'" >> /etc/environment; \
