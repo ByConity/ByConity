@@ -15,6 +15,7 @@
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeInterval.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeFixedString.h>
 #include <DataTypes/Native.h>
 #include <DataTypes/NumberTraits.h>
@@ -646,6 +647,23 @@ class FunctionBinaryArithmetic : public IFunction
         return FunctionFactory::instance().get(function_name, context);
     }
 
+    static FunctionOverloadResolverPtr
+    getFunctionForDateTime64Arithmetic(const DataTypePtr & type0, const DataTypePtr & type1, ContextPtr context)
+    {
+        if constexpr (!is_minus)
+            return {};
+
+        bool first_is_datetime64 = isDateTime64(type0);
+        bool second_is_datetime64 = isDateTime64(type1);
+
+        if (!(first_is_datetime64 && second_is_datetime64)) {
+            return {};
+        }
+
+        std::string function_name = "dateDiff";
+        return FunctionFactory::instance().get(function_name, context);
+    }
+
     static bool isAggregateMultiply(const DataTypePtr & type0, const DataTypePtr & type1)
     {
         if constexpr (!is_multiply)
@@ -782,6 +800,26 @@ class FunctionBinaryArithmetic : public IFunction
         /// Change interval argument type to its representation
         new_arguments[1].type = std::make_shared<DataTypeNumber<DataTypeInterval::FieldType>>();
 
+        auto function = function_builder->build(new_arguments);
+
+        return function->execute(new_arguments, result_type, input_rows_count);
+    }
+
+    // DateTime64_X - DateTime64_Y is equivalent to dateDiff('second', DateTime64_Y, DateTime64_X);
+    ColumnPtr executeDateTime64Minus(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type,
+                                               size_t input_rows_count, const FunctionOverloadResolverPtr & function_builder) const
+    {
+        ColumnsWithTypeAndName new_arguments(3);
+        new_arguments[1] = arguments[1];
+        new_arguments[2] = arguments[0];
+
+        ColumnWithTypeAndName unit_column;
+        unit_column.name = "unit";
+        DataTypePtr type = DataTypeFactory::instance().get("String");
+        unit_column.column = type->createColumnConst(1, Field("second"));
+        unit_column.type = type;
+
+        new_arguments[0] = unit_column;
         auto function = function_builder->build(new_arguments);
 
         return function->execute(new_arguments, result_type, input_rows_count);
@@ -1000,6 +1038,12 @@ public:
 
             auto function = function_builder->build(new_arguments);
             return function->getResultType();
+        }
+
+        /// Special case when the function is minus, and both arguments are DateTime64
+        if (auto function_builder = getFunctionForDateTime64Arithmetic(arguments[0], arguments[1], context))
+        {
+            return std::make_shared<DataTypeInterval>(IntervalKind::Second);
         }
 
         DataTypePtr type_res;
@@ -1271,6 +1315,13 @@ public:
             = getFunctionForIntervalArithmetic(arguments[0].type, arguments[1].type, context))
         {
             return executeDateTimeIntervalPlusMinus(arguments, result_type, input_rows_count, function_builder);
+        }
+
+        /// Special case when the function is minus, and both arguments are DateTime64.
+        if (auto function_builder
+            = getFunctionForDateTime64Arithmetic(arguments[0].type, arguments[1].type, context))
+        {
+            return executeDateTime64Minus(arguments, result_type, input_rows_count, function_builder);
         }
 
         const auto & left_argument = arguments[0];
