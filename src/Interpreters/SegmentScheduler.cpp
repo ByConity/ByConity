@@ -200,12 +200,12 @@ void SegmentScheduler::updateException(const String & query_id, const String & e
     // only record one exception
     // if query map can not find query_id means query has already finished
     if (query_map.count(query_id))
-        query_to_exception.putIfNotExists(query_id, exception);
+        query_to_exception.putIfNotExists(query_id, std::make_shared<String>(exception));
 }
 
 String SegmentScheduler::getException(const String & query_id, size_t timeout_ms)
 {
-    return query_to_exception.get(query_id, timeout_ms);
+    return *query_to_exception.get(query_id, timeout_ms);
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
