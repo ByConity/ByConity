@@ -34,6 +34,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int CANNOT_ALLOCATE_MEMORY;
     extern const int CANNOT_MREMAP;
+    const char * getSqlState(int error_code);
 }
 
 /// - Aborts the process if error code is LOGICAL_ERROR.
@@ -129,6 +130,18 @@ Exception::FramePointers Exception::getStackFramePointers() const
     return frame_pointers;
 }
 
+std::string Exception::displayText() const
+{
+    std::string txt = name();
+    if (!message().empty())
+    {
+        txt.append(": ");
+        txt.append(message());
+        txt.append(" SQLSTATE: ");
+        txt.append(ErrorCodes::getSqlState(code()));
+    }
+    return txt;
+}
 
 void throwFromErrno(const std::string & s, int code, int the_errno)
 {
