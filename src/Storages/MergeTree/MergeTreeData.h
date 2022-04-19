@@ -1330,6 +1330,13 @@ protected:
 
     virtual void ingestPartition(const PartitionCommand & /*command*/, ContextPtr /*context*/) { throw Exception("IngestPartition not implement", ErrorCodes::NOT_IMPLEMENTED); }
 
+    virtual void samplePartitionWhere(
+                            const String /*dst_database*/, 
+                            const String /*dst_table*/,
+                            const ASTPtr & /*sharding_expression*/, 
+                            const ASTPtr & /*predicate*/,
+                            const ContextPtr & /*query_context*/) { throw Exception("Sample Partition not implement", ErrorCodes::NOT_IMPLEMENTED); }
+
     void preattachPartition(const ASTPtr & partition, ContextPtr context);
     virtual void bitengineRecodePartition(const ASTPtr & partition, bool detach, ContextPtr context, bool can_skip);
     virtual void bitengineRecodePartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, bool can_skip);

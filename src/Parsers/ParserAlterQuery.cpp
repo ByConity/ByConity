@@ -84,6 +84,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_bitengine_recode_partition("BITENGINE RECODE PARTITION");
     ParserKeyword s_bitengine_recode_partition_where("BITENGINE RECODE PARTITION WHERE");
 
+    ParserKeyword s_sample_partition_with("SAMPLE PARTITION WITH");
+
     ParserKeyword s_first("FIRST");
     ParserKeyword s_after("AFTER");
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
@@ -929,6 +931,25 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             }
 
             command->type = ASTAlterCommand::BITENGINE_RECODE_PARTITION;
+        }
+        else if (s_sample_partition_with.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->with_sharding_exp, expected))
+                return false;
+
+            if (!s_where.ignore(pos, expected))
+                return false;
+
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            if (!s_to.ignore(pos, expected))
+                return false;
+
+            if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                return false;
+
+            command->type = ASTAlterCommand::SAMPLE_PARTITION_WHERE;
         }
         else
             return false;
