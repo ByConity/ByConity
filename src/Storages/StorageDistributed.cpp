@@ -716,7 +716,8 @@ QueryPipelinePtr StorageDistributed::distributedWrite(const ASTInsertQuery & que
         return nullptr;
     }
 
-    if (settings.parallel_distributed_insert_select == PARALLEL_DISTRIBUTED_INSERT_SELECT_ALL)
+    if (settings.parallel_distributed_insert_select == PARALLEL_DISTRIBUTED_INSERT_SELECT_ALL
+        || settings.distributed_perfect_shard)
     {
         new_query->table_id = StorageID(getRemoteDatabaseName(), getRemoteTableName());
     }
@@ -727,6 +728,8 @@ QueryPipelinePtr StorageDistributed::distributedWrite(const ASTInsertQuery & que
     std::vector<std::unique_ptr<QueryPipeline>> pipelines;
 
     String new_query_str = queryToString(new_query);
+    LOG_TRACE(log, "Parallel insert query: {}", new_query_str);
+
     for (size_t shard_index : collections::range(0, shards_info.size()))
     {
         const auto & shard_info = shards_info[shard_index];
