@@ -207,7 +207,6 @@ private:
     void updateLogTask();
     void replayLogTask();
     void checkpointLogTask();
-    bool mergeTask();
     void repairDataTask();
     void alterThread();
     /// Check some constrains for partial update feature
@@ -296,12 +295,7 @@ private:
         throw Exception("Method startBackgroundMovesIfNeeded is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    bool scheduleDataProcessingJob(IBackgroundJobExecutor & /*executor*/) override
-    {
-        /// Get job to execute in background pool (merge, mutate, drop range and so on)
-        /// FIXME (UNIQUEY KEY): Use BackgroundJobsExecutor.h to do merge task later
-        throw Exception("Method scheduleDataProcessingJob is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+    bool scheduleDataProcessingJob(IBackgroundJobExecutor & executor) override;
 
     /// FIXME (UNIQUEY KEY): Implement drop part later
     void dropPart(const String & /*part_name*/, bool /*detach*/, ContextPtr /*query_context*/) override
@@ -384,6 +378,9 @@ private:
     MergeTreeDataSelectExecutor reader;
     MergeTreeDataWriter writer;
     MergeTreeDataMergerMutator merger_mutator;
+    /// NOTE: background_executor shares pool between many storages, even when we defined a private variable here.
+    /// see `BackgroundJobsExecutor.cpp` for more detail
+    UniqueTableBackgroundJobsExecutor background_executor;
 
     HaUniqueMergeTreeLogExchanger log_exchanger;
 
@@ -434,7 +431,6 @@ private:
     /// leader-only tasks
     /// will be started when we become leader and stopped when we exit leader (including storage shutdown)
     BackgroundSchedulePool::TaskHolder checkpoint_log_task;
-    BackgroundSchedulePool::TaskHolder merge_task_handle; /// reset to nullptr when lose leadership
 
     /// A thread that alters parts asynchronously.
     HaUniqueMergeTreeAlterThread alter_thread;
@@ -471,6 +467,8 @@ private:
     /// Protected by MergeSelectLock
     time_t last_clear_empty_part_time {0};
     DataParts parts_under_merge;
+
+    std::atomic<bool> shutdown_called {false};
 
     /// Protected by UniqueWriteLock
     /// All input parts of a merge task share the same merge state

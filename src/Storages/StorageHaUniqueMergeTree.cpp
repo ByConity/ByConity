@@ -28,7 +28,7 @@
 namespace CurrentMetrics
 {
     extern const Metric LeaderReplica;
-    extern const Metric BackgroundUniqueTableSchedulePoolTask;
+    extern const Metric UniqueTableBackgroundPoolTask;
 }
 
 namespace DB
@@ -156,6 +156,7 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     , reader(*this)
     , writer(*this)
     , merger_mutator(*this, getContext()->getSettingsRef().background_pool_size)
+    , background_executor(*this, getContext())
     , log_exchanger(*this)
     , fetcher(*this)
     , alter_thread(*this)
@@ -170,8 +171,6 @@ StorageHaUniqueMergeTree::StorageHaUniqueMergeTree(
     update_log_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (UpdateLog)", [this] { updateLogTask(); });
     replay_log_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (ReplayLog)", [this] { return replayLogTask(); });
     checkpoint_log_task = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (CheckpointLog)", [this] { checkpointLogTask(); });
-    /// FIXME (UNIQUE KEY): Use BackgroundJobsExecutor
-    merge_task_handle = getContext()->getUniqueTableSchedulePool().createTask(db_table + " (HaUniqueMergeTreeMergeTask)", [this] { return mergeTask(); });
 
     if (getContext()->hasZooKeeper() || getContext()->hasAuxiliaryZooKeeper(zookeeper_name))
     {
@@ -396,30 +395,52 @@ void StorageHaUniqueMergeTree::startup()
     if (is_readonly)
         return;
 
-    verifyTableStructureAlterIfNeed();
+    try
+    {
+        verifyTableStructureAlterIfNeed();
 
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    /// NOTE: we update the part schema to the storage schema.
-    alter_thread.part_metadata = TableMetadata(*this, metadata_snapshot).toString();
-    alter_thread.part_columns = metadata_snapshot->getColumns().toString();
+        auto metadata_snapshot = getInMemoryMetadataPtr();
+        /// NOTE: we update the part schema to the storage schema.
+        alter_thread.part_metadata = TableMetadata(*this, metadata_snapshot).toString();
+        alter_thread.part_columns = metadata_snapshot->getColumns().toString();
 
-    replica_endpoint_holder = std::make_unique<HaReplicaEndpointHolder>(
-        replica_path, std::make_shared<HaUniqueMergeTreeReplicaEndpoint>(*this), getContext()->getHaReplicaHandler());
+        replica_endpoint_holder = std::make_unique<HaReplicaEndpointHolder>(
+            replica_path, std::make_shared<HaUniqueMergeTreeReplicaEndpoint>(*this), getContext()->getHaReplicaHandler());
 
-    InterserverIOEndpointPtr data_parts_exchange_ptr = std::make_shared<DataPartsExchange::Service>(*this, shared_from_this());
-    [[maybe_unused]] auto prev_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, data_parts_exchange_ptr);
-    assert(prev_ptr == nullptr);
-    getContext()->getInterserverIOHandler().addEndpoint(data_parts_exchange_ptr->getId(replica_path), data_parts_exchange_ptr);
+        InterserverIOEndpointPtr data_parts_exchange_ptr = std::make_shared<DataPartsExchange::Service>(*this, shared_from_this());
+        [[maybe_unused]] auto prev_ptr = std::atomic_exchange(&data_parts_exchange_endpoint, data_parts_exchange_ptr);
+        assert(prev_ptr == nullptr);
+        getContext()->getInterserverIOHandler().addEndpoint(data_parts_exchange_ptr->getId(replica_path), data_parts_exchange_ptr);
 
-    // addRecodeAndBitMapTaskIfNeeded(true);
+        // addRecodeAndBitMapTaskIfNeeded(true);
 
-    restarting_thread.start();
-    startup_event.wait();
+        restarting_thread.start();
+        startup_event.wait();
+        background_executor.start();
 
-    // collect_map_key_task = getContext()->getLocalSchedulePool().createTask(log->name() + " (MapKeyCache)", [this]() { runCollectMapKeyTasks(); });
-    // collect_map_key_task->activateAndSchedule();
+        // collect_map_key_task = getContext()->getLocalSchedulePool().createTask(log->name() + " (MapKeyCache)", [this]() { runCollectMapKeyTasks(); });
+        // collect_map_key_task->activateAndSchedule();
 
-    LOG_DEBUG(log, "startup finished; cost {} ms.", stopwatch.elapsedMicroseconds() / 1000.0);
+        LOG_DEBUG(log, "startup finished; cost {} ms.", stopwatch.elapsedMicroseconds() / 1000.0);
+    }
+    catch (...)
+    {
+        /// Exception safety: failed "startup" does not require a call to "shutdown" from the caller.
+        /// And it should be able to safely destroy table after exception in "startup" method.
+        /// It means that failed "startup" must not create any background tasks that we will have to wait.
+        try
+        {
+            shutdown();
+        }
+        catch (...)
+        {
+            std::terminate();
+        }
+
+        /// Note: after failed "startup", the table will be in a state that only allows to destroy the object.
+        throw;
+    }
+
 }
 
 
@@ -467,6 +488,10 @@ bool StorageHaUniqueMergeTree::verifyTableStructureForVersionAlterIfNeed(UInt64 
 
 void StorageHaUniqueMergeTree::shutdown()
 {
+    if (shutdown_called)
+        return;
+    shutdown_called = true;
+
     fetcher.blocker.cancelForever();
     merger_mutator.merges_blocker.cancelForever();
 
@@ -497,6 +522,8 @@ void StorageHaUniqueMergeTree::shutdown()
         /// Wait for all of them
         std::unique_lock lock(data_parts_exchange_ptr->rwlock);
     }
+
+    background_executor.finish();
 
     // if (collect_map_key_task.hasTask())
     //     collect_map_key_task->deactivate();
@@ -1092,8 +1119,6 @@ void StorageHaUniqueMergeTree::exitElectionUnlocked(const ElectionLock &)
         /// notify and wait for all running merge tasks to abort
         auto merge_block = merger_mutator.merges_blocker.cancel();
         auto ttl_block = merger_mutator.ttl_merges_blocker.cancel();
-        // getContext()->getUniqueTableSchedulePool().removeTask(merge_task_handle);
-        merge_task_handle->deactivate();
     }
 
     /// Delete the node in ZK only after we have stopped the merge_selecting_thread - so that only one
@@ -1144,7 +1169,6 @@ void StorageHaUniqueMergeTree::becomeLeaderTask()
         replay_log_task->deactivate();
         /// starting leader-only tasks
         checkpoint_log_task->activateAndSchedule();
-        merge_task_handle->activateAndSchedule();
     };
 
     try
@@ -1948,6 +1972,32 @@ struct MergingResourceHolder
     }
 };
 
+bool StorageHaUniqueMergeTree::scheduleDataProcessingJob(IBackgroundJobExecutor & executor)
+{
+    /// if returns false, then IBackgroundJobExecutor will re-try schedule the next time
+    /// otherwise the executor will take over to do the schedule job.
+    if (shutdown_called)
+        return true;
+
+    /// NOTE: for non-leader replica, we do not submit merge tasks to backgroud exector, but still need to
+    /// keep checking, in case when it becomes leader, the merge tasks can be scheduled.
+    auto zookeeper = getZooKeeper();
+    if (!zookeeper || zookeeper->expired() || !is_leader)
+        return false;
+
+    if (getUniqueTableState() != UniqueTableState::NORMAL)
+        return false;
+
+    /// NOTE: that multiple threads from background pool could run merge concurrently.
+    executor.execute({[this] () mutable
+    {
+        return doMerge(/*aggressive=*/false, /*partition_id=*/"", /*final=*/false, /*enable_try=*/false);
+
+    }, PoolType::MERGE_MUTATE});
+
+    return true;
+}
+
 bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition_id, bool final, bool enable_try)
 {
     auto zookeeper = getZooKeeper();
@@ -1997,14 +2047,15 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
             else
                 return false;
         };
+
         SelectPartsDecision selected = SelectPartsDecision::NOTHING_TO_MERGE;
         if (partition_id.empty())
         {
-            /// FIXME (UNIQUE KEY): revisit after merge task is running in processing pool
-            size_t running_bg_merges = CurrentMetrics::values[CurrentMetrics::BackgroundUniqueTableSchedulePoolTask].load(std::memory_order_relaxed);
+            size_t running_bg_merges = CurrentMetrics::values[CurrentMetrics::UniqueTableBackgroundPoolTask].load(std::memory_order_relaxed);
             UInt64 max_source_parts_size = merger_mutator.getMaxSourcePartsSizeForMerge(
-                /*pool_size=*/ getContext()->getUniqueTableSchedulePool().getNumberOfThreads(),
+                /*pool_size=*/ getContext()->getSettingsRef().unique_table_background_pool_size,
                 /*pool_used=*/ running_bg_merges == 0 ? 0 : running_bg_merges - 1);
+
             if (max_source_parts_size > 0)
                 selected = merger_mutator.selectPartsToMerge(future_part, aggressive, max_source_parts_size, can_merge, /*merge_with_ttl_allowed*/true, nullptr, /*merge_scheduler*/nullptr);
             else if (enable_try)
@@ -2015,6 +2066,7 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
             UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
             selected = merger_mutator.selectAllPartsToMergeWithinPartition(future_part, disk_space, can_merge, partition_id, final, getInMemoryMetadataPtr(), nullptr, /*optimize_skip_merged_partitions*/ false, /*merge_scheduler*/nullptr);
         }
+
         if (selected != SelectPartsDecision::SELECTED || enable_try)
             return false;
 
@@ -2201,25 +2253,6 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
     }
     // dropQueryCache();
     return true;
-}
-
-/// note that multiple threads from background pool could run merge task concurrently.
-bool StorageHaUniqueMergeTree::mergeTask()
-{
-    try
-    {
-        if (getUniqueTableState() != UniqueTableState::NORMAL)
-            return false;
-
-        doMerge(/*aggressive=*/false, /*partition_id=*/"", /*final=*/false, /*enable_try=*/false);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-    }
-    // TODO: Pitfall: only one threds run merge task and the schedule time is fixed.
-    merge_task_handle->scheduleAfter(1 * 1000);
-    return false;
 }
 
 bool StorageHaUniqueMergeTree::optimize(const ASTPtr & query,

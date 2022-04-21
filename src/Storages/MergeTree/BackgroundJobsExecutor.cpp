@@ -10,6 +10,7 @@ namespace CurrentMetrics
     extern const Metric BackgroundPoolTask;
     extern const Metric BackgroundMovePoolTask;
     extern const Metric BackgroundFetchesPoolTask;
+    extern const Metric UniqueTableBackgroundPoolTask;
 }
 
 namespace DB
@@ -173,7 +174,7 @@ try
 catch (...) /// Exception while we looking for a task, reschedule
 {
     tryLogCurrentException(__PRETTY_FUNCTION__);
-    
+
     /// Why do we scheduleTask again?
     /// To retry on exception, since it may be some temporary exception.
     scheduleTask(/* with_backoff = */ true);
@@ -284,6 +285,34 @@ String BackgroundMovesExecutor::getBackgroundTaskName() const
 bool BackgroundMovesExecutor::scheduleJob()
 {
     return data.scheduleDataMovingJob(*this);
+}
+
+
+UniqueTableBackgroundJobsExecutor::UniqueTableBackgroundJobsExecutor(
+       MergeTreeData & data_,
+       ContextPtr global_context_)
+    : IBackgroundJobExecutor(
+        global_context_,
+        global_context_->getBackgroundProcessingTaskSchedulingSettings(),
+        {PoolConfig
+            {
+                .pool_type = PoolType::MERGE_MUTATE,
+                .get_max_pool_size = [global_context_] () { return global_context_->getSettingsRef().unique_table_background_pool_size; },
+                .tasks_metric = CurrentMetrics::UniqueTableBackgroundPoolTask
+            }
+        })
+    , data(data_)
+{
+}
+
+String UniqueTableBackgroundJobsExecutor::getBackgroundTaskName() const
+{
+    return data.getStorageID().getFullTableName() + " (UniqueKeyDataProcessingTask)";
+}
+
+bool UniqueTableBackgroundJobsExecutor::scheduleJob()
+{
+    return data.scheduleDataProcessingJob(*this);
 }
 
 }
