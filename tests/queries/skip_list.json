@@ -114,6 +114,11 @@
         "02032_function_version_compare",
         "00743_aggregation_finder_funnel_group",
 
+        /// Memory
+        "00634_performance_introspection_and_logging",
+        "01598_memory_limit_zeros",
+        "01548_parallel_parsing_max_memory",
+
         /// Map
         "00825_protobuf_format_map",
         "00900_orc_arrow_parquet_maps",
