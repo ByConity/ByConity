@@ -129,6 +129,9 @@ void InterpreterPerfectShard::collectTables()
             break;
         }
     }
+
+    if (!query_info.cluster)
+        perfect_shardable = false;
 }
 
 void InterpreterPerfectShard::rewriteDistributedTables()
