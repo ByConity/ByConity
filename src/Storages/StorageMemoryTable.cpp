@@ -189,7 +189,7 @@ protected:
                     if (startsWith(elem.getNameInStorage(), String("__") + columnTypeName.name + "__") &&
                         columnTypeName.type->isMap()&& !columnTypeName.type->isMapKVStore())
                     {
-                        String implicit_key = parseKeyFromImplicitMap(columnTypeName.name, elem.getNameInStorage());
+                        String implicit_key = parseKeyNameFromImplicitColName(columnTypeName.name, elem.getNameInStorage());
                         MutableColumnPtr map_column = columnTypeName.column->assumeMutable();
                         auto result_column = typeid_cast<ColumnByteMap&>(*map_column).
                                 getValueColumnByKey(StringRef(implicit_key.data(), implicit_key.size()))->cloneEmpty();

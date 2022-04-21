@@ -76,7 +76,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
     }
 
     #if USE_RDKAFKA
-            auto kafka_table_ptr = dynamic_cast<StorageHaKafka*>(&*storage);
+            auto * kafka_table_ptr = dynamic_cast<StorageHaKafka *>(storage.get());
     #endif
 
     for (const auto & database_table : dependencies)
