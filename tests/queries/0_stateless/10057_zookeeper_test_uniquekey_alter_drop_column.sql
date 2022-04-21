@@ -18,8 +18,6 @@ unique key id
 order by id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10;
 
-select sleep(3) format Null;
-
 CREATE table test.alter_drop_column_t2 (
     `d` Date,
     `id` UInt64,
@@ -32,12 +30,12 @@ ENGINE = HaUniqueMergeTree('/clickhouse/tables/test/drop_columns_test', 'r2')
 partition by d
 unique key id
 order by id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, replicated_can_become_leader=0;
 
 insert into test.alter_drop_column_t1 values ('2021-01-10', 10001, 1, 2, 'col3', '2021-01-12', 2);
 
 select '-----------------------------------';
-select sleep(3) format Null;
+system sync replica test.alter_drop_column_t2;
 select 'r1', d, id, col1, col2, col3, col4, col5 from test.alter_drop_column_t1 order by id;
 select 'r2', d, id, col1, col2, col3, col4, col5 from test.alter_drop_column_t2 order by id;
 
@@ -73,7 +71,7 @@ alter table test.alter_drop_column_t1 drop column id; -- { serverError 47 };
 alter table test.alter_drop_column_t1 drop column not_exist; -- { serverError 10 };
 
 select '-----------------------------------';
-select sleep(3) format Null;
+system sync replica test.alter_drop_column_t2;
 select 'r1', d, id from test.alter_drop_column_t1 order by id ;
 select 'r2', d, id from test.alter_drop_column_t2 order by id;
 
@@ -84,7 +82,7 @@ show create table test.alter_drop_column_t2;
 select '-----------------------------------';
 select 'optimize table final';
 optimize table test.alter_drop_column_t1 final;
-select sleep(3) format Null;
+system sync replica test.alter_drop_column_t2;
 select 'r1', d, id from test.alter_drop_column_t1 order by id ;
 select 'r2', d, id from test.alter_drop_column_t2 order by id;
 

@@ -36,6 +36,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
+#include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageHaKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -931,6 +932,18 @@ void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
     {
         LOG_TRACE(log, "Synchronizing entries in replica's queue with table's log and waiting for it to become empty");
         if (!storage_ha->waitForShrinkingQueueSize(0, getContext()->getSettingsRef().receive_timeout.totalMilliseconds()))
+        {
+            LOG_ERROR(log, "SYNC REPLICA {}: Timed out!", table_id.getNameForLogs());
+            throw Exception(
+                "SYNC REPLICA " + table_id.getNameForLogs() + ": command timed out! See the 'receive_timeout' setting",
+                ErrorCodes::TIMEOUT_EXCEEDED);
+        }
+        LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
+    }
+    else if (auto storage_ha_unique = dynamic_cast<StorageHaUniqueMergeTree *>(table.get()))
+    {
+        LOG_TRACE(log, "Synchronizing replicas log waiting for it to be as the same with leader");
+        if (!storage_ha_unique->waitForLogSynced(getContext()->getSettingsRef().receive_timeout.totalMilliseconds()))
         {
             LOG_ERROR(log, "SYNC REPLICA {}: Timed out!", table_id.getNameForLogs());
             throw Exception(

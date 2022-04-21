@@ -26,7 +26,7 @@ ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_pa
 partition by toDate(event_time)
 order by (product_id, event_time)
 unique key product_id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0, replicated_can_become_leader=0;
 
 insert into delete_by_unique_key_r1 values ('2021-07-13 18:50:00', 10001, 5, 500),('2021-07-13 18:50:00', 10002, 2, 200),('2021-07-13 18:50:00', 10003, 1, 100);
 
@@ -35,18 +35,18 @@ insert into delete_by_unique_key_r1 values ('2021-07-13 18:50:01', 10002, 4, 400
 select 'insert with partial update mode, disable unique row store';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica delete_by_unique_key_r2;
 select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
 select '';
 optimize table delete_by_unique_key_r1 final;
-insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_) 
+insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_)
 values ('2021-07-13 18:50:01', 10002, 5, 1),('2021-07-14 18:50:00', 10003, 2, 1),('2021-07-13 18:50:00', 10001, 2, 0), ('2021-07-15 18:50:00', 10004, 2, 0)
 select 'after merge, delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica delete_by_unique_key_r2;
 select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
@@ -75,7 +75,7 @@ ENGINE = HaUniqueMergeTree('/clickhouse/tables/10068_zookeeper_test_uniquekey_pa
 partition by toDate(event_time)
 order by (product_id, event_time)
 unique key product_id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1, replicated_can_become_leader=0;
 
 insert into delete_by_unique_key_r1 values ('2021-07-13 18:50:00', 10001, 5, 500),('2021-07-13 18:50:00', 10002, 2, 200),('2021-07-13 18:50:00', 10003, 1, 100);
 
@@ -84,18 +84,18 @@ insert into delete_by_unique_key_r1 values ('2021-07-13 18:50:01', 10002, 4, 400
 select 'insert with partial update mode, enable unique row store';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica delete_by_unique_key_r2;
 select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
 select '';
 optimize table delete_by_unique_key_r2 final;
-insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_) 
+insert into delete_by_unique_key_r1 (event_time, product_id, amount, _delete_flag_)
 values ('2021-07-13 18:50:01', 10002, 5, 1),('2021-07-14 18:50:00', 10003, 2, 1),('2021-07-13 18:50:00', 10001, 2, 0), ('2021-07-15 18:50:00', 10004, 2, 0)
 select 'after merge, delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003), insert two new rows';
 select 'select ha unique table r1';
 select * from delete_by_unique_key_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica delete_by_unique_key_r2;
 select 'select ha unique table r2';
 select * from delete_by_unique_key_r2 order by event_time, product_id, amount;
 
