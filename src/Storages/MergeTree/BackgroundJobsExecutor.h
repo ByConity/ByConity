@@ -143,6 +143,22 @@ protected:
     bool scheduleJob() override;
 };
 
+/// Backgroud jobs executor for unique table: currently only does merge tasks
+class UniqueTableBackgroundJobsExecutor final : public IBackgroundJobExecutor
+{
+private:
+    MergeTreeData & data;
+public:
+    UniqueTableBackgroundJobsExecutor(
+        MergeTreeData & data_,
+        ContextPtr global_context_);
+
+protected:
+    String getBackgroundTaskName() const override;
+    bool scheduleJob() override;
+};
+
+
 /// Move jobs executor, move parts between disks in the background
 /// Does nothing in case of default configuration
 class BackgroundMovesExecutor final : public IBackgroundJobExecutor

@@ -365,7 +365,7 @@ MergeTreeData::MergeTreeData(
 
 MergeTreeData::~MergeTreeData()
 {
-    /// clean checksums cache of current storage before destroy. 
+    /// clean checksums cache of current storage before destroy.
     if (auto cache = getContext()->getChecksumsCache())
         cache->dropChecksumCache(getStorageUniqueID());
 }
@@ -1193,8 +1193,8 @@ bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
         }
 
         old_metastore->closeMetastore();
-        
-        String path_to_remove = old_version_meta_path + "catalog.db"; 
+
+        String path_to_remove = old_version_meta_path + "catalog.db";
         LOG_DEBUG(log, "[Compatible] Removing old metastore path {}", path_to_remove);
         fs::remove_all(path_to_remove);
     }
@@ -6016,7 +6016,7 @@ void MergeTreeData::searchAllPartsOnFilesystem(std::map<String, DiskPtr> & parts
         for (auto it = disk_ptr->iterateDirectory(relative_data_path); it->isValid(); it->next())
         {
             /// Skip temporary directories, file 'format_version.txt', WAL and directory 'detached'.
-            if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME 
+            if (startsWith(it->name(), "tmp") || it->name() == MergeTreeData::FORMAT_VERSION_FILE_NAME
                 || it->name() == MergeTreeData::DETACHED_DIR_NAME)
                 continue;
 
@@ -6076,7 +6076,7 @@ void MergeTreeData::syncMetaImpl(DataPartsLock & lock)
             metastore->removeWAL(*this, wal_file);
         }
     }
-    /// sync existing parts on disks 
+    /// sync existing parts on disks
     for (auto it = data_parts_by_info.begin(); it != data_parts_by_info.end(); )
     {
         const String & part_name = (*it)->name;
@@ -6401,7 +6401,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
             new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
             new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
             transaction->rename_map[UNIQUE_ROW_STORE_META_NAME + tmp_suffix] = UNIQUE_ROW_STORE_META_NAME;
-            
+
             /// Update row store meta in memory immediately, it's ok even transaction failed.
             const_cast<IMergeTreeDataPart &>(*part).setUniqueRowStoreMeta(new_row_store_meta);
         }
