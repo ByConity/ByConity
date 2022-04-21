@@ -136,6 +136,8 @@ public:
     bool getThrowIfAttachTableLevelPartition() const { return throw_attach_table_level_partition; }
     void setThrowIfAttachTableLevelPartition(bool val) { throw_attach_table_level_partition = val; }
 
+    bool waitForLogSynced(UInt64 max_wait_milliseconds);
+
 protected:
     StorageHaUniqueMergeTree(
         const String & zookeeper_path_,

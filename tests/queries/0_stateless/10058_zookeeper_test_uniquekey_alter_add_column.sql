@@ -16,8 +16,6 @@ SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10,
 ha_unique_checkpoint_attempt_interval=10, ha_unique_checkpoint_min_logs=0,
 ha_unique_replay_log_add_delay=10;
 
-select sleep(3) format Null;
-
 CREATE table test.alter_add_column_t2 (
     `d` Date,
     `id` UInt64
@@ -28,13 +26,13 @@ unique key id
 order by id
 SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10,
 ha_unique_checkpoint_attempt_interval=10, ha_unique_checkpoint_min_logs=0,
-ha_unique_replay_log_add_delay=10;
+ha_unique_replay_log_add_delay=10, replicated_can_become_leader=0;
 
 -- Insert a initial record #1
 insert into test.alter_add_column_t1 values ('2021-01-10', 10001);
 
 select '-----------------------------------';
-select sleep(3) format Null;
+system sync replica test.alter_add_column_t2;
 select 'r1', d, id from test.alter_add_column_t1 order by id;
 select 'r2', d, id from test.alter_add_column_t2 order by id;
 
@@ -54,7 +52,7 @@ alter table test.alter_add_column_t1 add column col1 UInt32; -- { serverError 15
 insert into test.alter_add_column_t1 values ('2022-02-22', 10002, 1, 2, '2021-01-12');
 
 select '-----------------------------------';
-select sleep(3) format Null;
+system sync replica test.alter_add_column_t2;
 select 'r1', d, id, col1, col2, col3 from test.alter_add_column_t1 order by id;
 select 'r2', d, id, col1, col2, col3 from test.alter_add_column_t2 order by id;
 
@@ -65,7 +63,7 @@ insert into test.alter_add_column_t1 values ('2022-02-22', 10004, 1, 2, '2021-01
 insert into test.alter_add_column_t1 values ('2021-01-10', 10001, 1, 2, '2021-01-12');
 
 select '-----------------------------------';
-select sleep(3) format Null;
+system sync replica test.alter_add_column_t2;
 select 'r1', d, id, col1, col2, col3 from test.alter_add_column_t1 order by id;
 select 'r2', d, id, col1, col2, col3 from test.alter_add_column_t2 order by id;
 
@@ -76,7 +74,7 @@ show create table test.alter_add_column_t2;
 select '-----------------------------------';
 select 'optimize table final';
 optimize table test.alter_add_column_t1 final;
-select sleep(3) format Null;
+system sync replica test.alter_add_column_t2;
 select 'r1', d, id, col1, col2, col3 from test.alter_add_column_t1 order by id;
 select 'r2', d, id, col1, col2, col3 from test.alter_add_column_t2 order by id;
 

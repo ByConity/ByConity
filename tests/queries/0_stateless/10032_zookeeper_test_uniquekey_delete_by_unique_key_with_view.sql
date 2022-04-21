@@ -36,7 +36,7 @@ ENGINE = HaUniqueMergeTree('/clickhouse/tables/test/delete_by_unique_key_with_vi
 partition by toDate(event_time)
 ORDER by (event_time, product_id)
 unique key product_id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, replicated_can_become_leader=0;
 
 CREATE MATERIALIZED VIEW test.delete_by_unique_key_with_view_view TO test.delete_by_unique_key_with_view_r1 (`event_time` DateTime, `product_id` UInt64, `amount` UInt32, `revenue` UInt64, `_delete_flag_` UInt8) AS SELECT * FROM test.delete_source_table;
 
@@ -49,7 +49,7 @@ select 'select source table';
 select * from test.delete_source_table order by event_time, product_id, amount, _delete_flag_;
 select 'select ha unique table r1';
 select * from test.delete_by_unique_key_with_view_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica test.delete_by_unique_key_with_view_r2;
 select 'select ha unique table r2';
 select * from test.delete_by_unique_key_with_view_r2 order by event_time, product_id, amount;
 
@@ -58,7 +58,7 @@ insert into test.delete_source_table values ('2021-07-13 18:50:01', 10002, 5, 50
 select 'delete data of pair(2021-07-13, 10002) and pair(2021-07-14, 10003)';
 select 'select ha unique table r1';
 select * from test.delete_by_unique_key_with_view_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica test.delete_by_unique_key_with_view_r2;
 select 'select ha unique table r2';
 select * from test.delete_by_unique_key_with_view_r2 order by event_time, product_id, amount;
 
@@ -67,7 +67,7 @@ insert into test.delete_source_table select event_time, product_id, amount, reve
 select 'delete data whose revenue is bigger than 500';
 select 'select ha unique table r1';
 select * from test.delete_by_unique_key_with_view_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica test.delete_by_unique_key_with_view_r2;
 select 'select ha unique table r2';
 select * from test.delete_by_unique_key_with_view_r2 order by event_time, product_id, amount;
 
@@ -88,7 +88,7 @@ CREATE MATERIALIZED VIEW test.delete_by_unique_key_with_view_view TO test.delete
 select 'clear source table and update materialized view to another replica, it will add new rows whose amount >= 10, delete old rows whose amount < 10, using expressions';
 select 'select ha unique table r1';
 select * from test.delete_by_unique_key_with_view_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica test.delete_by_unique_key_with_view_r2;
 select 'select ha unique table r2';
 select * from test.delete_by_unique_key_with_view_r2 order by event_time, product_id, amount;
 
@@ -99,7 +99,7 @@ select 'select source table';
 select * from test.delete_source_table order by event_time, product_id, amount, _delete_flag_;
 select 'select ha unique table r1';
 select * from test.delete_by_unique_key_with_view_r1 order by event_time, product_id, amount;
-select sleep(3) format Null;
+system sync replica test.delete_by_unique_key_with_view_r2;
 select 'select ha unique table r2';
 select * from test.delete_by_unique_key_with_view_r2 order by event_time, product_id, amount;
 

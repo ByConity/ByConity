@@ -1,6 +1,5 @@
 set database_atomic_wait_for_drop_and_detach_synchronously = 1;
 set max_insert_wait_seconds_for_unique_table_leader = 30;
-set enable_disk_based_unique_key_index_method = 1;
 
 drop table if exists test.unique_vertical_merge;
 

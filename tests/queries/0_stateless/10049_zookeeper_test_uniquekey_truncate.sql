@@ -28,18 +28,18 @@ ENGINE = HaUniqueMergeTree('/clickhouse/tables/test/truncate_test_1', 'r2')
 partition by toDate(event_time)
 ORDER by (city, category)
 unique key product_id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, replicated_can_become_leader=0;
 
 insert into test.truncate_r1 values ('2020-10-29 23:40:00', 10001, 'Beijing', 'cloth', 1, 100);
 
 select 'r1', event_time, product_id, city, category, amount, revenue from test.truncate_r1 order by product_id;
-select sleep(3) format Null;
+system sync replica test.truncate_r2;
 select 'r2', event_time, product_id, city, category, amount, revenue from test.truncate_r2 order by product_id;
 
 -- Truncate table from a non-leader replica --
 truncate table test.truncate_r2;
 
-select sleep(3) format Null;
+system sync replica test.truncate_r2;
 select 'r1', event_time, product_id, city, category, amount, revenue from test.truncate_r1 order by product_id;
 select 'r2', event_time, product_id, city, category, amount, revenue from test.truncate_r2 order by product_id;
 

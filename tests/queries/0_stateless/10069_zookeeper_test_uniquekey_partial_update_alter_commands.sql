@@ -24,7 +24,7 @@ CREATE table unique_partial_update_alter2(
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10069_zookeeper_test_uniquekey_partial_update_alter_commands/unique_partial_update_alter', 'r2')
 order by id
 unique key id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 0, replicated_can_become_leader=0;
 
 insert into unique_partial_update_alter1 values (1, '', [1, 2], {'k1': 1, 'k2': 2}), (2, 'abc', [3, 4 ,5], {'k3': 3, 'k4': 4});
 insert into unique_partial_update_alter1 values (1, 'bce', [10, 20], {'k1': 10, 'k5': 5}), (2, '', [], {'k7': 7, 'k8': 8});
@@ -32,7 +32,7 @@ insert into unique_partial_update_alter1 values (1, 'bce', [10, 20], {'k1': 10, 
 select 'insert with partial update mode, disbale unique row store';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 
@@ -43,7 +43,7 @@ optimize table unique_partial_update_alter2 final;
 select 'drop column a1, update one row and insert one new row, then merge';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 
@@ -52,7 +52,7 @@ insert into unique_partial_update_alter2 values (2, 'bcd', {'k5': 5}, [10, 20]),
 select 'update 1 row and insert one row';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 
@@ -79,7 +79,7 @@ CREATE table unique_partial_update_alter2(
 ENGINE = HaUniqueMergeTree('/clickhouse/tables/10069_zookeeper_test_uniquekey_partial_update_alter_commands/unique_partial_update_alter', 'r2')
 order by id
 unique key id
-SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1;
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, enable_unique_partial_update = 1, enable_unique_row_store = 1, replicated_can_become_leader=0;
 
 insert into unique_partial_update_alter1 values (1, '', [1, 2], {'k1': 1, 'k2': 2}), (2, 'abc', [3, 4 ,5], {'k3': 3, 'k4': 4});
 insert into unique_partial_update_alter1 values (1, 'bce', [10, 20], {'k1': 10, 'k5': 5}), (2, '', [], {'k7': 7, 'k8': 8});
@@ -87,7 +87,7 @@ insert into unique_partial_update_alter1 values (1, 'bce', [10, 20], {'k1': 10, 
 select 'insert with partial update mode, enable unique row store';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 
@@ -98,7 +98,7 @@ optimize table unique_partial_update_alter2 final;
 select 'drop column a1, update one row and insert one new row, then merge, trigger generating row store from storage';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 
@@ -107,7 +107,7 @@ insert into unique_partial_update_alter2 values (2, 'bcd', {'k5': 5}, [10, 20]),
 select 'update 1 row and insert one row';
 select 'select ha unique table r1';
 select * from unique_partial_update_alter1 order by id;
-select sleep(3) format Null;
+system sync replica unique_partial_update_alter2;
 select 'select ha unique table r2';
 select * from unique_partial_update_alter2 order by id;
 

@@ -22,9 +22,6 @@
 #include <Interpreters/MutationsInterpreter.h>
 #include <Poco/DirectoryIterator.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-parameter"
-
 namespace CurrentMetrics
 {
     extern const Metric LeaderReplica;
@@ -568,7 +565,7 @@ void StorageHaUniqueMergeTree::assertNotReadonly() const
         throw Exception(ErrorCodes::TABLE_IS_READ_ONLY, "Table is in readonly mode (zookeeper path: {})", zookeeper_path);
 }
 
-BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
+BlockOutputStreamPtr StorageHaUniqueMergeTree::write(const ASTPtr & /*query*/, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context)
 {
     const auto & query_settings = query_context->getSettingsRef();
     /// mainly used for tests and for create temporary table to delay inserts until leader is selected
@@ -2256,11 +2253,11 @@ bool StorageHaUniqueMergeTree::doMerge(bool aggressive, const String & partition
 }
 
 bool StorageHaUniqueMergeTree::optimize(const ASTPtr & query,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageMetadataPtr & /*metadata_snapshot*/,
     const ASTPtr & partition,
     bool final,
-    bool deduplicate,
-    const Names & deduplicate_by_columns,
+    bool /*deduplicate*/,
+    const Names & /*deduplicate_by_columns*/,
     ContextPtr query_context)
 {
     assertNotReadonly();
@@ -2950,7 +2947,7 @@ void StorageHaUniqueMergeTree::dropPartition(const ASTPtr & partition, bool deta
     }
 }
 
-void StorageHaUniqueMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, const ASTPtr & query)
+void StorageHaUniqueMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool /*detach*/, ContextPtr query_context, const ASTPtr & query)
 {
     assertNotReadonly();
     auto zookeeper = getZooKeeper();
@@ -3463,14 +3460,14 @@ void StorageHaUniqueMergeTree::setTableStructure(
     DatabaseCatalog::instance().getDatabase(table_id.database_name)->alterTable(getContext(), table_id, new_metadata);
 }
 
-std::optional<UInt64> StorageHaUniqueMergeTree::totalRows(const Settings & settings) const
+std::optional<UInt64> StorageHaUniqueMergeTree::totalRows(const Settings & /*settings*/) const
 {
     UInt64 res = 0;
     foreachCommittedParts([&res](auto & part) { res += part->numRowsRemovingDeletes(); });
     return res;
 }
 
-std::optional<UInt64> StorageHaUniqueMergeTree::totalBytes(const Settings & settings) const
+std::optional<UInt64> StorageHaUniqueMergeTree::totalBytes(const Settings & /*settings*/) const
 {
     UInt64 res = 0;
     foreachCommittedParts([&res](auto & part) { res += part->getBytesOnDisk(); } );
@@ -3481,6 +3478,42 @@ std::optional<UInt64> StorageHaUniqueMergeTree::totalRowsByPartitionPredicate(co
 {
     auto parts = getDataPartsVector({DataPartState::Committed});
     return totalRowsByPartitionPredicateImpl(query_info, query_context, parts);
+}
+
+bool StorageHaUniqueMergeTree::waitForLogSynced(UInt64 max_wait_milliseconds)
+{
+    if (is_leader)
+    {
+        /// Leader should always be synced.
+        return true;
+    }
+
+    Stopwatch watch;
+
+    /// Fetch the leader's latest commit version
+    UInt64 max_commit_version = 0;
+    auto activeReplicaInfos = log_exchanger.getAllManifestStatus();
+    for (auto & entry : activeReplicaInfos)
+    {
+        max_commit_version = std::max(max_commit_version, entry.second.commit_version);
+    }
+
+    LOG_DEBUG(log, "Sync replica will sync version from {} to {} ", manifest_store->commitVersion(), max_commit_version);
+
+    update_log_task->activateAndSchedule();
+
+    while (manifest_store->commitVersion() < max_commit_version)
+    {
+        if (partial_shutdown_called)
+            throw Exception("Shutdown is called for table", ErrorCodes::ABORTED);
+
+        if (max_wait_milliseconds && watch.elapsedMilliseconds() > max_wait_milliseconds)
+            return false;
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+
+    return true;
 }
 
 }

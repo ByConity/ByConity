@@ -4,8 +4,13 @@ set max_insert_wait_seconds_for_unique_table_leader = 30;
 drop table if exists test.unique_with_is_offline_r1;
 drop table if exists test.unique_with_is_offline_r2;
 
-create table test.unique_with_is_offline_r1 (d Date, id Int32, s String, offline UInt8) ENGINE=HaUniqueMergeTree('/clickhouse/tables/test/unique_with_is_offline', 'r1', d) partition by d order by (s, id) unique key id SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, unique_is_offline_column='offline';
-create table test.unique_with_is_offline_r2 (d Date, id Int32, s String, offline UInt8) ENGINE=HaUniqueMergeTree('/clickhouse/tables/test/unique_with_is_offline', 'r2', d) partition by d order by (s, id) unique key id SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, unique_is_offline_column='offline';
+create table test.unique_with_is_offline_r1 (d Date, id Int32, s String, offline UInt8)
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/test/unique_with_is_offline', 'r1', d) partition by d order by (s, id) unique key id
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, unique_is_offline_column='offline';
+
+create table test.unique_with_is_offline_r2 (d Date, id Int32, s String, offline UInt8)
+ENGINE=HaUniqueMergeTree('/clickhouse/tables/test/unique_with_is_offline', 'r2', d) partition by d order by (s, id) unique key id
+SETTINGS ha_unique_update_log_sleep_ms=10, ha_unique_replay_log_sleep_ms=10, unique_is_offline_column='offline', replicated_can_become_leader=0;
 
 insert into test.unique_with_is_offline_r1 values ('2020-10-25', 10, '10A', 0), ('2020-10-25', 11, '11A', 0), ('2020-10-26', 10, '10A', 0), ('2020-10-26', 11, '11A', 0), ('2020-10-26', 10, '10B', 0);
 select 'r1', d, id, s, offline from test.unique_with_is_offline_r1 order by d, id;
@@ -25,7 +30,7 @@ select 'r1', d, id, s, offline from test.unique_with_is_offline_r1 order by d, i
 insert into test.unique_with_is_offline_r1 values ('2020-10-27', 10, '10A-off', 1);
 select 'r1', d, id, s, offline from test.unique_with_is_offline_r1 order by d, id;
 
-select sleep(3) format Null;
+system sync replica test.unique_with_is_offline_r2;
 select 'r2', d, id, s, offline from test.unique_with_is_offline_r2 order by d, id;
 
 drop table if exists test.unique_with_is_offline_r1;

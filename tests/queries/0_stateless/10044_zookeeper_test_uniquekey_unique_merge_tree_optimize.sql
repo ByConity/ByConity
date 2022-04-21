@@ -17,14 +17,14 @@ insert into test.unique_optimize_r1 values ('2020-10-30', 2, 22);
 optimize table test.unique_optimize_r1 partition '2020-10-28';
 
 select table, name from system.parts where database='test' and table='unique_optimize_r1' and active=1 order by name;
-select sleep(3) format Null;
+system sync replica test.unique_optimize_r2 ;
 select table, name from system.parts where database='test' and table='unique_optimize_r2' and active=1 order by name;
 select * from test.unique_optimize_r1 order by d, id;
 
 optimize table test.unique_optimize_r2 final;
 
 select table, name from system.parts where database='test' and table='unique_optimize_r1' and active=1 order by name;
-select sleep(3) format Null;
+system sync replica test.unique_optimize_r2 ;
 select table, name from system.parts where database='test' and table='unique_optimize_r2' and active=1 order by name;
 select * from test.unique_optimize_r1 order by d, id;
 

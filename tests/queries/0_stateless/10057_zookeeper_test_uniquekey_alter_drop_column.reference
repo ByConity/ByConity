@@ -12,7 +12,7 @@ r2	2021-01-10	10003
 r2	2021-01-10	10004
 -----------------------------------
 CREATE TABLE test.alter_drop_column_t1\n(\n    `d` Date,\n    `id` UInt64\n)\nENGINE = HaUniqueMergeTree(\'/clickhouse/tables/test/drop_columns_test\', \'r1\')\nPARTITION BY d\nORDER BY id\nUNIQUE KEY id\nSETTINGS ha_unique_update_log_sleep_ms = 10, ha_unique_replay_log_sleep_ms = 10, index_granularity = 8192
-CREATE TABLE test.alter_drop_column_t2\n(\n    `d` Date,\n    `id` UInt64\n)\nENGINE = HaUniqueMergeTree(\'/clickhouse/tables/test/drop_columns_test\', \'r2\')\nPARTITION BY d\nORDER BY id\nUNIQUE KEY id\nSETTINGS ha_unique_update_log_sleep_ms = 10, ha_unique_replay_log_sleep_ms = 10, index_granularity = 8192
+CREATE TABLE test.alter_drop_column_t2\n(\n    `d` Date,\n    `id` UInt64\n)\nENGINE = HaUniqueMergeTree(\'/clickhouse/tables/test/drop_columns_test\', \'r2\')\nPARTITION BY d\nORDER BY id\nUNIQUE KEY id\nSETTINGS ha_unique_update_log_sleep_ms = 10, ha_unique_replay_log_sleep_ms = 10, replicated_can_become_leader = 0, index_granularity = 8192
 -----------------------------------
 optimize table final
 r1	2021-01-10	10001
