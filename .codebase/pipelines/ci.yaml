@@ -21,7 +21,7 @@ jobs:
           sync_aws: false
           sync_oss: false
           envs: {CUSTOM_CMAKE_BUILD_TYPE: "RelWithDebInfo"}
-  
+
   FuntionalStatelessTest:
     name: FuntionalStatelessTest
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
@@ -43,7 +43,7 @@ jobs:
       - name: Run FuntionalStatelessTest
         commands:
           - cd /
-          - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp -r /home/code/docker/test/stateless/. .
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
@@ -76,7 +76,7 @@ jobs:
       - name: Run FuntionalStatefulTest
         commands:
           - cd /
-          - cp /home/code/docker/test/stateful/run.sh run.sh
+          - cp -r /home/code/docker/test/stateful/. .
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - name: Upload Artifact
@@ -120,7 +120,7 @@ jobs:
       - name: Analyse Result
         commands:
           - /bin/bash /home/code/docker/test/result.sh
-  
+
   StressTest:
     name: StressTest
     image: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2
@@ -215,7 +215,7 @@ jobs:
           - /bin/bash /home/code/docker/test/result.sh
 
   IntegrationTestsRelease0:
-    name: IntegrationTestRelease0        
+    name: IntegrationTestRelease0
     image: minikube:1.22.0
     timeout: 360
     runs-on:
@@ -235,14 +235,14 @@ jobs:
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz          
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run IntegrationTest-CI-Runner
-        continue-on-error: true        
+        continue-on-error: true
         commands:
           - minikube start
           - export RUN_BY_HASH_NUM=0
-          - export RUN_BY_HASH_TOTAL=2          
-          - /bin/bash /home/code/tests/integration/run.sh          
+          - export RUN_BY_HASH_TOTAL=2
+          - /bin/bash /home/code/tests/integration/run.sh
       - name: Upload Artifact
         continue-on-error: true
         uses: actions/upload-artifact
@@ -255,7 +255,7 @@ jobs:
           - /bin/bash /home/code/docker/test/result.sh
 
   IntegrationTestsRelease1:
-    name: IntegrationTestRelease1    
+    name: IntegrationTestRelease1
     image: minikube:1.22.0
     timeout: 360
     runs-on:
@@ -275,14 +275,14 @@ jobs:
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz          
+          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run IntegrationTest-CI-Runner
-        continue-on-error: true        
+        continue-on-error: true
         commands:
           - minikube start
           - export RUN_BY_HASH_NUM=1
-          - export RUN_BY_HASH_TOTAL=2          
-          - /bin/bash /home/code/tests/integration/run.sh          
+          - export RUN_BY_HASH_TOTAL=2
+          - /bin/bash /home/code/tests/integration/run.sh
       - name: Upload Artifact
         continue-on-error: true
         uses: actions/upload-artifact

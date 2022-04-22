@@ -1,23 +1,22 @@
 name: BUILD_IMAGE
 trigger:
   change:
-  manual:
     types: ["create", "push"]
     paths:
-      - "docker/test/base/*"
-      - "docker/test/stateless/*"
-      - "docker/test/stateful/*"
-      - "docker/test/stress/*"
-      - "docker/test/certificate/*"
-      - "docker/test/integration/runner/*"
-      - "docker/test/integration/base/*"
-      - "docker/test/integration/helper_container/*"
-      - "docker/test/integration/kerberos_kdc/*"
-      - "docker/test/integration/mysql_golang_client/*"
-      - "docker/test/integration/mysql_java_client/*"
-      - "docker/test/integration/mysql_js_client/*"
-      - "docker/test/integration/mysql_php_client/*"
-      - "docker/test/integration/postgresql_java_client/*"
+      - "docker/test/base/Dockerfile"
+      - "docker/test/stateless/Dockerfile"
+      - "docker/test/stateful/Dockerfile"
+      - "docker/test/stress/Dockerfile"
+      - "docker/test/certificate/Dockerfile"
+      - "docker/test/integration/runner/Dockerfile"
+      - "docker/test/integration/base/Dockerfile"
+      - "docker/test/integration/helper_container/Dockerfile"
+      - "docker/test/integration/kerberos_kdc/Dockerfile"
+      - "docker/test/integration/mysql_golang_client/Dockerfile"
+      - "docker/test/integration/mysql_java_client/Dockerfile"
+      - "docker/test/integration/mysql_js_client/Dockerfile"
+      - "docker/test/integration/mysql_php_client/Dockerfile"
+      - "docker/test/integration/postgresql_java_client/Dockerfile"
 jobs:
   build_test_base_image:
     name: Build base, stateless, stateful, certificate, stress images
@@ -100,7 +99,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-mysql-golang-client:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-mysql-java-client
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -110,7 +109,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-mysql-java-client:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-mysql-js-client
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -120,7 +119,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-mysql-js-client:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-mysql-php-client
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -130,7 +129,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-mysql-php-client:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-postgresql-java-client
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -140,7 +139,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-postgresql-java-client:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-integration-test-base
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -160,7 +159,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-kerberos-kdc:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
       - id: clickhouse-integration-helper
         parallel-with-next-step: true
         uses: actions/buildkit@v1
@@ -170,7 +169,7 @@ jobs:
           output: registry
           image-ref: hub.byted.org/bytehouse/clickhouse-integration-helper:stable
           build-args:
-            - TAG=stable  
+            - TAG=stable
     services:
       - id: buildkit
         image: hub.byted.org/pipeline/buildkit
