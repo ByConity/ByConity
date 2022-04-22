@@ -141,6 +141,10 @@ StorageMaterializedView::StorageMaterializedView(
 
     if (!select.select_table_id.empty())
         DatabaseCatalog::instance().addDependency(select.select_table_id, getStorageID());
+
+    /// Add memory table dependency
+    if (!target_table_id.empty() && !select.select_table_id.empty())
+        DatabaseCatalog::instance().addMemoryTableDependency(target_table_id, select.select_table_id);
 }
 
 QueryProcessingStage::Enum StorageMaterializedView::getQueryProcessingStage(
@@ -260,6 +264,7 @@ void StorageMaterializedView::drop()
     if (!select_query.select_table_id.empty())
         DatabaseCatalog::instance().removeDependency(select_query.select_table_id, table_id);
 
+    DatabaseCatalog::instance().removeMemoryTableDependency(target_table_id);
     dropInnerTableIfAny(true, getContext());
 }
 
@@ -424,6 +429,8 @@ void StorageMaterializedView::shutdown()
     /// Make sure the dependency is removed after DETACH TABLE
     if (!select_query.select_table_id.empty())
         DatabaseCatalog::instance().removeDependency(select_query.select_table_id, getStorageID());
+
+    DatabaseCatalog::instance().removeMemoryTableDependency(target_table_id);
 }
 
 StoragePtr StorageMaterializedView::getTargetTable() const

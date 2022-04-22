@@ -51,6 +51,7 @@ private:
         BlockOutputStreamPtr out;
         std::exception_ptr exception;
         UInt64 elapsed_ms = 0;
+        String implicit_column;
     };
 
     std::vector<ViewInfo> views;

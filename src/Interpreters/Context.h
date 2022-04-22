@@ -783,6 +783,7 @@ public:
     BackgroundSchedulePool & getLocalSchedulePool() const;
     BackgroundSchedulePool & getMergeSelectSchedulePool() const;
     BackgroundSchedulePool & getUniqueTableSchedulePool() const;
+    BackgroundSchedulePool & getMemoryTableSchedulePool() const;
 
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;

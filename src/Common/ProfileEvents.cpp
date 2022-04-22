@@ -100,6 +100,13 @@
     M(ZooKeeperBytesSent, "") \
     M(ZooKeeperBytesReceived, "") \
     \
+    M(StorageMemoryFlush, "") \
+    M(StorageMemoryErrorOnFlush, "") \
+    M(StorageMemoryPassedAllMinThresholds, "") \
+    M(StorageMemoryPassedTimeMaxThreshold, "") \
+    M(StorageMemoryPassedRowsMaxThreshold, "") \
+    M(StorageMemoryPassedBytesMaxThreshold, "") \
+    \
     M(DistributedConnectionFailTry, "Total count when distributed connection fails with retry") \
     M(DistributedConnectionMissingTable, "") \
     M(DistributedConnectionStaleReplica, "") \

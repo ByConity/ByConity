@@ -160,6 +160,7 @@ namespace CurrentMetrics
     extern const Metric BackgroundLocalSchedulePoolTask;
     extern const Metric BackgroundMergeSelectSchedulePoolTask;
     extern const Metric BackgroundUniqueTableSchedulePoolTask;
+    extern const Metric BackgroundMemoryTableSchedulePoolTask;
 }
 
 
@@ -177,7 +178,8 @@ namespace SchedulePool
         Local,
         MergeSelect,
         UniqueTable,
-        Size,
+        MemoryTable,
+        Size
     };
 }
 
@@ -1944,14 +1946,13 @@ BackgroundSchedulePool & Context::getUniqueTableSchedulePool() const
     return *shared->extra_schedule_pools[SchedulePool::UniqueTable];
 }
 
-ThrottlerPtr Context::getReplicatedFetchesThrottler() const
+BackgroundSchedulePool & Context::getMemoryTableSchedulePool() const
 {
     auto lock = getLock();
-    if (!shared->replicated_fetches_throttler)
-        shared->replicated_fetches_throttler = std::make_shared<Throttler>(
-            settings.max_replicated_fetches_network_bandwidth_for_server);
-
-    return shared->replicated_fetches_throttler;
+    if (!shared->extra_schedule_pools[SchedulePool::MemoryTable])
+        shared->extra_schedule_pools[SchedulePool::MemoryTable].emplace(
+            settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemoryTablePool");
+    return *shared->extra_schedule_pools[SchedulePool::MemoryTable];
 }
 
 ThrottlerPtr Context::getReplicatedSendsThrottler() const
@@ -1962,6 +1963,16 @@ ThrottlerPtr Context::getReplicatedSendsThrottler() const
             settings.max_replicated_sends_network_bandwidth_for_server);
 
     return shared->replicated_sends_throttler;
+}
+
+ThrottlerPtr Context::getReplicatedFetchesThrottler() const
+{
+    auto lock = getLock();
+    if (!shared->replicated_fetches_throttler)
+        shared->replicated_fetches_throttler = std::make_shared<Throttler>(
+            settings.max_replicated_fetches_network_bandwidth_for_server);
+
+    return shared->replicated_fetches_throttler;
 }
 
 bool Context::hasDistributedDDL() const

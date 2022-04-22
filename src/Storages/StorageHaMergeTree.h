@@ -547,6 +547,11 @@ private:
     String getZKCommittedLSNPath() const { return zookeeper_path + "/committed_lsn"; }
     String getZKReplicaUpdatedLSNPath() const { return replica_path + "/updated_lsn"; }
 
+    void readMemoryTable(QueryPlan & query_plan, const Names & column_names, const StorageMetadataPtr & metadata_snapshot, const SelectQueryInfo & query_info,
+                         ContextPtr query_context, QueryProcessingStage::Enum processed_stage, size_t max_block_size, unsigned num_streams);
+
+    std::vector<String> findReplicaAddress();
+
 protected:
     /** If not 'attach', either creates a new table in ZK, or adds a replica to an existing table.
       */

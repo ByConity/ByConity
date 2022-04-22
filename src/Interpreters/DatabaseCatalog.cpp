@@ -8,6 +8,7 @@
 #include <Common/quoteString.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/LiveView/TemporaryLiveViewCleaner.h>
+#include <Storages/Kafka/StorageHaKafka.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
@@ -591,7 +592,6 @@ void DatabaseCatalog::addDependency(const StorageID & from, const StorageID & wh
     // FIXME when loading metadata storage may not know UUIDs of it's dependencies, because they are not loaded yet,
     // so UUID of `from` is not used here. (same for remove, get and update)
     view_dependencies[{from.getDatabaseName(), from.getTableName()}].insert(where);
-
 }
 
 void DatabaseCatalog::removeDependency(const StorageID & from, const StorageID & where)
@@ -609,8 +609,50 @@ Dependencies DatabaseCatalog::getDependencies(const StorageID & from) const
     return Dependencies(iter->second.begin(), iter->second.end());
 }
 
-void
-DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
+void DatabaseCatalog::addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id)
+{
+    std::lock_guard lock{databases_mutex};
+    memory_table_dependencies[{local_table_id.getDatabaseName(), local_table_id.getTableName()}].insert(memory_table_id);
+}
+
+void DatabaseCatalog::removeMemoryTableDependency(const StorageID & local_table_id)
+{
+    std::lock_guard lock{databases_mutex};
+    memory_table_dependencies.erase({local_table_id.getDatabaseName(), local_table_id.getTableName()});
+}
+
+std::optional<MemoryTableInfo> DatabaseCatalog::tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const
+{
+    String source_db;
+    String source_table;
+    {
+        std::lock_guard lock{databases_mutex};
+        auto iter = memory_table_dependencies.find(local_table_id);
+        if (iter == memory_table_dependencies.end()) return {};
+        if (iter->second.size() != 1 || iter->second.empty()) return {};
+        source_db = iter->second.begin()->getDatabaseName();
+        source_table = iter->second.begin()->getTableName();
+    }
+    auto source_table_ptr = tryGetTable({source_db, source_table}, local_context);
+    if (source_table_ptr)
+    {
+#if USE_RDKAFKA
+        auto * consumer_table = dynamic_cast<StorageHaKafka *>(source_table_ptr.get());
+        if (consumer_table && consumer_table->enableMemoryTable())
+            return std::make_optional<MemoryTableInfo>(std::make_pair(consumer_table->getMemoryTable({source_db, source_table}), consumer_table->isLeader()));
+        else
+#endif
+        {
+            return {};
+        }
+    }
+    else
+    {
+        return {};
+    }
+}
+
+void DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
                                   const StorageID & new_where)
 {
     std::lock_guard lock{databases_mutex};

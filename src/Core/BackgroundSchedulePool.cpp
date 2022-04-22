@@ -148,6 +148,15 @@ Coordination::WatchCallback BackgroundSchedulePoolTaskInfo::getWatchCallback()
      };
 }
 
+String BackgroundSchedulePoolTaskInfo::dumpStatus()
+{
+    std::stringstream ss;
+    ss << "BackgroundSchedulePool task info: " << "\n";
+    ss << "Status: deactivated-" << deactivated << ", scheduled-" << scheduled << ", delayed-"
+       << delayed << ", executing-" << executing << "\n";
+    ss << "Pool thread size -" << pool.threads.size() << ", current queue size-" << pool.queue.size() << "\n";
+    return ss.str();
+}
 
 BackgroundSchedulePool::BackgroundSchedulePool(size_t size_, CurrentMetrics::Metric tasks_metric_, const char *thread_name_, CpuSetPtr cpu_set_)
     : size(size_)

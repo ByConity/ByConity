@@ -24,6 +24,7 @@
     M(BackgroundLocalSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
     M(BackgroundMergeSelectSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
     M(BackgroundUniqueTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
+    M(BackgroundMemoryTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for memory table threads, etc.") \
     M(CacheDictionaryUpdateQueueBatches, "Number of 'batches' (a set of keys) in update queue in CacheDictionaries.") \
     M(CacheDictionaryUpdateQueueKeys, "Exact number of keys in update queue in CacheDictionaries.") \
     M(DiskSpaceReservedForMerge, "Disk space reserved for currently running background merges. It is slightly more than the total size of currently merging parts.") \
@@ -82,6 +83,8 @@
     M(MMappedFiles, "Total number of mmapped files.") \
     M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
     M(MemoryTrackingForExchange, "Total amount of memory (bytes) allocated for complex query exchange") \
+    M(StorageMemoryRows, "Memory table input rows") \
+    M(StorageMemoryBytes, "Memory table input bytes") \
 
 namespace CurrentMetrics
 {
