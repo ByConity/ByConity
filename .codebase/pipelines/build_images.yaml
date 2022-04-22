@@ -1,6 +1,7 @@
 name: BUILD_IMAGE
 trigger:
   change:
+  manual:
     types: ["create", "push"]
     paths:
       - "docker/test/base/*"
@@ -21,6 +22,7 @@ jobs:
   build_test_base_image:
     name: Build base, stateless, stateful, certificate, stress images
     image: hub.byted.org/data-ci-debian:latest
+    retry: 3
     steps:
       - uses: actions/checkout
         inputs:
@@ -31,43 +33,43 @@ jobs:
           context: docker/test/base
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:stable
+          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:gdb11.2
       - id: clickhouse-stateless-test
         uses: actions/buildkit@v1
         inputs:
           context: docker/test/stateless
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
           build-args:
-            - TAG=stable
+            - TAG=gdb11.2
       - id: clickhouse-stateful-test
         uses: actions/buildkit@v1
         inputs:
           context: docker/test/stateful
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
           build-args:
-            - TAG=stable
+            - TAG=gdb11.2
       - id: clickhouse-certificate-stateful-test
         uses: actions/buildkit@v1
         inputs:
           context: docker/test/certificate
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:certificate
+          image-ref: hub.byted.org/bytehouse/clickhouse-certificate-stateful-test:gdb11.2
           build-args:
-            - TAG=stable
+            - TAG=gdb11.2
       - id: clickhouse-stress-test
         uses: actions/buildkit@v1
         inputs:
           context: docker/test/stress
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:stable
+          image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2
           build-args:
-            - TAG=stable
+            - TAG=gdb11.2
     services:
       - id: buildkit
         image: hub.byted.org/pipeline/buildkit
@@ -171,4 +173,4 @@ jobs:
             - TAG=stable  
     services:
       - id: buildkit
-        image: hub.byted.org/pipeline/buildkit    
+        image: hub.byted.org/pipeline/buildkit
