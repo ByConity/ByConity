@@ -174,7 +174,8 @@ BlockIO InterpreterInsertQuery::execute()
 
     bool is_distributed_insert_select = false;
 
-    if (query.select && table->isRemote() && settings.parallel_distributed_insert_select)
+    if (query.select && table->isRemote() && 
+        (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
     {
         // Distributed INSERT SELECT
         if (auto maybe_pipeline = table->distributedWrite(query, getContext()))

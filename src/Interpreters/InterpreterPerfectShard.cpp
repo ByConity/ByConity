@@ -129,6 +129,9 @@ void InterpreterPerfectShard::collectTables()
             break;
         }
     }
+
+    if (!query_info.cluster)
+        perfect_shardable = false;
 }
 
 void InterpreterPerfectShard::rewriteDistributedTables()
@@ -176,6 +179,9 @@ void InterpreterPerfectShard::sendQuery(QueryPlan & query_plan)
     const Scalars & scalars = context->hasQueryContext() ? context->getQueryContext()->getScalars() : Scalars{};
 
     Block header = InterpreterSelectQuery(query, context, SelectQueryOptions(processed_stage).analyze()).getSampleBlock();
+
+    if (!query_info.getCluster())
+        throw Exception("Cluster should not be nullptr when sendQuery in PerfectShard: ", ErrorCodes::LOGICAL_ERROR);
 
     /// Return directly (with correct header) if no shard to query.
     if (query_info.getCluster()->getShardsInfo().empty())
