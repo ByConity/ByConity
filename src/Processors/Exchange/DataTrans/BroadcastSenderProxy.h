@@ -40,8 +40,8 @@ private:
     mutable bthread::Mutex mutex;
     bthread::ConditionVariable wait_become_real;
     bthread::ConditionVariable wait_accept;
-    std::atomic_bool has_real_sender = false;
-
+    std::atomic_bool has_real_sender {false};
+    bool closed {false};
     DataTransKeyPtr data_key;
 
     ContextPtr context;

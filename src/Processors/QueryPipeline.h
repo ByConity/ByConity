@@ -138,7 +138,7 @@ public:
         if (max_threads) //-V1051
             num_threads = std::min(num_threads, max_threads);
 
-        return std::max<size_t>(min_threads, num_threads);
+        return std::max<size_t>(min_threads + 1, num_threads);
     }
 
     /// Set upper limit for the recommend number of threads
@@ -153,6 +153,8 @@ public:
         if (max_threads == 0 || max_threads_ < max_threads)
             max_threads = max_threads_;
     }
+
+    const Processors & getProcessors() const { return pipe.getProcessors(); }
 
     /// Convert query pipeline to pipe.
     static Pipe getPipe(QueryPipeline pipeline) { return std::move(pipeline.pipe); }

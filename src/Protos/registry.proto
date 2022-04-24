@@ -5,6 +5,7 @@ option cc_generic_services = true;
 
 message RegistryRequest {
   required string data_key = 1;
+  required uint32 wait_timeout_ms = 2;
 };
 
 message RegistryResponse {

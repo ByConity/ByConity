@@ -1,6 +1,5 @@
-#include "BrpcRemoteBroadcastReceiver.h"
-#include "StreamHandler.h"
-
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/StreamHandler.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -9,6 +8,8 @@
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <Protos/registry.pb.h>
 #include <brpc/stream.h>
+
+#include <atomic>
 
 namespace DB
 {
@@ -68,6 +69,8 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     Protos::RegistryRequest request;
     Protos::RegistryResponse response;
     request.set_data_key(trans_key->getKey());
+    request.set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
+
     stub.registry(&cntl, &request, &response, nullptr);
     // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
     if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
@@ -91,7 +94,7 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk chunk)
     if (!queue.tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(chunk)))
         throw Exception(
             "Push exchange data to receiver for " + getName() + " timeout for "
-            + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
+                + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
 }
 
@@ -112,9 +115,9 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
         return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
     }
 
-    if(keep_order)
+    if (keep_order)
         // Chunk in queue is created in StreamHanlder's on_received_messages callback, which is run in bthread.
-        // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker. 
+        // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
         // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
         ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
     return RecvDataPacket(std::move(received_chunk));
@@ -140,7 +143,7 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
     if (status_code_ < 0)
     {
         // if send_done_flag has never been set, sender should have some unkown errors.
-        if (!send_done_flag.test(std::memory_order_relaxed))
+        if (!send_done_flag.test(std::memory_order_acquire))
             new_fin_code = BroadcastStatusCode::SEND_UNKNOWN_ERROR;
     }
 
@@ -160,6 +163,40 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
 
 String BrpcRemoteBroadcastReceiver::getName() const
 {
-    return "BrpcReciver[" +  trans_key->getKey() +"]@" + registry_address;
+    return "BrpcReciver[" + trans_key->getKey() + "]@" + registry_address;
 }
+
+AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
+{
+    AsyncRegisterResult res;
+
+    res.channel = RpcClientFactory::getInstance().getClient(registry_address, true);
+    res.cntl = std::make_unique<brpc::Controller>();
+    res.request = std::make_unique<Protos::RegistryRequest>();
+    res.response = std::make_unique<Protos::RegistryResponse>();
+
+    std::shared_ptr<RpcClient> & rpc_client = res.channel;
+    Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
+
+    brpc::Controller & cntl = *res.cntl;
+    brpc::StreamOptions stream_options;
+    stream_options.handler = std::make_shared<StreamHandler>(context, shared_from_this(), header, keep_order);
+
+    if (timeout_ms == 0)
+        cntl.set_timeout_ms(rpc_client->getChannel().options().timeout_ms);
+    else
+        cntl.set_timeout_ms(timeout_ms);
+    cntl.set_max_retry(3);
+    if (brpc::StreamCreate(&stream_id, cntl, &stream_options) != 0)
+        throw Exception("Fail to create stream for " + getName(), ErrorCodes::BRPC_EXCEPTION);
+
+    if (stream_id == brpc::INVALID_STREAM_ID)
+        throw Exception("Stream id is invalid for " + getName(), ErrorCodes::BRPC_EXCEPTION);
+
+    res.request->set_data_key(trans_key->getKey());
+    res.request->set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
+    stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
+    return res;
+}
+
 }

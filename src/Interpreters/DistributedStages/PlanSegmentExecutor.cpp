@@ -1,4 +1,5 @@
 #include <memory>
+#include <vector>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -8,6 +9,8 @@
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
+#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
@@ -15,6 +18,7 @@
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/ExchangeSource.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <Processors/Exchange/LoadBalancedExchangeSink.h>
 #include <Processors/Exchange/MultiPartitionExchangeSink.h>
@@ -29,7 +33,9 @@
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -155,15 +161,14 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
-    return plan_segment->getQueryPlan().buildQueryPipeline(
+    QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+    registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
+    return pipeline;
 }
 
 void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders)
 {
-    pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
-
     if (!plan_segment->getPlanSegmentOutput())
         throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
 
@@ -203,7 +208,12 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         sender->accept(context, header);
         senders.emplace_back(std::move(sender));
     }
-    
+
+    pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+
+    registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
+
     pipeline->setMaxThreads(pipeline->getNumThreads());
     auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
     if (!keep_order && output_size)
@@ -224,6 +234,60 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     else
         throw Exception("Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)), ErrorCodes::LOGICAL_ERROR);
 }
+
+void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms)
+{
+    const Processors & procesors = pipeline.getProcessors();
+    std::vector<AsyncRegisterResult> async_results;
+    std::vector<LocalBroadcastChannel *> local_receivers;
+
+    for (const auto & processor : procesors)
+    {
+        auto exchange_source_ptr = std::dynamic_pointer_cast<ExchangeSource>(processor);
+        if (!exchange_source_ptr)
+            continue;
+        auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
+        auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
+        if (local_receiver)
+            local_receivers.push_back(local_receiver);
+        else
+        {
+            auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
+            if (unlikely(!brpc_receiver))
+                throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
+            async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+        }
+    }
+
+    for (auto * local_receiver : local_receivers)
+        local_receiver->registerToSenders(register_timeout_ms);
+
+    /// Wait all brpc register rpc done
+    for (auto & res : async_results)
+        brpc::Join(res.cntl->call_id());
+
+    /// get result
+    for (auto & res : async_results)
+    {
+        // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
+        if (res.cntl->ErrorCode() == brpc::EREQUEST && boost::algorithm::ends_with(res.cntl->ErrorText(), "was closed before responded"))
+        {
+            LOG_INFO(
+                &Poco::Logger::get("PlanSegmentExecutor"),
+                "Receiver register sender successfully but sender already finished, host-{} , data_key-{}",
+                butil::endpoint2str(res.cntl->remote_side()).c_str(),
+                res.request->data_key());
+            continue;
+        }
+        res.channel->assertController(*res.cntl);
+        LOG_DEBUG(
+            &Poco::Logger::get("PlanSegmentExecutor"),
+            "Receiver register sender successfully, host-{} , data_key-{}",
+            butil::endpoint2str(res.cntl->remote_side()).c_str(),
+            res.request->data_key());
+    }
+}
+
 
 void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders, bool keep_order)
 {
@@ -256,12 +320,13 @@ void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline
                     connect(*ports[i], copy_transform->getInputPort());
                     auto & copy_outputs = copy_transform->getOutputs();
                     size_t partition_id = 0;
-                    for(auto & copy_output: copy_outputs)
+                    for (auto & copy_output : copy_outputs)
                     {
-                        auto exchange_sink = std::make_shared<SinglePartitionExchangeSink>(header, senders[partition_id], partition_id, options);
+                        auto exchange_sink
+                            = std::make_shared<SinglePartitionExchangeSink>(header, senders[partition_id], partition_id, options);
                         connect(copy_output, exchange_sink->getPort());
-                        new_processors.emplace_back(std::move(exchange_sink));       
-                        partition_id++;               
+                        new_processors.emplace_back(std::move(exchange_sink));
+                        partition_id++;
                     }
                     new_processors.emplace_back(std::move(copy_transform));
                 }

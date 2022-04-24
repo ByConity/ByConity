@@ -107,6 +107,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     if (keep_order)
         source_header = exchange_header;
 
+
     for (const auto & input : inputs)
     {
         size_t write_plan_segment_id = input->getPlanSegmentId();
@@ -143,15 +144,17 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     {
                         String localhost_address = context->getLocalHost() + ":" + std::to_string(context->getExchangePort());
                         LOG_DEBUG(logger, "Force local exchange use remote source : {}@{}", data_key->dump(), localhost_address);
-                        receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
-                            std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), localhost_address, context, exchange_header, keep_order));
+                        auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+                            std::move(data_key), localhost_address, context, exchange_header, keep_order);
+                        receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                     }
                 }
                 else
                 {
                     LOG_DEBUG(logger, "Create remote exchange source : {}@{}", data_key->dump(), write_address_info);
-                    receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(
-                        std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), write_address_info, context, exchange_header, keep_order));
+                    auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+                        std::move(data_key), write_address_info, context, exchange_header, keep_order);
+                    receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                 }
                 auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
                 pipe.addSource(std::move(source));
@@ -159,24 +162,21 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             }
         }
     }
-    
+
     pipeline.init(std::move(pipe));
     if (!keep_order)
     {
         pipeline.resize(context->getSettingsRef().exchange_source_pipeline_threads);
-        pipeline.addSimpleTransform(
-            [enable_compress = context->getSettingsRef().exchange_enable_block_compress, header = exchange_header](const Block & ) {
-                return std::make_shared<DeserializeBufTransform>(header, enable_compress);
-            });
+        pipeline.addSimpleTransform([enable_compress = context->getSettingsRef().exchange_enable_block_compress, header = exchange_header](
+                                        const Block &) { return std::make_shared<DeserializeBufTransform>(header, enable_compress); });
     }
     LOG_DEBUG(logger, "Total exchange source : {}, keep_order: {}", source_num, keep_order);
-    pipeline.setMinThreads(source_num + 1);
+    pipeline.setMinThreads(source_num);
 }
 
 
 void RemoteExchangeSourceStep::describePipeline(FormatSettings & /*settings*/) const {
     //TODO
 };
-
 
 }

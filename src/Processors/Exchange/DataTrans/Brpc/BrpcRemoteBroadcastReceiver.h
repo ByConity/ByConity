@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <Core/Block.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
@@ -8,9 +7,14 @@
 #include <Poco/Logger.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
+
+#include <atomic>
+#include <vector>
 
 namespace DB
 {
+
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
@@ -22,8 +26,9 @@ public:
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
     void pushReceiveQueue(Chunk chunk);
-    void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_relaxed); }
+    void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_release); }
 
+    AsyncRegisterResult registerToSendersAsync(UInt32 timeout_ms);
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
     DataTransKeyPtr trans_key;

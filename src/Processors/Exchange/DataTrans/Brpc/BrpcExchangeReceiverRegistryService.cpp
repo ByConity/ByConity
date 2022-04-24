@@ -25,11 +25,23 @@ void BrpcExchangeReceiverRegistryService::registry(
     brpc::StreamId sender_stream_id = brpc::INVALID_STREAM_ID;
     BroadcastSenderProxyPtr sender_proxy;
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+    auto accpet_timeout_ms = request->wait_timeout_ms();
     /// SCOPE_EXIT wrap logic which run after done->Run(),
     /// since host socket of the accpeted stream is set in done->Run()
     SCOPE_EXIT({
         if (sender_proxy && sender_stream_id != brpc::INVALID_STREAM_ID)
         {
+            try
+            {
+                sender_proxy->waitAccept(accpet_timeout_ms);
+            }
+            catch (...)
+            {
+                brpc::StreamClose(sender_stream_id);
+                String error_msg
+                    = "Create stream for " + sender_proxy->getDataKey()->getKey() + " failed by exception: " + getCurrentExceptionMessage(false);
+                LOG_ERROR(log, error_msg);
+            }
             try
             {
                 auto real_sender = std::dynamic_pointer_cast<IBroadcastSender>(std::make_shared<BrpcRemoteBroadcastSender>(
@@ -55,18 +67,6 @@ void BrpcExchangeReceiverRegistryService::registry(
         cntl->SetFailed(EINVAL, "Fail to parse data_key");
         return;
     }
-    try
-    {
-        sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-        sender_proxy->waitAccept(std::max(cntl->timeout_ms() - 500, 1000l));
-    }
-    catch (...)
-    {
-        String error_msg = "Create stream for " + request->data_key() + " failed by exception: " + getCurrentExceptionMessage(false);
-        LOG_ERROR(log, error_msg);
-        cntl->SetFailed(error_msg);
-        return;
-    }
     
     if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
     {
@@ -76,6 +76,7 @@ void BrpcExchangeReceiverRegistryService::registry(
         cntl->SetFailed(error_msg);
         return;
     }
+    sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
 
 }
 
