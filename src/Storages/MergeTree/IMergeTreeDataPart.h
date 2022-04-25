@@ -374,6 +374,9 @@ public:
     /// Makes full clone of part in specified subdirectory (relative to storage data directory, e.g. "detached") on another disk
     void makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const;
 
+    /// Check if there is only one map column not kv store and enable_compact_map_data.
+    bool hasOnlyOneCompactedMapColumnNotKV() const;
+
     /// Checks that .bin and .mrk files exist.
     ///
     /// NOTE: Doesn't take column renames into account, if some column renames
@@ -627,6 +630,8 @@ protected:
     String getRelativePathForDetachedPart(const String & prefix) const;
 
     std::optional<bool> keepSharedDataInDecoupledStorage() const;
+
+    ColumnSize getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const;
 
 private:
     /// In compact parts order of columns is necessary

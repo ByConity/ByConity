@@ -80,10 +80,20 @@ bool isMapImplicitKeyNotKV(const String & map_col);
 
 bool isMapKV(const String & map_col);
 
-// Check if the implicit file belongs to the target map column and if it's a data file whose suffix is .bin(exclude .null.bin or .size.bin)
+// Check if the implicit file belongs to the target map column excluding base file and if it's data file whose suffix is .bin(exclude .null.bin or .size.bin)
 // i.e. __col__%271%27.bin, co -> false(not belong to target map column)
 // i.e. __col__%271%27.null.bin, col -> false(not data file)
 // i.e. __col__%271%27.bin, col -> true
-bool isMapImplicitDataFileNameOfSpecialMapName(const String file_name, const String map_col);
+bool isMapImplicitDataFileNameNotBaseOfSpecialMapName(const String file_name, const String map_col);
 
+// Check if the implicit file belongs to the target map column, including base file
+// i.e. __col_base.bin, co -> false(not belong to target map column)
+// i.e. __col_base.bin, col -> true
+// i.e. __col__%271%27.mrk2, col -> true
+bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String map_col);
+
+/// For compact map type, check if it's the compacted file of target map column.
+// i.e. col.null.bin, co -> false(not belong to target map column)
+// i.e. col.bin, col -> true
+bool isMapCompactFileNameOfSpecialMapName(const String file_name, const String map_col);
 }

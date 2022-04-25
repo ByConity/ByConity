@@ -10,6 +10,7 @@
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeByteMap.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -20,6 +21,7 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Columns/ColumnUnique.h>
 #include <Columns/ColumnMap.h>
+#include <Columns/ColumnByteMap.h>
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
@@ -354,13 +356,28 @@ namespace DB
                     array_vector.emplace_back(std::move(chunk));
                 }
                 auto arrow_nested_column = std::make_shared<arrow::ChunkedArray>(array_vector);
-
+#ifdef USE_COMMUNITY_MAP
                 ColumnArray & column_array = arrow_column->type()->id() == arrow::Type::MAP
                     ? assert_cast<ColumnMap &>(internal_column).getNestedColumn()
                     : assert_cast<ColumnArray &>(internal_column);
 
                 readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
                 fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
+#else
+                ColumnPtr bytemap_nested = nullptr;
+                /// For ColumnByteMap, construct an ColumnArray to mock nested column in ColumnMap so that can use the same logic as ColumnMap.
+                if (arrow_column->type()->id() == arrow::Type::MAP)
+                {
+                    ColumnByteMap & map_column = assert_cast<ColumnByteMap &>(internal_column);
+                    bytemap_nested = ColumnArray::create(ColumnTuple::create(Columns{map_column.getKeyPtr(), map_column.getValuePtr()}), map_column.getOffsetsPtr());
+                }
+                ColumnArray & column_array = bytemap_nested
+                    ? assert_cast<ColumnArray &>(*(bytemap_nested->assumeMutable()))
+                    : assert_cast<ColumnArray &>(internal_column);
+
+                readColumnFromArrowColumn(arrow_nested_column, column_array.getData(), column_name, format_name, false, dictionary_values);
+                fillOffsetsFromArrowListColumn(arrow_column, column_array.getOffsetsColumn());
+#endif
                 break;
             }
             case arrow::Type::STRUCT:
@@ -506,7 +523,7 @@ namespace DB
             const auto & dict_type = lc_type ? lc_type->getDictionaryType() : column_type;
             return std::make_shared<DataTypeLowCardinality>(getInternalType(arrow_dict_type->value_type(), dict_type, column_name, format_name));
         }
-
+#ifdef USE_COMMUNITY_MAP
         if (arrow_type->id() == arrow::Type::MAP)
         {
             const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
@@ -519,7 +536,20 @@ namespace DB
                 getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
                 );
         }
+#else
+        if (arrow_type->id() == arrow::Type::MAP)
+        {
+            const auto * arrow_map_type = typeid_cast<arrow::MapType *>(arrow_type.get());
+            const auto * map_type = typeid_cast<const DataTypeByteMap *>(column_type.get());
+            if (!map_type)
+                throw Exception{fmt::format("Cannot convert arrow MAP type to a not Map ClickHouse type {}.", column_type->getName()), ErrorCodes::CANNOT_CONVERT_TYPE};
 
+            return std::make_shared<DataTypeByteMap>(
+                getInternalType(arrow_map_type->key_type(), map_type->getKeyType(), column_name, format_name),
+                getInternalType(arrow_map_type->item_type(), map_type->getValueType(), column_name, format_name)
+                );
+        }
+#endif
         if (const auto * internal_type_it = std::find_if(arrow_type_to_internal_type.begin(), arrow_type_to_internal_type.end(),
                                                               [=](auto && elem) { return elem.first == arrow_type->id(); });
             internal_type_it != arrow_type_to_internal_type.end())

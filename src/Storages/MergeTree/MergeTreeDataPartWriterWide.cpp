@@ -870,7 +870,10 @@ void MergeTreeDataPartWriterWide::adjustLastMarkIfNeedAndFlushToDisk(size_t new_
     }
 
     /// Last mark should be filled, otherwise it's a bug
-    if (last_non_written_marks.empty())
+    /// If the storage has only one map column not kv store, there has two cases:
+    /// 1. the map column use compact format. We should consider the case that last_non_written_marks is empty if map value is {}.
+    /// 2. the map column use uncompact format. We don't need to handle this case because there has at least one base stream, thus last_non_written_marks will not be empty.
+    if (last_non_written_marks.empty() && !data_part->hasOnlyOneCompactedMapColumnNotKV())
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "No saved marks for last mark {} having rows offset {}, total marks {}",

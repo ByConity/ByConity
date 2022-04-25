@@ -1498,7 +1498,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
                             for (const auto & it : checksums->files)
                             {
                                 const auto & file_name = it.first;
-                                if (isMapImplicitDataFileNameOfSpecialMapName(file_name, column_name))
+                                if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column_name))
                                 {
                                     String key_name = parseKeyNameFromImplicitFileName(file_name, column_name);
                                     String implicit_name = getImplicitColNameForMapKey(column_name, key_name);

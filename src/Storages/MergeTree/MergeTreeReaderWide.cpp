@@ -68,7 +68,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
                     {
                         //Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
                         const String & file_name = file.first;
-                        if (isMapImplicitDataFileNameOfSpecialMapName(file_name, column.name))
+                        if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
                         {
                             key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
                             impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
