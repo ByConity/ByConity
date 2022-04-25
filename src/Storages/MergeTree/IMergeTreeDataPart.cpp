@@ -1248,6 +1248,40 @@ std::optional<bool> IMergeTreeDataPart::keepSharedDataInDecoupledStorage() const
     return {};
 }
 
+ColumnSize IMergeTreeDataPart::getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const
+{
+    ColumnSize size;
+    if (!column.type->isMap())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle type {} in method getMapColumnSizeNotKV", column.type->getName());
+    if (column.type->isMapKVStore())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle map kv type in method getMapColumnSizeNotKV");
+    for (auto & name_csm : checksums->files)
+    {
+        bool is_map_file = false;
+        if (versions->enable_compact_map_data)
+        {
+            if (isMapCompactFileNameOfSpecialMapName(name_csm.first, column.name))
+                is_map_file = true;
+        }
+        else
+        {
+            if (isMapImplicitFileNameOfSpecialMapName(name_csm.first, column.name))
+                is_map_file = true;
+        }
+        if (is_map_file)
+        {
+            if (endsWith(name_csm.first, DATA_FILE_EXTENSION))
+            {
+                size.data_compressed += name_csm.second.file_size;
+                size.data_uncompressed += name_csm.second.uncompressed_size;
+            }
+            else if (endsWith(name_csm.first, index_granularity_info.marks_file_extension))
+                size.marks += name_csm.second.file_size;
+        }
+    }
+    return size;
+}
+
 void IMergeTreeDataPart::remove() const
 {
     std::optional<bool> keep_shared_data = keepSharedDataInDecoupledStorage();
@@ -1502,6 +1536,14 @@ void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const Storag
     /// Backup is not recursive (max_level is 0), so do not copy inner directories
     localBackup(volume->getDisk(), getFullRelativePath(), destination_path, 0);
     volume->getDisk()->removeFileIfExists(fs::path(destination_path) / DELETE_ON_DESTROY_MARKER_FILE_NAME);
+}
+
+bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
+{
+    if (columns.size() != 1)
+        return false;
+    const auto type = columns.begin()->type;
+    return type->isMap() && !type->isMapKVStore() && versions->enable_compact_map_data;
 }
 
 void IMergeTreeDataPart::makeCloneOnDisk(const DiskPtr & disk, const String & directory_name) const

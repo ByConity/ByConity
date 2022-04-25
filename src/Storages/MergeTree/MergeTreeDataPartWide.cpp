@@ -3,7 +3,9 @@
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
 #include <DataTypes/NestedUtils.h>
+#include <DataTypes/MapHelpers.h>
 #include <Core/NamesAndTypes.h>
+#include <Common/StringUtils/StringUtils.h>
 
 
 namespace DB
@@ -84,6 +86,10 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
     if (checksums->empty())
         return size;
 
+    // Special handling flattened map type
+    if (column.type->isMap() && !column.type->isMapKVStore())
+        return getMapColumnSizeNotKV(checksums, column);
+
     auto serialization = getSerializationForColumn(column);
     serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
     {
@@ -92,7 +98,7 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
         if (processed_substreams && !processed_substreams->insert(file_name).second)
             return;
 
-        auto bin_checksum = checksums->files.find(file_name + ".bin");
+        auto bin_checksum = checksums->files.find(file_name + DATA_FILE_EXTENSION);
         if (bin_checksum != checksums->files.end())
         {
             size.data_compressed += bin_checksum->second.file_size;
@@ -250,6 +256,9 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
 
 bool MergeTreeDataPartWide::hasColumnFiles(const NameAndTypePair & column) const
 {
+    /// Handle the special case that there has only one compact map column because it will has no data file if just insert {}
+    if (hasOnlyOneCompactedMapColumnNotKV())
+        return true;
     auto check_stream_exists = [this](const String & stream_name)
     {
         auto checksums = getChecksums();
@@ -259,16 +268,36 @@ bool MergeTreeDataPartWide::hasColumnFiles(const NameAndTypePair & column) const
         return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
     };
 
-    bool res = true;
-    auto serialization = IDataType::getSerialization(column, check_stream_exists);
-    serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
+    if (column.type->isMap() && !column.type->isMapKVStore())
     {
-        String file_name = ISerialization::getFileNameForStream(column, substream_path);
-        if (!check_stream_exists(file_name))
-            res = false;
-    });
+        for (auto & [file, _] : getChecksums()->files)
+        {
+            if (versions->enable_compact_map_data)
+            {
+                if (isMapCompactFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+            else
+            {
+                if (isMapImplicitFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+        }
+        return false;
+    }
+    else
+    {
+        bool res = true;
+        auto serialization = IDataType::getSerialization(column, check_stream_exists);
+        serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
+        {
+            String file_name = ISerialization::getFileNameForStream(column, substream_path);
+            if (!check_stream_exists(file_name))
+                res = false;
+        });
 
-    return res;
+        return res;
+    }
 }
 
 String MergeTreeDataPartWide::getFileNameForColumn(const NameAndTypePair & column) const

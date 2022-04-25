@@ -120,7 +120,6 @@
         "01548_parallel_parsing_max_memory",
 
         /// Map
-        "00825_protobuf_format_map",
         "00900_orc_arrow_parquet_maps",
         "00900_long_parquet_load",
         "01318_map_add_map_subtract_on_map_type",

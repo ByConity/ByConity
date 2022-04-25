@@ -98,8 +98,7 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCompact::getWriter(
     }
 }
 
-
-void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & /*each_columns_size*/, ColumnSize & total_size) const
+void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const
 {
     auto checksums = getChecksums();
     auto bin_checksum = checksums->files.find(DATA_FILE_NAME_WITH_EXTENSION);
@@ -112,6 +111,17 @@ void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & /*eac
     auto mrk_checksum = checksums->files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
     if (mrk_checksum != checksums->files.end())
         total_size.marks += mrk_checksum->second.file_size;
+
+    // Special handling flattened map type
+    for (const NameAndTypePair & column : columns)
+    {
+        if (column.type->isMap() && !column.type->isMapKVStore())
+        {
+            ColumnSize size = getMapColumnSizeNotKV(checksums, column);
+            each_columns_size[column.name] = size;
+            total_size.add(size);
+        }
+    }
 }
 
 void MergeTreeDataPartCompact::loadIndexGranularity()
@@ -159,14 +169,41 @@ void MergeTreeDataPartCompact::loadIndexGranularity(const size_t /*marks_count*/
 
 bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) const
 {
-    auto checksums = getChecksums();
     if (!getColumnPosition(column.name))
         return false;
 
-    auto bin_checksum = checksums->files.find(DATA_FILE_NAME_WITH_EXTENSION);
-    auto mrk_checksum = checksums->files.find(DATA_FILE_NAME + index_granularity_info.marks_file_extension);
+    /// Handle the special case that there has only one compact map column because it will has no data file if just insert {}
+    if (hasOnlyOneCompactedMapColumnNotKV())
+        return true;
 
-    return (bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end());
+    auto check_stream_exists = [&](const String & bin_file, const String & mrk_file)
+    {
+        auto checksums = getChecksums();
+        auto bin_checksum = checksums->files.find(bin_file);
+        auto mrk_checksum = checksums->files.find(mrk_file);
+
+        return bin_checksum != checksums->files.end() && mrk_checksum != checksums->files.end();
+    };
+
+    if (column.type->isMap() && !column.type->isMapKVStore())
+    {
+        for (auto & [file, _] : getChecksums()->files)
+        {
+            if (versions->enable_compact_map_data)
+            {
+                if (isMapCompactFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+            else
+            {
+                if (isMapImplicitFileNameOfSpecialMapName(file, column.name))
+                    return true;
+            }
+        }
+        return false;
+    }
+    else
+        return check_stream_exists(DATA_FILE_NAME_WITH_EXTENSION, DATA_FILE_NAME + index_granularity_info.marks_file_extension);
 }
 
 void MergeTreeDataPartCompact::setColumns(const NamesAndTypesList & new_columns)
