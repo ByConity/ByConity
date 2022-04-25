@@ -295,6 +295,15 @@ target_link_libraries (clickhouse_common_io
             dragonbox_to_chars
 )
 
+# Use X86 AVX2/AVX512 instructions to accelerate filter operations
+set_source_files_properties(
+        Columns/ColumnFixedString.cpp
+        Columns/ColumnsCommon.cpp
+        Columns/ColumnVector.cpp
+        Columns/ColumnDecimal.cpp
+        Columns/ColumnString.cpp
+        PROPERTIES COMPILE_FLAGS "${X86_INTRINSICS_FLAGS}")
+
 if(RE2_LIBRARY)
     target_link_libraries(clickhouse_common_io PUBLIC ${RE2_LIBRARY})
 endif()
