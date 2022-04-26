@@ -939,7 +939,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             formatReadableSizeWithBinarySuffix(mark_cache_size));
     }
     global_context->setMarkCache(mark_cache_size);
-    global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 1024*1024*10));
+    global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 10737418240)); // 10GB
 
     /// Size of cache for query. It is not necessary.
     size_t query_cache_size = config().getUInt64("query_cache_size", 0);
