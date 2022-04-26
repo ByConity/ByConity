@@ -8,6 +8,9 @@ jobs:
   scm_build:
     name: SCM Build for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     steps:
       - uses: actions/checkout
         inputs:
@@ -26,6 +29,9 @@ jobs:
     name: FuntionalStatelessTest
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
     depends: [scm_build]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     steps:
       - uses: actions/checkout
         inputs:
@@ -59,6 +65,9 @@ jobs:
     name: FuntionalStatefulTest
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
     depends: [scm_build]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     steps:
       - uses: actions/checkout
         inputs:
@@ -92,6 +101,9 @@ jobs:
     name: CertificateStatefullTest
     image: hub.byted.org/bytehouse/clickhouse-certificate-stateful-test:gdb11.2
     depends: [scm_build]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     steps:
       - uses: actions/checkout
         inputs:
@@ -125,6 +137,9 @@ jobs:
     name: StressTest
     image: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2
     depends: [scm_build]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     steps:
       - uses: actions/checkout
         inputs:
@@ -157,6 +172,9 @@ jobs:
   scm_build_ASAN: #Build will be skipped by default
     name: SCM Build_ASAN for clang11 ch_vanilla_debian_ci
     image: hub.byted.org/data-ci-debian:latest
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     if: ${{ false }}
     steps:
       - uses: actions/checkout
@@ -177,6 +195,9 @@ jobs:
     name: FuntionalStatelessTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
     depends: [scm_build_ASAN]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
@@ -298,6 +319,9 @@ jobs:
     name: FuntionalStatefulTest-ASAN
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
     depends: [scm_build_ASAN]
+    runs-on:
+      spec: m1.4xlarge
+      env: online
     if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
@@ -340,6 +364,9 @@ jobs:
       image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
       timeout: 360
       depends: [scm_build_ASAN]
+      runs-on:
+        spec: m1.4xlarge
+        env: online
       if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
       envs:
         ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
