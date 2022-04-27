@@ -71,7 +71,10 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
     else
     {
         plan_segment->setParallelSize(plan_segment_context.shard_number);
-        output->setParallelSize(plan_segment_context.shard_number);
+        if (output->getExchangeMode() == ExchangeMode::GATHER)
+            output->setParallelSize(1);
+        else
+            output->setParallelSize(plan_segment_context.shard_number);
     }
     output->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
     plan_segment->setPlanSegmentOutput(output);
@@ -81,6 +84,9 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
         inputs.push_back(std::make_shared<PlanSegmentInput>(Block(), PlanSegmentType::UNKNOWN));
     for (auto & input : inputs)
         input->setExchangeParallelSize(plan_segment_context.context->getSettingsRef().exchange_parallel_size);
+
+    if (inputs[0]->getExchangeMode() == ExchangeMode::GATHER)
+        plan_segment->setParallelSize(1);
 
     plan_segment->appendPlanSegmentInputs(inputs);
 
