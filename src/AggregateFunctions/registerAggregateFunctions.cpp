@@ -78,6 +78,8 @@ void registerAggregateFunctionsBitmapFromColumn(AggregateFunctionFactory &);
 void registerAggregateFunctionsBitmapColumnDiff(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitmapMaxLevel(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitMapJoin(AggregateFunctionFactory & factory);
+void registerAggregateFunctionsBitMapJoinAndCard(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -176,6 +178,8 @@ void registerAggregateFunctions()
         registerAggregateFunctionsBitmapColumnDiff(factory);
         registerAggregateFunctionsBitmapExpressionCalculation(factory);
         registerAggregateFunctionsBitmapMaxLevel(factory);
+        registerAggregateFunctionsBitMapJoin(factory);
+        registerAggregateFunctionsBitMapJoinAndCard(factory);
     }
 
     {
