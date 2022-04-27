@@ -578,23 +578,28 @@ void getExtremesWithNulls(const IColumn & nested_column, const NullMap & null_ar
     }
     else if (number_of_nulls == n)
     {
-        min = Null();
-        max = Null();
+        min = PositiveInfinity();
+        max = PositiveInfinity();
     }
     else
     {
         auto filtered_column = nested_column.filter(not_null_array, -1);
         filtered_column->getExtremes(min, max);
         if (null_last)
-            max = Null();
+            max = PositiveInfinity();
     }
 }
-
 }
 
 void ColumnNullable::getExtremes(Field & min, Field & max) const
 {
     getExtremesWithNulls(getNestedColumn(), getNullMapData(), min, max);
+}
+
+
+void ColumnNullable::getExtremesNullLast(Field & min, Field & max) const
+{
+    getExtremesWithNulls(getNestedColumn(), getNullMapData(), min, max, true);
 }
 
 
