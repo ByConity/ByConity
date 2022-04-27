@@ -79,7 +79,7 @@ public:
             while (map_data.find(key) == map_data.end() && try_count <= max_num)
             {
                 // 10 ms
-                if (ETIMEDOUT == cvs[key]->wait_for(lock, 10000))
+                if (auto cv = cvs[key]; ETIMEDOUT == cv->wait_for(lock, 10000))
                     try_count++;
                 else
                     break;
