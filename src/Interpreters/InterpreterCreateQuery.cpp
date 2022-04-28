@@ -377,8 +377,6 @@ ASTPtr InterpreterCreateQuery::formatColumns(const ColumnsDescription & columns)
         if (column.ttl)
             column_declaration->ttl = column.ttl;
 
-        column_declaration->flags = column.type->getFlags();
-
         columns_list->children.push_back(column_declaration_ptr);
     }
 
@@ -623,6 +621,8 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     else
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
+    if (create.ignore_bitengine_encode)
+        processIgnoreBitEngineEncode(properties.columns);
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     if (!create.columns_list)
@@ -654,11 +654,6 @@ void InterpreterCreateQuery::validateTableStructure(const ASTCreateQuery & creat
 {
     /// Check for duplicates
     std::set<String> all_columns;
-    for (const auto & column : properties.columns)
-    {
-        if (!all_columns.emplace(column.name).second)
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " already exists", ErrorCodes::DUPLICATE_COLUMN);
-    }
 
     const auto & settings = getContext()->getSettingsRef();
 
@@ -776,6 +771,21 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                     as_create.storage->engine->parameters = nullptr;
                 }
             }
+
+            if (create.ignore_async && as_create.storage->settings)
+            {
+                auto & setting_changes = as_create.storage->settings->changes;
+                for (auto itr = setting_changes.begin(); itr != setting_changes.end();  )
+                {
+                    if (itr->name == "enable_async_init_metasotre")
+                        itr = setting_changes.erase(itr);
+                    else
+                        ++itr;
+                }
+            }
+
+            if (create.ignore_ttl && as_create.storage->ttl_table)
+                as_create.storage->ttl_table = nullptr;
 
             create.set(create.storage, as_create.storage->ptr());
         }
@@ -1362,6 +1372,17 @@ void InterpreterCreateQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
         String database = backQuoteIfNeed(as_database_saved.empty() ? getContext()->getCurrentDatabase() : as_database_saved);
         elem.query_databases.insert(database);
         elem.query_tables.insert(database + "." + backQuoteIfNeed(as_table_saved));
+    }
+}
+
+void InterpreterCreateQuery::processIgnoreBitEngineEncode(ColumnsDescription & columns) const
+{
+    for (auto & column : columns)
+    {
+        if (column.type->isBitEngineEncode())
+        {
+            const_cast<IDataType *>(column.type.get())->resetFlags(TYPE_BITENGINE_ENCODE_FLAG);
+        }
     }
 }
 
