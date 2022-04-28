@@ -66,6 +66,7 @@ namespace ErrorCodes
     extern const int NETWORK_ERROR;
     extern const int MISMATCHING_USERS_FOR_PROCESS_AND_DATA;
     extern const int FAILED_TO_GETPWUID;
+    extern const int LOGICAL_ERROR;
 }
 
 namespace
@@ -255,6 +256,18 @@ std::string Keeper::getDefaultConfigFileName() const
     return "keeper_config.xml";
 }
 
+void Keeper::handleCustomArguments(const std::string & arg, [[maybe_unused]] const std::string & value) // NOLINT
+{
+    if (arg == "force-recovery")
+    {
+        assert(value.empty());
+        config().setBool("keeper_server.force_recovery", true);
+        return;
+    }
+
+    throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid argument {} provided", arg);
+}
+
 void Keeper::defineOptions(Poco::Util::OptionSet & options)
 {
     options.addOption(
@@ -267,6 +280,12 @@ void Keeper::defineOptions(Poco::Util::OptionSet & options)
             .required(false)
             .repeatable(false)
             .binding("version"));
+    options.addOption(
+        Poco::Util::Option("force-recovery", "force-recovery", "Force recovery mode allowing Keeper to overwrite cluster configuration without quorum")
+        .required(false)
+        .repeatable(false)
+        .noArgument()
+        .callback(Poco::Util::OptionCallback<Keeper>(this, &Keeper::handleCustomArguments)));
     BaseDaemon::defineOptions(options);
 }
 

@@ -6,6 +6,7 @@
 #include <Coordination/CoordinationSettings.h>
 #include <libnuraft/nuraft.hxx> // Y_IGNORE
 #include <Poco/Util/AbstractConfiguration.h>
+#include "Coordination/KeeperStateMachine.h"
 #include <Coordination/KeeperSnapshotManager.h>
 
 namespace DB
@@ -152,6 +153,7 @@ private:
 
     Poco::Logger * logger;
 
+public:
     /// Parse configuration from xml config.
     KeeperConfigurationWrapper parseServersConfiguration(const Poco::Util::AbstractConfiguration & config, bool allow_without_us) const;
 };

@@ -276,7 +276,7 @@ void KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration & conf
     try
     {
         LOG_DEBUG(log, "Waiting server to initialize");
-        server->startup();
+        server->startup(config, /*configuration_and_settings->enable_ipv6*/ false);
         LOG_DEBUG(log, "Server initialized, waiting for quorum");
 
         if (!start_async)
@@ -370,6 +370,11 @@ void KeeperDispatcher::shutdown()
     }
 
     LOG_DEBUG(log, "Dispatcher shut down");
+}
+
+void KeeperDispatcher::forceRecovery()
+{
+    server->forceRecovery();
 }
 
 KeeperDispatcher::~KeeperDispatcher()
@@ -525,6 +530,87 @@ int64_t KeeperDispatcher::getSessionID(int64_t session_timeout_ms)
     return future.get();
 }
 
+void KeeperDispatcher::updateConfigurationThread()
+{
+    while (true)
+    {
+        if (shutdown_called)
+            return;
+
+        try
+        {
+            using namespace std::chrono_literals;
+            if (!server->checkInit())
+            {
+                LOG_INFO(log, "Server still not initialized, will not apply configuration until initialization finished");
+                std::this_thread::sleep_for(5000ms);
+                continue;
+            }
+
+            if (server->isRecovering())
+            {
+                LOG_INFO(log, "Server is recovering, will not apply configuration until recovery is finished");
+                std::this_thread::sleep_for(5000ms);
+                continue;
+            }
+
+            ConfigUpdateAction action;
+            if (!update_configuration_queue.pop(action))
+                break;
+
+
+            /// We must wait this update from leader or apply it ourself (if we are leader)
+            bool done = false;
+            while (!done)
+            {
+                if (server->isRecovering())
+                    break;
+
+                if (shutdown_called)
+                    return;
+
+                if (isLeader())
+                {
+                    server->applyConfigurationUpdate(action);
+                    done = true;
+                }
+                else
+                {
+                    done = server->waitConfigurationUpdate(action);
+                    if (!done)
+                        LOG_INFO(log, "Cannot wait for configuration update, maybe we become leader, or maybe update is invalid, will try to wait one more time");
+                }
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+}
+
+bool KeeperDispatcher::isServerActive() const
+{
+    return checkInit() && hasLeader() && !server->isRecovering();
+}
+
+void KeeperDispatcher::updateConfiguration(const Poco::Util::AbstractConfiguration & config)
+{
+    auto diff = server->getConfigurationDiff(config);
+    if (diff.empty())
+        LOG_TRACE(log, "Configuration update triggered, but nothing changed for RAFT");
+    else if (diff.size() > 1)
+        LOG_WARNING(log, "Configuration changed for more than one server ({}) from cluster, it's strictly not recommended", diff.size());
+    else
+        LOG_DEBUG(log, "Configuration change size ({})", diff.size());
+
+    for (auto & change : diff)
+    {
+        bool push_result = update_configuration_queue.push(change);
+        if (!push_result)
+            throw Exception(ErrorCodes::SYSTEM_ERROR, "Cannot push configuration update to queue");
+    }
+}
 
 void KeeperDispatcher::updateKeeperStatLatency(uint64_t process_time_ms)
 {
@@ -587,66 +673,6 @@ Keeper4LWInfo KeeperDispatcher::getKeeper4LWInfo() const
     result.total_nodes_count = server->getKeeperStateMachine()->getNodesCount();
     result.last_zxid = server->getKeeperStateMachine()->getLastProcessedZxid();
     return result;
-}
-
-void KeeperDispatcher::updateConfigurationThread()
-{
-    while (true)
-    {
-        if (shutdown_called)
-            return;
-
-        try
-        {
-            server->startup();  /// TODO:
-
-            ConfigUpdateAction action;
-            if (!update_configuration_queue.pop(action))
-                break;
-
-            /// We must wait this update from leader or apply it ourself (if we are leader)
-            bool done = false;
-            while (!done)
-            {
-                if (shutdown_called)
-                    return;
-
-                if (isLeader())
-                {
-                    server->applyConfigurationUpdate(action);
-                    done = true;
-                }
-                else
-                {
-                    done = server->waitConfigurationUpdate(action);
-                    if (!done)
-                        LOG_INFO(log, "Cannot wait for configuration update, maybe we become leader, or maybe update is invalid, will try to wait one more time");
-                }
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
-        }
-    }
-}
-
-void KeeperDispatcher::updateConfiguration(const Poco::Util::AbstractConfiguration & config)
-{
-    auto diff = server->getConfigurationDiff(config);
-    if (diff.empty())
-        LOG_TRACE(log, "Configuration update triggered, but nothing changed for RAFT");
-    else if (diff.size() > 1)
-        LOG_WARNING(log, "Configuration changed for more than one server ({}) from cluster, it's strictly not recommended", diff.size());
-    else
-        LOG_DEBUG(log, "Configuration change size ({})", diff.size());
-
-    for (auto & change : diff)
-    {
-        bool push_result = update_configuration_queue.push(change);
-        if (!push_result)
-            throw Exception(ErrorCodes::SYSTEM_ERROR, "Cannot push configuration update to queue");
-    }
 }
 
 }
