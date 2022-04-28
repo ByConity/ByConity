@@ -38,6 +38,10 @@ void ExchangeStepVisitor::addExchange(QueryPlan::Node * node, ExchangeMode mode,
     auto last_node = exchange_context.query_plan.getLastNode();
     last_node->children.push_back(last_node);
     node->children.swap(last_node->children);
+    /**
+     * always set gather = false to make repartition works, if no repartition node, gather will be set.
+     */
+    exchange_context.has_gathered = false;
 }
 
 ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
@@ -54,7 +58,14 @@ ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::No
     for (auto & index : params.keys)
         keys.push_back(result_header.safeGetByPosition(index).name);
 
-    addExchange(node, ExchangeMode::REPARTITION, Partitioning(keys), exchange_context);
+    if (keys.empty())
+    {
+        addExchange(node, ExchangeMode::GATHER, Partitioning(keys), exchange_context);
+        exchange_context.has_gathered = true;
+    }
+    else
+        addExchange(node, ExchangeMode::REPARTITION, Partitioning(keys), exchange_context);
+
 
     return nullptr;
 }
