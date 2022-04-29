@@ -669,6 +669,275 @@ namespace ErrorCodes
         std::lock_guard lock(mutex);
         return value;
     }
+
+    const char * getSqlState(int error_code) {
+
+        switch (error_code) {
+            case CANNOT_READ_FROM_SOCKET:
+            case CANNOT_WRITE_TO_SOCKET:
+            case NO_FREE_CONNECTION :
+            case SOCKET_TIMEOUT :
+            case NETWORK_ERROR :
+            case CLIENT_HAS_CONNECTED_TO_WRONG_PORT :
+            case ALL_CONNECTION_TRIES_FAILED :
+            case SHARD_HAS_NO_CONNECTIONS :
+                return "08000"; /* 	connection_exception */
+            case UNKNOWN_PACKET_FROM_CLIENT:
+            case UNKNOWN_PACKET_FROM_SERVER:
+            case UNEXPECTED_PACKET_FROM_CLIENT:
+            case UNEXPECTED_PACKET_FROM_SERVER:
+                return "08S01"; /* unknown_packet */
+            case INCORRECT_NUMBER_OF_COLUMNS:
+            case SIZES_OF_COLUMNS_DOESNT_MATCH:
+            case SIZES_OF_COLUMNS_IN_TUPLE_DOESNT_MATCH:
+            case NUMBER_OF_COLUMNS_DOESNT_MATCH:
+            case INDEX_OF_POSITIONAL_ARGUMENT_IS_OUT_OF_RANGE :
+            case ILLEGAL_NUMBER_OF_RESULT_COLUMNS:
+            case ARGUMENT_OUT_OF_BOUND:
+            case CANNOT_INSERT_VALUE_OF_DIFFERENT_SIZE_INTO_TUPLE :
+            case ILLEGAL_INDEX :
+            case SIZES_OF_NESTED_COLUMNS_ARE_INCONSISTENT :
+            case SIZES_OF_MARKS_FILES_ARE_INCONSISTENT:
+                return "21000"; /* cardinality_violation */
+            case DELIMITER_IN_STRING_LITERAL_DOESNT_MATCH:
+            case CANNOT_INSERT_ELEMENT_INTO_CONSTANT_COLUMN:
+            case SIZE_OF_FIXED_STRING_DOESNT_MATCH:
+            case CANNOT_READ_SIZE_OF_COMPRESSED_CHUNK:
+            case CANNOT_READ_COMPRESSED_CHUNK:
+            case ATTEMPT_TO_READ_AFTER_EOF:
+            case CANNOT_READ_ALL_DATA:
+            case INCORRECT_DATA :
+            case CANNOT_READ_ARRAY_FROM_TEXT :
+            case FIRST_DATE_IS_BIGGER_THAN_LAST_DATE :
+            case NOT_FOUND_EXPECTED_DATA_PART :
+            case TOO_MANY_UNEXPECTED_DATA_PARTS :
+            case NO_SUCH_DATA_PART :
+            case BAD_DATA_PART_NAME :
+            case DUPLICATE_DATA_PART :
+            case NO_AVAILABLE_DATA :
+            case FUNCTION_THROW_IF_VALUE_IS_NON_ZERO :
+            case DECIMAL_OVERFLOW :
+            case THERE_IS_NO_COLUMN:
+            case NOT_FOUND_COLUMN_IN_BLOCK:
+            case BAD_ARGUMENTS:
+            case NO_DATA_TO_INSERT :
+            case EMPTY_LIST_OF_COLUMNS_PASSED:
+            case EMPTY_DATA_PASSED:
+                return "22000"; /* data_exception */
+            case VALUE_IS_OUT_OF_RANGE_OF_DATA_TYPE :
+                return "22003"; /* numeric_value_out_of_range */
+            case ILLEGAL_DIVISION :
+                return "22012"; /* division_by_zero */
+            case PARAMETER_OUT_OF_BOUND:
+                return "22023"; /* invalid_parameter_value */
+            case UNKNOWN_USER :
+            case WRONG_PASSWORD :
+            case REQUIRED_PASSWORD :
+            case DATABASE_ACCESS_DENIED :
+                return "28000"; /* invalid_authorization_specification */
+            case UNSUPPORTED_METHOD:
+            case CANNOT_PARSE_TEXT:
+            case CANNOT_PARSE_ESCAPE_SEQUENCE:
+            case CANNOT_PARSE_QUOTED_STRING:
+            case CANNOT_PARSE_INPUT_ASSERTION_FAILED:
+            case TOO_FEW_ARGUMENTS_FOR_FUNCTION:
+            case CANNOT_PARSE_DATE:
+            case CANNOT_PARSE_DATETIME:
+            case NUMBER_OF_ARGUMENTS_DOESNT_MATCH:
+            case ILLEGAL_TYPE_OF_ARGUMENT:
+            case UNKNOWN_TYPE:
+            case STORAGE_DOESNT_ALLOW_PARAMETERS:
+            case STORAGE_REQUIRES_PARAMETER:
+            case UNKNOWN_STORAGE:
+            case ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER:
+            case SYNTAX_ERROR:
+            case CANNOT_READ_AGGREGATE_FUNCTION_FROM_TEXT:
+            case CANNOT_WRITE_AGGREGATE_FUNCTION_AS_TEXT:
+            case NOT_A_COLUMN:
+            case ILLEGAL_KEY_OF_AGGREGATION:
+            case CANNOT_PARSE_NUMBER:
+            case UNKNOWN_TYPE_OF_QUERY:
+            case UNKNOWN_DATABASE:
+            case DIRECTORY_DOESNT_EXIST:
+            case DIRECTORY_ALREADY_EXISTS:
+            case FORMAT_IS_NOT_SUITABLE_FOR_INPUT:
+            case UNKNOWN_COMPRESSION_METHOD:
+            case UNKNOWN_AGGREGATED_DATA_VARIANT:
+            case CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS:
+            case UNKNOWN_SETTING :
+            case THERE_IS_NO_DEFAULT_VALUE :
+            case ENGINE_REQUIRED :
+            case CANNOT_GET_RETURN_TYPE :
+            case AGGREGATE_FUNCTION_DOESNT_ALLOW_PARAMETERS :
+            case PARAMETERS_TO_AGGREGATE_FUNCTIONS_MUST_BE_LITERALS :
+            case ZERO_ARRAY_OR_TUPLE_INDEX :
+            case ALL_REQUESTED_COLUMNS_ARE_MISSING :
+            case UNKNOWN_OVERFLOW_MODE :
+            case QUERY_SECTION_DOESNT_MAKE_SENSE :
+            case NOT_FOUND_FUNCTION_ELEMENT_FOR_AGGREGATE :
+            case NOT_FOUND_RELATION_ELEMENT_FOR_CONDITION :
+            case NOT_FOUND_RHS_ELEMENT_FOR_CONDITION :
+            case UNKNOWN_DIRECTION_OF_SORTING :
+            case CHUNK_NOT_FOUND :
+            case DUPLICATE_CHUNK_NAME :
+            case MULTIPLE_ALIASES_FOR_EXPRESSION :
+            case MULTIPLE_EXPRESSIONS_FOR_ALIAS :
+            case THERE_IS_NO_PROFILE :
+            case ILLEGAL_FINAL :
+            case ILLEGAL_PREWHERE :
+            case UNEXPECTED_EXPRESSION :
+            case ILLEGAL_AGGREGATION :
+            case IP_ADDRESS_NOT_ALLOWED :
+            case UNKNOWN_ADDRESS_PATTERN_TYPE :
+            case ALIAS_REQUIRED :
+            case AMBIGUOUS_IDENTIFIER :
+            case EMPTY_NESTED_TABLE :
+            case NOT_AN_AGGREGATE :
+            case INCOMPATIBLE_TYPE_OF_JOIN :
+            case UNKNOWN_FORMAT_VERSION :
+            case DISTRIBUTED_IN_JOIN_SUBQUERY_DENIED :
+            case FUNCTION_CANNOT_HAVE_PARAMETERS :
+            case AMBIGUOUS_TABLE_NAME :
+            case AMBIGUOUS_COLUMN_NAME :
+            case CANNOT_PARSE_UUID :
+            case ILLEGAL_SYNTAX_FOR_DATA_TYPE :
+            case DATA_TYPE_CANNOT_HAVE_ARGUMENTS :
+            case QUERY_IS_NOT_SUPPORTED_IN_MATERIALIZED_VIEW :
+            case UNKNOWN_MUTATION_COMMAND :
+            case FORMAT_IS_NOT_SUITABLE_FOR_OUTPUT :
+            case BAD_REQUEST_PARAMETER :
+            case UNKNOWN_JOIN :
+            case MULTIPLE_ASSIGNMENTS_TO_COLUMN :
+            case CANNOT_ADD_DIFFERENT_AGGREGATE_STATES :
+            case UNSUPPORTED_URI_SCHEME :
+            case CANNOT_GETTIMEOFDAY :
+            case ILLEGAL_SYNTAX_FOR_CODEC_TYPE :
+            case UNKNOWN_CODEC :
+            case ILLEGAL_CODEC_PARAMETER :
+            case CANNOT_PARSE_PROTOBUF_SCHEMA :
+            case PROTOBUF_BAD_CAST :
+            case PROTOBUF_FIELD_NOT_REPEATED :
+            case DATA_TYPE_CANNOT_BE_PROMOTED :
+            case CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING :
+            case UNKNOWN_PROTOBUF_FORMAT :
+            case FUNCTION_NOT_ALLOWED :
+            case CANNOT_UNLINK :
+            case UNKNOWN_FORMAT:
+            case AGGREGATE_FUNCTION_NOT_APPLICABLE :
+            case UNKNOWN_RELATION :
+            case DICTIONARIES_WAS_NOT_LOADED :
+            case ILLEGAL_OVERFLOW_MODE :
+            case UNSUPPORTED_PARAMETER:
+                return "42000"; /* syntax_error_or_access_rule_violation */
+            case DUPLICATE_COLUMN:
+                return "42701"; /* duplicate_column */
+            case NO_SUCH_COLUMN_IN_TABLE:
+            case UNKNOWN_IDENTIFIER:
+                return "42703"; /* undefined_column */
+            case TYPE_MISMATCH:
+                return "42804"; /* datatype_mismatch */
+            case UNKNOWN_FUNCTION:
+            case UNKNOWN_AGGREGATE_FUNCTION:
+                return "42883"; /* undefined_function */
+            case UNKNOWN_TABLE:
+                return "42P01"; /* undefined_table */
+            case DATABASE_ALREADY_EXISTS:
+                return "42P04"; /* duplicate_database */
+            case TABLE_ALREADY_EXISTS:
+                return "42P07"; /* duplicate_table */
+            case ILLEGAL_COLUMN:
+                return "42P10"; /* invalid_column_reference */
+            case MEMORY_LIMIT_EXCEEDED :
+            case NOT_ENOUGH_SPACE :
+            case RESOURCE_NOT_ENOUGH:
+                return "53000"; /* insufficient_resources */
+            case CANNOT_ALLOCATE_MEMORY :
+                return "53200"; /* out_of_memory */
+            case TOO_LARGE_SIZE_COMPRESSED:
+            case TOO_LARGE_ARRAY_SIZE :
+            case TOO_LARGE_STRING_SIZE :
+            case TOO_MANY_ROWS :
+            case TOO_DEEP_SUBQUERIES :
+            case TOO_DEEP_PIPELINE :
+            case TOO_MANY_TEMPORARY_COLUMNS :
+            case TOO_MANY_TEMPORARY_NON_CONST_COLUMNS :
+            case TOO_DEEP_AST :
+            case TOO_BIG_AST :
+            case SET_SIZE_LIMIT_EXCEEDED :
+            case NESTED_TYPE_TOO_DEEP :
+            case QUERY_IS_TOO_LARGE :
+            case LIMIT_EXCEEDED :
+            case TOO_DEEP_RECURSION :
+            case TOO_MANY_BYTES :
+            case RECEIVED_ERROR_TOO_MANY_REQUESTS :
+            case TOO_MANY_FETCHES :
+            case TOO_MANY_PARTITIONS :
+            case TOO_MANY_ROWS_OR_BYTES :
+                return "54000"; /* program_limit_exceeded */
+            case TOO_MANY_COLUMNS :
+                return "54011"; /* too_many_columns */
+            case TOO_MANY_ARGUMENTS_FOR_FUNCTION:
+                return "54023"; /* too_many_arguments */
+            case TABLE_IS_DROPPED :
+            case ABORTED :
+            case TABLE_WAS_NOT_DROPPED :
+            case QUERY_WAS_CANCELLED :
+                return "57000"; /* operator_intervention */
+            case CANNOT_MUNMAP :
+            case CANNOT_MREMAP :
+            case CANNOT_PIPE :
+            case CANNOT_FORK :
+            case CANNOT_DLSYM :
+            case CANNOT_CREATE_CHILD_PROCESS :
+            case CHILD_WAS_NOT_EXITED_NORMALLY :
+            case CANNOT_SELECT :
+            case CANNOT_WAITPID :
+            case CANNOT_DLOPEN :
+            case CANNOT_KILL :
+            case EXTERNAL_LIBRARY_ERROR :
+            case CANNOT_STAT :
+            case CANNOT_IOSETUP :
+            case EXTERNAL_EXECUTABLE_NOT_FOUND :
+            case EXTERNAL_SERVER_IS_NOT_RESPONDING :
+            case PTHREAD_ERROR :
+            case NETLINK_ERROR :
+            case CANNOT_LINK :
+            case SYSTEM_ERROR :
+            case CANNOT_MPROTECT :
+                return "58000"; /* system_error */
+            case UNEXPECTED_END_OF_FILE:
+            case EXPECTED_END_OF_FILE:
+            case CANNOT_READ_ALL_DATA_FROM_TAB_SEPARATED_INPUT:
+            case CANNOT_PARSE_ALL_VALUE_FROM_TAB_SEPARATED_INPUT:
+            case CANNOT_READ_FROM_ISTREAM:
+            case CANNOT_WRITE_TO_OSTREAM:
+            case CANNOT_WRITE_AFTER_END_OF_BUFFER:
+            case CANNOT_READ_FROM_FILE_DESCRIPTOR:
+            case CANNOT_WRITE_TO_FILE_DESCRIPTOR:
+            case CANNOT_OPEN_FILE:
+            case CANNOT_CLOSE_FILE:
+            case CANNOT_SEEK_THROUGH_FILE:
+            case CANNOT_TRUNCATE_FILE:
+            case CANNOT_READ_ALL_DATA_FROM_CHUNKED_INPUT:
+            case CANNOT_WRITE_TO_EMPTY_BLOCK_OUTPUT_STREAM:
+            case FILE_DOESNT_EXIST :
+            case NO_FILE_IN_DATA_PART :
+            case UNEXPECTED_FILE_IN_DATA_PART :
+            case BAD_SIZE_OF_FILE_IN_DATA_PART :
+            case CANNOT_CREATE_IO_BUFFER :
+            case CORRUPTED_LOG_FILE :
+                return "58030"; /* io_error */
+            case INCORRECT_FILE_NAME:
+                return "58P01"; /* undefined_file */
+            case UNKNOWN_ELEMENT_IN_CONFIG :
+            case EXCESSIVE_ELEMENT_IN_CONFIG :
+            case NO_ELEMENTS_IN_CONFIG :
+            case INVALID_CONFIG_PARAMETER :
+                return "F0000"; /* config_file_error */
+            default:
+                return "HY000"; /* generic_error */
+        }
+    }
 }
 
 }

@@ -51,6 +51,7 @@ public:
     const char * name() const throw() override { return "DB::Exception"; }
     const char * what() const throw() override { return message().data(); }
 
+    std::string displayText() const override;
     /// Add something to the existing message.
     template <typename ...Args>
     void addMessage(const std::string& format, Args&&... args)
