@@ -420,7 +420,7 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
             }
             else if (to_remove == RemoveProperty::SECURITY)
             {
-                column.type->resetFlags(column.type->getFlags() ^ TYPE_SECURITY_FLAG);
+                column.type->resetFlags(TYPE_SECURITY_FLAG);
             }
             else
             {

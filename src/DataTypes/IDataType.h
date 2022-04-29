@@ -282,7 +282,13 @@ public:
 
     UInt8 getFlags() const { return flags; }
     void setFlags(UInt8 flag) const { checkFlags(flag); flags |= flag; }
-    void resetFlags(UInt8 flag) const { checkFlags(flag); flags = flag; }
+    void resetFlags(UInt8 flag) const 
+    { 
+      checkFlags(flag); 
+      
+      if (flags & flag)
+        flags ^= flag; 
+    }
 
     virtual void checkFlags(UInt8 flag) const;
 
