@@ -169,7 +169,7 @@ private:
     size_t max_threads = 0;
 
     /// Limit on the minimum number of threads.
-    size_t min_threads = 1;
+    size_t min_threads = 0;
 
     QueryStatus * process_list_element = nullptr;
 
