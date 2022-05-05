@@ -21,7 +21,6 @@ LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalCha
     , receive_queue(options_.queue_size)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
 {
-    broadcast_status.store(new BroadcastStatus{BroadcastStatusCode::RUNNING});
 }
 
 RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
@@ -53,14 +52,15 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 
 BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 {
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
+    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
-        return *broadcast_status.load(std::memory_order_relaxed);
+        return *current_status_ptr;
+
     auto bytes = chunk.allocatedBytes();
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
     {       
         ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
-        return *broadcast_status.load(std::memory_order_relaxed);
+        return *broadcast_status.load(std::memory_order_acquire);
     }
 
     BroadcastStatus current_status = finish(
@@ -72,22 +72,11 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 
 BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, String message)
 {
-    BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
-    if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
-    {
-        LOG_TRACE(
-            logger,
-            "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
-            data_key->getKey(),
-            status_code,
-            current_status_ptr->code);
-        return *current_status_ptr;
-    }
+    BroadcastStatus * current_status_ptr = &init_status;
 
-    BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code);
-    new_status_ptr->message = message;
+    BroadcastStatus * new_status_ptr = new BroadcastStatus(status_code, false, message);
 
-    if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_relaxed, std::memory_order_relaxed))
+    if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_release, std::memory_order_relaxed))
     {
         LOG_INFO(
             logger,
@@ -96,7 +85,6 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
             current_status_ptr->code,
             new_status_ptr->code,
             new_status_ptr->message);
-        delete current_status_ptr;
         if (new_status_ptr->code > 0)
             // close queue immediately
             receive_queue.close();
@@ -137,7 +125,9 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
 {
     try
     {
-        delete broadcast_status.load(std::memory_order_relaxed);
+        auto * status = broadcast_status.load(std::memory_order_acquire);
+        if (status != &init_status)
+            delete status;
     }
     catch (...)
     {

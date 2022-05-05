@@ -68,7 +68,7 @@ std::pair<IColumn::Selector, RepartitionTransform::PartitionStartPoints> Reparti
         if (!hash_result->isNullable())
             partition_index[i] = hash_result->get64(i) % partition_num;
         else
-            partition_index[i] = hash_result->isNullAt(input_rows_count) ? 0 : hash_result->get64(i) % partition_num;
+            partition_index[i] = hash_result->isNullAt(i) ? 0 : hash_result->get64(i) % partition_num;
     }
 
     for (size_t i = 0; i < input_rows_count; ++i)

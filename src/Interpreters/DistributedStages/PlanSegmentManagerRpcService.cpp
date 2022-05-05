@@ -23,13 +23,9 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// Create context.
         ContextMutablePtr query_context = Context::createCopy(context);
 
-        /// Prepare settings.
-        SettingsChanges settings_changes;
-        settings_changes.reserve(request->settings_size());
-        for (const auto & [key, value] : request->settings())
-        {
-            settings_changes.push_back({key, value});
-        }
+        /// TODO: Authentication supports inter-server cluster secret, see https://github.com/ClickHouse/ClickHouse/commit/0159c74f217ec764060c480819e3ccc9d5a99a63
+        Poco::Net::SocketAddress initial_socket_address(request->coordinator_host(), request->coordinator_port());
+        query_context->setUser(request->user(), request->password(), initial_socket_address);
 
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
@@ -39,6 +35,24 @@ void PlanSegmentManagerRpcService::executeQuery(
         Decimal64 initial_query_start_time_microseconds {request->initial_query_start_time()};
         client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
         client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
+        client_info.initial_user = request->user();
+        client_info.initial_query_id = request->query_id();
+
+        client_info.initial_address = initial_socket_address;
+
+        client_info.current_query_id = request->query_id() + "_" + std::to_string(request->plan_segment_id());
+        client_info.current_address = Poco::Net::SocketAddress(request->current_host(), request->current_port());
+
+        /// Prepare settings.
+        SettingsChanges settings_changes;
+        settings_changes.reserve(request->settings_size());
+        for (const auto & [key, value] : request->settings())
+        {
+            settings_changes.push_back({key, value});
+        }
+
+        /// Sets an extra row policy based on `client_info.initial_user`
+        query_context->setInitialRowPolicy();
 
         /// Quietly clamp to the constraints since it's a secondary query.
         query_context->clampToSettingsConstraints(settings_changes);
@@ -63,26 +77,6 @@ void PlanSegmentManagerRpcService::executeQuery(
                 /// Plan segment Deserialization can't run in bthread since checkStackSize method is not compatible with all user-space lightweight threads that manually allocated stacks.
                 ReadBufferFromBrpcBuf plan_segment_read_buf(*plan_segment_buf);
                 auto plan_segment = PlanSegment::deserializePlanSegment(plan_segment_read_buf, query_context);
-
-                /// TODO: Authentication supports inter-server cluster secret, see https://github.com/ClickHouse/ClickHouse/commit/0159c74f217ec764060c480819e3ccc9d5a99a63
-                auto current_address = plan_segment->getCurrentAddress();
-                auto coordinator_address = plan_segment->getCoordinatorAddress();
-                Poco::Net::SocketAddress initial_socket_address(coordinator_address.getHostName(), coordinator_address.getPort());
-
-                query_context->setUser(current_address.getUser(), current_address.getPassword(), initial_socket_address);
-                
-                /// Set client info.
-                ClientInfo & info = query_context->getClientInfo();
-                info.initial_user = current_address.getUser();
-                String initial_query_id = plan_segment->getQueryId();
-                info.initial_query_id = initial_query_id;
-                info.initial_address = initial_socket_address;
-
-                info.current_query_id = initial_query_id + "_" + std::to_string(plan_segment->getPlanSegmentId());
-                info.current_address = Poco::Net::SocketAddress(current_address.getHostName(), current_address.getPort());
-
-                /// Sets an extra row policy based on `client_info.initial_user`
-                query_context->setInitialRowPolicy();
                 executePlanSegmentInternal(std::move(plan_segment), std::move(query_context), false);
             }
             catch (...)

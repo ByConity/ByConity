@@ -188,7 +188,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true);
-
+    receiver->registerToSenders(1000);
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);
 
     QueryPipeline pipeline;
@@ -237,6 +237,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true);
+    receiver->registerToSenders(1000);
 
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);
     QueryPipeline pipeline;

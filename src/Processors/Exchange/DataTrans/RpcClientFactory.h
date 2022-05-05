@@ -37,25 +37,18 @@ public:
         if (!connection_reuse)
         {
             brpc::ChannelOptions channel_options = getChannelOptions();
-            LOG_TRACE(logger, "Get rpc client with option: {}", BrpcChannelConfigHolder::dumpConfig(channel_options));
             return std::make_shared<RpcClient>(host_port, &channel_options);
         }
         else
         {
             std::unique_lock lock(mutex);
             auto client_iter = clients.find(host_port);
-            if (client_iter != clients.end())
+            if (client_iter != clients.end() && (*client_iter).second->ok())
             {
-                if ((*client_iter).second->ok())
-                    return clients[host_port];
-                else
-                {
-                    clients.erase(host_port);
-                    clients[host_port] = std::make_shared<RpcClient>(host_port);
-                }
+                return clients[host_port];
             }
-            else
-                clients[host_port] = std::make_shared<RpcClient>(host_port);
+            brpc::ChannelOptions channel_options = getChannelOptions();
+            clients[host_port] = std::make_shared<RpcClient>(host_port, &channel_options);
             return clients[host_port];
         }
     }

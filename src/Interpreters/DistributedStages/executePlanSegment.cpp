@@ -72,9 +72,25 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
     Protos::PlanSegmentManagerService_Stub manager_stub(&rpc_channel->getChannel());
     Protos::ExecutePlanSegmentRequest request;
     request.set_brpc_protocol_revision(DBMS_BRPC_PROTOCOL_VERSION);
+    request.set_query_id(plan_segment.getQueryId());
+    request.set_plan_segment_id(plan_segment.getPlanSegmentId());
     request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
     auto settings = context->getSettingsRef().dumpToMap();
     request.mutable_settings()->insert(settings.begin(), settings.end());
+
+    const auto & current_address = plan_segment.getCurrentAddress();
+    request.set_user(current_address.getUser());
+    request.set_password(current_address.getPassword());
+    request.set_current_host(current_address.getHostName());
+    request.set_current_port(current_address.getPort());
+    request.set_current_exchange_port(current_address.getExchangePort());
+    request.set_current_exchange_status_port(current_address.getExchangeStatusPort());
+
+    const auto & coordinator_address = plan_segment.getCoordinatorAddress();
+    request.set_coordinator_host(coordinator_address.getHostName());
+    request.set_coordinator_port(coordinator_address.getPort());
+    request.set_coordinator_exchange_port(coordinator_address.getExchangePort());
+    request.set_coordinator_exchange_status_port(coordinator_address.getExchangeStatusPort());
 
     const auto & client_info = context->getClientInfo();
     const String & quota_key = client_info.quota_key;

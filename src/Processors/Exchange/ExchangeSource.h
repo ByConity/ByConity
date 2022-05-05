@@ -21,6 +21,7 @@ public:
 
     IProcessor::Status prepare() override;
     String getName() const override;
+    BroadcastReceiverPtr & getReceiver() { return receiver; }
 
 protected:
     std::optional<Chunk> tryGenerate() override;
@@ -30,7 +31,6 @@ private:
     BroadcastReceiverPtr receiver;
     ExchangeOptions options;
     bool fetch_exception_from_scheduler;
-    std::atomic<bool> inited {false};
     std::atomic<bool> was_query_canceled {false};
     std::atomic<bool> was_receiver_finished {false};
     Poco::Logger * logger;

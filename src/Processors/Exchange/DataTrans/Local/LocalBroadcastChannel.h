@@ -15,7 +15,10 @@
 
 namespace DB
 {
-class LocalBroadcastChannel final : public IBroadcastReceiver, public IBroadcastSender, public std::enable_shared_from_this<LocalBroadcastChannel>, boost::noncopyable
+class LocalBroadcastChannel final : public IBroadcastReceiver,
+                                    public IBroadcastSender,
+                                    public std::enable_shared_from_this<LocalBroadcastChannel>,
+                                    boost::noncopyable
 {
 public:
     explicit LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_);
@@ -32,7 +35,8 @@ private:
     DataTransKeyPtr data_key;
     LocalChannelOptions options;
     BoundedDataQueue<Chunk> receive_queue;
-    std::atomic<BroadcastStatus *> broadcast_status;
+    BroadcastStatus init_status{BroadcastStatusCode::RUNNING, false, "init"};
+    std::atomic<BroadcastStatus *> broadcast_status{&init_status};
     Poco::Logger * logger;
 };
 }

@@ -55,19 +55,13 @@ IProcessor::Status ExchangeSource::prepare()
     const auto & status = SourceWithProgress::prepare();
     if (status == Status::Finished)
     {
-        if (inited.load(std::memory_order_relaxed))
-            receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "ExchangeSource finished");
+        receiver->finish(BroadcastStatusCode::RECV_REACH_LIMIT, "ExchangeSource finished");
     }
     return status;
 }
 
 std::optional<Chunk> ExchangeSource::tryGenerate()
 {
-    if (!inited.load(std::memory_order_relaxed))
-    {
-        receiver->registerToSenders(std::min(std::max(options.exhcange_timeout_ms / 3, 1000u), 5000u));
-        inited.store(true, std::memory_order_relaxed);
-    }
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 
@@ -76,7 +70,9 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     if (std::holds_alternative<Chunk>(packet))
     {
         Chunk chunk = std::move(std::get<Chunk>(packet));
+#ifndef NDEBUG
         LOG_TRACE(logger, "{} receive chunk with rows: {}", getName(), chunk.getNumRows());
+#endif
         return std::make_optional(std::move(chunk));
     }
     const auto & status = std::get<BroadcastStatus>(packet);
@@ -114,8 +110,7 @@ void ExchangeSource::onCancel()
 {
     LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
     was_query_canceled = true;
-    if(inited.load(std::memory_order_relaxed))
-        receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
+    receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
 }
 
 }

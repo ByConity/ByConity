@@ -72,13 +72,15 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
         }
     }
 
-    for(size_t i = 0; i < partition_num ; ++i)
-    {  
+    bool has_active_sender = false;
+    for (size_t i = 0; i < partition_num; ++i)
+    {
         auto status = buffered_senders[i].flush(false);
-        if (status.code != BroadcastStatusCode::RUNNING)
-            finish();
+        if (status.code == BroadcastStatusCode::RUNNING)
+            has_active_sender = true;
     }
-
+    if (!has_active_sender)
+        finish();
 }
 
 void MultiPartitionExchangeSink::onFinish()

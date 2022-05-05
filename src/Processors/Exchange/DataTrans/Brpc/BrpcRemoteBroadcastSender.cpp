@@ -203,6 +203,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
             return BroadcastStatus(static_cast<BroadcastStatusCode>(actual_status_code), false, "Stream Write receive finish request");
         return current_status;
     }
+#ifndef NDEBUG
     LOG_TRACE(
         log,
         "Send exchange data size-{} KB with data_key-{}, stream-{} retry times:{} cost:{} ms",
@@ -211,6 +212,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         stream_id,
         retry_count,
         s.elapsedMilliseconds());
+#endif
     return BroadcastStatus(RUNNING);
 }
 

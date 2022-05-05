@@ -10,6 +10,7 @@
 #include <Processors/QueryPipeline.h>
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -41,6 +42,8 @@ public:
 
     RuntimeSegmentsStatus execute(std::shared_ptr<ThreadGroupStatus> thread_group = nullptr);
     BlockIO lazyExecute(bool add_output_processors = false);
+
+    static void registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms);
 
 protected:
     void doExecute(std::shared_ptr<ThreadGroupStatus> thread_group);

@@ -17,8 +17,7 @@
 
 namespace DB
 {
-
-int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size) noexcept
+int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_id, butil::IOBuf * const messages[], size_t size) noexcept
 {
     BrpcRemoteBroadcastReceiverShardPtr receiver_ptr = receiver.lock();
     if (!receiver_ptr)
@@ -33,11 +32,13 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
             for (size_t index = 0; index < size; index++)
             {
                 butil::IOBuf * msg = messages[index];
+#ifndef NDEBUG
                 LOG_TRACE(
                     log,
                     "on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}",
                     stream_id,
                     msg->size());
+#endif
                 auto chunk_info = std::make_shared<DeserializeBufTransform::IOBufChunkInfo>();
                 chunk_info->io_buf.append(msg->movable());
                 Chunk chunk;
@@ -57,12 +58,14 @@ int StreamHandler::on_received_messages(brpc::StreamId stream_id, butil::IOBuf *
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
+#ifndef NDEBUG
             LOG_TRACE(
                 log,
                 "on_received_messages: StreamId-{} received exchange data successfully, io-buffer size:{}, chunk rows:{}",
                 stream_id,
                 msg.size(),
                 chunk.getNumRows());
+#endif
             receiver_ptr->pushReceiveQueue(std::move(chunk));
         }
     }

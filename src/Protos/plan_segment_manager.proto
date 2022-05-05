@@ -43,6 +43,23 @@ message ExecutePlanSegmentRequest {
   optional uint64 open_telemetry_span_id = 8;
   optional string open_telemetry_tracestate = 9;
   optional uint32 open_telemetry_trace_flags = 10;
+  // id of distributed query
+  required string query_id = 11;
+  // plan segment id
+  required uint32 plan_segment_id = 12;
+  // user
+  required string user = 13;
+  required string password = 14;
+  // coordinator
+  required string coordinator_host = 15;
+  required uint32 coordinator_port = 16;
+  required uint32 coordinator_exchange_port = 17;
+  required uint32 coordinator_exchange_status_port = 18;
+  // current
+  required string current_host = 19;
+  required uint32 current_port = 20;
+  required uint32 current_exchange_port = 21;
+  required uint32 current_exchange_status_port = 22;
 }
 
 message ExecutePlanSegmentResponse {

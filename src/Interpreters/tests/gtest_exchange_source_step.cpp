@@ -5,11 +5,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
+#include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
-#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
+#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
@@ -76,6 +77,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
     QueryPipeline pipeline;
     exchange_source_step.initializePipeline(pipeline, BuildQueryPipelineSettings::fromContext(context));
+    PlanSegmentExecutor::registerAllExchangeReceivers(pipeline, 200);
 
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();

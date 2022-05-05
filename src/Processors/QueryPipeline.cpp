@@ -243,7 +243,7 @@ QueryPipeline QueryPipeline::unitePipelines(
         pipes.emplace_back(std::move(pipeline.pipe));
 
         max_threads += pipeline.max_threads;
-        min_threads = std::max(min_threads, pipeline.min_threads);
+        min_threads += pipeline.min_threads;
         will_limit_max_threads = will_limit_max_threads && pipeline.max_threads != 0;
 
         /// If one of pipelines uses more threads then current limit, will keep it.
@@ -354,6 +354,7 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     left->pipe.holder = std::move(right->pipe.holder);
     left->pipe.header = left->pipe.output_ports.front()->getHeader();
     left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, right->pipe.max_parallel_streams);
+    left->min_threads = std::max(left->min_threads, right->max_threads);
     return left;
 }
 
