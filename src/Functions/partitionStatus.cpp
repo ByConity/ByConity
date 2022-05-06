@@ -62,7 +62,7 @@ namespace DB
             if (database_name.empty() || table_name.empty() || partition_id.empty())
                 throw Exception("Bad arguments: database/table/partition_id should not be empty", ErrorCodes::BAD_ARGUMENTS);
 
-            auto table = DatabaseCatalog::instance().getTable({database_name, table_name}, context);
+            auto table = DatabaseCatalog::instance().getTable({database_name, table_name}, context->getQueryContext());
             auto status = getPartitionStatus(table, partition_id);
 
             auto result_column = ColumnString::create();
