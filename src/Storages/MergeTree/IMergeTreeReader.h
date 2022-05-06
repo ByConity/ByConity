@@ -28,7 +28,8 @@ public:
         MarkCache * mark_cache_,
         const MarkRanges & all_mark_ranges_,
         const MergeTreeReaderSettings & settings_,
-        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{});
+        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
+        MergeTreeBitMapIndexReader * bitmap_index_reader = nullptr);
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
@@ -43,13 +44,13 @@ public:
     /// Add columns from ordered_names that are not present in the block.
     /// Missing columns are added in the order specified by ordered_names.
     /// num_rows is needed in case if all res_columns are nullptr.
-    void fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows);
+    void fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size = true);
     /// Evaluate defaulted columns if necessary.
     void evaluateMissingDefaults(Block additional_columns, Columns & res_columns);
 
     /// If part metadata is not equal to storage metadata, than
     /// try to perform conversions of columns.
-    void performRequiredConversions(Columns & res_columns);
+    void performRequiredConversions(Columns & res_columns, bool check_column_size = true);
 
     const NamesAndTypesList & getColumns() const { return columns; }
     size_t numColumnsInResult() const { return columns.size(); }
@@ -58,6 +59,10 @@ public:
     {
         return all_mark_ranges.front().begin;
     }
+
+    bool hasBitmapIndexReader() const { return bitmap_index_reader != nullptr; }
+
+    const NameSet & getBitmapOutputColumns();
 
     MergeTreeData::DataPartPtr data_part;
 
@@ -114,6 +119,9 @@ protected:
     Serializations serializations;
 
     friend class MergeTreeRangeReader::DelayedStream;
+
+    // Special handling arraySetCheck (pushdown in reader), and utilize bitmap-index as index-only scan
+    MergeTreeBitMapIndexReader * bitmap_index_reader = nullptr;
 
 private:
     /// Alter conversions, which must be applied on fly if required

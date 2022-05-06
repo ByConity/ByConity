@@ -94,6 +94,11 @@ private:
 
     bool isSubsetOfTableColumns(const NameSet & identifiers) const;
 
+    bool containsArraySetCheck(const ASTPtr & condition) const;
+
+    bool isArraySetCheck(const ASTPtr & condition, bool is_not = false) const;
+
+
     /** ARRAY JOIN'ed columns as well as arrayJoin() result cannot be used in PREWHERE, therefore expressions
       *    containing said columns should not be moved to PREWHERE at all.
       *    We assume all AS aliases have been expanded prior to using this class
@@ -115,6 +120,8 @@ private:
     std::unordered_map<std::string, UInt64> column_sizes;
     UInt64 total_size_of_queried_columns = 0;
     NameSet array_joined_names;
+    bool enable_ab_index_optimization;
+    const StorageMetadataPtr & metadata_snapshot;
 };
 
 

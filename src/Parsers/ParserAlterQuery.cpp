@@ -84,6 +84,14 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_bitengine_recode_partition("BITENGINE RECODE PARTITION");
     ParserKeyword s_bitengine_recode_partition_where("BITENGINE RECODE PARTITION WHERE");
 
+    ParserKeyword s_drop_bitmap_of_partition_where("DROP BITMAP OF PARTITION WHERE");
+    ParserKeyword s_drop_bitmap_of_partition("DROP BITMAP OF PARTITION");
+    ParserKeyword s_build_bitmap_of_partition_where("BUILD BITMAP OF PARTITION WHERE");
+    ParserKeyword s_build_bitmap_of_partition("BUILD BITMAP OF PARTITION");
+    ParserKeyword s_drop_mark_bitmap_of_partition_where("DROP MARK BITMAP OF PARTITION WHERE");
+    ParserKeyword s_drop_mark_bitmap_of_partition("DROP MARK BITMAP OF PARTITION");
+    ParserKeyword s_build_mark_bitmap_of_partition_where("BUILD MARK BITMAP OF PARTITION WHERE");
+    ParserKeyword s_build_mark_bitmap_of_partition("BUILD MARK BITMAP OF PARTITION");
     ParserKeyword s_sample_partition_with("SAMPLE PARTITION WITH");
 
     ParserKeyword s_first("FIRST");
@@ -850,6 +858,62 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
 
             command->type = ASTAlterCommand::UPDATE;
+        }
+        else if (s_drop_bitmap_of_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_BITMAP_OF_PARTITION_WHERE;
+        }
+        else if (s_drop_bitmap_of_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_BITMAP_OF_PARTITION;
+        }
+        else if (s_build_bitmap_of_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            command->type = ASTAlterCommand::BUILD_BITMAP_OF_PARTITION_WHERE;
+        }
+        else if (s_build_bitmap_of_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            command->type = ASTAlterCommand::BUILD_BITMAP_OF_PARTITION;
+        }
+        else if (s_drop_mark_bitmap_of_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION_WHERE;
+        }
+        else if (s_drop_mark_bitmap_of_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION;
+        }
+        else if (s_build_mark_bitmap_of_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            command->type = ASTAlterCommand::BUILD_BITMAP_OF_PARTITION_WHERE;
+        }
+        else if (s_build_mark_bitmap_of_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            command->type = ASTAlterCommand::BUILD_MARK_BITMAP_OF_PARTITION;
         }
         else if (s_comment_column.ignore(pos, expected))
         {

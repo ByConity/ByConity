@@ -50,6 +50,7 @@
 #include <Storages/System/StorageSystemErrors.h>
 #include <Storages/System/StorageSystemDDLWorkerQueue.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
+#include <Storages/System/StorageSystemBitmapIndex.h>
 
 #include <Storages/System/StorageSystemBitEngine.h>
 #include <Storages/System/StorageSystemBitEngineDict.h>
@@ -169,6 +170,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemMacros>(system_database, "macros");
     attach<StorageSystemReplicatedFetches>(system_database, "replicated_fetches");
     attach<StorageSystemPartMovesBetweenShards>(system_database, "part_moves_between_shards");
+    attach<StorageSystemBitmapIndex>(system_database, "bitmap_index");
 #if USE_RDKAFKA
     attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
 #endif

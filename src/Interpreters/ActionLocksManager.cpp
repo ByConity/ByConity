@@ -16,6 +16,11 @@ namespace ActionLocks
     extern const StorageActionBlockType DistributedSend = 5;
     extern const StorageActionBlockType PartsTTLMerge = 6;
     extern const StorageActionBlockType PartsMove = 7;
+    extern const StorageActionBlockType PartsRecode = 8;
+    extern const StorageActionBlockType PartsBuildBitmap = 9;
+    extern const StorageActionBlockType PartsBuildKllSketch = 10;
+    extern const StorageActionBlockType PartsMergeSelect = 11;
+    extern const StorageActionBlockType PartsBuildMarkBitmap = 12;
 }
 
 

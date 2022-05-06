@@ -14,7 +14,7 @@ bool endsWith(const std::string & s, const char * suffix, size_t suffix_size)
     return s.size() >= suffix_size && 0 == memcmp(s.data() + s.size() - suffix_size, suffix, suffix_size);
 }
 
-void parseSlowQuery(const std::string& query, size_t & pos)
+void parseSlowQuery(const std::string & query, size_t & pos)
 {
     const std::string whitespace = " \t\n";
     pos = query.find_first_not_of(whitespace, pos);

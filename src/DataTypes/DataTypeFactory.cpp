@@ -65,6 +65,11 @@ DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt8 flags) const
 
 DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr & parameters, UInt8 flags) const
 {
+    ContextPtr query_context;
+    if (CurrentThread::isInitialized())
+        query_context = CurrentThread::get().getQueryContext();
+
+    DataTypePtr res;
     String family_name = getAliasToOrName(family_name_param);
 
     if (endsWith(family_name, "WithDictionary"))
@@ -84,18 +89,44 @@ DataTypePtr DataTypeFactory::get(const String & family_name_param, const ASTPtr 
         return get("LowCardinality", low_cardinality_params, flags);
     }
 
-    auto res = findCreatorByName(family_name)(parameters);
+    {
+        DataTypesDictionary::const_iterator it = data_types.find(family_name);
+        if (data_types.end() != it)
+        {
+            res = it->second(parameters);
+            const_cast<IDataType *>(res.get())->setFlags(flags);
+            if (query_context && query_context->getSettingsRef().log_queries)
+                query_context->addQueryFactoriesInfo(Context::QueryLogFactories::DataType, family_name);
+            return res;
+        }
+    }
+
+    String family_name_lowercase = Poco::toLower(family_name);
+
+    {
+        DataTypesDictionary::const_iterator it = case_insensitive_data_types.find(family_name_lowercase);
+        if (case_insensitive_data_types.end() != it)
+        {
+            res = it->second(parameters);
+            const_cast<IDataType *>(res.get())->setFlags(flags);
+            if (query_context && query_context->getSettingsRef().log_queries)
+                query_context->addQueryFactoriesInfo(Context::QueryLogFactories::DataType, family_name_lowercase);
+            return res;
+        }
+    }
+
+    res = findCreatorByName(family_name)(parameters);
     res->setFlags(flags);
 
     return res;
 }
 
-DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization) const
+DataTypePtr DataTypeFactory::getCustom(DataTypeCustomDescPtr customization, const UInt8 flags) const
 {
     if (!customization->name)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot create custom type without name");
 
-    auto type = get(customization->name->getName());
+    auto type = get(customization->name->getName(), flags);
     type->setCustomization(std::move(customization));
     return type;
 }

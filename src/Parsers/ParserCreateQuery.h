@@ -131,10 +131,14 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_codec{"CODEC"};
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
+    ParserKeyword s_bloom{"BLOOM"};
+    ParserKeyword s_compression{"COMPRESSION"};
+    ParserKeyword s_security{"SECURITY"};
+    ParserKeyword s_encrypt{"ENCRYPT"};
     ParserKeyword s_kv{"KV"};
     ParserKeyword s_bitengine_encode{"BitEngineEncode"};
-    ParserKeyword s_encrypt{"ENCRYPT"};
-    ParserKeyword s_security("SECURITY");
+    ParserKeyword s_bitmap_index{"BitmapIndex"};
+    ParserKeyword s_mark_bitmap_index{"MarkBitmapIndex"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
@@ -218,7 +222,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     }
 
     UInt8 flags = 0;
-
     while (true)
     {
         UInt8 inner_flags = 0;
@@ -231,6 +234,14 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             inner_flags |= TYPE_ENCRYPT_FLAG;
         if (s_security.ignore(pos, expected))
             inner_flags |= TYPE_SECURITY_FLAG;
+        if (s_bloom.ignore(pos, expected))
+            inner_flags |= TYPE_BLOOM_FLAG;
+        if (s_compression.ignore(pos, expected))
+            inner_flags |= TYPE_COMPRESSION_FLAG;
+        if (s_bitmap_index.ignore(pos, expected))
+            inner_flags |= TYPE_BITMAP_INDEX_FLAG;
+        if (s_mark_bitmap_index.ignore(pos, expected))
+            inner_flags |= TYPE_MARK_BITMAP_INDEX_FALG;
 
         if (!inner_flags)
             break;
@@ -248,7 +259,6 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
         if (!codec_parser.parse(pos, codec_expression, expected))
             return false;
     }
-
     if (s_ttl.ignore(pos, expected))
     {
         if (!expression_parser.parse(pos, ttl_expression, expected))

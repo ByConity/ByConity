@@ -13,6 +13,14 @@ class MergeTreeDataPartWriterWide;
 class MergedBlockOutputStream final : public IMergedBlockOutputStream
 {
 public:
+    struct WriteSettings
+    {
+        bool enable_build_ab_index = true;
+        bool enable_build_index_in_alter = false;
+        bool only_recode = false;
+        bool bitengine_encode_without_lock = false;
+    };
+
     MergedBlockOutputStream(
         const MergeTreeDataPartPtr & data_part,
         const StorageMetadataPtr & metadata_snapshot_,
@@ -26,6 +34,7 @@ public:
 
     /// If the data is pre-sorted.
     void write(const Block & block) override;
+    void write(const Block & block, const WriteSettings & write_settings);
 
     /** If the data is not sorted, but we have previously calculated the permutation, that will sort it.
       * This method is used to save RAM, since you do not need to keep two blocks at once - the original one and the sorted one.

@@ -185,8 +185,10 @@ struct Settings;
     M(UInt64, ha_unique_checkpoint_attempt_interval, 60, "", 0) \
     M(UInt64, ha_unique_checkpoint_min_logs, 100, "", 0) \
     M(UInt64, ha_unique_replay_log_add_delay, 0, "", 0) \
-    /* Bitmap index settings */                                                                               \
-    M(Bool, enable_build_ab_index, false, "", 0) \
+    /* Bitmap index settings */        \
+    /* TODO doongyifeng change it to false    */                    \
+    M(Bool, enable_build_ab_index, true, "", 0) \
+    M(Bool, enable_build_bitmap_index, true, "", 0) \
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
     /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \

@@ -71,6 +71,7 @@ public:
     bool areTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
     void checkTypesEqual(size_t set_type_idx, const DataTypePtr & other_type) const;
 
+    SetVariants data;
     void serialize(WriteBuffer & buf) const;
     void deserializeImpl(ReadBuffer & buf);
     static SetPtr deserialize(ReadBuffer & buf);
@@ -78,8 +79,6 @@ public:
 private:
     size_t keys_size = 0;
     Sizes key_sizes;
-
-    SetVariants data;
 
     /** How IN works with Nullable types.
       *

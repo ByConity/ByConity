@@ -37,6 +37,9 @@ void registerFunctionArrayAUC(FunctionFactory &);
 void registerFunctionArrayReduceInRanges(FunctionFactory &);
 void registerFunctionMapOp(FunctionFactory &);
 void registerFunctionMapPopulateSeries(FunctionFactory &);
+void registerFunctionArraySetCheck(FunctionFactory &);
+void registerFunctionArraySetGet(FunctionFactory &);
+void registerFunctionArraySetGetAny(FunctionFactory &);
 
 void registerFunctionsArray(FunctionFactory & factory)
 {
@@ -75,6 +78,9 @@ void registerFunctionsArray(FunctionFactory & factory)
     registerFunctionArrayAUC(factory);
     registerFunctionMapOp(factory);
     registerFunctionMapPopulateSeries(factory);
+    registerFunctionArraySetCheck(factory);
+    registerFunctionArraySetGet(factory);
+    registerFunctionArraySetGetAny(factory);
 }
 
 }

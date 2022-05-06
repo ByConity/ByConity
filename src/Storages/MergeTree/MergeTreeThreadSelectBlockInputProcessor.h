@@ -25,6 +25,7 @@ public:
         const StorageMetadataPtr & metadata_snapshot_,
         const bool use_uncompressed_cache_,
         const PrewhereInfoPtr & prewhere_info_,
+        const BitMapIndexInfoPtr & bitmap_index_info,
         ExpressionActionsSettings actions_settings,
         const MergeTreeReaderSettings & reader_settings_,
 
@@ -49,6 +50,7 @@ private:
     std::string last_readed_part_name;
     /// Names from header. Used in order to order columns in read blocks.
     Names ordered_names;
+    const BitMapIndexInfoPtr bitmap_index_info;
 };
 
 }

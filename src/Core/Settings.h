@@ -270,6 +270,12 @@ class IColumn;
     M(Bool, prefer_global_in_and_join, false, "If enabled, all IN/JOIN operators will be rewritten as GLOBAL IN/JOIN. It's useful when the to-be-joined tables are only available on the initiator and we need to always scatter their data on-the-fly during distributed processing with the GLOBAL keyword. It's also useful to reduce the need to access the external sources joining external tables.", 0) \
     M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
     \
+    /**  settings about bitmap index */\
+    M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
+    M(Bool, enable_sync_build_bitmap, false, "Build bitmap index in sync mode", 0)\
+    M(Bool, enable_async_build_bitmap_in_attach, false, "Async build bitmap index in attach, it is a user config", 0)\
+    M(Bool, enable_async_build_mark_bitmap_in_attach, false, "Async build mark bitmap index in attach, it is a user config", 0)\
+    M(Bool, enable_mark_bitmap_index, true, "", 0) \
     \
     /** Limits during query execution are part of the settings. \
       * Used to provide a more safe execution of queries from the user interface. \

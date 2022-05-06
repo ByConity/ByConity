@@ -10,6 +10,7 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
+#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
 #include <utility>
@@ -20,7 +21,6 @@ namespace DB
 namespace
 {
     using OffsetColumns = std::map<std::string, ColumnPtr>;
-    //constexpr auto DATA_FILE_EXTENSION = ".bin";
 }
 
 namespace ErrorCodes
@@ -36,6 +36,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     MarkCache * mark_cache_,
     MarkRanges mark_ranges_,
     MergeTreeReaderSettings settings_,
+    MergeTreeBitMapIndexReader * bitmap_index_reader_,
     IMergeTreeDataPart::ValueSizeMap avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
     clockid_t clock_type_)
@@ -47,7 +48,8 @@ MergeTreeReaderWide::MergeTreeReaderWide(
         std::move(mark_cache_),
         std::move(mark_ranges_),
         std::move(settings_),
-        std::move(avg_value_size_hints_))
+        std::move(avg_value_size_hints_),
+        bitmap_index_reader_)
 {
     try
     {
@@ -254,6 +256,25 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, bool continue_reading, si
         /// NOTE: positions for all streams must be kept in sync.
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
+
+        if (bitmap_index_reader && bitmap_index_reader->validIndexReader())
+        {
+            size_t bitmap_rows_read = bitmap_index_reader->read(from_mark, continue_reading, max_rows_to_read, res_columns);
+#ifndef NDEBUG
+            String output_names = "";
+            for (const auto & output_name: bitmap_index_reader->getOutputColumnNames())
+                output_names += " " + output_name;
+            LOG_TRACE(&Poco::Logger::get("bitmap_index_reader"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
+#endif
+            // If there is only bitmap_index columns, rows_read may be zero.
+            if (read_rows == 0)
+                read_rows = bitmap_rows_read;
+
+            if (read_rows != bitmap_rows_read)
+            {
+                throw Exception("Mismatch rows read from bitmap_index_reader: " + toString(read_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
     }
     catch (Exception & e)
     {

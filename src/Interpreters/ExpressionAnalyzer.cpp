@@ -142,6 +142,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     : WithContext(context_)
     , query(query_), settings(getContext()->getSettings())
     , subquery_depth(subquery_depth_)
+    , bitmap_index_info(std::make_shared<BitMapIndexInfo>())
     , syntax(syntax_analyzer_result_)
 {
     /// Cache prepared sets because we might run analysis multiple times
@@ -490,7 +491,7 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_subqueries, 
     LogAST log;
     ActionsVisitor::Data visitor_data(getContext(), settings.size_limits_for_set, subquery_depth,
                                    sourceColumns(), std::move(actions), prepared_sets, subqueries_for_sets,
-                                   no_subqueries, false, only_consts, !isRemoteStorage());
+                                   no_subqueries, false, only_consts, !isRemoteStorage(), bitmap_index_info);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }

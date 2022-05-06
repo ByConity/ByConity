@@ -2,6 +2,7 @@
 
 #include <Common/SimpleIncrement.h>
 #include <Common/MultiVersion.h>
+#include <Common/QueueForAsyncTask.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
@@ -41,6 +42,12 @@ class AlterCommands;
 class MergeTreePartsMover;
 class MutationCommands;
 class Context;
+class BitmapTracker;
+class MergeTreeBitmapIndex;
+class MergeTreeMarkBitmapIndex;
+using MergeTreeBitmapIndexPtr = std::shared_ptr<MergeTreeBitmapIndex>;
+using MergeTreeMarkBitmapIndexPtr = std::shared_ptr<MergeTreeMarkBitmapIndex>;
+
 struct JobAndPool;
 class DiskUniqueKeyIndexCache;
 class DiskUniqueRowStoreCache;
@@ -326,6 +333,9 @@ public:
     MutableDataPartPtr createPart(const String & name, const MergeTreePartInfo & part_info,
         const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part = nullptr) const;
 
+    MergeTreeBitmapIndexPtr getMergeTreeBitmapIndex() const { return bitmap_index; }
+    MergeTreeMarkBitmapIndexPtr getMergeTreeMarkBitmapIndex() const { return mark_bitmap_index; }
+    void addPartForBackgroundTask(const DataPartPtr & part, const Context & context_, bool without_recode = false);
     bool supportsMapImplicitColumn() const override { return true; }
 
     /// Auxiliary object to add a set of parts into the working set in two steps:
@@ -652,6 +662,8 @@ public:
     DataPartPtr getPartIfExistsWithoutLock(const String & part_name, const DataPartStates & valid_states);
     DataPartPtr getPartIfExists(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
     DataPartPtr getPartIfExistsWithoutLock(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
+    bool hasPart(const String & part_name, const DataPartStates & valid_states);
+    bool hasPart(const MergeTreePartInfo & part_info, const MergeTreeData::DataPartStates & valid_states);
 
     /// For a target part that will be fetched from another replica, find whether the local has an old version part.
     /// When mutating a part, its mutate version will be changed. For example, all_0_0_0 -> all_0_0_0_1, all_0_0_0_1 is the target part, all_0_0_0 is the old version part.
@@ -1146,6 +1158,12 @@ protected:
     /// Used to determine which UUIDs to send to root query executor for deduplication.
     mutable std::shared_mutex pinned_part_uuids_mutex;
     PinnedPartUUIDsPtr pinned_part_uuids;
+
+    // manage all bitmap index related task
+    MergeTreeBitmapIndexPtr bitmap_index;
+
+    // manage all mark bitmap index related task
+    MergeTreeMarkBitmapIndexPtr mark_bitmap_index;
 
     /// Work with data parts
 

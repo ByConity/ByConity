@@ -22,6 +22,7 @@ public:
         MarkCache * mark_cache_,
         MarkRanges mark_ranges_,
         MergeTreeReaderSettings settings_,
+        MergeTreeBitMapIndexReader * bitmap_index_reader_,
         ValueSizeMap avg_value_size_hints_ = {},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
