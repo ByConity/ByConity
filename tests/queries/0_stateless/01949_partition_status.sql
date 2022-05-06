@@ -1,8 +1,9 @@
-drop table if exists test1;
+use test;
+drop table if exists number_table;
 
-create table test1(i int, j int) engine = MergeTree partition by i order by tuple() settings index_granularity = 1;
+create table number_table(i int, j int) engine = MergeTree partition by i order by tuple() settings index_granularity = 1;
 
-insert into test1 select number, number + 100 from numbers(10);
-select partitionStatus('default', 'test1', '2');
+insert into number_table select number, number + 100 from numbers(10);
+select partitionStatus('test', 'number_table', '2');
 
-drop table test1;
+drop table number_table;
