@@ -11,7 +11,7 @@
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/copyData.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <DataStreams/InputStreamFromASTInsertQuery.h>
+#include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 
 #include <Parsers/ASTIdentifier.h>
@@ -54,6 +54,7 @@
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Sources/SinkToOutputStream.h>
 
 
 namespace ProfileEvents
@@ -513,9 +514,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     StoragePtr storage = context->executeTableFunction(input_function);
                     auto & input_storage = dynamic_cast<StorageInput &>(*storage);
                     auto input_metadata_snapshot = input_storage.getInMemoryMetadataPtr();
-                    BlockInputStreamPtr input_stream = std::make_shared<InputStreamFromASTInsertQuery>(
+                    auto pipe = getSourceFromFromASTInsertQuery(
                         ast, istr, input_metadata_snapshot->getSampleBlock(), context, input_function);
-                    input_storage.setInputStream(input_stream);
+                    input_storage.setPipe(std::move(pipe));
                 }
             }
         }
@@ -1010,8 +1011,17 @@ void executeQuery(
     {
         if (streams.out)
         {
-            InputStreamFromASTInsertQuery in(ast, &istr, streams.out->getHeader(), context, nullptr);
-            copyData(in, *streams.out);
+            auto pipe = getSourceFromFromASTInsertQuery(ast, &istr, streams.out->getHeader(), context, nullptr);
+
+            pipeline.init(std::move(pipe));
+            pipeline.resize(1);
+            pipeline.setSinks([&](const Block &, Pipe::StreamType)
+            {
+                return std::make_shared<SinkToOutputStream>(streams.out);
+            });
+
+            auto executor = pipeline.execute();
+            executor->execute(pipeline.getNumThreads());
         }
         else if (streams.in)
         {
