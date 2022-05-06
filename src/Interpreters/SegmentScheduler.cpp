@@ -203,9 +203,12 @@ void SegmentScheduler::updateException(const String & query_id, const String & e
         query_to_exception.putIfNotExists(query_id, std::make_shared<String>(exception));
 }
 
-String SegmentScheduler::getException(const String & query_id, size_t timeout_ms)
-{
-    return *query_to_exception.get(query_id, timeout_ms);
+String SegmentScheduler::getException(const String &query_id, size_t timeout_ms) {
+    const auto ptr = query_to_exception.get(query_id, timeout_ms);
+    if (ptr)
+        return *ptr;
+    else
+        return "Unknown";
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
