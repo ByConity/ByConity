@@ -31,17 +31,19 @@ MergeTreeWhereOptimizer::MergeTreeWhereOptimizer(
     SelectQueryInfo & query_info,
     ContextPtr context,
     std::unordered_map<std::string, UInt64> column_sizes_,
-    const StorageMetadataPtr & metadata_snapshot,
+    const StorageMetadataPtr & metadata_snapshot_,
     const Names & queried_columns_,
     Poco::Logger * log_)
     : table_columns{collections::map<std::unordered_set>(
-        metadata_snapshot->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
+        metadata_snapshot_->getColumns().getAllPhysical(), [](const NameAndTypePair & col) { return col.name; })}
     , queried_columns{queried_columns_}
     , sorting_key_names{NameSet(
-          metadata_snapshot->getSortingKey().column_names.begin(), metadata_snapshot->getSortingKey().column_names.end())}
+          metadata_snapshot_->getSortingKey().column_names.begin(), metadata_snapshot_->getSortingKey().column_names.end())}
     , block_with_constants{KeyCondition::getBlockWithConstants(query_info.query->clone(), query_info.syntax_analyzer_result, context)}
     , log{log_}
     , column_sizes{std::move(column_sizes_)}
+    , enable_ab_index_optimization{context->getSettingsRef().enable_ab_index_optimization}
+    , metadata_snapshot{metadata_snapshot_}
 {
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     if (!primary_key.column_names.empty())
@@ -183,6 +185,74 @@ ASTPtr MergeTreeWhereOptimizer::reconstruct(const Conditions & conditions)
     return function;
 }
 
+bool MergeTreeWhereOptimizer::containsArraySetCheck(const ASTPtr & condition) const
+{
+    if (!condition)
+        return false;
+
+    const auto function = typeid_cast<const ASTFunction *>(condition.get());
+
+    if (function)
+    {
+        if (function->name == "not")
+        {
+            return containsArraySetCheck(function->arguments->children.front());
+        }
+        if (function->name == "and" or function->name == "or")
+        {
+            bool result = false;
+            for (const auto & children_ast : function->arguments->children)
+            {
+                result |= containsArraySetCheck(children_ast);
+            }
+            return result;
+        }
+        else if (BitMapIndexHelper::isArraySetFunctions(function->name))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// A expression is arraySetCheck if
+// 1. single arraySetCheck function with column argument is a BLOOM column
+// 2. not arraySetCheck function
+bool MergeTreeWhereOptimizer::isArraySetCheck(const ASTPtr & condition, bool) const
+{
+    if (!condition)
+        return false;
+
+    const auto function = typeid_cast<const ASTFunction *>(condition.get());
+
+    if (function)
+    {
+        if (BitMapIndexHelper::isArraySetFunctions(function->name))
+        {
+            size_t arg_size = function->arguments->children.size();
+            if (arg_size % 2)
+                throw Exception("Wrong number of arguments of arraySetCheck", ErrorCodes::LOGICAL_ERROR);
+
+            for (size_t i = 0; i < arg_size; i += 2)
+            {
+                auto left_arg = function->arguments->children.at(i).get();
+                auto right_arg = function->arguments->children.at(i+1).get();
+                auto identifier = left_arg->as<ASTIdentifier>();
+                if (!identifier || right_arg->as<ASTIdentifier>())
+                    return false;
+                const ColumnDescription & column = metadata_snapshot->getColumns().get(identifier->getColumnName());
+                if (!column.type->isBloomSet() && !column.type->isBitmapIndex())
+                    return false;
+            }
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 
 void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
 {
@@ -212,6 +282,35 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
         }
     };
 
+    /// @ab-opt, move ab check index if there is
+    if (enable_ab_index_optimization) {
+        // LOG_DEBUG(log, "MergeTreeWhereOptimizer: try to use ab index optimization.");
+        size_t array_set_check_function_numbers = 0;
+        for (auto it = where_conditions.begin(); it != where_conditions.end();)
+        {
+            if (containsArraySetCheck(it->node))
+            {
+                array_set_check_function_numbers++;
+            }
+            ++it;
+        }
+        // current only support one array check function, TODO dongyifeng: support complex expressions
+        if (array_set_check_function_numbers == 1)
+        {
+            for (auto it = where_conditions.begin(); it != where_conditions.end();)
+            {
+                if (isArraySetCheck(it->node))
+                {
+                    auto move_it = it++;
+                    move_condition(move_it);
+                    continue;
+                }
+                ++it;
+            }
+        }
+    }
+
+
     /// Move conditions unless the ratio of total_size_of_moved_conditions to the total_size_of_queried_columns is less than some threshold.
     while (!where_conditions.empty())
     {
@@ -220,6 +319,9 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
         auto it = std::min_element(where_conditions.begin(), where_conditions.end());
 
         if (!it->viable)
+            break;
+
+        if (containsArraySetCheck(it->node))
             break;
 
         bool moved_enough = false;
@@ -239,7 +341,6 @@ void MergeTreeWhereOptimizer::optimize(ASTSelectQuery & select) const
 
         if (moved_enough)
             break;
-
         move_condition(it);
     }
 

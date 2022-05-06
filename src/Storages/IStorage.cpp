@@ -255,6 +255,19 @@ StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
     return DatabaseCatalog::instance().getTable({database_name, table_name}, context);
 }
 
+void IStorage::checkHasCompressedAndBloomColumns(bool & has_compressed, bool & has_bitmap) const
+{
+    has_compressed = false;
+    has_bitmap = false;
+
+    for (auto name_and_type : getInMemoryMetadata().getColumns().getAllPhysical())
+    {
+        has_compressed |= name_and_type.type->isCompression();
+        has_bitmap |= name_and_type.type->isBloomSet();
+        has_bitmap |= name_and_type.type->isBitmapIndex();
+    }
+}
+
 std::string PrewhereInfo::dump() const
 {
     WriteBufferFromOwnString ss;

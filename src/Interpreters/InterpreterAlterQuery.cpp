@@ -391,6 +391,18 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::NO_TYPE: break;
+        case ASTAlterCommand::BUILD_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::BUILD_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::DROP_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::DROP_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::BUILD_MARK_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::BUILD_MARK_BITMAP_OF_PARTITION:
+        case ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION_WHERE:
+        case ASTAlterCommand::DROP_MARK_BITMAP_OF_PARTITION:
+        {
+            required_access.emplace_back(AccessType::ALTER_MODIFY_COLUMN, database, table, column_name_from_col_decl());
+            break;
+        }
     }
 
     return required_access;

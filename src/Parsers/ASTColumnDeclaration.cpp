@@ -75,25 +75,35 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         default_expression->formatImpl(settings, state, frame);
     }
 
-    // if (flags & TYPE_COMPRESSION_FLAG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMPRESSION"  << (settings.hilite ? hilite_none : "");
-    // }
+    if (flags & TYPE_COMPRESSION_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "COMPRESSION"  << (settings.hilite ? hilite_none : "");
+    }
 
-    // if (flags & TYPE_BLOOM_FLAG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BLOOM"  << (settings.hilite ? hilite_none : "");
-    // }
+    if (flags & TYPE_BLOOM_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BLOOM"  << (settings.hilite ? hilite_none : "");
+    }
 
-    // if (flags & TYPE_BITMAP_INDEX_FLAG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitmapIndex"  << (settings.hilite ? hilite_none : "");
-    // }
+    if (flags & TYPE_BITMAP_INDEX_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "BitmapIndex"  << (settings.hilite ? hilite_none : "");
+    }
 
-    // if (flags & TYPE_MARK_BITMAP_INDEX_FALG)
-    // {
-    //     settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "MarkBitmapIndex"  << (settings.hilite ? hilite_none : "");
-    // }
+    if (flags & TYPE_MARK_BITMAP_INDEX_FALG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "MarkBitmapIndex"  << (settings.hilite ? hilite_none : "");
+    }
+
+    if (flags & TYPE_SECURITY_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "SECURITY"  << (settings.hilite ? hilite_none : "");
+    }
+
+    if (flags & TYPE_ENCRYPT_FLAG)
+    {
+        settings.ostr << ' ' << (settings.hilite ? hilite_keyword : "") << "ENCRYPT"  << (settings.hilite ? hilite_none : "");
+    }
 
     if (flags & TYPE_MAP_KV_STORE_FLAG)
     {

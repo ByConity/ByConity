@@ -6,6 +6,7 @@
 #include <Core/Names.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeCustom.h>
+#include <DataTypes/Serializations/ISerialization.h>
 
 
 namespace DB
@@ -33,7 +34,6 @@ class SerializationInfo;
 #define TYPE_BITENGINE_ENCODE_FLAG  0x02
 #define TYPE_SECURITY_FLAG          0x04
 #define TYPE_ENCRYPT_FLAG           0x08
-// Not used
 #define TYPE_BLOOM_FLAG             0x10
 #define TYPE_COMPRESSION_FLAG       0x20
 #define TYPE_BITMAP_INDEX_FLAG      0x40
@@ -261,6 +261,19 @@ public:
       */
     virtual bool canBeInsideNullable() const { return false; }
 
+    void setFlags(UInt8 flag) { flags |= flag; }
+
+    void resetFlags(UInt8 flag) {
+        if (flags & flag)
+            flags ^= flag;
+    }
+
+    bool isBloomSet() const { return flags & TYPE_BLOOM_FLAG;}
+
+    bool isCompression() const { return flags & TYPE_COMPRESSION_FLAG;}
+
+    bool isSecurity() const { return flags & TYPE_SECURITY_FLAG;}
+
     virtual bool lowCardinality() const { return false; }
 
     /// Strings, Numbers, Date, DateTime, Nullable
@@ -273,6 +286,14 @@ public:
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
 
     bool isMapKVStore() const { return flags & TYPE_MAP_KV_STORE_FLAG;}
+
+    bool isEncrypt() const { return flags & TYPE_ENCRYPT_FLAG; }
+
+    bool isBitmapIndex() const { return flags & TYPE_BITMAP_INDEX_FLAG; }
+
+    bool isMarkBitmapIndex() const { return flags & TYPE_MARK_BITMAP_INDEX_FALG; }
+
+    Names getSpecialColumnFiles(const String & name, bool throw_exception) const;
     virtual bool canBeMapKVType() const {return false;}
     virtual Field stringToVisitorField(const String &) const;
   	static String getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path);
@@ -291,9 +312,6 @@ public:
     }
 
     virtual void checkFlags(UInt8 flag) const;
-
-    bool isEncrypt() const { return flags & TYPE_ENCRYPT_FLAG; }
-    bool isSecurity() const { return flags & TYPE_SECURITY_FLAG; }
 
 protected:
     friend class DataTypeFactory;

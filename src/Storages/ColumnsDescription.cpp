@@ -84,32 +84,43 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
 
     while (flag)
     {
-        // if (flag & TYPE_COMPRESSION_FLAG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("COMPRESSION", buf);
-        //     flag ^= TYPE_COMPRESSION_FLAG;
-        // }
-        // else if (flag & TYPE_BLOOM_FLAG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("BLOOM", buf);
-        //     flag ^= TYPE_BLOOM_FLAG;
-        // }
-        // else if (flag & TYPE_BITMAP_INDEX_FLAG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("BitmapIndex", buf);
-        //     flag ^= TYPE_BITMAP_INDEX_FLAG;
-        // }
-        // else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
-        // {
-        //     writeChar('\t', buf);
-        //     DB::writeText("MarkBitmapIndex", buf);
-        //     flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
-        // }
-        // else
-        if (flag & TYPE_MAP_KV_STORE_FLAG)
+        if (flag & TYPE_COMPRESSION_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("COMPRESSION", buf);
+            flag ^= TYPE_COMPRESSION_FLAG;
+        }
+        else if (flag & TYPE_SECURITY_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("SECURITY", buf);
+            flag ^= TYPE_SECURITY_FLAG;
+        }
+        else if (flag & TYPE_ENCRYPT_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("ENCRYPT", buf);
+            flag ^= TYPE_ENCRYPT_FLAG;
+        }
+        else if (flag & TYPE_BLOOM_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BLOOM", buf);
+            flag ^= TYPE_BLOOM_FLAG;
+        }
+        else if (flag & TYPE_BITMAP_INDEX_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BitmapIndex", buf);
+            flag ^= TYPE_BITMAP_INDEX_FLAG;
+        }
+        else if (flag & TYPE_MARK_BITMAP_INDEX_FALG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("MarkBitmapIndex", buf);
+            flag ^= TYPE_MARK_BITMAP_INDEX_FALG;
+        }
+        else if (flag & TYPE_MAP_KV_STORE_FLAG)
         {
             writeChar('\t', buf);
             DB::writeText("KV", buf);

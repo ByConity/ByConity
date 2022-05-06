@@ -55,6 +55,8 @@ protected:
 
     void initializeRangeReaders(MergeTreeReadTask & task);
 
+    void prepareForBitMapIndexFunctions(const BitMapIndexInfoPtr & bitmap_index_info, NamesAndTypesList & prewhere_columns, NamesAndTypesList & task_columns);
+
 protected:
     const MergeTreeData & storage;
     StorageMetadataPtr metadata_snapshot;
@@ -83,8 +85,10 @@ protected:
     std::shared_ptr<MarkCache> owned_mark_cache;
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
+    using MergeTreeBitMapIndexReaderPtr = std::unique_ptr<MergeTreeBitMapIndexReader>;
     MergeTreeReaderPtr reader;
     MergeTreeReaderPtr pre_reader;
+    MergeTreeBitMapIndexReaderPtr bitmap_index_reader;
 };
 
 }

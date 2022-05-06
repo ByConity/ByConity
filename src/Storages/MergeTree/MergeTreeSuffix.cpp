@@ -12,5 +12,5 @@ bool isEngineReservedWord(const String & column)
         return true;
     return false;
 }
-    
+
 } // namespace DB

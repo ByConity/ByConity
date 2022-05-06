@@ -47,8 +47,8 @@ class MergeScheduler
 
         size_t size()
         {
-           std::lock_guard<std::mutex> lck(timeout_mutex);
-           return timeout_queue.size();
+            std::lock_guard<std::mutex> lck(timeout_mutex);
+            return timeout_queue.size();
         }
     };
 
@@ -163,7 +163,7 @@ private:
         size_t begin;
         size_t end;
         CandidateRange(size_t sum_rows_, size_t sum_ages_, size_t begin_, size_t end_)
-        : sum_rows(sum_rows_), sum_ages(sum_ages_), begin(begin_), end(end_) {}
+            : sum_rows(sum_rows_), sum_ages(sum_ages_), begin(begin_), end(end_) {}
     };
 };
 

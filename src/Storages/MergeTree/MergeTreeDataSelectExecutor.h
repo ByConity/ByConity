@@ -176,6 +176,19 @@ public:
         Poco::Logger * log,
         ReadFromMergeTree::IndexStats & index_stats);
 
+    static DataTypes get_set_element_types(const NamesAndTypesList & source_columns, const String & column_name);
+
+    static bool extractBitmapIndexImpl(
+        const SelectQueryInfo&    queryInfo,
+        const ASTPtr&             expr,
+        const MergeTreeData&      data,
+        std::map<String, SetPtr>& bitmap_index_map);
+
+    static bool extractBitmapIndex(
+        const SelectQueryInfo &    queryInfo,
+        const MergeTreeData &      data,
+        std::map<String, SetPtr> & bitmap_index_map);
+
     /// Filter parts using primary key and secondary indexes.
     /// For every part, select mark ranges to read.
     static RangesInDataParts filterPartsByPrimaryKeyAndSkipIndexes(
@@ -189,6 +202,7 @@ public:
         size_t num_streams,
         ReadFromMergeTree::IndexStats & index_stats,
         bool use_skip_indexes,
+        const MergeTreeData & data_,
         bool use_sampling,
         RelativeSize relative_sample_size);
 

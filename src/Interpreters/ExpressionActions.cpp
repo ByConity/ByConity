@@ -5,6 +5,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/BitMapIndexHelper.h>
 #include <Columns/ColumnArray.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeArray.h>
@@ -332,7 +333,7 @@ namespace
     };
 }
 
-static void executeAction(const ExpressionActions::Action & action, ExecutionContext & execution_context, bool dry_run)
+static void executeAction(const ExpressionActions::Action & action, ExecutionContext & execution_context, bool dry_run, std::set<String> * bitmap_input_name_set = nullptr)
 {
     auto & inputs = execution_context.inputs;
     auto & columns = execution_context.columns;
@@ -359,6 +360,11 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             ColumnsWithTypeAndName arguments(action.arguments.size());
             for (size_t i = 0; i < arguments.size(); ++i)
             {
+                // if function is arraySetCheck and input is not ready, may it is used in prewhere
+                if (columns[action.arguments[i].pos].type == nullptr && (BitMapIndexHelper::isArraySetFunctions(action.node->function_base->getName())))
+                {
+                    return;
+                }
                 if (!action.arguments[i].needed_later)
                     arguments[i] = std::move(columns[action.arguments[i].pos]);
                 else
@@ -439,7 +445,8 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             {
                 /// Here we allow to skip input if it is not in block (in case it is not needed).
                 /// It may be unusual, but some code depend on such behaviour.
-                if (action.arguments.front().needed_later)
+                if (action.arguments.front().needed_later
+                    && !((bitmap_input_name_set != nullptr) && (bitmap_input_name_set->find(action.node->result_name) != bitmap_input_name_set->end())))
                     throw Exception(ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK,
                                     "Not found column {} in block",
                                     action.node->result_name);
@@ -499,11 +506,25 @@ void ExpressionActions::execute(Block & block, size_t & num_rows, bool dry_run) 
 
     execution_context.columns.resize(num_columns);
 
+    std::set<String> bitmap_input_name_set;
+    for (const auto & action : actions)
+    {
+        if (action.node->type == ActionsDAG::ActionType::FUNCTION && BitMapIndexHelper::isArraySetFunctions(action.node->function_base->getName()))
+        {
+            for (const auto & child : action.node->children)
+            {
+                if (child->type == ActionsDAG::ActionType::INPUT)
+                {
+                    bitmap_input_name_set.emplace(child->result_name);
+                }
+            }
+        }
+    }
     for (const auto & action : actions)
     {
         try
         {
-            executeAction(action, execution_context, dry_run);
+            executeAction(action, execution_context, dry_run, &bitmap_input_name_set);
             checkLimits(execution_context.columns);
 
             //std::cerr << "Action: " << action.toString() << std::endl;

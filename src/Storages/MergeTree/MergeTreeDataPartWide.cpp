@@ -48,6 +48,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartWide::getReader(
     UncompressedCache * uncompressed_cache,
     MarkCache * mark_cache,
     const MergeTreeReaderSettings & reader_settings,
+    MergeTreeBitMapIndexReader * bitmap_index_reader,
     const ValueSizeMap & avg_value_size_hints,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {
@@ -57,7 +58,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartWide::getReader(
     auto ptr = std::static_pointer_cast<const MergeTreeDataPartWide>(shared_from_this());
     return std::make_unique<MergeTreeReaderWide>(
         ptr, columns_to_read, metadata_snapshot, uncompressed_cache,
-        mark_cache, mark_ranges, new_settings,
+        mark_cache, mark_ranges, new_settings, bitmap_index_reader,
         avg_value_size_hints, profile_callback);
 }
 

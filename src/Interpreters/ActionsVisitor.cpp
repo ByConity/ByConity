@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/FieldToDataType.h>
 
 #include <Columns/ColumnSet.h>
@@ -350,7 +351,19 @@ SetPtr makeExplicitSet(
 
     auto column_name = left_arg->getColumnName();
     const auto & dag_node = actions.findInIndex(column_name);
-    const DataTypePtr & left_arg_type = dag_node.result_type;
+    DataTypePtr left_arg_type = dag_node.result_type;
+    // Special handling arraySetCheck/arraySetGet/arraySetGetAny(array, tuple) case
+    if (BitMapIndexHelper::isArraySetFunctions(node->name))
+    {
+        if (const auto null_type_ptr = typeid_cast<const DataTypeNullable *>(left_arg_type.get()))
+            left_arg_type = null_type_ptr->getNestedType();
+
+        const auto arg_type_ptr = typeid_cast<const DataTypeArray *>(left_arg_type.get());
+        if (arg_type_ptr)
+            left_arg_type = arg_type_ptr->getNestedType();
+        else
+            throw Exception("Invalid argument of function arraySet related functions", ErrorCodes::LOGICAL_ERROR);
+    }
 
     DataTypes set_element_types = {left_arg_type};
     const auto * left_tuple_type = typeid_cast<const DataTypeTuple *>(left_arg_type.get());
@@ -434,7 +447,7 @@ ActionsMatcher::Data::Data(
     ContextPtr context_, SizeLimits set_size_limit_, size_t subquery_depth_,
     const NamesAndTypesList & source_columns_, ActionsDAGPtr actions_dag,
     PreparedSets & prepared_sets_, SubqueriesForSets & subqueries_for_sets_,
-    bool no_subqueries_, bool no_makeset_, bool only_consts_, bool create_source_for_in_)
+    bool no_subqueries_, bool no_makeset_, bool only_consts_, bool create_source_for_in_, BitMapIndexInfoPtr bitmap_index_info_ )
     : WithContext(context_)
     , set_size_limit(set_size_limit_)
     , subquery_depth(subquery_depth_)
@@ -447,6 +460,7 @@ ActionsMatcher::Data::Data(
     , create_source_for_in(create_source_for_in_)
     , visit_depth(0)
     , actions_stack(std::move(actions_dag), context_)
+    , bitmap_index_info(bitmap_index_info_)
     , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
 {
 }
@@ -760,6 +774,23 @@ void ActionsMatcher::visit(const ASTIdentifier & identifier, const ASTPtr &, Dat
     }
 }
 
+static bool checkIdentifier(const ASTPtr & node)
+{
+    if (!node)
+        return false;
+
+    if (node->as<ASTIdentifier>())
+        return true;
+
+    for (const auto & child : node->children)
+    {
+        if (checkIdentifier(child))
+            return true;
+    }
+
+    return false;
+}
+
 void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & data)
 {
     auto column_name = ast->getColumnName();
@@ -784,6 +815,8 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
     }
 
     SetPtr prepared_set;
+    std::vector<SetPtr> prepared_sets_vec;
+    bool isArraySetFunc = BitMapIndexHelper::isArraySetFunctions(node.name);
     if (checkFunctionIsInOrGlobalInOperator(node))
     {
         /// Let's find the type of the first argument (then getActionsImpl will be called again and will not affect anything).
@@ -808,6 +841,54 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                         column_name);
             }
             return;
+        }
+    }
+    else if (isArraySetFunc)
+    {
+        bool should_update_bitmap_index_info = data.bitmap_index_info && !data.bitmap_index_info->index_names.count(node.getColumnName());
+        size_t arg_size = node.arguments->children.size();
+        if (arg_size % 2 != 0)
+            throw Exception("The number of arguments is wrong in arraySet function", ErrorCodes::LOGICAL_ERROR);
+
+
+        // to check const arguments. if the only_consts is true, arraySetCheck should make set if and only if the i and i + 2 is const literal
+        bool make_set = true;
+        for (size_t i = 0; i < arg_size; i += 2)
+        {
+            ASTPtr arg_col = node.arguments->children.at(i);
+            if (data.only_consts
+                && checkIdentifier(arg_col))
+            {
+                make_set = false;
+                break;
+            }
+        }
+
+        if (make_set)
+        {
+            auto col_name = node.getColumnName();
+
+            if (should_update_bitmap_index_info)
+                data.bitmap_index_info->return_types.emplace(col_name, BitMapIndexHelper::getBitMapIndexReturnType(node.name));
+
+            for (size_t i = 0; i < arg_size; i += 2)
+            {
+                ASTPtr arg_col = node.arguments->children.at(i);
+                ASTPtr arg_set = node.arguments->children.at(i + 1);
+                visit(arg_col, data);
+                SetPtr arg_prepared_set = makeSet(node, data, data.no_subqueries, true);
+                prepared_sets_vec.push_back(arg_prepared_set);
+                if (arg_prepared_set && should_update_bitmap_index_info)
+                {
+                    if (auto * identifier = arg_col->as<ASTIdentifier>())
+                    {
+                        data.bitmap_index_info->index_names[col_name].push_back(identifier->getColumnName());
+                        data.bitmap_index_info->set_args[col_name].push_back(arg_prepared_set);
+                        // collect all col names
+                        data.bitmap_index_info->index_column_name_set.emplace(identifier->getColumnName());
+                    }
+                }
+            }
         }
     }
 
@@ -940,6 +1021,36 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                         column.column = ColumnConst::create(std::move(column_set), 1);
                     else
                         column.column = std::move(column_set);
+                    data.addColumn(column);
+                }
+
+                argument_types.push_back(column.type);
+                argument_names.push_back(column.name);
+            }
+            else if ((isArraySetFunc && arg % 2) && !prepared_sets_vec.empty())
+            {
+                ColumnWithTypeAndName column;
+                column.type = std::make_shared<DataTypeSet>();
+
+                bool has_set = prepared_sets_vec.size() > arg / 2;
+                /// If the argument is a set given by an enumeration of values (so, the set was already built), give it a unique name,
+                ///  so that sets with the same literal representation do not fuse together (they can have different types).
+                if (has_set && prepared_sets_vec[arg / 2])
+                    column.name = data.getUniqueName("__set");
+                else
+                    column.name = child->getColumnName();
+
+                if (!data.hasColumn(column.name))
+                {
+                    if (has_set && prepared_sets_vec[arg / 2])
+                        column.column = ColumnSet::create(1, prepared_sets_vec[arg / 2]);
+                    else
+                    {
+                        auto column_set = ColumnSet::create(1, prepared_set);
+                        /// If prepared_set is not empty, we have a set made with literals.
+                        /// Create a const ColumnSet to make constant folding work
+                        column.column = std::move(column_set);
+                    }
                     data.addColumn(column);
                 }
 
@@ -1108,7 +1219,7 @@ void ActionsMatcher::visit(const ASTLiteral & literal, const ASTPtr & /* ast */,
     data.addColumn(std::move(column));
 }
 
-SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_subqueries)
+SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set)
 {
     /** You need to convert the right argument to a set.
       * This can be a table name, a value, a value enumeration, or a subquery.
@@ -1185,7 +1296,7 @@ SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_su
         const auto & index = data.actions_stack.getLastActionsIndex();
         if (index.contains(left_in_operand->getColumnName()))
             /// An explicit enumeration of values in parentheses.
-            return makeExplicitSet(&node, last_actions, false, data.getContext(), data.set_size_limit, data.prepared_sets);
+            return makeExplicitSet(&node, last_actions, create_ordered_set, data.getContext(), data.set_size_limit, data.prepared_sets);
         else
             return {};
     }

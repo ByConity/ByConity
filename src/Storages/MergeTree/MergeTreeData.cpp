@@ -46,6 +46,8 @@
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
+#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
+#include <Storages/MergeTree/MergeTreeMarkBitmapIndex.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>
@@ -174,6 +176,8 @@ MergeTreeData::MergeTreeData(
     , log(&Poco::Logger::get(log_name))
     , storage_settings(std::move(storage_settings_))
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
+    , bitmap_index(std::make_shared<MergeTreeBitmapIndex>(*this))
+    , mark_bitmap_index(std::make_shared<MergeTreeMarkBitmapIndex>(*this))
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     , parts_mover(this)
@@ -2554,6 +2558,15 @@ MergeTreeData::MutableDataPartPtr MergeTreeData::createPart(
     return createPart(name, type, part_info, volume, relative_path, parent_part);
 }
 
+void MergeTreeData::addPartForBackgroundTask(const DataPartPtr & part, const Context & context_, bool /*without_recode*/)
+{
+    if (context_.getSettingsRef().enable_async_build_bitmap_in_attach)
+        bitmap_index->addPartForBitMapIndex(part);
+
+    if (context_.getSettingsRef().enable_async_build_mark_bitmap_in_attach)
+        mark_bitmap_index->addPartForBitMapIndex(part);
+}
+
 void MergeTreeData::changeSettings(
         const ASTPtr & new_settings,
         TableLockHolder & /* table_lock_holder */)
@@ -3500,6 +3513,27 @@ MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const Merge
 MergeTreeData::DataPartPtr MergeTreeData::getPartIfExists(const String & part_name, const MergeTreeData::DataPartStates & valid_states)
 {
     return getPartIfExists(MergeTreePartInfo::fromPartName(part_name, format_version), valid_states);
+}
+bool MergeTreeData::hasPart(const String & part_name, const MergeTreeData::DataPartStates & valid_states)
+{
+    const MergeTreePartInfo & part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
+    return hasPart(part_info, valid_states);
+}
+
+bool MergeTreeData::hasPart(const MergeTreePartInfo & part_info, const MergeTreeData::DataPartStates & valid_states)
+{
+    // TODO dongyifeng change to lockPartsRead later
+    auto lock = lockParts();
+
+    auto it = data_parts_by_info.find(part_info);
+    if (it == data_parts_by_info.end())
+        return false;
+    for (auto state : valid_states)
+    {
+        if ((*it)->getState() == state)
+            return true;
+    }
+    return false;
 }
 
 MergeTreeData::DataPartPtr MergeTreeData::getPartIfExistsWithoutLock(const String & part_name, const MergeTreeData::DataPartStates & valid_states)

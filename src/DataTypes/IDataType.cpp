@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeCustom.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/Serializations/SerializationTupleElement.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 
 namespace DB
@@ -22,6 +23,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int DATA_TYPE_CANNOT_BE_PROMOTED;
     extern const int ILLEGAL_COLUMN;
+    extern const int UNSUPPORTED_PARAMETER;
 }
 
 IDataType::~IDataType() = default;
@@ -202,6 +204,40 @@ Field IDataType::stringToVisitorField(const String &) const
     throw Exception("stringToVisitorField not implemented for Data type" + getName(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
+Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_exception) const
+{
+    Names files;
+
+    if (isBloomSet())
+    {
+        files.push_back(prefix + BLOOM_FILTER_FILE_EXTENSION);
+        files.push_back(prefix + RANGE_BLOOM_FILTER_FILE_EXTENSION);
+    }
+    if (isBitmapIndex() || isBloomSet())
+    {
+        files.push_back(prefix + AB_IDX_EXTENSION);
+        files.push_back(prefix + AB_IRK_EXTENSION);
+    }
+    if (isCompression())
+    {
+        files.push_back(prefix + COMPRESSION_DATA_FILE_EXTENSION);
+        files.push_back(prefix + COMPRESSION_MARKS_FILE_EXTENSION);
+    }
+    if (isBitEngineEncode())
+    {
+        files.push_back(prefix + BITENGINE_DATA_FILE_EXTENSION);
+        files.push_back(prefix + BITENGINE_DATA_MARKS_EXTENSION);
+    }
+    if (throw_exception && (isSecurity() || lowCardinality() || isMapKVStore() || isEncrypt()))
+    {
+        // not support , throw exception instead.
+        throw Exception(
+            "Mutate (FastDelete) " + getName() + " (with speicial attribution) is not support", ErrorCodes::UNSUPPORTED_PARAMETER);
+    }
+
+    return files;
+}
+
 String IDataType::getFileNameForStream(const String & column_name, const ISerialization::SubstreamPath & path)
 {
     /// Sizes of arrays (elements of Nested type) are shared (all reside in single file).
@@ -251,5 +287,4 @@ String IDataType::getFileNameForStream(const String & column_name, const ISerial
     }
     return stream_name;
 }
-
 }

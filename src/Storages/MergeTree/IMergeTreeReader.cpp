@@ -6,6 +6,7 @@
 #include <Interpreters/inplaceBlockConversions.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Common/typeid_cast.h>
 
 
@@ -30,7 +31,8 @@ IMergeTreeReader::IMergeTreeReader(
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    const ValueSizeMap & avg_value_size_hints_)
+    const ValueSizeMap & avg_value_size_hints_,
+    MergeTreeBitMapIndexReader * bitmap_index_reader_)
     : data_part(data_part_)
     , avg_value_size_hints(avg_value_size_hints_)
     , columns(columns_)
@@ -41,6 +43,7 @@ IMergeTreeReader::IMergeTreeReader(
     , storage(data_part_->storage)
     , metadata_snapshot(metadata_snapshot_)
     , all_mark_ranges(all_mark_ranges_)
+    , bitmap_index_reader(bitmap_index_reader_)
     , alter_conversions(storage.getAlterConversionsForPart(data_part))
 {
     if (settings.convert_nested_to_subcolumns)
@@ -82,13 +85,13 @@ static bool arrayHasNoElementsRead(const IColumn & column)
     return last_offset != 0;
 }
 
-void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows)
+void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size)
 {
     try
     {
         size_t num_columns = columns.size();
 
-        if (res_columns.size() != num_columns)
+        if (check_column_size && res_columns.size() != num_columns)
             throw Exception("invalid number of columns passed to MergeTreeReader::fillMissingColumns. "
                             "Expected " + toString(num_columns) + ", "
                             "got " + toString(res_columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -249,13 +252,13 @@ NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & requ
     return {String(it->first), type};
 }
 
-void IMergeTreeReader::performRequiredConversions(Columns & res_columns)
+void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool check_column_size)
 {
     try
     {
         size_t num_columns = columns.size();
 
-        if (res_columns.size() != num_columns)
+        if (check_column_size && res_columns.size() != num_columns)
         {
             throw Exception(
                 "Invalid number of columns passed to MergeTreeReader::performRequiredConversions. "
@@ -433,6 +436,13 @@ bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) cons
 {
     return storage.isBitEngineMode() && !settings.read_source_bitmap
         && isBitmap64(column.type) && column.type->isBitEngineEncode();
+}
+
+const NameSet & IMergeTreeReader::getBitmapOutputColumns()
+{
+    if (hasBitmapIndexReader())
+        return bitmap_index_reader->getOutputColumnNames();
+    throw Exception("bitmap index reader is nullptr", ErrorCodes::LOGICAL_ERROR);
 }
 
 }

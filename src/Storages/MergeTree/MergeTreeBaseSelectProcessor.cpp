@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
 #include <Columns/FilterDescription.h>
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
@@ -69,6 +70,7 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
         prewhere_actions->prewhere_column_name = prewhere_info->prewhere_column_name;
         prewhere_actions->remove_prewhere_column = prewhere_info->remove_prewhere_column;
         prewhere_actions->need_filter = prewhere_info->need_filter;
+        prewhere_actions->has_bitmap_index = prewhere_info->has_bitmap_index;
     }
 }
 
@@ -102,14 +104,14 @@ void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & cu
     {
         if (reader->getColumns().empty())
         {
-            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, true);
+            current_task.range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, true, prewhere_info->has_bitmap_index);
         }
         else
         {
             MergeTreeRangeReader * pre_reader_ptr = nullptr;
             if (pre_reader != nullptr)
             {
-                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, false);
+                current_task.pre_range_reader = MergeTreeRangeReader(pre_reader.get(), nullptr, prewhere_actions.get(), task->delete_bitmap, false, prewhere_info->has_bitmap_index);
                 pre_reader_ptr = &current_task.pre_range_reader;
             }
 
@@ -221,6 +223,38 @@ Chunk MergeTreeBaseSelectProcessor::readFromPart()
         initializeRangeReaders(*task);
 
     return readFromPartImpl();
+}
+
+// This functions is used for generating actions for bitmap_index_reader.
+// To deal with arraySet functions independently, we need to remove columns related to arraySet functions.
+void MergeTreeBaseSelectProcessor::prepareForBitMapIndexFunctions(
+    const BitMapIndexInfoPtr & bitmap_index_info, NamesAndTypesList & prewhere_columns, NamesAndTypesList & task_columns)
+{
+    if (!bitmap_index_info || !bitmap_index_reader || !bitmap_index_reader->validIndexReader())
+    {
+        return;
+    }
+    NameSet index_names;
+    NameSet output_col_names;
+    // NOTE: order matters for assertBlocksHaveEqualStructure
+    for (auto it = bitmap_index_info->index_names.rbegin(); it != bitmap_index_info->index_names.rend(); it++)
+    {
+        output_col_names.emplace(it->first);
+        for (auto it_name = it->second.begin(); it_name != it->second.end(); it_name++)
+        {
+            index_names.emplace(*it_name);
+        }
+    }
+    // remove the index columns from prewhere_columns and tasks columns to prevent from being read.
+    prewhere_columns.remove_if([&index_names, &bitmap_index_info](auto & col) {
+        // it's index column, and not in non removable
+        return index_names.count(col.name) > 0 && bitmap_index_info->non_removable_index_columns.count(col.name) <= 0;
+    });
+    task_columns.remove_if([&index_names, &bitmap_index_info](auto & col) {
+        return index_names.count(col.name) > 0 && bitmap_index_info->non_removable_index_columns.count(col.name) <= 0;
+    });
+
+    bitmap_index_reader->initIndexes(std::move(output_col_names));
 }
 
 

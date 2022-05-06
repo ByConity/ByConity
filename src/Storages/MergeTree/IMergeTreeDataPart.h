@@ -103,6 +103,7 @@ public:
         UncompressedCache * uncompressed_cache,
         MarkCache * mark_cache,
         const MergeTreeReaderSettings & reader_settings_,
+        MergeTreeBitMapIndexReader * bitmap_index_reader = nullptr,
         const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{}) const = 0;
 
@@ -595,6 +596,9 @@ public:
     /// Used by ordinal MergeTree
     std::atomic<bool> is_delete_bitmap_cached = false;
     /// --------------------
+    /// Total size on disk, not only columns. May not contain size of
+    /// checksums.txt and columns.txt. 0 - if not counted;
+    UInt64 bytes_on_disk{0};
 protected:
     friend class MergeTreeData;
     friend class MergeScheduler;
@@ -604,10 +608,6 @@ protected:
 
     /// Size for each column, calculated once in calcuateColumnSizesOnDisk
     ColumnSizeByName columns_sizes;
-
-    /// Total size on disk, not only columns. May not contain size of
-    /// checksums.txt and columns.txt. 0 - if not counted;
-    UInt64 bytes_on_disk{0};
 
     /// Columns description. Cannot be changed, after part initialization.
     NamesAndTypesList columns;

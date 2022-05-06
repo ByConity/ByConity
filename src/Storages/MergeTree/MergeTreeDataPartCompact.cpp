@@ -46,6 +46,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCompact::getReader(
     UncompressedCache * uncompressed_cache,
     MarkCache * mark_cache,
     const MergeTreeReaderSettings & reader_settings,
+    MergeTreeBitMapIndexReader * /* bitmap_index_reader */,
     const ValueSizeMap & avg_value_size_hints,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {

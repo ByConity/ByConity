@@ -8,6 +8,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/WindowDescription.h>
 #include <Interpreters/join_common.h>
+#include <Interpreters/BitMapIndexHelper.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
@@ -160,6 +161,8 @@ protected:
     ASTPtr query;
     const ExtractedSettings settings;
     size_t subquery_depth;
+
+    BitMapIndexInfoPtr bitmap_index_info;
 
     TreeRewriterResultPtr syntax;
 
@@ -317,6 +320,7 @@ public:
     const AggregateDescriptions & aggregates() const { return aggregate_descriptions; }
 
     const PreparedSets & getPreparedSets() const { return prepared_sets; }
+    const BitMapIndexInfoPtr & getBitMapIndexInfo() const { return bitmap_index_info; }
     std::unique_ptr<QueryPlan> getJoinedPlan();
 
     /// Tables that will need to be sent to remote servers for distributed query processing.
