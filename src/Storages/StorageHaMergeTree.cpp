@@ -3106,6 +3106,9 @@ void StorageHaMergeTree::setTableStructure(
         if (metadata_diff.constraints_changed)
             new_metadata.constraints = ConstraintsDescription::parse(metadata_diff.new_constraints);
 
+        if (metadata_diff.projections_changed)
+            new_metadata.projections = ProjectionsDescription::parse(metadata_diff.new_projections, new_columns, getContext());
+
         if (metadata_diff.ttl_table_changed)
         {
             if (!metadata_diff.new_ttl_table.empty())
