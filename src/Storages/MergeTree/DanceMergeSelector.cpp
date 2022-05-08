@@ -57,10 +57,16 @@ static double mapPiecewiseLinearToUnit(double value, double min, double max)
 IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     for (auto & partition : partitions)
-        num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+    {
+        if (partition.size() >= 2)
+            num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+    }
 
     for (auto & partition : partitions)
-        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+    {
+        if (partition.size() >= 2)
+            selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+    }
 
     auto it = std::min_element(
         best_ranges.begin(), best_ranges.end(), [](auto & lhs, auto & rhs) { return lhs.second.min_score < rhs.second.min_score; });
@@ -73,10 +79,16 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
 IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
     for (auto & partition : partitions)
-        num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+    {
+        if (partition.size() >= 2)
+            num_parts_of_partitions[toPart(partition.front().data)->info.partition_id] += partition.size();
+    }
 
     for (auto & partition : partitions)
-        selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+    {
+        if (partition.size() >= 2)
+            selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
+    }
 
     std::vector<BestRangeWithScore *> range_vec;
     for (auto & [_, range] : best_ranges)
