@@ -37,6 +37,10 @@ public:
     void writeImplicitColumnForBitEngine(Block & block);
 
     virtual void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) = 0;
+
+    /// In case of low cardinality fall-back, during write need update the stream, use the proper
+    /// data type. It's also can serve other data type. Currently only support update stream for local disk.
+    /// Details can refer to  MergeTreeDataPartWriterWide::updateWriterStream
     virtual void updateWriterStream(const NameAndTypePair &pair);
 
 
