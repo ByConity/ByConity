@@ -460,82 +460,19 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         auto final_it = dag_graph_ptr->id_to_segment.find(dag_graph_ptr->final);
         if (final_it == dag_graph_ptr->id_to_segment.end())
             throw Exception("Logical error: final stage is not found", ErrorCodes::LOGICAL_ERROR);
-        std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(final_it->second->getClusterName());
-        if (cluster)
-        {
-            bool set_local_address = false;
-            for (const auto & shard_info : cluster->getShardsInfo())
-            {
-                if (shard_info.isLocal())
-                {
-                    for (size_t i = 0; i < shard_info.local_addresses.size(); i++)
-                    {
-                        if (shard_info.local_addresses[i].host_name == query_context->getLocalHost()
-                            && shard_info.local_addresses[i].port == query_context->getTCPPort())
-                        {
-                            final_it->second->setCurrentAddress(AddressInfo(
-                                shard_info.local_addresses[i].host_name,
-                                shard_info.local_addresses[i].port,
-                                shard_info.local_addresses[i].user,
-                                shard_info.local_addresses[i].password,
-                                shard_info.local_addresses[i].exchange_port,
-                                shard_info.local_addresses[i].exchange_status_port));
-                            final_it->second->setCoordinatorAddress(AddressInfo(
-                                shard_info.local_addresses[i].host_name,
-                                shard_info.local_addresses[i].port,
-                                shard_info.local_addresses[i].user,
-                                shard_info.local_addresses[i].password,
-                                shard_info.local_addresses[i].exchange_port,
-                                shard_info.local_addresses[i].exchange_status_port));
-                            set_local_address = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            if (!set_local_address)
-                throw Exception("Logical error: can't find local replica in cluster settings", ErrorCodes::LOGICAL_ERROR);
-        }
-        else // final table cluster is nullptr
-        {
-            bool set_local_address = false;
-            for (auto & cluster_it : query_context->getClusters()->getContainer())
-            {
-                for (const auto & shard_info : cluster_it.second->getShardsInfo())
-                {
-                    if (shard_info.isLocal())
-                    {
-                        for (size_t i = 0; i < shard_info.local_addresses.size(); i++)
-                        {
-                            if (shard_info.local_addresses[i].host_name == query_context->getLocalHost()
-                                && shard_info.local_addresses[i].port == query_context->getTCPPort())
-                            {
-                                final_it->second->setCurrentAddress(AddressInfo(
-                                    shard_info.local_addresses[i].host_name,
-                                    shard_info.local_addresses[i].port,
-                                    shard_info.local_addresses[i].user,
-                                    shard_info.local_addresses[i].password,
-                                    shard_info.local_addresses[i].exchange_port,
-                                    shard_info.local_addresses[i].exchange_status_port));
-                                final_it->second->setCoordinatorAddress(AddressInfo(
-                                    shard_info.local_addresses[i].host_name,
-                                    shard_info.local_addresses[i].port,
-                                    shard_info.local_addresses[i].user,
-                                    shard_info.local_addresses[i].password,
-                                    shard_info.local_addresses[i].exchange_port,
-                                    shard_info.local_addresses[i].exchange_status_port));
-                                set_local_address = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            if (!set_local_address)
-                throw Exception("Logical error: can't find local replica in cluster settings", ErrorCodes::LOGICAL_ERROR);
-        }
 
-        for (auto plan_segment_input : final_it->second->getPlanSegmentInputs())
+        const auto & final_address_info = AddressInfo(
+            query_context->getLocalHost(),
+            query_context->getTCPPort(),
+            query_context->getUserName(),
+            query_context->getClientInfo().current_password,
+            query_context->getExchangePort(),
+            query_context->getExchangeStatusPort());
+        LOG_TRACE(log, "SegmentScheduler set final plansegment with AddressInfo: {}", final_address_info.toString());
+        final_it->second->setCurrentAddress(final_address_info);
+        final_it->second->setCoordinatorAddress(final_address_info);
+        
+        for (const auto & plan_segment_input : final_it->second->getPlanSegmentInputs())
         {
             // segment has more than one input which one is table
             if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
@@ -548,7 +485,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                     throw Exception(
                         "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " can not be found",
                         ErrorCodes::LOGICAL_ERROR);
-                if (plan_segment_input->getSourceAddresses().size() == 0)
+                if (plan_segment_input->getSourceAddresses().empty())
                     plan_segment_input->insertSourceAddress(address_it->second);
             }
             else
