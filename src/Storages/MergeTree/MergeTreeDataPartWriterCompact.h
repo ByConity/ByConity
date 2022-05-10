@@ -34,16 +34,6 @@ private:
     /// all implicit column is written into different file against other columns who will be written into one file.
     void writeAllImplicitColumnBlock(const Block & block, const Granules & granules);
 
-    /// Write data of one column.
-    /// Return how many marks were written and
-    /// how many rows were written for last mark
-    void writeColumn(
-        const NameAndTypePair & name_and_type,
-        const IColumn & column,
-        WrittenOffsetColumns & offset_columns,
-        const Granules & granules,
-        bool need_finalize = false) override;
-
     /// Write block of rows into .bin file and marks in .mrk files, primary index in .idx file
     /// and skip indices in their corresponding files.
     void writeDataBlockPrimaryIndexAndSkipIndices(const Block & block, const Granules & granules);

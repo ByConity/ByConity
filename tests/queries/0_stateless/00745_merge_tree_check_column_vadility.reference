@@ -8,6 +8,11 @@ OK
 OK
 OK
 
+test invalid map key or value type
+OK
+OK
+OK
+
 test create column whose name is same with func column name
 OK
 OK

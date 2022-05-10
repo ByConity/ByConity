@@ -120,6 +120,13 @@ MutableColumnUniquePtr DataTypeLowCardinality::createColumnUnique(const IDataTyp
     return createColumnUniqueImpl(keys_type, creator);
 }
 
+bool DataTypeLowCardinality::canBeMapValueType() const
+{
+    if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(dictionary_type.get()))
+        return nullable_type->getNestedType()->canBeMapValueType();
+    return false;
+}
+
 MutableColumnPtr DataTypeLowCardinality::createColumn() const
 {
     MutableColumnPtr indexes = DataTypeUInt8().createColumn();

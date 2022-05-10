@@ -330,7 +330,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
         if (!column_bitmap_indexes.empty())
         {
-            String bitmap_index_name = IDataType::getFileNameForStream(it->name, {});
+            String bitmap_index_name = ISerialization::getFileNameForStream(it->name, {});
             if (column_bitmap_indexes.count(bitmap_index_name))
             {
                 auto * index = column_bitmap_indexes[bitmap_index_name].get();
@@ -348,7 +348,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
         if (!column_mark_bitmap_indexes.empty())
         {
-            String bitmap_index_name = IDataType::getFileNameForStream(it->name, {});
+            String bitmap_index_name = ISerialization::getFileNameForStream(it->name, {});
             if (column_mark_bitmap_indexes.count(bitmap_index_name))
             {
                 auto * index = column_mark_bitmap_indexes[bitmap_index_name].get();
@@ -470,135 +470,6 @@ void MergeTreeDataPartWriterWide::writeRowStoreIfNeed(const Block & block, const
         serialize_value_cost,
         finish_cost,
         timer.elapsedMilliseconds());
-}
-
-/// Column must not be empty. (column.size() !== 0)
-void MergeTreeDataPartWriterWide::writeColumn(
-    const NameAndTypePair & name_and_type,
-    const IColumn & column,
-    WrittenOffsetColumns & offset_columns,
-    const Granules & granules,
-    bool need_finalize)
-{
-    if (granules.empty())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Empty granules for column {}, current mark {}",
-            backQuoteIfNeed(name_and_type.name),
-            getCurrentMark());
-
-    const auto & [name, type] = name_and_type;
-    auto [it, inserted] = serialization_states.emplace(name, nullptr);
-
-    if (inserted)
-    {
-        ISerialization::SerializeBinaryBulkSettings serialize_settings;
-        serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-        serializations[name]->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
-    }
-
-    const auto & global_settings = storage.getContext()->getSettingsRef();
-    ISerialization::SerializeBinaryBulkSettings serialize_settings;
-    serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-    serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
-    serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
-
-    // special code path for ByteMap data type in flatten model
-    if (type->isMap() && column.size() > 0 && !type->isMapKVStore())
-    {
-        if (data_part->versions->enable_compact_map_data)
-        {
-            writeCompactedByteMapColumn(name_and_type, column, offset_columns, granules);
-        }
-        else
-        {
-            writeUncompactedByteMapColumn(name_and_type, column, offset_columns, granules);
-        }
-        return;
-    }
-
-    for (const auto & granule : granules)
-    {
-        data_written = true;
-
-        if (granule.mark_on_start)
-        {
-            if (last_non_written_marks.count(name))
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "We have to add new mark for column, but already have non written mark. Current mark {}, total marks {}, offset {}",
-                    getCurrentMark(),
-                    index_granularity.getMarksCount(),
-                    rows_written_in_last_mark);
-            last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
-        }
-        else if (isMapImplicitKeyNotKV(name) && !last_non_written_marks.count(name))
-        {
-            /// This case maybe happen when writing uncompact map data during merging.
-            /// For uncompacted map, we need to handle new key implicit column(more detail see method @writeUncompactedByteMapColumn), which will deep and clone base stream.
-            /// Thus, it may not exist in last_non_written_marks, we need to fill its mark info using the mark info of base stream.
-            String col = parseMapNameFromImplicitColName(name);
-            String map_base_stream_name = getBaseNameForMapCol(col);
-            if (!last_non_written_marks.count(map_base_stream_name))
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR, "Map base stream is not in last_non_written_marks.");
-
-            last_non_written_marks[name] = copyLastNonWrittenMarks(
-                {map_base_stream_name, type}, last_non_written_marks[map_base_stream_name], name_and_type, offset_columns, serialize_settings.path);
-        }
-
-        writeSingleGranule(name_and_type, column, offset_columns, it->second, serialize_settings, granule);
-
-        if (granule.is_complete)
-        {
-            auto marks_it = last_non_written_marks.find(name);
-            if (marks_it == last_non_written_marks.end())
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
-
-            for (const auto & mark : marks_it->second)
-                flushMarkToFile(mark, index_granularity.getMarkRows(granule.mark_number));
-            last_non_written_marks.erase(marks_it);
-        }
-    }
-
-    // When enable compact map data, it need to flush all data in the buffer to disk. Otherwise, the offset of the implicit column may be wrong.
-    if (need_finalize)
-    {
-        if (is_merge)
-            throw Exception("Can not finialize stream early in merge process.", ErrorCodes::LOGICAL_ERROR);
-
-        // for compacted map, we need to handle final marks here
-        auto last_granule = granules.back();
-        if (!last_granule.is_complete)
-        {
-            auto rows_in_last_mark = granules.back().rows_to_write;
-            auto marks_it = last_non_written_marks.find(name);
-            if (marks_it == last_non_written_marks.end())
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
-
-            for (const auto & mark : marks_it->second)
-                flushMarkToFile(mark, rows_in_last_mark);
-            last_non_written_marks.erase(marks_it);
-        }
-
-        bool write_final_mark = (with_final_mark && data_written);
-
-        if (write_final_mark)
-            writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
-
-        serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
-    }
-
-    serializations[name]->enumerateStreams(
-        [&](const ISerialization::SubstreamPath & substream_path) {
-            bool is_offsets = !substream_path.empty() && substream_path.back().type == ISerialization::Substream::ArraySizes;
-            if (is_offsets)
-            {
-                String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-                offset_columns.insert(stream_name);
-            }
-        },
-        serialize_settings.path);
 }
 
 void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name, const IDataType & type)

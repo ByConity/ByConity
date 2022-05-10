@@ -49,6 +49,14 @@ Field DataTypeNumberBase<T>::stringToVisitorField(const String& ins) const
     return res;
 }
 
+template <typename T>
+String DataTypeNumberBase<T>::stringToVisitorString(const String& ins) const
+{
+    Field field = stringToVisitorField(ins);
+    T val = DB::get<T>(field);
+    return String(reinterpret_cast<const char *>(&val), getSizeOfValueInMemory());
+}
+
 /// Explicit template instantiations - to avoid code bloat in headers.
 template class DataTypeNumberBase<UInt8>;
 template class DataTypeNumberBase<UInt16>;

@@ -1011,7 +1011,7 @@ void MergeTreeData::checkColumnsValidity(const ColumnsDescription & columns) con
             if (storage_settings.get()->enable_compact_map_data)
             {
                 const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
-                if (type_map.valueTypeIsLC())
+                if (type_map.getValueType()->lowCardinality())
                 {
                     throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
                 }
@@ -6442,11 +6442,7 @@ MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const Names
     }
 
     /// Write the checksums to the temporary file.
-    bool checksums_empty = false;
-    {
-        // auto lock = part->getColumnsReadLock();
-        checksums_empty = part->getChecksums()->empty();
-    }
+    bool checksums_empty = part->getChecksums()->empty();
     if (!checksums_empty)
     {
         transaction->new_checksums = *new_checksums;

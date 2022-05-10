@@ -371,22 +371,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         part_type = MergeTreeDataPartType::WIDE;
     }
 
-    /// TODO: @litianan will remove it when compact mode work for lc
-    bool has_lc_in_map = std::any_of(all_columns.begin(), all_columns.end(),
-                                  [](const NameAndTypePair & name_type)
-    {
-        if (name_type.type->isMap())
-        {
-            const auto * type_map = typeid_cast<const DataTypeByteMap *>(name_type.type.get());
-            if (type_map->valueTypeIsLC())
-                return true;
-        }
-        return false;
-    });
-
-    if (has_lc_in_map)
-        part_type = MergeTreeDataPartType::WIDE;
-
    auto new_data_part = data.createPart(
        part_name,
        part_type,
@@ -472,7 +456,14 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 
     const auto & index_factory = MergeTreeIndexFactory::instance();
 
-    MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns, index_factory.getMany(metadata_snapshot->getSecondaryIndices()), compression_codec);
+    MergedBlockOutputStream out(
+        new_data_part,
+        metadata_snapshot,
+        columns,
+        index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
+        compression_codec,
+        /* blocks_are_granules_size(default) */false,
+        context->getSettingsRef().optimize_map_column_serialization);
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
 
     // pre-handle low-cardinality fall-back

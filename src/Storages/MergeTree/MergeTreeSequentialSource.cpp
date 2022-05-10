@@ -137,7 +137,10 @@ try
                 }
                 for (auto & column : columns)
                 {
-                    /// The column is nullptr when it doesn't exist in the data_part, this case will happen when the table has applied operations of adding columns.
+                    /// The column is nullptr when it doesn't exist in the data_part, this case will happen in the following cases:
+                    /// 1. When the table has applied operations of adding columns.
+                    /// 2. When query a map implicit column that doesn't exist.
+                    /// 3. When query a map column that doesn't have any key.
                     if (column)
                         column = column->filter(delete_column->getData(), rows_read - num_deleted);
                 }

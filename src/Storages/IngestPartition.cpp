@@ -1241,7 +1241,7 @@ Block IngestPartition::blockJoinBlocks(MergeTreeData & data,
                     ColumnWithTypeAndName * col_type_name = res.findByName(col_name);
                     ColumnPtr implicit_col = col_type_name->column;
                     
-                    key_name = convertKeyNameToVisitorString(map_key_type.get(), key_name);
+                    key_name = map_key_type->stringToVisitorString(key_name);
                     implicit_columns[key_name] = std::move(implicit_col);
                     res.erase(col_name);
                 }

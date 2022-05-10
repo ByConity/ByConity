@@ -546,27 +546,10 @@ std::optional<NameAndTypePair> ColumnsDescription::tryGetMapImplicitColumn(const
         auto ordinary_columns = getOrdinary();
         for (auto & nt : ordinary_columns)
         {
-            if (nt.type->isMap() && startsWith(column_name, getMapSeparator() + nt.name + getMapSeparator()))
-            {
-                auto const & map_value_type = dynamic_cast<const DataTypeByteMap *>(nt.type.get())->getValueType();
-                if (map_value_type->lowCardinality())
-                    return NameAndTypePair(column_name, map_value_type);
-                else
-                    return NameAndTypePair(column_name, makeNullable(map_value_type));
-            }
-            else if (nt.type->isMapKVStore())
-            {
-                if (column_name == nt.name + ".key")
-                {
-                    auto key_store_type = typeid_cast<const DataTypeByteMap &>(*nt.type).getKeyStoreType();
-                    return NameAndTypePair(column_name, key_store_type);
-                }
-                else if (column_name == nt.name + ".value")
-                {
-                    auto value_store_type = typeid_cast<const DataTypeByteMap &>(*nt.type).getValueStoreType();
-                    return NameAndTypePair(column_name, value_store_type);
-                }
-            }
+            if (nt.type->isMap() && !nt.type->isMapKVStore() && isMapImplicitKeyOfSpecialMapName(column_name, nt.name))
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getValueTypeForImplicitColumn());
+            else if (nt.type->isMap() && nt.type->isMapKVStore() && isMapKVOfSpecialMapName(column_name, nt.name))
+                return NameAndTypePair(column_name, typeid_cast<const DataTypeByteMap &>(*nt.type).getMapStoreType(column_name));
         }
     }
     return {};

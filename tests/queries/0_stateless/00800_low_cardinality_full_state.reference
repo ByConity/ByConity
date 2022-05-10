@@ -32,3 +32,5 @@ test query mix part
 0
 0
 0
+compact part test
+10000000	{'__is_history':'true'}

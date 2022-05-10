@@ -56,7 +56,11 @@ public:
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type);
     static MutableColumnUniquePtr createColumnUnique(const IDataType & keys_type, MutableColumnPtr && keys);
 
-    bool canBeMapKVType() const override { return dictionary_type->canBeMapKVType(); }
+    /// Key can not be null because it's meaningless
+    bool canBeMapKeyType() const override { return dictionary_type->canBeMapKeyType(); }
+    /// Due to LowCardinality can not be inside nullable, so if dictionary_type is not nullable, ColumnByteMap can not insert Null field for missing key when handling each row. You can see more information in method ColumnByteMap::getValueColumnByKey.
+    bool canBeMapValueType() const override;
+
 protected:
     SerializationPtr doGetDefaultSerialization() const override;
 

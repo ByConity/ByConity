@@ -23,57 +23,34 @@ namespace DB
 
 std::string DataTypeByteMap::doGetName() const
 {
-    return "Map(" + keyType->getName() + ", " + valueType->getName() +  ")";
+    return "Map(" + key_type->getName() + ", " + value_type->getName() +  ")";
 }
 
-DataTypeByteMap::DataTypeByteMap(const DataTypePtr& keyType_, const DataTypePtr& valueType_)
-    : keyType(keyType_), valueType(valueType_)
+
+/// If type is not nullable, wrap it to be nullable
+static DataTypePtr makeNullableForMapValue(const DataTypePtr & type)
 {
-    keyStoreType = std::make_shared<DataTypeArray>(keyType);
-    valueStoreType = std::make_shared<DataTypeArray>(valueType);
-
-    nested = std::make_shared<DataTypeTuple>(DataTypes{keyType, valueType}, Names{"keys", "values"});
+    /// When type is low cardinality, its dictionary type must be nullable, see more detail in DataTypeLowCardinality::canBeMapValueType()
+    return type->lowCardinality() ? type: makeNullable(type);
 }
 
-/*
-DataTypePtr DataTypeByteMap::tryGetSubcolumnType(const String & subcolumn_name) const
+DataTypeByteMap::DataTypeByteMap(const DataTypePtr & keyType_, const DataTypePtr & valueType_) : key_type(keyType_), value_type(valueType_)
 {
-    if (subcolumn_name == "size")
-        return std::make_shared<DataTypeUInt64>();
-
-    return nested->tryGetSubcolumnType(subcolumn_name);
+    key_store_type = std::make_shared<DataTypeArray>(key_type);
+    value_store_type = std::make_shared<DataTypeArray>(value_type);
+    implicit_column_value_type = makeNullableForMapValue(value_type);
 }
-
-ColumnPtr DataTypeByteMap::getSubcolumn(const String & subcolumn_name, const IColumn& column) const
-{
-    const auto & column_map = assert_cast<const ColumnByteMap &>(column); 
-    if (subcolumn_name == "size")
-        return bytemapOffsetsToSizes(column_map.getOffsetsColumn());
-    // it depends on how ColumnByteMap is represented in memory
-    return nested->getSubcolumn(subcolumn_name, assert_cast<const ColumnByteMap &>(column).getNestedColumn());
-}
-
-SerializationPtr DataTypeByteMap::getSubcolumnSerialization(const String & subcolumn_name,
-        const BaseSerializationGetter & base_serialization_getter) const
-{
-    if (subcolumn_name == "size")
-        return std::make_shared<SerilizationTupleElement>(base_serialization_getter(DataTypeUInt64()), subcolumn_name);
-
-    return nested->getSubcolumnSerilization(subcolumn_name, base_serialization_getter);
-}
-*/
 
 SerializationPtr DataTypeByteMap::doGetDefaultSerialization() const
 {
     return std::make_shared<SerializationByteMap>(
-            keyType->getDefaultSerialization(),
-            valueType->getDefaultSerialization()
-            /*, nested->getDefaultSerialization()*/);
+            key_type->getDefaultSerialization(),
+            value_type->getDefaultSerialization());
 }
 
 MutableColumnPtr DataTypeByteMap::createColumn() const
 {
-    return ColumnByteMap::create(keyType->createColumn(), valueType->createColumn());
+    return ColumnByteMap::create(key_type->createColumn(), value_type->createColumn());
 }
 
 Field DataTypeByteMap::getDefault() const
@@ -84,58 +61,18 @@ Field DataTypeByteMap::getDefault() const
 bool DataTypeByteMap::equals(const IDataType & rhs) const
 {
     return typeid(rhs) == typeid(*this) &&
-        keyType->equals(*static_cast<const DataTypeByteMap &>(rhs).keyType) &&
-        valueType->equals(*static_cast<const DataTypeByteMap &>(rhs).valueType);
+        key_type->equals(*static_cast<const DataTypeByteMap &>(rhs).key_type) &&
+        value_type->equals(*static_cast<const DataTypeByteMap &>(rhs).value_type);
 }
 
-NameAndTypePair DataTypeByteMap::getValueNameAndType(const String & name) const
+const DataTypePtr & DataTypeByteMap::getMapStoreType(const String & name) const
 {
-    NameAndTypePair res_name_type;
-
-    res_name_type.name = name;
-    auto map_value_type = getValueType();
-
-    if (map_value_type->lowCardinality())
-        res_name_type.type = map_value_type;
-    else
-        res_name_type.type = makeNullable(map_value_type);
-    
-    return res_name_type;
-}
-
-NameAndTypePair DataTypeByteMap::getValueNameAndTypeOfKV(const String & name) const
-{
-    NameAndTypePair res_name_type;
-    res_name_type.name = name;
-
     if (endsWith(name, ".key"))
-        res_name_type.type = getKeyStoreType();
+        return key_store_type;
     else if (endsWith(name, ".value"))
-        res_name_type.type = getValueStoreType();
+        return value_store_type;
     else
         throw Exception(name + " is not a valid KV column", ErrorCodes::LOGICAL_ERROR);
-    
-    return res_name_type;
-}
-
-NameAndTypePair DataTypeByteMap::getValueNameAndTypeFromImplicitName(const NameAndTypePair & map_column, const String & name)
-{
-    if (map_column.type && map_column.type->isMap())
-    {
-        auto map_type = typeid_cast<const DataTypeByteMap *>(map_column.type.get());
-        if (map_type->isMapKVStore())
-        {
-            return map_type->getValueNameAndTypeOfKV(name);
-        }
-        else
-        {
-            return map_type->getValueNameAndType(name);
-        }
-    }
-    else
-    {
-        throw Exception("Cannot get map value name and type from column " + map_column.name, ErrorCodes::LOGICAL_ERROR);
-    }
 }
 
 static DataTypePtr create(const ASTPtr& arguments)
@@ -143,19 +80,14 @@ static DataTypePtr create(const ASTPtr& arguments)
     if (!arguments || arguments->children.size() != 2)
         throw Exception("Map data type faimily must have two argument-type for key-value pair", ErrorCodes::BAD_ARGUMENTS);
 
-    DataTypePtr keyType = DataTypeFactory::instance().get(arguments->children[0]);
-    DataTypePtr valueType = DataTypeFactory::instance().get(arguments->children[1]);
-    if (!keyType->canBeMapKVType() || !valueType->canBeMapKVType())
-    {
-        throw Exception("Map Key or Value Type is not compatible", ErrorCodes::BAD_ARGUMENTS);
-    }
-    else if (keyType->canBeMapKVType())
-    {
-        if (typeid_cast<const DataTypeArray *>(keyType.get()))
-            throw Exception("Array cannot be map key", ErrorCodes::BAD_ARGUMENTS);
-    }
+    DataTypePtr key_type = DataTypeFactory::instance().get(arguments->children[0]);
+    DataTypePtr value_type = DataTypeFactory::instance().get(arguments->children[1]);
+    if (!key_type->canBeMapKeyType())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Map Key Type {} is not compatible", key_type->getName());
+    if (!value_type->canBeMapValueType())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Map Value Type {} is not compatible", value_type->getName());
 
-    return std::make_shared<DataTypeByteMap>(keyType, valueType);
+    return std::make_shared<DataTypeByteMap>(key_type, value_type);
 }
 
 void registerDataTypeByteMap(DataTypeFactory& factory)

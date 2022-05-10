@@ -384,9 +384,15 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
 
     if (with_final_mark && data_written)
     {
+        /// Here `serialize_settings` just works for implicit column, which should be consistent with the settings in MergeTreeDataPartWriterOnDisk::writeColumn.
+        const auto & global_settings = storage.getContext()->getSettingsRef();
         ISerialization::SerializeBinaryBulkSettings serialize_settings;
+        serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
+        serialize_settings.low_cardinality_use_single_dictionary_for_part
+            = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
+
         WrittenOffsetColumns offset_columns; /// Nested type will not be the map KV type, so don't need to handle offset column
-    
+
         auto name_and_type = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
@@ -530,102 +536,4 @@ void MergeTreeDataPartWriterCompact::finish(IMergeTreeDataPart::Checksums & chec
 
     finishSkipIndicesSerialization(checksums, sync);
 }
-
-/// Column must not be empty. (column.size() !== 0)
-void MergeTreeDataPartWriterCompact::writeColumn(
-    const NameAndTypePair & name_and_type,
-    const IColumn & column,
-    WrittenOffsetColumns & offset_columns,
-    const Granules & granules,
-    bool need_finalize)
-{
-    if (granules.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Empty granules for column {}, current mark {}", backQuoteIfNeed(name_and_type.name), getCurrentMark());
-
-    const auto & [name, type] = name_and_type;
-    auto [it, inserted] = serialization_states.emplace(name, nullptr);
-
-    if (inserted)
-    {
-        ISerialization::SerializeBinaryBulkSettings serialize_settings;
-        serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-        serializations[name]->serializeBinaryBulkStatePrefix(serialize_settings, it->second);
-    }
-
-    const auto & global_settings = storage.getContext()->getSettingsRef();
-    ISerialization::SerializeBinaryBulkSettings serialize_settings;
-    serialize_settings.getter = createStreamGetter(name_and_type, offset_columns);
-    serialize_settings.low_cardinality_max_dictionary_size = global_settings.low_cardinality_max_dictionary_size;
-    serialize_settings.low_cardinality_use_single_dictionary_for_part = global_settings.low_cardinality_use_single_dictionary_for_part != 0;
-
-    // special code path for ByteMap data type in flatten model
-    if (type->isMap() && column.size() > 0 && !type->isMapKVStore()){
-
-        if (data_part->versions->enable_compact_map_data)
-        {
-            writeCompactedByteMapColumn(name_and_type, column, offset_columns, granules);
-        }
-        else
-        {
-            writeUncompactedByteMapColumn(name_and_type, column, offset_columns, granules);
-        }
-		return;
-    }
-
-    for (const auto & granule : granules)
-    {
-        data_written = true;
-
-        if (granule.mark_on_start)
-        {
-            if (last_non_written_marks.count(name))
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "We have to add new mark for column, but already have non written mark. Current mark {}, total marks {}", getCurrentMark(), index_granularity.getMarksCount());
-            last_non_written_marks[name] = getCurrentMarksForColumn(name_and_type, offset_columns, serialize_settings.path);
-        }
-
-        writeSingleGranule(
-           name_and_type,
-           column,
-           offset_columns,
-           it->second,
-           serialize_settings,
-           granule
-        );
-
-        if (granule.is_complete)
-        {
-            auto marks_it = last_non_written_marks.find(name);
-            if (marks_it == last_non_written_marks.end())
-                throw Exception(ErrorCodes::LOGICAL_ERROR, "No mark was saved for incomplete granule for column {}", backQuoteIfNeed(name));
-
-            for (const auto & mark : marks_it->second)
-                flushMarkToFile(mark, index_granularity.getMarkRows(granule.mark_number));
-            last_non_written_marks.erase(marks_it);
-        }
-        else
-            throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    // When enable compact map data, it need to flush all data in the buffer to disk. Otherwise, the offset of the implicit column may be wrong.
-    if (need_finalize)
-    {
-        if (is_merge)
-            throw Exception("Can not finialize stream early in merge process.", ErrorCodes::LOGICAL_ERROR);
-        
-        // for compacted map, we need to handle final marks here
-        auto last_granule = granules.back();
-        if (!last_granule.is_complete)
-        {
-            throw Exception("Granule is not complete in compact format.", ErrorCodes::LOGICAL_ERROR);
-        }
-     
-        bool write_final_mark = (with_final_mark && data_written);
-        if (write_final_mark)
-            writeFinalMark(name_and_type, offset_columns, serialize_settings.path);
-
-        serializations[name]->enumerateStreams(finalizeStreams(name), serialize_settings.path);
-    }
 }
-
-}
-

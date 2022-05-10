@@ -21,14 +21,12 @@ namespace DB
 class DataTypeByteMap final : public IDataType
 {
 private:
-    /// The type of array elements.
-    DataTypePtr keyType;
-    DataTypePtr valueType;
-    DataTypePtr keyStoreType;
-    DataTypePtr valueStoreType;
 
-    // "nested" is Tuple( key, value)
-    DataTypePtr nested;
+    DataTypePtr key_type;
+    DataTypePtr value_type;
+    DataTypePtr implicit_column_value_type;
+    DataTypePtr key_store_type;
+    DataTypePtr value_store_type;
 
 public:
     static constexpr bool is_parametric = true;
@@ -63,24 +61,19 @@ public:
     bool isComparable() const override { return false; }
     bool haveSubtypes() const override { return true; }
 
-    bool textCanContainOnlyValidUTF8() const override { return keyType->textCanContainOnlyValidUTF8() && valueType->textCanContainOnlyValidUTF8(); }
+    bool textCanContainOnlyValidUTF8() const override { return key_type->textCanContainOnlyValidUTF8() && value_type->textCanContainOnlyValidUTF8(); }
     bool isMap() const override { return true; }
-    bool valueTypeIsLC() const { return valueType->lowCardinality(); }
 
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override
     {
-        return keyType->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() &&
-               valueType->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion();
+        return key_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion() &&
+               value_type->isValueUnambiguouslyRepresentedInFixedSizeContiguousMemoryRegion();
     }
 
-    const DataTypePtr & getKeyType() const { return keyType; }
-    const DataTypePtr & getValueType() const { return valueType; }
-    const DataTypePtr & getKeyStoreType() const { return keyStoreType; }
-    const DataTypePtr & getValueStoreType() const { return valueStoreType; }
-
-    NameAndTypePair getValueNameAndType(const String & name) const;
-    NameAndTypePair getValueNameAndTypeOfKV(const String & name) const;
-    static NameAndTypePair getValueNameAndTypeFromImplicitName(const NameAndTypePair & map_column, const String & name);
+    const DataTypePtr & getKeyType() const { return key_type; }
+    const DataTypePtr & getValueType() const { return value_type; }
+    const DataTypePtr & getValueTypeForImplicitColumn() const { return implicit_column_value_type; }
+    const DataTypePtr & getMapStoreType(const String & name) const;
 
     SerializationPtr doGetDefaultSerialization() const override;
 };

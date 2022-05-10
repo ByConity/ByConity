@@ -77,7 +77,8 @@ struct MergeTreeWriterSettings
         bool can_use_adaptive_granularity_,
         bool rewrite_primary_key_,
         bool blocks_are_granules_size_ = false,
-        bool skip_bitengine_encode_ = false)
+        bool skip_bitengine_encode_ = false,
+        bool optimize_map_column_serialization_ = false)
         : min_compress_block_size(
             storage_settings->min_compress_block_size ? storage_settings->min_compress_block_size : global_settings.min_compress_block_size)
         , max_compress_block_size(
@@ -87,6 +88,7 @@ struct MergeTreeWriterSettings
         , rewrite_primary_key(rewrite_primary_key_)
         , blocks_are_granules_size(blocks_are_granules_size_)
         , bitengine_settings(global_settings, storage_settings)
+        , optimize_map_column_serialization(optimize_map_column_serialization_)
     {
         bitengine_settings.skip_bitengine_encode = skip_bitengine_encode_;
     }
@@ -98,6 +100,7 @@ struct MergeTreeWriterSettings
     bool blocks_are_granules_size;
 
     BitEngineEncodeSettings bitengine_settings;
+    bool optimize_map_column_serialization = false;
 };
 
 }

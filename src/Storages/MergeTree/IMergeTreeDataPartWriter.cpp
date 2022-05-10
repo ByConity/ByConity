@@ -167,7 +167,7 @@ void IMergeTreeDataPartWriter::addBitmapIndexes(
     const DB::IDataType &type,
     const IndexParams & bitmap_params)
 {
-    String bitmap_index_name = IDataType::getFileNameForStream(name, {});
+    String bitmap_index_name = ISerialization::getFileNameForStream(name, {});
     if (column_bitmap_indexes.count(bitmap_index_name)) return;
 
     column_bitmap_indexes[bitmap_index_name] = std::make_unique<ColumnBitmapIndex>(
@@ -179,7 +179,7 @@ void IMergeTreeDataPartWriter::addBitmapIndexes(
 
 void IMergeTreeDataPartWriter::addMarkBitmapIndexes(const String & path, const String & name, const IDataType & type, const IndexParams & bitmap_params)
 {
-    String bitmap_index_name = IDataType::getFileNameForStream(name, {});
+    String bitmap_index_name = ISerialization::getFileNameForStream(name, {});
     if (column_mark_bitmap_indexes.count(bitmap_index_name)) return;
 
     column_mark_bitmap_indexes[bitmap_index_name] = std::make_unique<ColumnMarkBitmapIndex>(
