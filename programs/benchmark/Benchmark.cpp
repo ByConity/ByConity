@@ -434,7 +434,10 @@ private:
 
         comparison_info_per_interval[connection_index]->add(seconds, progress.read_rows, progress.read_bytes, info.rows, info.bytes);
         comparison_info_total[connection_index]->add(seconds, progress.read_rows, progress.read_bytes, info.rows, info.bytes);
-        t_test.add(connection_index, seconds);
+
+        /// only compare the first two nodes
+        if (connection_index < 2)
+            t_test.add(connection_index, seconds);
     }
 
     void report(MultiStats & infos)
