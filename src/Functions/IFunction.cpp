@@ -220,7 +220,24 @@ ColumnPtr IExecutableFunction::executeWithoutLowCardinalityColumns(
 
     ColumnPtr res;
     if (dry_run)
-        res = executeDryRunImpl(args, result_type, input_rows_count);
+    {
+        // if dry_run is true, we only need to clone an empty args
+        if (args.size() > 0 && args[0].column->size() > 0 && input_rows_count == 0)
+        {
+            ColumnsWithTypeAndName empty_args(args.size());
+            for (size_t i  = 0; i < args.size(); i++)
+            {
+                ColumnWithTypeAndName temp_arg;
+                temp_arg.column = args[i].column->cloneEmpty();
+                temp_arg.type = args[i].type;
+                temp_arg.name = args[i].name;
+                empty_args[i] = temp_arg;
+            }
+            res = executeDryRunImpl(empty_args, result_type, input_rows_count);
+        }
+        else
+            res = executeDryRunImpl(args, result_type, input_rows_count);
+    }
     else
         res = executeImpl(args, result_type, input_rows_count);
 
