@@ -414,7 +414,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
             auto in = InterpreterSelectQuery(
                           projection.query_ast,
                           context,
-                          Pipe(std::make_shared<SourceFromSingleChunk>(block, Chunk(block.getColumns(), block.rows()))),
+                          Pipe(std::make_shared<SourceFromSingleChunk>(block.cloneEmpty(), Chunk(block.getColumns(), block.rows()))),
                           SelectQueryOptions{
                               projection.type == ProjectionDescription::Type::Normal ? QueryProcessingStage::FetchColumns : QueryProcessingStage::WithMergeableState})
                           .execute()
