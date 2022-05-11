@@ -92,6 +92,8 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
     request.set_coordinator_exchange_port(coordinator_address.getExchangePort());
     request.set_coordinator_exchange_status_port(coordinator_address.getExchangeStatusPort());
 
+    request.set_database(context->getCurrentDatabase());
+
     const auto & client_info = context->getClientInfo();
     const String & quota_key = client_info.quota_key;
     if (!client_info.quota_key.empty())
