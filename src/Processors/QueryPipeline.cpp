@@ -354,7 +354,7 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     left->pipe.holder = std::move(right->pipe.holder);
     left->pipe.header = left->pipe.output_ports.front()->getHeader();
     left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, right->pipe.max_parallel_streams);
-    left->min_threads = std::max(left->min_threads, right->max_threads);
+    left->min_threads = std::max(left->min_threads, right->min_threads);
     return left;
 }
 
