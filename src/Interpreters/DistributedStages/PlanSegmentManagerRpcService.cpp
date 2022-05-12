@@ -63,6 +63,9 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// compatibility.
         query_context->setSetting("normalize_function_names", Field(0));
 
+        if (request->has_database())
+            query_context->setCurrentDatabase(request->database());
+
         /// Set quota
         if (!request->has_quota())
             query_context->setQuotaKey(request->quota());

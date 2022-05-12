@@ -60,6 +60,9 @@ message ExecutePlanSegmentRequest {
   required uint32 current_port = 20;
   required uint32 current_exchange_port = 21;
   required uint32 current_exchange_status_port = 22;
+
+  // Default database.
+  optional string database = 23;
 }
 
 message ExecutePlanSegmentResponse {
