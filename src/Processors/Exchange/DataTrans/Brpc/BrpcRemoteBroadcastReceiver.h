@@ -14,6 +14,16 @@
 
 namespace DB
 {
+struct BrpcRecvMetric
+{
+    size_t recv_time_ms{0};
+    size_t register_time_ms{0};
+    size_t recv_bytes{0};
+    size_t dser_time_ms{0};
+    Int32 finish_code{};
+    Int8 is_modifier{-1};
+    String message;
+};
 
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
@@ -29,6 +39,7 @@ public:
     void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_release); }
 
     AsyncRegisterResult registerToSendersAsync(UInt32 timeout_ms);
+    BrpcRecvMetric metric;
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
     DataTransKeyPtr trans_key;

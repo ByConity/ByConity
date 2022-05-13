@@ -2386,6 +2386,17 @@ std::shared_ptr<QueryThreadLog> Context::getQueryThreadLog() const
 }
 
 
+std::shared_ptr<QueryExchangeLog> Context::getQueryExchangeLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->query_exchange_log;
+}
+
+
 std::shared_ptr<PartLog> Context::getPartLog(const String & part_database) const
 {
     auto lock = getLock();

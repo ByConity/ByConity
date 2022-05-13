@@ -137,7 +137,10 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     if (!options.force_remote_mode)
                     {
                         LOG_DEBUG(logger, "Create local exchange source : {}@{}", data_key->dump(), write_address_info);
-                        auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options);
+                        std::shared_ptr<QueryExchangeLog> query_exchange_log = nullptr;
+                        if (context->getSettingsRef().log_query_exchange && context->getQueryExchangeLog())
+                            query_exchange_log = context->getQueryExchangeLog();
+                        auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, query_exchange_log);
                         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
                     }
                     else

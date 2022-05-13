@@ -2,8 +2,11 @@
 
 #include <atomic>
 #include <cstddef>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
@@ -21,7 +24,8 @@ class LocalBroadcastChannel final : public IBroadcastReceiver,
                                     boost::noncopyable
 {
 public:
-    explicit LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_);
+    explicit LocalBroadcastChannel(
+        DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
     RecvDataPacket recv(UInt32 timeout_ms) override;
     void registerToSenders(UInt32 timeout_ms) override;
     void merge(IBroadcastSender &&) override;
@@ -32,11 +36,14 @@ public:
     ~LocalBroadcastChannel() override;
 
 private:
+    BrpcRecvMetric recv_metric;
+    BrpcSendMetric send_metric;
     DataTransKeyPtr data_key;
     LocalChannelOptions options;
     BoundedDataQueue<Chunk> receive_queue;
     BroadcastStatus init_status{BroadcastStatusCode::RUNNING, false, "init"};
     std::atomic<BroadcastStatus *> broadcast_status{&init_status};
     Poco::Logger * logger;
+    std::shared_ptr<QueryExchangeLog> query_exchange_log;
 };
 }
