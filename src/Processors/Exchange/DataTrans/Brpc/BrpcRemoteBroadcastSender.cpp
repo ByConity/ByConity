@@ -80,9 +80,10 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
         element.is_modifier = metric.is_modifier;
         element.message = metric.message;
         element.type = "brpc_sender";
-        if (auto exchange_log = context->getQueryExchangeLog() && context->getSettingsRef().log_query_exchange)
+        if (context->getSettingsRef().log_query_exchange)
         {
-            exchange_log->add(element);
+            if (auto exchange_log = context->getQueryExchangeLog())
+                exchange_log->add(element);
         }
     }
     catch (...)

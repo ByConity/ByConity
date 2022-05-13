@@ -65,9 +65,10 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         element.is_modifier = metric.is_modifier;
         element.message = metric.message;
         element.type = "brpc_receiver@reg_addr_" + registry_address;
-        if (auto exchange_log = context->getQueryExchangeLog() && context->getSettingsRef().log_query_exchange)
+        if (context->getSettingsRef().log_query_exchange)
         {
-            exchange_log->add(element);
+            if (auto exchange_log = context->getQueryExchangeLog())
+                exchange_log->add(element);
         }
     }
     catch (...)
