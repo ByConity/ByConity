@@ -49,6 +49,7 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
         }
         for (size_t index = 0; index < size; index++)
         {
+            Stopwatch s;
             butil::IOBuf & msg = *messages[index];
             auto read_buffer = std::make_unique<ReadBufferFromBrpcBuf>(msg);
             std::unique_ptr<ReadBuffer> buf;
@@ -58,6 +59,7 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
+            receiver_ptr->metric.dser_time_ms += s.elapsedMilliseconds();
 #ifndef NDEBUG
             LOG_TRACE(
                 log,

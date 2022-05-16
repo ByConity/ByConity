@@ -1,5 +1,9 @@
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/Brpc/StreamHandler.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
+#include "BrpcRemoteBroadcastReceiver.h"
+#include "StreamHandler.h"
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Exchange/DataTrans/DataTransException.h>
 #include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
@@ -41,6 +45,31 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             brpc::StreamClose(stream_id);
             LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, data_key, registry_address);
         }
+        QueryExchangeLogElement element;
+        if(auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_key))
+        {
+            element.initial_query_id = key->query_id;
+            element.write_segment_id = key->write_segment_id;
+            element.read_segment_id = key->read_segment_id;
+            element.partition_id = key->parallel_index;
+            element.coordinator_address = key->coordinator_address;
+        }
+        element.event_time =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        element.recv_time_ms = metric.recv_time_ms;
+        element.register_time_ms = metric.register_time_ms;
+        element.recv_bytes = metric.recv_bytes;
+        element.dser_time_ms = metric.dser_time_ms;
+        element.finish_code = metric.finish_code;
+        element.is_modifier = metric.is_modifier;
+        element.message = metric.message;
+        element.type = "brpc_receiver@reg_addr_" + registry_address;
+        if (context->getSettingsRef().log_query_exchange)
+        {
+            if (auto exchange_log = context->getQueryExchangeLog())
+                exchange_log->add(element);
+        }
     }
     catch (...)
     {
@@ -50,6 +79,7 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
 
 void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 {
+    Stopwatch s;
     std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(registry_address, false);
     Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
     brpc::Controller cntl;
@@ -84,6 +114,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
         return;
     }
     rpc_client->assertController(cntl);
+    metric.register_time_ms += s.elapsedMilliseconds();
     LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, data_key, stream_id);
 }
 
@@ -100,6 +131,7 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(Chunk chunk)
 
 RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
 {
+    Stopwatch s;
     Chunk received_chunk;
     if (!queue.tryPop(received_chunk, timeout_ms))
     {
@@ -116,16 +148,32 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     }
 
     if (keep_order)
+    {
         // Chunk in queue is created in StreamHanlder's on_received_messages callback, which is run in bthread.
         // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
         // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
         ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
+        metric.recv_bytes += received_chunk.bytes();
+    }
+    else
+    {
+        const ChunkInfoPtr & info = received_chunk.getChunkInfo();
+        if (info)
+        {
+            if(auto iobuf_info = std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info))
+            {
+                metric.recv_bytes += iobuf_info->io_buf.length();
+            }
+        }
+    }
+    metric.recv_time_ms += s.elapsedMilliseconds();
     return RecvDataPacket(std::move(received_chunk));
 }
 
 BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
 {
     BroadcastStatusCode current_fin_code = finish_status_code.load(std::memory_order_relaxed);
+    const auto *const msg = "BrpcRemoteBroadcastReceiver: already has been finished";
     if (current_fin_code != BroadcastStatusCode::RUNNING)
     {
         LOG_TRACE(
@@ -134,7 +182,9 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
             data_key,
             status_code_,
             current_fin_code);
-        return BroadcastStatus(current_fin_code, false, "BrpcRemoteBroadcastReceiver: already has been finished");
+        metric.finish_code = current_fin_code;
+        metric.is_modifier = 0;
+        return BroadcastStatus(current_fin_code, false, msg);
     }
 
     int actual_status_code = BroadcastStatusCode::RUNNING;
@@ -152,12 +202,17 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
         if (new_fin_code > 0)
             queue.close();
         brpc::StreamFinish(stream_id, actual_status_code, new_fin_code, new_fin_code > 0);
+        metric.finish_code = new_fin_code;
+        metric.is_modifier = 1;
+        metric.message = message;
         return BroadcastStatus(static_cast<BroadcastStatusCode>(new_fin_code), true, message);
     }
     else
     {
         LOG_TRACE(log, "Fail to change broadcast status to {}, current status is: {} ", new_fin_code, current_fin_code);
-        return BroadcastStatus(current_fin_code, false, "BrpcRemoteBroadcastReceiver: already has been finished");
+        metric.finish_code = current_fin_code;
+        metric.is_modifier = 0;
+        return BroadcastStatus(current_fin_code, false, msg);
     }
 }
 
@@ -168,6 +223,7 @@ String BrpcRemoteBroadcastReceiver::getName() const
 
 AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
 {
+    Stopwatch s;
     AsyncRegisterResult res;
 
     res.channel = RpcClientFactory::getInstance().getClient(registry_address, true);
@@ -196,6 +252,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_data_key(trans_key->getKey());
     res.request->set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
     stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
+    metric.register_time_ms += s.elapsedMilliseconds();
     return res;
 }
 

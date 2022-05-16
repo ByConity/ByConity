@@ -1,6 +1,7 @@
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/QueryThreadLog.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/PartLog.h>
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
@@ -94,6 +95,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
 {
     query_log = createSystemLog<QueryLog>(global_context, "system", "query_log", config, "query_log");
     query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log");
+    query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log");
     part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log");
     trace_log = createSystemLog<TraceLog>(global_context, "system", "trace_log", config, "trace_log");
     crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
@@ -112,6 +114,9 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(query_log.get());
     if (query_thread_log)
         logs.emplace_back(query_thread_log.get());
+    if (query_exchange_log)
+        logs.emplace_back(query_exchange_log.get());
+
     if (part_log)
         logs.emplace_back(part_log.get());
     if (trace_log)

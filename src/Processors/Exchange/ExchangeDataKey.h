@@ -51,7 +51,6 @@ public:
 
     inline const String & getCoordinatorAddress() const { return coordinator_address; }
 
-private:
     String query_id;
     String write_segment_id;
     String read_segment_id;

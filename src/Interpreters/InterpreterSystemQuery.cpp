@@ -49,6 +49,7 @@
 #include <FormaterTool/HDFSDumper.h>
 #include <csignal>
 #include <algorithm>
+#include <Interpreters/QueryExchangeLog.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -525,6 +526,7 @@ BlockIO InterpreterSystemQuery::execute()
                 [&] { if (auto query_log = getContext()->getQueryLog()) query_log->flush(true); },
                 [&] { if (auto part_log = getContext()->getPartLog("")) part_log->flush(true); },
                 [&] { if (auto query_thread_log = getContext()->getQueryThreadLog()) query_thread_log->flush(true); },
+                [&] { if (auto query_exchange_log = getContext()->getQueryExchangeLog()) query_exchange_log->flush(true); },
                 [&] { if (auto trace_log = getContext()->getTraceLog()) trace_log->flush(true); },
                 [&] { if (auto text_log = getContext()->getTextLog()) text_log->flush(true); },
                 [&] { if (auto metric_log = getContext()->getMetricLog()) metric_log->flush(true); },

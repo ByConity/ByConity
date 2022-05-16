@@ -1,4 +1,5 @@
 #include <atomic>
+#include <Interpreters/QueryExchangeLog.h>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,16 +16,18 @@
 
 namespace DB
 {
-LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_)
+LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
     : data_key(std::move(data_key_))
     , options(std::move(options_))
     , receive_queue(options_.queue_size)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
+    , query_exchange_log(query_exchange_log_)
 {
 }
 
 RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 {
+    Stopwatch s;
     Chunk recv_chunk;
 
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_relaxed);
@@ -36,6 +39,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     {
         if (recv_chunk)
         {
+            recv_metric.recv_bytes += recv_chunk.bytes();
             ExchangeUtils::transferGlobalMemoryToThread(recv_chunk.allocatedBytes());
             return RecvDataPacket(std::move(recv_chunk));
         }
@@ -46,17 +50,20 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
         "Receive from channel " + data_key->getKey() + " timeout after ms: " + std::to_string(timeout_ms));
+    recv_metric.recv_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
 
 
 BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 {
+    Stopwatch s;
     BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
     if (current_status_ptr->code != BroadcastStatusCode::RUNNING)
         return *current_status_ptr;
 
     auto bytes = chunk.allocatedBytes();
+    send_metric.send_uncompressed_bytes += bytes;
     if (receive_queue.tryEmplace(options.max_timeout_ms / 2, std::move(chunk)))
     {       
         ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
@@ -66,6 +73,7 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
         "Send to channel " + data_key->getKey() + " timeout after ms: " + std::to_string(options.max_timeout_ms));
+    send_metric.send_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
 
@@ -92,12 +100,17 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
             receive_queue.tryEmplace(options.max_timeout_ms, Chunk());
         auto res = *new_status_ptr;
         res.is_modifer = true;
+        send_metric.finish_code = new_status_ptr->code;
+        send_metric.is_modifier = 1;
+        send_metric.message = new_status_ptr->message;
         return res;
     }
     else
     {
         LOG_TRACE(
             logger, "Fail to change broadcast status to {}, current status is: {} ", new_status_ptr->code, current_status_ptr->code);
+        send_metric.finish_code = current_status_ptr->code;
+        send_metric.is_modifier = 0;
         delete new_status_ptr;
         return *current_status_ptr;
     }
@@ -105,10 +118,11 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
 
 void LocalBroadcastChannel::registerToSenders(UInt32 timeout_ms)
 {
+    Stopwatch s;
     auto sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-
     sender_proxy->waitAccept(timeout_ms);
     sender_proxy->becomeRealSender(shared_from_this());
+    recv_metric.register_time_ms += s.elapsedMilliseconds();
 }
 
 void LocalBroadcastChannel::merge(IBroadcastSender &&)
@@ -128,6 +142,38 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         auto * status = broadcast_status.load(std::memory_order_acquire);
         if (status != &init_status)
             delete status;
+        QueryExchangeLogElement element;
+        if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(data_key))
+        {
+            element.initial_query_id = key->query_id;
+            element.write_segment_id = key->write_segment_id;
+            element.read_segment_id = key->read_segment_id;
+            element.partition_id = key->parallel_index;
+            element.coordinator_address = key->coordinator_address;
+        }
+        element.type = "local";
+        element.event_time =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        // sender
+        element.send_time_ms = send_metric.send_time_ms;
+        element.send_rows = send_metric.send_rows;
+        element.send_uncompressed_bytes = send_metric.send_uncompressed_bytes;
+
+        element.finish_code = send_metric.finish_code;
+        element.is_modifier = send_metric.is_modifier;
+        element.message = send_metric.message;
+
+        // receiver
+        element.recv_time_ms = recv_metric.recv_time_ms;
+        element.register_time_ms = recv_metric.register_time_ms;
+        element.recv_bytes = recv_metric.recv_bytes;
+
+        if (query_exchange_log)
+        {
+            query_exchange_log->add(element);
+        }
+
     }
     catch (...)
     {

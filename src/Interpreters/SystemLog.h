@@ -67,6 +67,7 @@ namespace ErrorCodes
 
 class QueryLog;
 class QueryThreadLog;
+class QueryExchangeLog;
 class PartLog;
 class TextLog;
 class TraceLog;
@@ -103,6 +104,7 @@ struct SystemLogs
 
     std::shared_ptr<QueryLog> query_log;                /// Used to log queries.
     std::shared_ptr<QueryThreadLog> query_thread_log;   /// Used to log query threads.
+    std::shared_ptr<QueryExchangeLog> query_exchange_log;   /// Used to log query threads.
     std::shared_ptr<PartLog> part_log;                  /// Used to log operations with parts
     std::shared_ptr<TraceLog> trace_log;                /// Used to log traces from query profiler
     std::shared_ptr<CrashLog> crash_log;                /// Used to log server crashes.
