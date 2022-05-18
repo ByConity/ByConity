@@ -261,13 +261,15 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
         }
     }
     // Rewrite mapKeys(c) to implicite column c.key for KV store map
-    else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapkeys") && node.arguments->children.size() == 1 && data.storage)
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapkeys") && node.arguments->children.size() == 1 && data.storage
+        && data.storage->supportsMapImplicitColumn())
     {
         ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
         if (map_col)
         {
             DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
-            if (type->isMap() && (!data.storage->supportsMapImplicitColumn() || type->isMapKVStore()))
+            if (type->isMap() && type->isMapKVStore())
             {
                 String origin_alias = ast->getAliasOrColumnName();
                 ast = std::make_shared<ASTIdentifier>(map_col->name() + ".key");
@@ -276,13 +278,15 @@ void QueryNormalizer::visit(ASTFunction & node, ASTPtr & ast, Data & data)
         }
     }
     // Rewrite mapValues(c) to implicite column c.value for KV store map
-    else if (data.rewrite_map_col && startsWith(func_name_lowercase, "mapvalues") && node.arguments->children.size() == 1 && data.storage)
+    else if (
+        data.rewrite_map_col && startsWith(func_name_lowercase, "mapvalues") && node.arguments->children.size() == 1 && data.storage
+        && data.storage->supportsMapImplicitColumn())
     {
         ASTIdentifier * map_col = node.arguments->children[0]->as<ASTIdentifier>();
         if (map_col)
         {
             DataTypePtr type = data.metadata_snapshot->columns.getPhysical(map_col->name()).type;
-            if (type->isMap() && (!data.storage->supportsMapImplicitColumn() || type->isMapKVStore()))
+            if (type->isMap() && type->isMapKVStore())
             {
                 String origin_alias = ast->getAliasOrColumnName();
                 ast = std::make_shared<ASTIdentifier>(map_col->name() + ".value");
