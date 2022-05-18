@@ -1,0 +1,2 @@
+select length(mapKeys(ProfileEvents)) > 0 from system.processes where current_database = currentDatabase() limit 1;
+select length(mapKeys(Settings)) > 0 from system.processes where current_database = currentDatabase() limit 1;
