@@ -20,6 +20,7 @@ namespace DB
 {
 class IColumn;
 
+#define TEST_KNOB_FORCE_META_REBUILD 0x08ull
 
 /** List of settings: type, name, default value, description, flags
   *
@@ -32,6 +33,7 @@ class IColumn;
   */
 
 #define COMMON_SETTINGS(M) \
+    M(UInt64, TEST_KNOB, 0, "A placeholder for experiment features. Each bit represents a feature, the feature is enabled if the bit is 1", 0) \
     M(UInt64, min_compress_block_size, 65536, "The actual size of the block to compress, if the uncompressed data less than max_compress_block_size is no less than this value and no less than the volume of data for one mark.", 0) \
     M(UInt64, max_compress_block_size, 1048576, "The maximum size of blocks of uncompressed data before compressing for writing to a table.", 0) \
     M(UInt64, max_block_size, DEFAULT_BLOCK_SIZE, "Maximum block size for reading", 0) \

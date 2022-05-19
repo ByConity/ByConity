@@ -258,6 +258,12 @@ MergeTreeData::MergeTreeData(
     if (enable_metastore && !metastore)
     {
         String table_metastore_path = getMetastorePath();
+        bool force_meta_rebuild = (getContext()->getSettingsRef().TEST_KNOB & TEST_KNOB_FORCE_META_REBUILD);
+        if (force_meta_rebuild && fs::exists(table_metastore_path))
+        {
+            LOG_INFO(log, "Got TEST_KNOB_FORCE_META_REBUILD, remove the existing metastore.");
+            fs::remove_all(table_metastore_path);
+        }
         if (!fs::exists(table_metastore_path))
         {
             LOG_DEBUG(log, "Create metastore directory {} for table {}", table_metastore_path, log_name);
@@ -1210,9 +1216,11 @@ bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
 /// if metastore is enabled and ready for use, it will try to load parts from metastore first. Other wise, load parts from file system.
 void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
 {
+    bool force_meta_rebuild = (getContext()->getSettingsRef().TEST_KNOB & TEST_KNOB_FORCE_META_REBUILD);
+
     /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
     bool loaded_from_old_metastore = false;
-    if (metastore)
+    if (!force_meta_rebuild && metastore)
     {
         /// try to load parts from metastore with old metastore format. will transform metadata from old version to new after loading.
         loaded_from_old_metastore = preLoadDataParts(skip_sanity_checks, attach);
