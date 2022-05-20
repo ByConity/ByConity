@@ -97,9 +97,10 @@ MergeTreeReaderStream::MergeTreeReaderStream(
                     settings.mmap_cache.get());
             },
             uncompressed_cache,
+            /* allow_different_codecs = */false,
             data_file_offset,
             data_file_size_,
-            true);
+            /* is_limit = */true);
 
         if (profile_callback)
             buffer->setProfileCallback(profile_callback, clock_type);
