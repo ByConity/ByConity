@@ -1,8 +1,6 @@
 name: CI
 trigger:
   change:
-  manual:
-    branches: ["ce-dev"]
     types: ["create", "push", "submit"]
 jobs:
   scm_build:

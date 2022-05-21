@@ -90,7 +90,6 @@
     M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
 
 
->>>>>>> add service discovery mmodule
 
 namespace CurrentMetrics
 {
