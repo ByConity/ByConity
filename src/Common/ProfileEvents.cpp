@@ -261,6 +261,11 @@
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
+    \
+    M(SDRequest, "Number requests sent to SD") \
+    M(SDRequestFailed, "Number requests sent to SD that failed") \
+    M(SDRequestUpstream, "Number requests sent to SD upstream") \
+    M(SDRequestUpstreamFailed, "Number requests sent to SD upstream that failed") \
 
 
 namespace ProfileEvents

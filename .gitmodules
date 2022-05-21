@@ -260,3 +260,6 @@
 [submodule "contrib/numactl"]
 	path = contrib/numactl
 	url = git@code.byted.org:dp/numactl.git
+[submodule "contrib/udns"]
+	path = contrib/udns
+	url = git@code.byted.org:dp/udns

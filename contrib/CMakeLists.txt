@@ -155,6 +155,12 @@ if (USE_INTERNAL_CONSUL_LIBRARY)
     add_subdirectory(consul-cmake)
 endif ()
 
+
+if (USE_INTERNAL_UDNS_LIBRARY)
+    add_subdirectory(udns-cmake)
+endif ()
+
+
 if (USE_INTERNAL_RDKAFKA_LIBRARY)
     if (USE_BYTEDANCE_RDKAFKA)
         add_subdirectory (librdkafka-cmake)

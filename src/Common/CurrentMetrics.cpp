@@ -83,8 +83,14 @@
     M(MMappedFiles, "Total number of mmapped files.") \
     M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
     M(MemoryTrackingForExchange, "Total amount of memory (bytes) allocated for complex query exchange") \
+    \
     M(StorageMemoryRows, "Memory table input rows") \
     M(StorageMemoryBytes, "Memory table input bytes") \
+    \
+    M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
+
+
+>>>>>>> add service discovery mmodule
 
 namespace CurrentMetrics
 {

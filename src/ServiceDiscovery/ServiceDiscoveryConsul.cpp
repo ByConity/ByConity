@@ -1,0 +1,359 @@
+#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
+#include <sstream>
+#include <string>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <consul/bridge.h>
+#include <IO/ReadHelpers.h>
+#include <Common/ProfileEvents.h>
+#include <Common/CurrentMetrics.h>
+
+namespace ProfileEvents
+{
+    extern const Event SDRequestUpstream;
+    extern const Event SDRequestUpstreamFailed;
+}
+
+namespace CurrentMetrics
+{
+    extern const Metric CnchSDRequestsUpstream;
+}
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+    extern const int SD_EMPTY_ENDPOINTS;
+    extern const int SD_INVALID_TAG;
+    extern const int SD_PSM_NOT_EXISTS;
+    extern const int SD_UNKOWN_LB_STRATEGY;
+    extern const int SD_FAILED_TO_INIT_CONSUL_CLIENT;
+    extern const int NETWORK_ERROR;
+    extern const int LOGICAL_ERROR;
+}
+
+ServiceDiscoveryConsul::ServiceDiscoveryConsul(const Poco::Util::AbstractConfiguration & config)
+{
+    /// initialize cluster variable
+    if (config.hasProperty("service_discovery.cluster"))
+        cluster = config.getString("service_discovery.cluster");
+    /// initialize cache settings
+    if (config.hasProperty("service_discovery.disable_cache"))
+        cache_disabled = config.getBool("service_discovery.disable_cache");
+    if (config.hasProperty("service_discovery.cache_timeout"))
+        cache_timeout = config.getUInt("service_discovery.cache_timeout");
+
+}
+
+cpputil::consul::ServiceDiscovery get_consul_client()
+{
+    static cpputil::consul::ServiceDiscovery consul_client;
+
+    int i = 0;
+    while (consul_client.init_failed() && i++ < 3)
+    {
+        consul_client = cpputil::consul::ServiceDiscovery();
+        if (consul_client.init_failed())
+            usleep(1500 * 1000);
+    }
+
+    if (consul_client.init_failed())
+    {
+        throw Exception("Failed to init Consul client", ErrorCodes::SD_FAILED_TO_INIT_CONSUL_CLIENT);
+    }
+
+    consul_client.setLookupAddrFamily("");
+    consul_client.setLookupUnique("");
+    const char* ipv4 = getenv("BYTED_HOST_IP");
+    const char* ipv6 = getenv("BYTED_HOST_IPV6");
+    const bool v4 = ipv4 && ipv4[0];
+    const bool v6 = ipv6 && ipv6[0];
+    if (v4 && v6)
+    {
+        consul_client.setLookupAddrFamily("dual-stack");
+        consul_client.setLookupUnique("v6");
+    }
+    else if (v6)
+    {
+        consul_client.setLookupAddrFamily("v6");
+    }
+    else if (v4)
+    {
+        consul_client.setLookupAddrFamily("v4");
+    }
+
+    return consul_client;
+}
+
+HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, ComponentType type, const String & vw_name)
+{
+    if (type != ComponentType::WORKER && !vw_name.empty())
+        throw Exception("Should not specify vw name for non-worker components", ErrorCodes::LOGICAL_ERROR);
+
+    Endpoints endpoints = fetchEndpoints(psm_name, vw_name);
+    HostWithPortsVec result = formatResult(endpoints, type);
+
+    if (result.size() == 0)
+        LOG_DEBUG(log, "lookup " + typeToString(type) + " [" + psm_name + "][" + vw_name + "] returns empty result");
+    return result;
+}
+
+IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW(const String & psm_name, const String & vw_name)
+{
+    Endpoints endpoints = fetchEndpoints(psm_name, vw_name);
+
+    IServiceDiscovery::WorkerGroupMap group_map;
+
+    for (auto & ep : endpoints)
+    {
+        String wg_name = ep.tags.count("wg_name") ? ep.tags["wg_name"] : "wg_default";
+
+        auto & group = group_map[wg_name];
+        group.emplace_back();
+        group.back().host = ep.host;
+        group.back().tcp_port = ep.port;
+        if (ep.tags.count("hostname"))
+            group.back().id = ep.tags.at("hostname");
+        if (ep.tags.count("PORT1"))
+            group.back().rpc_port = parse<UInt16>(ep.tags.at("PORT1"));
+        if (ep.tags.count("PORT2"))
+            group.back().http_port = parse<UInt16>(ep.tags.at("PORT2"));
+        if (ep.tags.count("PORT5"))
+            group.back().exchange_port = parse<UInt16>(ep.tags.at("PORT5"));
+        if (ep.tags.count("PORT6"))
+            group.back().exchange_status_port = parse<UInt16>(ep.tags.at("PORT6"));
+    }
+
+    return group_map;
+}
+
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpoints(const String & psm_name, const String & vw_name)
+{
+    if (cache_disabled)
+        return fetchEndpointsFromUpstream(psm_name, vw_name);
+    else
+        return fetchEndpointsFromCache(psm_name, vw_name);
+}
+
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromCache(const String & psm_name, const String & vw_name)
+{
+    SDCacheKey key {psm_name, vw_name};
+    SDCacheValue<Endpoint> cache_res;
+
+    // Cache hit. endpoints exists in cache and not outdated
+    if (cache.get(key, cache_res) && time(nullptr) - cache_timeout < cache_res.last_update)
+    {
+        return cache_res.endpoints;
+    }
+
+    // Cache miss. We fetch entry and store in cache
+    try
+    {
+        Endpoints res = fetchEndpointsFromUpstream(psm_name, vw_name);
+        SDCacheValue<Endpoint> new_value {res, time(nullptr)};
+
+        // update cache
+        cache.put(key, new_value);
+        return res;
+
+    } catch (...)
+    {
+        LOG_WARNING(log, "failed to update sd cache, return old results");
+        return cache_res.endpoints;
+    }
+}
+
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fetchEndpointsFromUpstream(const String & psm_name, const String & vw_name)
+{
+    auto retry_count = 2;
+    while (retry_count >= 0)
+    {
+        try
+        {
+            ProfileEvents::increment(ProfileEvents::SDRequestUpstream);
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::CnchSDRequestsUpstream};
+            // by calling translate_one, we get endpoints from consul
+            Endpoints res;
+            for(auto & e : get_consul_client().translateName(psm_name))
+            {
+                // kick out endpoint that doesn't belong to this cluster as earily as possible
+                if(!passCheckCluster(e))
+                    continue;
+                // kick out endpoint that doesn't belong to this vw_name as earily as possible
+                if(!vw_name.empty() && !passCheckVwName(e, vw_name))
+                    continue;
+                res.emplace_back(e);
+            }
+            return res;
+        }
+        catch (Exception & e)
+        {
+            ProfileEvents::increment(ProfileEvents::SDRequestUpstreamFailed);
+            LOG_WARNING(log, "Try " + std::to_string(3 - retry_count)
+                        + ": Error looking up from consul " + e.displayText());
+            --retry_count;
+            usleep(10000); // sleep for 10ms
+        }
+    }
+
+    throw Exception("Unable to get endpoints from consul", ErrorCodes::NETWORK_ERROR);
+}
+
+HostWithPortsVec ServiceDiscoveryConsul::formatResult(const Endpoints & eps, ComponentType type)
+{
+    HostWithPortsVec result;
+    if (type == ComponentType::SERVER || type == ComponentType::WORKER)
+    {
+        for (auto & e : eps)
+        {
+            result.emplace_back();
+            result.back().host = e.host;
+            result.back().tcp_port = e.port;
+            if (e.tags.count("hostname"))
+                result.back().id = e.tags.at("hostname");
+            if (e.tags.count("PORT1"))
+                result.back().rpc_port = parse<UInt16>(e.tags.at("PORT1"));
+            if (e.tags.count("PORT2"))
+                result.back().http_port = parse<UInt16>(e.tags.at("PORT2"));
+            if (e.tags.count("PORT5"))
+                result.back().exchange_port = parse<UInt16>(e.tags.at("PORT5"));
+            if (e.tags.count("PORT6"))
+                result.back().exchange_status_port = parse<UInt16>(e.tags.at("PORT6"));
+        }
+    }
+    else if (type == ComponentType::TSO || type == ComponentType::DAEMON_MANAGER || type == ComponentType::RESOURCE_MANAGER)
+    {
+        for (auto & e : eps)
+        {
+            result.emplace_back();
+            result.back().host = e.host;
+            result.back().rpc_port = e.port;
+            if (e.tags.count("hostname"))
+                result.back().id = e.tags.at("hostname");
+        }
+    }
+    else if (type == ComponentType::NNPROXY || type == ComponentType::KMS)
+    {
+        for (auto & e : eps)
+        {
+            result.emplace_back();
+            result.back().host = e.host;
+            result.back().tcp_port = e.port;
+        }
+    }
+
+    /// sequence by virtual part feature.
+    std::sort(result.begin(), result.end(), [](const HostWithPorts &x, const HostWithPorts &y) { return (x.id < y.id);} );
+
+    return result;
+}
+
+bool ServiceDiscoveryConsul::passCheckCluster(const Endpoint & e)
+{
+    auto it = e.tags.find("cluster");
+    return (it == e.tags.end() || it->second == cluster);  /// If endpoint doesn't have `cluster` tag, i.e. nnproxy, let it pass the checking
+}
+
+bool ServiceDiscoveryConsul::passCheckVwName(const Endpoint & e, const String & vw_name)
+{
+    auto it = e.tags.find("vw_name");
+    return (it != e.tags.end() && it->second == vw_name);
+}
+
+void registerServiceDiscoveryConsul(ServiceDiscoveryFactory & factory) {
+    factory.registerServiceDiscoveryType("consul", [](const Poco::Util::AbstractConfiguration & config){
+        return std::make_shared<ServiceDiscoveryConsul>(config);
+    });
+}
+
+// For testing. fake interface
+HostWithPortsVec ServiceDiscoveryConsul::fakedLookup(const Endpoints & eps, const String & psm_name, ComponentType type, const String & vw_name)
+{
+    if (type != ComponentType::WORKER && !vw_name.empty())
+        throw Exception("Should not specify vw name for non-worker components", ErrorCodes::LOGICAL_ERROR);
+
+    Endpoints endpoints = fakedFetchEndpoints(eps, psm_name, vw_name);
+    HostWithPortsVec result = formatResult(endpoints, type);
+
+    if (result.size() == 0)
+        LOG_DEBUG(log, "fakedLookup(" + psm_name + ") returns empty result");
+    return result;
+}
+
+// For testing. fake interface.
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fakedFetchEndpoints(const Endpoints & eps, const String & psm_name, const String & vw_name)
+{
+    if (cache_disabled)
+        return fakedFetchEndpointsFromUpstream(eps, vw_name);
+    else
+        return fakedFetchEndpointsFromCache(eps, psm_name, vw_name);
+}
+
+// For testing. fake interface.
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fakedFetchEndpointsFromCache(const Endpoints & eps, const String & psm_name, const String & vw_name)
+{
+    SDCacheKey key {psm_name, vw_name};
+    SDCacheValue<Endpoint> cache_res;
+
+    // Cache hit. endpoints exists in cache and not outdated
+    if (cache.get(key, cache_res) && time(nullptr) - cache_timeout < cache_res.last_update)
+    {
+        return cache_res.endpoints;
+    }
+
+    // Cache miss. We fetch entry and store in cache
+    try
+    {
+        Endpoints res = fakedFetchEndpointsFromUpstream(eps, vw_name);
+        SDCacheValue<Endpoint> new_value {res, time(nullptr)};
+
+        // update cache
+        cache.put(key, new_value);
+        return res;
+
+    } catch (...)
+    {
+        LOG_WARNING(log, "failed to update sd cache, return old results");
+        return cache_res.endpoints;
+    }
+}
+
+// For testing. fake interface.
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::fakedFetchEndpointsFromUpstream(const Endpoints & eps, const String & vw_name)
+{
+    auto retry_count = 2;
+    while (retry_count >= 0)
+    {
+        try
+        {
+            ProfileEvents::increment(ProfileEvents::SDRequestUpstream);
+            // by calling translate_one, we get endpoints from consul
+            Endpoints res;
+            for(auto & e : eps)
+            {
+                // kick out endpoint that doesn't belong to this cluster as earily as possible
+                if(!passCheckCluster(e))
+                    continue;
+                // kick out endpoint that doesn't belong to this vw_name as earily as possible
+                if(!vw_name.empty() && !passCheckVwName(e, vw_name))
+                    continue;
+                res.emplace_back(e);
+            }
+            return res;
+        }
+        catch (Exception & e)
+        {
+            ProfileEvents::increment(ProfileEvents::SDRequestUpstreamFailed);
+            LOG_WARNING(log, "Try " + std::to_string(3 - retry_count)
+                        + ": Error looking up from consul " + e.displayText());
+            --retry_count;
+            usleep(10000); // sleep for 10ms
+        }
+    }
+
+    throw Exception("Unable to get endpoints from consul", ErrorCodes::NETWORK_ERROR);
+}
+
+}
