@@ -177,4 +177,20 @@ std::string normalizeHost(const std::string & host)
     }
 }
 
+std::tuple<std::string, bool> safeNormalizeHost(const std::string & host)
+{
+    try
+    {
+        Poco::Net::IPAddress addr(host);
+        /// For ipv6
+        if (addr.family() == Poco::Net::AddressFamily::IPv6)
+            return std::make_tuple("[" + host + "]", true);
+        return std::make_tuple(host, false);
+    }
+    catch (...)
+    {
+        return std::make_tuple(host, false);
+    }
+}
+
 }

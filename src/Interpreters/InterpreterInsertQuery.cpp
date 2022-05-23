@@ -28,6 +28,7 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
+#include "Common/tests/gtest_global_context.h"
 #include <Common/checkStackSize.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
@@ -358,9 +359,9 @@ BlockIO InterpreterInsertQuery::execute()
         BlockInputStreams inputs;
         // For HDFS inputs with fuzzname, let ReadBufferFromByteHDFS to handle multiple files
 #if USE_HDFS
-        if (scheme == "hdfs")
+        if (DB::isHdfsOrCfsScheme(scheme))
         {
-            std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(uristr, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
+            std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(uristr, false, getContext()->getHdfsConnectionParams(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
             // snappy compression suport
             if (endsWith(uristr, "snappy"))
             {
@@ -399,9 +400,9 @@ BlockIO InterpreterInsertQuery::execute()
                         read_buf = std::make_unique<ReadBufferFromFile>(Poco::URI(uriPrefix + name).getPath());
                     }
 #if USE_HDFS
-                    else if (scheme == "hdfs")
+                    else if (DB::isHdfsOrCfsScheme(scheme))
                     {
-                        read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
+                        read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, false, getContext()->getHdfsConnectionParams(), DBMS_DEFAULT_BUFFER_SIZE, nullptr,  0,  false, getContext()->getProcessList().getHDFSDownloadThrottler());
                     }
 #endif
                     else

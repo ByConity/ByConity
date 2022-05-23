@@ -25,7 +25,8 @@ namespace ErrorCodes
 HDFSDumper::HDFSDumper(const String & hdfs_user_, const String & hdfs_nnproxy_, size_t buffer_size_)
     : buffer_size(buffer_size_)
 {
-    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfs_user_, hdfs_nnproxy_, 100000, 100, 10);
+    HDFSConnectionParams hdfsParams(HDFSConnectionParams::CONN_NNPROXY, hdfs_user_, hdfs_nnproxy_);
+    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfsParams, 100000, 100, 10);
 }
 
 void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & remote_path, std::vector<String> & parts_to_upload)

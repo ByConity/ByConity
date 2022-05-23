@@ -113,6 +113,8 @@
 #include <Storages/StorageS3Settings.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
@@ -440,7 +442,7 @@ struct ContextSharedPart
 
     String hdfsUser; // libhdfs3 user name
     String hdfsNNProxy; // libhdfs3 namenode proxy
-
+    HDFSConnectionParams hdfsConnectionParams;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -611,7 +613,7 @@ struct ContextSharedPart
             if (auto * cache = CompiledExpressionCacheFactory::instance().tryGetCache())
                 cache->reset();
 #endif
-            
+
             if (server_manager)
                 server_manager->shutDown();
 
@@ -3181,6 +3183,16 @@ String Context::getHdfsNNProxy() const
 {
     return shared->hdfsNNProxy;
 }
+
+
+void Context::setHdfsConnectionParams(const HDFSConnectionParams& params)  {
+    shared->hdfsConnectionParams = params;
+}
+
+HDFSConnectionParams Context::getHdfsConnectionParams() const{
+    return shared->hdfsConnectionParams;
+}
+
 
 void Context::setDeleteBitmapCache(size_t cache_size_in_bytes)
 {

@@ -4,7 +4,8 @@
 #include <Common/config.h>
 #endif
 
-#if USE_HDFS
+
+// #if USE_HDFS
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -12,14 +13,48 @@
 #include <hdfs/hdfs.h> // Y_IGNORE
 #include <common/types.h>
 #include <mutex>
-
-#include <Interpreters/Context.h>
+#include <unordered_map>
+// #include <Interpreters/Context.h>
 #include <Poco/Util/AbstractConfiguration.h>
-
+#include <Poco/URI.h>
 
 namespace DB
 {
+inline bool isHdfsScheme(const std::string & scheme)
+{
+    return strcasecmp(scheme.c_str(), "hdfs") == 0;
+}
 
+inline bool isCfsScheme(const std::string & scheme)
+{
+    return strcasecmp(scheme.c_str(), "cfs") == 0;
+}
+
+inline bool isConsulScheme(const std::string & scheme)
+{
+    return scheme.empty() || strcasecmp(scheme.c_str(), "consul") == 0;
+}
+
+inline bool isHdfsOrCfsScheme(const std::string & scheme)
+{
+    return isHdfsScheme(scheme) || isCfsScheme(scheme);
+}
+
+inline void constructHDFSUri(const std::string & host, const std::string & defaultScheme, unsigned short port, Poco::URI * out)
+{
+    auto pos = host.find("://");
+    if (pos != std::string::npos)
+    {
+        out->setScheme(host.substr(0, pos));
+        out->setHost(host.substr(pos + 3));
+    }
+    else
+    {
+        out->setHost(host);
+        out->setScheme(defaultScheme);
+    }
+    out->setPort(port);
+}
 namespace detail
 {
 
@@ -31,7 +66,7 @@ namespace detail
         }
     };
 
-    struct HDFSFsDeleter
+    struct HDFSFsDeleter  
     {
         void operator()(hdfsFS fs_ptr)
         {
@@ -60,6 +95,67 @@ struct HDFSFileInfo
 };
 
 
+using HDFSBuilderPtr = std::unique_ptr<hdfsBuilder, detail::HDFSBuilderDeleter>;
+using HDFSFSPtr = std::shared_ptr<std::remove_pointer_t<hdfsFS>>;
+
+
+class HDFSConnectionParams
+{
+public:
+    enum HDFSConnectionType
+    {
+        CONN_DUMMY,
+        CONN_HDFS,
+        CONN_CFS,
+        CONN_HA,
+        CONN_NNPROXY
+    };
+    using IpWithPort = std::pair<String, int>;
+    HDFSConnectionParams() ;
+    HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const String & hdfs_service_);
+    HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const std::vector<IpWithPort>& addrs_);
+
+
+    HDFSConnectionType conn_type;
+    String hdfs_user;
+    String hdfs_service;
+    std::vector<IpWithPort> addrs;
+
+    bool use_nnproxy_ha = false; // for whether to use ha config for nnproxies.
+    bool inited = false;
+    size_t nnproxy_index = 0 ;
+
+    HDFSBuilderPtr createBuilder(const Poco::URI & uri  ) const ;
+
+    void setNNProxyHa(bool val ) {
+        use_nnproxy_ha = val ;
+    }
+
+    void lookupOnNeed();
+    void setNNProxyBroken();
+
+    Poco::URI formatPath([[maybe_unused]] const String & path) const ;
+
+
+    static HDFSConnectionParams parseHdfsFromConfig([[maybe_unused]]const  Poco::Util::AbstractConfiguration & config);
+
+
+    static const HDFSConnectionParams & defaultNNProxy()
+    {
+        static HDFSConnectionParams params(CONN_NNPROXY, "clickhouse", "nnproxy");
+        return params;
+    }
+
+    static const HDFSConnectionParams & emptyHost()
+    {
+        static HDFSConnectionParams params(CONN_HDFS, "clickhouse", {{"", 0}});
+        return params;
+    }
+
+    String toString() const;
+
+};
+
 class HDFSBuilderWrapper
 {
 
@@ -70,12 +166,14 @@ static const String CONFIG_PREFIX;
 public:
     HDFSBuilderWrapper() : hdfs_builder(hdfsNewBuilder()) {}
 
-    ~HDFSBuilderWrapper() { hdfsFreeBuilder(hdfs_builder); }
+    // need_kinit is always false in this constructor.
+    HDFSBuilderWrapper(HDFSBuilderPtr builderPtr) : hdfs_builder(std::move(builderPtr)){}
+
+    ~HDFSBuilderWrapper() {}
 
     HDFSBuilderWrapper(const HDFSBuilderWrapper &) = delete;
     HDFSBuilderWrapper(HDFSBuilderWrapper &&) = default;
-
-    hdfsBuilder * get() { return hdfs_builder; }
+    hdfsBuilder * get() { return hdfs_builder.get(); }
 
 private:
     void loadFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_path, bool isUser = false);
@@ -90,7 +188,8 @@ private:
         return config_stor.emplace_back(std::make_pair(k, v));
     }
 
-    hdfsBuilder * hdfs_builder;
+    // HDFSConnectionParams hdfs_params = HDFSConnectionParams::defaultNNProxy();
+    HDFSBuilderPtr  hdfs_builder;
     String hadoop_kerberos_keytab;
     String hadoop_kerberos_principal;
     String hadoop_kerberos_kinit_command = "kinit";
@@ -101,8 +200,9 @@ private:
     bool need_kinit{false};
 };
 
-using HDFSBuilderPtr = std::unique_ptr<hdfsBuilder, detail::HDFSBuilderDeleter>;
-using HDFSFSPtr = std::unique_ptr<std::remove_pointer_t<hdfsFS>, detail::HDFSFsDeleter>;
+
+template<typename T>
+using fs_ptr = std::shared_ptr<T>;
 
 /**
  * Bytedance hdfs related
@@ -165,4 +265,4 @@ HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::A
 HDFSFSPtr createHDFSFS(hdfsBuilder * builder);
 
 }
-#endif
+// #endif

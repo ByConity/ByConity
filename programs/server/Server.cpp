@@ -34,6 +34,7 @@
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/TCPHandlerFactory.h>
 #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
@@ -1008,7 +1009,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setHdfsUser(hdfs_user);
     std::string hdfs_nnproxy = config().getString("hdfs_nnproxy", "nnproxy");
     global_context->setHdfsNNProxy(hdfs_nnproxy);
-
+    
     /// Init HDFS3 client config path
     std::string hdfs_config = config().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
@@ -1016,14 +1017,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
         setenv("LIBHDFS3_CONF", hdfs_config.c_str(), 1);
     }
 
-    /// TODO: @pengxindong
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+    global_context->setHdfsConnectionParams(hdfs_params);
+    
+    /// TODO: @rmq
+    /// set the value of has_hdfs_disk as cnch-dev.
+    bool has_hdfs_disk = false; 
+    if( has_hdfs_disk ) 
+    {
+        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
+        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
+        const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
+
+    /// TODO: @pengxindong @rmq
     /// register default hdfs file system
     // if (has_hdfs_path)
     // {
-    //     const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
-    //     const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
-    //     const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
-    //     registerDefaultHdfsFileSystem(hdfs_user, hdfs_nnproxy, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    //     const int hdfs_max_fd_num = config().getint("hdfs_max_fd_num", 100000);
+    //     const int hdfs_skip_fd_num = config().getint("hdfs_skip_fd_num", 100);
+    //     const int hdfs_io_error_num_to_reconnect = config().getint("hdfs_io_error_num_to_reconnect", 10);
+    //     registerdefaulthdfsfilesystem(hdfs_user, hdfs_nnproxy, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
     // }
 
 #endif

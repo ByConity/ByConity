@@ -267,6 +267,19 @@
     M(SDRequestUpstream, "Number requests sent to SD upstream") \
     M(SDRequestUpstreamFailed, "Number requests sent to SD upstream that failed") \
     \
+    M(WriteBufferFromHdfsWriteBytes, "")\
+    M(HDFSWriteElapsedMilliseconds, "")\
+    M(WriteBufferFromHdfsWrite, "")\
+    M(WriteBufferFromHdfsWriteFailed, "")\
+    M(HdfsFileOpen, "")\
+    M(ReadBufferFromHdfsRead, "")\
+    M(ReadBufferFromHdfsReadFailed, "")\
+    M(ReadBufferFromHdfsReadBytes, "")\
+    M(HDFSReadElapsedMilliseconds, "")\
+    M(HdfsGetBlkLocMicroseconds, "Total number of millisecons spent to call getBlockLocations") \
+    M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
+    M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \
+    \
     M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
     M(CatalogConstructorSuccess, "") \
     M(CatalogConstructorFailed, "") \
