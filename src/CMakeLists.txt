@@ -67,6 +67,7 @@ add_subdirectory (Server)
 add_subdirectory (Coordination)
 add_subdirectory (Protos)
 add_subdirectory (FormaterTool)
+add_subdirectory (ServiceDiscovery)
 
 
 set(dbms_headers)
@@ -78,6 +79,7 @@ add_headers_and_sources(clickhouse_common_io Common/CGroup)
 add_headers_and_sources(clickhouse_common_io Common/Brpc)
 add_headers_and_sources(clickhouse_common_io IO)
 add_headers_and_sources(clickhouse_common_io IO/S3)
+add_headers_and_sources(clickhouse_common_io ServiceDiscovery)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 add_headers_and_sources(dbms Storages/IndexFile)
 add_headers_and_sources(dbms FormaterTool)
@@ -327,12 +329,20 @@ target_link_libraries(clickhouse_common_io
             ${CPPKMS_LIBRARIES}
             ipdb
             maxminddb
+        PRIVATE 
+            ${CONSUL_LIBRARIES}
+            ${UDNS_LIBRARIES}
+
 )
 
 
+target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR})
+target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${CONSUL_INCLUDE_DIR})
+# dbms_target_link_libraries(PUBLIC ${CONSUL_LIBRARIES})
+# dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${CONSUL_INCLUDE_DIR})
 if (USE_RDKAFKA)
-    dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} ${CONSUL_LIBRARIES})
-    dbms_target_include_directories(SYSTEM BEFORE PRIVATE ${CONSUL_INCLUDE_DIR} ${RAPIDJSON_INCLUDE_DIR})
+    dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
+    dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})
 
     if(NOT USE_INTERNAL_RDKAFKA_LIBRARY)
         dbms_target_include_directories(SYSTEM BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})

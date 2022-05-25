@@ -604,7 +604,15 @@
     M(4002, RESOURCE_NOT_ENOUGH) \
     M(4003, WAIT_FOR_RESOURCE_TIMEOUT) \
     M(4004, RESOURCE_GROUP_INTERNAL_ERROR) \
-    M(4005, RESOURCE_GROUP_MISMATCH)
+    M(4005, RESOURCE_GROUP_MISMATCH) \
+\
+    M(8001, END_EMPTY_ENDPOINTS) \
+    M(8002, END_INVALID_TAG) \
+    M(8003, SD_PSM_NOT_EXISTS) \
+    M(8004, SD_UNKOWN_LB_STRATEGY) \
+    M(8005, SD_UPSTREAM_ISSUE) \
+    M(8006, SD_FAILED_TO_INIT_CONSUL_CLIENT) \
+
 
 /* See END */
 
@@ -616,7 +624,7 @@ namespace ErrorCodes
     APPLY_FOR_ERROR_CODES(M)
 #undef M
 
-    constexpr ErrorCode END = 5000;
+    constexpr ErrorCode END = 9000;
     ErrorPairHolder values[END + 1]{};
 
     struct ErrorCodesNames
