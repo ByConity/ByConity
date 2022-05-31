@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <Core/Names.h>
 #include <Core/UUIDHelpers.h>
-#include <Interpreters/Context.h>
+// #include <Interpreters/Context.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_common.pb.h>
 #include <Protos/data_models.pb.h>
@@ -14,7 +14,7 @@
 
 namespace DB
 {
-namespace CatalogService
+namespace Catalog
 {
     class Catalog;
 }
@@ -217,7 +217,7 @@ struct UndoResource
 
     /// domain level logics
     bool isLegacy() const { return pb_model.placeholders_size() == 0; }
-    void clean(CatalogService::Catalog & catalog, MergeTreeMetaBase * storage) const;
+    void clean(Catalog::Catalog & catalog, MergeTreeMetaBase * storage) const;
 
 private:
     static inline std::atomic<UInt64> counter{0};

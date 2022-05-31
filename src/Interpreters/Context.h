@@ -18,7 +18,7 @@
 #include <Common/ThreadPool.h>
 #include <common/types.h>
 
-#include "Interpreters/DistributedStages/PlanSegmentProcessList.h"
+#include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -165,6 +165,8 @@ class CnchTopologyMaster;
 class CnchServerTopology;
 class CnchServerManager;
 struct RootConfiguration;
+class TransactionCoordinatorRcCnch;
+
 
 enum class ServerType
 {
@@ -1017,6 +1019,9 @@ public:
     void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
     const RootConfiguration & getRootConfig() const;
     void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
+
+    void initCnchTransactionCoordinator();
+    TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const; 
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

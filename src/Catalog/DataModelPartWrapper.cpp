@@ -95,7 +95,7 @@ void ServerDataPart::serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & 
 
 void ServerDataPart::serializeDeleteBitmapMetas([[maybe_unused]] const MergeTreeMetaBase & storage, WriteBuffer & buffer) const
 {
-    assert(storage.hasUniqueKey());
+    // assert(storage.hasUniqueKey());
     UInt64 num = std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end());
     writeVarUInt(num, buffer);
 

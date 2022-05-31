@@ -1,0 +1,39 @@
+#include "DDLCreateAction.h"
+
+#include <Catalog/Catalog.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+
+namespace DB
+{
+
+void DDLCreateAction::executeV1(TxnTimestamp commit_time)
+{
+    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+
+    /// TODO: Before add db or table into kv, we should create a redo buffer can be used to index the added record fast.
+    /// need support from Catalog client
+
+    if (!params.database.empty() && params.table.empty())
+    {
+        /// create database
+        cnch_catalog->createDatabase(params.database, params.uuid, txn_id, commit_time);
+    }
+    else
+    {
+        /// create table
+        updateTsCache(params.uuid, commit_time);
+        cnch_catalog->createTable(context, params.database, params.table, params.statement, "", txn_id, commit_time);
+    }
+}
+
+void DDLCreateAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
+{
+    auto & ts_cache_manager = context.getCnchTransactionCoordinator().getTsCacheManager();
+    auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
+    auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
+    ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);
+}
+
+void DDLCreateAction::abort() {}
+
+}

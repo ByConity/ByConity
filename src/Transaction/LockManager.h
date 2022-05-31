@@ -9,7 +9,6 @@
 #include <chrono>
 #include <unordered_map>
 #include <common/singleton.h>
-
 namespace DB
 {
 class Context;
@@ -93,7 +92,7 @@ public:
     void unlock(const TxnTimestamp & txn_id);
 
     using Clock = std::chrono::steady_clock;
-    void updateExpireTime(const TxnTimestamp & txn_id, Clock::time_point expire_tp);
+    void updateExpireTime(const TxnTimestamp & txn_id_, Clock::time_point expire_tp);
 
     // for unit test
     void initialize() { lock_maps = LockMaps(LockLevelSize); }

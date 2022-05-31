@@ -14,7 +14,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    extern const int BAD_CAST;
+    // extern const int BAD_CAST;
     extern const int BAD_TYPE_OF_FIELD;
     extern const int LOGICAL_ERROR;
     extern const int BAD_ARGUMENTS;
@@ -91,11 +91,10 @@ const char * txnInitiatorToString(CnchTransactionInitiator initiator)
     throw Exception("Bad type of Transaction Initiator", ErrorCodes::BAD_TYPE_OF_FIELD);
 }
 
-void UndoResource::clean(CatalogService::Catalog & , [[maybe_unused]]MergeTreeMetaBase * storage) const
+void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase * storage) const
 {
     if (metadataOnly())
         return;
-
     DiskPtr disk;
     ///FIXME: if storage selector is available @guanzhe.andy
     // if (diskName().empty())
@@ -114,7 +113,7 @@ void UndoResource::clean(CatalogService::Catalog & , [[maybe_unused]]MergeTreeMe
         ///FIXME: if storage selector is available @guanzhe.andy
         // const auto & relative_path = placeholders(1);
         // String rel_path = storage->getStorageSelector().tableRelativePathOnDisk(disk) + relative_path;
-        String rel_path = "";
+        String rel_path;
         if (disk->exists(rel_path)) 
         {
             LOG_DEBUG(log, "Will remove undo path {}", disk->getPath() + rel_path);
@@ -144,7 +143,7 @@ void UndoResource::clean(CatalogService::Catalog & , [[maybe_unused]]MergeTreeMe
 UndoResourceNames integrateResources(const UndoResources & resources)
 {
     UndoResourceNames result;
-    for (auto & resource : resources)
+    for (const auto & resource : resources)
     {
         if (resource.type() == UndoResourceType::Part)
         {
@@ -162,7 +161,7 @@ UndoResourceNames integrateResources(const UndoResources & resources)
         {
             /// try to get part name from dst path
             String dst_path = resource.placeholders(1);
-            if (dst_path.size() > 0 && dst_path.back() == '/')
+            if (dst_path.empty() && dst_path.back() == '/')
                 dst_path.pop_back();
             String part_name = dst_path.substr(dst_path.find_last_of('/') + 1);
             if (MergeTreePartInfo::tryParsePartName(part_name, nullptr, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION))

@@ -147,6 +147,8 @@
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+
 namespace fs = std::filesystem;
 
 namespace ProfileEvents
@@ -504,6 +506,7 @@ struct ContextSharedPart
     RootConfiguration root_config;
 
     ServerType server_type;
+    mutable std::unique_ptr<TransactionCoordinatorRcCnch> cnch_txn_coordinator;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -3573,6 +3576,20 @@ ThreadPool & Context::getPartCacheManagerThreadPool()
     if (!shared->part_cache_manager_thread_pool)
         shared->part_cache_manager_thread_pool.emplace(settings.part_cache_manager_thread_pool_size);
     return *shared->part_cache_manager_thread_pool;
+}
+
+void Context::initCnchTransactionCoordinator()
+{
+    auto lock = getLock();
+
+    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
+}
+
+TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
+{
+    auto lock = getLock();
+
+    return *shared->cnch_txn_coordinator;
 }
 
 }
