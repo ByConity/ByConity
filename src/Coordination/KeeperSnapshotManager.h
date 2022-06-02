@@ -2,7 +2,6 @@
 #include <Coordination/KeeperStorage.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
 #include <libnuraft/nuraft.hxx>
 
 #include <filesystem>

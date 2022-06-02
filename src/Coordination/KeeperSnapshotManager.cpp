@@ -10,6 +10,7 @@
 #include <IO/copyData.h>
 #include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <Coordination/pathUtils.h>
+
 #include <filesystem>
 #include <memory>
 
@@ -162,9 +163,12 @@ void KeeperStorageSnapshot::serialize(const KeeperStorageSnapshot & snapshot, Wr
 
     writeBinary(snapshot.session_id, out);
 
-    /// Serialize ACLs MAP
-    writeBinary(snapshot.acl_map.size(), out);
-    for (const auto & [acl_id, acls] : snapshot.acl_map)
+    /// Better to sort before serialization, otherwise snapshots can be different on different replicas
+    std::vector<std::pair<int64_t, Coordination::ACLs>> sorted_acl_map(snapshot.acl_map.begin(), snapshot.acl_map.end());
+    std::sort(sorted_acl_map.begin(), sorted_acl_map.end());
+    /// Serialize ACLs map
+    writeBinary(sorted_acl_map.size(), out);
+    for (const auto & [acl_id, acls] : sorted_acl_map)
     {
         writeBinary(acl_id, out);
         writeBinary(acls.size(), out);
@@ -202,15 +206,14 @@ void KeeperStorageSnapshot::serialize(const KeeperStorageSnapshot & snapshot, Wr
 
     /// Session must be saved in a sorted order,
     /// otherwise snapshots will be different
-    /// TODO:
-    // std::vector<std::pair<int64_t, int64_t>> sorted_session_and_timeout(
-    //     snapshot.session_and_timeout.begin(), snapshot.session_and_timeout.end());
-    // sort(sorted_session_and_timeout.begin(), sorted_session_and_timeout.end());
+    std::vector<std::pair<int64_t, int64_t>> sorted_session_and_timeout(
+        snapshot.session_and_timeout.begin(), snapshot.session_and_timeout.end());
+    sort(sorted_session_and_timeout.begin(), sorted_session_and_timeout.end());
 
     /// Serialize sessions
-    size_t size = snapshot.session_and_timeout.size();
+    size_t size = sorted_session_and_timeout.size();
     writeBinary(size, out);
-    for (const auto & [session_id, timeout] : snapshot.session_and_timeout)
+    for (const auto & [session_id, timeout] : sorted_session_and_timeout)
     {
         writeBinary(session_id, out);
         writeBinary(timeout, out);

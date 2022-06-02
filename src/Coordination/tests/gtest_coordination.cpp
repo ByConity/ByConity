@@ -1730,7 +1730,6 @@ TEST_P(CoordinationTest, TestStorageSnapshotEqual)
         DB::KeeperSnapshotManager manager("./snapshots", 3, params.enable_compression);
 
         DB::KeeperStorage storage(500, "", true);
-        addNode(storage, "/hello", "");
         for (size_t j = 0; j < 5000; ++j)
         {
             addNode(storage, "/hello_" + std::to_string(j), "world", 1);

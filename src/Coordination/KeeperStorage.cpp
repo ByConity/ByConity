@@ -1,5 +1,3 @@
-#include <iterator>
-#include <variant>
 #include <Coordination/KeeperStorage.h>
 #include <Common/ZooKeeper/IKeeper.h>
 #include <Common/setThreadName.h>
@@ -786,6 +784,9 @@ struct KeeperStorageCreateRequestProcessor final : public KeeperStorageRequestPr
         };
 
         new_deltas.emplace_back(std::string{parent_path}, zxid, KeeperStorage::UpdateNodeDelta{std::move(parent_update)});
+
+        if (request.is_ephemeral)
+            storage.ephemerals[session_id].emplace(path_created);
 
         Coordination::Stat stat;
         stat.czxid = zxid;
