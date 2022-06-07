@@ -4,6 +4,7 @@
 #include <Databases/DatabaseReplicated.h>
 #include <Databases/DatabaseDictionary.h>
 #include <Databases/DatabaseLazy.h>
+#include <Databases/DatabaseCnch.h>
 #include <Databases/DatabaseMemory.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -120,6 +121,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
         return std::make_shared<DatabaseMemory>(database_name, context);
     else if (engine_name == "Dictionary")
         return std::make_shared<DatabaseDictionary>(database_name, context);
+    else if (engine_name == "Cnch")
+        return std::make_shared<DatabaseCnch>(database_name, context);
+
 
 #if USE_MYSQL
 
