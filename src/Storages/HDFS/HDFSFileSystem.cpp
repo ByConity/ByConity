@@ -11,6 +11,7 @@
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <hdfs/hdfs.h>
 #include <common/logger_useful.h>
+#include <common/scope_guard.h>
 namespace DB
 {
 
@@ -1057,8 +1058,6 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(const Poco::Util:
 
 void HDFSConnectionParams::lookupOnNeed()
 {
-    thread_local static std::random_device rd;
-    thread_local static std::mt19937 g(rd());
     if (conn_type != CONN_NNPROXY)
         return;
 
@@ -1068,16 +1067,8 @@ void HDFSConnectionParams::lookupOnNeed()
     {
         addrs.emplace_back( it.host, it.tcp_port);
     }
-    std::uniform_int_distribution<size_t> dist(0, addrs.size()-1);
     // ensure the nnproxy picked is not the same as the broken one. 
-    int retry = 3;
-    do {
-        size_t new_index = dist(g); 
-        nnproxy_index = (new_index == nnproxy_index) ? ((nnproxy_index + 1)% addrs.size()): new_index;
-        if(!brokenNNs.isBrokenNN(addrs[nnproxy_index].first)) {
-            break;
-        }
-    } while(retry-- > 0);
+    nnproxy_index = brokenNNs.findOneGoodNN(nnproxys);
     inited = true; 
 }
 

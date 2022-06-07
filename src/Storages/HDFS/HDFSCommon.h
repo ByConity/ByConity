@@ -17,7 +17,8 @@
 // #include <Interpreters/Context.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/URI.h>
-
+#include <random>
+#include <Common/HostWithPorts.h>
 namespace DB
 {
 inline bool isHdfsScheme(const std::string & scheme)
@@ -218,7 +219,7 @@ class TTLBrokenNameNodes
 public:
     using TTLNameNode = std::pair<std::string, time_t>;
     // default ttl is two hours
-    TTLBrokenNameNodes(size_t ttl_ = 7200):ttl(ttl_){}
+    TTLBrokenNameNodes(size_t ttl_ = 7200):ttl(ttl_), generator(rd()){}
 
     std::mutex nnMutex;
 
@@ -242,6 +243,26 @@ public:
     {
         std::unique_lock lock(nnMutex);
         time_t current_time = time(nullptr);
+        return isBrokenNNInternal(namenode, current_time);
+    }
+    
+    size_t findOneGoodNN(const HostWithPortsVec& hosts) {
+        std::uniform_int_distribution<size_t> dist(0, hosts.size()-1);
+        size_t start_point = dist(generator);
+        size_t current_point = start_point;
+        time_t current_time = time(nullptr);
+        std::unique_lock lock(nnMutex);
+        while(current_point != start_point) {
+            if(isBrokenNNInternal(hosts[current_point].host,current_time)) {
+                current_point = (current_point + 1 ) % hosts.size(); 
+            } else {
+                break;
+            }            
+        }
+        return current_point;
+    }
+private:
+    bool isBrokenNNInternal(const std::string& namenode, const time_t & current_time) {
         auto it = nns.find(namenode);
         if (it == nns.end()) return false;
         if (it->second + time_t(ttl) > current_time)
@@ -252,9 +273,10 @@ public:
         return true;
     }
 
-private:
     size_t ttl;
     std::unordered_map<std::string, time_t>  nns;
+    std::random_device rd;
+    std::mt19937 generator;
 };
 
 static TTLBrokenNameNodes brokenNNs; // NameNode blacklist
