@@ -115,6 +115,8 @@ public:
     void deserialize(ReadBuffer & buf);
 };
 
+using NamesAndTypesListPtr = std::shared_ptr<NamesAndTypesList>;
+
 }
 
 namespace std

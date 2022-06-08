@@ -68,6 +68,10 @@ add_subdirectory (Coordination)
 add_subdirectory (Protos)
 add_subdirectory (FormaterTool)
 add_subdirectory (ServiceDiscovery)
+add_subdirectory (ResourceManagement)
+add_subdirectory (Transaction)
+add_subdirectory (MergeTreeCommon)
+add_subdirectory (Catalog)
 
 
 set(dbms_headers)
@@ -83,6 +87,9 @@ add_headers_and_sources(clickhouse_common_io ServiceDiscovery)
 list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_delete.cpp)
 add_headers_and_sources(dbms Storages/IndexFile)
 add_headers_and_sources(dbms FormaterTool)
+add_headers_and_sources(dbms Transaction)
+add_headers_and_sources(dbms MergeTreeCommon)
+add_headers_and_sources(dbms Catalog)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -112,7 +119,7 @@ if (USE_HDFS)
     add_headers_and_sources(dbms Disks/HDFS)
 endif()
 
-add_headers_and_sources(dbms src/Protos)
+add_headers_and_sources(dbms Protos)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
 list (APPEND clickhouse_common_io_headers ${CONFIG_VERSION} ${CONFIG_COMMON})
@@ -384,6 +391,8 @@ dbms_target_link_libraries (
         boost::system
         clickhouse_common_io
         clickhouse_protos_lib
+        catalog_lib
+        resource_manager_lib
 )
 
 target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
@@ -450,6 +459,10 @@ if (USE_PROTOBUF)
     target_link_libraries(clickhouse_common_io PUBLIC ${Protobuf_LIBRARY})
     target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${Protobuf_INCLUDE_DIR})
 endif ()
+
+if (USE_BYTEKV)
+    dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${BYTEKV_INCLUDE_DIR})
+endif()
 
 if (USE_GRPC)
     dbms_target_link_libraries (PUBLIC clickhouse_grpc_protos)

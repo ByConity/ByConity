@@ -1,0 +1,114 @@
+#pragma once
+#include <Common/ConfigurationCommon.h>
+
+namespace DB
+{
+#define RM_CONFIG_FIELDS_LIST(M) \
+    M(UInt64, port, "", 9000, ConfigFlag::Default, "desc: rpc port") \
+    M(String, election_point_key, "", "rm_point_default", ConfigFlag::Default, "") \
+    M(UInt64, init_client_tries, "", 3, ConfigFlag::Default, "") \
+    M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "")
+
+DECLARE_CONFIG_DATA(RMConfigurationData, RM_CONFIG_FIELDS_LIST)
+
+struct RMConfiguration final : public RMConfigurationData
+{
+};
+
+
+constexpr auto bj_default_uri
+    = "bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&is_consul=false";
+/// For bytejournal audit logs . Can be one of following : [none,native,databus]. https://jira.bytedance.com/browse/CNCH-270
+
+#define BJ_CONFIG_FIELDS_LIST(M) \
+    M(String, cnch_prefix, "", "default_cnch_ci_random_", ConfigFlag::Default, "") \
+    M(String, log_dir, "", "./logs_bytejournal", ConfigFlag::Default, "") \
+    M(String, uri, "", bj_default_uri, ConfigFlag::Recommended, "") \
+    M(String, name_space, "namespace", "cnch_test", ConfigFlag::Recommended, "") \
+    M(String, metrics_prefix, "", "cnch", ConfigFlag::Default, "") \
+    M(String, metadata_audit_type, "", "none", ConfigFlag::Default, "") \
+    M(UInt64, retention_ms, "", 4 * 60 * 60 * 1000, ConfigFlag::Default, "") \
+    M(UInt64, max_write_throughput_bytes, "", 1024 * 1024 * 1024, ConfigFlag::Default, "") \
+    M(UInt64, max_rollover_size, "", 512 * 1024 * 1024, ConfigFlag::Default, "")
+
+DECLARE_CONFIG_DATA(BJConfigurationData, BJ_CONFIG_FIELDS_LIST)
+
+struct BJConfiguration final : public BJConfigurationData
+{
+};
+
+
+#define SD_CONFIG_FIELDS_LIST(M) \
+    M(String, mode, "", "local", ConfigFlag::Recommended, "") \
+    M(String, server_psm, "server.psm", "data.cnch.server", ConfigFlag::Recommended, "") \
+    M(String, vw_psm, "vw.psm", "data.cncn.vw", ConfigFlag::Recommended, "") \
+    M(String, catalog_psm, "catalog.psm", "data.cnch.catalog", ConfigFlag::Recommended, "") \
+    M(String, tso_psm, "tso.psm", "data.cnch.tso", ConfigFlag::Recommended, "") \
+    M(String, daemon_manager_psm, "daemon_manager.psm", "data.cnch.daemon_manager", ConfigFlag::Recommended, "") \
+    M(String, resource_manager_psm, "resource_manager.psm", "data.cnch.resource_manager", ConfigFlag::Default, "") \
+    M(String, bytepond_psm, "bytepond.psm", "data.cnch.bytepond", ConfigFlag::Default, "")
+
+DECLARE_CONFIG_DATA(SDConfigurationData, SD_CONFIG_FIELDS_LIST)
+
+struct SDConfiguration final : public SDConfigurationData
+{
+};
+
+
+#define ROOT_CONFIG_FIELDS_LIST(M) \
+    M(UInt64, tcp_port, "", 9000, ConfigFlag::Recommended, "") \
+    M(UInt64, http_port, "", 8123, ConfigFlag::Recommended, "") \
+    M(UInt64, rpc_port, "", 9100, ConfigFlag::Recommended, "") \
+    M(UInt64, exchange_port, "", 0, ConfigFlag::Default, "") \
+    M(UInt64, exchange_status_port, "", 0, ConfigFlag::Default, "") \
+    M(Int64, keep_alive_timeout, "", 10, ConfigFlag::Default, "") \
+    M(UInt64, max_connections, "", 1024 * 16, ConfigFlag::Default, "") \
+    M(Bool, listen_try, "", false, ConfigFlag::Default, "") \
+    M(Bool, listen_reuse_port, "", false, ConfigFlag::Default, "") \
+    M(UInt64, listen_backlog, "", 64, ConfigFlag::Default, "") \
+    M(UInt64, asynchronous_metrics_update_period_s, "", 60, ConfigFlag::Default, "") \
+    M(String, cnch_type, "", "server", ConfigFlag::Recommended, "") \
+    M(UInt64, max_concurrent_queries, "", 0, ConfigFlag::Default, "") \
+    M(UInt64, max_concurrent_insert_queries, "", 0, ConfigFlag::Default, "") \
+    M(UInt64, max_concurrent_system_queries, "", 0, ConfigFlag::Default, "") \
+    M(Float32, cache_size_to_ram_max_ratio, "", 0.5, ConfigFlag::Default, "") \
+    M(UInt64, uncompressed_cache_size, "", 0, ConfigFlag::Default, "") \
+    M(UInt64, mark_cache_size, "", 5368709120, ConfigFlag::Default, "") \
+    M(UInt64, cnch_checksums_cache_size, "", 5368709120, ConfigFlag::Default, "") \
+    M(UInt64, shutdown_wait_unfinished, "", 5, ConfigFlag::Default, "") \
+    M(UInt64, cnch_transaction_ts_expire_time, "", 2 * 60 * 60 * 1000, ConfigFlag::Default, "") \
+    /**
+     * Mutable */ \
+    M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
+    M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.8, ConfigFlag::Default, "") \
+    M(MutableUInt64, kafka_max_partition_fetch_bytes, "", 1048576, ConfigFlag::Default, "") \
+    M(MutableUInt64, stream_poll_timeout_ms, "", 500, ConfigFlag::Default, "") \
+    M(MutableUInt64, memory_buffer_heartbeat_ms, "", 1000, ConfigFlag::Default, "") \
+    /**
+     * Might be removed */ \
+    M(MutableUInt64, max_table_size_to_drop, "", 50000000000lu, ConfigFlag::Default, "") \
+    M(MutableUInt64, max_partition_size_to_drop, "", 50000000000lu, ConfigFlag::Default, "") \
+    M(MutableUInt64, databases_load_pool_size, "", 3, ConfigFlag::Default, "") \
+    M(MutableUInt64, tables_load_pool_size, "", 8, ConfigFlag::Default, "") \
+    M(MutableUInt64, parts_load_pool_size, "", 48, ConfigFlag::Default, "")
+
+DECLARE_CONFIG_DATA(RootConfigurationData, ROOT_CONFIG_FIELDS_LIST)
+
+
+struct RootConfiguration final : public RootConfigurationData
+{
+    RMConfiguration resource_manager;
+    BJConfiguration bytejournal;
+    SDConfiguration service_discovery;
+
+    RootConfiguration()
+    {
+        sub_configs.push_back(&resource_manager);
+        sub_configs.push_back(&bytejournal);
+        sub_configs.push_back(&service_discovery);
+    }
+
+    void loadFromPocoConfigImpl(const PocoAbstractConfig & config, const String & current_prefix) override;
+};
+
+}

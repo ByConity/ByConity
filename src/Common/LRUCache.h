@@ -87,6 +87,19 @@ public:
         return ret;
     }
 
+    std::set<Key> getAllKeys()
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+
+        std::set<Key> ret;
+        const auto & key_index = indexes.template get<key_tag>();
+        for (auto it = key_index.begin(); it != key_index.end(); ++it)
+        {
+            ret.insert(it->second);
+        }
+        return ret;
+    }
+
     // name-Key pairs in CacheContainer
     // Insert name-Key pairs into CacheContainer
     // A name may has multiple Keys, and a Key belongs to multiple names

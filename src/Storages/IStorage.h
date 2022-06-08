@@ -19,6 +19,7 @@
 #include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
+#include <Transaction/TxnTimestamp.h>
 
 #include <optional>
 #include <shared_mutex>
@@ -38,6 +39,8 @@ class ASTCreateQuery;
 class ASTInsertQuery;
 
 struct Settings;
+
+using StorageType = DiskType::Type;
 
 class AlterCommands;
 class MutationCommands;
@@ -105,6 +108,9 @@ public:
 
     /// The name of the table.
     StorageID getStorageID() const;
+    std::string getTableName() const { return storage_id.table_name; }
+    std::string getDatabaseName() const { return storage_id.database_name; }
+    UUID getStorageUUID() const { return storage_id.uuid; }
 
     /// Returns true if the storage receives data from a remote server or servers.
     virtual bool isRemote() const { return false; }
@@ -197,6 +203,12 @@ public:
     /// Check whether column names and data types are valid. If not, throw Exception.
     virtual void checkColumnsValidity([[maybe_unused]] const ColumnsDescription & columns) const {}
 
+    void setCreateTableSql(String sql) { create_table_sql = std::move(sql); }
+    String getCreateTableSql() const { return create_table_sql; }
+
+    virtual bool isBucketTable() const {return false;}
+    virtual UInt64 getTableHashForClusterBy() const {return 0;}
+
 protected:
     /// Returns whether the column is virtual - by default all columns are real.
     /// Initially reserved virtual column name may be shadowed by real column.
@@ -211,6 +223,9 @@ private:
     /// Multiversion storage metadata. Allows to read/write storage metadata
     /// without locks.
     MultiVersionStorageMetadataPtr metadata;
+
+    /// cnch specific members
+    String create_table_sql;
 
     RWLockImpl::LockHolder tryLockTimed(
         const RWLock & rwlock, RWLockImpl::Type type, const String & query_id, const std::chrono::milliseconds & acquire_timeout) const;
@@ -603,6 +618,15 @@ public:
 
     void serialize(WriteBuffer & buf) const;
     static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context); 
+
+    bool is_detached{false};
+
+    TxnTimestamp commit_time;
+    /// Parts metadata columns mapping related
+    NamesAndTypesListPtr part_columns = std::make_shared<NamesAndTypesList>();
+    std::map<UInt64, NamesAndTypesListPtr> previous_versions_part_columns;
+    NamesAndTypesListPtr getPartColumns(const UInt64 & columns_commit_time) const;
+    UInt64 getPartColumnsCommitTime(const NamesAndTypesList & search_part_columns) const;
 
 private:
     std::atomic<UInt64> update_time{0};

@@ -265,6 +265,10 @@ void readStringUntilEOFInto(Vector & s, ReadBuffer & buf)
     }
 }
 
+UInt128 stringToUUID(const String & str)
+{
+    return parseFromString<UUID>(str);
+}
 
 void readStringUntilEOF(String & s, ReadBuffer & buf)
 {

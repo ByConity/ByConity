@@ -154,6 +154,30 @@ class DiskUniqueKeyIndexCache;
 class DiskUniqueRowStoreCache;
 using IndexFileBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
 
+class CnchStorageCache;
+class PartCacheManager;
+class IServiceDiscovery;
+using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
+class CnchTopologyMaster;
+class CnchServerTopology;
+class CnchServerManager;
+struct RootConfiguration;
+
+enum class ServerType
+{
+    standalone,
+    cnch_server,
+    cnch_worker,
+    cnch_daemon_manager,
+    cnch_resource_manager,
+    cnch_bytepond,
+};
+
+namespace Catalog
+{
+    class Catalog;
+    struct CatalogConfig;
+}
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -242,6 +266,10 @@ private:
     TemporaryTablesMapping external_tables_mapping;
     Scalars scalars;
     String pipeline_log_path;
+
+    /// write ha related. manage the non host update time for tables during query execution.
+    std::unordered_map<UUID, UInt64> session_nhuts {};
+    std::shared_ptr<std::mutex> nhut_mutex = std::make_shared<std::mutex>();
 
     /// Fields for distributed s3 function
     std::optional<ReadTaskCallback> next_task_callback;
@@ -785,6 +813,7 @@ public:
     BackgroundSchedulePool & getMergeSelectSchedulePool() const;
     BackgroundSchedulePool & getUniqueTableSchedulePool() const;
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
+    BackgroundSchedulePool & getTopologySchedulePool() const;
 
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
@@ -944,6 +973,44 @@ public:
     std::shared_ptr<DiskUniqueRowStoreCache> getDiskUniqueRowStoreCache() const;
 
     void setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config);
+
+    /// client for service discovery
+    void initServiceDiscoveryClient();
+    ServiceDiscoveryClientPtr getServiceDiscoveryClient() const;
+
+    UInt64 getTimestamp() const;
+    UInt64 tryGetTimestamp(const String & pretty_func_name = "Context") const;
+    UInt64 getPhysicalTimestamp() const;
+
+    void setCnchStorageCache(size_t max_cache_size);
+    std::shared_ptr<CnchStorageCache> getCnchStorageCache() const;
+
+    void setPartCacheManager();
+    std::shared_ptr<PartCacheManager> getPartCacheManager() const;
+
+    ThreadPool & getPartCacheManagerThreadPool();
+
+    /// catalog related
+    void initCatalog(Catalog::CatalogConfig & catalog_conf, const String & name_space);
+    std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
+    std::shared_ptr<Catalog::Catalog> getCnchCatalog() const;
+
+    void setCnchServerManager();
+    std::shared_ptr<CnchServerManager> getCnchServerManager() const;
+    void setCnchTopologyMaster();
+    std::shared_ptr<CnchTopologyMaster> getCnchTopologyMaster() const;
+
+    void setServerType(const String & type_str);
+    ServerType getServerType() const;
+
+    UInt16 getRPCPort() const;
+
+    //write ha non host update time
+    UInt64 getNonHostUpdateTime(const UUID & uuid);
+
+    void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
+    const RootConfiguration & getRootConfig() const;
+    void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

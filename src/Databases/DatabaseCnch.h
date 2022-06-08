@@ -5,6 +5,7 @@
 #include <Databases/DatabasesCommon.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Storages/IStorage.h>
+#include <Transaction/TxnTimestamp.h>
 
 namespace DB
 {
@@ -15,7 +16,7 @@ namespace DB
 class DatabaseCnch : public DatabaseWithOwnTablesBase
 {
 public:
-    DatabaseCnch(const String & name, ContextPtr context);
+    DatabaseCnch(const String & name, ContextPtr context, UUID uuid_ = UUIDHelpers::Nil);
 
     String getEngineName() const override { return "Cnch"; }
     void createTable(
@@ -31,6 +32,14 @@ public:
 
     ASTPtr getCreateDatabaseQuery() const override;
     void drop(ContextPtr context) override;
+
+    TxnTimestamp commit_time;
+private:
+    UUID db_uuid = UUIDHelpers::Nil;
+
 };
+
+using CnchDBPtr = std::shared_ptr<DatabaseCnch>;
+using CnchDatabases = std::map<String, CnchDBPtr>;
 
 }
