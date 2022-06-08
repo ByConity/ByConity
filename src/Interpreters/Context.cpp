@@ -15,6 +15,7 @@
 #include <Common/Throttler.h>
 #include <Common/thread_local_rng.h>
 #include <Common/FieldVisitorToString.h>
+#include <Common/Configurations.h>
 #include <Coordination/KeeperStorageDispatcher.h>
 #include <Compression/ICompressionCodec.h>
 #include <Core/BackgroundSchedulePool.h>
@@ -110,6 +111,8 @@
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/StorageS3Settings.h>
+#include <Storages/CnchStorageCache.h>
+#include <Storages/PartCacheManager.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Poco/Mutex.h>
 #include <Poco/Net/IPAddress.h>
@@ -133,6 +136,11 @@
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
 #include <common/logger_useful.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <Catalog/Catalog.h>
+#include <MergeTreeCommon/CnchServerTopology.h>
+#include <MergeTreeCommon/CnchServerManager.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
@@ -161,6 +169,7 @@ namespace CurrentMetrics
     extern const Metric BackgroundMergeSelectSchedulePoolTask;
     extern const Metric BackgroundUniqueTableSchedulePoolTask;
     extern const Metric BackgroundMemoryTableSchedulePoolTask;
+    extern const Metric BackgroundCNCHTopologySchedulePoolTask;
 }
 
 
@@ -179,6 +188,7 @@ namespace SchedulePool
         MergeSelect,
         UniqueTable,
         MemoryTable,
+        CNCHTopology,
         Size
     };
 }
@@ -462,6 +472,8 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
+    std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
+
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
 
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
@@ -479,6 +491,17 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+
+    mutable ServiceDiscoveryClientPtr sd;
+    mutable PartCacheManagerPtr cache_manager;           /// Manage cache of parts for cnch tables.
+    mutable CnchStorageCachePtr storage_cache;          /// Storage cache used in cnch.
+    mutable std::shared_ptr<Catalog::Catalog> cnch_catalog;
+    mutable CnchServerManagerPtr server_manager;
+    mutable CnchTopologyMasterPtr topology_master;
+
+    RootConfiguration root_config;
+
+    ServerType server_type;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -588,7 +611,12 @@ struct ContextSharedPart
             if (auto * cache = CompiledExpressionCacheFactory::instance().tryGetCache())
                 cache->reset();
 #endif
+            
+            if (server_manager)
+                server_manager->shutDown();
 
+            if (topology_master)
+                topology_master->shutDown();
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -1953,6 +1981,15 @@ BackgroundSchedulePool & Context::getMemoryTableSchedulePool() const
         shared->extra_schedule_pools[SchedulePool::MemoryTable].emplace(
             settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemoryTablePool");
     return *shared->extra_schedule_pools[SchedulePool::MemoryTable];
+}
+
+BackgroundSchedulePool & Context::getTopologySchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::CNCHTopology])
+        shared->extra_schedule_pools[SchedulePool::CNCHTopology].emplace(
+            settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopologyPool");
+    return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
 ThrottlerPtr Context::getReplicatedSendsThrottler() const
@@ -3330,6 +3367,200 @@ void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & co
         if (nullptr != shared->cpu_set_scale_manager)
             shared->cpu_set_scale_manager = nullptr;
     }
+}
+
+void Context::initServiceDiscoveryClient()
+{
+    auto & config = getConfigRef();
+    shared->sd = ServiceDiscoveryFactory::instance().create(config);
+}
+
+ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
+{
+    return shared->sd;
+}
+
+UInt64 Context::getTimestamp() const
+{
+//    return getTSOResponse(GET_TIMESTAMP);
+    /// FIXME: when tso is available
+    return 0;
+}
+
+
+
+UInt64 Context::tryGetTimestamp([[maybe_unused]]const String & pretty_func_name) const
+{
+    /// FIXME: when tso is available
+    return 0;
+}
+
+UInt64 Context::getPhysicalTimestamp() const
+{
+    // 46 bit of TSO timestamp is used to store physical part
+    const auto tso_ts = tryGetTimestamp();
+    if (TxnTimestamp::fallbackTS() == tso_ts)
+        return 0;
+    return tso_ts >> 18;
+}
+
+void Context::setCnchStorageCache(size_t max_cache_size)
+{
+    auto lock = getLock();
+
+    if (shared->storage_cache)
+        throw Exception("Storage cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->storage_cache = std::make_shared<CnchStorageCache>(max_cache_size);
+}
+
+CnchStorageCachePtr Context::getCnchStorageCache() const
+{
+    return shared->storage_cache;
+}
+
+void Context::setPartCacheManager()
+{
+    auto lock = getLock();
+
+    if (shared->cache_manager)
+        throw Exception("Part cache manager has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->cache_manager = std::make_shared<PartCacheManager>(*this);
+}
+
+PartCacheManagerPtr Context::getPartCacheManager() const
+{
+    auto lock = getLock();
+    return shared->cache_manager;
+}
+
+void Context::initCatalog(Catalog::CatalogConfig & catalog_conf, const String & name_space)
+{
+    shared->cnch_catalog = std::make_unique<Catalog::Catalog>(*this, catalog_conf, name_space);
+}
+
+std::shared_ptr<Catalog::Catalog> Context::tryGetCnchCatalog() const
+{
+    return shared->cnch_catalog;
+}
+
+std::shared_ptr<Catalog::Catalog> Context::getCnchCatalog() const
+{
+    if (!shared->cnch_catalog)
+        throw Exception("Cnch catalog is not initialized", ErrorCodes::LOGICAL_ERROR);
+
+    return shared->cnch_catalog;
+}
+
+void Context::setCnchServerManager()
+{
+    auto lock = getLock();
+    if (shared->server_manager)
+        throw Exception("Server manager has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->server_manager = std::make_shared<CnchServerManager>(*this);
+}
+
+std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
+{
+    auto lock = getLock();
+    return shared->server_manager;
+}
+
+void Context::setCnchTopologyMaster()
+{
+    auto lock = getLock();
+    if (shared->topology_master)
+        throw Exception("Topology master has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    shared->topology_master = std::make_shared<CnchTopologyMaster>(*this);
+}
+
+std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const
+{
+    auto lock = getLock();
+    return shared->topology_master;
+}
+
+UInt16 Context::getRPCPort() const
+{
+    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
+    {
+        auto sd_client = this->getServiceDiscoveryClient();
+        if(sd_client->getName() == "consul")
+        {
+            const char * rpcPort = getenv("PORT1");
+            if(rpcPort != nullptr)
+                return parse<UInt16>(rpcPort);
+        }
+    }
+
+    return getRootConfig().rpc_port;
+}
+
+void Context::setServerType(const String & type_str)
+{
+    if (type_str == "standalone")
+        shared->server_type = ServerType::standalone;
+    else if (type_str == "server")
+        shared->server_type = ServerType::cnch_server;
+    else if (type_str == "worker")
+        shared->server_type = ServerType::cnch_worker;
+    else if (type_str == "daemon_manager")
+        shared->server_type = ServerType::cnch_daemon_manager;
+    else if (type_str == "resource_manager")
+        shared->server_type = ServerType::cnch_resource_manager;
+    else if (type_str == "bytepond")
+        shared->server_type = ServerType::cnch_bytepond;
+    else
+        throw Exception("Unknown server type: " + type_str, ErrorCodes::BAD_ARGUMENTS);
+}
+
+ServerType Context::getServerType() const
+{
+    return shared->server_type;
+}
+
+UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
+{
+    {
+        std::lock_guard<std::mutex> lock(*nhut_mutex);
+        if (auto it = session_nhuts.find(uuid); it!=session_nhuts.end())
+            return it->second;
+    }
+
+    UInt64 fetched_nhut = getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(uuid);
+
+    {
+        std::lock_guard<std::mutex> lock(*nhut_mutex);
+        session_nhuts.emplace(uuid, fetched_nhut);
+    }
+
+    return fetched_nhut;
+}
+
+void Context::initRootConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->root_config.loadFromPocoConfig(config, "");
+}
+
+const RootConfiguration & Context::getRootConfig() const
+{
+    return shared->root_config;
+}
+
+void Context::reloadRootConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->root_config.reloadFromPocoConfig(config);
+}
+
+ThreadPool & Context::getPartCacheManagerThreadPool()
+{
+    auto lock = getLock();
+    if (!shared->part_cache_manager_thread_pool)
+        shared->part_cache_manager_thread_pool.emplace(settings.part_cache_manager_thread_pool_size);
+    return *shared->part_cache_manager_thread_pool;
 }
 
 }

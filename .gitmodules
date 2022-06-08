@@ -263,3 +263,6 @@
 [submodule "contrib/udns"]
 	path = contrib/udns
 	url = git@code.byted.org:dp/udns
+[submodule "contrib/bytekv4cpp"]
+	path = contrib/bytekv4cpp
+	url = git@code.byted.org:dp/bytekv4cpp.git

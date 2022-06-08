@@ -742,6 +742,8 @@ inline T parseFromString(const std::string_view & str)
     return parse<T>(str.data(), str.size());
 }
 
+UInt128 stringToUUID(const String & str);
+
 static inline bool hasTzSign(const char *c)
 {
     return *c == '+' || *c  == '-';

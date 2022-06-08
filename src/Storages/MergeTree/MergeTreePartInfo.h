@@ -7,6 +7,7 @@
 #include <common/DayNum.h>
 #include <Core/Names.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
+#include <Storages/IStorage.h>
 
 
 namespace DB
@@ -22,6 +23,9 @@ struct MergeTreePartInfo
     UInt32 level = 0;
     Int64 mutation = 0;   /// If the part has been mutated or contains mutated parts, is equal to mutation version number.
 
+    StorageType storage_type = StorageType::Local;
+
+    Int64 hint_mutation = 0; /// Trace about previous version part.
     bool use_leagcy_max_level = false;  /// For compatibility. TODO remove it
 
     MergeTreePartInfo() = default;
@@ -87,7 +91,7 @@ struct MergeTreePartInfo
         return level == MergeTreePartInfo::MAX_LEVEL || level == another_max_level;
     }
 
-    String getPartName() const;
+    String getPartName(bool with_hint_mutation = false) const;
     String getPartNameV0(DayNum left_date, DayNum right_date) const;
     UInt64 getBlocksCount() const
     {

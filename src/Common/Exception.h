@@ -156,6 +156,8 @@ using Exceptions = std::vector<std::exception_ptr>;
 void tryLogCurrentException(const char * log_name, const std::string & start_of_message = "");
 void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
+void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
 /** Prints current exception in canonical format.
   * with_stacktrace - prints stack trace for DB::Exception.
@@ -169,6 +171,8 @@ std::string getCurrentExceptionMessage(bool with_stacktrace, bool check_embedded
 /// Returns error code from ErrorCodes
 int getCurrentExceptionCode();
 
+std::unique_ptr<Exception> getSerializableException();
+Exception toException(const std::string & s, const std::string & additional_message = "");
 
 /// An execution status of any piece of code, contains return code and optional error
 struct ExecutionStatus

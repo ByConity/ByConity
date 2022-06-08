@@ -95,6 +95,7 @@ class IColumn;
     M(UInt64, background_consume_schedule_pool_size, 16, "Number of threads performing background tasks for kafka tables. Only has meaning at server startup.", 0) \
     M(UInt64, background_unique_table_schedule_pool_size, 16, "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", 0) \
     M(UInt64, background_memory_table_schedule_pool_size, 24, "Number of threads performing background tasks for memory table. Only has meaning at server startup.", 0) \
+    M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
     M(UInt64, max_replicated_fetches_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_sends_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited. Only has meaning at server startup.", 0) \
     \
@@ -536,6 +537,18 @@ class IColumn;
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     \
+    /** settings in cnch **/ \
+    M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
+    M(Milliseconds, topology_lease_renew_interval_ms, 1000, "Interval of background task to renew topology lease.", 0) \
+    M(Milliseconds, topology_refresh_interval_ms, 500, "Interval of background task to sync topology from consul.", 0) \
+    M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
+    M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
+    M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
+    M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
+    M(UInt64, cnch_clear_parts_timeout, 10, "Wait for actions to clear the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    M(Seconds, cnch_fetch_parts_timeout, 60, "The timeout for gettting parts from metastore. 0 - wait unlimited time.", 0) \
+    M(UInt64, cnch_sync_parts_timeout, 10, "Wait for actions to sync the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
+    M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     \

@@ -192,6 +192,46 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
     tryLogCurrentExceptionImpl(logger, start_of_message);
 }
 
+void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message)
+{
+    tryLogDebugCurrentException(&Poco::Logger::get(log_name), start_of_message);
+}
+
+void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_DEBUG(logger, start_of_message + (start_of_message.empty() ? "" : ": ") + getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
+std::unique_ptr<Exception> getSerializableException()
+{
+    try
+    {
+        throw;
+    }
+    catch (const Exception & e)
+    {
+        return std::unique_ptr<Exception>(e.clone());
+    }
+    catch (const Poco::Exception & e)
+    {
+        return std::make_unique<Exception>(e.displayText(), ErrorCodes::POCO_EXCEPTION);
+    }
+    catch (const std::exception & e)
+    {
+        return std::make_unique<Exception>(e.what(), ErrorCodes::STD_EXCEPTION);
+    }
+    catch (...)
+    {
+        return std::make_unique<Exception>("Unknown exception", ErrorCodes::UNKNOWN_EXCEPTION);
+    }
+}
+
 static void getNoSpaceLeftInfoMessage(std::filesystem::path path, String & msg)
 {
     path = std::filesystem::absolute(path);

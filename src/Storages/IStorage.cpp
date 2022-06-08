@@ -25,6 +25,7 @@ namespace ErrorCodes
     extern const int TABLE_IS_DROPPED;
     extern const int NOT_IMPLEMENTED;
     extern const int DEADLOCK_AVOIDED;
+    extern const int PART_COLUMNS_NOT_FOUND_IN_TABLE_VERSIONS;
 }
 
 bool IStorage::isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const
@@ -253,6 +254,28 @@ StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
     readBinary(database_name, buf);
     readBinary(table_name, buf);
     return DatabaseCatalog::instance().getTable({database_name, table_name}, context);
+}
+
+NamesAndTypesListPtr IStorage::getPartColumns(const UInt64 &columns_commit_time) const
+{
+    if (columns_commit_time == commit_time.toUInt64())
+        return part_columns;
+    auto it = previous_versions_part_columns.find(columns_commit_time);
+    if (it == previous_versions_part_columns.end())
+        throw Exception("Part's columns_commit_time " + toString(columns_commit_time) + " not found in table versions", ErrorCodes::PART_COLUMNS_NOT_FOUND_IN_TABLE_VERSIONS);
+    return it->second;
+}
+
+UInt64 IStorage::getPartColumnsCommitTime(const NamesAndTypesList &search_part_columns) const
+{
+    if (search_part_columns == *part_columns)
+        return commit_time.toUInt64();
+    for (const auto & version : previous_versions_part_columns)
+    {
+        if (search_part_columns == *version.second)
+            return version.first;
+    }
+    return 0;
 }
 
 void IStorage::checkHasCompressedAndBloomColumns(bool & has_compressed, bool & has_bitmap) const

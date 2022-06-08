@@ -8,8 +8,8 @@
 namespace DB
 {
 
-DatabaseCnch::DatabaseCnch(const String & name, ContextPtr local_context)
-    : DatabaseWithOwnTablesBase{name, "DatabaseCnch (" + name + ")", local_context}
+DatabaseCnch::DatabaseCnch(const String & name, ContextPtr local_context, UUID uuid_)
+    : DatabaseWithOwnTablesBase{name, "DatabaseCnch (" + name + ")", local_context}, db_uuid(std::move(uuid_))
 {
     LOG_DEBUG(log, "Create database {} in query {}", database_name, local_context->getCurrentQueryId());
 }

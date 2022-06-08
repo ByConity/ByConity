@@ -18,7 +18,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartVersions.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
-
+#include <Transaction/TxnTimestamp.h>
 #include <Storages/UniqueKeyIndex.h>
 #include <Storages/UniqueRowStore.h>
 #include <Poco/Path.h>
@@ -36,6 +36,8 @@ namespace zkutil
 namespace DB
 {
 
+class IMergeTreeDataPart;
+using IMergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 struct ColumnSize;
 class MergeTreeData;
 struct FutureMergedMutatedPart;
@@ -60,6 +62,7 @@ class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPar
 {
 public:
     //static constexpr auto DATA_FILE_EXTENSION = ".bin";
+    static constexpr UInt64 NOT_INITIALIZED_COMMIT_TIME = 0;
 
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
@@ -574,6 +577,12 @@ public:
         return String(reinterpret_cast<char *>(&addr), sizeof(addr));
     }
 
+    void setPreviousPart(IMergeTreeDataPartPtr part) const { prev_part = std::move(part); }
+
+    const IMergeTreeDataPartPtr & tryGetPreviousPart() const { return prev_part; }
+
+    bool isPartial() const { return info.hint_mutation; }
+
     /// FIXME: move to PartMetaEntry once metastore is added
     /// Used to prevent concurrent modification to a part.
     /// Can be removed once all data modification tasks (e.g, build bitmap index, recode) are
@@ -599,6 +608,32 @@ public:
     /// Total size on disk, not only columns. May not contain size of
     /// checksums.txt and columns.txt. 0 - if not counted;
     UInt64 bytes_on_disk{0};
+
+    TxnTimestamp columns_commit_time;
+    TxnTimestamp mutation_commit_time;
+
+    UInt64 staging_txn_id = 0;
+
+    /// Only for storage with UNIQUE KEY
+    String min_unique_key = "";
+    String max_unique_key = "";
+
+    mutable UInt64 virtual_part_size = 0;
+
+    /// secondary_txn_id > 0 mean this parts belong to an explicit transaction
+    mutable TxnTimestamp secondary_txn_id {0};
+
+    /// commit_time equals 0 means the data part is not committed.
+    mutable TxnTimestamp commit_time {NOT_INITIALIZED_COMMIT_TIME};
+
+    bool deleted = false;
+
+    Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
+    UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
+
+    /// Columns description. It could be shared between parts. This can help reduce memory usage during query execution.
+    NamesAndTypesListPtr columns_ptr = std::make_shared<NamesAndTypesList>();
+
 protected:
     friend class MergeTreeData;
     friend class MergeScheduler;
@@ -685,6 +720,8 @@ private:
     mutable std::mutex checksums_mutex;
 
     mutable std::mutex index_mutex;
+
+    mutable IMergeTreeDataPartPtr prev_part;
 
 public:
 

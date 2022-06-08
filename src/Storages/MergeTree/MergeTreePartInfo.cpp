@@ -167,7 +167,7 @@ bool MergeTreePartInfo::contains(const String & outer_part_name, const String & 
 }
 
 
-String MergeTreePartInfo::getPartName() const
+String MergeTreePartInfo::getPartName(bool) const
 {
     WriteBufferFromOwnString wb;
 
