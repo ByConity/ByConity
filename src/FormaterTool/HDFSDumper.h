@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Common/config.h>
 #include <common/logger_useful.h>

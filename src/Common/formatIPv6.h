@@ -233,5 +233,5 @@ inline void formatIPv4(const unsigned char * src, char *& dst, uint8_t mask_tail
  *  normalize ipv6 and ipv4 address
  */
 std::string normalizeHost(const std::string & host);
-
+std::tuple<std::string, bool> safeNormalizeHost(const std::string &host);
 }

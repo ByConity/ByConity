@@ -17,6 +17,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
+
 #include "Interpreters/DistributedStages/PlanSegmentProcessList.h"
 
 #if !defined(ARCADIA_BUILD)
@@ -31,6 +32,8 @@
 #include <mutex>
 #include <optional>
 #include <thread>
+// #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 
 
 namespace Poco::Net { class IPAddress; }
@@ -415,7 +418,10 @@ public:
     /// HDFS nnproxy
     void setHdfsNNProxy(const String & name);
     String getHdfsNNProxy() const;
-
+    
+    void setHdfsConnectionParams(const HDFSConnectionParams & hdfs_params);
+    HDFSConnectionParams getHdfsConnectionParams() const;
+    
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();
     void setMetaCheckerStatus(bool stop);
