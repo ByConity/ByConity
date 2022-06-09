@@ -90,6 +90,8 @@ add_headers_and_sources(dbms FormaterTool)
 add_headers_and_sources(dbms Transaction)
 add_headers_and_sources(dbms MergeTreeCommon)
 add_headers_and_sources(dbms Catalog)
+add_headers_and_sources(dbms CloudServices)
+add_headers_and_sources(dbms WorkerTasks)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -336,7 +338,7 @@ target_link_libraries(clickhouse_common_io
             ${CPPKMS_LIBRARIES}
             ipdb
             maxminddb
-        PRIVATE 
+        PRIVATE
             ${CONSUL_LIBRARIES}
             ${UDNS_LIBRARIES}
 

@@ -37,15 +37,17 @@ public:
     static String getName() { return T::getName() + "Pool"; }
 
     RpcClientPool(
-        String service_name, std::function<HostWithPortsVec()> lookup, std::function<Ptr(HostWithPorts)> creator = RpcClientPoolDefaultCreator<T>{})
-        : service_name(std::move(service_name))
-        , lookup(std::move(lookup))
-        , creator(std::move(creator))
+        String service_name_,
+        std::function<HostWithPortsVec()> lookup_,
+        std::function<Ptr(HostWithPorts)> creator_ = RpcClientPoolDefaultCreator<T>{})
+        : service_name(std::move(service_name_))
+        , lookup(std::move(lookup_))
+        , creator(std::move(creator_))
         , log(&Poco::Logger::get(getName() + ':' + getServiceName()))
     {
     }
 
-    auto & getServiceName() const { return service_name; }
+    const auto & getServiceName() const { return service_name; }
     auto getClientsMapSize() const { return clients_map.size(); }
 
     void update()
@@ -101,43 +103,45 @@ public:
             clients_vec.pop_back();
         }
 
-        throw Exception("No available service for " + service_name, ErrorCodes::NO_SUCH_SERVICE);
+        throw Exception(ErrorCodes::NO_SUCH_SERVICE, "No available service for {}", service_name);
     }
 
-    // Ptr getByHashRing(const String & key)
-    // {
-    //     std::unique_lock lock(state_mutex);
-    //     updateIfNeedUnlocked(lock);
+    /*
+    Ptr getByHashRing(const String & key)
+    {
+        std::unique_lock lock(state_mutex);
+        updateIfNeedUnlocked(lock);
 
-    //     /// The `clients_ring_map` is not necessary for all now, initialize here
-    //     if (rpc_ring_map.empty())
-    //         initOrUpdateRpcRingMap();
+        /// The `clients_ring_map` is not necessary for all now, initialize here
+        if (rpc_ring_map.empty())
+            initOrUpdateRpcRingMap();
 
-    //     while (!rpc_ring_map.empty())
-    //     {
-    //         auto rpc_address = rpc_ring_map.find(key);
-    //         if (rpc_address.empty())
-    //             break;
+        while (!rpc_ring_map.empty())
+        {
+            auto rpc_address = rpc_ring_map.find(key);
+            if (rpc_address.empty())
+                break;
 
-    //         if (auto it = rpc_clients_map.find(rpc_address); it != rpc_clients_map.end() && it->second->ok())
-    //             return it->second;
+            if (auto it = rpc_clients_map.find(rpc_address); it != rpc_clients_map.end() && it->second->ok())
+                return it->second;
 
-    //         rpc_ring_map.erase(rpc_address);
-    //     }
+            rpc_ring_map.erase(rpc_address);
+        }
 
-    //     throw Exception("No available service for " + service_name, ErrorCodes::LOGICAL_ERROR);
-    // }
+        throw Exception("No available service for " + service_name, ErrorCodes::LOGICAL_ERROR);
+    }
 
-    // void initOrUpdateRpcRingMap()
-    // {
-    //     rpc_ring_map.clear();
-    //     rpc_clients_map.clear();
-    //     for (auto & p : clients_map)
-    //     {
-    //         rpc_ring_map.insert(p.first.getRPCAddress());
-    //         rpc_clients_map.emplace(p.first.getRPCAddress(), p.second);
-    //     }
-    // }
+    void initOrUpdateRpcRingMap()
+    {
+        rpc_ring_map.clear();
+        rpc_clients_map.clear();
+        for (auto & p : clients_map)
+        {
+            rpc_ring_map.insert(p.first.getRPCAddress());
+            rpc_clients_map.emplace(p.first.getRPCAddress(), p.second);
+        }
+    }
+    */
 
     bool empty()
     {
@@ -205,7 +209,7 @@ private:
                 }
                 catch (...)
                 {
-                    LOG_ERROR(log, "Failed to create RPC client to {}: {}", ep, getCurrentExceptionMessage(false));
+                    LOG_ERROR(log, "Failed to create RPC client to {}: {}", ep.toDebugString(), getCurrentExceptionMessage(false));
                 }
             }
         }
@@ -236,7 +240,7 @@ private:
     ClientsMap clients_map;
 
     /// for select node by consistent hash
-    // DB::ConsistentHashRing rpc_ring_map;
+    /// DB::ConsistentHashRing rpc_ring_map;
     std::unordered_map<String, Ptr> rpc_clients_map;
 };
 
