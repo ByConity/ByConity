@@ -69,14 +69,14 @@ RUN wget https://ftp.gnu.org/gnu/gdb/gdb-11.2.tar.gz \
     && cd .. && rm -rf gdb-11.2.tar.gz gdb-11.2
 
 # Sanitizer options for services (clickhouse-server)
-RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=1 history_size=7'" >> /etc/environment; \
+RUN echo "TSAN_OPTIONS='verbosity=1000 halt_on_error=0 history_size=7'" >> /etc/environment; \
   echo "UBSAN_OPTIONS='print_stacktrace=1'" >> /etc/environment; \
   echo "MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'" >> /etc/environment; \
   echo "LSAN_OPTIONS='suppressions=/usr/share/clickhouse-test/config/lsan_suppressions.txt'" >> /etc/environment; \
   ln -s /usr/lib/llvm-${LLVM_VERSION}/bin/llvm-symbolizer /usr/bin/llvm-symbolizer;
 # Sanitizer options for current shell (not current, but the one that will be spawned on "docker run")
 # (but w/o verbosity for TSAN, otherwise test.reference will not match)
-ENV TSAN_OPTIONS='halt_on_error=1 history_size=7'
+ENV TSAN_OPTIONS='halt_on_error=0 history_size=7'
 ENV UBSAN_OPTIONS='print_stacktrace=1'
 ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
 
@@ -84,5 +84,28 @@ ENV MSAN_OPTIONS='abort_on_error=1 poison_in_dtor=1'
 ENV http_proxy=
 ENV https_proxy=
 ENV no_proxy=
+
+# install bvc && sd
+RUN mkdir  -p /opt/tiger/bvc && wget -q -O /opt/tiger/bvc/bvc.tar.gz http://d.scm.byted.org/api/v2/download/ceph:tao.modules.bvc_1.0.0.234.tar.gz \
+    && tar zxf /opt/tiger/bvc/bvc.tar.gz  --directory /opt/tiger/bvc \
+    && ./opt/tiger/bvc/bin/bvc clone -f consul_deploy /opt/tiger/consul_deploy
+
+# install hdfs
+RUN YARN_DEPLOY_SCM_REPO=inf/hdfs/cfs_client_volce_deploy_bytehouse && \
+    YARN_DEPLOY_SCM_VERSION=1.0.0.3 && \
+    JDK_SCM_VERSION=1.0.0.12 && \
+    mkdir -p /opt/tiger/yarn_deploy && \
+    curl http://d.scm.byted.org/api/v2/download/ceph:$(echo ${YARN_DEPLOY_SCM_REPO} | sed "s/\//./g")_${YARN_DEPLOY_SCM_VERSION}.tar.gz | pigz -dc | tar -x -C /opt/tiger/yarn_deploy  && rm -rf /opt/tiger/yarn_deploy/hadoop/conf/*  && \
+
+    mkdir -p /opt/tiger/jdk && \
+    curl http://d.scm.byted.org/api/v2/download/ceph:jdk_${JDK_SCM_VERSION}.tar.gz | pigz -dc | tar -x -C /opt/tiger/jdk  &&  \
+    rm -rf /opt/tiger/yarn_deploy/hadoop-2.6.0-cdh5.4.4/libexec/make-config.sh
+
+# env for sd and hdfs
+ENV PATH=$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go \
+    JAVA_HOME='/opt/tiger/jdk/jdk8u265-b01' \
+    HADOOP_HOME='/opt/tiger/yarn_deploy/hadoop' \
+    CONSUL_HTTP_HOST=10.8.156.215 \
+    CONSUL_HTTP_PORT=2280
 
 CMD sleep 1

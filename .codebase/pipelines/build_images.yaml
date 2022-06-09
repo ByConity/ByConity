@@ -19,7 +19,7 @@ trigger:
       - "docker/test/integration/postgresql_java_client/Dockerfile"
 jobs:
   build_test_base_image:
-    name: Build base, stateless, stateful, certificate, stress images
+    name: Build base, stateless, stateful, stress images
     image: hub.byted.org/data-ci-debian:latest
     retry: 3
     steps:
@@ -27,48 +27,39 @@ jobs:
         inputs:
           depth: 1
       - id: clickhouse-test-base
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/base
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:gdb11.2
+          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:gdb11.2v1
       - id: clickhouse-stateless-test
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/stateless
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
           build-args:
-            - TAG=gdb11.2
+            - TAG=gdb11.2v1
       - id: clickhouse-stateful-test
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/stateful
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
           build-args:
-            - TAG=gdb11.2
-      - id: clickhouse-certificate-stateful-test
-        uses: actions/buildkit@v1
-        inputs:
-          context: docker/test/certificate
-          dockerfile: Dockerfile
-          output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-certificate-stateful-test:gdb11.2
-          build-args:
-            - TAG=gdb11.2
+            - TAG=gdb11.2v1
       - id: clickhouse-stress-test
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/stress
           dockerfile: Dockerfile
           output: registry
-          image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2
+          image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2v1
           build-args:
-            - TAG=gdb11.2
+            - TAG=gdb11.2v1
     services:
       - id: buildkit
         image: hub.byted.org/pipeline/buildkit
@@ -82,7 +73,7 @@ jobs:
           depth: 1
       - id: clickhouse-integration-tests-runner
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/runner
           dockerfile: Dockerfile
@@ -92,7 +83,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-mysql-golang-client
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/mysql_golang_client
           dockerfile: Dockerfile
@@ -102,7 +93,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-mysql-java-client
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/mysql_java_client
           dockerfile: Dockerfile
@@ -112,7 +103,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-mysql-js-client
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/mysql_js_client
           dockerfile: Dockerfile
@@ -122,7 +113,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-mysql-php-client
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/mysql_php_client
           dockerfile: Dockerfile
@@ -132,7 +123,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-postgresql-java-client
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/postgresql_java_client
           dockerfile: Dockerfile
@@ -142,7 +133,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-integration-test-base
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/base
           dockerfile: Dockerfile
@@ -152,7 +143,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-kerberos-kdc
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/kerberos_kdc
           dockerfile: Dockerfile
@@ -162,7 +153,7 @@ jobs:
             - TAG=stable
       - id: clickhouse-integration-helper
         parallel-with-next-step: true
-        uses: actions/buildkit@v1
+        uses: actions/buildkit
         inputs:
           context: docker/test/integration/helper_container
           dockerfile: Dockerfile

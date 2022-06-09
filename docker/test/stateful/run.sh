@@ -7,9 +7,13 @@ set -e -x
 # dpkg -i package_folder/clickhouse-server_*.deb
 # dpkg -i package_folder/clickhouse-client_*.deb
 # dpkg -i package_folder/clickhouse-test_*.deb
-clickhouse/bin/clickhouse install
-cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
-cp -r clickhouse/share/clickhouse-test /usr/share/
+if [ $sanitizer_type == "tsan" ]; then
+    /bin/bash /home/code/programs/install/ch_install.sh
+else
+    /clickhouse/bin/clickhouse install
+fi
+cp /clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
+cp -r /clickhouse/share/clickhouse-test /usr/share/
 
 # install test configs
 /usr/share/clickhouse-test/config/install.sh
@@ -38,7 +42,11 @@ function start()
         --mysql_port 29004 --postgresql_port 29005 \
         --keeper_server.tcp_port 29181 --keeper_server.server_id 3
     fi
-    sudo clickhouse start
+    if [ $sanitizer_type == "tsan" ]; then
+        sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --pid-file /var/run/clickhouse-server/clickhouse-server.pid 2> /var/log/clickhouse-server/server.log &
+    else
+        sudo clickhouse start
+    fi
     sleep 10
     counter=0
     until clickhouse-client --query "SELECT 1"
@@ -51,7 +59,11 @@ function start()
             tail -n1000 /var/log/clickhouse-server/clickhouse-server.log
             break
         fi
-        timeout 120 service clickhouse-server start
+        if [ $sanitizer_type == "tsan" ]; then
+            timeout 120 sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --pid-file /var/run/clickhouse-server/clickhouse-server.pid 2> /var/log/clickhouse-server/server.log &
+        else
+            timeout 120 service clickhouse-server start
+        fi
         sleep 0.5
         counter=$((counter + 1))
     done
@@ -59,7 +71,11 @@ function start()
 
 start
 # shellcheck disable=SC2086 # No quotes because I want to split it into words.
-/s3downloader --dataset-names $DATASETS
+if [ ! -d "/ClickHouse-ci-dataset" ]; then
+  git clone --depth 1 https://gitlab+deploy-token-3553:pcgsySXCwK8md2BHebPw@code.byted.org/dp/ClickHouse-ci-dataset.git # download dataset from ClickHouse-ci-dataset repo
+fi
+cp /home/code/docker/test/stateful/s3downloader /s3downloader -f
+/s3downloader --dataset-names $DATASETS  --use-local-dataset "/ClickHouse-ci-dataset/ce/"
 chmod 777 -R /var/lib/clickhouse
 clickhouse-client --query "SHOW DATABASES"
 
@@ -112,7 +128,7 @@ function run_tests()
     fi
 
     clickhouse-test --testname --shard --zookeeper --hung-check --use-skip-list --run stateful --print-time "${ADDITIONAL_OPTIONS[@]}" \
-        "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt
+        "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt || true
 }
 
 export -f run_tests
@@ -124,22 +140,23 @@ grep -Fa "Fatal" /var/log/clickhouse-server/clickhouse-server.log ||:
 pigz < /var/log/clickhouse-server/clickhouse-server.log > /test_output/clickhouse-server.log.gz ||:
 mv /var/log/clickhouse-server/stderr.log /test_output/ ||:
 
-#To print ASAN LOG in the console
-if [[ -n $(find /var/log/clickhouse-server -name "*asan.log*") ]];
+#To print ASAN/TSAN LOG in the console
+sanitizer_type="${sanitizer_type:='ASAN/TSAN'}"
+if [[ -n $(find /var/log/clickhouse-server -name "*${sanitizer_type}.log*") ]];
 then
-    mkdir -p /test_output/asan_log
-    echo "ASAN Logs are printed for analysis."
-    if [[ -n $(find /var/log/clickhouse-server -name "asan_report") ]]; then
-      cat /var/log/clickhouse-server/asan_report
-      mv /var/log/clickhouse-server/asan_report /test_output/asan_log/
+    mkdir -p /test_output/${sanitizer_type}_log
+    echo "${sanitizer_type^^} Logs are printed for analysis."
+    if [[ -n $(find /var/log/clickhouse-server -name "${sanitizer_type}_report") ]]; then
+      cat /var/log/clickhouse-server/${sanitizer_type}_report
+      mv /var/log/clickhouse-server/${sanitizer_type}_report /test_output/${sanitizer_type}_log/
     else
-      echo "No ASAN report exists"
+      echo "No ${sanitizer_type^^} report exists"
     fi
-    echo 'Uploading asan log to Artifacts'
-    mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
-    cp -r /test_output/asan_log/ /sanitizer_log_output/
+    echo "Uploading ${sanitizer_type^^} log to Artifacts"
+    mv /var/log/clickhouse-server/$sanitizer_type.log* /test_output/${sanitizer_type}_log/
+    cp -r /test_output/${sanitizer_type}_log/ /sanitizer_log_output/
 else
-    echo "No ASAN logs exists"
+    echo "No ${sanitizer_type^^} logs exists"
 fi
 
 if [[ -n "$WITH_COVERAGE" ]] && [[ "$WITH_COVERAGE" -eq 1 ]]; then

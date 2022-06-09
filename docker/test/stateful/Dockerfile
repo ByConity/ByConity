@@ -15,6 +15,9 @@ RUN apt-get update -y \
 
 COPY s3downloader /s3downloader
 
+# prepare statefull dataset
+RUN git clone --depth 1 https://gitlab+deploy-token-3553:pcgsySXCwK8md2BHebPw@code.byted.org/dp/ClickHouse-ci-dataset.git
+
 ENV DATASETS="hits visits"
 
 # unset http proxy env
@@ -22,5 +25,5 @@ ENV http_proxy=
 ENV https_proxy=
 ENV no_proxy=
 
-COPY run.sh /
+# COPY run.sh /
 # CMD ["/bin/bash", "/run.sh"]
