@@ -1,0 +1,26 @@
+syntax = "proto2";
+package DB.TSO;
+
+option cc_generic_services = true;
+
+message GetTimestampReq {}
+
+message GetTimestampResp {
+    optional string exception = 1;
+    required uint64 timestamp = 2;
+};
+
+message GetTimestampsReq {
+  required uint32 size = 1;
+};
+
+message GetTimestampsResp {
+  optional string exception = 1;
+  required uint64 max_timestamp = 2;
+}
+
+service TSO {
+    rpc GetTimestamp(GetTimestampReq) returns (GetTimestampResp);
+    rpc GetTimestamps(GetTimestampsReq) returns (GetTimestampsResp);
+};
+

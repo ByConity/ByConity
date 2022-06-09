@@ -3486,17 +3486,27 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
 
 UInt64 Context::getTimestamp() const
 {
-//    return getTSOResponse(GET_TIMESTAMP);
-    /// FIXME: when tso is available
-    return 0;
+    return tso_client->getTimestamp().timestamp();
 }
 
 
 
 UInt64 Context::tryGetTimestamp([[maybe_unused]]const String & pretty_func_name) const
 {
-    /// FIXME: when tso is available
-    return 0;
+    try
+    {
+        return getTimestamp();
+    }
+    catch (...)
+    {
+        LOG_DEBUG(&Logger::get(pretty_func_name), "Unable to reach TSO during call to tryGetTimestamp and falling back to fallbackTS.");
+        return TxnTimestamp::fallbackTS();
+    }
+}
+
+UInt64 Context::getTimestamps(UInt32 size) const
+{
+    return tso_client->getTimestamps(size).max_timestamp();
 }
 
 UInt64 Context::getPhysicalTimestamp() const

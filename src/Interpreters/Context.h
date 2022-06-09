@@ -1034,6 +1034,7 @@ public:
 
     UInt64 getTimestamp() const;
     UInt64 tryGetTimestamp(const String & pretty_func_name = "Context") const;
+    UInt64 getTimestamps(UInt32 size) const
     UInt64 getPhysicalTimestamp() const;
 
     void setCnchStorageCache(size_t max_cache_size);
