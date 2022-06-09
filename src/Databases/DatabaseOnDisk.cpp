@@ -93,7 +93,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 }
 
 
-String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
+String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach)
 {
     ASTPtr query_clone = query->clone();
     auto * create = query_clone->as<ASTCreateQuery>();
@@ -107,6 +107,8 @@ String getObjectDefinitionFromCreateQuery(const ASTPtr & query)
 
     if (!create->is_dictionary)
         create->attach = true;
+    if (attach.has_value())
+        create->attach = *attach;
 
     /// We remove everything that is not needed for ATTACH from the query.
     assert(!create->temporary);

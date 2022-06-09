@@ -23,12 +23,12 @@ namespace
 
 #define LOG_IMPL(logger, priority, PRIORITY, ...) do                              \
 {                                                                                 \
-    const bool is_clients_log = (DB::CurrentThread::getGroup() != nullptr) &&     \
+    const bool __is_clients_log = (DB::CurrentThread::getGroup() != nullptr) &&     \
         (DB::CurrentThread::getGroup()->client_logs_level >= (priority));         \
-    if ((logger)->is((PRIORITY)) || is_clients_log)                               \
+    if ((logger)->is((PRIORITY)) || __is_clients_log)                               \
     {                                                                             \
         std::string formatted_message = numArgs(__VA_ARGS__) > 1 ? fmt::format(__VA_ARGS__) : firstArg(__VA_ARGS__); \
-        if (auto channel = (logger)->getChannel())                                \
+        if (auto __channel = (logger)->getChannel())                                \
         {                                                                         \
             std::string file_function;                                            \
             file_function += __FILE__;                                            \
@@ -36,7 +36,7 @@ namespace
             file_function += __PRETTY_FUNCTION__;                                 \
             Poco::Message poco_message((logger)->name(), formatted_message,       \
                                  (PRIORITY), file_function.c_str(), __LINE__);    \
-            channel->log(poco_message);                                           \
+            __channel->log(poco_message);                                           \
         }                                                                         \
     }                                                                             \
 } while (false)
