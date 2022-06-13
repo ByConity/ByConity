@@ -15,6 +15,6 @@ set(CLICKHOUSE_TSO_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/TSOServer.cpp
         )
 
-add_library(tso_lib ${CLICKHOUSE_TSO_HEADER} ${CLICKHOUSE_TSO_SOURCE} ${CLICKHOUSE_TSO_HTTPHANDLER_SOURCES})
+add_library(tso_lib ${CLICKHOUSE_TSO_HEADER} ${CLICKHOUSE_TSO_SOURCE})
 target_include_directories(tso_lib SYSTEM BEFORE PRIVATE ${BYTEKV_INCLUDE_DIR} PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
-target_link_libraries(tso_lib daemon dbms tso_httphandler)
+target_link_libraries(tso_lib daemon dbms)
