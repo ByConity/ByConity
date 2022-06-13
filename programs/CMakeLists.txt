@@ -53,6 +53,8 @@ option (ENABLE_CLICKHOUSE_KEEPER "ClickHouse alternative to ZooKeeper" ${ENABLE_
 
 option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into clickhouse-keeper snapshot" ${ENABLE_CLICKHOUSE_ALL})
 
+option (ENABLE_CLICKHOUSE_TSO_SERVER "Enable tso_server" ${ENABLE_CLICKHOUSE_ALL})
+
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
     # since USE_NURAFT is set to OFF for FreeBSD and Darwin.
@@ -174,6 +176,11 @@ macro(clickhouse_target_link_split_lib target name)
     endif()
 endmacro()
 
+macro(cnch_program_add name)
+    clickhouse_program_add_library(${name})
+    clickhouse_program_add_executable(${name} "")
+endmacro()
+
 macro(clickhouse_program_link_split_binary name)
     clickhouse_target_link_split_lib(clickhouse-${name} ${name})
 endmacro()
@@ -227,6 +234,7 @@ add_subdirectory (obfuscator)
 add_subdirectory (install)
 add_subdirectory (git-import)
 add_subdirectory (bash-completion)
+add_subdirectory (tso)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
     add_subdirectory (keeper)
@@ -258,7 +266,8 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
     ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES})
+    ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES}
+    ${CLICKHOUSE_TSO_SERVER_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -273,7 +282,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_GIT_IMPORT_LINK}
       ${CLICKHOUSE_ODBC_BRIDGE_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
-      ${CLICKHOUSE_KEEPER_CONVERTER_LINK})
+      ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
+      ${CLICKHOUSE_TSO_SERVER_LINK})
 
     target_include_directories(clickhouse-lib
       ${CLICKHOUSE_SERVER_INCLUDE}
@@ -306,6 +316,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-obfuscator
         clickhouse-git-import
         clickhouse-copier
+        tso_server
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -380,6 +391,10 @@ else ()
     if (ENABLE_CLICKHOUSE_INSTALL)
         clickhouse_target_link_split_lib(clickhouse install)
     endif ()
+    if (ENABLE_CLICKHOUSE_TSO_SERVER)
+    clickhouse_target_link_split_lib(clickhouse tso_server)
+    endif ()
+
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -442,6 +457,12 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-keeper-converter" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-keeper-converter)
     endif ()
+    if (ENABLE_CLICKHOUSE_TSO_SERVER)
+        add_custom_target (tso_server ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse tso_server DEPENDS clickhouse)
+        install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tso_server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE tso_server)
+    endif ()
+
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
 
