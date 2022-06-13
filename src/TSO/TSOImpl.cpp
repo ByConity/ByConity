@@ -12,10 +12,8 @@ namespace DB
 
 namespace ErrorCodes
 {
-    extern const int TSO_OPERATION_ERROR;
     extern const int TSO_TIMESTAMP_NOT_FOUND_ERROR;
     extern const int TSO_TIMESTAMPS_SIZE_TOO_LARGE;
-    extern const int TSO_LOGICAL_CLOCK_OVERFLOW;
 }
 
 namespace TSO
@@ -38,8 +36,6 @@ void TSOImpl::setPhysicalTime(UInt64 physical_time)
 UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
 {
     UInt64 timestamp = ts.fetch_add(to_add, std::memory_order_acquire);
-    UInt32 next_logical = ts_to_logical(timestamp) + to_add;
-    checkLogicalClock(next_logical);
     return timestamp;
 }
 

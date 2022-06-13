@@ -59,7 +59,6 @@ private:
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
 
-    void checkLogicalClock(UInt32 logical_value);
     UInt64 fetchAddLogical(UInt32 to_add);
 };
 
