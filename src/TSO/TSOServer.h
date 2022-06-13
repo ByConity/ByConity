@@ -38,14 +38,14 @@ public:
 
     void updateTSO(Poco::Timer &);
 
-    String getHostPort() const { return host_port; };
+    String getHostPort() const { return host_port; }
 protected:
     int run() override;
 
     int main(const std::vector<std::string> & args) override;
 
 private:
-    Logger * log;
+    Poco::Logger * log;
 
     size_t tso_window;
     Int32 tso_max_retry_count; // TSOV: see if can keep or remove

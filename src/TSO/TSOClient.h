@@ -13,8 +13,8 @@ class TSOClient : public RpcClientBase
 public:
     static String getName() { return "TSOClient"; }
 
-    TSOClient(String host_port);
-    TSOClient(HostWithPorts host_ports);
+    TSOClient(String host_port_);
+    TSOClient(HostWithPorts host_ports_);
     ~TSOClient();
 
     GetTimestampResp getTimestamp();

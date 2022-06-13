@@ -17,13 +17,13 @@ namespace ErrorCodes
 
 namespace TSO
 {
-TSOClient::TSOClient(String host_port)
-    : RpcClientBase(getName(), std::move(host_port)), stub(std::make_unique<TSO_Stub>(&getChannel()))
+TSOClient::TSOClient(String host_port_)
+    : RpcClientBase(getName(), std::move(host_port_)), stub(std::make_unique<TSO_Stub>(&getChannel()))
 {
 }
 
-TSOClient::TSOClient(HostWithPorts host_ports)
-    : RpcClientBase(getName(), std::move(host_ports)), stub(std::make_unique<TSO_Stub>(&getChannel()))
+TSOClient::TSOClient(HostWithPorts host_ports_)
+    : RpcClientBase(getName(), std::move(host_ports_)), stub(std::make_unique<TSO_Stub>(&getChannel()))
 {
 }
 
@@ -35,7 +35,7 @@ GetTimestampResp TSOClient::getTimestamp()
     GetTimestampResp resp;
     brpc::Controller cntl;
 
-    stub->GetTimestamp(&cntl, &req, &resp, NULL);
+    stub->GetTimestamp(&cntl, &req, &resp, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(resp);
@@ -50,7 +50,7 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
     brpc::Controller cntl;
 
     req.set_size(size);
-    stub->GetTimestamps(&cntl, &req, &resp, NULL);
+    stub->GetTimestamps(&cntl, &req, &resp, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(resp);

@@ -4,7 +4,6 @@
 #include <common/logger_useful.h>
 #include <gflags/gflags.h>
 #include <chrono>
-#include <WAL/ICnchLogFactory.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -67,7 +66,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
     {
         const char * rpc_port = getenv("PORT0");
         const char * tso_host = getenv("TSO_IP");
-        if(rpc_port != NULL && tso_host != NULL)
+        if(rpc_port != nullptr && tso_host != nullptr)
         {
             port = atoi(rpc_port);
             host_port = createHostPortString(tso_host, port);
@@ -82,7 +81,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     if (host_port.empty())
         LOG_WARNING(log, "Hostport is empty. Please set PORT0 and TSO_IP env variables for consul/dns mode. For local mode, check cnch-server.xml");
-    LOG_TRACE(log, "hostport : " + host_port);
+    LOG_TRACE(log, "hostport : {}", host_port);
 
     TSOConfig tso_config;
     tso_config.service_name = config().getString("tso_service.bytekv.service_name", "toutiao.bytekv.proxy.service.lq");
@@ -154,7 +153,7 @@ void TSOServer::updateTSO(Poco::Timer &)
         {
             Tnext = cur_ts.physical + 1;
             tso_service->setPhysicalTime(Tnext);
-            LOG_INFO(log, "Tnext updated to: " << Tnext); // TODO: replace with metrics couting how many times Tnext is updated
+            LOG_INFO(log, "Tnext updated to: {}", Tnext); // TODO: replace with metrics couting how many times Tnext is updated
         }
 
         if (Tlast <= Tnext + 1)  /// current timestamp already out of TSO window, update the window
@@ -166,11 +165,11 @@ void TSOServer::updateTSO(Poco::Timer &)
     }
     catch(Exception & e)
     {
-        LOG_ERROR(log, "Exception!" << e.message());
+        LOG_ERROR(log, "Exception!{}", e.message());
     }
     catch (...)
     {
-        LOG_ERROR(log, "Unhandled Exception!" << std::endl << boost::current_exception_diagnostic_information());
+        LOG_ERROR(log, "Unhandled Exception!\n{}", boost::current_exception_diagnostic_information());
         // if any other unhandled exception happens, we should terminate the current process using KillingErrorHandler
         // and let TSO service recover with another replica.
         Poco::ErrorHandler::handle();
@@ -198,11 +197,11 @@ int TSOServer::main(const std::vector<std::string> &)
     std::string brpc_listen_interface = createHostPortString("::", port);
     if (server.Start(brpc_listen_interface.c_str(), &options) != 0)
     {
-        LOG_ERROR(log, "Failed to start TSO server on address: " << brpc_listen_interface);
+        LOG_ERROR(log, "Failed to start TSO server on address: {}", brpc_listen_interface);
         exit(-1);
     }
 
-    LOG_INFO(log, "TSO Service start on address " << brpc_listen_interface);
+    LOG_INFO(log, "TSO Service start on address {}", brpc_listen_interface);
 
     waitForTerminationRequest();
     return Application::EXIT_OK;

@@ -72,6 +72,7 @@ add_subdirectory (ResourceManagement)
 add_subdirectory (Transaction)
 add_subdirectory (MergeTreeCommon)
 add_subdirectory (Catalog)
+add_subdirectory (TSO)
 
 
 set(dbms_headers)

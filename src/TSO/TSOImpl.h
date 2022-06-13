@@ -33,7 +33,7 @@ class TSOImpl : public DB::TSO::TSO {
 public:
     TSOImpl() {}
 
-    ~TSOImpl() {}
+    ~TSOImpl() override {}
 
     void setPhysicalTime(UInt64 time);
 
@@ -47,12 +47,12 @@ public:
     void GetTimestamp(::google::protobuf::RpcController* /*controller*/,
                         const ::DB::TSO::GetTimestampReq* request,
                         ::DB::TSO::GetTimestampResp* response,
-                        ::google::protobuf::Closure* done);
+                        ::google::protobuf::Closure* done) override;
 
     void GetTimestamps(::google::protobuf::RpcController* /*controller*/,
                         const ::DB::TSO::GetTimestampsReq* request,
                         ::DB::TSO::GetTimestampsResp* response,
-                        ::google::protobuf::Closure* done);
+                        ::google::protobuf::Closure* done) override;
 
 private:
     std::atomic<UInt64> ts = 0;
