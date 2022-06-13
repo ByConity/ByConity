@@ -96,6 +96,7 @@ add_headers_and_sources(dbms CloudServices)
 add_headers_and_sources(dbms WorkerTasks)
 add_headers_and_sources(dbms ResourceGroup)
 add_headers_and_sources(dbms ResourceManagement)
+add_headers_and_sources(dbms TSO)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
@@ -399,6 +400,7 @@ dbms_target_link_libraries (
         clickhouse_protos_lib
         catalog_lib
         resource_manager_lib
+        tso_lib
 )
 
 target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
