@@ -85,6 +85,8 @@ class QueryLog;
 class QueryThreadLog;
 class QueryExchangeLog;
 class PartLog;
+class PartMergeLog;
+class ServerPartLog;
 class TextLog;
 class TraceLog;
 class MetricLog;
@@ -126,6 +128,14 @@ class KeeperStorageDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+template <class T>
+class RpcClientPool;
+class CnchServerClient;
+using CnchServerClientPtr = std::shared_ptr<CnchServerClient>;
+using CnchServerClientPool = RpcClientPool<CnchServerClient>;
+class CnchWorkerClient;
+using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+class CnchWorkerClientPools;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -435,10 +445,10 @@ public:
     /// HDFS nnproxy
     void setHdfsNNProxy(const String & name);
     String getHdfsNNProxy() const;
-    
+
     void setHdfsConnectionParams(const HDFSConnectionParams & hdfs_params);
     HDFSConnectionParams getHdfsConnectionParams() const;
-    
+
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();
     void setMetaCheckerStatus(bool stop);
@@ -448,6 +458,10 @@ public:
     /// Global application configuration settings.
     void setConfig(const ConfigurationPtr & config);
     const Poco::Util::AbstractConfiguration & getConfigRef() const;
+
+    void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
+    const RootConfiguration & getRootConfig() const;
+    void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
 
     AccessControlManager & getAccessControlManager();
     const AccessControlManager & getAccessControlManager() const;
@@ -884,6 +898,8 @@ public:
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.
     std::shared_ptr<PartLog> getPartLog(const String & part_database) const;
+    std::shared_ptr<PartMergeLog> getPartMergeLog() const;
+    std::shared_ptr<ServerPartLog> getServerPartLog() const;
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
@@ -1052,9 +1068,14 @@ public:
     //write ha non host update time
     UInt64 getNonHostUpdateTime(const UUID & uuid);
 
-    void initRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
-    const RootConfiguration & getRootConfig() const;
-    void reloadRootConfig(const Poco::Util::AbstractConfiguration & poco_config);
+    void initCnchServerClientPool(const String & service_name);
+    CnchServerClientPool & getCnchServerClientPool() const;
+    CnchServerClientPtr getCnchServerClient(const std::string & host, uint16_t port) const;
+    CnchServerClientPtr getCnchServerClient(const std::string & host_port) const;
+    CnchServerClientPtr getCnchServerClient() const;
+
+    void initCnchWorkerClientPools();
+    CnchWorkerClientPools & getCnchWorkerClientPools() const;
 
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const; 

@@ -1,0 +1,180 @@
+#pragma once
+#include <CloudServices/ICnchBGThread.h>
+
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Transaction/ICnchTransaction.h>
+#include <WorkerTasks/ManipulationList.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
+
+namespace DB
+{
+
+class CnchMergeMutateThread;
+struct PartMergeLogElement;
+
+struct ManipulationTaskRecord
+{
+    ManipulationTaskRecord(CnchMergeMutateThread & p) : parent(p) { }
+    ~ManipulationTaskRecord();
+
+    CnchMergeMutateThread & parent;
+
+    ManipulationType type;
+    std::unique_ptr<ManipulationListEntry> manipulation_entry;
+    bool try_execute{false};
+
+    String task_id;
+    TransactionCnchPtr transaction;
+
+    ServerDataPartsVector parts;
+
+    /// for heartbeat
+    CnchWorkerClientPtr worker;
+    size_t lost_count{0};
+
+    /// for system.part_merge_log & system.server_part_log
+    String result_part_name;
+};
+
+struct FutureManipulationTask
+{
+    FutureManipulationTask(CnchMergeMutateThread & p, ManipulationType t) : parent(p), record(std::make_shared<ManipulationTaskRecord>(p))
+    {
+        record->type = t;
+    }
+
+    ~FutureManipulationTask();
+
+    FutureManipulationTask & setTryExecute(bool try_execute_)
+    {
+        record->try_execute = this->try_execute = try_execute_;
+        return *this;
+    }
+
+    FutureManipulationTask & setMutationEntry(CnchMergeTreeMutationEntry m)
+    {
+        mutation_entry.emplace(std::move(m));
+        return *this;
+    }
+
+    TxnTimestamp calcColumnsCommitTime() const;
+    FutureManipulationTask & assignSourceParts(ServerDataPartsVector && parts);
+    FutureManipulationTask & prepareTransaction();
+    std::shared_ptr<ManipulationTaskRecord> moveRecord();
+
+    CnchMergeMutateThread & parent;
+
+    bool try_execute{false};
+
+    std::shared_ptr<ManipulationTaskRecord> record;
+    ServerDataPartsVector parts;
+    std::optional<CnchMergeTreeMutationEntry> mutation_entry;
+};
+
+struct MergeSelectionMetrics
+{
+    Stopwatch watch;
+    size_t elapsed_get_data_parts = 0;
+    size_t elapsed_calc_visible_parts = 0;
+    size_t elapsed_calc_merge_parts = 0;
+    size_t elapsed_select_parts = 0;
+};
+
+class CnchMergeMutateThread : public ICnchBGThread
+{
+    using TaskRecord = ManipulationTaskRecord;
+    using TaskRecordPtr = std::shared_ptr<TaskRecord>;
+
+    friend struct ManipulationTaskRecord;
+    friend struct FutureManipulationTask;
+
+public:
+    CnchMergeMutateThread(ContextPtr context, const StorageID & id);
+    ~CnchMergeMutateThread() override;
+
+    void shutdown();
+
+    void tryRemoveTask(const String & task_id);
+    void finishTask(const String & task_id, const MergeTreeDataPartPtr & merged_part, std::function<void()> && commit_parts);
+    bool removeTasksOnPartition(const String & partition_id);
+
+    String triggerPartMerge(StoragePtr & istorage, const String & partition_id, bool aggressive, bool try_select, bool try_execute);
+
+private:
+    void preStart() override;
+
+    void runHeartbeatTask();
+
+    void runImpl() override;
+
+    /// Merge
+    PartMergeLogElement createPartMergeLogElement();
+    void writePartMergeLogElement(StoragePtr & istorage, PartMergeLogElement & elem, const MergeSelectionMetrics & metrics);
+
+    bool tryMergeParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
+    bool trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics);
+    void submitFutureManipulationTask(FutureManipulationTask & future_task);
+
+    // Mutate
+    void parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &);
+    void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
+    bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
+
+    void removeTaskImpl(const String & task_id, TaskRecordPtr * out_task_record, std::lock_guard<std::mutex> & lock);
+
+    CnchWorkerClientPtr getWorker(ManipulationType type, const ServerDataPartsVector & all_parts);
+
+    bool isPartsCacheValid(const StorageCnchMergeTree & cnch_table);
+
+    bool needCollectExtendedMergeMetrics();
+
+    auto copy_currently_merging_mutating_parts()
+    {
+        std::lock_guard lock(currently_merging_mutating_parts_mutex);
+        return currently_merging_mutating_parts;
+    }
+
+private:
+    std::mutex currently_merging_mutating_parts_mutex;
+    NameSet currently_merging_mutating_parts;
+
+    std::mutex task_records_mutex;
+    std::unordered_map<String, TaskRecordPtr> task_records;
+
+    std::mutex try_merge_parts_mutex; /// protect tryMergeParts(), triggerPartMerge()
+    std::queue<std::unique_ptr<FutureManipulationTask>> merge_pending_queue;
+
+    std::mutex try_mutate_parts_mutex; /// protect tryMutateParts(), getMutationStatus()
+    NameSet scheduled_mutation_partitions;
+    NameSet finish_mutation_partitions;
+    std::optional<CnchMergeTreeMutationEntry> current_mutate_entry;
+    std::map<TxnTimestamp, CnchMergeTreeMutationEntry> current_mutations_by_version;
+
+    /// Separate quota for merge & mutation tasks
+    std::atomic<int> running_merge_tasks{0};
+    std::atomic<int> running_mutation_tasks{0};
+
+    time_t last_heartbeat_time = 0;
+    time_t last_time_collect_extended_merge_metrics = 0;
+
+    /// the start time of current MergeMutateThread.
+    UInt64 thread_start_time{0};
+    /// the last schedule time of MergeMutateThread. Its a physical timestamp.
+    UInt64 last_schedule_time{0};
+
+    std::mutex worker_pool_mutex;
+    String vw_name;
+    String pick_worker_algo;
+    CnchWorkerClientPoolPtr worker_pool;
+
+    /// Index for round-robin strategy when picking worker.
+    std::atomic<size_t> merge_worker_round_robin_index = 0;
+    std::atomic<size_t> mutation_worker_round_robin_index = 0;
+};
+
+
+}

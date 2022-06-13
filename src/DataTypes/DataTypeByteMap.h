@@ -79,4 +79,17 @@ public:
 };
 
 ColumnPtr mapOffsetsToSizes(const IColumn & column);
+
+/// Get range of implicit column files from ordered files (e.g. std::map) with a hacking solution
+template <class V>
+std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
+getMapColumnRangeFromOrderedFiles(const String & map_column, const std::map<String, V> & m)
+{
+    String map_prefix = "__" + map_column + "__";
+    auto beg = m.lower_bound(map_prefix);
+    map_prefix.back() += 1; /// The modified prefix must greater than all implicit column files in map
+    auto end = m.upper_bound(map_prefix);
+    return {beg, end};
+}
+
 }

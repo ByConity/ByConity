@@ -77,6 +77,8 @@ struct SDConfiguration final : public SDConfigurationData
     M(UInt64, cnch_checksums_cache_size, "", 5368709120, ConfigFlag::Default, "") \
     M(UInt64, shutdown_wait_unfinished, "", 5, ConfigFlag::Default, "") \
     M(UInt64, cnch_transaction_ts_expire_time, "", 2 * 60 * 60 * 1000, ConfigFlag::Default, "") \
+    M(UInt64, cnch_task_heartbeat_interval, "", 5, ConfigFlag::Default, "") \
+    M(UInt64, cnch_task_heartbeat_max_retries, "", 5, ConfigFlag::Default, "") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
@@ -84,6 +86,8 @@ struct SDConfiguration final : public SDConfigurationData
     M(MutableUInt64, kafka_max_partition_fetch_bytes, "", 1048576, ConfigFlag::Default, "") \
     M(MutableUInt64, stream_poll_timeout_ms, "", 500, ConfigFlag::Default, "") \
     M(MutableUInt64, memory_buffer_heartbeat_ms, "", 1000, ConfigFlag::Default, "") \
+    M(MutableUInt64, debug_disable_merge_mutate_thread, "", false, ConfigFlag::Default, "") \
+    M(MutableBool, debug_disable_merge_commit, "", false, ConfigFlag::Default, "") \
     /**
      * Might be removed */ \
     M(MutableUInt64, max_table_size_to_drop, "", 50000000000lu, ConfigFlag::Default, "") \

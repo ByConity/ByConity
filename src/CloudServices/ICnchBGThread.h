@@ -9,12 +9,13 @@
 
 namespace DB
 {
-namespace CatalogService
+namespace Catalog
 {
     class Catalog;
 }
 
-class StorageCnchMergeTree;
+class MergeTreeData;
+using StorageCnchMergeTree = MergeTreeData;
 class StorageCnchKafka;
 class TxnTimestamp;
 
@@ -41,7 +42,8 @@ public:
      */
     StoragePtr getStorageFromCatalog();
 
-    StorageCnchMergeTree & checkAndGetCnchTable(StoragePtr & storage) const;
+    // StorageCnchMergeTree & checkAndGetCnchTable(StoragePtr & storage) const;
+    MergeTreeData & checkAndGetCnchTable(StoragePtr & storage) const;
 
     StorageCnchKafka & checkAndGetCnchKafka(StoragePtr & storage) const;
 
@@ -78,7 +80,7 @@ private:
 protected:
     const CnchBGThreadType thread_type;
     const StorageID storage_id;
-    std::shared_ptr<CatalogService::Catalog> catalog;
+    std::shared_ptr<Catalog::Catalog> catalog;
     Poco::Logger * log;
     BackgroundSchedulePool::TaskHolder scheduled_task;
 
