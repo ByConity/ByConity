@@ -296,16 +296,9 @@
     M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
     M(CnchTxnFinishedTransactionRecord, "Total number of finished transaction records") \
     \
-    M(IntentLockAcquiredAttempt, "Total number of times to acquire intent locks") \
-    M(IntentLockAcquiredSuccess, "Number of times intent locks were acquired successfully") \
-    M(IntentLockAcquiredElapsedMilliseconds, "Total number of milliseconds spent to acquire intent locks") \
-    M(IntentLockWriteIntentAttempt, "Total number of times to write intents to catalog") \
-    M(IntentLockWriteIntentSuccess, "Number of times a intent was written to catalog successfully") \
-    M(IntentLockWriteIntentConflict, "Number of times a intent was conflict with other transaction") \
-    M(IntentLockWriteIntentPreemption, "Number of times a intent lock was preempted") \
-    M(IntentLockWriteIntentElapsedMilliseconds, "Total number of milliseconds spent to write intents") \
-    M(TsCacheCheckSuccess, "Number of times Timestamp cache check was successful") \
-    M(TsCacheCheckFailed, "Number of times Timestamp cache check was failed") \
+    M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
+    M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
+    M(IntentLockPreemptionElapsedMilliseconds, "Total time spent to preempt conflict locks") \
     M(TsCacheCheckElapsedMilliseconds, "Total number of milliseconds spent to check in Timestamp cache") \
     M(TsCacheUpdateElapsedMilliseconds, "Total number of milliseconds spent to update in Timestamp cache") \
     M(CatalogConstructorSuccess, "") \
