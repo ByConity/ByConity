@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Storages/CnchPartitionInfo.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 
 namespace DB::Catalog

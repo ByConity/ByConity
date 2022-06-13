@@ -90,6 +90,20 @@ public:
 
     void writeText(WriteBuffer & out) const;
     void readText(ReadBuffer & in);
+    bool changeSchema() const
+    {
+        for (const auto & command : *this)
+        {
+            if (command.type != MutationCommand::EMPTY &&
+                /* command.type != MutationCommand::BUILD_BITMAP && */
+                command.type != MutationCommand::CLEAR_MAP_KEY &&
+                command.type != MutationCommand::MATERIALIZE_INDEX /* &&
+                command.type != MutationCommand::DROP_BUILD_BITMAP */)
+
+                return true;
+        }
+        return false;
+    }
 };
 
 }

@@ -308,17 +308,17 @@ public:
         const bool skip_part_cache = false);
 
     /// write undo buffer before write vfs
-    // void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources);
-    // void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources);
+    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources);
+    void writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources);
 
     /// clear undo buffer
-    // void clearUndoBuffer(const TxnTimestamp & txnID);
+    void clearUndoBuffer(const TxnTimestamp & txnID);
 
     /// return storage uuid -> undo resources
-    // std::unordered_map<String, UndoResources> getUndoBuffer(const TxnTimestamp & txnID);
+    std::unordered_map<String, UndoResources> getUndoBuffer(const TxnTimestamp & txnID);
 
     /// return txn_id -> undo resources
-    // std::unordered_map<UInt64, UndoResources> getAllUndoBuffer();
+    std::unordered_map<UInt64, UndoResources> getAllUndoBuffer();
 
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
     /// the transaction record will be cleared only after all intents have been cleared and set commit time for all parts.

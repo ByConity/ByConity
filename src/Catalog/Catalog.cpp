@@ -2761,103 +2761,103 @@ namespace Catalog
     }
 
     // write undo buffer before write vfs
-    // void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources)
-    // {
-    //     runWithMetricSupport(
-    //         [&] {
-    //             /// write resources in batch, max batch size is max_commit_size_one_batch
-    //             auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
-    //             while (begin < end)
-    //             {
-    //                 UndoResources tmp{begin, end};
-    //                 meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
-    //                 begin = end;
-    //                 end = std::min(resources.end(), begin + max_commit_size_one_batch);
-    //             }
-    //         },
-    //         ProfileEvents::WriteUndoBufferConstResourceSuccess,
-    //         ProfileEvents::WriteUndoBufferConstResourceFailed);
-    // }
+    void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, const UndoResources & resources)
+    {
+        runWithMetricSupport(
+            [&] {
+                /// write resources in batch, max batch size is max_commit_size_one_batch
+                auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                while (begin < end)
+                {
+                    UndoResources tmp{begin, end};
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
+                    begin = end;
+                    end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                }
+            },
+            ProfileEvents::WriteUndoBufferConstResourceSuccess,
+            ProfileEvents::WriteUndoBufferConstResourceFailed);
+    }
 
-    // void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources)
-    // {
-    //     runWithMetricSupport(
-    //         [&] {
-    //             auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
-    //             while (begin < end)
-    //             {
-    //                 UndoResources tmp{std::make_move_iterator(begin), std::make_move_iterator(end)};
-    //                 meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
-    //                 begin = end;
-    //                 end = std::min(resources.end(), begin + max_commit_size_one_batch);
-    //             }
-    //         },
-    //         ProfileEvents::WriteUndoBufferNoConstResourceSuccess,
-    //         ProfileEvents::WriteUndoBufferNoConstResourceFailed);
-    // }
+    void Catalog::writeUndoBuffer(const String & uuid, const TxnTimestamp & txnID, UndoResources && resources)
+    {
+        runWithMetricSupport(
+            [&] {
+                auto begin = resources.begin(), end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                while (begin < end)
+                {
+                    UndoResources tmp{std::make_move_iterator(begin), std::make_move_iterator(end)};
+                    meta_proxy->writeUndoBuffer(name_space, txnID.toUInt64(), uuid, tmp);
+                    begin = end;
+                    end = std::min(resources.end(), begin + max_commit_size_one_batch);
+                }
+            },
+            ProfileEvents::WriteUndoBufferNoConstResourceSuccess,
+            ProfileEvents::WriteUndoBufferNoConstResourceFailed);
+    }
 
     // clear undo buffer
-    // void Catalog::clearUndoBuffer(const TxnTimestamp & txnID)
-    // {
-    //     runWithMetricSupport(
-    //         [&] {
-    //             /// clear by prefix (txnID) for undo buffer.
-    //             meta_proxy->clearUndoBuffer(name_space, txnID.toUInt64());
-    //         },
-    //         ProfileEvents::ClearUndoBufferSuccess,
-    //         ProfileEvents::ClearUndoBufferFailed);
-    // }
+    void Catalog::clearUndoBuffer(const TxnTimestamp & txnID)
+    {
+        runWithMetricSupport(
+            [&] {
+                /// clear by prefix (txnID) for undo buffer.
+                meta_proxy->clearUndoBuffer(name_space, txnID.toUInt64());
+            },
+            ProfileEvents::ClearUndoBufferSuccess,
+            ProfileEvents::ClearUndoBufferFailed);
+    }
 
-    // std::unordered_map<String, UndoResources> Catalog::getUndoBuffer(const TxnTimestamp & txnID)
-    // {
-    //     std::unordered_map<String, UndoResources> res;
-    //     runWithMetricSupport(
-    //         [&] {
-    //             auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64());
-    //             while (it->next())
-    //             {
-    //                 UndoResource resource = UndoResource::deserialize(it->value());
-    //                 resource.txn_id = txnID;
-    //                 res[resource.uuid()].emplace_back(std::move(resource));
-    //             }
-    //         },
-    //         ProfileEvents::GetUndoBufferSuccess,
-    //         ProfileEvents::GetUndoBufferFailed);
-    //     return res;
-    // }
+    std::unordered_map<String, UndoResources> Catalog::getUndoBuffer(const TxnTimestamp & txnID)
+    {
+        std::unordered_map<String, UndoResources> res;
+        runWithMetricSupport(
+            [&] {
+                auto it = meta_proxy->getUndoBuffer(name_space, txnID.toUInt64());
+                while (it->next())
+                {
+                    UndoResource resource = UndoResource::deserialize(it->value());
+                    resource.txn_id = txnID;
+                    res[resource.uuid()].emplace_back(std::move(resource));
+                }
+            },
+            ProfileEvents::GetUndoBufferSuccess,
+            ProfileEvents::GetUndoBufferFailed);
+        return res;
+    }
 
-    // std::unordered_map<UInt64, UndoResources> Catalog::getAllUndoBuffer()
-    // {
-    //     std::unordered_map<UInt64, UndoResources> txn_undobuffers;
-    //     runWithMetricSupport(
-    //         [&] {
-    //             auto it = meta_proxy->getAllUndoBuffer(name_space);
-    //             size_t size = 0;
-    //             const String ub_prefix{UNDO_BUFFER_PREFIX};
-    //             while (it->next())
-    //             {
-    //                 /// pb_model
-    //                 UndoResource resource = UndoResource::deserialize(it->value());
+    std::unordered_map<UInt64, UndoResources> Catalog::getAllUndoBuffer()
+    {
+        std::unordered_map<UInt64, UndoResources> txn_undobuffers;
+        runWithMetricSupport(
+            [&] {
+                auto it = meta_proxy->getAllUndoBuffer(name_space);
+                size_t size = 0;
+                const String ub_prefix{UNDO_BUFFER_PREFIX};
+                while (it->next())
+                {
+                    /// pb_model
+                    UndoResource resource = UndoResource::deserialize(it->value());
 
-    //                 // txn_id
-    //                 auto pos = it->key().find(ub_prefix);
-    //                 if (pos == std::string::npos || pos + ub_prefix.size() > it->key().size())
-    //                 {
-    //                     LOG_ERROR(log, "Invalid undobuffer key: ", it->key());
-    //                     continue;
-    //                 }
-    //                 UInt64 txn_id = std::stoull(it->key().substr(pos + ub_prefix.size()));
-    //                 resource.txn_id = txn_id;
-    //                 txn_undobuffers[txn_id].emplace_back(std::move(resource));
-    //                 size++;
-    //             }
+                    // txn_id
+                    auto pos = it->key().find(ub_prefix);
+                    if (pos == std::string::npos || pos + ub_prefix.size() > it->key().size())
+                    {
+                        LOG_ERROR(log, "Invalid undobuffer key: ", it->key());
+                        continue;
+                    }
+                    UInt64 txn_id = std::stoull(it->key().substr(pos + ub_prefix.size()));
+                    resource.txn_id = txn_id;
+                    txn_undobuffers[txn_id].emplace_back(std::move(resource));
+                    size++;
+                }
 
-    //             LOG_DEBUG(log, "Fetched {} undo buffers", size);
-    //         },
-    //         ProfileEvents::GetAllUndoBufferSuccess,
-    //         ProfileEvents::GetAllUndoBufferFailed);
-    //     return txn_undobuffers;
-    // }
+                LOG_DEBUG(log, "Fetched {} undo buffers", size);
+            },
+            ProfileEvents::GetAllUndoBufferSuccess,
+            ProfileEvents::GetAllUndoBufferFailed);
+        return txn_undobuffers;
+    }
 
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
     /// the transaction record will be cleared only after all intents have been cleared and set commit time for all parts.

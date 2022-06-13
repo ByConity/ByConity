@@ -201,7 +201,7 @@ TRAP(dlerror) // Used by tsan
 TRAP(ftw)
 TRAP(getc_unlocked)
 //TRAP(getenv) // Ok at program startup
-TRAP(inet_ntoa)
+// TRAP(inet_ntoa) // Used by udns
 TRAP(lgamma)
 TRAP(lgammaf)
 TRAP(lgammal)

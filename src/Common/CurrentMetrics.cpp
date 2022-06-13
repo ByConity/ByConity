@@ -89,6 +89,9 @@
     M(StorageMemoryBytes, "Memory table input bytes") \
     \
     M(CnchSDRequestsUpstream, "Number of Service Discovery requests to upstream") \
+    \
+    M(CnchTxnActiveTransactions, "Number of active transactions") \
+    M(CnchTxnTransactionRecords, "Number of transaction records") \
 
 
 

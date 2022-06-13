@@ -280,7 +280,27 @@
     M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
     M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \
     \
+    M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
+    M(CnchTxnCommitted, "Total number of committed transactions") \
+    M(CnchTxnExpired, "Total number of expired transactions") \
+    M(CnchTxnReadTxnCreated, "Total number of read only transaction created") \
+    M(CnchTxnWriteTxnCreated, "Total number of write transaction created") \
+    M(CnchTxnCommitV1Failed, "Number of commitV1 failures") \
+    M(CnchTxnCommitV2Failed, "Number of commitV2 failures") \
+    M(CnchTxnCommitV1ElapsedMilliseconds, "Total number of milliseconds spent to commitV1") \
+    M(CnchTxnCommitV2ElapsedMilliseconds, "Total number of milliseconds spent to commitV2") \
+    M(CnchTxnPrecommitElapsedMilliseconds, "Total number of milliseconds spent to preempt tranasctions") \
+    M(CnchTxnCommitKVElapsedMilliseconds, "Total number of milliseconds spent to commit transaction in catalog") \
+    M(CnchTxnCleanFailed, "Number of times clean a transaction was failed") \
+    M(CnchTxnCleanElapsedMilliseconds, "Total number of milliseconds spent to clean transactions") \
     M(CnchTxnAllTransactionRecord, "Total number of transaction records") \
+    M(CnchTxnFinishedTransactionRecord, "Total number of finished transaction records") \
+    \
+    M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
+    M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
+    M(IntentLockPreemptionElapsedMilliseconds, "Total time spent to preempt conflict locks") \
+    M(TsCacheCheckElapsedMilliseconds, "Total number of milliseconds spent to check in Timestamp cache") \
+    M(TsCacheUpdateElapsedMilliseconds, "Total number of milliseconds spent to update in Timestamp cache") \
     M(CatalogConstructorSuccess, "") \
     M(CatalogConstructorFailed, "") \
     M(UpdateTableStatisticsSuccess, "") \

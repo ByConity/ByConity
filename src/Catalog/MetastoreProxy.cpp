@@ -1168,19 +1168,19 @@ std::unordered_set<UInt64> MetastoreProxy::getActiveTransactionsSet()
     return res;
 }
 
-// void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & uuid, UndoResources & resources)
-// {
-//     if (resources.empty())
-//         return;
+void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & uuid, UndoResources & resources)
+{
+    if (resources.empty())
+        return;
 
-//     auto multiWrite = createMultiWrite();
-//     for (auto & resource : resources)
-//     {
-//         resource.setUUID(uuid);
-//         multiWrite.addPut(undoBufferStoreKey(name_space, txnID, resource), resource.serialize());
-//     }
-//     multiWrite.commit();
-// }
+    auto multiWrite = createMultiWrite();
+    for (auto & resource : resources)
+    {
+        resource.setUUID(uuid);
+        multiWrite.addPut(undoBufferStoreKey(name_space, txnID, resource), resource.serialize());
+    }
+    multiWrite.commit();
+}
 
 void MetastoreProxy::clearUndoBuffer(const String & name_space, const UInt64 & txnID)
 {

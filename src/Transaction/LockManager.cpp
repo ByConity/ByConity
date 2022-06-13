@@ -1,10 +1,10 @@
 #include <Transaction/LockManager.h>
-
 #include <Catalog/Catalog.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Transaction/LockDefines.h>
 #include <Transaction/LockRequest.h>
+#include <Transaction/TransactionCommon.h>
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
@@ -15,14 +15,15 @@
 
 namespace DB
 {
+
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
 }
 
 LockContext::LockContext() : grantedCounts{}, grantedModes(0), conflictedCounts{}, conflictedModes(0)
-{
-}
+{}
 
 LockStatus LockContext::lock(LockRequest * request)
 {
@@ -248,7 +249,7 @@ void LockManager::lock(const LockInfoPtr & info, const Context & context)
     // TODO: fix here type conversion
     Int64 remain_wait_time = info->timeout;
     Stopwatch watch;
-    for (auto & request : requests)
+    for (const auto & request : requests)
     {
         request->setTimeout(remain_wait_time);
         bool lock_ok = request->lock(context);
@@ -273,11 +274,10 @@ void LockManager::unlock(const LockInfoPtr & info)
     LockInfoPtr stored_info = getLockInfoPtr(info->txn_id, info->lock_id);
     if (!stored_info)
     {
-        LOG_WARNING(log, "Unlock a nonexistent lock. lock id: {}, txn_id: {}",toString(info->lock_id) ,toString(txn_id));
+        LOG_WARNING(log, "Unlock a nonexistent lock. lock id: {}, txn_id: {}\n", toString(info->lock_id),toString(txn_id));
         return;
     }
-
-    // update txn_locks_map, txn_id -> lock_ids;
+    else
     {
         TxnLockMapStripe & stripe = txn_locks_map.getStripe(txn_id);
         std::lock_guard lock(stripe.mutex);
@@ -295,7 +295,7 @@ void LockManager::unlock(const LockInfoPtr & info)
     }
 
     const auto & requests = stored_info->getLockRequests();
-    for (auto & request : requests)
+    for (const auto & request : requests)
     {
         request->unlock();
     }
