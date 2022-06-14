@@ -7,6 +7,7 @@
 #include <Poco/UUID.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
+#include <Common/DNSResolver.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
 #include <Common/setThreadName.h>
@@ -146,6 +147,7 @@
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
+#include <WorkerTasks/ManipulationList.h>
 
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
@@ -466,6 +468,7 @@ struct ContextSharedPart
     ProcessList process_list;                               /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
     MergeList merge_list;                                   /// The list of executable merge (for (Replicated)?MergeTree)
+    ManipulationList manipulation_list;
     PlanSegmentProcessList plan_segment_process_list;       /// The list of running plansegments in the moment;
     ReplicatedFetchList replicated_fetch_list;
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
@@ -749,6 +752,8 @@ PlanSegmentProcessList & Context::getPlanSegmentProcessList() { return shared->p
 const PlanSegmentProcessList & Context::getPlanSegmentProcessList() const { return shared->plan_segment_process_list; }
 MergeList & Context::getMergeList() { return shared->merge_list; }
 const MergeList & Context::getMergeList() const { return shared->merge_list; }
+ManipulationList & Context::getManipulationList() { return shared->manipulation_list; }
+const ManipulationList & Context::getManipulationList() const { return shared->manipulation_list; }
 ReplicatedFetchList & Context::getReplicatedFetchList() { return shared->replicated_fetch_list; }
 const ReplicatedFetchList & Context::getReplicatedFetchList() const { return shared->replicated_fetch_list; }
 
@@ -2273,6 +2278,25 @@ void Context::setRemoteHostFilter(const Poco::Util::AbstractConfiguration & conf
 const RemoteHostFilter & Context::getRemoteHostFilter() const
 {
     return shared->remote_host_filter;
+}
+
+HostWithPorts Context::getHostWithPorts() const
+{
+    // TODO(zuochuang.zema) MERGE dns
+    // bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
+    // bool has_worker_id = !!std::getenv("WORKER_ID");
+    // String id = (use_dns || !has_worker_id) ? DNSResolver::instance().getHostName() : String(std::getenv("WORKER_ID"));
+
+    // return HostWithPorts{
+    //     std::move(id),
+    //     DNSResolver::instance().getIPOrFQDNOrHostname(),
+    //     getRPCPort(),
+    //     getTCPPort(),
+    //     getHTTPPort(),
+    //     getExchangePort(),
+    //     getExchangeStatusPort(),
+    // };
+    return {};
 }
 
 UInt16 Context::getTCPPort() const

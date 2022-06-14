@@ -67,6 +67,7 @@ class InterserverIOHandler;
 class HaReplicaHandler;
 class BackgroundSchedulePool;
 class MergeList;
+class ManipulationList;
 class ReplicatedFetchList;
 class Cluster;
 class Compiler;
@@ -167,6 +168,13 @@ class CnchServerManager;
 struct RootConfiguration;
 class TransactionCoordinatorRcCnch;
 
+class VirtualWarehousePool;
+class VirtualWarehouseHandleImpl;
+using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
+class WorkerGroupHandleImpl;
+using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
+class CnchWorkerClient;
+using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 
 enum class ServerType
 {
@@ -183,6 +191,13 @@ namespace Catalog
     class Catalog;
     struct CatalogConfig;
 }
+
+namespace ResourceManagement
+{
+    class ResourceManagerClient;
+}
+using ResourceManagerClientPtr = std::shared_ptr<ResourceManagement::ResourceManagerClient>;
+
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -672,6 +687,8 @@ public:
     void setRemoteHostFilter(const Poco::Util::AbstractConfiguration & config);
     const RemoteHostFilter & getRemoteHostFilter() const;
 
+    HostWithPorts getHostWithPorts() const;
+
     /// The port that the server listens for executing SQL queries.
     UInt16 getTCPPort() const;
 
@@ -744,6 +761,9 @@ public:
 
     MergeList & getMergeList();
     const MergeList & getMergeList() const;
+
+    ManipulationList & getManipulationList();
+    const ManipulationList & getManipulationList() const;
 
     ReplicatedFetchList & getReplicatedFetchList();
     const ReplicatedFetchList & getReplicatedFetchList() const;
@@ -1010,6 +1030,22 @@ public:
 
     void setServerType(const String & type_str);
     ServerType getServerType() const;
+
+    String getVirtualWarehousePSM() const;
+
+    void initVirtualWarehousePool();
+    VirtualWarehousePool & getVirtualWarehousePool() const;
+
+    void setCurrentWorkerGroup(WorkerGroupHandle group);
+    WorkerGroupHandle getCurrentWorkerGroup() const;
+    WorkerGroupHandle tryGetCurrentWorkerGroup() const;
+
+    void setCurrentVW(VirtualWarehouseHandle warehouse);
+    VirtualWarehouseHandle getCurrentVW() const;
+    VirtualWarehouseHandle tryGetCurrentVW() const;
+
+    void initResourceManagerClient();
+    ResourceManagerClientPtr getResourceManagerClient() const;
 
     UInt16 getRPCPort() const;
 

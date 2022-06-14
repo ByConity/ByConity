@@ -1,14 +1,16 @@
 #pragma once
 
+#include <memory>
+#include <sstream>
 #include <unordered_map>
 #include <unordered_set>
-#include <memory>
 
+#include <Common/HostWithPorts.h>
+#include <Core/Types.h>
 #include <Core/UUID.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
 #include <ResourceManagement/WorkerGroupType.h>
-#include <Common/HostWithPorts.h>
 
 namespace DB
 {
@@ -18,6 +20,7 @@ namespace DB
 namespace DB::Protos
 {
     class ResourceRequirement;
+    class QueryQueueInfo;
     class VirtualWarehouseSettings;
     class VirtualWarehouseAlterSettings;
     class VirtualWarehouseData;
@@ -37,6 +40,8 @@ struct VirtualWarehouseSettings
     size_t min_worker_groups{0};
     size_t max_worker_groups{0};
     size_t max_concurrent_queries{0};
+    size_t max_queued_queries{0};
+    size_t max_queued_waiting_ms{5000};
     size_t auto_suspend{0};
     size_t auto_resume{1};
     VWScheduleAlgo vw_schedule_algo{VWScheduleAlgo::Random};
@@ -59,6 +64,8 @@ struct VirtualWarehouseAlterSettings
     std::optional<size_t> min_worker_groups;
     std::optional<size_t> max_worker_groups;
     std::optional<size_t> max_concurrent_queries;
+    std::optional<size_t> max_queued_queries;
+    std::optional<size_t> max_queued_waiting_ms;
     std::optional<size_t> auto_suspend;
     std::optional<size_t> auto_resume;
     std::optional<VWScheduleAlgo> vw_schedule_algo;
@@ -85,6 +92,8 @@ struct VirtualWarehouseData
     ///  runtime information
     size_t num_worker_groups{0};
     size_t num_workers{0};
+    size_t running_query_count;
+    size_t queued_query_count;
 
     void fillProto(Protos::VirtualWarehouseData & pb_data) const;
     void parseFromProto(const Protos::VirtualWarehouseData & pb_data);
@@ -154,6 +163,19 @@ struct WorkerNodeResourceData
 
     void fillProto(Protos::WorkerNodeResourceData & resource_info) const;
     static WorkerNodeResourceData createFromProto(const Protos::WorkerNodeResourceData & resource_info);
+    inline String toDebugString() const
+    {
+        std::stringstream ss;
+        ss << "{ vw:" << vw_name 
+        << ", worker_group:" << worker_group_id
+        << ", id:" << id
+        << ", cpu_usage:" << cpu_usage
+        << ", memory_usage:" << memory_usage
+        << ", memory_available:" << memory_available
+        << ", query_num:" << query_num
+        << " }";
+        return ss.str();
+    }
 };
 
 /// Based on VWScheduleAlgo, we can pass some additional requirements.
@@ -187,16 +209,18 @@ struct ResourceRequirement
         return requirement;
     }
 
-};
-
-inline std::ostream & operator<<(std::ostream & os, const ResourceRequirement & requirement)
-{
-    return os << "{limit_cpu:" << requirement.limit_cpu
-              << ", request_mem_bytes:" << requirement.request_mem_bytes
-              << ", request_disk_bytes:" << requirement.request_disk_bytes
-              << ", expected_workers:" << requirement.expected_workers
+    inline String toDebugString() const
+    {
+        std::stringstream ss;
+        ss << "{limit_cpu:" << limit_cpu
+              << ", request_mem_bytes:" << request_mem_bytes
+              << ", request_disk_bytes:" << request_disk_bytes
+              << ", expected_workers:" << expected_workers
               << "}";
-}
+        return ss.str();
+    }
+
+};
 
 /// Worker Group's aggregated metrics.
 struct WorkerGroupMetrics
@@ -248,15 +272,17 @@ struct WorkerGroupMetrics
             return false;
         return true;
     }
-};
 
-inline std::ostream & operator<<(std::ostream & os, const WorkerGroupMetrics & metrics)
-{
-    return os << metrics.id << ":"
-               << metrics.max_cpu_usage << "|" << metrics.min_cpu_usage << "|" << metrics.avg_cpu_usage << "|"
-               << metrics.max_mem_usage << "|" << metrics.min_mem_usage << "|" << metrics.avg_mem_usage << "|" << metrics.min_mem_available
-               << "|" << metrics.total_queries;
-}
+    inline String toDebugString() const
+    {
+        std::stringstream ss;
+        ss << id << ":" 
+            << max_cpu_usage << "|" << min_cpu_usage << "|" << avg_cpu_usage << "|"
+            << max_mem_usage << "|" << min_mem_usage << "|" << avg_mem_usage << "|" << min_mem_available
+            << "|" << total_queries;
+        return ss.str();
+    }
+};
 
 struct WorkerGroupData
 {
@@ -288,11 +314,32 @@ struct WorkerGroupData
     }
 };
 
+struct QueryQueueInfo
+{
+    UInt32 queued_query_count {0};
+    UInt32 running_query_count {0};
+    UInt64 last_sync {0};
+
+    void fillProto(Protos::QueryQueueInfo & data) const;
+    void parseFromProto(const Protos::QueryQueueInfo & data);
+
+    static inline auto createFromProto(const Protos::QueryQueueInfo & pb_data)
+    {
+        QueryQueueInfo group_data;
+        group_data.parseFromProto(pb_data);
+        return group_data;
+    }
+};
+
 }
 
 namespace DB
 {
 namespace RM = ResourceManagement;
+using ServerQueryQueueMap = std::unordered_map<String, RM::QueryQueueInfo>;
+using VWQueryQueueMap = std::unordered_map<String, RM::QueryQueueInfo>;
+using AggQueryQueueMap = std::unordered_map<String, RM::QueryQueueInfo>;
+using QueryQueueInfo = RM::QueryQueueInfo;
 using VirtualWarehouseSettings = RM::VirtualWarehouseSettings;
 using VirtualWarehouseAlterSettings = RM::VirtualWarehouseAlterSettings;
 using VirtualWarehouseType = RM::VirtualWarehouseType;

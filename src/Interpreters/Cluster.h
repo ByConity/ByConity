@@ -195,6 +195,8 @@ public:
         /// Connection pool for each replica, contains nullptr for local replicas
         ConnectionPoolPtrs per_replica_pools;
         bool has_internal_replication = false;
+        std::string worker_id {};
+        UInt16 rpc_port {};
     };
 
     using ShardsInfo = std::vector<ShardInfo>;

@@ -32,15 +32,13 @@ namespace RPCHelpers
         }
     }
 
-    // void checkException(const std::string & exception_str)
-    // {
-    //     if (exception_str == unepxected_rare_exception)
-    //         throw Exception("Service got a rare exception, but failed to send back", ErrorCodes::LOGICAL_ERROR);
-    //     ReadBufferFromString in(exception_str);
-    //     Exception e;
-    //     readException(e, in);
-    //     throw e;
-    // }
+    [[noreturn]] void checkException(const std::string & exception_str)
+    {
+        if (exception_str == unepxected_rare_exception)
+            throw Exception("Service got a rare exception, but failed to send back", ErrorCodes::LOGICAL_ERROR);
+        ReadBufferFromString in(exception_str);
+        throw readException(in);
+    }
 
     // Context createSessionContext(Context & global_context, google::protobuf::RpcController & cntl_base)
     // {

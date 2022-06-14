@@ -22,6 +22,10 @@ void VirtualWarehouseSettings::fillProto(Protos::VirtualWarehouseSettings & pb_s
         pb_settings.set_auto_resume(auto_resume);
     if (max_concurrent_queries)
         pb_settings.set_max_concurrent_queries(max_concurrent_queries);
+    if (max_queued_queries)
+        pb_settings.set_max_queued_queries(max_queued_queries);
+    if (max_queued_waiting_ms)
+        pb_settings.set_max_queued_waiting_ms(max_queued_waiting_ms);
     pb_settings.set_vw_schedule_algo(int(vw_schedule_algo));
 }
 
@@ -34,6 +38,8 @@ void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSett
     auto_suspend = pb_settings.auto_suspend();
     auto_resume = pb_settings.auto_resume();
     max_concurrent_queries = pb_settings.max_concurrent_queries();
+    max_queued_queries = pb_settings.max_queued_queries();
+    max_queued_waiting_ms = pb_settings.max_queued_waiting_ms();
     vw_schedule_algo = VWScheduleAlgo(pb_settings.vw_schedule_algo());
 }
 
@@ -53,6 +59,10 @@ void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSetti
         pb_settings.set_auto_resume(*auto_resume);
     if (max_concurrent_queries)
         pb_settings.set_max_concurrent_queries(*max_concurrent_queries);
+    if (max_queued_queries)
+        pb_settings.set_max_queued_queries(*max_queued_queries);
+    if (max_queued_waiting_ms)
+        pb_settings.set_max_queued_waiting_ms(*max_queued_waiting_ms);
     if (vw_schedule_algo)
         pb_settings.set_vw_schedule_algo(int(*vw_schedule_algo));
 }
@@ -73,6 +83,10 @@ void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehous
         auto_resume = pb_settings.auto_resume();
     if (pb_settings.has_max_concurrent_queries())
         max_concurrent_queries = pb_settings.max_concurrent_queries();
+    if (pb_settings.has_max_queued_queries() )
+        max_queued_queries = pb_settings.max_queued_queries();
+    if (pb_settings.has_max_queued_waiting_ms() )
+        max_queued_waiting_ms = pb_settings.max_queued_waiting_ms();
     if (pb_settings.has_vw_schedule_algo())
         vw_schedule_algo = VWScheduleAlgo(pb_settings.vw_schedule_algo());
 }
@@ -351,6 +365,18 @@ void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
 
     if (pb_data.has_metrics())
         metrics.parseFromProto(pb_data.metrics());
+}
+
+void QueryQueueInfo::fillProto(Protos::QueryQueueInfo & pb_data) const
+{
+    pb_data.set_queued_query_count(queued_query_count);
+    pb_data.set_running_query_count(running_query_count);
+}
+
+void QueryQueueInfo::parseFromProto(const Protos::QueryQueueInfo & pb_data)
+{
+    queued_query_count = pb_data.queued_query_count();
+    running_query_count = pb_data.running_query_count();
 }
 
 }
