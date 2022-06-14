@@ -3,6 +3,7 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -313,6 +314,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     bool is_ha = startsWith(name_part, "Ha");
     if (is_ha)
         name_part = name_part.substr(strlen("Ha"));
+
+    bool is_cnch = startsWith(name_part, "Cnch");
+    if (is_cnch)
+        name_part = name_part.substr(strlen("Cnch"));
 
     MergeTreeData::MergingParams merging_params;
     merging_params.mode = MergeTreeData::MergingParams::Ordinary;
@@ -882,6 +887,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 allow_renaming);
         }
     }
+    else if (is_cnch)
+    {
+        return StorageCnchMergeTree::create(
+            args.table_id,
+            args.relative_data_path,
+            metadata,
+            args.attach,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings),
+            args.has_force_restore_data_flag);
+    }
     else
     {
         return StorageMergeTree::create(
@@ -936,6 +954,15 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("HaSummingMergeTree", create, features);
     factory.registerStorage("HaGraphiteMergeTree", create, features);
     factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("CnchMergeTree", create, features);
+    factory.registerStorage("CnchUniqueMergeTree", create, features);
+    factory.registerStorage("CnchCollapsingMergeTree", create, features);
+    factory.registerStorage("CnchReplacingMergeTree", create, features);
+    factory.registerStorage("CnchAggregatingMergeTree", create, features);
+    factory.registerStorage("CnchSummingMergeTree", create, features);
+    factory.registerStorage("CnchGraphiteMergeTree", create, features);
+    factory.registerStorage("CnchVersionedCollapsingMergeTree", create, features);
 }
 
 }

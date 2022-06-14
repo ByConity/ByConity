@@ -79,7 +79,7 @@ static void loadDatabase(
     {
         /// It's first server run and we need create default and system databases.
         /// .sql file with database engine will be written for CREATE query.
-        database_attach_query = "CREATE DATABASE " + backQuoteIfNeed(database);
+        database_attach_query = "CREATE DATABASE " + backQuoteIfNeed(database) + " ENGINE = Atomic";
     }
 
     try
@@ -225,7 +225,7 @@ void reloadFormatSchema(String remote_format_schema_path, String format_schema_p
                 // avoid download same file multiple times, checking size for now, it is not solid but should work online
                 if (target_file.exists() && (target_file.getSize() == UInt64(files[i].mSize)))
                 {
-                    if(log) 
+                    if(log)
                     {
 
                         LOG_TRACE(log, "skip get same size remote_format_schema " + shortFileName);

@@ -442,6 +442,7 @@ struct ContextSharedPart
     String tmp_path;                                        /// Path to the temporary files that occur when processing the request.
     mutable VolumePtr tmp_volume;                           /// Volume for the the temporary files that occur when processing the request.
 
+
     String hdfsUser; // libhdfs3 user name
     String hdfsNNProxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfsConnectionParams;

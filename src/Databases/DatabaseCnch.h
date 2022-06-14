@@ -11,14 +11,17 @@ namespace DB
 {
 
 /* Class to provide operations for CNCH tables where metadata is stored in external storage
+   And it doesn't manage its own tables
  */
 
-class DatabaseCnch : public DatabaseWithOwnTablesBase
+
+class DatabaseCnch : public IDatabase, protected WithContext
 {
 public:
-    DatabaseCnch(const String & name, ContextPtr context, UUID uuid_ = UUIDHelpers::Nil);
+    DatabaseCnch(const String & name, UUID uuid, ContextPtr context);
 
     String getEngineName() const override { return "Cnch"; }
+    UUID getUUID() const override { return db_uuid; }
     void createTable(
         ContextPtr context,
         const String & table_name,
@@ -32,11 +35,16 @@ public:
 
     ASTPtr getCreateDatabaseQuery() const override;
     void drop(ContextPtr context) override;
+    bool isTableExist(const String & name, ContextPtr context) const override;
+    StoragePtr tryGetTable(const String & name, ContextPtr context) const override;
+    DatabaseTablesIteratorPtr getTablesIterator(ContextPtr context, const FilterByNameFunction & filter_by_table_name = {}) override;
+    bool empty() const override;
+    void shutdown() override {}
 
     TxnTimestamp commit_time;
 private:
-    UUID db_uuid = UUIDHelpers::Nil;
-
+    const UUID db_uuid;
+    Poco::Logger * log;
 };
 
 using CnchDBPtr = std::shared_ptr<DatabaseCnch>;

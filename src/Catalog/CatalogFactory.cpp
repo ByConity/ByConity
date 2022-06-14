@@ -23,24 +23,16 @@ namespace ErrorCodes
 namespace Catalog {
 
 CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB &db_model, const ContextPtr & context) {
-    /// TODO: remove the in-memory database
-    /*
-    DatabasePtr db = std::make_shared<DatabaseMemory>(db_model.name());
-
-    auto tables = db_model.tables();
-
-    for (auto it=tables.begin(); it!=tables.end(); it++)
-    {
-        /// storage is not initialized here;
-        db->attachTable(*it, nullptr);
-    }*/
     DatabasePtr db {nullptr};
     if (db_model.has_uuid())
     {
-        db = std::make_shared<DatabaseCnch>(db_model.name(), context, RPCHelpers::createUUID(db_model.uuid()));
+        db = std::make_shared<DatabaseCnch>(db_model.name(), RPCHelpers::createUUID(db_model.uuid()), context);
     }
     else
-        db = std::make_shared<DatabaseCnch>(db_model.name(), context);
+    {
+        throw Exception("DataModelDB has no uuid", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+        //db = std::make_shared<DatabaseCnch>(db_model.name(), context);
+    }
     return db;
 }
 
