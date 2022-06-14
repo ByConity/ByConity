@@ -122,7 +122,7 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     else if (engine_name == "Dictionary")
         return std::make_shared<DatabaseDictionary>(database_name, context);
     else if (engine_name == "Cnch")
-        return std::make_shared<DatabaseCnch>(database_name, context);
+        return std::make_shared<DatabaseCnch>(database_name, uuid, context);
 
 
 #if USE_MYSQL

@@ -510,6 +510,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
+    global_context->setServerType(config().getString("cnch_type", "server"));
+
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
@@ -1233,7 +1235,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     LOG_DEBUG(log, "Loaded metadata.");
 
-    /// start background task to sync metadata automatically. consider to remove it later. 
+    /// start background task to sync metadata automatically. consider to remove it later.
     global_context->setMetaChecker();
 
     /// Init trace collector only after trace_log system table was created

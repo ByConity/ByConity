@@ -116,6 +116,7 @@ enum class DefaultDatabaseEngine
 {
     Ordinary,
     Atomic,
+    Cnch,
 };
 
 DECLARE_SETTING_ENUM(DefaultDatabaseEngine)

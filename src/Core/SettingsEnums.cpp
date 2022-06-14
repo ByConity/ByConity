@@ -91,7 +91,8 @@ IMPLEMENT_SETTING_ENUM_WITH_RENAME(LogQueriesType, ErrorCodes::BAD_ARGUMENTS,
 
 IMPLEMENT_SETTING_ENUM_WITH_RENAME(DefaultDatabaseEngine, ErrorCodes::BAD_ARGUMENTS,
     {{"Ordinary", DefaultDatabaseEngine::Ordinary},
-     {"Atomic",   DefaultDatabaseEngine::Atomic}})
+     {"Atomic",   DefaultDatabaseEngine::Atomic},
+     {"Cnch",   DefaultDatabaseEngine::Cnch}})
 
 IMPLEMENT_SETTING_MULTI_ENUM(MySQLDataTypesSupport, ErrorCodes::UNKNOWN_MYSQL_DATATYPES_SUPPORT_LEVEL,
     {{"decimal",    MySQLDataTypesSupport::DECIMAL},

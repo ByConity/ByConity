@@ -20,6 +20,8 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
+#include <Catalog/Catalog.h>
+
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
 #endif
@@ -425,6 +427,13 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
 bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
 {
     assert(!database_name.empty());
+/// TODO enable when catalog avail
+#if 0
+    /// Check whether existing CNCH database with that name
+    DatabasePtr cnch_database = getContext()->getCnchCatalog()->getDatabase(database_name, *getContext(), TxnTimestamp::maxTS());
+    if (cnch_database)
+        return true;
+#endif
     std::lock_guard lock{databases_mutex};
     return databases.end() != databases.find(database_name);
 }

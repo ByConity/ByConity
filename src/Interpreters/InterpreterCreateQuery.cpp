@@ -66,6 +66,8 @@
 #include <Poco/UUIDGenerator.h>
 #include <Parsers/queryToString.h>
 
+#include <Catalog/Catalog.h>
+
 namespace DB
 {
 
@@ -138,10 +140,17 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         /// When attaching old-style database during server startup, we must always use Ordinary engine
         if (create.attach)
             throw Exception("Database engine must be specified for ATTACH DATABASE query", ErrorCodes::UNKNOWN_DATABASE_ENGINE);
-        bool old_style_database = getContext()->getSettingsRef().default_database_engine.value == DefaultDatabaseEngine::Ordinary;
+        DefaultDatabaseEngine default_database_engine = getContext()->getSettingsRef().default_database_engine.value;
         auto engine = std::make_shared<ASTFunction>();
         auto storage = std::make_shared<ASTStorage>();
-        engine->name = old_style_database ? "Ordinary" : "Atomic";
+
+        if (default_database_engine == DefaultDatabaseEngine::Cnch)
+            engine->name = "Cnch";
+        else if (default_database_engine == DefaultDatabaseEngine::Ordinary)
+            engine->name = "Ordinary";
+        else
+            engine->name = "Atomic";
+
         engine->no_empty_args = true;
         storage->set(storage->engine, engine);
         create.set(create.storage, storage);
@@ -154,7 +163,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         throw Exception(ErrorCodes::UNKNOWN_DATABASE_ENGINE, "Unknown database engine: {}", serializeAST(*create.storage));
     }
 
-    if (create.storage->engine->name == "Atomic" || create.storage->engine->name == "Replicated" || create.storage->engine->name == "MaterializedPostgreSQL")
+    if (create.storage->engine->name == "Atomic" || create.storage->engine->name == "Replicated" || create.storage->engine->name == "MaterializedPostgreSQL" || create.storage->engine->name == "Cnch")
     {
         if (create.attach && create.uuid == UUIDHelpers::Nil)
             throw Exception(ErrorCodes::INCORRECT_QUERY, "UUID must be specified for ATTACH. "
@@ -227,13 +236,18 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     }
 
     DatabasePtr database = DatabaseFactory::get(create, metadata_path / "", getContext());
+    /// CNCH TODO replace with transaction, enable with catalog avail
+    #if 0
+    if (database->getEngineName() == "Cnch")
+        getContext()->getCnchCatalog()->createDatabase(database->getDatabaseName(), database->getUUID(), 0, 0);
+    #endif
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;
 
-    bool need_write_metadata = !create.attach || !fs::exists(metadata_file_path);
+    bool need_write_metadata_on_disk = (database->getEngineName() != "Cnch") && (!create.attach || !fs::exists(metadata_file_path));
 
-    if (need_write_metadata)
+    if (need_write_metadata_on_disk)
     {
         create.attach = true;
         create.if_not_exists = false;
@@ -264,7 +278,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         DatabaseCatalog::instance().attachDatabase(database_name, database);
         added = true;
 
-        if (need_write_metadata)
+        if (need_write_metadata_on_disk)
         {
             /// Prevents from overwriting metadata of detached database
             renameNoReplace(metadata_file_tmp_path, metadata_file_path);

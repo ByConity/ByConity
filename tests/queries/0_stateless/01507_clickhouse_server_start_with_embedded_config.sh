@@ -35,7 +35,7 @@ done
 
 $CLICKHOUSE_CLIENT -n --query "
     DROP DATABASE IF EXISTS test;
-    CREATE DATABASE test;
+    CREATE DATABASE test ENGINE=Atomic;
     USE test;
 
     CREATE TABLE t (s String) ENGINE=TinyLog;
