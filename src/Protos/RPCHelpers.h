@@ -108,7 +108,7 @@ namespace RPCHelpers
 
     void handleException(std::string * exception_str);
 
-    // void checkException(const std::string & exception_str);
+    [[noreturn]] void checkException(const std::string & exception_str);
 
     template <class R>
     inline void checkResponse(const R & r)

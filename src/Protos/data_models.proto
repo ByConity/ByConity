@@ -362,6 +362,8 @@ message VirtualWarehouseSettings
     optional uint32 auto_resume = 7;
     optional uint32 max_concurrent_queries = 8;
     optional uint32 vw_schedule_algo = 9;
+    optional uint32 max_queued_queries = 10;
+    optional uint32 max_queued_waiting_ms = 11;
 };
 
 message VirtualWarehouseAlterSettings
@@ -377,6 +379,8 @@ message VirtualWarehouseAlterSettings
     optional uint32 auto_resume = 7;
     optional uint32 max_concurrent_queries = 8;
     optional uint32 vw_schedule_algo = 9;
+    optional uint32 max_queued_queries = 10;
+    optional uint32 max_queued_waiting_ms = 11;
 };
 
 message VirtualWarehouseData
@@ -457,6 +461,13 @@ message ResourceRequirement
 
     /// Specified worker group (may be used by pickWorker)
     optional string worker_group = 5;
+}
+
+/// vw queue
+message QueryQueueInfo
+{
+  required uint32 queued_query_count = 1;
+  required uint32 running_query_count = 2;
 }
 
 message DataModelFileSystemLock

@@ -496,6 +496,8 @@ template <typename T> bool tryReadFloatText(T & x, ReadBuffer & in);
 /// simple: all until '\n' or '\t'
 void readString(String & s, ReadBuffer & buf);
 
+void readWord(String & s, ReadBuffer & buf);
+
 void readEscapedString(String & s, ReadBuffer & buf);
 
 void readQuotedString(String & s, ReadBuffer & buf);
@@ -1243,6 +1245,13 @@ inline void skipWhitespaceIfAny(ReadBuffer & buf, bool one_line = false)
     else
         while (!buf.eof() && isWhitespaceASCIIOneLine(*buf.position()))
             ++buf.position();
+}
+
+/// Skip non-numeric characters.
+inline void skipNonNumericIfAny(ReadBuffer & buf)
+{
+    while (!buf.eof() &&  ! (isNumericASCII(*buf.position())))
+        ++buf.position();
 }
 
 /// Skips json value.
