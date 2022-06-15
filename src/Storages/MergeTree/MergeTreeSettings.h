@@ -223,6 +223,22 @@ struct Settings;
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
     M(Seconds, drop_ranges_lifetime, 60 * 60  * 36, "", 0) \
+    \
+    M(String, cnch_vw_default, "vw_default", "", 0) \
+    M(String, cnch_vw_read, "vw_read", "", 0) \
+    M(String, cnch_vw_write, "vw_write", "", 0) \
+    M(String, cnch_vw_task, "vw_task", "", 0) \
+    \
+    M(Bool, cnch_merge_enable_batch_select, false, "", 0)                                                     \
+    M(Bool, enable_addition_bg_task, false, "", 0) \
+    M(Int64, max_addition_bg_task_num, 200, "", 0) \
+    M(Int64, max_addition_mutation_task_num, 10, "", 0) \
+    M(Int64, max_partition_for_multi_select, 3, "", 0) \
+    \
+    /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
+    M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
+    M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
+    \
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, false, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \

@@ -187,6 +187,12 @@ public:
     /// Compute part block id for zero level part. Otherwise throws an exception.
     String getZeroLevelPartBlockID() const;
 
+    auto const & get_name() const { return name; }
+    auto const & get_info() const { return info; }
+    auto const & get_partition() const { return partition; }
+    auto const & get_deleted() const { return deleted; }
+    auto const & get_commit_time() const { return commit_time; }
+
     const MergeTreeData & storage;
 
     String name;
@@ -575,6 +581,12 @@ public:
     {
         auto addr = reinterpret_cast<uintptr_t>(this);
         return String(reinterpret_cast<char *>(&addr), sizeof(addr));
+    }
+
+    bool containsExactly(const IMergeTreeDataPart & other) const
+    {
+        return info.partition_id == other.info.partition_id && info.min_block == other.info.min_block
+            && info.max_block == other.info.max_block && info.level >= other.info.level && commit_time >= other.commit_time;
     }
 
     void setPreviousPart(IMergeTreeDataPartPtr part) const { prev_part = std::move(part); }

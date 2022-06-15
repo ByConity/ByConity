@@ -1,6 +1,7 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 
 #include <sstream>
+#include <Catalog/DataModelPartWrapper.h>
 #include <Parsers/formatAST.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -16,7 +17,7 @@ String ManipulationTaskParams::toDebugString() const
 {
     std::ostringstream oss;
 
-    oss << "ManipulationTask {" << task_id << "}, type "  << typeToString(type) << ", ";
+    oss << "ManipulationTask {" << task_id << "}, type " << typeToString(type) << ", ";
     oss << storage->getStorageID().getNameForLogs() << ": ";
     if (!source_data_parts.empty())
     {
@@ -43,7 +44,8 @@ String ManipulationTaskParams::toDebugString() const
     return oss.str();
 }
 
-void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
+template <class Vec>
+void ManipulationTaskParams::assignSourcePartsImpl(const Vec & parts)
 {
     if (unlikely(type == Type::Empty))
         throw Exception("Expected non-empty manipulate type", ErrorCodes::LOGICAL_ERROR);
@@ -58,7 +60,7 @@ void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
     {
         if (type == ManipulationType::Merge)
         {
-            while (right != parts.end() && (*left)->partition.value == (*right)->partition.value)
+            while (right != parts.end() && (*left)->get_partition().value == (*right)->get_partition().value)
                 ++right;
         }
         else
@@ -67,10 +69,10 @@ void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
         }
 
         MergeTreePartInfo part_info;
-        part_info.partition_id = (*left)->info.partition_id;
-        part_info.min_block = (*left)->info.min_block;
-        part_info.max_block = (*std::prev(right))->info.max_block;
-        part_info.level = (*left)->info.level + 1;
+        part_info.partition_id = (*left)->get_info().partition_id;
+        part_info.min_block = (*left)->get_info().min_block;
+        part_info.max_block = (*std::prev(right))->get_info().max_block;
+        part_info.level = (*left)->get_info().level + 1;
 
         // TODO: Double check any issue: previously the mutation is set to max part's mutation, now set mutation to current txn id.
         // part_info.mutation = (*std::prev(right))->info.mutation;
@@ -78,35 +80,24 @@ void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
 
         for (auto it = left; it != right; ++it)
         {
-            part_info.level = std::max(part_info.level, (*it)->info.level + 1);
+            part_info.level = std::max(part_info.level, (*it)->get_info().level + 1);
         }
 
-        if ((*left)->storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
-        {
-            DayNum min_date = DayNum(std::numeric_limits<UInt16>::max());
-            DayNum max_date = DayNum(std::numeric_limits<UInt16>::min());
-            for (auto it = left; it != right; ++it)
-            {
-                /// NOTE: getting min and max dates from part names (instead of part data) because we want
-                /// the merged part name be determined only by source part names.
-                /// It is simpler this way when the real min and max dates for the block range can change
-                /// (e.g. after an ALTER DELETE command).
-                DayNum part_min_date;
-                DayNum part_max_date;
-                MergeTreePartInfo::parseMinMaxDatesFromPartName((*it)->name, part_min_date, part_max_date);
-                min_date = std::min(min_date, part_min_date);
-                max_date = std::max(max_date, part_max_date);
-            }
-
-            new_part_names.push_back(part_info.getPartNameV0(min_date, max_date));
-        }
-        else
-            new_part_names.push_back(part_info.getPartName());
+        new_part_names.push_back(part_info.getPartName());
 
         left = right;
     }
-
-    source_data_parts = std::move(parts);
 }
 
+void ManipulationTaskParams::assignSourceParts(ServerDataPartsVector parts)
+{
+    assignSourcePartsImpl(parts);
+    source_parts = std::move(parts);
+}
+
+void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
+{
+    assignSourcePartsImpl(parts);
+    source_data_parts = std::move(parts);
+}
 }

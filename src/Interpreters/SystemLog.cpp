@@ -3,6 +3,8 @@
 #include <Interpreters/QueryThreadLog.h>
 #include <Interpreters/QueryExchangeLog.h>
 #include <Interpreters/PartLog.h>
+#include <Interpreters/PartMergeLog.h>
+#include <Interpreters/ServerPartLog.h>
 #include <Interpreters/TextLog.h>
 #include <Interpreters/TraceLog.h>
 #include <Interpreters/CrashLog.h>
@@ -97,6 +99,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     query_thread_log = createSystemLog<QueryThreadLog>(global_context, "system", "query_thread_log", config, "query_thread_log");
     query_exchange_log = createSystemLog<QueryExchangeLog>(global_context, "system", "query_exchange_log", config, "query_exchange_log");
     part_log = createSystemLog<PartLog>(global_context, "system", "part_log", config, "part_log");
+    part_merge_log = createSystemLog<PartMergeLog>(global_context, "system", "part_merge_log", config, "part_merge_log");
+    server_part_log = createSystemLog<ServerPartLog>(global_context, "system", "server_part_log", config, "server_part_log");
     trace_log = createSystemLog<TraceLog>(global_context, "system", "trace_log", config, "trace_log");
     crash_log = createSystemLog<CrashLog>(global_context, "system", "crash_log", config, "crash_log");
     text_log = createSystemLog<TextLog>(global_context, "system", "text_log", config, "text_log");
@@ -119,6 +123,10 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
 
     if (part_log)
         logs.emplace_back(part_log.get());
+    if (part_merge_log)
+        logs.emplace_back(part_merge_log.get());
+    if (server_part_log)
+        logs.emplace_back(server_part_log.get());
     if (trace_log)
         logs.emplace_back(trace_log.get());
     if (crash_log)

@@ -1,12 +1,12 @@
 #pragma once
 
-#include <WorkerTasks/ManipulationType.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Core/Types.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MutationCommands.h>
-// #include <Transaction/TxnTimestamp.h>
-#include <Core/Types.h>
-// #include <CatalogService/DataModelPartWrapper_fwd.h>
+#include <Transaction/TxnTimestamp.h>
+#include <WorkerTasks/ManipulationType.h>
 
 namespace DB
 {
@@ -27,13 +27,13 @@ struct ManipulationTaskParams
     StoragePtr storage; /// On which storage this manipulate task should run
     bool is_bucket_table{false}; /// mark if the table is treated as bucket table when create this manipulation task
 
-    MergeTreeDataPartsVector all_parts; /// Used by callee
-    // ServerDataPartsVector source_parts;
+    ServerDataPartsVector source_parts; /// Used by server
     MergeTreeDataPartsVector source_data_parts; // Used by worker
+    MergeTreeDataPartsVector all_parts; /// Used by callee
     Strings new_part_names;
 
-    UInt64 columns_commit_time{0};
-    UInt64 mutation_commit_time{0};
+    TxnTimestamp columns_commit_time;
+    TxnTimestamp mutation_commit_time;
 
     std::shared_ptr<MutationCommands> mutation_commands;
 
@@ -45,7 +45,12 @@ struct ManipulationTaskParams
 
     String toDebugString() const;
 
-    void assignSourceParts(MergeTreeDataPartsVector source_parts);
+    void assignSourceParts(ServerDataPartsVector parts);
+    void assignSourceParts(MergeTreeDataPartsVector parts);
+
+private:
+    template <class Vec>
+    void assignSourcePartsImpl(const Vec & parts);
 };
 
 }

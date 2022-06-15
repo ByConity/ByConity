@@ -72,10 +72,17 @@ public:
     bool isPartial() const;
     bool deleted() const;
     const Protos::DataModelPart & part_model() const;
+    const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
+
     const MergeTreePartInfo & info() const;
     const String & name() const;
     const MergeTreePartition & partition() const;
-    const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
+
+    decltype(auto) get_name() const { return name(); }
+    decltype(auto) get_info() const { return info(); }
+    decltype(auto) get_partition() const { return partition(); }
+    decltype(auto) get_deleted() const { return deleted(); }
+    decltype(auto) get_commit_time() const { return getCommitTime(); }
 
     void serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & storage, WriteBuffer & buf) const;
     void serializeDeleteBitmapMetas(const MergeTreeMetaBase & storage, WriteBuffer & buffer) const;

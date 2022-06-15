@@ -138,8 +138,13 @@
 #include <Common/formatReadable.h>
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
+#include <Common/RpcClientPool.h>
 #include <common/logger_useful.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <WorkerTasks/ManipulationList.h>
 #include <Catalog/Catalog.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchServerManager.h>
@@ -440,6 +445,7 @@ struct ContextSharedPart
     String dictionaries_lib_path;                           /// Path to the directory with user provided binaries and libraries for external dictionaries.
     String metastore_path;                                  /// Path to metastore. We use a seperate path to hold all metastore to make it more easier to manage the metadata on server.
     ConfigurationPtr config;                                /// Global configuration settings.
+    RootConfiguration root_config;                          /// Predefined global configuration settings.
 
     String tmp_path;                                        /// Path to the temporary files that occur when processing the request.
     mutable VolumePtr tmp_volume;                           /// Volume for the the temporary files that occur when processing the request.
@@ -507,10 +513,11 @@ struct ContextSharedPart
     mutable CnchServerManagerPtr server_manager;
     mutable CnchTopologyMasterPtr topology_master;
 
-    RootConfiguration root_config;
-
     ServerType server_type;
     mutable std::unique_ptr<TransactionCoordinatorRcCnch> cnch_txn_coordinator;
+
+    mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
+    mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -911,6 +918,21 @@ const Poco::Util::AbstractConfiguration & Context::getConfigRef() const
 {
     auto lock = getLock();
     return shared->config ? *shared->config : Poco::Util::Application::instance().config();
+}
+
+void Context::initRootConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->root_config.loadFromPocoConfig(config, "");
+}
+
+const RootConfiguration & Context::getRootConfig() const
+{
+    return shared->root_config;
+}
+
+void Context::reloadRootConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    shared->root_config.reloadFromPocoConfig(config);
 }
 
 
@@ -2482,6 +2504,28 @@ std::shared_ptr<PartLog> Context::getPartLog(const String & part_database) const
 }
 
 
+std::shared_ptr<PartMergeLog> Context::getPartMergeLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs || !shared->system_logs->part_merge_log)
+        return {};
+
+    return shared->system_logs->part_merge_log;
+}
+
+
+std::shared_ptr<ServerPartLog> Context::getServerPartLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs || !shared->system_logs->server_part_log)
+        return {};
+
+    return shared->system_logs->server_part_log;
+}
+
+
 std::shared_ptr<TraceLog> Context::getTraceLog() const
 {
     auto lock = getLock();
@@ -3580,27 +3624,58 @@ UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
     return fetched_nhut;
 }
 
-void Context::initRootConfig(const Poco::Util::AbstractConfiguration & config)
-{
-    shared->root_config.loadFromPocoConfig(config, "");
-}
-
-const RootConfiguration & Context::getRootConfig() const
-{
-    return shared->root_config;
-}
-
-void Context::reloadRootConfig(const Poco::Util::AbstractConfiguration & config)
-{
-    shared->root_config.reloadFromPocoConfig(config);
-}
-
 ThreadPool & Context::getPartCacheManagerThreadPool()
 {
     auto lock = getLock();
     if (!shared->part_cache_manager_thread_pool)
         shared->part_cache_manager_thread_pool.emplace(settings.part_cache_manager_thread_pool_size);
     return *shared->part_cache_manager_thread_pool;
+}
+
+void Context::initCnchServerClientPool(const String & service_name)
+{
+    shared->cnch_server_client_pool = std::make_unique<CnchServerClientPool>(
+        service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::SERVER); });
+}
+
+CnchServerClientPool & Context::getCnchServerClientPool() const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return *shared->cnch_server_client_pool;
+}
+
+CnchServerClientPtr Context::getCnchServerClient(const std::string & host, uint16_t port) const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->cnch_server_client_pool->get(host, port);
+}
+
+CnchServerClientPtr Context::getCnchServerClient(const std::string & host_port) const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->cnch_server_client_pool->get(host_port);
+}
+
+CnchServerClientPtr Context::getCnchServerClient() const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->cnch_server_client_pool->get();
+}
+
+void Context::initCnchWorkerClientPools()
+{
+    shared->cnch_worker_client_pools = std::make_unique<CnchWorkerClientPools>(getServiceDiscoveryClient());
+}
+
+CnchWorkerClientPools & Context::getCnchWorkerClientPools() const
+{
+    if (!shared->cnch_worker_client_pools)
+        throw Exception("Cnch worker client pools are not initialized", ErrorCodes::LOGICAL_ERROR);
+    return *shared->cnch_worker_client_pools;
 }
 
 void Context::initCnchTransactionCoordinator()

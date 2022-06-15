@@ -2,6 +2,7 @@
 
 // #include <CatalogService/Catalog.h>
 #include <Interpreters/Context.h>
+#include <Storages/MergeTree/MergeTreeData.h>
 // #include <Storages/StorageCnchMergeTree.h>
 // #include <Storages/Kafka/StorageCnchKafka.h>
 // #include <MergeTreeCommon/CnchServerClientPool.h>
