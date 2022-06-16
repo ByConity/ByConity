@@ -19,6 +19,7 @@
 #include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
+#include <Common/HostWithPorts.h>
 #include <Transaction/TxnTimestamp.h>
 
 #include <optional>
@@ -384,6 +385,11 @@ public:
         ContextPtr /*context*/)
     {
         return nullptr;
+    }
+
+    virtual HostWithPortsVec getWriteWorkers(const ASTPtr & /*query*/, ContextPtr /*context*/)
+    {
+        throw Exception("Method getWriteWorker is not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** Delete the table data. Called before deleting the directory with the data.

@@ -18,7 +18,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
-#include "Transaction/TxnTimestamp.h"
+#include <Transaction/TxnTimestamp.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 
 #if !defined(ARCADIA_BUILD)

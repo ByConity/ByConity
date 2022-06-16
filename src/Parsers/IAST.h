@@ -251,6 +251,36 @@ public:
             set(field, child);
     }
 
+    void setOrReplaceAST(ASTPtr & old_ast, const ASTPtr & new_ast)
+    {
+        if (!new_ast)
+            throw Exception("Trying to set or replace AST subtree with nullptr", ErrorCodes::LOGICAL_ERROR);
+
+        if (old_ast == new_ast)
+            return;
+
+        /// set ast
+        if (!old_ast)
+        {
+            old_ast = new_ast;
+            children.push_back(old_ast);
+            return;
+        }
+
+        /// replace ast
+        for (ASTPtr & current_child: children)
+        {
+            if (current_child == old_ast)
+            {
+                current_child = new_ast;
+                old_ast = new_ast;
+                return;
+            }
+        }
+
+        throw Exception("AST subtree not found in children", ErrorCodes::LOGICAL_ERROR);
+    }
+
     /// Convert to a string.
 
     /// Format settings.

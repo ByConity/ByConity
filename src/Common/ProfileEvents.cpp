@@ -310,6 +310,9 @@
     M(TsCacheUpdateElapsedMilliseconds, "Total number of milliseconds spent to update in Timestamp cache") \
     M(CatalogConstructorSuccess, "") \
     M(CatalogConstructorFailed, "") \
+    M(CatalogTime, "Total time spent getting data parts from Catalog") \
+    M(TotalPartitions, "Number of total partitions") \
+    M(PrunedPartitions, "Number of pruned partitions") \
     M(UpdateTableStatisticsSuccess, "") \
     M(UpdateTableStatisticsFailed, "") \
     M(GetTableStatisticsSuccess, "") \

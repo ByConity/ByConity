@@ -326,6 +326,43 @@ void TranslateQualifiedNamesMatcher::extractJoinUsingColumns(const ASTPtr ast, D
     }
 }
 
+String getTableExpressionAlias(const ASTTableExpression * table_expression)
+{
+    if (table_expression->subquery)
+        return table_expression->subquery->tryGetAlias();
+    else if (table_expression->table_function)
+        return table_expression->table_function->tryGetAlias();
+    else if (table_expression->database_and_table_name)
+        return table_expression->database_and_table_name->tryGetAlias();
+
+    return String();
+}
+
+bool RestoreTableExpressionsMatcher::needChildVisit(ASTPtr &, const ASTPtr &)
+{
+    return true;
+}
+
+void RestoreTableExpressionsMatcher::visit(ASTPtr & ast, Data & data)
+{
+    if (auto * t = ast->as<ASTTableExpression>())
+        visit(*t, ast, data);
+}
+
+void RestoreTableExpressionsMatcher::visit(ASTTableExpression & expression, ASTPtr &, Data & data)
+{
+    if (!expression.database_and_table_name || data.database.empty())
+        return;
+
+    auto * identifier = expression.database_and_table_name->as<ASTTableIdentifier>();
+
+    if (identifier && identifier->isShort())
+    {
+        String table_alias = getTableExpressionAlias(&expression);
+        identifier->resetTable(data.database, identifier->name());
+        expression.database_and_table_name->setAlias(table_alias);
+    }
+}
 
 void RestoreQualifiedNamesMatcher::Data::changeTable(ASTIdentifier & identifier) const
 {

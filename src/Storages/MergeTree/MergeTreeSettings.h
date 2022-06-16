@@ -219,6 +219,10 @@ struct Settings;
     M(Bool, enable_async_init_metasotre, false, "", 0) \
     M(UInt64, bitengine_split_index, 0, "", 0) \
     M(Float, bitengine_encode_loss_rate, 0.1, "", 0) \
+    M(Bool, cnch_temporary_table, false, "", 0) \
+    M(Bool, cnch_enable_memory_buffer, false, "", 0) \
+    M(Bool, cloud_enable_memory_buffer, false, "", 0) \
+    M(Bool, cloud_enable_staging_area, false, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \

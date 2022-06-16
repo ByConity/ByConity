@@ -214,6 +214,8 @@ public:
       */
     void disconnect();
 
+    void tryConnect(const ConnectionTimeouts & timeouts);
+
     size_t outBytesCount() const { return out ? out->count() : 0; }
     size_t inBytesCount() const { return in ? in->count() : 0; }
 

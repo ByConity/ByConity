@@ -72,6 +72,9 @@ public:
     StoragePtr getTargetTable() const;
     StoragePtr tryGetTargetTable() const;
 
+    String getTargetDatabaseName() const { return target_table_id.database_name;  }
+    String getTargetTableName() const { return target_table_id.table_name;  }
+
     ActionLock getActionLock(StorageActionBlockType type) override;
 
     Pipe read(
