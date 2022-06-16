@@ -594,7 +594,8 @@ void TreeOptimizer::optimizeIf(ASTPtr & query, Aliases & aliases, bool if_chain_
 }
 
 void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
-                          const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context)
+                          const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context,
+                          bool push_predicate_to_subquery)
 {
     const auto & settings = context->getSettingsRef();
 
@@ -613,7 +614,9 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
         optimizeAggregationFunctions(query);
 
     /// Push the predicate expression down to the subqueries.
-    result.rewrite_subqueries = PredicateExpressionsOptimizer(context, tables_with_columns, settings).optimize(*select_query);
+    /// (optimizer has its own predicate pushdown implementation, so turn this off)
+    if (push_predicate_to_subquery)
+        result.rewrite_subqueries = PredicateExpressionsOptimizer(context, tables_with_columns, settings).optimize(*select_query);
 
     /// GROUP BY injective function elimination.
     optimizeGroupBy(select_query, result.source_columns_set, context);

@@ -1,0 +1,145 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 146835 rows
+      └─ MergeSorting est. 146835 rows
+         └─ PartialSorting est. 146835 rows
+            └─ Gather Exchange est. 146835 rows
+               └─ MergeSorting est. 146835 rows
+                  └─ PartialSorting est. 146835 rows
+                     └─ Projection est. 146835 rows
+                        └─ Inner Join est. 146835 rows
+                           │     Condition: i_item_id == i_item_id_2
+                           ├─ Inner Join est. 146835 rows
+                           │  │     Condition: i_item_id_1 == i_item_id
+                           │  ├─ MergingAggregated est. 146835 rows
+                           │  │  └─ Repartition Exchange est. 146835 rows
+                           │  │     │     Partition by: {i_item_id_1}
+                           │  │     └─ Aggregating est. 146835 rows
+                           │  │        │     Group by: {i_item_id_1}
+                           │  │        └─ Inner Join est. 143996756 rows
+                           │  │           │     Condition: cr_returned_date_sk == d_date_sk_3
+                           │  │           ├─ Inner Join est. 143996756 rows
+                           │  │           │  │     Condition: cr_item_sk == i_item_sk_1
+                           │  │           │  ├─ Repartition Exchange est. 143996756 rows
+                           │  │           │  │  │     Partition by: {cr_item_sk}
+                           │  │           │  │  └─ TableScan tpcds.catalog_returns est. 143996756 rows
+                           │  │           │  └─ Repartition Exchange est. 300000 rows
+                           │  │           │     │     Partition by: {i_item_sk_1}
+                           │  │           │     └─ TableScan tpcds.item est. 300000 rows
+                           │  │           └─ Broadcast Exchange est. 73049 rows
+                           │  │              └─ Inner Join est. 73049 rows
+                           │  │                 │     Condition: d_date_3 == d_date_4
+                           │  │                 ├─ Repartition Exchange est. 73049 rows
+                           │  │                 │  │     Partition by: {d_date_3}
+                           │  │                 │  └─ Filter est. 73049 rows
+                           │  │                 │     │     isNotNull(d_date_3)
+                           │  │                 │     └─ TableScan tpcds.date_dim est. 73049 rows
+                           │  │                 └─ MergingAggregated est. 48565 rows
+                           │  │                    └─ Repartition Exchange est. 48565 rows
+                           │  │                       │     Partition by: {d_date_4}
+                           │  │                       └─ Aggregating est. 48565 rows
+                           │  │                          │     Group by: {d_date_4}
+                           │  │                          └─ Inner Join est. 73049 rows
+                           │  │                             │     Condition: d_week_seq_4 == d_week_seq_5
+                           │  │                             ├─ Repartition Exchange est. 73049 rows
+                           │  │                             │  │     Partition by: {d_week_seq_4}
+                           │  │                             │  └─ Filter est. 73049 rows
+                           │  │                             │     │     isNotNull(d_week_seq_4) AND isNotNull(d_date_4)
+                           │  │                             │     └─ TableScan tpcds.date_dim est. 73049 rows
+                           │  │                             └─ MergingAggregated est. 10409 rows
+                           │  │                                └─ Repartition Exchange est. 10409 rows
+                           │  │                                   │     Partition by: {d_week_seq_5}
+                           │  │                                   └─ Aggregating est. 10409 rows
+                           │  │                                      │     Group by: {d_week_seq_5}
+                           │  │                                      └─ Projection est. 73049 rows
+                           │  │                                         └─ Filter est. 73049 rows
+                           │  │                                            │     (d_date_5 IN ('2000-11-17', '2000-09-27', '2000-06-30')) AND isNotNull(d_week_seq_5)
+                           │  │                                            └─ TableScan tpcds.date_dim est. 73049 rows
+                           │  └─ MergingAggregated est. 146835 rows
+                           │     └─ Repartition Exchange est. 146835 rows
+                           │        │     Partition by: {i_item_id}
+                           │        └─ Aggregating est. 146835 rows
+                           │           │     Group by: {i_item_id}
+                           │           └─ Inner Join est. 287999764 rows
+                           │              │     Condition: sr_returned_date_sk == d_date_sk
+                           │              ├─ Inner Join est. 287999764 rows
+                           │              │  │     Condition: sr_item_sk == i_item_sk
+                           │              │  ├─ Repartition Exchange est. 287999764 rows
+                           │              │  │  │     Partition by: {sr_item_sk}
+                           │              │  │  └─ TableScan tpcds.store_returns est. 287999764 rows
+                           │              │  └─ Repartition Exchange est. 300000 rows
+                           │              │     │     Partition by: {i_item_sk}
+                           │              │     └─ TableScan tpcds.item est. 300000 rows
+                           │              └─ Broadcast Exchange est. 73049 rows
+                           │                 └─ Inner Join est. 73049 rows
+                           │                    │     Condition: d_date == d_date_1
+                           │                    ├─ Repartition Exchange est. 73049 rows
+                           │                    │  │     Partition by: {d_date}
+                           │                    │  └─ Filter est. 73049 rows
+                           │                    │     │     isNotNull(d_date)
+                           │                    │     └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                    └─ MergingAggregated est. 48565 rows
+                           │                       └─ Repartition Exchange est. 48565 rows
+                           │                          │     Partition by: {d_date_1}
+                           │                          └─ Aggregating est. 48565 rows
+                           │                             │     Group by: {d_date_1}
+                           │                             └─ Inner Join est. 73049 rows
+                           │                                │     Condition: d_week_seq_1 == d_week_seq_2
+                           │                                ├─ Repartition Exchange est. 73049 rows
+                           │                                │  │     Partition by: {d_week_seq_1}
+                           │                                │  └─ Filter est. 73049 rows
+                           │                                │     │     isNotNull(d_week_seq_1) AND isNotNull(d_date_1)
+                           │                                │     └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                                └─ MergingAggregated est. 10409 rows
+                           │                                   └─ Repartition Exchange est. 10409 rows
+                           │                                      │     Partition by: {d_week_seq_2}
+                           │                                      └─ Aggregating est. 10409 rows
+                           │                                         │     Group by: {d_week_seq_2}
+                           │                                         └─ Projection est. 73049 rows
+                           │                                            └─ Filter est. 73049 rows
+                           │                                               │     (d_date_2 IN ('2000-11-17', '2000-09-27', '2000-06-30')) AND isNotNull(d_week_seq_2)
+                           │                                               └─ TableScan tpcds.date_dim est. 73049 rows
+                           └─ MergingAggregated est. 146835 rows
+                              └─ Repartition Exchange est. 146835 rows
+                                 │     Partition by: {i_item_id_2}
+                                 └─ Aggregating est. 146835 rows
+                                    │     Group by: {i_item_id_2}
+                                    └─ Inner Join est. 71997522 rows
+                                       │     Condition: wr_returned_date_sk == d_date_sk_6
+                                       ├─ Inner Join est. 71997522 rows
+                                       │  │     Condition: wr_item_sk == i_item_sk_2
+                                       │  ├─ Repartition Exchange est. 71997522 rows
+                                       │  │  │     Partition by: {wr_item_sk}
+                                       │  │  └─ TableScan tpcds.web_returns est. 71997522 rows
+                                       │  └─ Repartition Exchange est. 300000 rows
+                                       │     │     Partition by: {i_item_sk_2}
+                                       │     └─ TableScan tpcds.item est. 300000 rows
+                                       └─ Broadcast Exchange est. 73049 rows
+                                          └─ Inner Join est. 73049 rows
+                                             │     Condition: d_date_6 == d_date_7
+                                             ├─ Repartition Exchange est. 73049 rows
+                                             │  │     Partition by: {d_date_6}
+                                             │  └─ Filter est. 73049 rows
+                                             │     │     isNotNull(d_date_6)
+                                             │     └─ TableScan tpcds.date_dim est. 73049 rows
+                                             └─ MergingAggregated est. 48565 rows
+                                                └─ Repartition Exchange est. 48565 rows
+                                                   │     Partition by: {d_date_7}
+                                                   └─ Aggregating est. 48565 rows
+                                                      │     Group by: {d_date_7}
+                                                      └─ Inner Join est. 73049 rows
+                                                         │     Condition: d_week_seq_7 == d_week_seq_8
+                                                         ├─ Repartition Exchange est. 73049 rows
+                                                         │  │     Partition by: {d_week_seq_7}
+                                                         │  └─ Filter est. 73049 rows
+                                                         │     │     isNotNull(d_week_seq_7) AND isNotNull(d_date_7)
+                                                         │     └─ TableScan tpcds.date_dim est. 73049 rows
+                                                         └─ MergingAggregated est. 10409 rows
+                                                            └─ Repartition Exchange est. 10409 rows
+                                                               │     Partition by: {d_week_seq_8}
+                                                               └─ Aggregating est. 10409 rows
+                                                                  │     Group by: {d_week_seq_8}
+                                                                  └─ Projection est. 73049 rows
+                                                                     └─ Filter est. 73049 rows
+                                                                        │     isNotNull(d_week_seq_8) AND (d_date_8 IN ('2000-11-17', '2000-09-27', '2000-06-30'))
+                                                                        └─ TableScan tpcds.date_dim est. 73049 rows

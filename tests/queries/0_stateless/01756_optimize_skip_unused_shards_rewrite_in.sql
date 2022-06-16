@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- shard pruning
 -- NOTE: this test cannot use 'current_database = currentDatabase()',
 -- because it does not propagated via remote queries,
 -- hence it uses 'with (select currentDatabase()) as X'

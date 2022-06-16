@@ -140,6 +140,10 @@ StorageID StorageID::deserialize(ReadBuffer & buffer, ContextPtr context)
     UUID uuid;
     readBinary(uuid, buffer);
 
+    if (table_name.empty() && uuid == UUIDHelpers::Nil)
+    {
+        return StorageID("_dummy", "_dummy", uuid);
+    }
     auto storage_id_recv = StorageID(database_name, table_name, uuid);
     StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id_recv.database_name, storage_id_recv.table_name}, context);
     if (storage)

@@ -24,7 +24,7 @@
 #include <Parsers/ParserExplainQuery.h>
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
 #include <Parsers/ParserRefreshQuery.h>
-
+#include <Parsers/ParserStatsQuery.h>
 
 namespace DB
 {
@@ -51,6 +51,9 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end, dt);
     ParserRefreshQuery refresh_p(dt);
+    ParserCreateStatsQuery create_stats_p;
+    ParserShowStatsQuery show_stats_p;
+    ParserDropStatsQuery drop_stats_p;
 
     ASTPtr query;
 
@@ -74,7 +77,10 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || show_access_entities_p.parse(pos, query, expected)
         || show_grants_p.parse(pos, query, expected)
         || show_privileges_p.parse(pos, query, expected)
-        || refresh_p.parse(pos, query, expected);
+        || refresh_p.parse(pos, query, expected)
+        || create_stats_p.parse(pos, query, expected)
+        || show_stats_p.parse(pos, query, expected)
+        || drop_stats_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

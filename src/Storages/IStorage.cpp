@@ -13,8 +13,8 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/PlanSegmentSourceStep.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/PlanSegmentSourceStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/AlterCommands.h>
 
 

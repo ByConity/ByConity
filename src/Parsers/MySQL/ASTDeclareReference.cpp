@@ -47,7 +47,7 @@ bool ParserDeclareReference::parseImpl(IParser::Pos & pos, ASTPtr & node, Expect
 {
     ASTPtr table_name;
     ASTPtr expression;
-    ParserExpression p_expression(DialectType::CLICKHOUSE);
+    ParserExpression p_expression(ParserSettings::CLICKHOUSE);
     ParserIdentifier p_identifier;
     ASTDeclareReference::MatchKind match_kind = ASTDeclareReference::MATCH_FULL;
     ASTDeclareReference::ReferenceOption delete_option = ASTDeclareReference::RESTRICT;

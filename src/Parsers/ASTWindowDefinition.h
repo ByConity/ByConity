@@ -43,6 +43,7 @@ struct ASTWindowListElement : public IAST
     // ASTWindowDefinition
     ASTPtr definition;
 
+    ASTType getType() const override { return ASTType::ASTWindowListElement; }
 
     ASTPtr clone() const override;
 

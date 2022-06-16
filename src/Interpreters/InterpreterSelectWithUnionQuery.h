@@ -2,7 +2,7 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
-#include <Processors/QueryPlan/QueryCacheStep.h>
+#include <QueryPlan/QueryCacheStep.h>
 
 namespace DB
 {

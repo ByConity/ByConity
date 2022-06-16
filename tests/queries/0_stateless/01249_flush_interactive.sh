@@ -13,18 +13,22 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 function test()
 {
-    timeout 5 ${CLICKHOUSE_LOCAL} --max_execution_time 10 --query "
-        SELECT DISTINCT number % 5 FROM system.numbers" ||:
+    # set enable_distinct_to_aggregate=0 due to DISTINCT is blocking in optimizer
+    timeout 5 ${CLICKHOUSE_LOCAL} --enable_distinct_to_aggregate=0 --max_execution_time 10 --query "SELECT DISTINCT number % 5 FROM system.numbers" ||:
     echo '---'
-    timeout 5 ${CLICKHOUSE_CURL} -sS --no-buffer "${CLICKHOUSE_URL}&max_execution_time=10" --data-binary "
-        SELECT DISTINCT number % 5 FROM system.numbers" ||:
+    timeout 5 ${CLICKHOUSE_CURL} -sS --no-buffer "${CLICKHOUSE_URL}&max_execution_time=10&enable_distinct_to_aggregate=0" --data-binary "SELECT DISTINCT number % 5 FROM system.numbers" ||:
     echo '---'
 }
 
 # The test depends on timeouts. And there is a chance that under high system load the query
 # will not be able to finish in 5 seconds (this will lead to test flakiness).
 # Let's check that is will be able to show the expected result at least once.
-while true; do
-    [[ $(test) == $(echo -ne "0\n1\n2\n3\n4\n---\n0\n1\n2\n3\n4\n---\n") ]] && break
-    sleep 1
+
+# limit retry to 5 times
+for i in {1..5}; do
+    output=$(test)
+    [[ "$output" == $(echo -ne "0\n1\n2\n3\n4\n---\n0\n1\n2\n3\n4\n---\n") ]] && break
+    sleep 1;
 done
+# ensure the result is correct
+echo "$output"

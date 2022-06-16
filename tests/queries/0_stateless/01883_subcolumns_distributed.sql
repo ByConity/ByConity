@@ -1,3 +1,4 @@
+set enable_optimizer = 0; -- schedule local
 DROP TABLE IF EXISTS t_subcolumns_local;
 DROP TABLE IF EXISTS t_subcolumns_dist;
 

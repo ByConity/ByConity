@@ -5,6 +5,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
+CLICKHOUSE_CLIENT_SECURE=${CLICKHOUSE_CLIENT_SECURE//enable_optimizer=1/enable_optimizer=0} # can't find local replica in cluster settings
 
 $CLICKHOUSE_CLIENT_SECURE -q "SELECT 2;"
 

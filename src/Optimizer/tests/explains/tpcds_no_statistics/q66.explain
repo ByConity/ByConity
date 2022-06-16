@@ -1,0 +1,99 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {d_year_2, expr#concat('DHL', ',', 'BARIAN')_2, w_city_2, w_country_2, w_county_2, w_state_2, w_warehouse_name_2, w_warehouse_sq_ft_2}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {d_year_2, expr#concat('DHL', ',', 'BARIAN')_2, w_city_2, w_country_2, w_county_2, w_state_2, w_warehouse_name_2, w_warehouse_sq_ft_2}
+                              └─ Projection est. ? rows
+                                 └─ Union est. ? rows
+                                    ├─ Projection est. ? rows
+                                    │  └─ MergingAggregated est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {d_year, w_city, w_country, w_county, w_state, w_warehouse_name, w_warehouse_sq_ft}
+                                    │        └─ Aggregating est. ? rows
+                                    │           │     Group by: {d_year, w_city, w_country, w_county, w_state, w_warehouse_name, w_warehouse_sq_ft}
+                                    │           └─ Projection est. ? rows
+                                    │              └─ Inner Join est. ? rows
+                                    │                 │     Condition: ws_ship_mode_sk == sm_ship_mode_sk
+                                    │                 ├─ Repartition Exchange est. ? rows
+                                    │                 │  │     Partition by: {ws_ship_mode_sk}
+                                    │                 │  └─ Inner Join est. ? rows
+                                    │                 │     │     Condition: ws_sold_time_sk == t_time_sk
+                                    │                 │     ├─ Repartition Exchange est. ? rows
+                                    │                 │     │  │     Partition by: {ws_sold_time_sk}
+                                    │                 │     │  └─ Inner Join est. ? rows
+                                    │                 │     │     │     Condition: ws_sold_date_sk == d_date_sk
+                                    │                 │     │     ├─ Repartition Exchange est. ? rows
+                                    │                 │     │     │  │     Partition by: {ws_sold_date_sk}
+                                    │                 │     │     │  └─ Inner Join est. ? rows
+                                    │                 │     │     │     │     Condition: ws_warehouse_sk == w_warehouse_sk
+                                    │                 │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │                 │     │     │     │  │     Partition by: {ws_warehouse_sk}
+                                    │                 │     │     │     │  └─ TableScan tpcds.web_sales est. ? rows
+                                    │                 │     │     │     └─ Repartition Exchange est. ? rows
+                                    │                 │     │     │        │     Partition by: {w_warehouse_sk}
+                                    │                 │     │     │        └─ TableScan tpcds.warehouse est. ? rows
+                                    │                 │     │     └─ Repartition Exchange est. ? rows
+                                    │                 │     │        │     Partition by: {d_date_sk}
+                                    │                 │     │        └─ Filter est. ? rows
+                                    │                 │     │           │     d_year = 2001
+                                    │                 │     │           └─ TableScan tpcds.date_dim est. ? rows
+                                    │                 │     └─ Repartition Exchange est. ? rows
+                                    │                 │        │     Partition by: {t_time_sk}
+                                    │                 │        └─ Filter est. ? rows
+                                    │                 │           │     (t_time <= cast(59638, 'UInt32')) AND (t_time >= 30838)
+                                    │                 │           └─ TableScan tpcds.time_dim est. ? rows
+                                    │                 └─ Repartition Exchange est. ? rows
+                                    │                    │     Partition by: {sm_ship_mode_sk}
+                                    │                    └─ Filter est. ? rows
+                                    │                       │     sm_carrier IN ('DHL', 'BARIAN')
+                                    │                       └─ TableScan tpcds.ship_mode est. ? rows
+                                    └─ Projection est. ? rows
+                                       └─ MergingAggregated est. ? rows
+                                          └─ Repartition Exchange est. ? rows
+                                             │     Partition by: {d_year_1, w_city_1, w_country_1, w_county_1, w_state_1, w_warehouse_name_1, w_warehouse_sq_ft_1}
+                                             └─ Aggregating est. ? rows
+                                                │     Group by: {d_year_1, w_city_1, w_country_1, w_county_1, w_state_1, w_warehouse_name_1, w_warehouse_sq_ft_1}
+                                                └─ Projection est. ? rows
+                                                   └─ Inner Join est. ? rows
+                                                      │     Condition: cs_ship_mode_sk == sm_ship_mode_sk_1
+                                                      ├─ Repartition Exchange est. ? rows
+                                                      │  │     Partition by: {cs_ship_mode_sk}
+                                                      │  └─ Inner Join est. ? rows
+                                                      │     │     Condition: cs_sold_time_sk == t_time_sk_1
+                                                      │     ├─ Repartition Exchange est. ? rows
+                                                      │     │  │     Partition by: {cs_sold_time_sk}
+                                                      │     │  └─ Inner Join est. ? rows
+                                                      │     │     │     Condition: cs_sold_date_sk == d_date_sk_1
+                                                      │     │     ├─ Repartition Exchange est. ? rows
+                                                      │     │     │  │     Partition by: {cs_sold_date_sk}
+                                                      │     │     │  └─ Inner Join est. ? rows
+                                                      │     │     │     │     Condition: cs_warehouse_sk == w_warehouse_sk_1
+                                                      │     │     │     ├─ Repartition Exchange est. ? rows
+                                                      │     │     │     │  │     Partition by: {cs_warehouse_sk}
+                                                      │     │     │     │  └─ TableScan tpcds.catalog_sales est. ? rows
+                                                      │     │     │     └─ Repartition Exchange est. ? rows
+                                                      │     │     │        │     Partition by: {w_warehouse_sk_1}
+                                                      │     │     │        └─ TableScan tpcds.warehouse est. ? rows
+                                                      │     │     └─ Repartition Exchange est. ? rows
+                                                      │     │        │     Partition by: {d_date_sk_1}
+                                                      │     │        └─ Filter est. ? rows
+                                                      │     │           │     d_year_1 = 2001
+                                                      │     │           └─ TableScan tpcds.date_dim est. ? rows
+                                                      │     └─ Repartition Exchange est. ? rows
+                                                      │        │     Partition by: {t_time_sk_1}
+                                                      │        └─ Filter est. ? rows
+                                                      │           │     (t_time_1 >= 30838) AND (t_time_1 <= cast(59638, 'UInt32'))
+                                                      │           └─ TableScan tpcds.time_dim est. ? rows
+                                                      └─ Repartition Exchange est. ? rows
+                                                         │     Partition by: {sm_ship_mode_sk_1}
+                                                         └─ Filter est. ? rows
+                                                            │     sm_carrier_1 IN ('DHL', 'BARIAN')
+                                                            └─ TableScan tpcds.ship_mode est. ? rows

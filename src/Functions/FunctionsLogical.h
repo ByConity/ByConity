@@ -81,6 +81,8 @@ struct AndImpl
     /// Final value in three-valued logic (no further operations with True, False, Null will change this value)
     static inline constexpr bool isSaturatedValueTernary(UInt8 a) { return a == Ternary::False; }
 
+    static inline constexpr bool isNeutralValueTernary(UInt8 a) { return a == Ternary::True; }
+
     static inline constexpr ResultType apply(UInt8 a, UInt8 b) { return a & b; }
 
     /// Will use three-valued logic for NULLs (see above) or default implementation (any operation with NULL returns NULL).
@@ -94,6 +96,7 @@ struct OrImpl
     static inline constexpr bool isSaturable() { return true; }
     static inline constexpr bool isSaturatedValue(bool a) { return a; }
     static inline constexpr bool isSaturatedValueTernary(UInt8 a) { return a == Ternary::True; }
+    static inline constexpr bool isNeutralValueTernary(UInt8 a) { return a == Ternary::False; }
     static inline constexpr ResultType apply(UInt8 a, UInt8 b) { return a | b; }
     static inline constexpr bool specialImplementationForNulls() { return true; }
 };

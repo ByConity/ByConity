@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- shard pruning
 set optimize_skip_unused_shards=1;
 
 drop table if exists data_01755;

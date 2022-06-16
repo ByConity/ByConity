@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- union type
 SELECT id
 FROM
 (

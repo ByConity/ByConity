@@ -35,6 +35,7 @@
 #include <common/logger_useful.h>
 
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
+#include <QueryPlan/GraphvizPrinter.h>
 
 #include "Core/Protocol.h"
 #include "TCPHandler.h"
@@ -703,6 +704,9 @@ void TCPHandler::processOrdinaryQueryWithProcessors()
                     sendData(block);
             }
         }
+
+        if (auto pipline_executor = executor.getPipelineExecutor())
+            GraphvizPrinter::printPipeline(pipline_executor->getProcessors(), pipline_executor->getExecutingGraph(), query_context, 0, "coordinator");
 
         /** If data has run out, we will send the profiling data and total values to
           * the last zero block to be able to use

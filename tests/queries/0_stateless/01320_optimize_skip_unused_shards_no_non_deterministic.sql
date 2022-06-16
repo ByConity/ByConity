@@ -1,3 +1,5 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
+
 drop table if exists data_01320;
 drop table if exists dist_01320;
 

@@ -11,6 +11,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Parsers/IAST_fwd.h>
+#include <QueryPlan/SymbolAllocator.h>
+#include <QueryPlan/PlanNodeIdAllocator.h>
 #include <Storages/IStorage_fwd.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
@@ -38,6 +40,7 @@
 
 
 namespace Poco::Net { class IPAddress; }
+namespace DB::Statistics { struct StatisticsMemoryStore; }
 namespace zkutil { class ZooKeeper; }
 
 
@@ -77,6 +80,7 @@ class MMappedFileCache;
 class UncompressedCache;
 class ProcessList;
 class ProcessListEntry;
+class PlanSegment;
 class QueryStatus;
 class QueryCache;
 class Macros;
@@ -405,6 +409,11 @@ private:
     CnchWorkerResourcePtr worker_resource;
     CnchServerResourcePtr server_resource;
 
+    PlanNodeIdAllocatorPtr id_allocator = nullptr;
+    std::shared_ptr<SymbolAllocator> symbol_allocator = nullptr;
+    std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
+    
+    std::unordered_map<std::string, bool> function_deterministic;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -1057,6 +1066,28 @@ public:
 
     String getKMSKeyCache(const String & config_name) const;
     void addKMSKeyCache(const String & config_name, const String & key) const;
+
+    PlanNodeIdAllocatorPtr & getPlanNodeIdAllocator() { return id_allocator; }
+    UInt32 nextNodeId() { return id_allocator->nextId(); }
+    void createPlanNodeIdAllocator();
+    SymbolAllocatorPtr & getSymbolAllocator() { return symbol_allocator; }
+
+    void createSymbolAllocator();
+    std::shared_ptr<Statistics::StatisticsMemoryStore> getStatisticsMemoryStore();
+ 
+    void setFunctionDeterministic(const std::string & fun_name, bool deterministic)
+    {
+        function_deterministic[fun_name] = deterministic;
+    }
+    
+    bool isFunctionDeterministic(const std::string & fun_name) const
+    {
+        if (function_deterministic.contains(fun_name))
+        {
+            return function_deterministic.at(fun_name);
+        }
+        return true;
+    }
 
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;

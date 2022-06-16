@@ -1,4 +1,5 @@
 SET joined_subquery_requires_alias = 0;
+SET enable_optimizer=0; -- union types
 
 select toTypeName(key), toTypeName(value) from (
     select 1 as key, '' as value

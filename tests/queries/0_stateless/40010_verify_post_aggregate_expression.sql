@@ -1,0 +1,39 @@
+DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t_local;
+
+CREATE TABLE t_local (a Int32, b Int32, c Array(Int32)) ENGINE = MergeTree() ORDER BY a;
+CREATE TABLE t AS t_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), t_local);
+
+INSERT INTO t_local VALUES (10, 20, [1, 2, 3]);
+
+SELECT a FROM t GROUP BY a;
+SELECT a + 1 FROM t GROUP BY a;
+SELECT b FROM t GROUP BY a; -- { serverError 215 }
+SELECT b + 1 FROM t GROUP BY a; -- { serverError 215 }
+-- below query runs successfully in InterpreterSelectQuery
+-- SELECT a FROM t GROUP BY a HAVING b > 0; -- expect serverError 215 }
+SELECT a FROM t GROUP BY a ORDER BY b; -- { serverError 215 }
+SELECT a FROM t GROUP BY a LIMIT 1 BY b; -- { serverError 215 }
+SELECT * FROM t GROUP BY a;  -- { serverError 215 }
+SELECT a AS b FROM t GROUP BY a ORDER BY b;
+SELECT a AS b FROM t GROUP BY a ORDER BY b + 1;
+
+SELECT a + b FROM t GROUP BY a + b, c;
+SELECT (a + b) + 2 FROM t GROUP BY a + b, c;
+
+-- TODO:
+--   1. for optimizer, this check depends on ScopeAware
+--   2. for non-optimizer, this query has a wrong result
+-- SELECT arrayMap(a -> a + b, c) FROM t GROUP BY a + b, c; -- expect serverError 215
+
+SELECT arrayMap(x -> x + (a + b), c) FROM t GROUP BY a + b, c;
+
+-- TODO: wrong result for both optimizer/non-optimizer
+--       the root cause is Project[expr1 = a + b, expr2 = arrayMap(a -> a + b, c)] will have a wrong result
+--       since sub expr `a + b` will be wrongly reused
+-- SELECT arrayMap(x -> x + (a + b), any(arrayMap(a -> a + b, c))) FROM t GROUP BY a + b, c;
+
+SELECT arrayMap(x -> x + (a + b), any(arrayMap(d -> d + b, c))) FROM t GROUP BY a + b, c;
+
+DROP TABLE IF EXISTS t;
+DROP TABLE IF EXISTS t_local;

@@ -109,7 +109,13 @@ class ReadBuffer;
     M(ASTWatchQuery) \
     M(ASTWindowDefinition) \
     M(ASTWithElement) \
-
+    M(ASTFieldReference) \
+    M(ASTCreateStatsQuery) \
+    M(ASTDropStatsQuery) \
+    M(ASTShowStatsQuery) \
+    M(ASTSelectIntersectExceptQuery) \
+    M(ASTWindowListElement) \
+    M(ASTTEALimit)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8
@@ -280,6 +286,8 @@ public:
 
         throw Exception("AST subtree not found in children", ErrorCodes::LOGICAL_ERROR);
     }
+    ASTs & getChildren() { return children; }
+    void replaceChildren(ASTs & children_) { children = std::move(children_); }
 
     /// Convert to a string.
 

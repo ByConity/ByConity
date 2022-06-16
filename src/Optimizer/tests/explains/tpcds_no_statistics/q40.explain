@@ -1,0 +1,47 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {i_item_id, w_state}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {i_item_id, w_state}
+                              └─ Projection est. ? rows
+                                 └─ Inner Join est. ? rows
+                                    │     Condition: cs_sold_date_sk == d_date_sk
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {cs_sold_date_sk}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: cs_item_sk == i_item_sk
+                                    │     ├─ Repartition Exchange est. ? rows
+                                    │     │  │     Partition by: {cs_item_sk}
+                                    │     │  └─ Inner Join est. ? rows
+                                    │     │     │     Condition: cs_warehouse_sk == w_warehouse_sk
+                                    │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │  │     Partition by: {cs_warehouse_sk}
+                                    │     │     │  └─ Left Join est. ? rows
+                                    │     │     │     │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                                    │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │  │     Partition by: {cs_item_sk, cs_order_number}
+                                    │     │     │     │  └─ TableScan tpcds.catalog_sales est. ? rows
+                                    │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │        │     Partition by: {cr_item_sk, cr_order_number}
+                                    │     │     │        └─ TableScan tpcds.catalog_returns est. ? rows
+                                    │     │     └─ Repartition Exchange est. ? rows
+                                    │     │        │     Partition by: {w_warehouse_sk}
+                                    │     │        └─ TableScan tpcds.warehouse est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {i_item_sk}
+                                    │        └─ Filter est. ? rows
+                                    │           │     (i_current_price <= 1.49) AND (i_current_price >= 0.99)
+                                    │           └─ TableScan tpcds.item est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {d_date_sk}
+                                       └─ Filter est. ? rows
+                                          │     (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
+                                          └─ TableScan tpcds.date_dim est. ? rows

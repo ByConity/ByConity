@@ -1,4 +1,5 @@
 SET joined_subquery_requires_alias = 0;
+set enable_optimizer=0; -- inner setting
 
 SELECT 'IN empty set',count() FROM system.numbers WHERE number IN (SELECT toUInt64(1) WHERE 0);
 SELECT 'IN non-empty set',count() FROM (SELECT number FROM system.numbers LIMIT 10) t1 WHERE t1.number IN (SELECT toUInt64(1) WHERE 1);

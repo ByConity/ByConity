@@ -1,25 +1,25 @@
 #include <chrono>
 #include <memory>
 #include <thread>
+#include <Client/Connection.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/DistributedStages/ExchangeStepVisitor.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/DistributedStages/InterpreterPlanSegment.h>
-#include <Interpreters/DistributedStages/ExchangeStepVisitor.h>
-#include <Interpreters/DistributedStages/PlanSegmentVisitor.h>
-#include <Interpreters/InterpreterSetQuery.h>
+#include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
+#include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Interpreters/SegmentScheduler.h>
-#include <Interpreters/Cluster.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/RewriteDistributedQueryVisitor.h>
+#include <Interpreters/SegmentScheduler.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSubquery.h>
-#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/IAST.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
-#include <Client/Connection.h>
-#include <Interpreters/Context_fwd.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
 
 namespace DB
 {
@@ -82,7 +82,7 @@ void InterpreterDistributedStages::createPlanSegments()
                                             .shard_number = query_data.cluster ? query_data.cluster->getShardCount() : 1,
                                             .cluster_name = query_data.cluster_name,
                                             .plan_segment_tree = plan_segment_tree.get()};
-    PlanSegmentSpliter::rewrite(query_plan, plan_segment_context);
+    PlanSegmentSplitter::split(query_plan, plan_segment_context);
 
     LOG_DEBUG(log, "PLAN-SEGMENTS \n" + plan_segment_tree->toString());
 }
@@ -204,43 +204,7 @@ void MockTestQuery(PlanSegmentTree * plan_segment_tree, ContextMutablePtr contex
 
 BlockIO InterpreterDistributedStages::executePlanSegment()
 {
-    BlockIO res;
-
-    LOG_DEBUG(log, "Generate QueryPipeline from PlanSegment");
-
-    PlanSegmentsStatusPtr scheduler_status;
-    
-    if (plan_segment_tree->getNodes().size() > 1)
-        scheduler_status = context->getSegmentScheduler()->insertPlanSegments(context->getCurrentQueryId(), plan_segment_tree.get(), context);
-    else
-    {
-        scheduler_status = std::make_shared<PlanSegmentsStatus>();
-        scheduler_status->is_final_stage_start = true;
-    }
-
-    if (!scheduler_status)
-        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
-
-    Stopwatch s;
-    while (1)
-    {
-        if (context->getSettingsRef().max_execution_time.value.seconds() > 0 && s.elapsedSeconds() > context->getSettingsRef().max_execution_time.value.seconds())
-            throw Exception("Final stage not start", ErrorCodes::LOGICAL_ERROR);
-
-        if (scheduler_status->is_final_stage_start)
-        {
-            auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
-            final_segment->update();
-            LOG_TRACE(log, "EXECUTE\n" + final_segment->toString());
-
-            if (context->getSettingsRef().debug_plan_generation)
-                break;            
-            res = DB::lazyExecutePlanSegmentLocally(std::make_unique<PlanSegment>(std::move(*final_segment)), context);
-            break;
-        }
-    }
-
-    return res;
+    return executePlanSegmentTree(plan_segment_tree, context);
 }
 
 void InterpreterDistributedStages::initSettings()
@@ -297,7 +261,7 @@ DistributedStagesSettings InterpreterDistributedStages::extractDistributedStages
         return DistributedStagesSettings(false, false);
 
     const Settings & settings_ = context_->getSettingsRef();
-    DistributedStagesSettings distributed_stages_settings(settings_.enable_distributed_stages, settings_.fallback_to_simple_query);
+    DistributedStagesSettings distributed_stages_settings(settings_.enable_distributed_stages && !settings_.enable_optimizer, settings_.fallback_to_simple_query);
 
     if (select_with_union)
     {

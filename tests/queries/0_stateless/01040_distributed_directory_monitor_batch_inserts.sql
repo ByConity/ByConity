@@ -1,6 +1,7 @@
 SET distributed_directory_monitor_batch_inserts=1;
 SET distributed_directory_monitor_sleep_time_ms=10;
 SET distributed_directory_monitor_max_sleep_time_ms=100;
+SET enable_optimizer=0; -- can't find local replica in cluster settings
 
 DROP TABLE IF EXISTS test_01040;
 DROP TABLE IF EXISTS dist_test_01040;

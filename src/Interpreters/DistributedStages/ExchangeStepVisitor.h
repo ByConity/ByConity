@@ -1,9 +1,9 @@
 #pragma once
-#include <Interpreters/DistributedStages/Property.h>
+#include <Optimizer/Property/Property.h>
 #include <Interpreters/Context_fwd.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/PlanVisitor.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/PlanVisitor.h>
 
 
 namespace DB
@@ -20,19 +20,19 @@ struct ExchangeStepContext
     bool has_gathered = false;
 };
 
-class ExchangeStepVisitor : public StepVisitor<ExchangeStepResult, ExchangeStepContext>
+class ExchangeStepVisitor : public NodeVisitor<ExchangeStepResult, ExchangeStepContext>
 {
 public:
 
-    ExchangeStepResult visitPlan(QueryPlan::Node *, ExchangeStepContext & exchange_context) override;
+    ExchangeStepResult visitNode(QueryPlan::Node *, ExchangeStepContext & exchange_context) override;
 
-    ExchangeStepResult visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext &) override;
+    ExchangeStepResult visitMergingAggregatedNode(QueryPlan::Node * node, ExchangeStepContext &) override;
 
-    ExchangeStepResult visitJoinStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
+    ExchangeStepResult visitJoinNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
 
-    ExchangeStepResult visitLimitStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
+    ExchangeStepResult visitLimitNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
 
-    ExchangeStepResult visitMergingSortedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
+    ExchangeStepResult visitMergingSortedNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context) override;
     
     void addGather(QueryPlan & query_plan, ExchangeStepContext & exchange_context);
 

@@ -14,6 +14,9 @@
 #include <Interpreters/NestedLoopJoin.h>
 #include <Interpreters/join_common.h>
 #include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 
 namespace DB
@@ -164,7 +167,15 @@ void NestedLoopJoin::completeColumnsAfterJoin(NamesAndTypesList & total_columns)
     auto it = total_columns.begin();
     // empty when analyse sql
     if (right_blocks.empty())
-        total_columns.insert(it, table_join->columnsFromJoinedTable().begin(), table_join->columnsFromJoinedTable().end());
+    {
+        if (table_join->columnsFromJoinedTable().empty())
+        {
+            auto name_type_list = right_columns_to_add.getNamesAndTypesList();
+            total_columns.insert(it, name_type_list.begin(), name_type_list.end());
+        }
+        else
+            total_columns.insert(it, table_join->columnsFromJoinedTable().begin(), table_join->columnsFromJoinedTable().end());
+    }
     else
     {
         auto name_type_list = right_blocks.front().cloneEmpty().getNamesAndTypesList();
@@ -284,7 +295,20 @@ void NestedLoopJoin::joinImpl(
     for (size_t i = 0; i < left_block.columns(); ++i)
     {
         const auto & column = left_block.getByPosition(i);
-        left_block.setColumn(i, std::move(*new_block.findByName(column.name)));
+        if (new_block)
+            left_block.setColumn(i, std::move(*new_block.findByName(column.name)));
+        else if (is_left)
+        {
+            auto rows = left_block.rows();
+            if (column.column->size() != rows)
+            {
+                auto new_column = column.type->createColumn();
+                new_column->insertManyDefaults(rows);
+                left_block.setColumn(i, ColumnWithTypeAndName{std::move(new_column), column.type, column.name});
+            }
+        }
+        else if (isInner(table_join->kind()))
+            left_block.setColumn(i, column.cloneEmpty());
     }
 }
 

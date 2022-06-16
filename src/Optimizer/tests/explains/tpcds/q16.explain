@@ -1,0 +1,70 @@
+Projection est. 1 rows
+└─ Limit est. 1 rows
+   └─ MergingSorted est. 1 rows
+      └─ MergeSorting est. 1 rows
+         └─ PartialSorting est. 1 rows
+            └─ MergingAggregated est. 1 rows
+               └─ Gather Exchange est. 1 rows
+                  └─ Aggregating est. 1 rows
+                     │     Group by: {}
+                     └─ Projection est. 15709758 rows
+                        └─ Filter est. 15709758 rows
+                           │     NOT cast(coalesce(build_side_non_null_symbol_1, 0), 'UInt8')
+                           └─ Left Join est. 17455287 rows
+                              │     Condition: cs_order_number == cr_order_number
+                              ├─ Repartition Exchange est. 17455287 rows
+                              │  │     Partition by: {cs_order_number}
+                              │  └─ Filter est. 17455287 rows
+                              │     │     count_non_null_value > 0
+                              │     └─ MergingAggregated est. 19394764 rows
+                              │        └─ Repartition Exchange est. 19394764 rows
+                              │           │     Partition by: {assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk}
+                              │           └─ Aggregating est. 19394764 rows
+                              │              │     Group by: {assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk}
+                              │              └─ Projection est. 19394764 rows
+                              │                 └─ Left Join est. 19394764 rows
+                              │                    │     Condition: cs_order_number == cs_order_number_1
+                              │                    ├─ AssignUniqueId est. 2217430 rows
+                              │                    │  └─ Repartition Exchange est. 2217430 rows
+                              │                    │     │     Partition by: {cs_order_number}
+                              │                    │     └─ Inner Join est. 2217430 rows
+                              │                    │        │     Condition: cs_call_center_sk == cc_call_center_sk
+                              │                    │        ├─ Inner Join est. 2217430 rows
+                              │                    │        │  │     Condition: cs_ship_addr_sk == ca_address_sk
+                              │                    │        │  ├─ Repartition Exchange est. 44443840 rows
+                              │                    │        │  │  │     Partition by: {cs_ship_addr_sk}
+                              │                    │        │  │  └─ Inner Join est. 44443840 rows
+                              │                    │        │  │     │     Condition: cs_ship_date_sk == d_date_sk
+                              │                    │        │  │     ├─ Local Exchange est. 1439980416 rows
+                              │                    │        │  │     │  └─ Filter est. 1439980416 rows
+                              │                    │        │  │     │     │     Dynamic Filters: {cs_ship_addr_sk:bloomfilter,cs_ship_addr_sk:range,cs_ship_date_sk:range}
+                              │                    │        │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                              │                    │        │  │     └─ Projection est. 60 rows
+                              │                    │        │  │        │     Dynamic Filters Builder: {d_date_sk}
+                              │                    │        │  │        └─ Broadcast Exchange est. 60 rows
+                              │                    │        │  │           └─ Filter est. 60 rows
+                              │                    │        │  │              │     (d_date >= '2002-2-01') AND (d_date <= cast(11779, 'Date'))
+                              │                    │        │  │              └─ TableScan tpcds.date_dim est. 73049 rows
+                              │                    │        │  └─ Projection est. 307020 rows
+                              │                    │        │     │     Dynamic Filters Builder: {ca_address_sk}
+                              │                    │        │     └─ Repartition Exchange est. 307020 rows
+                              │                    │        │        │     Partition by: {ca_address_sk}
+                              │                    │        │        └─ Filter est. 307020 rows
+                              │                    │        │           │     ca_state = 'GA'
+                              │                    │        │           └─ TableScan tpcds.customer_address est. 6000000 rows
+                              │                    │        └─ Broadcast Exchange est. 42 rows
+                              │                    │           └─ Filter est. 42 rows
+                              │                    │              │     cc_county IN ('Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County')
+                              │                    │              └─ TableScan tpcds.call_center est. 42 rows
+                              │                    └─ Repartition Exchange est. 1439980416 rows
+                              │                       │     Partition by: {cs_order_number_1}
+                              │                       └─ Projection est. 1439980416 rows
+                              │                          └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                              └─ Projection est. 96543494 rows
+                                 └─ MergingAggregated est. 96543494 rows
+                                    └─ Repartition Exchange est. 96543494 rows
+                                       │     Partition by: {cr_order_number}
+                                       └─ Aggregating est. 96543494 rows
+                                          │     Group by: {cr_order_number}
+                                          └─ TableScan tpcds.catalog_returns est. 143996756 rows
+note: Dynamic Filter is applied for 3 times.

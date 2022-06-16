@@ -92,7 +92,7 @@ public:
     using ColumnTransformers = MultiEnum<ColumnTransformer, UInt8>;
     static constexpr auto AllTransformers = ColumnTransformers{ColumnTransformer::APPLY, ColumnTransformer::EXCEPT, ColumnTransformer::REPLACE};
 
-    explicit ParserColumnsTransformers(enum DialectType t, ColumnTransformers allowed_transformers_ = AllTransformers, bool is_strict_ = false)
+    explicit ParserColumnsTransformers(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = AllTransformers, bool is_strict_ = false)
         : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
         , is_strict(is_strict_)
     {}
@@ -110,7 +110,7 @@ class ParserAsterisk : public IParserDialectBase
 {
 public:
     using ColumnTransformers = ParserColumnsTransformers::ColumnTransformers;
-    explicit ParserAsterisk(enum DialectType t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
+    explicit ParserAsterisk(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
         : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
     {}
 
@@ -138,7 +138,7 @@ class ParserColumnsMatcher : public IParserDialectBase
 {
 public:
     using ColumnTransformers = ParserColumnsTransformers::ColumnTransformers;
-    explicit ParserColumnsMatcher(enum DialectType t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
+    explicit ParserColumnsMatcher(ParserSettingsImpl t, ColumnTransformers allowed_transformers_ = ParserColumnsTransformers::AllTransformers)
         : IParserDialectBase(t), allowed_transformers(allowed_transformers_)
     {}
 
@@ -158,7 +158,7 @@ protected:
 class ParserFunction : public IParserDialectBase
 {
 public:
-    explicit ParserFunction(enum DialectType t, bool allow_function_parameters_ = true, bool is_table_function_ = false)
+    explicit ParserFunction(ParserSettingsImpl t, bool allow_function_parameters_ = true, bool is_table_function_ = false)
         : IParserDialectBase(t), allow_function_parameters(allow_function_parameters_), is_table_function(is_table_function_)
     {
     }
@@ -364,7 +364,7 @@ template <typename Collection>
 class ParserCollectionOfLiterals : public IParserDialectBase
 {
 public:
-    ParserCollectionOfLiterals(TokenType opening_bracket_, TokenType closing_bracket_, enum DialectType t)
+    ParserCollectionOfLiterals(TokenType opening_bracket_, TokenType closing_bracket_, ParserSettingsImpl t)
         : IParserDialectBase(t), opening_bracket(opening_bracket_), closing_bracket(closing_bracket_) {}
 protected:
     const char * getName() const override { return "collection of literals"; }
@@ -401,6 +401,17 @@ protected:
     }
 };
 
+/**
+  * Parse query with EXISTS expression.
+  */
+class ParserExistsExpression : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "exists expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
 
 /** The literal is one of: NULL, UInt64, Int64, Float64, String.
   */
@@ -482,7 +493,7 @@ public:
 class ParserWithOptionalAlias : public IParserDialectBase
 {
 public:
-    ParserWithOptionalAlias(ParserPtr && elem_parser_, bool allow_alias_without_as_keyword_, enum DialectType t)
+    ParserWithOptionalAlias(ParserPtr && elem_parser_, bool allow_alias_without_as_keyword_, ParserSettingsImpl t)
     : IParserDialectBase(t),elem_parser(std::move(elem_parser_)), allow_alias_without_as_keyword(allow_alias_without_as_keyword_) {}
 protected:
     ParserPtr elem_parser;
@@ -513,7 +524,7 @@ public:
 class ParserFunctionWithKeyValueArguments : public IParserDialectBase
 {
 public:
-    explicit ParserFunctionWithKeyValueArguments(enum DialectType t, bool brackets_can_be_omitted_ = false) : IParserDialectBase(t), brackets_can_be_omitted(brackets_can_be_omitted_)
+    explicit ParserFunctionWithKeyValueArguments(ParserSettingsImpl t, bool brackets_can_be_omitted_ = false) : IParserDialectBase(t), brackets_can_be_omitted(brackets_can_be_omitted_)
     {
     }
 

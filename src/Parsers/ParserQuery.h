@@ -15,7 +15,7 @@ private:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 public:
-    explicit ParserQuery(const char * end_, enum DialectType t = DialectType::CLICKHOUSE) : IParserDialectBase(t), end(end_) {}
+    explicit ParserQuery(const char * end_, ParserSettingsImpl t = ParserSettings::CLICKHOUSE) : IParserDialectBase(t), end(end_) {}
 };
 
 }

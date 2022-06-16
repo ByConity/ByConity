@@ -14,6 +14,7 @@ void registerFunctionsMap(FunctionFactory &);
 void registerFunctionsByteMap(FunctionFactory &);
 void registerFunctionsBitmap(FunctionFactory &);
 void registerFunctionsBitEngine(FunctionFactory &);
+void registerFunctionsBloomFilter(FunctionFactory &);
 void registerFunctionsCoding(FunctionFactory &);
 void registerFunctionsComparison(FunctionFactory &);
 void registerFunctionsConditional(FunctionFactory &);
@@ -65,6 +66,8 @@ void registerFunctionAESDecryptMysql(FunctionFactory & factory);
 
 #endif
 
+void registerInternalFunctionDynamicFilter(FunctionFactory &);
+
 void registerFunctions()
 {
     auto & factory = FunctionFactory::instance();
@@ -81,6 +84,7 @@ void registerFunctions()
     registerFunctionsBitmap(factory);
     registerFunctionsBitEngine(factory);
 #endif
+    registerFunctionsBloomFilter(factory);
     registerFunctionsCoding(factory);
     registerFunctionsComparison(factory);
     registerFunctionsConditional(factory);
@@ -131,6 +135,7 @@ void registerFunctions()
     registerFunctionTid(factory);
     registerFunctionLogTrace(factory);
     registerFunctionTopoFindDown(factory);
+    registerInternalFunctionDynamicFilter(factory);
 }
 
 }

@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- schedule
 DROP DATABASE IF EXISTS shard_0;
 DROP DATABASE IF EXISTS shard_1;
 SET distributed_ddl_output_mode='none';

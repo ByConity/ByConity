@@ -127,6 +127,7 @@ bool PullingAsyncPipelineExecutor::pull(Chunk & chunk, uint64_t milliseconds)
     if (lazy_format)
     {
         chunk = lazy_format->getChunk(milliseconds);
+        // data->rethrowExceptionIfHas();
         return true;
     }
 
@@ -231,6 +232,18 @@ BlockStreamProfileInfo & PullingAsyncPipelineExecutor::getProfileInfo()
     std::call_once(flag, []() { profile_info.getRowsBeforeLimit(); });
 
     return profile_info;
+}
+
+PipelineExecutorPtr PullingAsyncPipelineExecutor::getPipelineExecutor()
+{
+    if (data)
+        return data->executor;
+    return {};
+}
+
+void PullingAsyncPipelineExecutor::rethrowExceptionIfHas()
+{
+    data->rethrowExceptionIfHas();
 }
 
 }

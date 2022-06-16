@@ -5,13 +5,14 @@
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
+#include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnNumbers.h>
 #include <Parsers/IAST.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <Parsers/queryToString.h>
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
-#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/RemoteExchangeSourceStep.h>
 
 #include <sstream>
 
@@ -115,7 +116,17 @@ void PlanSegmentInput::serialize(WriteBuffer & buf) const
         source_address.serialize(buf);
 
     if (type == PlanSegmentType::SOURCE)
-        storage_id.serialize(buf);
+    {
+        if (storage_id)
+        {
+            writeBinary(true, buf);
+            storage_id->serialize(buf);
+        }
+        else
+        {
+            writeBinary(false, buf);
+        }
+    }
 }
 
 void PlanSegmentInput::deserialize(ReadBuffer & buf, ContextPtr context)
@@ -136,7 +147,12 @@ void PlanSegmentInput::deserialize(ReadBuffer & buf, ContextPtr context)
     }
 
     if (type == PlanSegmentType::SOURCE)
-        storage_id = StorageID::deserialize(buf, context);
+    {
+        bool has;
+        readBinary(has, buf);
+        if (has)
+            storage_id = StorageID::deserialize(buf, context);
+    }
 }
 
 String PlanSegmentInput::toString(size_t indent) const
@@ -147,7 +163,7 @@ String PlanSegmentInput::toString(size_t indent) const
     ostr << IPlanSegment::toString(indent) << "\n";
     ostr << indent_str << "parallel_index: " << parallel_index << "\n";
     ostr << indent_str << "keep_order: " << keep_order << "\n";
-    ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE ? storage_id.getNameForLogs() : "") << "\n";
+    ostr << indent_str << "storage_id: " << (type == PlanSegmentType::SOURCE && storage_id.has_value() ? storage_id->getNameForLogs() : "") << "\n";
     ostr << indent_str << "source_addresses: " << "\n";
     for (auto & address : source_addresses)
         ostr << indent_str << indent_str << address.toString() << "\n";
@@ -299,6 +315,17 @@ String PlanSegment::toString() const
     ostr << "parallel: " << parallel << ", exchange_parallel_size: " << exchange_parallel_size; 
 
     return ostr.str();
+}
+
+std::unordered_map<size_t, PlanSegmentPtr &> PlanSegmentTree::getPlanSegmentsMap()
+{
+    std::unordered_map<size_t, PlanSegmentPtr &> all_segments;
+    Nodes & all_nodes = getNodes();
+    for(auto & node : all_nodes)
+    {
+        all_segments.emplace(node.plan_segment->getPlanSegmentId(), node.plan_segment);
+    }
+    return all_segments;
 }
 
 String PlanSegmentTree::toString() const

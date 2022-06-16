@@ -267,7 +267,7 @@ void cascadingDrop(const StorageID & table_id, const ASTPtr & partition_or_predi
                 const char * begin = query_str.data();
                 const char * end = query_str.data() + query_str.size();
 
-                ParserQuery parser(end, DialectType::CLICKHOUSE);
+                ParserQuery parser(end, ParserSettings::CLICKHOUSE);
                 auto ast = parseQuery(parser, begin, end, "", 0, 0);
                 auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
                 target_table->alterPartition(metadata_snapshot, drop_commands, context);

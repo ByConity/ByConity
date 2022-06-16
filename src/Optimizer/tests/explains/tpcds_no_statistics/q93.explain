@@ -1,0 +1,31 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {ss_customer_sk}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {ss_customer_sk}
+                              └─ Projection est. ? rows
+                                 └─ Inner Join est. ? rows
+                                    │     Condition: sr_reason_sk == r_reason_sk
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {sr_reason_sk}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                    │     ├─ Repartition Exchange est. ? rows
+                                    │     │  │     Partition by: {ss_item_sk, ss_ticket_number}
+                                    │     │  └─ TableScan tpcds.store_sales est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {sr_item_sk, sr_ticket_number}
+                                    │        └─ TableScan tpcds.store_returns est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {r_reason_sk}
+                                       └─ Filter est. ? rows
+                                          │     r_reason_desc = 'reason 28'
+                                          └─ TableScan tpcds.reason est. ? rows

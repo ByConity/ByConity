@@ -164,10 +164,15 @@ DataTypePtr FieldToDataType::operator() (const ByteMap & map) const
     DataTypePtr keyType, valueType;
 
     if (map.empty())
-        throw Exception("Cannot infer type of empty map", ErrorCodes::EMPTY_DATA_PASSED);
-
-    keyType = applyVisitor(FieldToDataType(), map[0].first);
-    valueType = applyVisitor(FieldToDataType(), map[0].second);
+    {
+        keyType = std::make_shared<DataTypeNothing>();
+        valueType = std::make_shared<DataTypeNothing>();
+    }
+    else
+    {
+        keyType = applyVisitor(FieldToDataType(), map[0].first);
+        valueType = applyVisitor(FieldToDataType(), map[0].second);
+    }
 
     return std::make_shared<DataTypeByteMap>(keyType, valueType);
 }

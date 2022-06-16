@@ -1,3 +1,4 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
 DROP TABLE IF EXISTS x;
 DROP TABLE IF EXISTS x_dist;
 DROP TABLE IF EXISTS y;

@@ -1,3 +1,6 @@
+-- TODO: for optimizer, require implicit type conversion
+SET enable_optimizer=0;
+
 SELECT 1 IN (SELECT 1);
 SELECT -1 IN (SELECT 1);
 
@@ -27,6 +30,8 @@ DROP TABLE select_in_test;
 
 SELECT 1 IN (1);
 SELECT '1' IN (SELECT 1);
+
+-- TODO: for optimizer, support transform_null_in
 
 SELECT 1 IN (SELECT 1) SETTINGS transform_null_in = 1;
 SELECT 1 IN (SELECT 'a') SETTINGS transform_null_in = 1;

@@ -5,6 +5,7 @@ CLICKHOUSE_CLIENT_SERVER_LOGS_LEVEL=trace
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
+CLICKHOUSE_CLIENT=${CLICKHOUSE_CLIENT//enable_optimizer=1/enable_optimizer=0} ## shard pruning
 
 $CLICKHOUSE_CLIENT --optimize_skip_unused_shards=1 -nm -q "
 create table dist_01758 as system.one engine=Distributed(test_cluster_two_shards, system, one, dummy);

@@ -1,3 +1,5 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
+
 -- TODO: correct testing with real unique shards
 
 set optimize_distributed_group_by_sharding_key=1;

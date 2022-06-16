@@ -18,6 +18,7 @@
 #include <Interpreters/DNSCacheUpdater.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/ExternalModelsLoader.h>
@@ -87,6 +88,7 @@
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
 #include <DataTypes/MapHelpers.h>
+#include <Statistics/CacheManager.h>
 
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/Catalog.h>
@@ -1249,6 +1251,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         database_catalog.loadDatabases();
         /// After loading validate that default database exists
         database_catalog.assertDatabaseExists(default_database);
+        try
+        {
+            createSystemTablesIfNotExist(*database_catalog.getSystemDatabase(), global_context);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Caught exception while loading metadata");
+        }
     }
     catch (...)
     {
@@ -1698,16 +1708,23 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (global_context->getComplexQueryActive())
         {
+            Statistics::CacheManager::initialize(global_context);
             /// Brpc data trans registry service
             rpc_servers.emplace_back(std::make_unique<brpc::Server>());
             rpc_servers.emplace_back(std::make_unique<brpc::Server>());
             rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
             rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
+            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
+
             if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
                 throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
             }
             if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
                 throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
+            }
+            // RuntimeFilterService reuse PlanSegmentManagerRpcService port
+            if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
             }
             brpc::ServerOptions stream_options;
             stream_options.idle_timeout_sec = -1;

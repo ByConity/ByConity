@@ -16,6 +16,8 @@ public:
     ASTPtr group_expr_list;  // ASTExpressionList
     ASTPtr order_expr_list;  // ASTOrderByElement
 
+    ASTType getType() const override { return ASTType::ASTTEALimit; }
+
     String getID(char) const override;
     ASTPtr clone() const override;
 

@@ -17,6 +17,10 @@ NameSet removeDuplicateColumns(NamesAndTypesList & columns);
 ASTTableExprConstPtrs getTableExpressions(const ASTSelectQuery & select_query);
 
 const ASTTableExpression * getTableExpression(const ASTSelectQuery & select, size_t table_number);
+inline ASTTableExpression * getTableExpressionNonConst(ASTSelectQuery & select, size_t table_number)
+{
+    return const_cast<ASTTableExpression *>(getTableExpression(select, table_number));
+}
 
 ASTPtr extractTableExpression(const ASTSelectQuery & select, size_t table_number);
 

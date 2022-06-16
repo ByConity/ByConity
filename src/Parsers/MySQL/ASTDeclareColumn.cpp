@@ -43,8 +43,8 @@ static inline bool parseColumnDeclareOptions(IParser::Pos & pos, ASTPtr & node, 
             OptionDescribe("UNSIGNED", "is_unsigned", std::make_unique<ParserAlwaysTrue>()),
             OptionDescribe("NULL", "is_null", std::make_unique<ParserAlwaysTrue>()),
             OptionDescribe("NOT NULL", "is_null", std::make_unique<ParserAlwaysFalse>()),
-            OptionDescribe("DEFAULT", "default", std::make_unique<ParserExpression>(DialectType::CLICKHOUSE)),
-            OptionDescribe("ON UPDATE", "on_update", std::make_unique<ParserExpression>(DialectType::CLICKHOUSE)),
+            OptionDescribe("DEFAULT", "default", std::make_unique<ParserExpression>(ParserSettings::CLICKHOUSE)),
+            OptionDescribe("ON UPDATE", "on_update", std::make_unique<ParserExpression>(ParserSettings::CLICKHOUSE)),
             OptionDescribe("AUTO_INCREMENT", "auto_increment", std::make_unique<ParserAlwaysTrue>()),
             OptionDescribe("UNIQUE KEY", "unique_key", std::make_unique<ParserAlwaysTrue>()),
             OptionDescribe("PRIMARY KEY", "primary_key", std::make_unique<ParserAlwaysTrue>()),
@@ -55,8 +55,8 @@ static inline bool parseColumnDeclareOptions(IParser::Pos & pos, ASTPtr & node, 
             OptionDescribe("COLLATE", "collate", std::make_unique<ParserCharsetOrCollateName>()),
             OptionDescribe("COLUMN_FORMAT", "column_format", std::make_unique<ParserIdentifier>()),
             OptionDescribe("STORAGE", "storage", std::make_unique<ParserIdentifier>()),
-            OptionDescribe("AS", "generated", std::make_unique<ParserExpression>(DialectType::CLICKHOUSE)),
-            OptionDescribe("GENERATED ALWAYS AS", "generated", std::make_unique<ParserExpression>(DialectType::CLICKHOUSE)),
+            OptionDescribe("AS", "generated", std::make_unique<ParserExpression>(ParserSettings::CLICKHOUSE)),
+            OptionDescribe("GENERATED ALWAYS AS", "generated", std::make_unique<ParserExpression>(ParserSettings::CLICKHOUSE)),
             OptionDescribe("STORED", "is_stored", std::make_unique<ParserAlwaysTrue>()),
             OptionDescribe("VIRTUAL", "is_stored", std::make_unique<ParserAlwaysFalse>()),
             OptionDescribe("", "reference", std::make_unique<ParserDeclareReference>()),
@@ -73,7 +73,7 @@ bool ParserDeclareColumn::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     ASTPtr column_data_type;
     ASTPtr column_options;
 
-    ParserExpression p_expression(DialectType::CLICKHOUSE);
+    ParserExpression p_expression(ParserSettings::CLICKHOUSE);
     ParserIdentifier p_identifier;
 
     if (!p_identifier.parse(pos, column_name, expected))

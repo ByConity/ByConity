@@ -1,0 +1,68 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ MergingAggregated est. ? rows
+               └─ Gather Exchange est. ? rows
+                  └─ Aggregating est. ? rows
+                     │     Group by: {}
+                     └─ Projection est. ? rows
+                        └─ Filter est. ? rows
+                           │     NOT cast(coalesce(build_side_non_null_symbol_1, 0), 'UInt8')
+                           └─ Left Join est. ? rows
+                              │     Condition: cs_order_number == cr_order_number
+                              ├─ Repartition Exchange est. ? rows
+                              │  │     Partition by: {cs_order_number}
+                              │  └─ Filter est. ? rows
+                              │     │     count_non_null_value > 0
+                              │     └─ MergingAggregated est. ? rows
+                              │        └─ Repartition Exchange est. ? rows
+                              │           │     Partition by: {assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk}
+                              │           └─ Aggregating est. ? rows
+                              │              │     Group by: {assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk}
+                              │              └─ Projection est. ? rows
+                              │                 └─ Left Join est. ? rows
+                              │                    │     Condition: cs_order_number == cs_order_number_1
+                              │                    ├─ AssignUniqueId est. ? rows
+                              │                    │  └─ Repartition Exchange est. ? rows
+                              │                    │     │     Partition by: {cs_order_number}
+                              │                    │     └─ Inner Join est. ? rows
+                              │                    │        │     Condition: cs_call_center_sk == cc_call_center_sk
+                              │                    │        ├─ Repartition Exchange est. ? rows
+                              │                    │        │  │     Partition by: {cs_call_center_sk}
+                              │                    │        │  └─ Inner Join est. ? rows
+                              │                    │        │     │     Condition: cs_ship_addr_sk == ca_address_sk
+                              │                    │        │     ├─ Repartition Exchange est. ? rows
+                              │                    │        │     │  │     Partition by: {cs_ship_addr_sk}
+                              │                    │        │     │  └─ Inner Join est. ? rows
+                              │                    │        │     │     │     Condition: cs_ship_date_sk == d_date_sk
+                              │                    │        │     │     ├─ Repartition Exchange est. ? rows
+                              │                    │        │     │     │  │     Partition by: {cs_ship_date_sk}
+                              │                    │        │     │     │  └─ TableScan tpcds.catalog_sales est. ? rows
+                              │                    │        │     │     └─ Repartition Exchange est. ? rows
+                              │                    │        │     │        │     Partition by: {d_date_sk}
+                              │                    │        │     │        └─ Filter est. ? rows
+                              │                    │        │     │           │     (d_date >= '2002-2-01') AND (d_date <= cast(11779, 'Date'))
+                              │                    │        │     │           └─ TableScan tpcds.date_dim est. ? rows
+                              │                    │        │     └─ Repartition Exchange est. ? rows
+                              │                    │        │        │     Partition by: {ca_address_sk}
+                              │                    │        │        └─ Filter est. ? rows
+                              │                    │        │           │     ca_state = 'GA'
+                              │                    │        │           └─ TableScan tpcds.customer_address est. ? rows
+                              │                    │        └─ Repartition Exchange est. ? rows
+                              │                    │           │     Partition by: {cc_call_center_sk}
+                              │                    │           └─ Filter est. ? rows
+                              │                    │              │     cc_county IN ('Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County')
+                              │                    │              └─ TableScan tpcds.call_center est. ? rows
+                              │                    └─ Repartition Exchange est. ? rows
+                              │                       │     Partition by: {cs_order_number_1}
+                              │                       └─ Projection est. ? rows
+                              │                          └─ TableScan tpcds.catalog_sales est. ? rows
+                              └─ Projection est. ? rows
+                                 └─ MergingAggregated est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {cr_order_number}
+                                       └─ Aggregating est. ? rows
+                                          │     Group by: {cr_order_number}
+                                          └─ TableScan tpcds.catalog_returns est. ? rows

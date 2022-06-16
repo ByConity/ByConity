@@ -5,6 +5,7 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/ProcessList.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
@@ -25,11 +26,12 @@
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Exchange/SinglePartitionExchangeSink.h>
 #include <Processors/Executors/PipelineExecutor.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/QueryPlan.h>
 #include <Processors/Transforms/BufferedCopyTransform.h>
 #include <Protos/plan_segment_manager.pb.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/QueryPlan.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
@@ -155,6 +157,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
         plan_segment->getPlanSegmentId(),
         num_threads);
     pipeline_executor->execute(num_threads);
+    GraphvizPrinter::printPipeline(pipeline_executor->getProcessors(), pipeline_executor->getExecutingGraph(), context, plan_segment->getPlanSegmentId(), extractExchangeStatusHostPort(plan_segment->getCurrentAddress()));
     for (const auto & sender : senders)
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
 }
@@ -162,7 +165,7 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
     registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
     return pipeline;
 }
@@ -210,7 +213,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     }
 
     pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context));
+        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
 
     registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
 

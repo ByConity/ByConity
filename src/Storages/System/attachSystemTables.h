@@ -13,5 +13,6 @@ class IDatabase;
 void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper);
 void attachSystemTablesLocal(IDatabase & system_database);
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics);
+void createSystemTablesIfNotExist(IDatabase & system_database, ContextMutablePtr global_context);
 
 }

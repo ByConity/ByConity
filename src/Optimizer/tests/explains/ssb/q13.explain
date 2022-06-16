@@ -1,0 +1,46 @@
+Projection est. 871560 rows
+└─ MergingSorted est. 871560 rows
+   └─ MergeSorting est. 871560 rows
+      └─ PartialSorting est. 871560 rows
+         └─ Gather Exchange est. 871560 rows
+            └─ MergeSorting est. 871560 rows
+               └─ PartialSorting est. 871560 rows
+                  └─ MergingAggregated est. 871560 rows
+                     └─ Repartition Exchange est. 871560 rows
+                        │     Partition by: {P_BRAND, S_CITY, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 871560 rows
+                           │     Group by: {P_BRAND, S_CITY, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 4003537 rows
+                              └─ Inner Join est. 6000919 rows
+                                 │     Condition: LO_CUSTKEY == C_CUSTKEY
+                                 ├─ Repartition Exchange est. 13664578 rows
+                                 │  │     Partition by: {LO_CUSTKEY}
+                                 │  └─ Inner Join est. 13664578 rows
+                                 │     │     Condition: LO_PARTKEY == P_PARTKEY
+                                 │     ├─ Inner Join est. 239622672 rows
+                                 │     │  │     Condition: LO_SUPPKEY == S_SUPPKEY
+                                 │     │  ├─ Local Exchange est. 5999989813 rows
+                                 │     │  │  └─ Filter est. 5999989813 rows
+                                 │     │  │     │     (toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)
+                                 │     │  │     │     Dynamic Filters: {LO_CUSTKEY:bloomfilter,LO_CUSTKEY:range,LO_PARTKEY:range,LO_SUPPKEY:range}
+                                 │     │  │     └─ TableScan ssb.lineorder est. 5999989813 rows
+                                 │     │  └─ Projection est. 79875 rows
+                                 │     │     │     Dynamic Filters Builder: {S_SUPPKEY}
+                                 │     │     └─ Broadcast Exchange est. 79875 rows
+                                 │     │        └─ Filter est. 79875 rows
+                                 │     │           │     S_NATION = 'UNITED STATES'
+                                 │     │           └─ TableScan ssb.supplier est. 2000000 rows
+                                 │     └─ Projection est. 79913 rows
+                                 │        │     Dynamic Filters Builder: {P_PARTKEY}
+                                 │        └─ Broadcast Exchange est. 79913 rows
+                                 │           └─ Filter est. 79913 rows
+                                 │              │     P_CATEGORY = 'MFGR#14'
+                                 │              └─ TableScan ssb.part est. 2000000 rows
+                                 └─ Projection est. 6000975 rows
+                                    │     Dynamic Filters Builder: {C_CUSTKEY}
+                                    └─ Repartition Exchange est. 6000975 rows
+                                       │     Partition by: {C_CUSTKEY}
+                                       └─ Filter est. 6000975 rows
+                                          │     C_REGION = 'AMERICA'
+                                          └─ TableScan ssb.customer est. 30000000 rows
+note: Dynamic Filter is applied for 4 times.

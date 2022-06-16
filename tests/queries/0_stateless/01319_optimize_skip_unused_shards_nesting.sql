@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- nested distributed table is not supported by optimizer
 drop table if exists data_01319;
 drop table if exists dist_01319;
 drop table if exists dist_layer_01319;

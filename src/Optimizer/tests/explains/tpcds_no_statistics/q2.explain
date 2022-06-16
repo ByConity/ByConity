@@ -1,0 +1,59 @@
+Projection est. ? rows
+└─ MergingSorted est. ? rows
+   └─ MergeSorting est. ? rows
+      └─ PartialSorting est. ? rows
+         └─ Gather Exchange est. ? rows
+            └─ MergeSorting est. ? rows
+               └─ PartialSorting est. ? rows
+                  └─ Projection est. ? rows
+                     └─ Inner Join est. ? rows
+                        │     Condition: d_week_seq == minus(d_week_seq_2, 53)
+                        ├─ Inner Join est. ? rows
+                        │  │     Condition: d_week_seq == d_week_seq_1
+                        │  ├─ MergingAggregated est. ? rows
+                        │  │  └─ Repartition Exchange est. ? rows
+                        │  │     │     Partition by: {d_week_seq}
+                        │  │     └─ Aggregating est. ? rows
+                        │  │        │     Group by: {d_week_seq}
+                        │  │        └─ Projection est. ? rows
+                        │  │           └─ Inner Join est. ? rows
+                        │  │              │     Condition: ws_sold_date_sk_1 == d_date_sk
+                        │  │              ├─ Repartition Exchange est. ? rows
+                        │  │              │  │     Partition by: {ws_sold_date_sk_1}
+                        │  │              │  └─ Union est. ? rows
+                        │  │              │     ├─ TableScan tpcds.web_sales est. ? rows
+                        │  │              │     └─ TableScan tpcds.catalog_sales est. ? rows
+                        │  │              └─ Repartition Exchange est. ? rows
+                        │  │                 │     Partition by: {d_date_sk}
+                        │  │                 └─ TableScan tpcds.date_dim est. ? rows
+                        │  └─ Repartition Exchange est. ? rows
+                        │     │     Partition by: {d_week_seq_1}
+                        │     └─ Filter est. ? rows
+                        │        │     d_year_1 = 2001
+                        │        └─ TableScan tpcds.date_dim est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {minus(d_week_seq_2, 53)}
+                           └─ Projection est. ? rows
+                              └─ Inner Join est. ? rows
+                                 │     Condition: d_week_seq_2 == d_week_seq_3
+                                 ├─ MergingAggregated est. ? rows
+                                 │  └─ Repartition Exchange est. ? rows
+                                 │     │     Partition by: {d_week_seq_2}
+                                 │     └─ Aggregating est. ? rows
+                                 │        │     Group by: {d_week_seq_2}
+                                 │        └─ Projection est. ? rows
+                                 │           └─ Inner Join est. ? rows
+                                 │              │     Condition: ws_sold_date_sk_3 == d_date_sk_2
+                                 │              ├─ Repartition Exchange est. ? rows
+                                 │              │  │     Partition by: {ws_sold_date_sk_3}
+                                 │              │  └─ Union est. ? rows
+                                 │              │     ├─ TableScan tpcds.web_sales est. ? rows
+                                 │              │     └─ TableScan tpcds.catalog_sales est. ? rows
+                                 │              └─ Repartition Exchange est. ? rows
+                                 │                 │     Partition by: {d_date_sk_2}
+                                 │                 └─ TableScan tpcds.date_dim est. ? rows
+                                 └─ Repartition Exchange est. ? rows
+                                    │     Partition by: {d_week_seq_3}
+                                    └─ Filter est. ? rows
+                                       │     d_year_3 = cast(2002, 'UInt32')
+                                       └─ TableScan tpcds.date_dim est. ? rows

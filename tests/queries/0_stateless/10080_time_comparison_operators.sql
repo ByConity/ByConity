@@ -45,8 +45,8 @@ select '12:00:00.4566'::Time(4) NOT BETWEEN '11:00:00.4566'::Time(4) AND '11:59:
 
 select '12:00:00.4566'::Time(4) IN ('11:00:00.4566'::Time(4), '11:00:00.4566'::Time(4));
 select '12:00:00.4566'::Time(4) IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(4));
-select '12:00:00.4566'::Time(4) IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(3)); -- { serverError 53 }
+select '12:00:00.4566'::Time(4) IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(3)) settings enable_optimizer = 0; -- { serverError 53 }
 
 select '12:00:00.4566'::Time(4) NOT IN ('11:00:00.4566'::Time(4), '11:00:00.4566'::Time(4));
 select '12:00:00.4566'::Time(4) NOT IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(4));
-select '12:00:00.4566'::Time(4) NOT IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(3)); -- { serverError 53 }
+select '12:00:00.4566'::Time(4) NOT IN ('11:00:00.4566'::Time(4), '12:00:00.4566'::Time(3)) settings enable_optimizer = 0; -- { serverError 53 }

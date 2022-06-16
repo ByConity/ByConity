@@ -27,7 +27,7 @@
 #include <Interpreters/Set.h>
 #include <Interpreters/TableJoin.h>
 
-#include <Processors/QueryPlan/ExpressionStep.h>
+#include <QueryPlan/ExpressionStep.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/parseAggregateFunctionParameters.h>

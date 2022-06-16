@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Parsers/IParser.h>
+#include <Parsers/IParserBase.h>
 
 
 namespace DB
@@ -61,6 +62,6 @@ std::pair<const char *, bool> splitMultipartQuery(
     std::vector<std::string> & queries_list,
     size_t max_query_size,
     size_t max_parser_depth,
-    enum DialectType dialect_type);
+    ParserSettingsImpl dialect_type);
 
 }

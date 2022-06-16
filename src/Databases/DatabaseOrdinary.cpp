@@ -267,7 +267,7 @@ void DatabaseOrdinary::alterTable(ContextPtr local_context, const StorageID & ta
         readStringUntilEOF(statement, in);
     }
 
-    ParserCreateQuery parser(local_context->getSettingsRef().dialect_type);
+    ParserCreateQuery parser(ParserSettings::valueOf(local_context->getSettingsRef().dialect_type));
     ASTPtr ast = parseQuery(
         parser,
         statement.data(),

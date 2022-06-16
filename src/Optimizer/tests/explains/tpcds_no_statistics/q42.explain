@@ -1,0 +1,32 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {d_year, i_category, i_category_id}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {d_year, i_category, i_category_id}
+                              └─ Inner Join est. ? rows
+                                 │     Condition: ss_item_sk == i_item_sk
+                                 ├─ Repartition Exchange est. ? rows
+                                 │  │     Partition by: {ss_item_sk}
+                                 │  └─ Inner Join est. ? rows
+                                 │     │     Condition: d_date_sk == ss_sold_date_sk
+                                 │     ├─ Repartition Exchange est. ? rows
+                                 │     │  │     Partition by: {d_date_sk}
+                                 │     │  └─ Filter est. ? rows
+                                 │     │     │     (d_moy = 11) AND (d_year = 2000)
+                                 │     │     └─ TableScan tpcds.date_dim est. ? rows
+                                 │     └─ Repartition Exchange est. ? rows
+                                 │        │     Partition by: {ss_sold_date_sk}
+                                 │        └─ TableScan tpcds.store_sales est. ? rows
+                                 └─ Repartition Exchange est. ? rows
+                                    │     Partition by: {i_item_sk}
+                                    └─ Filter est. ? rows
+                                       │     i_manager_id = 1
+                                       └─ TableScan tpcds.item est. ? rows

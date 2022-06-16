@@ -3,7 +3,7 @@
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <atomic>
 
 namespace DB

@@ -1,0 +1,33 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {s_store_id, s_store_name}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {s_store_id, s_store_name}
+                              └─ Projection est. ? rows
+                                 └─ Inner Join est. ? rows
+                                    │     Condition: ss_store_sk == s_store_sk
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {ss_store_sk}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: d_date_sk == ss_sold_date_sk
+                                    │     ├─ Repartition Exchange est. ? rows
+                                    │     │  │     Partition by: {d_date_sk}
+                                    │     │  └─ Filter est. ? rows
+                                    │     │     │     d_year = 2000
+                                    │     │     └─ TableScan tpcds.date_dim est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {ss_sold_date_sk}
+                                    │        └─ TableScan tpcds.store_sales est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {s_store_sk}
+                                       └─ Filter est. ? rows
+                                          │     s_gmt_offset = -5
+                                          └─ TableScan tpcds.store est. ? rows

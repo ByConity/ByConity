@@ -298,6 +298,11 @@ public:
             throw Exception(msg, ErrorCodes::LOGICAL_ERROR);
         }
 
+#ifndef NDEBUG
+        rows += data->chunk.getNumRows();
+        bytes += data->chunk.bytes();
+#endif
+
         return std::move(*data);
     }
 
@@ -371,6 +376,14 @@ public:
         assumeConnected();
         return *output_port;
     }
+
+#ifndef NDEBUG
+    size_t getRows() const { return rows; }
+    size_t getBytes() const { return bytes; }
+
+    size_t rows = 0;
+    size_t bytes = 0;
+#endif
 };
 
 
@@ -401,6 +414,11 @@ public:
 
     void ALWAYS_INLINE pushData(Data data_)
     {
+#ifndef NDEBUG
+        rows += data_.chunk.getNumRows();
+        bytes += data_.chunk.bytes();
+#endif
+
         if (unlikely(!data_.exception && header.columns() && data_.chunk.getNumColumns() != header.columns()))
         {
             String msg = "Invalid number of columns in chunk pushed to OutputPort. Expected "
@@ -462,6 +480,14 @@ public:
         assumeConnected();
         return *input_port;
     }
+
+#ifndef NDEBUG
+    size_t getRows() const { return rows; }
+    size_t getBytes() const { return bytes; }
+
+    size_t rows = 0;
+    size_t bytes = 0;
+#endif
 };
 
 

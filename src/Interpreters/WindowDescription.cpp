@@ -1,11 +1,13 @@
 #include <Interpreters/WindowDescription.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Core/Field.h>
-#include <Common/FieldVisitorsAccurateComparison.h>
-#include <Common/FieldVisitorToString.h>
+#include <DataTypes/DataTypeHelper.h>
 #include <IO/Operators.h>
 #include <Parsers/ASTFunction.h>
-
+#include <QueryPlan/PlanSerDerHelper.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/FieldVisitorsAccurateComparison.h>
 
 namespace DB
 {
@@ -20,7 +22,7 @@ std::string WindowFunctionDescription::dump() const
     WriteBufferFromOwnString ss;
 
     ss << "window function '" << column_name << "\n";
-    ss << "function node " << function_node->dumpTree() << "\n";
+    ss << "function node " << (function_node != nullptr ? function_node->dumpTree() : "") << "\n";
     ss << "aggregate function '" << aggregate_function->getName() << "'\n";
     if (!function_parameters.empty())
     {
@@ -205,6 +207,90 @@ void WindowDescription::checkValid() const
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
             "The RANGE OFFSET window frame requires exactly one ORDER BY column, {} given",
            order_by.size());
+    }
+}
+
+void WindowFrame::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(is_default, buffer);
+    serializeEnum(type, buffer);
+
+    serializeEnum(begin_type, buffer);
+    writeFieldBinary(begin_offset, buffer);
+    writeBinary(begin_preceding, buffer);
+    
+    serializeEnum(end_type, buffer);
+    writeFieldBinary(end_offset, buffer);
+    writeBinary(end_preceding, buffer);
+}
+
+void WindowFrame::deserialize(ReadBuffer & buffer)
+{
+    readBinary(is_default, buffer);
+    deserializeEnum(type, buffer);
+
+    deserializeEnum(begin_type, buffer);
+    readFieldBinary(begin_offset, buffer);
+    readBinary(begin_preceding, buffer);
+
+    deserializeEnum(end_type, buffer);
+    readFieldBinary(end_offset, buffer);
+    readBinary(end_preceding, buffer);
+}
+
+void WindowFunctionDescription::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(column_name, buffer);
+    
+    writeBinary(aggregate_function->getName(), buffer);
+    writeBinary(function_parameters, buffer);
+    serializeDataTypes(argument_types, buffer);
+    serializeStrings(argument_names, buffer);
+}
+
+void WindowFunctionDescription::deserialize(ReadBuffer & buffer)
+{
+    readBinary(column_name, buffer);
+    
+    String func_name;
+    readBinary(func_name, buffer);
+    readBinary(function_parameters, buffer);
+    argument_types = deserializeDataTypes(buffer);
+    argument_names = deserializeStrings(buffer);
+    AggregateFunctionProperties properties;
+    aggregate_function = AggregateFunctionFactory::instance().get(func_name, argument_types, function_parameters, properties);
+}
+
+void WindowDescription::serialize(WriteBuffer & buffer) const
+{
+    writeBinary(window_name, buffer);
+    serializeSortDescription(partition_by, buffer);
+    serializeSortDescription(order_by, buffer);
+    serializeSortDescription(full_sort_description, buffer);
+
+    frame.serialize(buffer);
+
+    writeBinary(window_functions.size(), buffer);
+    for (const auto & item : window_functions)
+        item.serialize(buffer);
+}
+
+void WindowDescription::deserialize(ReadBuffer & buffer)
+{
+    readBinary(window_name, buffer);
+    deserializeSortDescription(partition_by, buffer);
+    deserializeSortDescription(order_by, buffer);
+    deserializeSortDescription(full_sort_description, buffer);
+
+    frame.deserialize(buffer);
+
+    size_t size;
+    readBinary(size, buffer);
+    for (size_t index = 0; index < size; ++index)
+    {
+        WindowFunctionDescription desc;
+        desc.deserialize(buffer);
+        window_functions.emplace_back(desc);
     }
 }
 

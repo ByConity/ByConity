@@ -57,4 +57,5 @@ private:
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;
 using BrpcRemoteBroadcastReceiverWeakPtr = std::weak_ptr<BrpcRemoteBroadcastReceiver>;
+using BrpcReceiverPtrs = std::vector<BrpcRemoteBroadcastReceiverShardPtr>;
 }

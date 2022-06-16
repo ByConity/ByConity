@@ -8,8 +8,8 @@
 #include <Parsers/ASTPartition.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/queryToString.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/IngestPartition.h>
 #include <Storages/MergeTree/HaMergeTreeBlockOutputStream.h>
@@ -17,7 +17,7 @@
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
 #include <Storages/StorageMemoryTable.h>
-#include <Processors/QueryPlan/UnionStep.h>
+#include <QueryPlan/UnionStep.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ParserTablesInSelectQuery.h>
 #include <Common/isLocalAddress.h>
@@ -3061,7 +3061,7 @@ void StorageHaMergeTree::setTableStructure(
     {
         auto parse_key_expr = [] (const String & key_expr)
         {
-            ParserNotEmptyExpressionList parser(false, DialectType::CLICKHOUSE);
+            ParserNotEmptyExpressionList parser(false, ParserSettings::CLICKHOUSE);
             auto new_sorting_key_expr_list = parseQuery(parser, key_expr, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
             ASTPtr order_by_ast;
@@ -3113,7 +3113,7 @@ void StorageHaMergeTree::setTableStructure(
         {
             if (!metadata_diff.new_ttl_table.empty())
             {
-                ParserTTLExpressionList parser(DialectType::CLICKHOUSE);
+                ParserTTLExpressionList parser(ParserSettings::CLICKHOUSE);
                 auto ttl_for_table_ast = parseQuery(parser, metadata_diff.new_ttl_table, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
                 new_metadata.table_ttl = TTLTableDescription::getTTLForTableFromAST(
                     ttl_for_table_ast, new_metadata.columns, getContext(), new_metadata.primary_key);

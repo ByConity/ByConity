@@ -1,6 +1,7 @@
 set allow_nondeterministic_optimize_skip_unused_shards=1;
 set optimize_skip_unused_shards=1;
 set force_optimize_skip_unused_shards=2;
+set enable_optimizer=0; -- can't find local replica in cluster settings
 
 drop database if exists db_01527_ranges;
 drop table if exists dist_01527;

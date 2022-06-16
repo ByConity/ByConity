@@ -94,7 +94,7 @@ template <typename NameParser>
 class IParserColumnDeclaration : public IParserDialectBase
 {
 public:
-    explicit IParserColumnDeclaration(enum DialectType t, bool require_type_ = true, bool allow_null_modifiers_ = false, bool check_keywords_after_name_ = false)
+    explicit IParserColumnDeclaration(ParserSettingsImpl t, bool require_type_ = true, bool allow_null_modifiers_ = false, bool check_keywords_after_name_ = false)
     : IParserDialectBase(t)
     , require_type(require_type_)
     , allow_null_modifiers(allow_null_modifiers_)
@@ -142,7 +142,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
-    ParserExpression expression_parser(DialectType::CLICKHOUSE); /* Use CK dialect to parse TTL */
+    ParserExpression expression_parser(ParserSettings::CLICKHOUSE); /* Use CK dialect to parse TTL */
 
     /// mandatory column name
     ASTPtr name;

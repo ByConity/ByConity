@@ -1,0 +1,16 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ MergingAggregated est. 1 rows
+                     └─ Repartition Exchange est. 4 rows
+                        │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 4 rows
+                           │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 389628 rows
+                              └─ Filter est. 389628 rows
+                                 │     ((S_CITY = 'UNITED KI5') OR (S_CITY = 'UNITED KI1')) AND (toYYYYMM(LO_ORDERDATE) = 199712) AND ((C_CITY = 'UNITED KI5') OR (C_CITY = 'UNITED KI1'))
+                                 └─ TableScan ssb.lineorder_flat est. 5999989813 rows

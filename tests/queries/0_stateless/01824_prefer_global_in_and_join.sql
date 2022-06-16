@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- schedule
 -- { echo }
 CREATE DATABASE IF NOT EXISTS test_01824;
 USE test_01824;

@@ -1044,6 +1044,11 @@ inline void readBinary(PairInt64 & x, ReadBuffer & buf)
     readBinary(x.low, buf);
     readBinary(x.high, buf);
 }
+inline void readBinary(std::pair<String, String> & x, ReadBuffer & buf)
+{
+    readBinary(x.first, buf);
+    readBinary(x.second, buf);
+}
 
 
 template <typename T>

@@ -1,5 +1,5 @@
 #include <Processors/printPipeline.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <set>
 #include <map>
 

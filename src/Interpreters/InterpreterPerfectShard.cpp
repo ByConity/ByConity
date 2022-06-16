@@ -20,10 +20,10 @@
 #include <Parsers/queryToString.h>
 
 #include <Storages/StorageDistributed.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/AggregatingStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/AggregatingStep.h>
 
 #include <IO/WriteBufferFromString.h>
 

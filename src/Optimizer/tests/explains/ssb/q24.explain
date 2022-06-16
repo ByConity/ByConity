@@ -1,0 +1,16 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ MergingAggregated est. 1 rows
+                     └─ Repartition Exchange est. 34 rows
+                        │     Partition by: {C_NATION, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 34 rows
+                           │     Group by: {C_NATION, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 86313863 rows
+                              └─ Filter est. 86313863 rows
+                                 │     ((P_MFGR = 'MFGR#1') OR (P_MFGR = 'MFGR#2')) AND (S_REGION = 'AMERICA') AND (C_REGION = 'AMERICA')
+                                 └─ TableScan ssb.lineorder_flat est. 5999989813 rows

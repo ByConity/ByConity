@@ -4,6 +4,7 @@
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/NameToType.h>
 
 #include <initializer_list>
 #include <list>
@@ -37,6 +38,7 @@ public:
     Block() = default;
     Block(std::initializer_list<ColumnWithTypeAndName> il);
     Block(const ColumnsWithTypeAndName & data_);
+    Block(const NamesAndTypes & data_);
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName & elem);
@@ -91,7 +93,10 @@ public:
 
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
     NamesAndTypesList getNamesAndTypesList() const;
+    NamesAndTypes getNamesAndTypes() const;
+    NameToType getNamesToTypes() const;
     Names getNames() const;
+    NameSet getNameSet() const;
     DataTypes getDataTypes() const;
 
     /// Returns number of rows from first column in block, not equal to nullptr. If no columns, returns 0.

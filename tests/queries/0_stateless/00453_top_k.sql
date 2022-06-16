@@ -1,5 +1,7 @@
 SELECT topK(10)(n) FROM (SELECT if(number % 100 < 10, number % 10, number) AS n FROM system.numbers LIMIT 100000);
 
+set enable_push_partial_agg=0; -- unstable input will results in unstable agg result for topK
+
 SELECT
     k,
     topK(v)

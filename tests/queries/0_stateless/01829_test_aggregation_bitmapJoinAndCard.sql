@@ -1,3 +1,4 @@
+set enable_optimizer=0;
 drop table if exists test.test_bitmapjoinandcard;
 drop table if exists test.test_bitmapjoinandcard_all;
 

@@ -1,0 +1,37 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ Inner Join est. 1 rows
+                     │     Condition: s_suppkey == l_suppkey
+                     ├─ TableScan tpch.supplier est. 10000 rows
+                     └─ Broadcast Exchange est. 1 rows
+                        └─ Inner Join est. 1 rows
+                           │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount))) == expr#max(total_revenue)
+                           ├─ MergingAggregated est. 375 rows
+                           │  └─ Repartition Exchange est. 375 rows
+                           │     │     Partition by: {l_suppkey}
+                           │     └─ Aggregating est. 375 rows
+                           │        │     Group by: {l_suppkey}
+                           │        └─ Projection est. 226119 rows
+                           │           └─ Filter est. 226119 rows
+                           │              │     (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
+                           │              └─ TableScan tpch.lineitem est. 6001215 rows
+                           └─ Broadcast Exchange est. 1 rows
+                              └─ MergingAggregated est. 1 rows
+                                 └─ Gather Exchange est. 1 rows
+                                    └─ Aggregating est. 1 rows
+                                       │     Group by: {}
+                                       └─ Projection est. 375 rows
+                                          └─ MergingAggregated est. 375 rows
+                                             └─ Repartition Exchange est. 375 rows
+                                                │     Partition by: {l_suppkey_1}
+                                                └─ Aggregating est. 375 rows
+                                                   │     Group by: {l_suppkey_1}
+                                                   └─ Projection est. 226119 rows
+                                                      └─ Filter est. 226119 rows
+                                                         │     (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
+                                                         └─ TableScan tpch.lineitem est. 6001215 rows

@@ -821,7 +821,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (!s_in_partition.checkWithoutMoving(pos, expected)
                 && !s_where.checkWithoutMoving(pos, expected))
             {
-                ParserList parser_column_list(std::make_unique<ParserTupleElementExpression>(DialectType::CLICKHOUSE), std::make_unique<ParserToken>(TokenType::Comma));
+                ParserList parser_column_list(std::make_unique<ParserTupleElementExpression>(ParserSettings::CLICKHOUSE), std::make_unique<ParserToken>(TokenType::Comma));
                 if (!parser_column_list.parse(pos, command->columns, expected))
                     return false;
             }

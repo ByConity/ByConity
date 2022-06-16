@@ -1,0 +1,95 @@
+Projection est. 2562 rows
+└─ MergingSorted est. 2562 rows
+   └─ MergeSorting est. 2562 rows
+      └─ PartialSorting est. 2562 rows
+         └─ Gather Exchange est. 2562 rows
+            └─ MergeSorting est. 2562 rows
+               └─ PartialSorting est. 2562 rows
+                  └─ Projection est. 2562 rows
+                     └─ Inner Join est. 2562 rows
+                        │     Condition: d_week_seq == minus(d_week_seq_2, 53)
+                        ├─ Inner Join est. 365 rows
+                        │  │     Condition: d_week_seq_1 == d_week_seq
+                        │  ├─ Repartition Exchange est. 365 rows
+                        │  │  │     Partition by: {d_week_seq_1}
+                        │  │  └─ Filter est. 365 rows
+                        │  │     │     d_year_1 = 2001
+                        │  │     └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  └─ MergingAggregated est. 52 rows
+                        │     └─ Repartition Exchange est. 52 rows
+                        │        │     Partition by: {d_week_seq}
+                        │        └─ Aggregating est. 52 rows
+                        │           │     Group by: {d_week_seq}
+                        │           └─ Projection est. 10790565 rows
+                        │              └─ Inner Join est. 211694401 rows
+                        │                 │     Condition: ws_sold_date_sk_1 == d_date_sk
+                        │                 ├─ Union est. 2159980792 rows
+                        │                 │  ├─ Local Exchange est. 720000376 rows
+                        │                 │  │  └─ Filter est. 720000376 rows
+                        │                 │  │     │     Dynamic Filters: {ws_sold_date_sk:range}
+                        │                 │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                        │                 │  └─ Local Exchange est. 1439980416 rows
+                        │                 │     └─ Filter est. 1439980416 rows
+                        │                 │        │     Dynamic Filters: {cs_sold_date_sk:range}
+                        │                 │        └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                        │                 └─ Projection est. 364 rows
+                        │                    │     Dynamic Filters Builder: {d_date_sk}
+                        │                    └─ Broadcast Exchange est. 364 rows
+                        │                       └─ Inner Join est. 364 rows
+                        │                          │     Condition: d_week_seq == d_week_seq_4
+                        │                          ├─ TableScan tpcds.date_dim est. 73049 rows
+                        │                          └─ Broadcast Exchange est. 52 rows
+                        │                             └─ MergingAggregated est. 52 rows
+                        │                                └─ Repartition Exchange est. 52 rows
+                        │                                   │     Partition by: {d_week_seq_4}
+                        │                                   └─ Aggregating est. 52 rows
+                        │                                      │     Group by: {d_week_seq_4}
+                        │                                      └─ Projection est. 365 rows
+                        │                                         └─ Filter est. 365 rows
+                        │                                            │     d_year_1 = 2001
+                        │                                            └─ TableScan tpcds.date_dim est. 73049 rows
+                        └─ Repartition Exchange est. 365 rows
+                           │     Partition by: {minus(d_week_seq_2, 53)}
+                           └─ Projection est. 365 rows
+                              └─ Inner Join est. 365 rows
+                                 │     Condition: d_week_seq_3 == d_week_seq_2
+                                 ├─ Repartition Exchange est. 365 rows
+                                 │  │     Partition by: {d_week_seq_3}
+                                 │  └─ Filter est. 365 rows
+                                 │     │     d_year_3 = cast(2002, 'UInt32')
+                                 │     └─ TableScan tpcds.date_dim est. 73049 rows
+                                 └─ MergingAggregated est. 52 rows
+                                    └─ Repartition Exchange est. 52 rows
+                                       │     Partition by: {d_week_seq_2}
+                                       └─ Aggregating est. 52 rows
+                                          │     Group by: {d_week_seq_2}
+                                          └─ Projection est. 10790565 rows
+                                             └─ Inner Join est. 211694401 rows
+                                                │     Condition: ws_sold_date_sk_3 == d_date_sk_2
+                                                ├─ Union est. 2159980792 rows
+                                                │  ├─ Local Exchange est. 720000376 rows
+                                                │  │  └─ Filter est. 720000376 rows
+                                                │  │     │     Dynamic Filters: {ws_sold_date_sk_2:range}
+                                                │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                                                │  └─ Local Exchange est. 1439980416 rows
+                                                │     └─ Filter est. 1439980416 rows
+                                                │        │     Dynamic Filters: {cs_sold_date_sk_1:range}
+                                                │        └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                                └─ Projection est. 364 rows
+                                                   │     Dynamic Filters Builder: {d_date_sk_2}
+                                                   └─ Broadcast Exchange est. 364 rows
+                                                      └─ Inner Join est. 364 rows
+                                                         │     Condition: d_week_seq_2 == d_week_seq_5
+                                                         ├─ TableScan tpcds.date_dim est. 73049 rows
+                                                         └─ Broadcast Exchange est. 52 rows
+                                                            └─ MergingAggregated est. 52 rows
+                                                               └─ Repartition Exchange est. 52 rows
+                                                                  │     Partition by: {d_week_seq_5}
+                                                                  └─ Aggregating est. 52 rows
+                                                                     │     Group by: {d_week_seq_5}
+                                                                     └─ Projection est. 365 rows
+                                                                        └─ Filter est. 365 rows
+                                                                           │     d_year_3 = cast(2002, 'UInt32')
+                                                                           └─ TableScan tpcds.date_dim est. 73049 rows
+note: Magic Set is applied for 2 parts.
+note: Dynamic Filter is applied for 4 times.

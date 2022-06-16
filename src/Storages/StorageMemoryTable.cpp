@@ -26,15 +26,15 @@
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 #include <common/range.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
+#include <QueryPlan/ExpressionStep.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Sources/SourceFromInputStream.h>
-#include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/UnionStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/UnionStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
 
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <Storages/Kafka/StorageHaKafka.h>

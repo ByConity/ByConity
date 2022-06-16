@@ -49,7 +49,7 @@ protected:
 public:
     bool is_live_view;
 
-    explicit ParserAlterCommandList(enum DialectType t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
+    explicit ParserAlterCommandList(ParserSettingsImpl t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
 };
 
 
@@ -62,7 +62,7 @@ protected:
 public:
     bool is_live_view;
 
-    explicit ParserAlterCommand(enum DialectType t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
+    explicit ParserAlterCommand(ParserSettingsImpl t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
 };
 
 

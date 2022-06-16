@@ -1790,7 +1790,7 @@ private:
     ASTPtr parseQuery(const char *& pos, const char * end, bool allow_multi_statements)
     {
         const auto & settings = context->getSettingsRef();
-        ParserQuery parser(end, settings.dialect_type);
+        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
         ASTPtr res;
 
         size_t max_length = 0;

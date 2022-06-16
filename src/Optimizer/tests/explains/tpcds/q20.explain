@@ -1,0 +1,39 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 22415154 rows
+      └─ MergeSorting est. 22415154 rows
+         └─ PartialSorting est. 22415154 rows
+            └─ Gather Exchange est. 22415154 rows
+               └─ MergeSorting est. 22415154 rows
+                  └─ PartialSorting est. 22415154 rows
+                     └─ Projection est. 22415154 rows
+                        └─ Window est. 22415154 rows
+                           └─ Repartition Exchange est. 22415154 rows
+                              │     Partition by: {i_class}
+                              └─ MergingAggregated est. 22415154 rows
+                                 └─ Repartition Exchange est. 22415154 rows
+                                    │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                                    └─ Aggregating est. 22415154 rows
+                                       │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                                       └─ Inner Join est. 22415154 rows
+                                          │     Condition: cs_item_sk == i_item_sk
+                                          ├─ Repartition Exchange est. 22415154 rows
+                                          │  │     Partition by: {cs_item_sk}
+                                          │  └─ Inner Join est. 22415154 rows
+                                          │     │     Condition: cs_sold_date_sk == d_date_sk
+                                          │     ├─ Local Exchange est. 1439980416 rows
+                                          │     │  └─ Filter est. 1439980416 rows
+                                          │     │     │     Dynamic Filters: {cs_sold_date_sk:range}
+                                          │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                          │     └─ Projection est. 29 rows
+                                          │        │     Dynamic Filters Builder: {d_date_sk}
+                                          │        └─ Broadcast Exchange est. 29 rows
+                                          │           └─ Filter est. 29 rows
+                                          │              │     (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                          │              └─ TableScan tpcds.date_dim est. 73049 rows
+                                          └─ Repartition Exchange est. 300000 rows
+                                             │     Partition by: {i_item_sk}
+                                             └─ Filter est. 300000 rows
+                                                │     i_category IN ('Sports', 'Books', 'Home')
+                                                └─ TableScan tpcds.item est. 300000 rows
+note: Dynamic Filter is applied for 1 times.

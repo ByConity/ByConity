@@ -1,3 +1,4 @@
+SET enable_optimizer=0; -- const
 SELECT 'hello' UNION ALL SELECT toLowCardinality('hello');
 SELECT toTypeName(x) FROM (SELECT 'hello' AS x UNION ALL SELECT toLowCardinality('hello'));
 

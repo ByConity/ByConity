@@ -22,6 +22,8 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_view("VIEW");
     ParserKeyword s_element("ELEMENT");
     ParserKeyword s_plansegment("PLANSEGMENT");
+    ParserKeyword s_opt_plan("OPT_PLAN");
+
 
     if (s_explain.ignore(pos, expected))
     {
@@ -40,6 +42,8 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             kind = ASTExplainQuery::ExplainKind::QueryElement;
         else if (s_plansegment.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::PlanSegment;
+        else if (s_opt_plan.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::OptimizerPlan;
     }
     else
         return false;

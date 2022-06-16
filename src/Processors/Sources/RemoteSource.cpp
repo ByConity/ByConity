@@ -3,7 +3,7 @@
 #include <DataStreams/RemoteQueryExecutorReadContext.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 
 namespace DB

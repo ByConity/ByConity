@@ -1,0 +1,40 @@
+Projection est. ? rows
+└─ MergingSorted est. ? rows
+   └─ MergeSorting est. ? rows
+      └─ PartialSorting est. ? rows
+         └─ Gather Exchange est. ? rows
+            └─ MergeSorting est. ? rows
+               └─ PartialSorting est. ? rows
+                  └─ MergingAggregated est. ? rows
+                     └─ Repartition Exchange est. ? rows
+                        │     Partition by: {expr#substring(c_phone, 1, 2)}
+                        └─ Aggregating est. ? rows
+                           │     Group by: {expr#substring(c_phone, 1, 2)}
+                           └─ Projection est. ? rows
+                              └─ Filter est. ? rows
+                                 │     NOT cast(coalesce(build_side_non_null_symbol, 0), 'UInt8')
+                                 └─ Left Join est. ? rows
+                                    │     Condition: c_custkey == o_custkey
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {c_custkey}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: 
+                                    │     │     Filter: c_acctbal > `expr#avg(c_acctbal)`
+                                    │     ├─ Filter est. 150000 rows
+                                    │     │  │     substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
+                                    │     │  └─ TableScan tpch.customer est. 150000 rows
+                                    │     └─ Broadcast Exchange est. 1 rows
+                                    │        └─ MergingAggregated est. 1 rows
+                                    │           └─ Gather Exchange est. 1 rows
+                                    │              └─ Aggregating est. 1 rows
+                                    │                 │     Group by: {}
+                                    │                 └─ Filter est. 136306 rows
+                                    │                    │     (c_acctbal_1 > 0.) AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+                                    │                    └─ TableScan tpch.customer est. 150000 rows
+                                    └─ Projection est. 102536 rows
+                                       └─ MergingAggregated est. 102536 rows
+                                          └─ Repartition Exchange est. 102536 rows
+                                             │     Partition by: {o_custkey}
+                                             └─ Aggregating est. 102536 rows
+                                                │     Group by: {o_custkey}
+                                                └─ TableScan tpch.orders est. 1500000 rows

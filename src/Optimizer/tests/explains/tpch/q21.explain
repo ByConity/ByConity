@@ -1,0 +1,83 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 8005 rows
+      └─ MergeSorting est. 8005 rows
+         └─ PartialSorting est. 8005 rows
+            └─ Gather Exchange est. 8005 rows
+               └─ MergeSorting est. 8005 rows
+                  └─ PartialSorting est. 8005 rows
+                     └─ MergingAggregated est. 8005 rows
+                        └─ Repartition Exchange est. 8005 rows
+                           │     Partition by: {s_name}
+                           └─ Aggregating est. 8005 rows
+                              │     Group by: {s_name}
+                              └─ Projection est. 1507776 rows
+                                 └─ Filter est. 1507776 rows
+                                    │     NOT (count_non_null_value_1 > 0)
+                                    └─ MergingAggregated est. 1675307 rows
+                                       └─ Repartition Exchange est. 1675307 rows
+                                          │     Partition by: {_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                                          └─ Aggregating est. 1675307 rows
+                                             │     Group by: {_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                                             └─ Projection est. 1675307 rows
+                                                └─ Left Join est. 1675307 rows
+                                                   │     Condition: l_orderkey == l_orderkey_2
+                                                   ├─ AssignUniqueId est. 419264 rows
+                                                   │  └─ Repartition Exchange est. 419264 rows
+                                                   │     │     Partition by: {l_orderkey}
+                                                   │     └─ Projection est. 419264 rows
+                                                   │        └─ Filter est. 419264 rows
+                                                   │           │     count_non_null_value > 0
+                                                   │           └─ MergingAggregated est. 465849 rows
+                                                   │              └─ Repartition Exchange est. 465849 rows
+                                                   │                 │     Partition by: {assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                                                   │                 └─ Aggregating est. 465849 rows
+                                                   │                    │     Group by: {assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                                                   │                    └─ Projection est. 465849 rows
+                                                   │                       └─ Left Join est. 465849 rows
+                                                   │                          │     Condition: l_orderkey == l_orderkey_1
+                                                   │                          ├─ Repartition Exchange est. 116584 rows
+                                                   │                          │  │     Partition by: {l_orderkey}
+                                                   │                          │  └─ AssignUniqueId est. 116584 rows
+                                                   │                          │     └─ Inner Join est. 241132 rows
+                                                   │                          │        │     Condition: o_orderkey == l_orderkey
+                                                   │                          │        ├─ Repartition Exchange est. 729413 rows
+                                                   │                          │        │  │     Partition by: {o_orderkey}
+                                                   │                          │        │  └─ Filter est. 729413 rows
+                                                   │                          │        │     │     o_orderstatus = 'F'
+                                                   │                          │        │     └─ TableScan tpch.orders est. 1500000 rows
+                                                   │                          │        └─ Repartition Exchange est. 240048 rows
+                                                   │                          │           │     Partition by: {l_orderkey}
+                                                   │                          │           └─ Inner Join est. 239976 rows
+                                                   │                          │              │     Condition: l_suppkey == s_suppkey
+                                                   │                          │              ├─ Local Exchange est. 6001215 rows
+                                                   │                          │              │  └─ Filter est. 6001215 rows
+                                                   │                          │              │     │     l_receiptdate > l_commitdate
+                                                   │                          │              │     │     Dynamic Filters: {l_suppkey:range}
+                                                   │                          │              │     └─ TableScan tpch.lineitem est. 6001215 rows
+                                                   │                          │              └─ Projection est. 400 rows
+                                                   │                          │                 │     Dynamic Filters Builder: {s_suppkey}
+                                                   │                          │                 └─ Broadcast Exchange est. 400 rows
+                                                   │                          │                    └─ Inner Join est. 400 rows
+                                                   │                          │                       │     Condition: s_nationkey == n_nationkey
+                                                   │                          │                       ├─ Local Exchange est. 10000 rows
+                                                   │                          │                       │  └─ Filter est. 10000 rows
+                                                   │                          │                       │     │     Dynamic Filters: {s_nationkey:range}
+                                                   │                          │                       │     └─ TableScan tpch.supplier est. 10000 rows
+                                                   │                          │                       └─ Projection est. 1 rows
+                                                   │                          │                          │     Dynamic Filters Builder: {n_nationkey}
+                                                   │                          │                          └─ Broadcast Exchange est. 1 rows
+                                                   │                          │                             └─ Filter est. 1 rows
+                                                   │                          │                                │     n_name = 'SAUDI ARABIA'
+                                                   │                          │                                └─ TableScan tpch.nation est. 25 rows
+                                                   │                          └─ Repartition Exchange est. 6001215 rows
+                                                   │                             │     Partition by: {l_orderkey_1}
+                                                   │                             └─ Projection est. 6001215 rows
+                                                   │                                └─ TableScan tpch.lineitem est. 6001215 rows
+                                                   └─ Repartition Exchange est. 6001215 rows
+                                                      │     Partition by: {l_orderkey_2}
+                                                      └─ Projection est. 6001215 rows
+                                                         └─ Filter est. 6001215 rows
+                                                            │     l_receiptdate_2 > l_commitdate_2
+                                                            └─ TableScan tpch.lineitem est. 6001215 rows
+note: Dynamic Filter is applied for 2 times.

@@ -1,0 +1,38 @@
+Projection est. 1 rows
+└─ Limit est. 1 rows
+   └─ MergingSorted est. 1 rows
+      └─ MergeSorting est. 1 rows
+         └─ PartialSorting est. 1 rows
+            └─ MergingAggregated est. 1 rows
+               └─ Gather Exchange est. 1 rows
+                  └─ Aggregating est. 1 rows
+                     │     Group by: {}
+                     └─ Inner Join est. 2695642 rows
+                        │     Condition: ss_store_sk == s_store_sk
+                        ├─ Inner Join est. 10611419 rows
+                        │  │     Condition: ss_hdemo_sk == hd_demo_sk
+                        │  ├─ Inner Join est. 106423695 rows
+                        │  │  │     Condition: ss_sold_time_sk == t_time_sk
+                        │  │  ├─ Local Exchange est. 2879987999 rows
+                        │  │  │  └─ Filter est. 2879987999 rows
+                        │  │  │     │     Dynamic Filters: {ss_hdemo_sk:range,ss_sold_time_sk:range,ss_store_sk:range}
+                        │  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │  │  └─ Projection est. 1739 rows
+                        │  │     │     Dynamic Filters Builder: {t_time_sk}
+                        │  │     └─ Broadcast Exchange est. 1739 rows
+                        │  │        └─ Filter est. 1739 rows
+                        │  │           │     (t_hour = 20) AND (t_minute >= 30)
+                        │  │           └─ TableScan tpcds.time_dim est. 86400 rows
+                        │  └─ Projection est. 720 rows
+                        │     │     Dynamic Filters Builder: {hd_demo_sk}
+                        │     └─ Broadcast Exchange est. 720 rows
+                        │        └─ Filter est. 720 rows
+                        │           │     hd_dep_count = 7
+                        │           └─ TableScan tpcds.household_demographics est. 7200 rows
+                        └─ Projection est. 126 rows
+                           │     Dynamic Filters Builder: {s_store_sk}
+                           └─ Broadcast Exchange est. 126 rows
+                              └─ Filter est. 126 rows
+                                 │     s_store_name = 'ese'
+                                 └─ TableScan tpcds.store est. 1002 rows
+note: Dynamic Filter is applied for 3 times.

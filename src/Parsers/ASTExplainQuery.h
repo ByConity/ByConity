@@ -20,6 +20,7 @@ public:
         MaterializedView, /// 'EXPLAIN VIEW SELECT ...'
         QueryElement, /// 'EXPLAIN ELEMENT ...'
         PlanSegment, /// 'EXPLAIN PLANSEGMENT ...'
+        OptimizerPlan, /// 'EXPLAIN OPT_PLAN ...'
     };
 
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
@@ -50,6 +51,7 @@ public:
     }
 
     const ASTPtr & getExplainedQuery() const { return query; }
+    ASTPtr & getExplainedQuery() { return query; }
     const ASTPtr & getSettings() const { return ast_settings; }
 
 protected:
@@ -84,6 +86,7 @@ private:
             case MaterializedView: return "EXPLAIN VIEW";
             case QueryElement: return "EXPLAIN ELEMENT";
             case PlanSegment: return "EXPLAIN PLANSEGMENT";
+            case OptimizerPlan: return "EXPLAIN OPT_PLAN";
         }
 
         __builtin_unreachable();

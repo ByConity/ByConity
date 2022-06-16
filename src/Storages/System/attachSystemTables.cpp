@@ -2,6 +2,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachSystemTablesImpl.h>
 
+#include <Statistics/StatsDataSource.h>
 #include <Storages/System/StorageSystemAggregateFunctionCombinators.h>
 #include <Storages/System/StorageSystemAsynchronousMetrics.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
@@ -205,6 +206,14 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
 {
     attach<StorageSystemAsynchronousMetrics>(system_database, "asynchronous_metrics", async_metrics);
+}
+
+// TODO: change it to attach
+void createSystemTablesIfNotExist(IDatabase & system_database, ContextMutablePtr global_context)
+{
+    (void)system_database;
+    // create HaUniqueMergeTree table 'system.optimizer_statistics'
+    Statistics::StatsDataSource(global_context).initialize();
 }
 
 }

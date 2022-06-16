@@ -19,7 +19,7 @@ protected:
 
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
-        ParserExpression p_expression(DialectType::CLICKHOUSE);
+        ParserExpression p_expression(ParserSettings::CLICKHOUSE);
 
         if (!p_expression.parse(pos, node, expected))
             return false;
@@ -174,7 +174,7 @@ bool ParserDeclareIndex::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected &
 
     ParserDeclareOptions p_index_options{
         {
-            OptionDescribe("KEY_BLOCK_SIZE", "key_block_size", std::make_unique<ParserLiteral>(DialectType::CLICKHOUSE)),
+            OptionDescribe("KEY_BLOCK_SIZE", "key_block_size", std::make_unique<ParserLiteral>(ParserSettings::CLICKHOUSE)),
             OptionDescribe("USING", "index_type", std::make_unique<ParserIdentifier>()),
             OptionDescribe("WITH PARSER", "index_parser", std::make_unique<ParserIdentifier>()),
             OptionDescribe("COMMENT", "comment", std::make_unique<ParserStringLiteral>()),

@@ -1,0 +1,39 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 2394 rows
+      └─ MergeSorting est. 2394 rows
+         └─ PartialSorting est. 2394 rows
+            └─ Gather Exchange est. 2394 rows
+               └─ MergeSorting est. 2394 rows
+                  └─ PartialSorting est. 2394 rows
+                     └─ MergingAggregated est. 2394 rows
+                        └─ Repartition Exchange est. 2394 rows
+                           │     Partition by: {cc_name, expr#substring(w_warehouse_name, 1, 20), sm_type}
+                           └─ Aggregating est. 2394 rows
+                              │     Group by: {cc_name, expr#substring(w_warehouse_name, 1, 20), sm_type}
+                              └─ Projection est. 248144773 rows
+                                 └─ Inner Join est. 248144773 rows
+                                    │     Condition: cs_call_center_sk == cc_call_center_sk
+                                    ├─ Inner Join est. 248144773 rows
+                                    │  │     Condition: cs_warehouse_sk == w_warehouse_sk
+                                    │  ├─ Inner Join est. 248144773 rows
+                                    │  │  │     Condition: cs_ship_mode_sk == sm_ship_mode_sk
+                                    │  │  ├─ Inner Join est. 248144773 rows
+                                    │  │  │  │     Condition: cs_ship_date_sk == d_date_sk
+                                    │  │  │  ├─ Local Exchange est. 1439980416 rows
+                                    │  │  │  │  └─ Filter est. 1439980416 rows
+                                    │  │  │  │     │     Dynamic Filters: {cs_ship_date_sk:range}
+                                    │  │  │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                    │  │  │  └─ Projection est. 335 rows
+                                    │  │  │     │     Dynamic Filters Builder: {d_date_sk}
+                                    │  │  │     └─ Broadcast Exchange est. 335 rows
+                                    │  │  │        └─ Filter est. 335 rows
+                                    │  │  │           │     (d_month_seq <= cast(1211, 'UInt32')) AND (d_month_seq >= 1200)
+                                    │  │  │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                    │  │  └─ Broadcast Exchange est. 20 rows
+                                    │  │     └─ TableScan tpcds.ship_mode est. 20 rows
+                                    │  └─ Broadcast Exchange est. 20 rows
+                                    │     └─ TableScan tpcds.warehouse est. 20 rows
+                                    └─ Broadcast Exchange est. 42 rows
+                                       └─ TableScan tpcds.call_center est. 42 rows
+note: Dynamic Filter is applied for 1 times.

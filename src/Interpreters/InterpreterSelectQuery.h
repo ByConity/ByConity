@@ -31,6 +31,7 @@ class QueryPlan;
 struct TreeRewriterResult;
 using TreeRewriterResultPtr = std::shared_ptr<const TreeRewriterResult>;
 
+StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options);
 
 /** Interprets the SELECT query. Returns the stream of blocks with the results of the query before `to_stage` stage.
   */

@@ -1,0 +1,40 @@
+Projection est. 60525 rows
+└─ MergingSorted est. 60525 rows
+   └─ MergeSorting est. 60525 rows
+      └─ PartialSorting est. 60525 rows
+         └─ Gather Exchange est. 60525 rows
+            └─ MergeSorting est. 60525 rows
+               └─ PartialSorting est. 60525 rows
+                  └─ MergingAggregated est. 60525 rows
+                     └─ Repartition Exchange est. 60525 rows
+                        │     Partition by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 60525 rows
+                           │     Group by: {C_NATION, S_NATION, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 351695206 rows
+                              └─ Inner Join est. 351695206 rows
+                                 │     Condition: LO_CUSTKEY == C_CUSTKEY
+                                 ├─ Repartition Exchange est. 1200113002 rows
+                                 │  │     Partition by: {LO_CUSTKEY}
+                                 │  └─ Inner Join est. 1200113002 rows
+                                 │     │     Condition: LO_SUPPKEY == S_SUPPKEY
+                                 │     ├─ Repartition Exchange est. 5999989813 rows
+                                 │     │  │     Partition by: {LO_SUPPKEY}
+                                 │     │  └─ Filter est. 5999989813 rows
+                                 │     │     │     (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
+                                 │     │     │     Dynamic Filters: {LO_CUSTKEY:bloomfilter,LO_CUSTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
+                                 │     │     └─ TableScan ssb.lineorder est. 5999989813 rows
+                                 │     └─ Projection est. 400039 rows
+                                 │        │     Dynamic Filters Builder: {S_SUPPKEY}
+                                 │        └─ Repartition Exchange est. 400039 rows
+                                 │           │     Partition by: {S_SUPPKEY}
+                                 │           └─ Filter est. 400039 rows
+                                 │              │     S_REGION = 'ASIA'
+                                 │              └─ TableScan ssb.supplier est. 2000000 rows
+                                 └─ Projection est. 6002311 rows
+                                    │     Dynamic Filters Builder: {C_CUSTKEY}
+                                    └─ Repartition Exchange est. 6002311 rows
+                                       │     Partition by: {C_CUSTKEY}
+                                       └─ Filter est. 6002311 rows
+                                          │     C_REGION = 'ASIA'
+                                          └─ TableScan ssb.customer est. 30000000 rows
+note: Dynamic Filter is applied for 4 times.

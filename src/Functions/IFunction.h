@@ -282,6 +282,7 @@ public:
     /// (for functions like isNull(x))
     virtual ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t number_of_arguments [[maybe_unused]]) const { return {}; }
 
+    friend class ExpressionInterpreter;
 protected:
 
     virtual FunctionBasePtr buildImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type) const = 0;

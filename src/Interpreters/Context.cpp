@@ -167,6 +167,7 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
+#include <Statistics/StatisticsMemoryStore.h>
 
 namespace fs = std::filesystem;
 
@@ -3918,6 +3919,26 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
         case 1: return PartAllocator::RING_CONSISTENT_HASH;
         default: return PartAllocator::JUMP_CONSISTENT_HASH;
     }
+}
+
+void Context::createPlanNodeIdAllocator()
+{
+    id_allocator = std::make_shared<PlanNodeIdAllocator>();
+}
+
+void Context::createSymbolAllocator()
+{
+    symbol_allocator = std::make_shared<SymbolAllocator>();
+}
+
+std::shared_ptr<Statistics::StatisticsMemoryStore> Context::getStatisticsMemoryStore()
+{
+    auto lock = getLock();
+    if (!this->stats_memory_store)
+    {
+        this->stats_memory_store = std::make_shared<Statistics::StatisticsMemoryStore>();
+    }
+    return stats_memory_store;
 }
 
 }

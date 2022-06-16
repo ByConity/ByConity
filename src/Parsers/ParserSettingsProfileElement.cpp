@@ -60,7 +60,7 @@ namespace
                 return false;
 
             ASTPtr ast;
-            if (!ParserLiteral{DialectType::CLICKHOUSE}.parse(pos, ast, expected))
+            if (!ParserLiteral{ParserSettings::CLICKHOUSE}.parse(pos, ast, expected))
                 return false;
 
             res = ast->as<ASTLiteral &>().value;
@@ -81,7 +81,7 @@ namespace
             ParserToken{TokenType::Equals}.ignore(pos, expected);
 
             ASTPtr ast;
-            if (!ParserLiteral{DialectType::CLICKHOUSE}.parse(pos, ast, expected))
+            if (!ParserLiteral{ParserSettings::CLICKHOUSE}.parse(pos, ast, expected))
                 return false;
 
             auto min_or_max_value = ast->as<ASTLiteral &>().value;

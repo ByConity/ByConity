@@ -1,3 +1,4 @@
+SET enable_optimizer=0; -- union type
 SELECT sumKahan(toFloat64(number)) FROM numbers(10);
 SELECT sumKahan(toNullable(toFloat64(number))) FROM numbers(10);
 SELECT sum(toNullable(number)) FROM numbers(10);

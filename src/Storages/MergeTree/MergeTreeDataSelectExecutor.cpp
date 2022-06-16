@@ -19,12 +19,12 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/Context.h>
 #include <Processors/ConcatProcessor.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/ReadFromMergeTree.h>
-#include <Processors/QueryPlan/UnionStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/ReadFromMergeTree.h>
+#include <QueryPlan/UnionStep.h>
 
 #include <Core/UUID.h>
 #include <DataTypes/DataTypeDate.h>

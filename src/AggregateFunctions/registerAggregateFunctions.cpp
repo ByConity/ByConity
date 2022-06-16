@@ -1,7 +1,7 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 
-#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/AggregateFunctionCombinatorFactory.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 
 
 namespace DB
@@ -80,6 +80,10 @@ void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFact
 void registerAggregateFunctionsBitmapMaxLevel(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitMapJoin(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitMapJoinAndCard(AggregateFunctionFactory & factory);
+void registerAggregateFunctionCpcSketch(AggregateFunctionFactory & factory);
+void registerAggregateFunctionKllSketch(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -180,6 +184,10 @@ void registerAggregateFunctions()
         registerAggregateFunctionsBitmapMaxLevel(factory);
         registerAggregateFunctionsBitMapJoin(factory);
         registerAggregateFunctionsBitMapJoinAndCard(factory);
+        registerAggregateFunctionCpcSketch(factory);
+        registerAggregateFunctionKllSketch(factory);
+        registerAggregateFunctionNdvBuckets(factory);
+        registerAggregateFunctionNothing(factory);
     }
 
     {

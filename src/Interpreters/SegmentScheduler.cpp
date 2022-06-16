@@ -255,6 +255,11 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     for (PlanSegment * plan_segment_ptr : plan_segment_vector)
     {
         graph_ptr->id_to_segment.emplace(std::make_pair(plan_segment_ptr->getPlanSegmentId(), plan_segment_ptr));
+        // value, readnothing, system table
+        if (plan_segment_ptr->getPlanSegmentInputs().empty())
+        {
+            graph_ptr->sources.emplace_back(plan_segment_ptr->getPlanSegmentId());
+        }
         // source
         if (plan_segment_ptr->getPlanSegmentInputs().size() >= 1)
         {
@@ -828,17 +833,19 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                     plan_segment_input->setParallelIndex(parallel_index_id_index);
 
                     // if input mode is local, set parallel index to 1
-                    auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input->getPlanSegmentId());
-                    auto plan_segment_output = it->second->getPlanSegmentOutput();
+                    if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input->getPlanSegmentId()); it != dag_graph_ptr->id_to_segment.end())
                     {
-                        // if data is write to local, so no need to shuffle data
-                        if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
-                            || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                        auto plan_segment_output = it->second->getPlanSegmentOutput();
                         {
-                            plan_segment_input->setParallelIndex(1);
-                            plan_segment_input->clearSourceAddresses();
-                            plan_segment_input->insertSourceAddress(AddressInfo("localhost", 0, "", ""));
-                            //                            std::cerr << plan_segment_ptr->getPlanSegmentId() << " plan_segment_input " << plan_segment_input->getPlanSegmentId() << "  change getSourceAddresses to "<< plan_segment_input->getSourceAddresses().size() << std::endl;
+                            // if data is write to local, so no need to shuffle data
+                            if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                                || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
+                            {
+                                plan_segment_input->setParallelIndex(1);
+                                plan_segment_input->clearSourceAddresses();
+                                plan_segment_input->insertSourceAddress(AddressInfo("localhost", 0, "", ""));
+                                //                            std::cerr << plan_segment_ptr->getPlanSegmentId() << " plan_segment_input " << plan_segment_input->getPlanSegmentId() << "  change getSourceAddresses to "<< plan_segment_input->getSourceAddresses().size() << std::endl;
+                            }
                         }
                     }
 
@@ -979,7 +986,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                         "Logical error: source segment id(" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + ") input is not source",
                         ErrorCodes::LOGICAL_ERROR);
                 StoragePtr main_table_storage
-                    = DatabaseCatalog::instance().tryGetTable(segment_input_table->getStorageID(), query_context);
+                    = segment_input_table->getStorageID().has_value() ? DatabaseCatalog::instance().tryGetTable(*segment_input_table->getStorageID(), query_context) : nullptr;
 
                 if (settings.prefer_localhost_replica && shard_info.isLocal())
                 {
@@ -991,7 +998,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                             LOG_WARNING(
                                 &Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
                                 "There is no table {} on local replica of shard {}, will try remote replicas.",
-                                segment_input_table->getStorageID().getNameForLogs(),
+                                segment_input_table->getStorageID().has_value() ? segment_input_table->getStorageID()->getNameForLogs() : "",
                                 shard_info.shard_num);
 
                             auto try_results = get_try_results(shard_info, main_table_storage);
@@ -1014,7 +1021,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                             {
                                 throw Exception(
                                     "Logical error: can not find available source node for "
-                                        + segment_input_table->getStorageID().getNameForLogs(),
+                                        + (segment_input_table->getStorageID().has_value() ? segment_input_table->getStorageID()->getNameForLogs() : ""),
                                     ErrorCodes::LOGICAL_ERROR);
                             }
                         }

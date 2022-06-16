@@ -30,7 +30,7 @@ bool ParserDeclareConstraint::parseImpl(IParser::Pos & pos, ASTPtr & node, Expec
     bool enforced = true;
     ASTPtr constraint_symbol;
     ASTPtr index_check_expression;
-    ParserExpression p_expression(DialectType::CLICKHOUSE);
+    ParserExpression p_expression(ParserSettings::CLICKHOUSE);
 
     if (ParserKeyword("CONSTRAINT").ignore(pos, expected))
     {

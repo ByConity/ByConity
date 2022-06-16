@@ -341,6 +341,14 @@ set (CMAKE_C_FLAGS                       "${CMAKE_C_FLAGS} -fno-omit-frame-point
 set (CMAKE_C_FLAGS_RELWITHDEBINFO        "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O3 ${CMAKE_C_FLAGS_ADD}")
 set (CMAKE_C_FLAGS_DEBUG                 "${CMAKE_C_FLAGS_DEBUG} -O0 -g3 -ggdb3 -fno-inline ${CMAKE_C_FLAGS_ADD}")
 
+# Ignored if `lldb` is used
+option(NO_LIMIT_DEBUG_INFO "Add no-limit-debug-info to compile flags.")
+if (NO_LIMIT_DEBUG_INFO)
+    set (CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-limit-debug-info")
+    set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-limit-debug-info")
+endif()
+
+
 if (COMPILER_CLANG)
     if (OS_DARWIN)
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")

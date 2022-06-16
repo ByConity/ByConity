@@ -7,7 +7,7 @@
 #include <Storages/ConstraintsDescription.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/StorageInMemoryMetadata.h>
-
+#include <Parsers/IParserBase.h>
 
 namespace DB
 {
@@ -31,7 +31,7 @@ public:
 
     /// List of columns and their types in AST.
     static ASTPtr formatColumns(const NamesAndTypesList & columns);
-    static ASTPtr formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, enum DialectType dialect_type);
+    static ASTPtr formatColumns(const NamesAndTypesList & columns, const NamesAndAliases & alias_columns, ParserSettingsImpl dialect_type);
     static ASTPtr formatColumns(const ColumnsDescription & columns);
     static ASTPtr formatIndices(const IndicesDescription & indices);
     static ASTPtr formatConstraints(const ConstraintsDescription & constraints);

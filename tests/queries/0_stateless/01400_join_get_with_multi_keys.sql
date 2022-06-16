@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- join table
 DROP TABLE IF EXISTS test_joinGet;
 
 CREATE TABLE test_joinGet(a String, b String, c Float64) ENGINE = Join(any, left, a, b);

@@ -1,4 +1,5 @@
 USE test;
+SET enable_optimizer=0; -- can't find local replica in cluster settings
 
 DROP TABLE IF EXISTS tob_apps;
 DROP TABLE IF EXISTS tob_apps_all;

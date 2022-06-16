@@ -132,4 +132,17 @@ FunctionFactory & FunctionFactory::instance()
     return ret;
 }
 
+std::optional<String> FunctionFactory::getCanonicalName(const String & name_or_alias) const
+{
+    auto real_name = getAliasToOrName(name_or_alias);
+    auto real_name_lowercase = Poco::toLower(real_name);
+
+    if (case_insensitive_functions.count(real_name_lowercase))
+        return real_name_lowercase;
+    else if (functions.count(real_name))
+        return real_name;
+
+    return std::nullopt;
+}
+
 }

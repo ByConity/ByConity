@@ -1,0 +1,25 @@
+Projection est. 92282 rows
+└─ MergingSorted est. 92282 rows
+   └─ MergeSorting est. 92282 rows
+      └─ PartialSorting est. 92282 rows
+         └─ Gather Exchange est. 92282 rows
+            └─ MergeSorting est. 92282 rows
+               └─ PartialSorting est. 92282 rows
+                  └─ MergingAggregated est. 92282 rows
+                     └─ Repartition Exchange est. 92282 rows
+                        │     Partition by: {expr#count(o_orderkey)}
+                        └─ Aggregating est. 92282 rows
+                           │     Group by: {expr#count(o_orderkey)}
+                           └─ Projection est. 92282 rows
+                              └─ Aggregating est. 92282 rows
+                                 │     Group by: {c_custkey}
+                                 └─ Left Join est. 1350000 rows
+                                    │     Condition: c_custkey == o_custkey
+                                    ├─ Repartition Exchange est. 150000 rows
+                                    │  │     Partition by: {c_custkey}
+                                    │  └─ TableScan tpch.customer est. 150000 rows
+                                    └─ Repartition Exchange est. 1350000 rows
+                                       │     Partition by: {o_custkey}
+                                       └─ Filter est. 1350000 rows
+                                          │     o_comment NOT LIKE '%special%requests%'
+                                          └─ TableScan tpch.orders est. 1500000 rows

@@ -1,5 +1,5 @@
 USE test;
-
+set enable_optimizer=0;
 --- event metric merge tree local table
 DROP TABLE IF EXISTS event_metric_local;
 CREATE TABLE test.event_metric_local

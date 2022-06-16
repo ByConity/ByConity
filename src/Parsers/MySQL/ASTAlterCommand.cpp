@@ -199,7 +199,7 @@ static inline bool parseAlterCommand(IParser::Pos & pos, ASTPtr & node, Expected
         else if (ParserKeyword("SET DEFAULT").ignore(pos, expected))
         {
             ASTPtr default_expression;
-            ParserExpression expression_p(DialectType::CLICKHOUSE);
+            ParserExpression expression_p(ParserSettings::CLICKHOUSE);
 
             if (!expression_p.parse(pos, default_expression, expected))
                 return false;

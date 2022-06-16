@@ -1,0 +1,49 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ MergingAggregated est. ? rows
+               └─ Gather Exchange est. ? rows
+                  └─ Aggregating est. ? rows
+                     │     Group by: {}
+                     └─ Inner Join est. ? rows
+                        │     Condition: i_item_sk == ws_item_sk_1
+                        │     Filter: ws_ext_discount_amt > (1.3 * `expr#avg(ws_ext_discount_amt)`)
+                        ├─ Repartition Exchange est. ? rows
+                        │  │     Partition by: {i_item_sk}
+                        │  └─ Inner Join est. ? rows
+                        │     │     Condition: ws_sold_date_sk == d_date_sk
+                        │     ├─ Repartition Exchange est. ? rows
+                        │     │  │     Partition by: {ws_sold_date_sk}
+                        │     │  └─ Inner Join est. ? rows
+                        │     │     │     Condition: ws_item_sk == i_item_sk
+                        │     │     ├─ Repartition Exchange est. ? rows
+                        │     │     │  │     Partition by: {ws_item_sk}
+                        │     │     │  └─ TableScan tpcds.web_sales est. ? rows
+                        │     │     └─ Repartition Exchange est. ? rows
+                        │     │        │     Partition by: {i_item_sk}
+                        │     │        └─ Filter est. ? rows
+                        │     │           │     i_manufact_id = 350
+                        │     │           └─ TableScan tpcds.item est. ? rows
+                        │     └─ Repartition Exchange est. ? rows
+                        │        │     Partition by: {d_date_sk}
+                        │        └─ Filter est. ? rows
+                        │           │     (d_date >= '2000-01-27') AND (d_date <= cast(11073, 'Date'))
+                        │           └─ TableScan tpcds.date_dim est. ? rows
+                        └─ MergingAggregated est. ? rows
+                           └─ Repartition Exchange est. ? rows
+                              │     Partition by: {ws_item_sk_1}
+                              └─ Aggregating est. ? rows
+                                 │     Group by: {ws_item_sk_1}
+                                 └─ Projection est. ? rows
+                                    └─ Inner Join est. ? rows
+                                       │     Condition: ws_sold_date_sk_1 == d_date_sk_1
+                                       ├─ Repartition Exchange est. ? rows
+                                       │  │     Partition by: {ws_sold_date_sk_1}
+                                       │  └─ TableScan tpcds.web_sales est. ? rows
+                                       └─ Repartition Exchange est. ? rows
+                                          │     Partition by: {d_date_sk_1}
+                                          └─ Filter est. ? rows
+                                             │     (d_date_1 >= '2000-01-27') AND (d_date_1 <= cast(11073, 'Date'))
+                                             └─ TableScan tpcds.date_dim est. ? rows

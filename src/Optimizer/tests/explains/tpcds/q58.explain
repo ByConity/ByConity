@@ -1,0 +1,151 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 103778 rows
+      └─ MergeSorting est. 103778 rows
+         └─ PartialSorting est. 103778 rows
+            └─ Gather Exchange est. 103778 rows
+               └─ MergeSorting est. 103778 rows
+                  └─ PartialSorting est. 103778 rows
+                     └─ Projection est. 103778 rows
+                        └─ Inner Join est. 103778 rows
+                           │     Condition: i_item_id_1 == i_item_id
+                           │     Filter: (`expr#sum(cs_ext_sales_price)` >= (0.9 * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= (1.1 * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= (1.1 * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= (0.9 * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` >= (0.9 * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= (1.1 * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` <= (1.1 * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` >= (0.9 * `expr#sum(cs_ext_sales_price)`))
+                           ├─ MergingAggregated est. 146835 rows
+                           │  └─ Repartition Exchange est. 146835 rows
+                           │     │     Partition by: {i_item_id_1}
+                           │     └─ Aggregating est. 146835 rows
+                           │        │     Group by: {i_item_id_1}
+                           │        └─ Inner Join est. 207835 rows
+                           │           │     Condition: i_item_sk_1 == cs_item_sk
+                           │           ├─ Repartition Exchange est. 300000 rows
+                           │           │  │     Partition by: {i_item_sk_1}
+                           │           │  └─ TableScan tpcds.item est. 300000 rows
+                           │           └─ Repartition Exchange est. 207554 rows
+                           │              │     Partition by: {cs_item_sk}
+                           │              └─ Inner Join est. 7729363 rows
+                           │                 │     Condition: cs_sold_date_sk == d_date_sk_3
+                           │                 ├─ Local Exchange est. 1439980416 rows
+                           │                 │  └─ Filter est. 1439980416 rows
+                           │                 │     │     Dynamic Filters: {cs_sold_date_sk:range}
+                           │                 │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                           │                 └─ Projection est. 10 rows
+                           │                    │     Dynamic Filters Builder: {d_date_sk_3}
+                           │                    └─ Broadcast Exchange est. 10 rows
+                           │                       └─ Inner Join est. 10 rows
+                           │                          │     Condition: d_date_3 == d_date_4
+                           │                          ├─ Filter est. 73049 rows
+                           │                          │  │     isNotNull(d_date_3)
+                           │                          │  └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                          └─ Broadcast Exchange est. 7 rows
+                           │                             └─ MergingAggregated est. 7 rows
+                           │                                └─ Repartition Exchange est. 7 rows
+                           │                                   │     Partition by: {d_date_4}
+                           │                                   └─ Aggregating est. 7 rows
+                           │                                      │     Group by: {d_date_4}
+                           │                                      └─ Inner Join est. 7 rows
+                           │                                         │     Condition: d_week_seq_4 == d_week_seq_5
+                           │                                         ├─ Filter est. 73049 rows
+                           │                                         │  │     isNotNull(d_date_4)
+                           │                                         │  └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                                         └─ Broadcast Exchange est. 1 rows
+                           │                                            └─ EnforceSingleRow est. 1 rows
+                           │                                               └─ Union est. 1 rows
+                           │                                                  └─ Gather Exchange est. 1 rows
+                           │                                                     └─ Projection est. 1 rows
+                           │                                                        └─ Filter est. 1 rows
+                           │                                                           │     d_date_5 = '2000-01-03'
+                           │                                                           └─ TableScan tpcds.date_dim est. 73049 rows
+                           └─ Inner Join est. 103778 rows
+                              │     Condition: i_item_id == i_item_id_2
+                              │     Filter: (`expr#sum(ss_ext_sales_price)` <= (1.1 * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` >= (0.9 * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= (1.1 * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` >= (0.9 * `expr#sum(ss_ext_sales_price)`))
+                              ├─ MergingAggregated est. 146835 rows
+                              │  └─ Repartition Exchange est. 146835 rows
+                              │     │     Partition by: {i_item_id}
+                              │     └─ Aggregating est. 146835 rows
+                              │        │     Group by: {i_item_id}
+                              │        └─ Inner Join est. 415112 rows
+                              │           │     Condition: ss_item_sk == i_item_sk
+                              │           ├─ Repartition Exchange est. 415112 rows
+                              │           │  │     Partition by: {ss_item_sk}
+                              │           │  └─ Inner Join est. 15559092 rows
+                              │           │     │     Condition: ss_sold_date_sk == d_date_sk
+                              │           │     ├─ Local Exchange est. 2879987999 rows
+                              │           │     │  └─ Filter est. 2879987999 rows
+                              │           │     │     │     Dynamic Filters: {ss_sold_date_sk:range}
+                              │           │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                              │           │     └─ Projection est. 10 rows
+                              │           │        │     Dynamic Filters Builder: {d_date_sk}
+                              │           │        └─ Broadcast Exchange est. 10 rows
+                              │           │           └─ Inner Join est. 10 rows
+                              │           │              │     Condition: d_date == d_date_1
+                              │           │              ├─ Filter est. 73049 rows
+                              │           │              │  │     isNotNull(d_date)
+                              │           │              │  └─ TableScan tpcds.date_dim est. 73049 rows
+                              │           │              └─ Broadcast Exchange est. 7 rows
+                              │           │                 └─ MergingAggregated est. 7 rows
+                              │           │                    └─ Repartition Exchange est. 7 rows
+                              │           │                       │     Partition by: {d_date_1}
+                              │           │                       └─ Aggregating est. 7 rows
+                              │           │                          │     Group by: {d_date_1}
+                              │           │                          └─ Inner Join est. 7 rows
+                              │           │                             │     Condition: d_week_seq_1 == d_week_seq_2
+                              │           │                             ├─ Filter est. 73049 rows
+                              │           │                             │  │     isNotNull(d_date_1)
+                              │           │                             │  └─ TableScan tpcds.date_dim est. 73049 rows
+                              │           │                             └─ Broadcast Exchange est. 1 rows
+                              │           │                                └─ EnforceSingleRow est. 1 rows
+                              │           │                                   └─ Union est. 1 rows
+                              │           │                                      └─ Gather Exchange est. 1 rows
+                              │           │                                         └─ Projection est. 1 rows
+                              │           │                                            └─ Filter est. 1 rows
+                              │           │                                               │     d_date_2 = '2000-01-03'
+                              │           │                                               └─ TableScan tpcds.date_dim est. 73049 rows
+                              │           └─ Repartition Exchange est. 300000 rows
+                              │              │     Partition by: {i_item_sk}
+                              │              └─ TableScan tpcds.item est. 300000 rows
+                              └─ MergingAggregated est. 103778 rows
+                                 └─ Repartition Exchange est. 103778 rows
+                                    │     Partition by: {i_item_id_2}
+                                    └─ Aggregating est. 103778 rows
+                                       │     Group by: {i_item_id_2}
+                                       └─ Inner Join est. 103918 rows
+                                          │     Condition: i_item_sk_2 == ws_item_sk
+                                          ├─ Repartition Exchange est. 300000 rows
+                                          │  │     Partition by: {i_item_sk_2}
+                                          │  └─ TableScan tpcds.item est. 300000 rows
+                                          └─ Repartition Exchange est. 103778 rows
+                                             │     Partition by: {ws_item_sk}
+                                             └─ Inner Join est. 3889791 rows
+                                                │     Condition: ws_sold_date_sk == d_date_sk_6
+                                                ├─ Local Exchange est. 720000376 rows
+                                                │  └─ Filter est. 720000376 rows
+                                                │     │     Dynamic Filters: {ws_sold_date_sk:range}
+                                                │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                                                └─ Projection est. 10 rows
+                                                   │     Dynamic Filters Builder: {d_date_sk_6}
+                                                   └─ Broadcast Exchange est. 10 rows
+                                                      └─ Inner Join est. 10 rows
+                                                         │     Condition: d_date_6 == d_date_7
+                                                         ├─ Filter est. 73049 rows
+                                                         │  │     isNotNull(d_date_6)
+                                                         │  └─ TableScan tpcds.date_dim est. 73049 rows
+                                                         └─ Broadcast Exchange est. 7 rows
+                                                            └─ MergingAggregated est. 7 rows
+                                                               └─ Repartition Exchange est. 7 rows
+                                                                  │     Partition by: {d_date_7}
+                                                                  └─ Aggregating est. 7 rows
+                                                                     │     Group by: {d_date_7}
+                                                                     └─ Inner Join est. 7 rows
+                                                                        │     Condition: d_week_seq_7 == d_week_seq_8
+                                                                        ├─ Filter est. 73049 rows
+                                                                        │  │     isNotNull(d_date_7)
+                                                                        │  └─ TableScan tpcds.date_dim est. 73049 rows
+                                                                        └─ Broadcast Exchange est. 1 rows
+                                                                           └─ EnforceSingleRow est. 1 rows
+                                                                              └─ Union est. 1 rows
+                                                                                 └─ Gather Exchange est. 1 rows
+                                                                                    └─ Projection est. 1 rows
+                                                                                       └─ Filter est. 1 rows
+                                                                                          │     d_date_8 = '2000-01-03'
+                                                                                          └─ TableScan tpcds.date_dim est. 73049 rows
+note: Dynamic Filter is applied for 3 times.

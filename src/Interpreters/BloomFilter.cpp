@@ -6,7 +6,8 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-
+#include <IO/WriteHelpers.h>
+#include <IO/ReadHelpers.h>
 
 namespace DB
 {
@@ -145,6 +146,37 @@ ColumnPtr BloomFilter::getPrimitiveColumn(const ColumnPtr & column)
         return getPrimitiveColumn(low_cardinality_col->convertToFullColumnIfLowCardinality());
 
     return column;
+}
+
+void BloomFilter::merge(const BloomFilter & bf)
+{
+    if (unlikely(size != bf.size || hashes != bf.hashes || seed != bf.seed || words != bf.words))
+        throw Exception("Bloom filters must have the same size", ErrorCodes::LOGICAL_ERROR);
+    for (size_t i = 0; i < words; ++i)
+        filter[i] |= bf.filter[i];
+}
+
+void BloomFilter::serializeToBuffer(WriteBuffer & buf) const
+{
+    writeBinary(size, buf);
+    writeBinary(hashes, buf);
+    writeBinary(seed, buf);
+    writeBinary(words, buf);
+
+    for (size_t i = 0; i < words; ++i)
+        writeBinary(filter[i], buf);
+}
+
+void BloomFilter::deserialize(ReadBuffer & buf)
+{
+    readBinary(size, buf);
+    readBinary(hashes, buf);
+    readBinary(seed, buf);
+    readBinary(words, buf);
+
+    filter.resize(words, 0);
+    for (size_t i = 0; i < words; ++i)
+        readBinary(filter[i], buf);
 }
 
 }

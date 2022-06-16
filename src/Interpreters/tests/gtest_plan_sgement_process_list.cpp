@@ -5,7 +5,7 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeFactory.h>
-#include <Processors/QueryPlan/ReadNothingStep.h>
+#include <QueryPlan/ReadNothingStep.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
 #include <common/scope_guard.h>

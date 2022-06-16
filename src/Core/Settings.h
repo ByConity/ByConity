@@ -505,6 +505,8 @@ class IColumn;
     M(UInt64, external_storage_max_read_rows, 0, "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0) \
     M(UInt64, external_storage_max_read_bytes, 0, "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0)  \
     M(UnionMode, union_default_mode, UnionMode::Unspecified, "Set default Union Mode in SelectWithUnion query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Union Mode will throw exception.", 0) \
+    M(UnionMode, intersect_default_mode, UnionMode::ALL, "Set default Intersect Mode in intersect query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Intersect Mode will throw exception.", 0) \
+    M(UnionMode, except_default_mode, UnionMode::ALL, "Set default Except Mode in except query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without Except Mode will throw exception.", 0) \
     M(Bool, optimize_aggregators_of_group_by_keys, true, "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", 0) \
     M(Bool, optimize_group_by_function_keys, true, "Eliminates functions of other keys in GROUP BY section", 0) \
     M(Bool, legacy_column_name_of_tuple_literal, false, "List all names of element of large tuple literals in their column names instead of hash. This settings exists only for compatibility reasons. It makes sense to set to 'true', while doing rolling update of cluster from version lower than 21.7 to higher.", 0) \
@@ -601,9 +603,67 @@ class IColumn;
     M(Bool, allow_ingest_empty_partition, false, "Allow empty partition replace target table", 0) \
     M(Bool, enable_async_ingest, false, "Allow ingest in aync mode", 0) \
     \
+    /** Optimizer relative settings */ \
+    M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
+    M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
+    M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
+    M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
+    M(Bool, enable_optimizer_explain, false, "Enable query return explain for unittest", 0) \
+    M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
+    M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
+    M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
+    M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
+    M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
+    M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
+    M(Bool, statistics_enable_sample, false, "Enable sampling for statistics", 0) \
+    M(UInt64, statistics_sample_row_threshold, 100'000'000, "Row threshold for samping", 0) \
+    M(UInt64, statistics_sample_row_count, 40'000'000, "Row threshold for samping", 0) \
+    M(UInt64, statistics_sample_histogram_enable_ndv_threshold, 2000, "When sampling, collect histogram only when ndv <= threshold", 0) \
+    M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
+    M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
+    M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
+    M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
+    M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
+    M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
+    M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
+    M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select", 0) \
+    M(UInt64, iterative_optimizer_timeout, 3000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(UInt64, cascades_optimizer_timeout, 3000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
+    M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
+    M(Bool, enum_replicate, true, "Enum replicate join", 0) \
+    M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
+    M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
+    M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
+    M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
+    M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
+    M(Bool, enable_left_join_to_right_join, false, "Whether enable convert left join to right join", 0) \
+    M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
+    M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
+    M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
+    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for join", 0) \
+    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
+    M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
+    M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
+    M(UInt64 , max_graph_reorder_size, 10, "Max tables join order enum on graph", 0) \
+    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+    M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
+    M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
+    M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
+    M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
+    M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
+    M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
+    M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
+    M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
-    M(UInt64, exchange_source_pipeline_threads, 8, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
+    M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \
     M(UInt64, exchange_timeout_ms, 100000, "Exchange request timeout ms",0) \
     M(UInt64, exchange_local_receiver_queue_size, 50, "Queue size for local exchange receiver",0) \
     M(UInt64, exchange_remote_receiver_queue_size, 100, "Queue size for remote exchange receiver",0) \
@@ -615,6 +675,11 @@ class IColumn;
     M(Bool, exchange_enable_keep_order_parallel_shuffle, false, "Whether enable parallel shuffle when exchange need keep order", 0) \
     M(Bool, exchange_enable_force_remote_mode, false, "Force exchange data transfer through network", 0) \
     M(Bool, exchange_enable_force_keep_order, false, "Force exchange keep data order", 0) \
+    \
+    /** Dynamic Filter settings */ \
+    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(UInt64, wait_runtime_filter_timeout_for_filter, 0, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(Bool, runtime_filter_dynamic_mode, false, "Whether enable bloom runtime filter", 0) \
     \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0)\

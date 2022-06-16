@@ -12,12 +12,7 @@ bool ParserSelectWithUnionQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & 
 {
     ASTPtr list_node;
 
-    ParserUnionList parser(
-        std::make_unique<ParserUnionQueryElement>(dt),
-        std::make_unique<ParserKeyword>("UNION"),
-        std::make_unique<ParserKeyword>("ALL"),
-        std::make_unique<ParserKeyword>("DISTINCT"),
-        dt);
+    ParserUnionList parser(dt);
 
     if (!parser.parse(pos, list_node, expected))
         return false;

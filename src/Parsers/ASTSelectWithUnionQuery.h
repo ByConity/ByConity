@@ -27,7 +27,13 @@ public:
     {
         Unspecified,
         ALL,
-        DISTINCT
+        DISTINCT,
+        EXCEPT_UNSPECIFIED,
+        EXCEPT_ALL,
+        EXCEPT_DISTINCT,
+        INTERSECT_UNSPECIFIED,
+        INTERSECT_ALL,
+        INTERSECT_DISTINCT
     };
 
     using UnionModes = std::vector<Mode>;
