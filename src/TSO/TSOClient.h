@@ -1,5 +1,5 @@
 #pragma once
-#include <Common/RpcClientBase.h>
+#include <CloudServices/RpcClientBase.h>
 #include <Protos/tso.pb.h>
 
 namespace DB
@@ -15,7 +15,7 @@ public:
 
     TSOClient(String host_port_);
     TSOClient(HostWithPorts host_ports_);
-    ~TSOClient();
+    ~TSOClient() override;
 
     GetTimestampResp getTimestamp();
     GetTimestampsResp getTimestamps(UInt32 size);
