@@ -23,7 +23,7 @@ namespace ErrorCodes
 
 
 KeeperDispatcher::KeeperDispatcher()
-    : responses_queue(/*std::numeric_limits<size_t>::max()*/)
+    : responses_queue(std::numeric_limits<size_t>::max())
     , configuration_and_settings(std::make_shared<KeeperConfigurationAndSettings>())
     , log(&Poco::Logger::get("KeeperDispatcher"))
 {
@@ -327,7 +327,7 @@ void KeeperDispatcher::shutdown()
                     request_thread.join();
             }
 
-            responses_queue.push({});
+            responses_queue.finish();
             if (responses_thread.joinable())
                 responses_thread.join();
 
@@ -447,14 +447,19 @@ void KeeperDispatcher::finishSession(int64_t session_id)
 
 void KeeperDispatcher::addErrorResponses(const KeeperStorage::RequestsForSessions & requests_for_sessions, Coordination::Error error)
 {
-    for (const auto & [session_id, time, request] : requests_for_sessions)
+    for (const auto & request_for_session : requests_for_sessions)
     {
         KeeperStorage::ResponsesForSessions responses;
-        auto response = request->makeResponse();
-        response->xid = request->xid;
+        auto response = request_for_session.request->makeResponse();
+        response->xid = request_for_session.request->xid;
         response->zxid = 0;
         response->error = error;
-        responses_queue.push(DB::KeeperStorage::ResponseForSession{session_id, response});
+        if (!responses_queue.push(DB::KeeperStorage::ResponseForSession{request_for_session.session_id, response}))
+            throw Exception(ErrorCodes::SYSTEM_ERROR,
+                "Could not push error response xid {} zxid {} error message {} to responses queue",
+                response->xid,
+                response->zxid,
+                errorMessage(error));
     }
 }
 
