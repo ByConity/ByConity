@@ -142,6 +142,8 @@ struct StorageInMemoryMetadata
     TTLDescription getRowsTTL() const;
     bool hasRowsTTL() const;
 
+    bool hasPartitionLevelTTL() const;
+
     TTLDescriptions getRowsWhereTTLs() const;
     bool hasAnyRowsWhereTTL() const;
 
@@ -296,8 +298,8 @@ struct StorageInMemoryMetadata
     /// If |need_all| is set, then checks that all the columns of the table are in the block.
     void check(const Block & block, bool need_all = false) const;
 
-	/// check if there exist map column
-	bool hasMapColumn() const;
+    /// check if there exist map column
+    bool hasMapColumn() const;
 };
 
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
