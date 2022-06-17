@@ -1,16 +1,20 @@
 #include <Storages/StorageInMemoryMetadata.h>
 
-#include <sparsehash/dense_hash_map>
-#include <sparsehash/dense_hash_set>
-#include <Common/quoteString.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/MapHelpers.h>
+#include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
-#include <IO/Operators.h>
-#include <DataTypes/DataTypeFactory.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/quoteString.h>
+
+#include <sparsehash/dense_hash_map>
+#include <sparsehash/dense_hash_set>
 
 
 namespace DB
@@ -198,6 +202,35 @@ TTLDescription StorageInMemoryMetadata::getRowsTTL() const
 bool StorageInMemoryMetadata::hasRowsTTL() const
 {
     return table_ttl.rows_ttl.expression != nullptr;
+}
+
+bool StorageInMemoryMetadata::hasPartitionLevelTTL() const
+{
+    if (!hasRowsTTL())
+        return false;
+
+    NameSet partition_columns(partition_key.column_names.begin(), partition_key.column_names.end());
+
+    std::function<bool(const ASTPtr &)> isInPartitions = [&](const ASTPtr expr) -> bool {
+        String name = expr->getAliasOrColumnName();
+        if (partition_columns.count(name))
+            return true;
+
+        if (auto literal = expr->as<ASTLiteral>())
+            return true;
+        if (auto identifier = expr->as<ASTIdentifier>())
+            return false;
+        if (auto func = expr->as<ASTFunction>())
+        {
+            bool res = true;
+            for (auto & arg : func->arguments->children)
+                res &= isInPartitions(arg);
+            return res;
+        }
+        return false;
+    };
+
+    return isInPartitions(table_ttl.rows_ttl.expression_ast);
 }
 
 TTLDescriptions StorageInMemoryMetadata::getRowsWhereTTLs() const

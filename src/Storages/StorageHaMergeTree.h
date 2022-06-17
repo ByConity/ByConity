@@ -444,7 +444,6 @@ private:
     /// leader_election node in ZK is either deleted, or the session is marked expired.
     void exitLeaderElection();
 
-    bool hasPartitionLevelTTL(const StorageInMemoryMetadata & metadata);
     void tryExecutePartitionLevelTTL();
     time_t calcTTLForPartition(
         const MergeTreePartition & partition, const KeyDescription & partition_key, const TTLDescription & ttl_description) const;

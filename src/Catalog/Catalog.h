@@ -7,7 +7,7 @@
 #include <Catalog/MetastoreProxy.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Core/Types.h>
-// #include <MergeTreeCommon/Checkpoint.h>
+#include <CloudServices/Checkpoint.h>
 #include <Parsers/ASTAlterResourceGroupQuery.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
@@ -422,7 +422,7 @@ public:
     // void addCheckpoint(const StoragePtr &, Checkpoint) { }
     // void markCheckpoint(const StoragePtr &, Checkpoint) { }
     // void removeCheckpoint(const StoragePtr &, Checkpoint) { }
-    // Checkpoints getCheckpoints() { return {}; }
+    Checkpoints getCheckpoints() { return {}; }
 
     /// TODO:
     DataPartsVector getAllDataPartsBetween(const StoragePtr &, const TxnTimestamp &, const TxnTimestamp &) { return {}; }

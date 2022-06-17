@@ -958,7 +958,7 @@ void StorageHaMergeTree::read(
                 /// When kafka consumer is follower read memory table from leader replica union local data stream
                 QueryPlan memory_table_plan;
                 readMemoryTable(memory_table_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
-                
+
                 DataStreams input_streams;
                 input_streams.emplace_back(query_plan.getCurrentDataStream());
                 input_streams.emplace_back(memory_table_plan.getCurrentDataStream());
@@ -3400,39 +3400,10 @@ void StorageHaMergeTree::exitLeaderElection()
     leader_election = nullptr;
 }
 
-bool StorageHaMergeTree::hasPartitionLevelTTL(const StorageInMemoryMetadata & metadata)
-{
-    if (!metadata.hasRowsTTL())
-        return false;
-
-    NameSet partition_columns(metadata.partition_key.column_names.begin(), metadata.partition_key.column_names.end());
-
-    std::function<bool(const ASTPtr &)> isInPartitions = [&](const ASTPtr expr) -> bool {
-        String name = expr->getAliasOrColumnName();
-        if (partition_columns.count(name))
-            return true;
-
-        if (auto literal = expr->as<ASTLiteral>())
-            return true;
-        if (auto identifier = expr->as<ASTIdentifier>())
-            return false;
-        if (auto func = expr->as<ASTFunction>())
-        {
-            bool res = true;
-            for (auto & arg : func->arguments->children)
-                res &= isInPartitions(arg);
-            return res;
-        }
-        return false;
-    };
-
-    return isInPartitions(metadata.table_ttl.rows_ttl.expression_ast);
-}
-
 void StorageHaMergeTree::tryExecutePartitionLevelTTL()
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
-    if (!hasPartitionLevelTTL(*metadata_snapshot))
+    if (!metadata_snapshot->hasPartitionLevelTTL())
         return;
 
     auto & partition_key_description = metadata_snapshot->partition_key;
@@ -4419,9 +4390,9 @@ void StorageHaMergeTree::ingestPartition(const PartitionCommand & command, Conte
 {
     bool async_ingest = true;
     auto settings = query_context->getSettingsRef();
-    
+
     String partition_id = getPartitionIDFromQuery(command.partition, query_context);
-    
+
     auto zookeeper = getZooKeeper();
     Int64 block_number = allocateBlockNumberDirect(zookeeper);
 
@@ -4467,7 +4438,7 @@ void StorageHaMergeTree::ingestPartition(const PartitionCommand & command, Conte
             log_entry.is_executed = true;
         else
             LOG_DEBUG(log, "Executing async ingest mode, log generated");
-        
+
         queue.write(log_entry);
     }
     catch (...)
