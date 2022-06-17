@@ -4,6 +4,7 @@
 #include <Common/RWLock.h>
 #include <CloudServices/RpcLeaderClientBase.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
 namespace DB
@@ -27,15 +28,15 @@ namespace ResourceManagement
 {
 struct WorkerNode;
 
-String fetchByteJournalLeader(Context & context, String election_ns, String election_point);
+String fetchByteJournalLeader(ContextMutablePtr context, String election_ns, String election_point);
 
-class ResourceManagerClient : public RpcLeaderClientBase
+class ResourceManagerClient : public RpcLeaderClientBase, protected WithMutableContext
 {
     friend class ResourceReporterTask;
 public:
     static String getName() { return "ResourceManagerClient"; }
 
-    ResourceManagerClient(Context & global_context, const String & election_ns_, const String & election_point_);
+    ResourceManagerClient(ContextMutablePtr global_context_, const String & election_ns_, const String & election_point_);
     ~ResourceManagerClient() override;
 
     void getVirtualWarehouse(const std::string & name, VirtualWarehouseData & vw_data);
@@ -65,7 +66,6 @@ private:
     using Stub = Protos::ResourceManagerService_Stub;
     mutable RWLock leader_mutex = RWLockImpl::create();
     std::unique_ptr<Stub> stub;
-    Context & global_context;
     String election_ns;
     String election_point;
 
@@ -101,7 +101,7 @@ private:
     template <typename RMResponse, typename RpcFunc>
     bool callToLeaderWrapper(RMResponse & response, RpcFunc & rpc_func)
     {
-        auto & config = global_context.getConfigRef();
+        auto & config = getContext()->getConfigRef();
         auto max_retry_count = config.getInt("resource_manager.max_retry_count", 3);
 
         int retry_count = 0;
@@ -144,7 +144,7 @@ private:
                 tryLogDebugCurrentException(__PRETTY_FUNCTION__);
                 auto lock = getWriteLock();
                 auto new_leader = fetchByteJournalLeader();
-                if (new_leader.empty() || new_leader == leader_host_port )
+                if (new_leader.empty() || new_leader == leader_host_port)
                 {
                     LOG_DEBUG(log, "There is no active elected RM leader");
                     throw;

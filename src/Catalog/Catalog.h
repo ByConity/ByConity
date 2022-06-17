@@ -8,10 +8,8 @@
 #include <Catalog/DataModelPartWrapper.h>
 #include <Core/Types.h>
 #include <CloudServices/Checkpoint.h>
-#include <Parsers/ASTAlterResourceGroupQuery.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
-// #include <ResourceGroup/IResourceGroup.h>
 // #include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TxnTimestamp.h>
@@ -42,7 +40,6 @@ public:
     using DataModelUDFs = std::vector<Protos::DataModelUDF>;
 
     using MetastoreProxyPtr = std::shared_ptr<MetastoreProxy>;
-    // using ResourceGroupPtr = std::shared_ptr<IResourceGroup>;
 
     Catalog(Context & _context, CatalogConfig & config, String _name_space = "default");
 
@@ -461,10 +458,6 @@ public:
 
     std::unordered_map<String, UInt64> getTrashTableVersions(const String & database, const String & table);
     void undropTable(const String & database, const String & table, const UInt64 & ts);
-
-    void updateResourceGroup(const ASTAlterResourceGroupQuery & query);
-    std::shared_ptr<Protos::ResourceGroup> getResourceGroup(const String & group_name);
-    void removeResourceGroup(const String & group_name);
 
     /// Get the key of a insertion label with the KV namespace
     String getInsertionLabelKey(const InsertionLabelPtr & label);

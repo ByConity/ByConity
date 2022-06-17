@@ -105,8 +105,13 @@ using ActionLocksManagerPtr = std::shared_ptr<ActionLocksManager>;
 class ShellCommand;
 class ICompressionCodec;
 class AccessControlManager;
-class InternalResourceGroup;
-class ResourceGroupManager;
+class IResourceGroup;
+struct ResourceGroupInfo;
+class IResourceGroupManager;
+using ResourceGroupManagerPtr = std::shared_ptr<IResourceGroupManager>;
+using ResourceGroupInfoMap = std::unordered_map<String, ResourceGroupInfo>;
+class InternalResourceGroupManager;
+class VWResourceGroupManager;
 class Credentials;
 class GSSAcceptorContext;
 class SettingsConstraints;
@@ -277,7 +282,7 @@ private:
     bool use_default_roles = false;
     std::shared_ptr<const ContextAccess> access;
     std::shared_ptr<const EnabledRowPolicies> initial_row_policy;
-    CopyableAtomic<InternalResourceGroup*> resource_group{nullptr}; /// Current resource group.
+    CopyableAtomic<IResourceGroup*> resource_group{nullptr}; /// Current resource group.
     String current_database;
     Settings settings;  /// Setting for query execution.
 
@@ -402,6 +407,11 @@ private:
                                                     /// to DatabaseOnDisk::commitCreateTable(...) or IStorage::alter(...) without changing
                                                     /// thousands of signatures.
                                                     /// And I hope it will be replaced with more common Transaction sometime.
+
+
+    /// VirtualWarehouse for each query, session level
+    mutable VirtualWarehouseHandle current_vw;
+    mutable WorkerGroupHandle current_worker_group;
 
     Context();
     Context(const Context &);
@@ -549,9 +559,9 @@ public:
     const ClientInfo & getClientInfo() const { return client_info; }
 
     void setResourceGroup(const IAST *ast);
-    InternalResourceGroup* getResourceGroup() const;
-    ResourceGroupManager & getResourceGroupManager();
-    const ResourceGroupManager & getResourceGroupManager() const;
+    IResourceGroup* tryGetResourceGroup() const;
+    IResourceGroupManager * tryGetResourceGroupManager();
+    IResourceGroupManager * tryGetResourceGroupManager() const;
     void startResourceGroup();
     void stopResourceGroup();
 

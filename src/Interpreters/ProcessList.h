@@ -6,7 +6,7 @@
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/QueryPriorities.h>
-#include <Interpreters/ResourceGroupManager.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Storages/IStorage_fwd.h>
 #include <bthread/mtx_cv_base.h>
 #include <Poco/Condition.h>
@@ -97,7 +97,7 @@ protected:
     OverflowMode overflow_mode;
 
     QueryPriorities::Handle priority_handle;
-    InternalResourceGroup::Handle resource_group_handle;
+    IResourceGroup::Handle resource_group_handle;
 
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
 
@@ -141,7 +141,7 @@ public:
         const String & query_,
         const ClientInfo & client_info_,
         QueryPriorities::Handle && priority_handle_,
-        InternalResourceGroup::Handle && resource_group_handle_);
+        IResourceGroup::Handle && resource_group_handle_);
 
     ~QueryStatus();
 

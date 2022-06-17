@@ -337,12 +337,6 @@ namespace ProfileEvents
     extern const Event GetTrashTableVersionsFailed;
     extern const Event UndropTableSuccess;
     extern const Event UndropTableFailed;
-    extern const Event UpdateResourceGroupSuccess;
-    extern const Event UpdateResourceGroupFailed;
-    extern const Event GetResourceGroupSuccess;
-    extern const Event GetResourceGroupFailed;
-    extern const Event RemoveResourceGroupSuccess;
-    extern const Event RemoveResourceGroupFailed;
     extern const Event GetInsertionLabelKeySuccess;
     extern const Event GetInsertionLabelKeyFailed;
     extern const Event PrecommitInsertionLabelSuccess;
@@ -4543,38 +4537,6 @@ namespace Catalog
             [&] { meta_proxy->removeBufferManagerMetadata(name_space, uuid); },
             ProfileEvents::RemoveBufferManagerMetadataSuccess,
             ProfileEvents::RemoveBufferManagerMetadataFailed);
-    }
-
-    void Catalog::updateResourceGroup(const ASTAlterResourceGroupQuery & query)
-    {
-        runWithMetricSupport(
-            [&] {
-                std::shared_ptr<Protos::ResourceGroup> resource_group_model = meta_proxy->getResourceGroup(name_space, query.name);
-                if (!resource_group_model)
-                    resource_group_model = std::make_shared<Protos::ResourceGroup>();
-                fillResourceGroupModel(query, resource_group_model);
-                meta_proxy->updateResourceGroup(name_space, query.name, resource_group_model);
-            },
-            ProfileEvents::UpdateResourceGroupSuccess,
-            ProfileEvents::UpdateResourceGroupFailed);
-    }
-
-    std::shared_ptr<Protos::ResourceGroup> Catalog::getResourceGroup(const String & group_name)
-    {
-        std::shared_ptr<Protos::ResourceGroup> res;
-        runWithMetricSupport(
-            [&] { res = meta_proxy->getResourceGroup(name_space, group_name); },
-            ProfileEvents::GetResourceGroupSuccess,
-            ProfileEvents::GetResourceGroupFailed);
-        return res;
-    }
-
-    void Catalog::removeResourceGroup(const String & group_name)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->removeResourceGroup(name_space, group_name); },
-            ProfileEvents::RemoveResourceGroupSuccess,
-            ProfileEvents::RemoveResourceGroupFailed);
     }
 
     void Catalog::createVirtualWarehouse(const String & vw_name, const VirtualWarehouseData & data)

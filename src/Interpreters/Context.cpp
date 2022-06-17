@@ -70,12 +70,13 @@
 #include <Interpreters/Cluster.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/HaReplicaHandler.h>
-#include <Interpreters/ResourceGroupManager.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DDLTask.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/ActionLocksManager.h>
@@ -95,10 +96,15 @@
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SystemLog.h>
+#include <Interpreters/WorkerGroupHandle.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <ResourceGroup/IResourceGroupManager.h>
+#include <ResourceGroup/InternalResourceGroupManager.h>
+#include <ResourceGroup/VWResourceGroupManager.h>
+#include <ResourceManagement/ResourceManagerClient.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/DiskUniqueIndexFileCache.h>
 #include <Storages/IStorage.h>
@@ -219,6 +225,8 @@ namespace ErrorCodes
     extern const int SESSION_IS_LOCKED;
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
+
 }
 
 
@@ -466,7 +474,7 @@ struct ContextSharedPart
     String system_profile_name;                             /// Profile used by system processes
     String buffer_profile_name;                             /// Profile used by Buffer engine for flushing to the underlying
     AccessControlManager access_control_manager;
-    ResourceGroupManager resource_group_manager;              /// Known resource groups
+    mutable ResourceGroupManagerPtr resource_group_manager;              /// Known resource groups
     mutable UncompressedCachePtr uncompressed_cache;        /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache;                        /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;                      /// Cache of queries' results.
@@ -512,6 +520,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<Catalog::Catalog> cnch_catalog;
     mutable CnchServerManagerPtr server_manager;
     mutable CnchTopologyMasterPtr topology_master;
+    mutable ResourceManagerClientPtr rm_client;
+    mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
 
     ServerType server_type;
     mutable std::unique_ptr<TransactionCoordinatorRcCnch> cnch_txn_coordinator;
@@ -963,7 +973,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     auto lock = getLock();
     shared->users_config = config;
     shared->access_control_manager.setUsersConfig(*shared->users_config);
-    shared->resource_group_manager.loadFromConfig(*shared->users_config);
+    shared->resource_group_manager->initialize(*shared->users_config);
 }
 
 ConfigurationPtr Context::getUsersConfig()
@@ -972,24 +982,34 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
-void Context::setResourceGroup(const IAST *ast)
+void Context::setResourceGroup(const IAST * ast)
 {
-    if (auto lock = getLock(); shared->resource_group_manager.isInUse())
-        resource_group = shared->resource_group_manager.selectGroup(*this, ast);
-    else
-        resource_group = nullptr;
+    if (auto lock = getLock(); shared->resource_group_manager->isInUse())
+        resource_group = shared->resource_group_manager->selectGroup(*this, ast);
+    resource_group = nullptr;
 }
 
-InternalResourceGroup* Context::getResourceGroup() const
+IResourceGroup * Context::tryGetResourceGroup() const
 {
     return resource_group.load(std::memory_order_acquire);
 }
 
-ResourceGroupManager& Context::getResourceGroupManager() { return shared->resource_group_manager; }
-const ResourceGroupManager& Context::getResourceGroupManager() const { return shared->resource_group_manager; }
+IResourceGroupManager * Context::tryGetResourceGroupManager() 
+{
+    if (shared->resource_group_manager)
+        return shared->resource_group_manager.get();
+    return nullptr;
+}
 
-void Context::startResourceGroup() { shared->resource_group_manager.enable(); }
-void Context::stopResourceGroup() { shared->resource_group_manager.disable(); }
+IResourceGroupManager * Context::tryGetResourceGroupManager() const 
+{
+    if (shared->resource_group_manager)
+        return shared->resource_group_manager.get();
+    return nullptr;
+}
+
+void Context::startResourceGroup() { shared->resource_group_manager->enable(); }
+void Context::stopResourceGroup() { shared->resource_group_manager->disable(); }
 
 void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address)
 {
@@ -3691,5 +3711,94 @@ TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
 
     return *shared->cnch_txn_coordinator;
 }
+
+String Context::getVirtualWarehousePSM() const
+{
+    return getRootConfig().service_discovery.vw_psm;
+}
+
+void Context::initVirtualWarehousePool()
+{
+    shared->vw_pool = std::make_unique<VirtualWarehousePool>(*this);
+}
+
+VirtualWarehousePool & Context::getVirtualWarehousePool() const
+{
+    if (!shared->vw_pool)
+        throw Exception("VirtualWarehousePool is not initialized.", ErrorCodes::LOGICAL_ERROR);
+
+    return *shared->vw_pool;
+}
+
+void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group)
+{
+    current_worker_group = std::move(worker_group);
+}
+
+WorkerGroupHandle Context::getCurrentWorkerGroup() const
+{
+    if (!current_worker_group)
+        throw Exception("Worker group is not set", ErrorCodes::LOGICAL_ERROR);
+    return current_worker_group;
+}
+
+WorkerGroupHandle Context::tryGetCurrentWorkerGroup() const
+{
+    return current_worker_group;
+}
+
+void Context::setCurrentVW(VirtualWarehouseHandle vw)
+{
+    current_vw = std::move(vw);
+}
+
+VirtualWarehouseHandle Context::getCurrentVW() const
+{
+    if (!current_vw)
+        throw Exception("Virtual warehouse is not set", ErrorCodes::LOGICAL_ERROR);
+    return current_vw;
+}
+
+VirtualWarehouseHandle Context::tryGetCurrentVW() const
+{
+    return current_vw;
+}
+
+void Context::initResourceManagerClient()
+{
+    LOG_DEBUG(&Poco::Logger::get("Context"), "Initialising Resource Manager Client");
+    auto & root_config = getRootConfig();
+
+    auto & election_ns = root_config.bytejournal.name_space;
+    String election_point = root_config.bytejournal.cnch_prefix.value + "rm_election_point";
+    auto & max_retry_count = root_config.resource_manager.init_client_tries;
+    auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
+
+    size_t retry_count = 0;
+    do
+    {
+        String host_port;
+        try
+        {
+            auto lock = getLock();
+            shared->rm_client = std::make_shared<ResourceManagerClient>(getGlobalContext(), election_ns, election_point);
+            LOG_DEBUG(&Poco::Logger::get("Context"), "Initialised Resource Manager Client on try: {}", retry_count);
+            return;
+        }
+        catch (...)
+        {
+            LOG_DEBUG(&Poco::Logger::get("Context"), "Failed to initialise Resource Manager Client on try: {}", retry_count);
+            usleep(retry_interval_ms * 1000);
+        }
+    } while (retry_count++ < max_retry_count);
+
+    throw Exception("Unable to initialise Resource Manager Client", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
+}
+
+ResourceManagerClientPtr Context::getResourceManagerClient() const
+{
+   return shared->rm_client;
+}
+
 
 }

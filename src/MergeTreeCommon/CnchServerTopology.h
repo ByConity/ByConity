@@ -15,6 +15,7 @@ public:
     CnchServerTopology(const UInt64 & lease_expiration_, HostWithPortsVec && servers_);
 
     HostWithPortsVec getServerList() const;
+    size_t getServerSize() const;
 
     void setExpiration(const UInt64 & new_expiration);
 

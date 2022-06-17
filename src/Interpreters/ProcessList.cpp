@@ -74,16 +74,16 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
 
     bool is_unlimited_query = isUnlimitedQuery(ast);
 
-    InternalResourceGroup::Container::iterator gpIt;
-    InternalResourceGroup *resourceGroup = nullptr;
+    IResourceGroup::Container::iterator group_it;
+    IResourceGroup * resource_group = nullptr;
     if (!is_unlimited_query)
     {
         const_cast<Context *>(query_context.get())->setResourceGroup(ast);
         /// FIXME(xuruiliang): change getResourceGroup to const getResourceGroup
-        resourceGroup = const_cast<Context *>(query_context.get())->getResourceGroup();
+        resource_group = const_cast<Context *>(query_context.get())->tryGetResourceGroup();
     }
-    if (resourceGroup != nullptr)
-        gpIt = resourceGroup->run(query_, *query_context);
+    if (resource_group != nullptr)
+        group_it = resource_group->run(query_, *query_context);
 
     {
         std::unique_lock lock(mutex);
@@ -188,7 +188,7 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
 
         auto process_it = processes.emplace(processes.end(),
             query_context, query_, client_info, priorities.insert(settings.priority),
-            resourceGroup == nullptr ? nullptr : resourceGroup->insert(gpIt));
+            resource_group == nullptr ? nullptr : resource_group->insert(group_it));
 
         res = std::make_shared<Entry>(*this, process_it);
 
@@ -245,8 +245,8 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
         }
     }
 
-    if (resourceGroup != nullptr)
-        (*gpIt)->queryStatus = &res->get();
+    if (resource_group != nullptr)
+        (*group_it)->query_status = &res->get();
 
     return res;
 }
@@ -309,7 +309,7 @@ QueryStatus::QueryStatus(
     const String & query_,
     const ClientInfo & client_info_,
     QueryPriorities::Handle && priority_handle_,
-    InternalResourceGroup::Handle && resource_group_handle_)
+    IResourceGroup::Handle && resource_group_handle_)
     : WithContext(context_)
     , query(query_)
     , client_info(client_info_)
