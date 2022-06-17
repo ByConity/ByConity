@@ -28,7 +28,7 @@ struct CostContext
 {
     CostModel cost_model;
     const Context & context;
-    const PlanNodeStatisticsPtr & stats;
+    PlanNodeStatisticsPtr stats;
     const std::vector<PlanNodeStatisticsPtr> & children_stats;
     size_t worker_size;
 };
