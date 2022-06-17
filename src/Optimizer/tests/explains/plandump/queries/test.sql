@@ -1,0 +1,1 @@
+select * from people FULL join max_avg_parition_by using(id);

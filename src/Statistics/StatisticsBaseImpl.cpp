@@ -1,3 +1,4 @@
+#include <Optimizer/Dump/Json2Pb.h>
 #include <Statistics/StatisticsBaseImpl.h>
 #include <Statistics/StatsColumnBasic.h>
 #include <Statistics/StatsCpcSketch.h>
@@ -69,6 +70,60 @@ std::shared_ptr<StatsType> createStatisticsTyped(StatisticsTag tag, std::string_
         }
     }
 }
+template <class StatsType>
+std::shared_ptr<StatsType> createStatisticsUntypedJson(StatisticsTag tag, std::string_view blob)
+{
+    static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
+    CheckTag<StatsType>(tag);
+    std::shared_ptr<StatsType> ptr = std::make_shared<StatsType>();
+    ptr->deserializeFromJson(blob);
+    return ptr;
+}
+template <class StatsType, typename T>
+std::shared_ptr<StatsType> createStatisticsTypedJsonImpl(StatisticsTag tag, std::string_view blob)
+{
+    static_assert(std::is_base_of_v<StatisticsBase, StatsType>);
+    CheckTag<StatsType>(tag);
+    using ImplType = typename StatsType::template Impl<T>;
+    auto ptr = std::make_shared<ImplType>();
+    ptr->deserializeFromJson(blob);
+    return ptr;
+}
+template <class StatsType>
+std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::string_view blob)
+{
+    if (blob.size() < sizeof(TypeIndex))
+    {
+        throw Exception("statistics blob corrupted", ErrorCodes::LOGICAL_ERROR);
+    }
+    Pparser parser;
+    PVar var = parser.parse(std::string{blob.data(), blob.size()});
+    PObject json_object = *var.extract<PObject::Ptr>();
+
+    PVar var_bounds_blob = json_object.get("bounds_blob");
+    PObject object_bounds_blob = *var_bounds_blob.extract<PObject::Ptr>();
+
+    String type_str = object_bounds_blob.get("type_id").toString();
+    SerdeDataType type_index = SerdeDataTypeFromString(type_str);
+    //    auto it_pair = std::find_if(
+    //        STRING_TYPE_INDEX.begin(), STRING_TYPE_INDEX.end(), [type_str](const std::pair<std::string, SerdeDataType> & element) {
+    //            return element.first == type_str;
+    //        });
+    //    SerdeDataType type_index = it_pair->second;
+    switch (type_index)
+    {
+#define ENUM_CASE(TYPE) \
+    case SerdeDataType::TYPE: { \
+        return createStatisticsTypedJsonImpl<StatsType, TYPE>(tag, blob); \
+    }
+        ALL_TYPE_ITERATE(ENUM_CASE)
+#undef ENUM_CASE
+
+        default: {
+            throw Exception("unknown type", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+}
 
 StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
 {
@@ -97,6 +152,25 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
         }
     }();
 
+    return ptr;
+}
+StatisticsBasePtr createStatisticsBaseFromJson(StatisticsTag tag, TxnTimestamp ts, std::string_view blob)
+{
+    auto ptr = [&]() -> StatisticsBasePtr {
+        switch (tag)
+        {
+            case StatisticsTag::TableBasic:
+                return createStatisticsUntypedJson<StatsTableBasic>(tag, blob);
+            case StatisticsTag::ColumnBasic:
+                return createStatisticsUntypedJson<StatsColumnBasic>(tag, blob);
+            case StatisticsTag::NdvBucketsResult:
+                return createStatisticsTypedJson<StatsNdvBucketsResult>(tag, blob);
+            default: {
+                throw Exception("Unimplemented Statistics Tag", ErrorCodes::NOT_IMPLEMENTED);
+            }
+        }
+    }();
+    ptr->setTxnTimestamp(ts);
     return ptr;
 }
 } // namespace DB

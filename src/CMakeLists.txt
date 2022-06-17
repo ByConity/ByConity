@@ -593,6 +593,9 @@ if (ENABLE_TESTS AND USE_GTEST)
         -Wno-sign-compare
         -Wno-used-but-marked-unused
         -Wno-missing-noreturn
+        -Wno-old-style-cast
+        -Wno-suggest-override
+        -Wno-suggest-destructor-override
         -Wno-gnu-zero-variadic-macro-arguments
     )
 

@@ -40,6 +40,12 @@ public:
     // note: timestamp is not included
     virtual void deserialize(std::string_view blob) = 0;
 
+    //serialize as json
+    virtual String serializeToJson() const { return String{}; }
+
+    //deserialize from json
+    virtual void deserializeFromJson(std::string_view) { }
+
     StatisticsBase() = default;
     StatisticsBase(const StatisticsBase &) = default;
     StatisticsBase(StatisticsBase &&) = default;
@@ -61,4 +67,6 @@ struct StatsData
 
 // helper function to create statistics object from binary blob
 StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob);
+//helper function to create statistics object from json string
+StatisticsBasePtr createStatisticsBaseFromJson(StatisticsTag tag, std::string_view blob);
 }

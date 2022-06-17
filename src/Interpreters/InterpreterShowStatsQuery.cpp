@@ -11,6 +11,7 @@
 #include <Statistics/serde_extend.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
+#include <Optimizer/Dump/PlanDump.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -117,6 +118,25 @@ void writeDbStats(ContextPtr context, const String & db_name, const String & pat
     }
     std::ofstream fout(path, std::ios::binary);
     db_stats.SerializeToOstream(&fout);
+}
+void writeDbStatsToJson(ContextPtr context, const String & db_name, const String & path)
+{
+    Protos::DbStats db_stats;
+    db_stats.set_db_name(db_name);
+    db_stats.set_version(PROTO_VERSION);
+    auto catalog = createCatalogAdaptor(context);
+    auto tables = catalog->getAllTablesID(db_name);
+    Poco::JSON::Object stats_json;
+    for (auto & table : tables)
+    {
+        String table_name = table.getTableName();
+        if (table_name.find("_local") == String::npos)
+            stats_json.set(db_name + "." + table_name, tableJson(context, db_name, table_name));
+    }
+    std::ofstream fout(path);
+    Poco::Dynamic::Var stats_var(stats_json);
+    fout << stats_var.toString();
+    fout.close();
 }
 
 void readDbStats(ContextPtr context, const String & original_db_name, const String & path)
@@ -382,6 +402,29 @@ BlockIO InterpreterShowStatsQuery::execute()
         }
 
         readDbStats(context, db_name, path);
+        return {};
+    }
+    else if (!query->target_all && boost::starts_with(query->table, "__jsonsave"))
+    {
+        auto db_name = query->database;
+        if (db_name.empty())
+            db_name = context->getCurrentDatabase();
+        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name +".json";
+        writeDbStatsToJson(context,db_name,path);
+        return {};
+    }
+    else if(!query->target_all && boost::starts_with(query->table, "__jsonload"))
+    {
+        auto db_name = query->database;
+        if (db_name.empty())
+            db_name = context->getCurrentDatabase();
+        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
+        if (!std::filesystem::exists(path))
+        {
+            throw Exception("json_file " + path + " not exists", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        loadStats(context, path);
         return {};
     }
     else

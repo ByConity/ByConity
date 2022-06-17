@@ -1,5 +1,7 @@
 #pragma once
+#include <Optimizer/Dump/Json2Pb.h>
 #include <Statistics/BucketBoundsImpl.h>
+#include <Statistics/SerdeUtils.h>
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsNdvBucketsResult.h>
 
@@ -20,6 +22,8 @@ public:
 
     String serialize() const override;
     void deserialize(std::string_view blob) override;
+    String serializeToJson() const override;
+    void deserializeFromJson(std::string_view json) override;
 
     SerdeDataType getSerdeDataType() const override { return SerdeDataTypeFrom<T>; }
     size_t num_buckets() const override { return bounds_.numBuckets(); }
@@ -69,7 +73,29 @@ String StatsNdvBucketsResultImpl<T>::serialize() const
     pb.SerializeToOstream(&ss);
     return ss.str();
 }
+template <typename T>
+String StatsNdvBucketsResultImpl<T>::serializeToJson() const
+{
+    checkValid();
+    Poco::JSON::Object::Ptr ptr_json = new Poco::JSON::Object(true);
+    Poco::JSON::Parser parser;
+    ptr_json->set("bounds_blob", parser.parse(bounds_.serializeToJson()));
+    Poco::JSON::Array array_counts;
+    for (auto & count : counts_)
+    {
+        array_counts.add(int64_t(count));
+    }
+    ptr_json->set("counts", Poco::Dynamic::Var(array_counts));
 
+    Poco::JSON::Array array_ndvs;
+    for (auto & ndv : ndvs_)
+    {
+        array_ndvs.add(double(ndv));
+    }
+    ptr_json->set("ndvs", Poco::Dynamic::Var(array_ndvs));
+    Poco::Dynamic::Var result(*ptr_json);
+    return result.toString();
+}
 template <typename T>
 void StatsNdvBucketsResultImpl<T>::deserialize(std::string_view raw_blob)
 {
@@ -100,6 +126,59 @@ void StatsNdvBucketsResultImpl<T>::deserialize(std::string_view raw_blob)
             counts[i] = pb.counts(i);
             auto ndv = pb.ndvs(i);
             ndvs[i] = ndv;
+        }
+        return std::tuple{std::move(bounds), std::move(counts), std::move(ndvs)};
+    }();
+    checkValid();
+}
+template <typename T>
+void StatsNdvBucketsResultImpl<T>::deserializeFromJson(std::string_view raw_blob)
+{
+    std::tie(bounds_, counts_, ndvs_) = [raw_blob] {
+        Pparser parser;
+        PVar var = parser.parse(std::string{raw_blob.data(), raw_blob.size()});
+        PObject json_object = *var.extract<PObject::Ptr>();
+
+        if (raw_blob.size() <= sizeof(SerdeDataType))
+        {
+            throw Exception("corrupted blob", ErrorCodes::LOGICAL_ERROR);
+        }
+        PVar var_bounds_blob = json_object.get("bounds_blob");
+        PObject object_bounds_blob = *var_bounds_blob.extract<PObject::Ptr>();
+
+        String type_str = object_bounds_blob.get("type_id").toString();
+        SerdeDataType type_id = SerdeDataTypeFromString(type_str);
+        //        auto it_pair = std::find_if(
+        //            STRING_TYPE_INDEX.begin(), STRING_TYPE_INDEX.end(), [type_str](const std::pair<std::string, SerdeDataType> & element) {
+        //                return element.first == type_str;
+        //            });
+        //        SerdeDataType type_id = it_pair->second;
+        if (type_id != SerdeDataTypeFrom<T>)
+        {
+            throw Exception("blob header mismatch", ErrorCodes::TYPE_MISMATCH);
+        }
+
+        BucketBoundsImpl<T> bounds;
+
+        bounds.deserializeFromJson(var_bounds_blob.toString());
+
+        PVar counts_var, ndvs_var;
+        counts_var = json_object.get("counts");
+        ndvs_var = json_object.get("ndvs");
+        PArray array_counts = *counts_var.extract<PArray::Ptr>();
+        PArray array_ndvs = *ndvs_var.extract<PArray::Ptr>();
+
+        size_t num_buckets = bounds.numBuckets();
+        if (array_counts.size() != num_buckets || array_ndvs.size() != num_buckets)
+        {
+            throw Exception("Corrupted blob", ErrorCodes::LOGICAL_ERROR);
+        }
+        decltype(counts_) counts(num_buckets);
+        decltype(ndvs_) ndvs(num_buckets);
+        for (size_t i = 0; i < num_buckets; ++i)
+        {
+            counts[i] = array_counts.get(i).convert<uint64_t>();
+            ndvs[i] = array_ndvs.get(i).convert<double>();
         }
         return std::tuple{std::move(bounds), std::move(counts), std::move(ndvs)};
     }();

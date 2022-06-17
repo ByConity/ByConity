@@ -34,6 +34,12 @@ public:
 
     void deserialize(std::string_view raw_blob) override;
 
+    //serialize as json
+    String serializeToJson() const override;
+
+    //deserialize from json
+    void deserializeFromJson(std::string_view) override;
+
     // set internal data
     void setBounds(std::vector<EmbeddedType> && bounds);
 

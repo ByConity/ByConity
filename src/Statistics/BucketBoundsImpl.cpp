@@ -1,3 +1,4 @@
+#include <Optimizer/Dump/Json2Pb.h>
 #include <Statistics/BucketBoundsImpl.h>
 #include <Statistics/StatsKllSketchImpl.h>
 
@@ -28,6 +29,96 @@ void BucketBoundsImpl<T>::deserialize(std::string_view raw_blob)
     bounds_ = vector_deserialize<EmbeddedType>(blob);
     checkValid();
 }
+
+//serialize as json
+template <typename T>
+String BucketBoundsImpl<T>::serializeToJson() const
+{
+    checkValid();
+    Poco::JSON::Object object_json;
+    auto type_id = SerdeDataTypeFrom<T>;
+    String type_string = SerdeDataTypeToString(type_id);
+    Poco::JSON::Array array_json;
+    if constexpr (!std::is_same_v<T, UInt128> && !std::is_same_v<T, Int128> && !std::is_same_v<T, UInt256> && !std::is_same_v<T, Int256>)
+    {
+        object_json.set("type_id", type_string);
+        for (auto ptr : bounds_)
+        {
+            array_json.add(ptr);
+        }
+    }
+    else if constexpr (std::is_same_v<T, UInt128> || std::is_same_v<T, Int128> || std::is_same_v<T, UInt256> || std::is_same_v<T, Int256>)
+    {
+        for (auto ptr : bounds_)
+        {
+            std::ostringstream out_str;
+            out_str << ptr;
+            array_json.add(out_str.str());
+        }
+    }
+    else
+    {
+        throw Exception(
+            " serializeToJson in BucketBoundsImpl.h is not successful, because the Type define is not in type_string set",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    object_json.set("bounds_", array_json);
+    std::stringstream json_string;
+    object_json.stringify(json_string);
+    return json_string.str();
+}
+
+//deserialize from json
+template <typename T>
+void BucketBoundsImpl<T>::deserializeFromJson(std::string_view blob)
+{
+    Poco::JSON::Parser json_parse;
+    Poco::JSON::Object object;
+    Poco::Dynamic::Var var = json_parse.parse({blob.data(), blob.size()});
+    object = *var.extract<Poco::JSON::Object::Ptr>();
+    String type_id = object.get("type_id");
+    var = object.get("bounds_");
+    if (var.isArray())
+    {
+        bounds_.clear();
+        Poco::JSON::Array array = *var.extract<Poco::JSON::Array::Ptr>();
+        num_buckets_ = array.size() - 1;
+        for (size_t j = 0; j < array.size(); ++j)
+        {
+            if constexpr (
+                !std::is_same_v<
+                    EmbeddedType,
+                    UInt8> && !std::is_same_v<T, UInt128> && !std::is_same_v<T, Int128> && !std::is_same_v<T, UInt256> && !std::is_same_v<T, Int256>)
+            {
+                bounds_.push_back(array.get(j).convert<EmbeddedType>());
+            }
+            else if constexpr (std::is_same_v<EmbeddedType, UInt8>)
+            {
+                bounds_.push_back(array.get(j).convert<Poco::UInt8>());
+            }
+            else if constexpr (
+                std::is_same_v<T, UInt128> || std::is_same_v<T, Int128> || std::is_same_v<T, UInt256> || std::is_same_v<T, Int256>)
+            {
+                String ele = array.get(j).toString();
+                int len = ele.length();
+                char * data;
+                data = static_cast<char *>(malloc((len + 1) * sizeof(char)));
+                ele.copy(data, len, 0);
+                ReadBuffer buffers(data, ele.size());
+                EmbeddedType type_ele;
+                buffers.readStrict(reinterpret_cast<char *>(&type_ele), sizeof(type_ele));
+                bounds_.push_back(type_ele);
+                throw Exception(
+                    "when load stats from json to bound, not sure 128 or 256 is correct, so throw error", ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+    else
+    {
+        throw Exception("the blob is not a array, deserialize failure", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
 
 template <typename T>
 void BucketBoundsImpl<T>::setBounds(std::vector<EmbeddedType> && bounds)

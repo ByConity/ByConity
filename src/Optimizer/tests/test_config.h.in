@@ -19,3 +19,5 @@
 #define CORRECTNESS_QUERIES_DIR "${CMAKE_SOURCE_DIR}/tests/optimizers/correctness/queries/"
 #define CORRECTNESS_TABLE_DDL_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/correctness/sql/create_table.sql"
 #define CORRECTNESS_EXPECTED_EXPLAIN_RESULT "${CMAKE_CURRENT_SOURCE_DIR}/explains/"
+
+#define PLAN_DUMP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/explains/plandump/"

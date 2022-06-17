@@ -46,7 +46,17 @@ enum SerdeDataType {
   Int256 = 18;
 }
 
-
+enum StatisticsType {
+  Invalid = 0;
+  TableBasic = 1;
+  CpcSketch = 2;
+  KllSketch = 3;
+  NdvBuckets = 4;
+  NdvBucketsResult = 5;
+  ColumnBasic = 6;
+  DummyAlpha = 2000;
+  DummyBeta = 2001;
+}
 message DbStats {
   enum Version {
     Invalid = 0;

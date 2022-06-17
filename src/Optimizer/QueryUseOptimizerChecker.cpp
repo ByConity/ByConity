@@ -12,6 +12,8 @@
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
+#include <QueryPlan/QueryPlan.h>
+#include <Parsers/ASTDumpInfoQuery.h>
 //#include <Common/TestLog.h>
 
 namespace DB
@@ -42,6 +44,11 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
             || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan;
         support = explain_plan && check(explain->getExplainedQuery(), context);
+    }
+
+    if (auto * dump = node->as<ASTDumpInfoQuery>())
+    {
+        return check(dump->dump_query, context);
     }
 
     if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())

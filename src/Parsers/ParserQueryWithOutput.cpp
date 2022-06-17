@@ -25,6 +25,8 @@
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
 #include <Parsers/ParserRefreshQuery.h>
 #include <Parsers/ParserStatsQuery.h>
+#include <Parsers/ParserDumpInfoQuery.h>
+#include <Parsers/ParserReproduceQuery.h>
 
 namespace DB
 {
@@ -50,6 +52,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end, dt);
+    ParserDumpInfoQuery dump_info_p(end, dt);
+    ParserReproduceQuery reproduce_p(end);
     ParserRefreshQuery refresh_p(dt);
     ParserCreateStatsQuery create_stats_p;
     ParserShowStatsQuery show_stats_p;
@@ -59,6 +63,8 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     bool parsed =
            explain_p.parse(pos, query, expected)
+        || reproduce_p.parse(pos, query, expected)
+        || dump_info_p.parse(pos, query, expected)
         || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)

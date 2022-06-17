@@ -16,6 +16,7 @@
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTExternalDDLQuery.h>
@@ -43,6 +44,7 @@
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Parsers/ASTRowPolicyName.h>
+#include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectQuery.h>

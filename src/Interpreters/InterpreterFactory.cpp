@@ -32,6 +32,8 @@
 #include <Parsers/ASTShowWarehousesQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTDumpInfoQuery.h>
+#include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTGrantQuery.h>
@@ -58,6 +60,7 @@
 #include <Interpreters/InterpreterDropWarehouseQuery.h>
 #include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
+#include <Interpreters/InterpreterDumpInfoQueryUseOptimizer.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
 #include <Interpreters/InterpreterExternalDDLQuery.h>
@@ -83,6 +86,7 @@
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterShowWarehousesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
+#include <Interpreters/InterpreterReproduceQueryUseOptimizer.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -354,6 +358,19 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTShowStatsQuery>())
     {
         return std::make_unique<InterpreterShowStatsQuery>(query, context);
+    }
+    else if (query->as<ASTDumpInfoQuery>())
+    {
+        if (QueryUseOptimizerChecker::check(query, context))
+        {
+            return std::make_unique<InterpreterDumpInfoQueryUseOptimizer>(query, context);
+        }
+        else
+            throw Exception("Not support dump query, because it's optimizer check fail.", ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
+    }
+    else if (query->as<ASTReproduceQuery>())
+    {
+        return std::make_unique<InterpreterReproduceQueryUseOptimizer>(query, context);
     }
     else
     {

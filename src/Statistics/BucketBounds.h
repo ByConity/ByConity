@@ -19,6 +19,11 @@ public:
 
     virtual String serialize() const = 0;
     virtual void deserialize(std::string_view blob) = 0;
+    //serialize as json
+    virtual String serializeToJson() const = 0;
+
+    //deserialize from json
+    virtual void deserializeFromJson(std::string_view) = 0;
 
     BucketBounds() = default;
 

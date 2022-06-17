@@ -115,7 +115,9 @@ class ReadBuffer;
     M(ASTShowStatsQuery) \
     M(ASTSelectIntersectExceptQuery) \
     M(ASTWindowListElement) \
-    M(ASTTEALimit)
+    M(ASTTEALimit) \
+    M(ASTDumpInfoQuery) \
+    M(ASTReproduceQuery)
 #define ENUM_TYPE(ITEM) ITEM,
 
 enum class ASTType : UInt8

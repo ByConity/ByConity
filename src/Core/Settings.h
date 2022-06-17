@@ -3,6 +3,7 @@
 #include <Core/BaseSettings.h>
 #include <Core/SettingsEnums.h>
 #include <Core/Defines.h>
+#include <Poco/JSON/Object.h>
 
 
 namespace Poco::Util
@@ -826,6 +827,8 @@ struct Settings : public BaseSettings<SettingsTraits>
 
     /// Get all changed settings
     SettingsChanges getChangedSettings() const;
+    /// save settings changed to json
+    void dumpToJSON(Poco::JSON::Object & dumpJson)const;
 };
 
 /*

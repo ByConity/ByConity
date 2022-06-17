@@ -20,6 +20,9 @@ public:
     void setRowCount(int64_t row_count);
     int64_t getRowCount() const;
 
+    String serializeToJson() const override;
+    void deserializeFromJson(std::string_view json) override;
+
 private:
     Protos::StatsTableBasic table_basic_pb;
 };

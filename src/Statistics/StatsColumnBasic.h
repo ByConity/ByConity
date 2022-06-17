@@ -20,6 +20,9 @@ public:
     Protos::StatsColumnBasic & mutable_proto() { return proto; }
     const Protos::StatsColumnBasic & get_proto() const { return proto; }
 
+    String serializeToJson() const override;
+    void deserializeFromJson(std::string_view json) override;
+
 private:
     Protos::StatsColumnBasic proto;
 };
