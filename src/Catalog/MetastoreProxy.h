@@ -382,13 +382,6 @@ public:
         return ss.str();
     }
 
-    static String resourceGroupKey(const String & name_space, const String & group_name)
-    {
-        std::stringstream  ss;
-        ss << escapeString(name_space) << '_' << RESOURCE_GROUP_PREFIX << group_name;
-        return ss.str();
-    }
-
     static String insertionLabelKey(const String & name_space, const std::string & uuid, const std::string & label)
     {
         std::stringstream ss;
@@ -669,10 +662,6 @@ public:
     void setCnchLogMetadataInBatch(const String & name_space, const Strings & log_names, const std::vector<Protos::CnchLogMetadata> & metadata_vec);
     std::shared_ptr<Protos::CnchLogMetadata> getCnchLogMetadata(const String & name_space, const String & log_name);
     void removeCnchLogMetadata(const String & name_space, const String & log_name);
-
-    void updateResourceGroup(const String & name_space, const String & group_name, std::shared_ptr<Protos::ResourceGroup> resource_group);
-    std::shared_ptr<Protos::ResourceGroup> getResourceGroup(const String & name_space, const String & group_name);
-    void removeResourceGroup(const String & name_space, const String & group_name);
 
     void precommitInsertionLabel(const String & name_space, const InsertionLabelPtr & label);
     void commitInsertionLabel(const String & name_space, InsertionLabelPtr & label);

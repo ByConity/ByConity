@@ -1,4 +1,5 @@
 #include <Parsers/ASTAlterQuery.h>
+#include <Parsers/ASTAlterWarehouseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateUserQuery.h>
@@ -6,8 +7,12 @@
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRowPolicyQuery.h>
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
+#include <Parsers/ASTCreateWarehouseQuery.h>
+#include <Parsers/ASTCreateWorkerGroupQuery.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTDropWarehouseQuery.h>
+#include <Parsers/ASTDropWorkerGroupQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
@@ -23,6 +28,7 @@
 #include <Parsers/ASTShowPrivilegesQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
+#include <Parsers/ASTShowWarehousesQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
@@ -33,6 +39,7 @@
 
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterAlterQuery.h>
+#include <Interpreters/InterpreterAlterWarehouseQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterCreateQuotaQuery.h>
@@ -40,8 +47,12 @@
 #include <Interpreters/InterpreterCreateRowPolicyQuery.h>
 #include <Interpreters/InterpreterCreateSettingsProfileQuery.h>
 #include <Interpreters/InterpreterCreateUserQuery.h>
+#include <Interpreters/InterpreterCreateWarehouseQuery.h>
+#include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterDropAccessEntityQuery.h>
+#include <Interpreters/InterpreterDropWarehouseQuery.h>
+#include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
@@ -63,6 +74,7 @@
 #include <Interpreters/InterpreterShowPrivilegesQuery.h>
 #include <Interpreters/InterpreterShowProcesslistQuery.h>
 #include <Interpreters/InterpreterShowTablesQuery.h>
+#include <Interpreters/InterpreterShowWarehousesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
@@ -284,6 +296,30 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTRefreshQuery>())
     {
         return std::make_unique<InterpreterRefreshQuery>(query, context);
+    }
+        else if (query->as<ASTAlterWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterAlterWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTCreateWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterCreateWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTDropWarehouseQuery>())
+    {
+        return std::make_unique<InterpreterDropWarehouseQuery>(query, context);
+    }
+    else if (query->as<ASTShowWarehousesQuery>())
+    {
+        return std::make_unique<InterpreterShowWarehousesQuery>(query, context);
+    }
+    else if (query->as<ASTCreateWorkerGroupQuery>())
+    {
+        return std::make_unique<InterpreterCreateWorkerGroupQuery>(query, context);
+    }
+    else if (query->as<ASTDropWorkerGroupQuery>())
+    {
+        return std::make_unique<InterpreterDropWorkerGroupQuery>(query, context);
     }
     else
     {

@@ -92,6 +92,8 @@ add_headers_and_sources(dbms MergeTreeCommon)
 add_headers_and_sources(dbms Catalog)
 add_headers_and_sources(dbms CloudServices)
 add_headers_and_sources(dbms WorkerTasks)
+add_headers_and_sources(dbms ResourceGroup)
+add_headers_and_sources(dbms ResourceManagement)
 
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)

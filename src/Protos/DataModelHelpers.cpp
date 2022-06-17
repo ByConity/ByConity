@@ -19,7 +19,6 @@ namespace ErrorCodes
     extern const int BAD_TTL_IN_DATA_MODEL_PART;
     extern const int FORMAT_VERSION_TOO_OLD;
     extern const int EMPTY_PARTITION_IN_DATA_MODEL_PART;
-    extern const int RESOURCE_GROUP_ILLEGAL_CONFIG;
 }
 
 DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model)
@@ -265,23 +264,6 @@ std::shared_ptr<MergeTreePartition> createParitionFromMetaString(const MergeTree
     ReadBufferFromString partition_minmax_buf(parition_minmax_info);
     partition_ptr->read(storage, partition_minmax_buf);
     return partition_ptr;
-}
-
-void fillResourceGroupModel(const ASTAlterResourceGroupQuery & query, std::shared_ptr<Protos::ResourceGroup> resource_group_model)
-{
-    for (const auto & setting : query.group_settings)
-    {
-        if ("soft_max_memory_usage" == setting->setting_name)
-            resource_group_model->set_soft_max_memory_usage(setting->value.get<Int64>());
-        else if ("max_concurrent_queries" == setting->setting_name)
-            resource_group_model->set_max_concurrent_queries(setting->value.get<Int32>());
-        else if ("max_queued" == setting->setting_name)
-            resource_group_model->set_max_queued(setting->value.get<Int32>());
-        else if ("priority" == setting->setting_name)
-            resource_group_model->set_priority(setting->value.get<Int32>());
-        else
-            throw Exception("Unknown resource group setting: " + setting->setting_name, ErrorCodes::RESOURCE_GROUP_ILLEGAL_CONFIG);
-    }
 }
 
 void fillLockInfoModel(const LockInfo & info, Protos::DataModelLockInfo & model)

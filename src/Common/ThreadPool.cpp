@@ -4,7 +4,7 @@
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/CurrentThread.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/InternalResourceGroup.h>
+#include <ResourceGroup/IResourceGroup.h>
 
 #include <cassert>
 #include <type_traits>
@@ -387,8 +387,10 @@ FreeThreadPool & ThreadFromGlobalPool::getThreadPool()
     if (!query_context)
         return GlobalThreadPool::instance();
 
-    if (auto * resource_group = query_context->getResourceGroup();
-        likely(resource_group == nullptr || resource_group->getThreadPool() == nullptr))
+    if (auto * resource_group = query_context->tryGetResourceGroup();
+        resource_group == nullptr 
+        || resource_group->getType() != DB::ResourceGroupType::Internal 
+        || resource_group->getThreadPool() == nullptr)
         return GlobalThreadPool::instance();
     else
         return *resource_group->getThreadPool();

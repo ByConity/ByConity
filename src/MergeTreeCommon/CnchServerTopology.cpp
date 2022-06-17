@@ -14,6 +14,11 @@ HostWithPortsVec CnchServerTopology::getServerList() const
     return servers;
 }
 
+size_t CnchServerTopology::getServerSize() const
+{
+    return servers.size();
+}
+
 void CnchServerTopology::setExpiration(const UInt64 & new_expiration)
 {
     lease_expiration = new_expiration;

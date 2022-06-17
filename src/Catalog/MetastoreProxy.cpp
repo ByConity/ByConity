@@ -1569,35 +1569,6 @@ void MetastoreProxy::removeBufferManagerMetadata([[maybe_unused]]const String & 
     metastore_ptr->clean(manager_key);
 }
 
-void MetastoreProxy::updateResourceGroup(const String & name_space, const String & group_name,  std::shared_ptr<Protos::ResourceGroup> resource_group)
-{
-    auto group_key = resourceGroupKey(name_space, group_name);
-    metastore_ptr->put(group_key, resource_group->SerializeAsString());
-}
-
-std::shared_ptr<Protos::ResourceGroup> MetastoreProxy::getResourceGroup(const String & name_space, const String & group_name)
-{
-    String value;
-    auto group_key = resourceGroupKey(name_space, group_name);
-    metastore_ptr->get(group_key, value);
-
-    if (value.empty())
-        return nullptr;
-
-    auto resource_group = std::make_shared<Protos::ResourceGroup>();
-
-    if (!resource_group->ParseFromString(value))
-        throw Exception("Failed to parse resource group from the stored string", ErrorCodes::LOGICAL_ERROR);
-
-    return resource_group;
-}
-
-void MetastoreProxy::removeResourceGroup(const String & name_space, const String & group_name)
-{
-    auto group_key = resourceGroupKey(name_space, group_name);
-    metastore_ptr->drop(group_key);
-}
-
 void MetastoreProxy::precommitInsertionLabel(const String & name_space, const InsertionLabelPtr & label)
 {
     auto label_key = insertionLabelKey(name_space, toString(label->table_uuid), label->name);

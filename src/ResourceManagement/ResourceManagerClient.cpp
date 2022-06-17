@@ -20,16 +20,16 @@ extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
 namespace DB::ResourceManagement
 {
 
-ResourceManagerClient::ResourceManagerClient(Context & global_context_, const String & election_ns_, const String & election_point_)
+ResourceManagerClient::ResourceManagerClient(ContextMutablePtr global_context_, const String & election_ns_, const String & election_point_)
     : RpcLeaderClientBase(getName(), DB::ResourceManagement::fetchByteJournalLeader(global_context_, election_ns_, election_point_))
+    , WithMutableContext(global_context_)
     , stub(std::make_unique<Protos::ResourceManagerService_Stub>(&getChannel()))
-    , global_context(global_context_)
     , election_ns(election_ns_)
     , election_point(election_point_)
 {
 }
 
-String fetchByteJournalLeader([[maybe_unused]] Context & context, [[maybe_unused]]  String election_ns, [[maybe_unused]]  String election_point)
+String fetchByteJournalLeader([[maybe_unused]] ContextMutablePtr context, [[maybe_unused]]  String election_ns, [[maybe_unused]]  String election_point)
 {
     // TODO(zuochuang.zema) MERGE bj
     // auto leader_addr = getResult(context.getByteJournalClient()->GetLeaderInfo(election_ns, election_point)).addr;
@@ -43,7 +43,7 @@ String fetchByteJournalLeader([[maybe_unused]] Context & context, [[maybe_unused
 
 String ResourceManagerClient::fetchByteJournalLeader() const
 {
-    return DB::ResourceManagement::fetchByteJournalLeader(global_context, election_ns, election_point);
+    return DB::ResourceManagement::fetchByteJournalLeader(getContext(), election_ns, election_point);
 }
 
 ResourceManagerClient::~ResourceManagerClient()

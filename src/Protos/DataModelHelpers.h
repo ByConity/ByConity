@@ -12,7 +12,6 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Protos/data_models.pb.h>
-#include <Parsers/ASTAlterResourceGroupQuery.h>
 #include <google/protobuf/repeated_field.h>
 #include <memory>
 
@@ -229,8 +228,6 @@ inline DeleteBitmapMetaPtr createFromModel(const MergeTreeMetaBase & storage, co
     auto model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>(model);
     return std::make_shared<DeleteBitmapMeta>(storage, model_ptr);
 }
-
-void fillResourceGroupModel(const ASTAlterResourceGroupQuery & query, std::shared_ptr<Protos::ResourceGroup> resource_group_model);
 
 void fillLockInfoModel(const LockInfo & lock_info, Protos::DataModelLockInfo & model);
 LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model);
