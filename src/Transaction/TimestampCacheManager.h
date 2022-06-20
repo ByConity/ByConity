@@ -5,7 +5,7 @@
 #include <mutex>
 
 #include <Core/Types.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Transaction/TimestampCache.h>
 
 namespace DB

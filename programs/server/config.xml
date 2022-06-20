@@ -1162,4 +1162,5 @@
 
     <!-- Uncomment to disable ClickHouse internal DNS caching. -->
     <!-- <disable_internal_dns_cache>1</disable_internal_dns_cache> -->
+    <hdfs_nnproxy>data.bytehouse.nnproxy-hostnetwork.service.lf</hdfs_nnproxy>
 </yandex>

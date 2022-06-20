@@ -3,6 +3,7 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/Actions/Action.h>
+#include <Poco/Logger.h>
 
 namespace DB
 {

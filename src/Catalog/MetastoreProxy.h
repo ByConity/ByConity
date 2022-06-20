@@ -11,7 +11,7 @@
 #include <google/protobuf/repeated_field.h>
 #include <unordered_set>
 #include <sstream>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Protos/RPCHelpers.h>
 #include <cppkafka/cppkafka.h>
 #include <MergeTreeCommon/InsertionLabel.h>
@@ -608,7 +608,7 @@ public:
     std::multimap<String, String> getAllMutations(const String & name_space);
 
     void writeUndoBuffer(const String & name_space, const UInt64 & txnID, const String & uuid, UndoResources & resources);
-    
+
     void clearUndoBuffer(const String & name_space, const UInt64 & txnID);
     IMetaStore::IteratorPtr getUndoBuffer(const String & name_space, UInt64 txnID);
     IMetaStore::IteratorPtr getAllUndoBuffer(const String & name_space);

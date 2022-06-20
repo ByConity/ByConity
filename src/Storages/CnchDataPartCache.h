@@ -3,7 +3,7 @@
 #include <Storages/UUIDAndPartName.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Common/LRUCache.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/DataModelHelpers.h>
 
@@ -107,7 +107,7 @@ public:
         auto keys = inner_container->getAllKeys();
 
         std::unordered_map<String, std::pair<size_t, size_t>> res;
-        
+
         for (const auto & key : keys)
         {
             auto cached = get(key);

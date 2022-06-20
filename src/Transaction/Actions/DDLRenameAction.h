@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/Actions/Action.h>
@@ -58,8 +58,8 @@ private:
 private:
     RenameActionParams params;
 
-    bool is_cnch_merge_tree{false};
-    bool is_cnch_kafka{false};
+    /* bool is_cnch_merge_tree{false} ; */
+    /* bool is_cnch_kafka{false}; */
 };
 
 using DDLRenameActionPtr = std::shared_ptr<DDLRenameAction>;

@@ -69,7 +69,7 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
     }
 }
 
-void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
+void DDLRenameAction::renameTableSuffix(TxnTimestamp /*commit_time*/)
 {
     // Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
     // auto daemon_manager = context.getDaemonManagerClient();

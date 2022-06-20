@@ -88,6 +88,7 @@ list (REMOVE_ITEM clickhouse_common_io_sources Common/malloc.cpp Common/new_dele
 add_headers_and_sources(dbms Storages/IndexFile)
 add_headers_and_sources(dbms FormaterTool)
 add_headers_and_sources(dbms Transaction)
+add_headers_and_sources(dbms Transaction/Actions)
 add_headers_and_sources(dbms MergeTreeCommon)
 add_headers_and_sources(dbms Catalog)
 add_headers_and_sources(dbms CloudServices)

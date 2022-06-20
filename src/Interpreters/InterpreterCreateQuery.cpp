@@ -237,10 +237,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     DatabasePtr database = DatabaseFactory::get(create, metadata_path / "", getContext());
     /// CNCH TODO replace with transaction, enable with catalog avail
-    #if 0
     if (database->getEngineName() == "Cnch")
         getContext()->getCnchCatalog()->createDatabase(database->getDatabaseName(), database->getUUID(), 0, 0);
-    #endif
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;
@@ -1022,6 +1020,16 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
             guard->releaseTableLock();
             return ptr->tryEnqueueReplicatedDDL(query_ptr, getContext());
         }
+    }
+
+    if (database->getEngineName() == "Cnch")
+    {
+        if (!create.cluster.empty())
+        {
+            throw Exception("Cluster is not supported in Cnch.", ErrorCodes::NOT_IMPLEMENTED);
+        }
+
+        assertOrSetUUID(create, database);
     }
 
     if (create.replace_table)

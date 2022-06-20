@@ -2,6 +2,8 @@
 
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/Actions/Action.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Transaction/TransactionCommon.h>
 
 namespace DB
 {

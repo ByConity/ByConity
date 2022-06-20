@@ -1163,7 +1163,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        auto databases = DatabaseCatalog::instance().getDatabases();
+        auto databases = DatabaseCatalog::instance().getNonCnchDatabases();
 
         size_t max_queue_size = 0;
         size_t max_inserts_in_queue = 0;

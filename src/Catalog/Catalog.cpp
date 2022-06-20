@@ -487,7 +487,7 @@ namespace Catalog
             ProfileEvents::CreateDatabaseFailed);
     }
 
-    DatabasePtr Catalog::getDatabase(const String & database, const Context & context, const TxnTimestamp & ts)
+    DatabasePtr Catalog::getDatabase(const String & database, const ContextPtr & context, const TxnTimestamp & ts)
     {
         DatabasePtr res = nullptr;
         runWithMetricSupport(
@@ -495,7 +495,7 @@ namespace Catalog
                 auto database_model = tryGetDatabaseFromMetastore(database, ts.toUInt64());
                 if (database_model)
                 {
-                    DatabasePtr db = CatalogFactory::getDatabaseByDataModel(*database_model, context.getSessionContext());
+                    DatabasePtr db = CatalogFactory::getDatabaseByDataModel(*database_model, context);
 
                     if (database_model->has_commit_time())
                         dynamic_cast<DatabaseCnch &>(*db).commit_time = TxnTimestamp{database_model->commit_time()};
