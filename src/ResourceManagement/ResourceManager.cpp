@@ -3,7 +3,7 @@
 #include <Catalog/Catalog.h>
 #include <Common/Exception.h>
 #include <Common/getMultipleKeysFromConfig.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 // TODO(zuochuang.zema): MERGE http handler
 // #include <HTTPHandler/HTTPHandlerFactory.h>
 // #include <HTTPHandler/PrometheusRequestHandler.h>
@@ -79,7 +79,7 @@ int ResourceManager::main(const std::vector<std::string> &)
 
     LOG_INFO(log, "Resource Manager is starting up...");
 
-    
+
     auto global_context = Context::createGlobal(Context::createShared().get());
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);

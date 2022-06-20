@@ -1,7 +1,7 @@
 #include <ResourceManagement/VirtualWarehouseManager.h>
 
 #include <Catalog/Catalog.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceManagerController.h>
 #include <Catalog/Catalog.h>
