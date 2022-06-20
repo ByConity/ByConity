@@ -4,6 +4,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/formatAST.h>
 
 #include <Catalog/Catalog.h>
 #include <Transaction/Actions/DDLCreateAction.h>

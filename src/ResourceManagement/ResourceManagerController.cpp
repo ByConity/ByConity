@@ -5,7 +5,7 @@
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <ResourceManagement/ElectionController.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
 
