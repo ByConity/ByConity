@@ -1,0 +1,129 @@
+#pragma once
+
+#include <IO/HashingWriteBuffer.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <Disks/IDisk.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Common/config.h>
+// #include <Encryption/AesEncrypt.h>
+
+namespace DB
+{
+
+/** Dump local part to cloud storage
+  */
+class MergeTreeCNCHDataDumper
+{
+public:
+    enum CNCHStorageType
+    {
+        Hdfs/*,
+        S3*/
+    };
+
+    using uint128 = CityHash_v1_0_2::uint128;
+
+    MergeTreeCNCHDataDumper(
+        MergeTreeMetaBase & data_,
+        const CNCHStorageType & type_ = CNCHStorageType::Hdfs,
+        const String magic_code_ = "CNCH",
+        const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION)
+        : data(data_)
+        , log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)"))
+        , type(type_)
+        , magic_code(magic_code_)
+        , version(version_)
+    {}
+
+    /** Dump local part,
+      * Returns cnch part with unique name starting with 'tmp_',
+      * Yet not added to catalog service.
+      *
+      * There are meta & data information per part.
+      *
+      * Meta information will be stored in catalog service.
+      *
+      * --------meta information--------
+      * rows_count
+      * marks_count
+      * columns
+      * partition
+      * minmax index
+      * ttl
+      * --------------------------------
+      *
+      * Data information will be stored in cloud storage(e.g. s3 hdfs) as one data file,
+      * Which will not be updated once generated, only can be rewrited to new data file or be deleted.
+      *
+      * ------------data header---------
+      * magic_code(4 bytes)
+      * version(8 bytes)
+      * deleted(1 bytes)
+      * reserved size(256 - 12 bytes)
+      * -----------data content---------
+      * columns data files & idx files
+      * primary_index
+      * checksums
+      * metainfo
+      * -----------data footer----------
+      * primary_index offset(8 bytes)
+      * primary_index size(8 bytes)
+      * primary_index checksum(16 bytes)
+      * checksums offset(8 bytes)
+      * checksums size(8 bytes)
+      * checksums checksum(16 bytes)
+      * metainfo offset(8 bytes)
+      * metainfo size(8 bytes)
+      * metainfo checksum(16 bytes)
+      * unique_key_index offset(8 bytes)
+      * unique_key_index size(8 bytes)
+      * unique_key_index checksum(16 bytes)
+      * metainfo key (32 bytes)
+      * --------------------------------
+      */
+    MutableMergeTreeDataPartCNCHPtr dumpTempPart(std::shared_ptr<const MergeTreeDataPartCNCH> local_part, const HDFSConnectionParams & connectionParams = HDFSConnectionParams::emptyHost() ,bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr);
+
+private:
+    struct CNCHDataMeta
+    {
+        off_t index_offset;
+        size_t index_size;
+        uint128 index_checksum;
+
+        off_t checksums_offset;
+        size_t checksums_size;
+        uint128 checksums_checksum;
+
+        off_t meta_info_offset;
+        size_t meta_info_size;
+        uint128 meta_info_checksum;
+
+        off_t unique_key_index_offset;
+        size_t unique_key_index_size;
+        uint128 unique_key_index_checksum;
+
+        // AesEncrypt::AesKeyByteArray key;
+    };
+    // static_assert(sizeof(CNCHDataMeta) == 160);
+    static_assert(sizeof(CNCHDataMeta) <= MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+
+    std::unique_ptr<WriteBufferFromHDFS> createWriteBuffer(const String & file_name, const CNCHStorageType & type, const HDFSConnectionParams& params);
+    std::unique_ptr<ReadBufferFromFileBase> createReadBuffer(const String & file_name, const CNCHStorageType & type);
+    void writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part);
+    void writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta);
+    size_t check(MergeTreeDataPartCNCHPtr remote_part, const MergeTreeDataPartCNCH::ChecksumsPtr & checksums, const CNCHDataMeta & meta);
+
+    NamesAndTypesList getKeyColumns();
+
+private:
+    MergeTreeMetaBase & data;
+    Poco::Logger * log;
+    CNCHStorageType type;
+    String magic_code{"CNCH"};
+    MergeTreeDataFormatVersion version{MERGE_TREE_CHCH_DATA_STORAGTE_VERSION};
+};
+
+}

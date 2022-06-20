@@ -22,23 +22,28 @@ struct MergeTreePartInfo
     Int64 max_block = 0;
     UInt32 level = 0;
     Int64 mutation = 0;   /// If the part has been mutated or contains mutated parts, is equal to mutation version number.
+    Int64 hint_mutation = 0; /// Trace about previous version part.
 
     StorageType storage_type = StorageType::Local;
 
-    Int64 hint_mutation = 0; /// Trace about previous version part.
     bool use_leagcy_max_level = false;  /// For compatibility. TODO remove it
 
     MergeTreePartInfo() = default;
 
-    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_)
-        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_)
+    // MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_)
+    //     : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_)
+    // {
+    // }
+
+    // MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, Int64 mutation_)
+    //     : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_)
+    // {}
+
+    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, UInt64 mutation_ = 0, UInt64 hint_mutation_ = 0, StorageType storage_type_ = StorageType::Local)
+        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_), hint_mutation(hint_mutation_), storage_type(storage_type_)
     {
     }
 
-    MergeTreePartInfo(String partition_id_, Int64 min_block_, Int64 max_block_, UInt32 level_, Int64 mutation_)
-        : partition_id(std::move(partition_id_)), min_block(min_block_), max_block(max_block_), level(level_), mutation(mutation_)
-    {
-    }
 
     bool operator<(const MergeTreePartInfo & rhs) const
     {
