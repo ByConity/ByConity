@@ -21,7 +21,7 @@ public:
     using DeserializeBinaryBulkStateMap = std::map<std::string, ISerialization::DeserializeBinaryBulkStatePtr>;
 
     IMergeTreeReader(
-        const MergeTreeData::DataPartPtr & data_part_,
+        const MergeTreeMetaBase::DataPartPtr & data_part_,
         const NamesAndTypesList & columns_,
         const StorageMetadataPtr & metadata_snapshot_,
         UncompressedCache * uncompressed_cache_,
@@ -111,7 +111,7 @@ protected:
 
     MergeTreeReaderSettings settings;
 
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;
     MarkRanges all_mark_ranges;
 
@@ -131,7 +131,7 @@ protected:
 
 private:
     /// Alter conversions, which must be applied on fly if required
-    MergeTreeData::AlterConversions alter_conversions;
+    MergeTreeMetaBase::AlterConversions alter_conversions;
 
     /// Actual data type of columns in part
     google::dense_hash_map<StringRef, const DataTypePtr *, StringRefHash> columns_from_part;

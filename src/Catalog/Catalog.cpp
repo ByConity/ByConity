@@ -1353,7 +1353,7 @@ namespace Catalog
                 std::unordered_set<String> s;
                 for (auto & name : names)
                 {
-                    String partition = MergeTreePartInfo::fromPartName(name, storage->getDataFormatVersion()).partition_id;
+                    String partition = MergeTreePartInfo::fromPartName(name, storage->format_version).partition_id;
                     if (s.insert(partition).second)
                         partitions.emplace_back(std::move(partition));
                 }
@@ -1388,7 +1388,7 @@ namespace Catalog
                 NameSet partitions;
                 for (auto & name : names)
                 {
-                    auto info = MergeTreePartInfo::fromPartName(name, storage->getDataFormatVersion());
+                    auto info = MergeTreePartInfo::fromPartName(name, storage->format_version);
                     partitions.insert(info.partition_id);
                 }
 

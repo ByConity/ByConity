@@ -84,7 +84,7 @@ void ServerDataPart::serializePartitionAndMinMaxIndex(const MergeTreeMetaBase & 
     /// Skip partition_id check if this is a deleted part
     if (!deleted())
     {
-        String calculated_partition_id = part_model_wrapper->partition.getID(storage.partition_key_sample);
+        String calculated_partition_id = part_model_wrapper->partition.getID(storage);
         if (calculated_partition_id != info().partition_id)
             throw Exception(
                 "While loading part " + name() + ": calculated partition ID: " + calculated_partition_id

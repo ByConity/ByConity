@@ -1,5 +1,5 @@
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Core/NamesAndTypes.h>
 #include <Common/checkStackSize.h>
 #include <Common/typeid_cast.h>
@@ -24,8 +24,8 @@ namespace
 bool injectRequiredColumnsRecursively(
     const String & column_name,
     const ColumnsDescription & storage_columns,
-    const MergeTreeData::AlterConversions & alter_conversions,
-    const MergeTreeData::DataPartPtr & part,
+    const MergeTreeMetaBase::AlterConversions & alter_conversions,
+    const MergeTreeMetaBase::DataPartPtr & part,
     Names & columns,
     NameSet & required_columns,
     NameSet & injected_columns)
@@ -79,7 +79,7 @@ bool injectRequiredColumnsRecursively(
 
 }
 
-NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeData::DataPartPtr & part, Names & columns)
+NameSet injectRequiredColumns(const MergeTreeMetaBase & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeMetaBase::DataPartPtr & part, Names & columns)
 {
     NameSet required_columns{std::begin(columns), std::end(columns)};
     NameSet injected_columns;
@@ -87,7 +87,7 @@ NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetada
     bool have_at_least_one_physical_column = false;
 
     const auto & storage_columns = metadata_snapshot->getColumns();
-    MergeTreeData::AlterConversions alter_conversions;
+    MergeTreeMetaBase::AlterConversions alter_conversions;
     if (!part->isProjectionPart())
         alter_conversions = storage.getAlterConversionsForPart(part);
     for (size_t i = 0; i < columns.size(); ++i)
@@ -124,7 +124,7 @@ NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetada
 
 
 MergeTreeReadTask::MergeTreeReadTask(
-    const MergeTreeData::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+    const MergeTreeMetaBase::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
     const Names & ordered_names_, const NameSet & column_name_set_, NamesAndTypesList & columns_,
     NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
     MergeTreeBlockSizePredictorPtr && size_predictor_)
@@ -138,7 +138,7 @@ MergeTreeReadTask::~MergeTreeReadTask() = default;
 
 
 MergeTreeBlockSizePredictor::MergeTreeBlockSizePredictor(
-    const MergeTreeData::DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
+    const MergeTreeMetaBase::DataPartPtr & data_part_, const Names & columns, const Block & sample_block)
     : data_part(data_part_)
 {
     number_of_rows_in_part = data_part->rows_count;
@@ -262,9 +262,9 @@ void MergeTreeBlockSizePredictor::update(const Block & sample_block, const Colum
 
 
 MergeTreeReadTaskColumns getReadTaskColumns(
-    const MergeTreeData & storage,
+    const MergeTreeMetaBase & storage,
     const StorageMetadataPtr & metadata_snapshot,
-    const MergeTreeData::DataPartPtr & data_part,
+    const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
     bool check_columns)

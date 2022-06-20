@@ -2,7 +2,7 @@
 
 #include <Core/UUID.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsuggest-destructor-override"
@@ -60,16 +60,16 @@ inline String getProjectionKey(const UUID & uuid, const String & parent_part, co
 
 String getSerializedPartMeta(const DataPartPtr & part);
 
-MutableDataPartPtr buildPartFromMeta(const MergeTreeData & storage, const String & part_name, const Protos::DataPartModel & part_data);
+MutableDataPartPtr buildPartFromMeta(const MergeTreeMetaBase & storage, const String & part_name, const Protos::DataPartModel & part_data);
 
-MutableDataPartPtr buildProjectionFromMeta(const MergeTreeData & storage, const String & projection_name, const Protos::DataPartModel & part_data, const IMergeTreeDataPart * parent);
+MutableDataPartPtr buildProjectionFromMeta(const MergeTreeMetaBase & storage, const String & projection_name, const Protos::DataPartModel & part_data, const IMergeTreeDataPart * parent);
 
 void deserializePartCommon(const Protos::DataPartModel & part_data, MutableDataPartPtr & part);
 
 /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
 /*  compatible with old metastore. remove this later  */
 String unescapeForDiskName(const String & s);
-MutableDataPartPtr createPartFromRaw(const MergeTreeData & storage, const String & key, const String & meta);
+MutableDataPartPtr createPartFromRaw(const MergeTreeMetaBase & storage, const String & key, const String & meta);
 /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 
 } // namespace name

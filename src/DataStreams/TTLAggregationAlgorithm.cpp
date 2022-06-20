@@ -9,7 +9,7 @@ TTLAggregationAlgorithm::TTLAggregationAlgorithm(
     time_t current_time_,
     bool force_,
     const Block & header_,
-    const MergeTreeData & storage_)
+    const MergeTreeMetaBase & storage_)
     : ITTLAlgorithm(description_, old_ttl_info_, current_time_, force_)
     , header(header_)
 {

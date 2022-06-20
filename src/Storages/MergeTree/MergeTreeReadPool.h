@@ -3,7 +3,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/SelectQueryInfo.h>
 #include <mutex>
 
@@ -71,8 +71,8 @@ private:
 public:
     MergeTreeReadPool(
         const size_t threads_, const size_t sum_marks_, const size_t min_marks_for_concurrent_read_,
-        RangesInDataParts && parts_, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter,
-        const MergeTreeData & data_, const StorageMetadataPtr & metadata_snapshot_,
+        RangesInDataParts && parts_, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter,
+        const MergeTreeMetaBase & data_, const StorageMetadataPtr & metadata_snapshot_,
         const PrewhereInfoPtr & prewhere_info_,
         const bool check_columns_, const Names & column_names_,
         const BackoffSettings & backoff_settings_, size_t preferred_block_size_bytes_,
@@ -93,13 +93,13 @@ public:
 
 private:
     std::vector<size_t> fillPerPartInfo(
-        const RangesInDataParts & parts, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns);
+        const RangesInDataParts & parts, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns);
 
     void fillPerThreadInfo(
         const size_t threads, const size_t sum_marks, std::vector<size_t> per_part_sum_marks,
         const RangesInDataParts & parts, const size_t min_marks_for_concurrent_read);
 
-    const MergeTreeData & data;
+    const MergeTreeMetaBase & data;
     StorageMetadataPtr metadata_snapshot;
     const Names column_names;
     bool do_not_steal_tasks;
@@ -113,7 +113,7 @@ private:
 
     struct Part
     {
-        MergeTreeData::DataPartPtr data_part;
+        MergeTreeMetaBase::DataPartPtr data_part;
         size_t part_index_in_query;
         DeleteBitmapPtr delete_bitmap;
     };

@@ -172,7 +172,7 @@ ServerSelectPartsDecision selectPartsToMergeMulti(
     std::unique_ptr<IMergeSelector> merge_selector;
     auto & config = data.getContext()->getConfigRef();
     auto merge_selector_str = config.getString("merge_selector", "simple");
-    if (data.merging_params.mode != MergeTreeData::MergingParams::Unique && merge_selector_str == "dance")
+    if (data.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique && merge_selector_str == "dance")
     {
         DanceMergeSelector::Settings merge_settings;
         merge_settings.loadFromConfig(config);
@@ -190,7 +190,7 @@ ServerSelectPartsDecision selectPartsToMergeMulti(
         if (aggressive)
             merge_settings.base = 1;
         /// make sure rowid could be represented in 4 bytes
-        if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+        if (data.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
         {
             auto & max_rows = merge_settings.max_total_rows_to_merge;
             if (!(0 < max_rows && max_rows <= std::numeric_limits<Int32>::max()))

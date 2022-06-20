@@ -22,8 +22,8 @@ MergeTreeReadPool::MergeTreeReadPool(
     const size_t sum_marks_,
     const size_t min_marks_for_concurrent_read_,
     RangesInDataParts && parts_,
-    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
-    const MergeTreeData & data_,
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
+    const MergeTreeMetaBase & data_,
     const StorageMetadataPtr & metadata_snapshot_,
     const PrewhereInfoPtr & prewhere_info_,
     const bool check_columns_,
@@ -213,7 +213,7 @@ void MergeTreeReadPool::profileFeedback(const ReadBufferFromFileBase::ProfileInf
 
 
 std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
-    const RangesInDataParts & parts, MergeTreeData::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns)
+    const RangesInDataParts & parts, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns)
 {
     std::vector<size_t> per_part_sum_marks;
     Block sample_block = metadata_snapshot->getSampleBlock();

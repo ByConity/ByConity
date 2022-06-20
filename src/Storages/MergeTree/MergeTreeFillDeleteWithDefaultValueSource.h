@@ -1,6 +1,6 @@
 #pragma once
 #include <Processors/Sources/SourceWithProgress.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <memory>
@@ -15,7 +15,7 @@ class MergeTreeFillDeleteWithDefaultValueSource : public SourceWithProgress
 {
 public:
     MergeTreeFillDeleteWithDefaultValueSource(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         MergeTreeData::DataPartPtr data_part_,
         DeleteBitmapPtr delete_bitmap_,
@@ -30,7 +30,7 @@ protected:
 
 private:
 
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;
 
     /// Data part will not be removed if the pointer owns it

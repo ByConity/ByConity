@@ -6,7 +6,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -71,7 +71,7 @@ static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & di
     return disk->readFile(path, std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path)));
 }
 
-void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path)
+void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeMetaBase & data, const DiskPtr & disk_, const String & part_path)
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
@@ -102,7 +102,7 @@ void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, const Dis
     initialized = true;
 }
 
-void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, ReadBuffer & buf)
+void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeMetaBase & data, ReadBuffer & buf)
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
@@ -126,7 +126,7 @@ void IMergeTreeDataPart::MinMaxIndex::load(const MergeTreeData & data, ReadBuffe
 }
 
 void IMergeTreeDataPart::MinMaxIndex::store(
-    const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & out_checksums) const
+    const MergeTreeMetaBase & data, const DiskPtr & disk_, const String & part_path, Checksums & out_checksums) const
 {
     auto metadata_snapshot = data.getInMemoryMetadataPtr();
     const auto & partition_key = metadata_snapshot->getPartitionKey();
@@ -164,7 +164,7 @@ void IMergeTreeDataPart::MinMaxIndex::store(
     }
 }
 
-void IMergeTreeDataPart::MinMaxIndex::store(const MergeTreeData & data, const String & part_path, WriteBuffer & buf) const
+void IMergeTreeDataPart::MinMaxIndex::store(const MergeTreeMetaBase & data, const String & part_path, WriteBuffer & buf) const
 {
     if (!initialized)
         throw Exception("Attempt to store uninitialized MinMax index for part " + part_path + ". This is a bug.",
@@ -347,7 +347,7 @@ static void decrementTypeMetric(MergeTreeDataPartType type)
 
 
 IMergeTreeDataPart::IMergeTreeDataPart(
-    MergeTreeData & storage_,
+    MergeTreeMetaBase & storage_,
     const String & name_,
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
@@ -370,7 +370,7 @@ IMergeTreeDataPart::IMergeTreeDataPart(
 }
 
 IMergeTreeDataPart::IMergeTreeDataPart(
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const String & name_,
     const MergeTreePartInfo & info_,
     const VolumePtr & volume_,
@@ -399,7 +399,7 @@ IMergeTreeDataPart::~IMergeTreeDataPart()
     decrementTypeMetric(part_type);
 
     /// clear cache
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         try
         {
@@ -682,7 +682,7 @@ off_t IMergeTreeDataPart::getFileOffsetOrZero(const String & file_name) const
 String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(const StorageMetadataPtr & metadata_snapshot) const
 {
     const auto & storage_columns = metadata_snapshot->getColumns().getAllPhysical();
-    MergeTreeData::AlterConversions alter_conversions;
+    MergeTreeMetaBase::AlterConversions alter_conversions;
     if (!parent_part)
         alter_conversions = storage.getAlterConversionsForPart(shared_from_this());
 
@@ -1375,7 +1375,7 @@ void IMergeTreeDataPart::remove() const
 
     /// Part of unique table may have multiple delete bitmap files which are not in checksum, so it needs special handling.
     /// TODO: remove special case of unique
-    if (checksums->empty() || storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (checksums->empty() || storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         /// If the part is not completely written, we cannot use fast path by listing files.
         disk->removeSharedRecursive(fs::path(to) / "", *keep_shared_data);
@@ -1889,7 +1889,7 @@ bool isInMemoryPart(const MergeTreeDataPartPtr & data_part)
 
 UInt32 IMergeTreeDataPart::numDeletedRows() const
 {
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         return delete_rows;
     }
@@ -1926,7 +1926,7 @@ static MemoryUniqueKeyIndexPtr newUniqueArenaAndIndex(size_t num_elements, size_
 
 void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::unique_lock<std::mutex> & unique_index_lock)
 {
-    assert(storage.merging_params.mode == MergeTreeData::MergingParams::Unique);
+    assert(storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique);
     assert(unique_index_lock.owns_lock());
 
     Stopwatch watch;
@@ -2029,14 +2029,14 @@ void IMergeTreeDataPart::loadMemoryUniqueIndex([[maybe_unused]] const std::uniqu
 
 DiskUniqueKeyIndexPtr IMergeTreeDataPart::loadDiskUniqueIndex()
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not load disk unique index for Non-Unique table {}", storage.log_name);
     return std::make_shared<DiskUniqueKeyIndex>(getFullPath() + UKI_FILE_NAME, storage.getContext()->getDiskUniqueKeyIndexBlockCache());
 }
 
 UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not load unique row store for Non-Unique table {}", storage.log_name);
 
     return std::make_shared<UniqueRowStore>(
@@ -2045,7 +2045,7 @@ UniqueRowStorePtr IMergeTreeDataPart::loadUniqueRowStore()
 
 UInt64 IMergeTreeDataPart::gcUniqueIndexIfNeeded(const time_t * now, bool force_unload)
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
         return 0;
 
     if (!memory_unique_index)
@@ -2201,7 +2201,7 @@ std::vector<UInt64> IMergeTreeDataPart::listDeleteFiles(UInt64 min_version) cons
 
 UInt32 IMergeTreeDataPart::clearOldDeleteFilesIfNeeded(UInt64 commit_version, bool & retry_next_time) const
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
         throw Exception("No need to clear delete files for Non-Unique table " + storage.log_name, ErrorCodes::LOGICAL_ERROR);
 
     auto settings = storage.getSettings();
@@ -2244,7 +2244,7 @@ UInt32 IMergeTreeDataPart::clearOldDeleteFilesIfNeeded(UInt64 commit_version, bo
 
 UInt32 IMergeTreeDataPart::clearDeleteFilesExceptCurrentVersion() const
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
         throw Exception("No need to clear delete files for Non-Unique table " + storage.log_name, ErrorCodes::LOGICAL_ERROR);
 
     auto & stat = delete_files_stat;
@@ -2280,7 +2280,7 @@ UInt32 IMergeTreeDataPart::clearDeleteFilesExceptCurrentVersion() const
 
 DeleteBitmapPtr IMergeTreeDataPart::getDeleteBitmap() const
 {
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         /// For UniqueMergeTree, the latest delete bitmap is always cached in the field below
         return delete_bitmap;
@@ -2378,7 +2378,7 @@ DeleteBitmapPtr IMergeTreeDataPart::readDeleteFileWithVersion(UInt64 version, bo
 
 UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
     {
         throw Exception("getUniqueKeyIndex of " + storage.log_name + " which doesn't have unique key", ErrorCodes::LOGICAL_ERROR);
     }
@@ -2419,7 +2419,7 @@ UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
 
 UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "tryGetUniqueRowStore of {} which doesn't have unique key", storage.log_name);
     }
@@ -2441,7 +2441,7 @@ UniqueRowStorePtr IMergeTreeDataPart::tryGetUniqueRowStore() const
 
 UniqueRowStoreMetaPtr IMergeTreeDataPart::tryGetUniqueRowStoreMeta() const
 {
-    if (storage.merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
     {
         throw Exception(ErrorCodes::LOGICAL_ERROR, "tryGetUniqueRowStore of {} which doesn't have unique key", storage.log_name);
     }

@@ -39,6 +39,7 @@ namespace DB
 class IMergeTreeDataPart;
 using IMergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 struct ColumnSize;
+class MergeTreeMetaBase;
 class MergeTreeData;
 struct FutureMergedMutatedPart;
 class IReservation;
@@ -83,7 +84,7 @@ public:
     using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
 
     IMergeTreeDataPart(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume,
@@ -92,7 +93,7 @@ public:
         const IMergeTreeDataPart * parent_part_);
 
     IMergeTreeDataPart(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path,
@@ -193,7 +194,7 @@ public:
     auto const & get_deleted() const { return deleted; }
     auto const & get_commit_time() const { return commit_time; }
 
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
 
     String name;
     MergeTreePartInfo info;
@@ -325,11 +326,11 @@ public:
         {
         }
 
-        void load(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path);
-        void load(const MergeTreeData & data, ReadBuffer & buf);
-        void store(const MergeTreeData & data, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
+        void load(const MergeTreeMetaBase & data, const DiskPtr & disk_, const String & part_path);
+        void load(const MergeTreeMetaBase & data, ReadBuffer & buf);
+        void store(const MergeTreeMetaBase & data, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
         void store(const Names & column_names, const DataTypes & data_types, const DiskPtr & disk_, const String & part_path, Checksums & checksums) const;
-        void store(const MergeTreeData & data, const String & part_path, WriteBuffer & buf) const;
+        void store(const MergeTreeMetaBase & data, const String & part_path, WriteBuffer & buf) const;
 
         void update(const Block & block, const Names & column_names);
         void merge(const MinMaxIndex & other);
@@ -647,6 +648,7 @@ public:
     NamesAndTypesListPtr columns_ptr = std::make_shared<NamesAndTypesList>();
 
 protected:
+    friend class MergeTreeMetaBase;
     friend class MergeTreeData;
     friend class MergeScheduler;
 

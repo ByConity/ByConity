@@ -11,7 +11,7 @@ class MergeTreeDataPartCNCH : public MergeTreeDataPartWide
 {
 public:
     MergeTreeDataPartCNCH(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr& volume_,

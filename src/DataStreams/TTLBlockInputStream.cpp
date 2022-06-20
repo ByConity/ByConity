@@ -18,9 +18,9 @@ namespace DB
 
 TTLBlockInputStream::TTLBlockInputStream(
     const BlockInputStreamPtr & input_,
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
-    const MergeTreeData::MutableDataPartPtr & data_part_,
+    const MergeTreeMetaBase::MutableDataPartPtr & data_part_,
     time_t current_time_,
     bool force_)
     : data_part(data_part_)

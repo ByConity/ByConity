@@ -1,7 +1,7 @@
 #pragma once
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Storages/SelectQueryInfo.h>
@@ -17,9 +17,9 @@ class MergeTreeReverseSelectProcessor : public MergeTreeBaseSelectProcessor
 {
 public:
     MergeTreeReverseSelectProcessor(
-        const MergeTreeData & storage,
+        const MergeTreeMetaBase & storage,
         const StorageMetadataPtr & metadata_snapshot,
-        const MergeTreeData::DataPartPtr & owned_data_part,
+        const MergeTreeMetaBase::DataPartPtr & owned_data_part,
         DeleteBitmapPtr delete_bitmap,
         UInt64 max_block_size_rows,
         size_t preferred_block_size_bytes,
@@ -60,7 +60,7 @@ private:
     MergeTreeReadTaskColumns task_columns;
 
     /// Data part will not be removed if the pointer owns it
-    MergeTreeData::DataPartPtr data_part;
+    MergeTreeMetaBase::DataPartPtr data_part;
     DeleteBitmapPtr delete_bitmap;
 
     /// Mark ranges we should read (in ascending order)

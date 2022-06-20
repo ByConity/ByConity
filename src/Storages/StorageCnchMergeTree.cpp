@@ -10,7 +10,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     bool /*attach*/,
     ContextMutablePtr /* context_ */,
     const String & /* date_column_name */,
-    const MergeTreeData::MergingParams & /* merging_params_ */,
+    const MergeTreeMetaBase::MergingParams & /* merging_params_ */,
     std::unique_ptr<MergeTreeSettings> /* settings_ */,
     bool /* has_force_restore_data_flag */)
     : IStorage{table_id_}

@@ -69,13 +69,13 @@ namespace ErrorCodes
 }
 
 
-MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(const MergeTreeData & data_)
+MergeTreeDataSelectExecutor::MergeTreeDataSelectExecutor(const MergeTreeMetaBase & data_)
     : data(data_), log(&Poco::Logger::get(data.getLogName() + " (SelectExecutor)"))
 {
 }
 
 size_t MergeTreeDataSelectExecutor::getApproximateTotalRowsToRead(
-    const MergeTreeData::DataPartsVector & parts,
+    const MergeTreeMetaBase::DataPartsVector & parts,
     const StorageMetadataPtr & metadata_snapshot,
     const KeyCondition & key_condition,
     const Settings & settings,
@@ -138,7 +138,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 
     if (!query_info.projection)
     {
-        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter;
+        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
         if (metadata_snapshot->hasUniqueKey())
         {
             /// get a consistent snapshot of delete bitmaps for query,
@@ -184,8 +184,8 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
         ProjectionDescription::typeToString(query_info.projection->desc->type),
         query_info.projection->desc->name);
 
-    MergeTreeData::DataPartsVector projection_parts;
-    MergeTreeData::DataPartsVector normal_parts;
+    MergeTreeMetaBase::DataPartsVector projection_parts;
+    MergeTreeMetaBase::DataPartsVector normal_parts;
     for (const auto & part : parts)
     {
         const auto & projections = part->getProjectionParts();
@@ -204,7 +204,7 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     {
         LOG_DEBUG(log, "projection required columns: {}", fmt::join(query_info.projection->required_columns, ", "));
         /// projection part shouldn't have delete bitmap
-        MergeTreeData::DeleteBitmapGetter null_getter = [](auto & /*part*/) { return nullptr; };
+        MergeTreeMetaBase::DeleteBitmapGetter null_getter = [](auto & /*part*/) { return nullptr; };
         auto plan = readFromParts(
             projection_parts,
             null_getter,
@@ -399,9 +399,9 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
 MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
     const ASTSelectQuery & select,
     NamesAndTypesList available_real_columns,
-    const MergeTreeData::DataPartsVector & parts,
+    const MergeTreeMetaBase::DataPartsVector & parts,
     KeyCondition & key_condition,
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context,
     bool sample_factor_column_queried,
@@ -662,8 +662,8 @@ MergeTreeDataSelectSamplingData MergeTreeDataSelectExecutor::getSampling(
 }
 
 std::optional<std::unordered_set<String>> MergeTreeDataSelectExecutor::filterPartsByVirtualColumns(
-    const MergeTreeData & data,
-    const MergeTreeData::DataPartsVector & parts,
+    const MergeTreeMetaBase & data,
+    const MergeTreeMetaBase::DataPartsVector & parts,
     const ASTPtr & query,
     ContextPtr context)
 {
@@ -686,10 +686,10 @@ std::optional<std::unordered_set<String>> MergeTreeDataSelectExecutor::filterPar
 }
 
 void MergeTreeDataSelectExecutor::filterPartsByPartition(
-    MergeTreeData::DataPartsVector & parts,
+    MergeTreeMetaBase::DataPartsVector & parts,
     const std::optional<std::unordered_set<String>> & part_values,
     const StorageMetadataPtr & metadata_snapshot,
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     const SelectQueryInfo & query_info,
     const ContextPtr & context,
     const PartitionIdToMaxBlock * max_block_numbers_to_read,
@@ -810,7 +810,7 @@ bool MergeTreeDataSelectExecutor::extractBitmapIndexImpl
     (
         const SelectQueryInfo&    queryInfo,
         const ASTPtr&             expr,
-        const MergeTreeData&      data_,
+        const MergeTreeMetaBase&  data_,
         std::map<String, SetPtr>& bitmap_index_map
     )
 {
@@ -865,8 +865,8 @@ bool MergeTreeDataSelectExecutor::extractBitmapIndexImpl
     return ref;
 }
 
-bool MergeTreeDataSelectExecutor::extractBitmapIndex(const SelectQueryInfo &    queryInfo,
-                        const MergeTreeData &      data_,
+bool MergeTreeDataSelectExecutor::extractBitmapIndex(const SelectQueryInfo & queryInfo,
+                        const MergeTreeMetaBase & data_,
                         std::map<String, SetPtr> & bitmap_index_map)
 {
     bool ref = false;
@@ -885,7 +885,7 @@ bool MergeTreeDataSelectExecutor::extractBitmapIndex(const SelectQueryInfo &    
 }
 
 RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipIndexes(
-    MergeTreeData::DataPartsVector && parts,
+    MergeTreeMetaBase::DataPartsVector && parts,
     StorageMetadataPtr metadata_snapshot,
     const SelectQueryInfo & query_info,
     const ContextPtr & context,
@@ -895,7 +895,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     size_t num_streams,
     ReadFromMergeTree::IndexStats & index_stats,
     bool use_skip_indexes,
-    const MergeTreeData & data_,
+    const MergeTreeMetaBase & data_,
     bool use_sampling,
     RelativeSize relative_sample_size)
 {
@@ -1203,7 +1203,7 @@ MarkRanges MergeTreeDataSelectExecutor::sliceRange(const MarkRange & range, cons
 }
 
 std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     const RangesInDataParts & parts_with_ranges,
     const ContextPtr & context)
 {
@@ -1250,7 +1250,7 @@ std::shared_ptr<QueryIdHolder> MergeTreeDataSelectExecutor::checkLimits(
 
 static void selectColumnNames(
     const Names & column_names_to_return,
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     Names & real_column_names,
     Names & virt_column_names,
     bool & sample_factor_column_queried,
@@ -1310,7 +1310,7 @@ static void selectColumnNames(
 }
 
 size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
-    MergeTreeData::DataPartsVector parts,
+    MergeTreeMetaBase::DataPartsVector parts,
     const Names & column_names_to_return,
     const StorageMetadataPtr & metadata_snapshot_base,
     const StorageMetadataPtr & metadata_snapshot,
@@ -1395,8 +1395,8 @@ size_t MergeTreeDataSelectExecutor::estimateNumMarksToRead(
 }
 
 QueryPlanPtr MergeTreeDataSelectExecutor::readFromParts(
-    MergeTreeData::DataPartsVector parts,
-    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter,
+    MergeTreeMetaBase::DataPartsVector parts,
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter,
     const Names & column_names_to_return,
     const StorageMetadataPtr & metadata_snapshot_base,
     const StorageMetadataPtr & metadata_snapshot,
@@ -1494,7 +1494,7 @@ size_t MergeTreeDataSelectExecutor::minMarksForConcurrentRead(
 /// Calculates a set of mark ranges, that could possibly contain keys, required by condition.
 /// In other words, it removes subranges from whole range, that definitely could not contain required keys.
 MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
-    const MergeTreeData::DataPartPtr & part,
+    const MergeTreeMetaBase::DataPartPtr & part,
     const StorageMetadataPtr & metadata_snapshot,
     const KeyCondition & key_condition,
     const Settings & settings,
@@ -1687,7 +1687,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
 MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     MergeTreeIndexPtr index_helper,
     MergeTreeIndexConditionPtr condition,
-    MergeTreeData::DataPartPtr part,
+    MergeTreeMetaBase::DataPartPtr part,
     const MarkRanges & ranges,
     const Settings & settings,
     const MergeTreeReaderSettings & reader_settings,
@@ -1764,7 +1764,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
 }
 
 void MergeTreeDataSelectExecutor::selectPartsToRead(
-    MergeTreeData::DataPartsVector & parts,
+    MergeTreeMetaBase::DataPartsVector & parts,
     const std::optional<std::unordered_set<String>> & part_values,
     const std::optional<KeyCondition> & minmax_idx_condition,
     const DataTypes & minmax_columns_types,
@@ -1772,7 +1772,7 @@ void MergeTreeDataSelectExecutor::selectPartsToRead(
     const PartitionIdToMaxBlock * max_block_numbers_to_read,
     PartFilterCounters & counters)
 {
-    MergeTreeData::DataPartsVector prev_parts;
+    MergeTreeMetaBase::DataPartsVector prev_parts;
     std::swap(prev_parts, parts);
     for (const auto & part_or_projection : prev_parts)
     {
@@ -1818,9 +1818,9 @@ void MergeTreeDataSelectExecutor::selectPartsToRead(
 }
 
 void MergeTreeDataSelectExecutor::selectPartsToReadWithUUIDFilter(
-    MergeTreeData::DataPartsVector & parts,
+    MergeTreeMetaBase::DataPartsVector & parts,
     const std::optional<std::unordered_set<String>> & part_values,
-    MergeTreeData::PinnedPartUUIDsPtr pinned_part_uuids,
+    MergeTreeMetaBase::PinnedPartUUIDsPtr pinned_part_uuids,
     const std::optional<KeyCondition> & minmax_idx_condition,
     const DataTypes & minmax_columns_types,
     std::optional<PartitionPruner> & partition_pruner,
@@ -1833,12 +1833,12 @@ void MergeTreeDataSelectExecutor::selectPartsToReadWithUUIDFilter(
 
     /// process_parts prepare parts that have to be read for the query,
     /// returns false if duplicated parts' UUID have been met
-    auto select_parts = [&] (MergeTreeData::DataPartsVector & selected_parts) -> bool
+    auto select_parts = [&] (MergeTreeMetaBase::DataPartsVector & selected_parts) -> bool
     {
         auto ignored_part_uuids = query_context->getIgnoredPartUUIDs();
         std::unordered_set<UUID> temp_part_uuids;
 
-        MergeTreeData::DataPartsVector prev_parts;
+        MergeTreeMetaBase::DataPartsVector prev_parts;
         std::swap(prev_parts, selected_parts);
         for (const auto & part_or_projection : prev_parts)
         {

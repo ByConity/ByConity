@@ -11,9 +11,9 @@ namespace ErrorCodes
 }
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
-    MergeTreeData::DataPartPtr data_part_,
+    MergeTreeMetaBase::DataPartPtr data_part_,
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
@@ -23,9 +23,9 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     take_column_types_from_storage, quiet) {}
 
 MergeTreeSequentialSource::MergeTreeSequentialSource(
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
-    MergeTreeData::DataPartPtr data_part_,
+    MergeTreeMetaBase::DataPartPtr data_part_,
     DeleteBitmapPtr delete_bitmap_,
     Names columns_to_read_,
     bool read_with_direct_io_,

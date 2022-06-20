@@ -56,11 +56,11 @@ public:
     };
 
     ReadFromMergeTree(
-        MergeTreeData::DataPartsVector parts_,
-        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
+        MergeTreeMetaBase::DataPartsVector parts_,
+        MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
         Names real_column_names_,
         Names virt_column_names_,
-        const MergeTreeData & data_,
+        const MergeTreeMetaBase & data_,
         const SelectQueryInfo & query_info_,
         StorageMetadataPtr metadata_snapshot_,
         StorageMetadataPtr metadata_snapshot_base_,
@@ -89,12 +89,12 @@ public:
 private:
     const MergeTreeReaderSettings reader_settings;
 
-    MergeTreeData::DataPartsVector prepared_parts;
-    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter;
+    MergeTreeMetaBase::DataPartsVector prepared_parts;
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter;
     Names real_column_names;
     Names virt_column_names;
 
-    const MergeTreeData & data;
+    const MergeTreeMetaBase & data;
     SelectQueryInfo query_info;
     PrewhereInfoPtr prewhere_info;
     BitMapIndexInfoPtr bitmap_index_info;
@@ -140,7 +140,7 @@ private:
         ActionsDAGPtr & out_projection);
 
     struct AnalysisResult;
-    AnalysisResult selectRangesToRead(MergeTreeData::DataPartsVector parts) const;
+    AnalysisResult selectRangesToRead(MergeTreeMetaBase::DataPartsVector parts) const;
 };
 
 }

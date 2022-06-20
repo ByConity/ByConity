@@ -9,7 +9,7 @@
 namespace DB
 {
 
-class MergeTreeData;
+class MergeTreeMetaBase;
 struct MergeTreeReadTask;
 struct MergeTreeBlockSizePredictor;
 
@@ -22,14 +22,14 @@ using MergeTreeBlockSizePredictorPtr = std::unique_ptr<MergeTreeBlockSizePredict
   * so that you can calculate the DEFAULT expression for these columns.
   * Adds them to the `columns`.
   */
-NameSet injectRequiredColumns(const MergeTreeData & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeData::DataPartPtr & part, Names & columns);
+NameSet injectRequiredColumns(const MergeTreeMetaBase & storage, const StorageMetadataPtr & metadata_snapshot, const MergeTreeMetaBase::DataPartPtr & part, Names & columns);
 
 
 /// A batch of work for MergeTreeThreadSelectBlockInputStream
 struct MergeTreeReadTask
 {
     /// data part which should be read while performing this task
-    MergeTreeData::DataPartPtr data_part;
+    MergeTreeMetaBase::DataPartPtr data_part;
     /// used to filter out deleted rows from part, could be nullptr if no deleted rows
     DeleteBitmapPtr delete_bitmap;
     /// Ranges to read from `data_part`.
@@ -57,7 +57,7 @@ struct MergeTreeReadTask
     bool isFinished() const { return mark_ranges.empty() && range_reader.isCurrentRangeFinished(); }
 
     MergeTreeReadTask(
-        const MergeTreeData::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+        const MergeTreeMetaBase::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
         const Names & ordered_names_, const NameSet & column_name_set_, NamesAndTypesList & columns_,
         NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
         MergeTreeBlockSizePredictorPtr && size_predictor_);
@@ -76,16 +76,16 @@ struct MergeTreeReadTaskColumns
 };
 
 MergeTreeReadTaskColumns getReadTaskColumns(
-    const MergeTreeData & storage,
+    const MergeTreeMetaBase & storage,
     const StorageMetadataPtr & metadata_snapshot,
-    const MergeTreeData::DataPartPtr & data_part,
+    const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
     bool check_columns);
 
 struct MergeTreeBlockSizePredictor
 {
-    MergeTreeBlockSizePredictor(const MergeTreeData::DataPartPtr & data_part_, const Names & columns, const Block & sample_block);
+    MergeTreeBlockSizePredictor(const MergeTreeMetaBase::DataPartPtr & data_part_, const Names & columns, const Block & sample_block);
 
     /// Reset some values for correct statistics calculating
     void startBlock();
@@ -134,7 +134,7 @@ struct MergeTreeBlockSizePredictor
 
 protected:
 
-    MergeTreeData::DataPartPtr data_part;
+    MergeTreeMetaBase::DataPartPtr data_part;
 
     struct ColumnInfo
     {

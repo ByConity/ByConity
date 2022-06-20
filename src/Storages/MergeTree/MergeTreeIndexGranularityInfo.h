@@ -2,13 +2,14 @@
 
 #include <optional>
 #include <common/types.h>
+#include "Storages/MergeTree/MergeTreePartition.h"
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 #include <Disks/IDisk.h>
 
 namespace DB
 {
 
-class MergeTreeData;
+class MergeTreeMetaBase;
 
 /// Meta information about index granularity
 struct MergeTreeIndexGranularityInfo
@@ -26,7 +27,7 @@ public:
     /// Approximate bytes size of one granule
     size_t index_granularity_bytes = 0;
 
-    MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MergeTreeDataPartType type_);
+    MergeTreeIndexGranularityInfo(const MergeTreeMetaBase & storage, MergeTreeDataPartType type_);
 
     void changeGranularityIfRequired(const DiskPtr & disk, const String & path_to_part);
 

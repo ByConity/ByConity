@@ -169,7 +169,7 @@ void HaMergeTreeCleanupThread::removeFailedQuorumParts()
         {
             LOG_INFO(log, "Found part " << part_name << " with failed quorum. Remove this partition.");
             auto data_parts_lock = storage.lockParts();
-            MergeTreePartInfo part_info = MergeTreePartInfo::fromPartName(part_name, storage.getDataFormatVersion());
+            MergeTreePartInfo part_info = MergeTreePartInfo::fromPartName(part_name, storage.format_version);
             storage.removePartsInRangeFromWorkingSet(part_info, true, true, data_parts_lock);
 
             /// Remove replica item from quorum entry list
