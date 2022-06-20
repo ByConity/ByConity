@@ -7,7 +7,7 @@
 namespace DB
 {
 class MergeScheduler;
-class MergeTreeData;
+class MergeTreeMetaBase;
 
 #define LIST_OF_DANCE_MERGE_SELECTOR_SETTINGS(M) \
     M(UInt64, max_parts_to_merge_base, 100, "", 0) \
@@ -47,7 +47,7 @@ public:
     using Iterator = PartsRange::const_iterator;
     using Settings = DanceMergeSelectorSettings;
 
-    DanceMergeSelector(const MergeTreeData & data_, const Settings & settings_) : data(data_), settings(settings_) {}
+    DanceMergeSelector(const MergeTreeMetaBase & data_, const Settings & settings_) : data(data_), settings(settings_) {}
 
     PartsRange select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
     PartsRanges selectMulti(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
@@ -75,7 +75,7 @@ private:
     void selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr);
     bool allow(double sum_size, double max_size, double min_age, double range_size);
 
-    [[maybe_unused]] const MergeTreeData & data;
+    [[maybe_unused]] const MergeTreeMetaBase & data;
     const Settings settings;
 
     std::unordered_map<String, size_t> num_parts_of_partitions;

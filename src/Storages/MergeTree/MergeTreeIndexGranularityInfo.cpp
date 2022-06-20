@@ -1,5 +1,5 @@
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 
 
 namespace fs = std::filesystem;
@@ -29,7 +29,7 @@ std::optional<std::string> MergeTreeIndexGranularityInfo::getMarksExtensionFromF
     return {};
 }
 
-MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeData & storage, MergeTreeDataPartType type_)
+MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeMetaBase & storage, MergeTreeDataPartType type_)
     : type(type_)
 {
     const auto storage_settings = storage.getSettings();

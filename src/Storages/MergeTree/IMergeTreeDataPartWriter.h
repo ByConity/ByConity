@@ -4,7 +4,7 @@
 #include <IO/WriteBufferFromFileBase.h>
 #include <Compression/CompressedWriteBuffer.h>
 #include <IO/HashingWriteBuffer.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/ColumnBitmapIndex.h>
@@ -50,7 +50,7 @@ public:
 protected:
 
     const MergeTreeData::DataPartPtr data_part;
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     const StorageMetadataPtr metadata_snapshot;
     const NamesAndTypesList columns_list;
     const MergeTreeWriterSettings settings;

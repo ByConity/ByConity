@@ -172,12 +172,12 @@ void FutureMergedMutatedPart::assign(MergeTreeData::DataPartsVector parts_, Merg
         name = part_info.getPartName();
 }
 
-void FutureMergedMutatedPart::updatePath(const MergeTreeData & storage, const ReservationPtr & reservation)
+void FutureMergedMutatedPart::updatePath(const MergeTreeMetaBase & storage, const ReservationPtr & reservation)
 {
     path = storage.getFullPathOnDisk(reservation->getDisk()) + name + "/";
 }
 
-MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeData & data_, size_t background_pool_size_)
+MergeTreeDataMergerMutator::MergeTreeDataMergerMutator(MergeTreeMetaBase & data_, size_t background_pool_size_)
     : data(data_)
     , background_pool_size(background_pool_size_)
     , log(&Poco::Logger::get(data.getLogName() + " (MergerMutator)"))
@@ -578,7 +578,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
     std::unique_ptr<IMergeSelector> merge_selector;
     auto & config = data.getContext()->getConfigRef();
     auto merge_selector_str = config.getString("merge_selector", "simple");
-    if (data.merging_params.mode != MergeTreeData::MergingParams::Unique && merge_selector_str == "dance")
+    if (data.merging_params.mode != MergeTreeMetaBase::MergingParams::Unique && merge_selector_str == "dance")
     {
         DanceMergeSelector::Settings merge_settings;
         merge_settings.loadFromConfig(config);
@@ -596,7 +596,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         if (aggressive)
             merge_settings.base = 1;
         /// make sure rowid could be represented in 4 bytes
-        if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+        if (data.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
         {
             auto & max_rows = merge_settings.max_total_rows_to_merge;
             if (!(0 < max_rows && max_rows <= std::numeric_limits<Int32>::max()))
@@ -739,7 +739,7 @@ static void extractMergingAndGatheringColumns(
     const String & extra_column_name,
     const IndicesDescription & indexes,
     const ProjectionsDescription & projections,
-    const MergeTreeData::MergingParams & merging_params,
+    const MergeTreeMetaBase::MergingParams & merging_params,
     NamesAndTypesList & gathering_columns, Names & gathering_column_names,
     NamesAndTypesList & merging_columns, Names & merging_column_names)
 {
@@ -761,7 +761,7 @@ static void extractMergingAndGatheringColumns(
 
     /// Force unique key columns and extra column for Unique mode,
     /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
-    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         if (!unique_key_expr)
             throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
@@ -775,15 +775,15 @@ static void extractMergingAndGatheringColumns(
     }
 
     /// Force sign column for Collapsing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Collapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force version column for Replacing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing)
         key_columns.emplace(merging_params.version_column);
 
     /// Force sign column for VersionedCollapsing mode. Version is already in primary key.
-    if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force to merge at least one column in case of empty key
@@ -972,7 +972,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     const ReservationPtr & space_reservation,
     bool deduplicate,
     const Names & deduplicate_by_columns,
-    const MergeTreeData::MergingParams & merging_params,
+    const MergeTreeMetaBase::MergingParams & merging_params,
     const IMergeTreeDataPart * parent_part,
     const String & prefix,
     const ActionBlocker * unique_table_blocker)
@@ -1201,42 +1201,42 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
     UInt64 merge_block_size = data_settings->merge_max_block_size;
     switch (merging_params.mode)
     {
-        case MergeTreeData::MergingParams::Ordinary:
-        case MergeTreeData::MergingParams::Unique:
+        case MergeTreeMetaBase::MergingParams::Ordinary:
+        case MergeTreeMetaBase::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
                 header, pipes.size(), sort_description, merge_block_size, 0, rows_sources_write_buf.get(),
                 true, blocks_are_granules_size, /*have_all_inputs*/true, /*part_id_mapping_cb*/part_id_mapping_cb);
             break;
 
-        case MergeTreeData::MergingParams::Collapsing:
+        case MergeTreeMetaBase::MergingParams::Collapsing:
             merged_transform = std::make_unique<CollapsingSortedTransform>(
                 header, pipes.size(), sort_description, merging_params.sign_column, false,
                 merge_block_size, rows_sources_write_buf.get(), blocks_are_granules_size);
             break;
 
-        case MergeTreeData::MergingParams::Summing:
+        case MergeTreeMetaBase::MergingParams::Summing:
             merged_transform = std::make_unique<SummingSortedTransform>(
                 header, pipes.size(), sort_description, merging_params.columns_to_sum, partition_key_columns, merge_block_size);
             break;
 
-        case MergeTreeData::MergingParams::Aggregating:
+        case MergeTreeMetaBase::MergingParams::Aggregating:
             merged_transform = std::make_unique<AggregatingSortedTransform>(
                 header, pipes.size(), sort_description, merge_block_size);
             break;
 
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeMetaBase::MergingParams::Replacing:
             merged_transform = std::make_unique<ReplacingSortedTransform>(
                 header, pipes.size(), sort_description, merging_params.version_column,
                 merge_block_size, rows_sources_write_buf.get(), blocks_are_granules_size);
             break;
 
-        case MergeTreeData::MergingParams::Graphite:
+        case MergeTreeMetaBase::MergingParams::Graphite:
             merged_transform = std::make_unique<GraphiteRollupSortedTransform>(
                 header, pipes.size(), sort_description, merge_block_size,
                 merging_params.graphite_params, time_of_merge);
             break;
 
-        case MergeTreeData::MergingParams::VersionedCollapsing:
+        case MergeTreeMetaBase::MergingParams::VersionedCollapsing:
             merged_transform = std::make_unique<VersionedCollapsingTransform>(
                 header, pipes.size(), sort_description, merging_params.sign_column,
                 merge_block_size, rows_sources_write_buf.get(), blocks_are_granules_size);
@@ -1576,10 +1576,10 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         projection_future_part.path = future_part.path + "/" + projection.name + ".proj/";
         projection_future_part.part_info = {"all", 0, 0, 0};
 
-        MergeTreeData::MergingParams projection_merging_params;
-        projection_merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+        MergeTreeMetaBase::MergingParams projection_merging_params;
+        projection_merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
         if (projection.type == ProjectionDescription::Type::Aggregate)
-            projection_merging_params.mode = MergeTreeData::MergingParams::Aggregating;
+            projection_merging_params.mode = MergeTreeMetaBase::MergingParams::Aggregating;
 
         // TODO Should we use a new merge_entry for projection?
         auto merged_projection_part = mergePartsToTemporaryPart(
@@ -1961,7 +1961,7 @@ bool MergeTreeDataMergerMutator::tryMergeRowStoreIntoNewPart(
 
 bool MergeTreeDataMergerMutator::checkIfBuildRowStore()
 {
-    return data.merging_params.mode == MergeTreeData::MergingParams::Unique
+    return data.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique
         && data.getSettings()->enable_unique_partial_update && data.getSettings()->enable_unique_row_store;
 }
 
@@ -2234,7 +2234,7 @@ MergeAlgorithm MergeTreeDataMergerMutator::chooseMergeAlgorithm(
     const NamesAndTypesList & gathering_columns,
     bool deduplicate,
     bool need_remove_expired_values,
-    const MergeTreeData::MergingParams & merging_params) const
+    const MergeTreeMetaBase::MergingParams & merging_params) const
 {
     const auto data_settings = data.getSettings();
 
@@ -2259,10 +2259,10 @@ MergeAlgorithm MergeTreeDataMergerMutator::chooseMergeAlgorithm(
             return MergeAlgorithm::Horizontal;
 
     bool is_supported_storage =
-        merging_params.mode == MergeTreeData::MergingParams::Ordinary ||
-        merging_params.mode == MergeTreeData::MergingParams::Collapsing ||
-        merging_params.mode == MergeTreeData::MergingParams::Replacing ||
-        merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
+        merging_params.mode == MergeTreeMetaBase::MergingParams::Ordinary ||
+        merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing ||
+        merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing ||
+        merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing;
 
     // return MergeAlgorithm::Vertical if there is a map key since we cannot know how many keys in this column.
     // If there are too many keys, it may exhaust all file handles.
@@ -2294,8 +2294,13 @@ MergeTreeData::DataPartPtr MergeTreeDataMergerMutator::renameMergedTemporaryPart
     const MergeTreeData::DataPartsVector & parts,
     MergeTreeData::Transaction * out_transaction)
 {
+    auto * merge_tree_data = dynamic_cast<MergeTreeData*>(&data);
+
+    if (!merge_tree_data)
+        throw Exception("renameMergedTemporaryPart only support merge_tree", ErrorCodes::LOGICAL_ERROR);
+
     /// Rename new part, add to the set and remove original parts.
-    auto replaced_parts = data.renameTempPartAndReplace(new_data_part, nullptr, out_transaction);
+    auto replaced_parts = merge_tree_data->renameTempPartAndReplace(new_data_part, nullptr, out_transaction);
 
     /// Let's check that all original parts have been deleted and only them.
     if (replaced_parts.size() != parts.size())
@@ -2991,10 +2996,10 @@ void MergeTreeDataMergerMutator::writeWithProjections(
                 projection_future_part.name = fmt::format("{}_{}", projection.name, ++block_num);
                 projection_future_part.part_info = {"all", 0, 0, 0};
 
-                MergeTreeData::MergingParams projection_merging_params;
-                projection_merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+                MergeTreeMetaBase::MergingParams projection_merging_params;
+                projection_merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
                 if (projection.type == ProjectionDescription::Type::Aggregate)
-                    projection_merging_params.mode = MergeTreeData::MergingParams::Aggregating;
+                    projection_merging_params.mode = MergeTreeMetaBase::MergingParams::Aggregating;
 
                 LOG_DEBUG(log, "Merged {} parts in level {} to {}", selected_parts.size(), current_level, projection_future_part.name);
                 next_level_parts.push_back(mergePartsToTemporaryPart(

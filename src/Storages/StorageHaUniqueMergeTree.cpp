@@ -3134,7 +3134,7 @@ void StorageHaUniqueMergeTree::movePartitionFrom(const StoragePtr & source_table
     if (!merge_tree_table)
         throw Exception("Target table must be MergeTree family for Move Partition.", ErrorCodes::LOGICAL_ERROR);
 
-    if (merge_tree_table->merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (merge_tree_table->merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
     {
         throw Exception(
             "Move partition source table type does not match, it also have to be unique engine table.", ErrorCodes::LOGICAL_ERROR);

@@ -14,9 +14,9 @@ namespace ErrorCodes
 }
 
 MergeTreeSelectProcessor::MergeTreeSelectProcessor(
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
-    const MergeTreeData::DataPartPtr & owned_data_part_,
+    const MergeTreeMetaBase::DataPartPtr & owned_data_part_,
     DeleteBitmapPtr delete_bitmap_,
     UInt64 max_block_size_rows_,
     size_t preferred_block_size_bytes_,

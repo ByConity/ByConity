@@ -46,7 +46,7 @@ static StorageSystemGraphite::Configs getConfigs(ContextPtr context)
             if (!table_data)
                 continue;
 
-            if (table_data->merging_params.mode == MergeTreeData::MergingParams::Graphite)
+            if (table_data->merging_params.mode == MergeTreeMetaBase::MergingParams::Graphite)
             {
                 const String & config_name = table_data->merging_params.graphite_params.config_name;
 

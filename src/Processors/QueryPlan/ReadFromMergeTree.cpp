@@ -76,7 +76,7 @@ static const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_inf
                                  : query_info.prewhere_info;
 }
 
-static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
+static Array extractMapColumnKeys(const MergeTreeMetaBase::DataPartsVector & parts)
 {
     Array res;
 
@@ -140,11 +140,11 @@ static Array extractMapColumnKeys(const MergeTreeData::DataPartsVector & parts)
 }
 
 ReadFromMergeTree::ReadFromMergeTree(
-    MergeTreeData::DataPartsVector parts_,
-    MergeTreeData::DeleteBitmapGetter delete_bitmap_getter_,
+    MergeTreeMetaBase::DataPartsVector parts_,
+    MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter_,
     Names real_column_names_,
     Names virt_column_names_,
-    const MergeTreeData & data_,
+    const MergeTreeMetaBase & data_,
     const SelectQueryInfo & query_info_,
     StorageMetadataPtr metadata_snapshot_,
     StorageMetadataPtr metadata_snapshot_base_,
@@ -588,7 +588,7 @@ static void addMergingFinal(
     Pipe & pipe,
     size_t num_output_streams,
     const SortDescription & sort_description,
-    MergeTreeData::MergingParams merging_params,
+    MergeTreeMetaBase::MergingParams merging_params,
     Names partition_key_columns,
     size_t max_block_size)
 {
@@ -599,34 +599,34 @@ static void addMergingFinal(
     {
         switch (merging_params.mode)
         {
-            case MergeTreeData::MergingParams::Ordinary:
-            case MergeTreeData::MergingParams::Unique:
+            case MergeTreeMetaBase::MergingParams::Ordinary:
+            case MergeTreeMetaBase::MergingParams::Unique:
             {
                 return std::make_shared<MergingSortedTransform>(header, num_outputs,
                            sort_description, max_block_size);
             }
 
-            case MergeTreeData::MergingParams::Collapsing:
+            case MergeTreeMetaBase::MergingParams::Collapsing:
                 return std::make_shared<CollapsingSortedTransform>(header, num_outputs,
                            sort_description, merging_params.sign_column, true, max_block_size);
 
-            case MergeTreeData::MergingParams::Summing:
+            case MergeTreeMetaBase::MergingParams::Summing:
                 return std::make_shared<SummingSortedTransform>(header, num_outputs,
                            sort_description, merging_params.columns_to_sum, partition_key_columns, max_block_size);
 
-            case MergeTreeData::MergingParams::Aggregating:
+            case MergeTreeMetaBase::MergingParams::Aggregating:
                 return std::make_shared<AggregatingSortedTransform>(header, num_outputs,
                            sort_description, max_block_size);
 
-            case MergeTreeData::MergingParams::Replacing:
+            case MergeTreeMetaBase::MergingParams::Replacing:
                 return std::make_shared<ReplacingSortedTransform>(header, num_outputs,
                            sort_description, merging_params.version_column, max_block_size);
 
-            case MergeTreeData::MergingParams::VersionedCollapsing:
+            case MergeTreeMetaBase::MergingParams::VersionedCollapsing:
                 return std::make_shared<VersionedCollapsingTransform>(header, num_outputs,
                            sort_description, merging_params.sign_column, max_block_size);
 
-            case MergeTreeData::MergingParams::Graphite:
+            case MergeTreeMetaBase::MergingParams::Graphite:
                 throw Exception("GraphiteMergeTree doesn't support FINAL", ErrorCodes::LOGICAL_ERROR);
         }
 
@@ -856,7 +856,7 @@ Pipe ReadFromMergeTree::spreadMarkRangesAmongStreamsFinal(
     return Pipe::unitePipes(std::move(partition_pipes));
 }
 
-ReadFromMergeTree::AnalysisResult ReadFromMergeTree::selectRangesToRead(MergeTreeData::DataPartsVector parts) const
+ReadFromMergeTree::AnalysisResult ReadFromMergeTree::selectRangesToRead(MergeTreeMetaBase::DataPartsVector parts) const
 {
     AnalysisResult result;
     const auto & settings = context->getSettingsRef();

@@ -20,7 +20,7 @@ MergeTreeMeta::~MergeTreeMeta()
 }
 
 
-std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMeta::loadFromMetastore(const MergeTreeData & storage)
+std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMeta::loadFromMetastore(const MergeTreeMetaBase & storage)
 {
     std::vector<MutableDataPartPtr> loaded_parts;
     PartNamesWithDisks unloaded_parts;
@@ -55,7 +55,7 @@ std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMe
     return {loaded_parts, unloaded_parts};
 }
 
-void MergeTreeMeta::addPart(const MergeTreeData & storage, const DataPartPtr & part)
+void MergeTreeMeta::addPart(const MergeTreeMetaBase & storage, const DataPartPtr & part)
 {
     if (part->getProjectionParts().empty())
         metastore->put(getPartMetaKey(storage.getStorageID().uuid, part->name), getSerializedPartMeta(part));
@@ -73,7 +73,7 @@ void MergeTreeMeta::addPart(const MergeTreeData & storage, const DataPartPtr & p
     }
 }
 
-void MergeTreeMeta::dropPart(const MergeTreeData & storage, const DataPartPtr & part)
+void MergeTreeMeta::dropPart(const MergeTreeMetaBase & storage, const DataPartPtr & part)
 {
     if (part->getProjectionParts().empty())
         metastore->drop(getPartMetaKey(storage.getStorageID().uuid, part->name));
@@ -91,19 +91,19 @@ void MergeTreeMeta::dropPart(const MergeTreeData & storage, const DataPartPtr & 
     }
 }
 
-void MergeTreeMeta::addWAL(const MergeTreeData & storage, const String & wal_file, const DiskPtr & disk)
+void MergeTreeMeta::addWAL(const MergeTreeMetaBase & storage, const String & wal_file, const DiskPtr & disk)
 {
     LOG_DEBUG(log, "Add new wal file '{}' into metastore.", wal_file);
     metastore->put(getWALMetaKey(storage.getStorageID().uuid, wal_file), std::to_string(disk->getID()));
 }
 
-void MergeTreeMeta::removeWAL(const MergeTreeData & storage, const String & wal_file)
+void MergeTreeMeta::removeWAL(const MergeTreeMetaBase & storage, const String & wal_file)
 {
     LOG_DEBUG(log, "Remove outdated wal file '{}' from metastore.", wal_file);
     metastore->drop(getWALMetaKey(storage.getStorageID().uuid, wal_file));
 }
 
-PartNamesWithDisks MergeTreeMeta::getWriteAheadLogs(const MergeTreeData & storage)
+PartNamesWithDisks MergeTreeMeta::getWriteAheadLogs(const MergeTreeMetaBase & storage)
 {
     PartNamesWithDisks wals;
 
@@ -128,7 +128,7 @@ PartNamesWithDisks MergeTreeMeta::getWriteAheadLogs(const MergeTreeData & storag
     return wals;
 }
 
-void MergeTreeMeta::loadProjections(const MergeTreeData & storage)
+void MergeTreeMeta::loadProjections(const MergeTreeMetaBase & storage)
 {
     String projection_prefix = getProjectionPrefix(storage.getStorageID().uuid);
 
@@ -140,7 +140,7 @@ void MergeTreeMeta::loadProjections(const MergeTreeData & storage)
         part_data.ParseFromString(iterPtr->value());
 
         String parent_name = part_data.parent_part();
-        DataPartPtr parent_part = const_cast<MergeTreeData &>(storage).getPartIfExistsWithoutLock(parent_name, {MergeTreeDataPartState::Committed});
+        DataPartPtr parent_part = const_cast<MergeTreeMetaBase &>(storage).getPartIfExistsWithoutLock(parent_name, {MergeTreeDataPartState::Committed});
         if (!parent_part)
         {
             iterPtr->next();
@@ -164,7 +164,7 @@ void MergeTreeMeta::loadProjections(const MergeTreeData & storage)
     }
 }
 
-void MergeTreeMeta::dropMetaData(const MergeTreeData & /*storage*/, const String & key)
+void MergeTreeMeta::dropMetaData(const MergeTreeMetaBase & /*storage*/, const String & key)
 {
     if (key.empty())
     {
@@ -178,7 +178,7 @@ void MergeTreeMeta::dropMetaData(const MergeTreeData & /*storage*/, const String
     }
 }
 
-bool MergeTreeMeta::checkMetastoreStatus(const MergeTreeData & storage)
+bool MergeTreeMeta::checkMetastoreStatus(const MergeTreeMetaBase & storage)
 {
     String status;
     metastore->get(getMetaStoreStatusKey(storage.getStorageID().uuid), status);
@@ -188,7 +188,7 @@ bool MergeTreeMeta::checkMetastoreStatus(const MergeTreeData & storage)
         return false;
 }
 
-void MergeTreeMeta::setMetastoreStatus(const MergeTreeData & storage)
+void MergeTreeMeta::setMetastoreStatus(const MergeTreeMetaBase & storage)
 {
     metastore->put(getMetaStoreStatusKey(storage.getStorageID().uuid), META_DATA_READY_FLAG);
 }
@@ -235,7 +235,7 @@ bool MergeTreeMeta::checkMetaReady()
     return false;
 }
 
-std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMeta::loadPartFromMetastore(const MergeTreeData & storage)
+std::pair<MergeTreeMeta::MutableDataPartsVector, PartNamesWithDisks> MergeTreeMeta::loadPartFromMetastore(const MergeTreeMetaBase & storage)
 {
     /// part_name and disk_name
     std::vector<MutableDataPartPtr> loaded_parts;

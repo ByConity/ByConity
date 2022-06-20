@@ -93,7 +93,7 @@ MergeTreeDataMerger::MergeTreeDataMerger(
     , rowid_mappings(params.source_data_parts.size())
     , log(&Poco::Logger::get(data.getLogName() + " (Merger)"))
 {
-    if (build_rowid_mappings && data.merging_params.mode != MergeTreeData::MergingParams::Ordinary)
+    if (build_rowid_mappings && data.merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary)
         throw Exception(
             ErrorCodes::LOGICAL_ERROR, "Rowid mapping is only supported for Ordinal mode, got {}", data.merging_params.getModeName());
 }
@@ -129,7 +129,7 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
 
     /// Force unique key columns and extra column for Unique mode,
     /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
-    if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         auto unique_key_expr = metadata_snapshot->getUniqueKey().expression;
         if (!unique_key_expr)
@@ -144,15 +144,15 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
     }
 
     /// Force sign column for Collapsing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Collapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force version column for Replacing mode
-    if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing)
         key_columns.emplace(merging_params.version_column);
 
     /// Force sign column for VersionedCollapsing mode. Version is already in primary key.
-    if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing)
         key_columns.emplace(merging_params.sign_column);
 
     /// Force to merge at least one column in case of empty key
@@ -228,10 +228,10 @@ void MergeTreeDataMerger::chooseMergeAlgorithm()
         return;
     }
 
-    bool is_supported_storage = data.merging_params.mode == MergeTreeData::MergingParams::Ordinary
-        || data.merging_params.mode == MergeTreeData::MergingParams::Collapsing
-        || data.merging_params.mode == MergeTreeData::MergingParams::Replacing
-        || data.merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing;
+    bool is_supported_storage = data.merging_params.mode == MergeTreeMetaBase::MergingParams::Ordinary
+        || data.merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing
+        || data.merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing
+        || data.merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing;
 
     // return MergeAlgorithm::Vertical if there is a map key since we cannot know how many keys in this column.
     // If there are too many keys, it may exhaust all file handles.
@@ -385,8 +385,8 @@ void MergeTreeDataMerger::createMergedStream()
     auto & merging_params = data.merging_params;
     switch (merging_params.mode)
     {
-        case MergeTreeData::MergingParams::Ordinary:
-        case MergeTreeData::MergingParams::Unique:
+        case MergeTreeMetaBase::MergingParams::Ordinary:
+        case MergeTreeMetaBase::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
                 header,
                 pipes.size(),
@@ -400,7 +400,7 @@ void MergeTreeDataMerger::createMergedStream()
                 MergingSortedAlgorithm::PartIdMappingCallback{});
             break;
 
-        case MergeTreeData::MergingParams::Collapsing:
+        case MergeTreeMetaBase::MergingParams::Collapsing:
             merged_transform = std::make_unique<CollapsingSortedTransform>(
                 header,
                 pipes.size(),
@@ -412,7 +412,7 @@ void MergeTreeDataMerger::createMergedStream()
                 blocks_are_granules_size);
             break;
 
-        case MergeTreeData::MergingParams::Summing:
+        case MergeTreeMetaBase::MergingParams::Summing:
             merged_transform = std::make_unique<SummingSortedTransform>(
                 header,
                 pipes.size(),
@@ -422,11 +422,11 @@ void MergeTreeDataMerger::createMergedStream()
                 merge_block_size);
             break;
 
-        case MergeTreeData::MergingParams::Aggregating:
+        case MergeTreeMetaBase::MergingParams::Aggregating:
             merged_transform = std::make_unique<AggregatingSortedTransform>(header, pipes.size(), sort_description, merge_block_size);
             break;
 
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeMetaBase::MergingParams::Replacing:
             merged_transform = std::make_unique<ReplacingSortedTransform>(
                 header,
                 pipes.size(),
@@ -437,12 +437,12 @@ void MergeTreeDataMerger::createMergedStream()
                 blocks_are_granules_size);
             break;
 
-        case MergeTreeData::MergingParams::Graphite:
+        case MergeTreeMetaBase::MergingParams::Graphite:
             merged_transform = std::make_unique<GraphiteRollupSortedTransform>(
                 header, pipes.size(), sort_description, merge_block_size, merging_params.graphite_params, time(nullptr));
             break;
 
-        case MergeTreeData::MergingParams::VersionedCollapsing:
+        case MergeTreeMetaBase::MergingParams::VersionedCollapsing:
             merged_transform = std::make_unique<VersionedCollapsingTransform>(
                 header,
                 pipes.size(),

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPartWriter.h>
@@ -35,10 +35,10 @@ protected:
     static NameSet removeEmptyColumnsFromPart(
         const MergeTreeDataPartPtr & data_part,
         NamesAndTypesList & columns,
-        MergeTreeData::DataPart::Checksums & checksums);
+        MergeTreeMetaBase::DataPart::Checksums & checksums);
 
 protected:
-    const MergeTreeData & storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;
 
     VolumePtr volume;

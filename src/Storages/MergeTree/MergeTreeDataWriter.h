@@ -9,7 +9,7 @@
 
 #include <Interpreters/sortBlock.h>
 
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 
 
 namespace DB
@@ -33,7 +33,7 @@ using BlocksWithPartition = std::vector<BlockWithPartition>;
 class MergeTreeDataWriter
 {
 public:
-    MergeTreeDataWriter(MergeTreeData & data_) : data(data_), log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
+    MergeTreeDataWriter(MergeTreeMetaBase & data_) : data(data_), log(&Poco::Logger::get(data.getLogName() + " (Writer)")) {}
 
     /** Split the block to blocks, each of them must be written as separate part.
       *  (split rows by partition)
@@ -44,16 +44,16 @@ public:
     /** All rows must correspond to same partition.
       * Returns part with unique name starting with 'tmp_', yet not added to MergeTreeData.
       */
-    MergeTreeData::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, bool optimize_on_insert);
+    MergeTreeMetaBase::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, bool optimize_on_insert);
 
-    MergeTreeData::MutableDataPartPtr
+    MergeTreeMetaBase::MutableDataPartPtr
     writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
 
-    MergeTreeData::MutableDataPartPtr writeProjectionPart(
+    MergeTreeMetaBase::MutableDataPartPtr writeProjectionPart(
         Block block, const ProjectionDescription & projection, const IMergeTreeDataPart * parent_part);
 
-    static MergeTreeData::MutableDataPartPtr writeTempProjectionPart(
-        MergeTreeData & data,
+    static MergeTreeMetaBase::MutableDataPartPtr writeTempProjectionPart(
+        MergeTreeMetaBase & data,
         Poco::Logger * log,
         Block block,
         const ProjectionDescription & projection,
@@ -63,14 +63,14 @@ public:
     Block mergeBlock(const Block & block, SortDescription sort_description, Names & partition_key_columns, IColumn::Permutation *& permutation);
 
 private:
-    static MergeTreeData::MutableDataPartPtr writeProjectionPartImpl(
-        MergeTreeData & data,
+    static MergeTreeMetaBase::MutableDataPartPtr writeProjectionPartImpl(
+        MergeTreeMetaBase & data,
         Poco::Logger * log,
         Block block,
         const StorageMetadataPtr & metadata_snapshot,
-        MergeTreeData::MutableDataPartPtr && new_data_part);
+        MergeTreeMetaBase::MutableDataPartPtr && new_data_part);
 
-    MergeTreeData & data;
+    MergeTreeMetaBase & data;
 
     Poco::Logger * log;
 };

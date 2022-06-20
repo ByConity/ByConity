@@ -11,9 +11,9 @@ namespace ErrorCodes
 }
 
 MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSource(
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
-    MergeTreeData::DataPartPtr data_part_,
+    MergeTreeMetaBase::DataPartPtr data_part_,
     DeleteBitmapPtr delete_bitmap_,
     Names columns_to_read_)
     /// virtual columns are not allowed in "columns_to_read_"

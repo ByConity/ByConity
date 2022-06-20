@@ -1,5 +1,5 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Common/FieldVisitors.h>
@@ -189,7 +189,7 @@ static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & di
     return disk->readFile(path, std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path)));
 }
 
-String MergeTreePartition::getID(const MergeTreeData & storage) const
+String MergeTreePartition::getID(const MergeTreeMetaBase & storage) const
 {
     return getID(storage.getInMemoryMetadataPtr()->getPartitionKey().sample_block);
 }
@@ -252,7 +252,7 @@ String MergeTreePartition::getID(const Block & partition_key_sample) const
     return result;
 }
 
-void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffer & out, const FormatSettings & format_settings) const
+void MergeTreePartition::serializeText(const MergeTreeMetaBase & storage, WriteBuffer & out, const FormatSettings & format_settings) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
@@ -288,7 +288,7 @@ void MergeTreePartition::serializeText(const MergeTreeData & storage, WriteBuffe
     }
 }
 
-void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path)
+void MergeTreePartition::load(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     if (!metadata_snapshot->hasPartitionKey())
@@ -302,7 +302,7 @@ void MergeTreePartition::load(const MergeTreeData & storage, const DiskPtr & dis
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], *file);
 }
 
-void MergeTreePartition::load(const MergeTreeData & storage, ReadBuffer & buf)
+void MergeTreePartition::load(const MergeTreeMetaBase & storage, ReadBuffer & buf)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     if (!metadata_snapshot->hasPartitionKey())
@@ -314,7 +314,7 @@ void MergeTreePartition::load(const MergeTreeData & storage, ReadBuffer & buf)
         partition_key_sample.getByPosition(i).type->getDefaultSerialization()->deserializeBinary(value[i], buf);
 }
 
-void MergeTreePartition::store(const MergeTreeData & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
+void MergeTreePartition::store(const MergeTreeMetaBase & storage, const DiskPtr & disk, const String & part_path, MergeTreeDataPartChecksums & checksums) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
@@ -337,7 +337,7 @@ void MergeTreePartition::store(const Block & partition_key_sample, const DiskPtr
     out->finalize();
 }
 
-void MergeTreePartition::store(const MergeTreeData & storage, WriteBuffer & buf) const
+void MergeTreePartition::store(const MergeTreeMetaBase & storage, WriteBuffer & buf) const
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & partition_key_sample = adjustPartitionKey(metadata_snapshot, storage.getContext()).sample_block;
@@ -404,7 +404,7 @@ KeyDescription MergeTreePartition::adjustPartitionKey(const StorageMetadataPtr &
 /*  compatible with old metastore. remove this later  */
 
 #define META_FIELD_DELIMITER '\0'
-void MergeTreePartition::read(const MergeTreeData & storage, ReadBuffer & buffer)
+void MergeTreePartition::read(const MergeTreeMetaBase & storage, ReadBuffer & buffer)
 {
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     /// If there is no partition key add 0 as partition row size

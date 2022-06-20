@@ -16,7 +16,7 @@ class MergeTreeDataPartWide : public IMergeTreeDataPart
 {
 public:
     MergeTreeDataPartWide(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume,
@@ -24,7 +24,7 @@ public:
         const IMergeTreeDataPart * parent_part_ = nullptr);
 
     MergeTreeDataPartWide(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path_ = {},

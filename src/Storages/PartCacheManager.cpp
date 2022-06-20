@@ -299,19 +299,20 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & table, std::uno
             for (auto it = table_entry->partitions.begin(); it != table_entry->partitions.end(); it++)
             {
                 PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(it->second);
-                if (storage->partition_key_sample.columns() > 0 && require_partition_info)
+                const auto & partition_key_sample = storage->getInMemoryMetadataPtr()->getPartitionKey().sample_block;
+                if (partition_key_sample.columns() > 0 && require_partition_info)
                 {
                     WriteBufferFromOwnString out;
                     partition_ptr->partition_info_ptr->partition_ptr->serializeText(*storage, out, format_settings);
                     partition_ptr->partition = out.str();
-                    if (storage->partition_key_sample.columns() == 1)
+                    if (partition_key_sample.columns() == 1)
                     {
                         partition_ptr->first_partition = partition_ptr->partition;
                     }
                     else
                     {
                         WriteBufferFromOwnString out;
-                        const DataTypePtr & type = storage->partition_key_sample.getByPosition(0).type;
+                        const DataTypePtr & type = partition_key_sample.getByPosition(0).type;
                         auto column = type->createColumn();
                         column->insert(partition_ptr->partition_info_ptr->partition_ptr->value[0]);
                         type->getDefaultSerialization()->serializeTextQuoted(*column, 0, out, format_settings);

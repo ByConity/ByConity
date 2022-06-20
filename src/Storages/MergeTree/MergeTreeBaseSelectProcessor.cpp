@@ -27,7 +27,7 @@ namespace ErrorCodes
 
 MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
     Block header,
-    const MergeTreeData & storage_,
+    const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const PrewhereInfoPtr & prewhere_info_,
     ExpressionActionsSettings actions_settings,

@@ -21,7 +21,7 @@ namespace ErrorCodes
 
 
 MergeTreeDataPartWide::MergeTreeDataPartWide(
-       MergeTreeData & storage_,
+       MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
@@ -31,7 +31,7 @@ MergeTreeDataPartWide::MergeTreeDataPartWide(
 }
 
 MergeTreeDataPartWide::MergeTreeDataPartWide(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,

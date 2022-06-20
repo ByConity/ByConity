@@ -9,6 +9,7 @@
 #include <Catalog/DataModelPartWrapper.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
+#include <IO/ReadBufferFromString.h>
 #include <Disks/SingleDiskVolume.h>
 
 namespace DB

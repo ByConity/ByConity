@@ -210,28 +210,28 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
         switch (data.merging_params.mode)
         {
             /// There is nothing to merge in single block in ordinary MergeTree
-            case MergeTreeData::MergingParams::Ordinary:
+            case MergeTreeMetaBase::MergingParams::Ordinary:
                 return nullptr;
-            case MergeTreeData::MergingParams::Replacing:
+            case MergeTreeMetaBase::MergingParams::Replacing:
                 return std::make_shared<ReplacingSortedAlgorithm>(
                     block, 1, sort_description, data.merging_params.version_column, block_size + 1);
-            case MergeTreeData::MergingParams::Collapsing:
+            case MergeTreeMetaBase::MergingParams::Collapsing:
                 return std::make_shared<CollapsingSortedAlgorithm>(
                     block, 1, sort_description, data.merging_params.sign_column,
                     false, block_size + 1, &Poco::Logger::get("MergeTreeBlockOutputStream"));
-            case MergeTreeData::MergingParams::Summing:
+            case MergeTreeMetaBase::MergingParams::Summing:
                 return std::make_shared<SummingSortedAlgorithm>(
                     block, 1, sort_description, data.merging_params.columns_to_sum,
                     partition_key_columns, block_size + 1);
-            case MergeTreeData::MergingParams::Aggregating:
+            case MergeTreeMetaBase::MergingParams::Aggregating:
                 return std::make_shared<AggregatingSortedAlgorithm>(block, 1, sort_description, block_size + 1);
-            case MergeTreeData::MergingParams::VersionedCollapsing:
+            case MergeTreeMetaBase::MergingParams::VersionedCollapsing:
                 return std::make_shared<VersionedCollapsingAlgorithm>(
                     block, 1, sort_description, data.merging_params.sign_column, block_size + 1);
-            case MergeTreeData::MergingParams::Graphite:
+            case MergeTreeMetaBase::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedAlgorithm>(
                     block, 1, sort_description, block_size + 1, data.merging_params.graphite_params, time(nullptr));
-            case MergeTreeData::MergingParams::Unique:
+            case MergeTreeMetaBase::MergingParams::Unique:
                 return nullptr; /// TODO::
         }
 
@@ -270,7 +270,7 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
     return block.cloneWithColumns(status.chunk.getColumns());
 }
 
-MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     BlockWithPartition & block_with_partition, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
     Block & block = block_with_partition.block;
@@ -365,7 +365,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     bool has_bitmap = std::any_of(all_columns.begin(), all_columns.end(),
                                   [](const NameAndTypePair & name_type) { return isBitmap64(name_type.type);});
     if (has_bitmap) part_type = MergeTreeDataPartType::WIDE;
-    if (data.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (data.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
         part_type = MergeTreeDataPartType::WIDE;
@@ -385,7 +385,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     new_data_part->rows_count = block.rows();
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
-    new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
+    new_data_part->checksums_ptr = std::make_shared<MergeTreeMetaBase::DataPart::Checksums>();
     new_data_part->is_temp = true;
 
     SyncGuardPtr sync_guard;
@@ -494,12 +494,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     return new_data_part;
 }
 
-MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(
-    MergeTreeData & data,
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(
+    MergeTreeMetaBase & data,
     Poco::Logger * log,
     Block block,
     const StorageMetadataPtr & metadata_snapshot,
-    MergeTreeData::MutableDataPartPtr && new_data_part)
+    MergeTreeMetaBase::MutableDataPartPtr && new_data_part)
 {
     NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
     MergeTreePartition partition{};
@@ -572,7 +572,7 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeProjectionPartImpl(
     return std::move(new_data_part);
 }
 
-MergeTreeData::MutableDataPartPtr
+MergeTreeMetaBase::MutableDataPartPtr
 MergeTreeDataWriter::writeProjectionPart(Block block, const ProjectionDescription & projection, const IMergeTreeDataPart * parent_part)
 {
     /// Size of part would not be greater than block.bytes() + epsilon
@@ -590,8 +590,8 @@ MergeTreeDataWriter::writeProjectionPart(Block block, const ProjectionDescriptio
     return writeProjectionPartImpl(data, log, block, projection.metadata, std::move(new_data_part));
 }
 
-MergeTreeData::MutableDataPartPtr MergeTreeDataWriter::writeTempProjectionPart(
-    MergeTreeData & data,
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempProjectionPart(
+    MergeTreeMetaBase & data,
     Poco::Logger * log,
     Block block,
     const ProjectionDescription & projection,

@@ -71,7 +71,7 @@ String getSerializedPartMeta(const DataPartPtr & part)
     return part_data.SerializeAsString();
 }
 
-MutableDataPartPtr buildPartFromMeta(const MergeTreeData & storage, const String & part_name, const Protos::DataPartModel & part_data)
+MutableDataPartPtr buildPartFromMeta(const MergeTreeMetaBase & storage, const String & part_name, const Protos::DataPartModel & part_data)
 {
     MergeTreePartInfo part_info;
     if (!MergeTreePartInfo::tryParsePartName(part_name, &part_info, storage.format_version))
@@ -91,7 +91,7 @@ MutableDataPartPtr buildPartFromMeta(const MergeTreeData & storage, const String
     return part;
 }
 
-MutableDataPartPtr buildProjectionFromMeta(const MergeTreeData & storage, const String & projection_name, const Protos::DataPartModel & part_data, const IMergeTreeDataPart * parent)
+MutableDataPartPtr buildProjectionFromMeta(const MergeTreeMetaBase & storage, const String & projection_name, const Protos::DataPartModel & part_data, const IMergeTreeDataPart * parent)
 {
     MergeTreePartInfo part_info("all", 0, 0, 0);
 
@@ -183,7 +183,7 @@ String unescapeForDiskName(const String & s)
     return res;
 }
 
-MutableDataPartPtr createPartFromRaw(const MergeTreeData & storage, const String & key, const String & meta)
+MutableDataPartPtr createPartFromRaw(const MergeTreeMetaBase & storage, const String & key, const String & meta)
 {
     auto pos = key.rfind('_');
     String part_name = key.substr(0, pos);

@@ -1,6 +1,6 @@
 #pragma once
 #include <DataStreams/IBlockInputStream.h>
-#include <Storages/MergeTree/MergeTreeData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Core/Block.h>
 #include <Storages/MergeTree/MergeTreeDataPartTTLInfo.h>
@@ -17,9 +17,9 @@ class TTLBlockInputStream : public IBlockInputStream
 public:
     TTLBlockInputStream(
         const BlockInputStreamPtr & input_,
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
-        const MergeTreeData::MutableDataPartPtr & data_part_,
+        const MergeTreeMetaBase::MutableDataPartPtr & data_part_,
         time_t current_time,
         bool force_
     );
@@ -39,7 +39,7 @@ private:
     bool all_data_dropped = false;
 
     /// ttl_infos and empty_columns are updating while reading
-    const MergeTreeData::MutableDataPartPtr & data_part;
+    const MergeTreeMetaBase::MutableDataPartPtr & data_part;
     Poco::Logger * log;
     Block header;
 };

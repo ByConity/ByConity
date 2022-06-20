@@ -22,7 +22,7 @@ public:
     static constexpr auto DATA_FILE_NAME_WITH_EXTENSION = "data.bin";
 
     MergeTreeDataPartCompact(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
@@ -30,7 +30,7 @@ public:
         const IMergeTreeDataPart * parent_part_ = nullptr);
 
     MergeTreeDataPartCompact(
-        MergeTreeData & storage_,
+        MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},

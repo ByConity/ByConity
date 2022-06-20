@@ -319,23 +319,23 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (is_cnch)
         name_part = name_part.substr(strlen("Cnch"));
 
-    MergeTreeData::MergingParams merging_params;
-    merging_params.mode = MergeTreeData::MergingParams::Ordinary;
+    MergeTreeMetaBase::MergingParams merging_params;
+    merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
 
     if (name_part == "Collapsing")
-        merging_params.mode = MergeTreeData::MergingParams::Collapsing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Collapsing;
     else if (name_part == "Summing")
-        merging_params.mode = MergeTreeData::MergingParams::Summing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Summing;
     else if (name_part == "Aggregating")
-        merging_params.mode = MergeTreeData::MergingParams::Aggregating;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Aggregating;
     else if (name_part == "Replacing")
-        merging_params.mode = MergeTreeData::MergingParams::Replacing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Replacing;
     else if (name_part == "Graphite")
-        merging_params.mode = MergeTreeData::MergingParams::Graphite;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
-        merging_params.mode = MergeTreeData::MergingParams::VersionedCollapsing;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::VersionedCollapsing;
     else if (name_part == "Unique")
-        merging_params.mode = MergeTreeData::MergingParams::Unique;
+        merging_params.mode = MergeTreeMetaBase::MergingParams::Unique;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -374,7 +374,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_mandatory_param("replica name");
         }
 
-        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+        if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
             add_optional_param("version");
     }
 
@@ -390,19 +390,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     {
         default:
             break;
-        case MergeTreeData::MergingParams::Summing:
+        case MergeTreeMetaBase::MergingParams::Summing:
             add_optional_param("list of columns to sum");
             break;
-        case MergeTreeData::MergingParams::Replacing:
+        case MergeTreeMetaBase::MergingParams::Replacing:
             add_optional_param("version");
             break;
-        case MergeTreeData::MergingParams::Collapsing:
+        case MergeTreeMetaBase::MergingParams::Collapsing:
             add_mandatory_param("sign column");
             break;
-        case MergeTreeData::MergingParams::Graphite:
+        case MergeTreeMetaBase::MergingParams::Graphite:
             add_mandatory_param("'config_element_for_graphite_schema'");
             break;
-        case MergeTreeData::MergingParams::VersionedCollapsing: {
+        case MergeTreeMetaBase::MergingParams::VersionedCollapsing: {
             add_mandatory_param("sign column");
             add_mandatory_param("version");
             break;
@@ -437,7 +437,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def && merging_params.mode != MergeTreeData::MergingParams::Unique)
+    if (is_extended_storage_def && merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
@@ -503,7 +503,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                     "No replica name in config" + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::NO_REPLICA_NAME_GIVEN);
             ++arg_num;
         }
-        else if (is_extended_storage_def && (arg_cnt == 0 || !engine_args[arg_num]->as<ASTLiteral>() || (arg_cnt == 1 && merging_params.mode == MergeTreeData::MergingParams::Graphite)))
+        else if (is_extended_storage_def && (arg_cnt == 0 || !engine_args[arg_num]->as<ASTLiteral>() || (arg_cnt == 1 && merging_params.mode == MergeTreeMetaBase::MergingParams::Graphite)))
         {
             /// Try use default values if arguments are not specified.
             /// Note: {uuid} macro works for ON CLUSTER queries when database engine is Atomic.
@@ -579,7 +579,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     /// This merging param maybe used as part of sorting key
     std::optional<String> merging_param_key_arg;
 
-    if (merging_params.mode == MergeTreeData::MergingParams::Collapsing)
+    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.sign_column))
             throw Exception(
@@ -587,7 +587,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 ErrorCodes::BAD_ARGUMENTS);
         --arg_cnt;
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Replacing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Replacing)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is the name of the version column.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -599,7 +599,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             --arg_cnt;
         }
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Summing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Summing)
     {
         /// If the last element is not index_granularity or replica_name (a literal), then this is a list of summable columns.
         if (arg_cnt && !engine_args[arg_cnt - 1]->as<ASTLiteral>())
@@ -608,7 +608,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             --arg_cnt;
         }
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Graphite)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Graphite)
     {
         String graphite_config_name;
         String error_msg
@@ -628,7 +628,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         --arg_cnt;
         setGraphitePatternsFromConfig(args.getContext(), graphite_config_name, merging_params.graphite_params);
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::VersionedCollapsing)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::VersionedCollapsing)
     {
         if (!tryGetIdentifierNameInto(engine_args[arg_cnt - 1], merging_params.version_column))
             throw Exception(
@@ -647,7 +647,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// sorting key.
         merging_param_key_arg = merging_params.version_column;
     }
-    else if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         if (replicated)
             throw Exception("ReplicatedUniqueMergeTree is not supported, use HaUniqueMergeTree instead", ErrorCodes::BAD_ARGUMENTS);
@@ -664,7 +664,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             /// besides choose an explicit column as version, we also support using `partition by` expression
             /// as version for convenience and better performance
             if (args.storage_def->partition_by && args.storage_def->partition_by->getColumnName() == engine_args.back()->getColumnName())
-                merging_params.version_column = MergeTreeData::MergingParams::partition_value_as_version;
+                merging_params.version_column = MergeTreeMetaBase::MergingParams::partition_value_as_version;
             else if (!tryGetIdentifierNameInto(engine_args.back(), merging_params.version_column))
                 throw Exception(
                     "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
@@ -855,7 +855,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     }
     else if (is_ha)
     {
-        if (merging_params.mode == MergeTreeData::MergingParams::Unique)
+        if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
         {
             return StorageHaUniqueMergeTree::create(
                 zookeeper_path,

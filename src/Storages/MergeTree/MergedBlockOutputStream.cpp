@@ -58,7 +58,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     else
         writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
         if (!writer_wide)

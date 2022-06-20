@@ -140,7 +140,7 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
 
 void MergeTreeDataPartWriterWide::init()
 {
-    if (storage.merging_params.mode == MergeTreeData::MergingParams::Unique)
+    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
     {
         if (storage.getContext()->getSettingsRef().enable_disk_based_unique_key_index_method
             && storage.getSettings()->enable_disk_based_unique_key_index)

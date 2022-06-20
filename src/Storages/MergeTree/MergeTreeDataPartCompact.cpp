@@ -19,7 +19,7 @@ namespace ErrorCodes
 
 
 MergeTreeDataPartCompact::MergeTreeDataPartCompact(
-       MergeTreeData & storage_,
+       MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_,
@@ -29,7 +29,7 @@ MergeTreeDataPartCompact::MergeTreeDataPartCompact(
 }
 
 MergeTreeDataPartCompact::MergeTreeDataPartCompact(
-        const MergeTreeData & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const MergeTreePartInfo & info_,
         const VolumePtr & volume_,
