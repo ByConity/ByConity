@@ -87,6 +87,8 @@
 #include "MetricsTransmitter.h"
 #include <DataTypes/MapHelpers.h>
 
+#include <Catalog/CatalogConfig.h>
+#include <Catalog/Catalog.h>
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
@@ -510,7 +512,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
-    global_context->setServerType(config().getString("cnch_type", "server"));
+    global_context->setServerType(config().getString("cnch_type", "standalone"));
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
@@ -520,6 +522,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("exchange_port") && config().has("exchange_status_port"))
     {
         global_context->setComplexQueryActive(true);
+    }
+
+    Catalog::CatalogConfig catalog_conf;
+    if (config().has("catalog_service"))
+    {
+        /// set bytekv properties.
+        if (config().has("catalog_service.bytekv"))
+        {
+            catalog_conf.byteKV.service_name = config().getString("catalog_service.bytekv.service_name");
+            catalog_conf.byteKV.cluster_name = config().getString("catalog_service.bytekv.cluster_name");
+            catalog_conf.byteKV.name_space = config().getString("catalog_service.bytekv.name_space");
+            catalog_conf.byteKV.table_name = config().getString("catalog_service.bytekv.table_name");
+        }
     }
 
     bool has_zookeeper = config().has("zookeeper");
@@ -1011,7 +1026,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setHdfsUser(hdfs_user);
     std::string hdfs_nnproxy = config().getString("hdfs_nnproxy", "nnproxy");
     global_context->setHdfsNNProxy(hdfs_nnproxy);
-    
+
     /// Init HDFS3 client config path
     std::string hdfs_config = config().getString("hdfs3_config", "");
     if (!hdfs_config.empty())
@@ -1021,11 +1036,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
     global_context->setHdfsConnectionParams(hdfs_params);
-    
+
     /// TODO: @rmq
     /// set the value of has_hdfs_disk as cnch-dev.
-    bool has_hdfs_disk = false; 
-    if( has_hdfs_disk ) 
+    bool has_hdfs_disk = false;
+    if( has_hdfs_disk )
     {
         const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
         const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
@@ -1209,6 +1224,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Set current database name before loading tables and databases because
     /// system logs may copy global context.
     global_context->setCurrentDatabaseNameInGlobalContext(default_database);
+
+    /// Initialize components in server or worker.
+    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
+    {
+        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+    }
 
     LOG_INFO(log, "Loading metadata from {}", path);
 

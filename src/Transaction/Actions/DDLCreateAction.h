@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Transaction/Actions/Action.h>
 

@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <Core/Names.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 // #include <Interpreters/Context.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_common.pb.h>
@@ -150,7 +150,7 @@ struct UndoResource
             if (placeholders[i].empty())
                 throw Exception("UndoResource: empty placeholder, this is a bug", ErrorCodes::LOGICAL_ERROR);
 
-            /// Only for backward and forward compatibility with cnch-1.0 and cnch-1.1, 
+            /// Only for backward and forward compatibility with cnch-1.0 and cnch-1.1,
             /// can completely remove them after verify the dev version
             if (i == 0) pb_model.set_placeholder_0(placeholders[i]);
             if (i == 1) pb_model.set_placeholder_1(placeholders[i]);
@@ -168,13 +168,13 @@ struct UndoResource
     UndoResourceType type() const { return pb_model.type(); }
     const String & uuid() const { return pb_model.uuid(); }
     size_t numPlaceholders() const { return pb_model.placeholders_size(); }
-    const String & placeholders(size_t i) const 
+    const String & placeholders(size_t i) const
     {
         if (i > 1)
         {
             /// old format has only 2 placeholders, so if i > 1 it must from new format
             /// remove this check for better performance later
-            return pb_model.placeholders(i); 
+            return pb_model.placeholders(i);
         }
         if (i == 0) return isLegacy() ? pb_model.placeholder_0() : pb_model.placeholders(0);
         if (i == 1) return isLegacy() ? pb_model.placeholder_1() : pb_model.placeholders(1);

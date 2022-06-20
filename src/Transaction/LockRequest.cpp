@@ -2,7 +2,7 @@
 #include <Transaction/LockManager.h>
 #include <Transaction/LockRequest.h>
 #include <Common/Exception.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <IO/WriteHelpers.h>
 #include <Transaction/LockDefines.h>
 #include <Protos/RPCHelpers.h>

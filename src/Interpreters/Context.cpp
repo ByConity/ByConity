@@ -523,7 +523,7 @@ struct ContextSharedPart
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
 
-    ServerType server_type;
+    ServerType server_type{ServerType::standalone};
     mutable std::unique_ptr<TransactionCoordinatorRcCnch> cnch_txn_coordinator;
 
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
@@ -3319,7 +3319,7 @@ void Context::setMetaChecker()
         }
         else
         {
-            auto database_snapshot = DatabaseCatalog::instance().getDatabases();
+            auto database_snapshot = DatabaseCatalog::instance().getNonCnchDatabases();
 
             for (auto it = database_snapshot.begin(); it != database_snapshot.end(); it++) {
                 try {

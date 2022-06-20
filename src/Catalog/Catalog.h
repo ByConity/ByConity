@@ -79,7 +79,7 @@ public:
     ///database related interface
     void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
-    DatabasePtr getDatabase(const String & database, const Context & context, const TxnTimestamp & ts = 0);
+    DatabasePtr getDatabase(const String & database, const ContextPtr & context, const TxnTimestamp & ts = 0);
 
     bool isDatabaseExists(const String & database, const TxnTimestamp & ts = 0);
 

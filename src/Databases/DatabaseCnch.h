@@ -22,6 +22,7 @@ public:
 
     String getEngineName() const override { return "Cnch"; }
     UUID getUUID() const override { return db_uuid; }
+    bool canContainMergeTreeTables() const override { return false; }
     void createTable(
         ContextPtr context,
         const String & table_name,
@@ -42,6 +43,8 @@ public:
     void shutdown() override {}
 
     TxnTimestamp commit_time;
+protected:
+    ASTPtr getCreateTableQueryImpl(const String & name, ContextPtr context, bool throw_on_error) const override;
 private:
     const UUID db_uuid;
     Poco::Logger * log;

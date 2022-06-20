@@ -31,7 +31,6 @@ CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Pro
     else
     {
         throw Exception("DataModelDB has no uuid", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-        //db = std::make_shared<DatabaseCnch>(db_model.name(), context);
     }
     return db;
 }

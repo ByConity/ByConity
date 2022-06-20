@@ -156,6 +156,7 @@ public:
     DatabasePtr tryGetDatabase(const UUID & uuid) const;
     bool isDatabaseExist(const String & database_name) const;
     Databases getDatabases() const;
+    Databases getNonCnchDatabases() const;
 
     /// Same as getDatabase(const String & database_name), but if database_name is empty, current database of local_context is used
     DatabasePtr getDatabase(const String & database_name, ContextPtr local_context) const;
@@ -219,6 +220,10 @@ private:
     explicit DatabaseCatalog(ContextMutablePtr global_context_);
     void assertDatabaseExistsUnlocked(const String & database_name) const;
     void assertDatabaseDoesntExistUnlocked(const String & database_name) const;
+
+    DatabasePtr getDatabaseCnch(const String & database_name) const;
+    DatabasePtr getDatabaseCnch(const UUID & uuid) const;
+    Databases getDatabaseCnchs() const;
 
     void shutdownImpl();
 
@@ -286,6 +291,7 @@ private:
     static constexpr time_t default_drop_delay_sec = 8 * 60;
     time_t drop_delay_sec = default_drop_delay_sec;
     std::condition_variable wait_table_finally_dropped;
+    const bool use_cnch_catalog;
 };
 
 }

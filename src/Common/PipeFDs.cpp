@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <string>
 #include <algorithm>
+#include <iostream>
 
 
 namespace DB
@@ -65,7 +66,8 @@ LazyPipeFDs::~LazyPipeFDs()
     }
     catch (...)
     {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        //tryLogCurrentException(__PRETTY_FUNCTION__);
+        std::cout << "exception at ~LazyPipeFDs\n";
     }
 }
 

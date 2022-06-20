@@ -5,7 +5,7 @@
 #include <optional>
 #include <boost/noncopyable.hpp>
 
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Interpreters/StorageID.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>

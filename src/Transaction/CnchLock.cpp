@@ -1,6 +1,6 @@
 #include <Transaction/CnchLock.h>
 
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 // #include <MergeTreeCommon/CnchServerClient.h>
 // #include <MergeTreeCommon/CnchServerClientPool.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>

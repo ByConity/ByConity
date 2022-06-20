@@ -3,7 +3,7 @@
 #include <Catalog/Catalog.h>
 // #include <Interpreters/CnchSystemLog.h>
 #include <Parsers/ASTDropQuery.h>
-#include <Storages/Kafka/StorageCnchKafka.h>
+// #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 // #include <Storages/StorageCnchMergeTree.h>
 // #include <MergeTreeCommon/MemoryBufferManager.h>

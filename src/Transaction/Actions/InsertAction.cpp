@@ -92,7 +92,7 @@ UInt32 InsertAction::collectNewParts() const
     return collectNewParts(parts);
 }
 
-void InsertAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, bool set_column_mutation)
+void InsertAction::updatePartData(MutableMergeTreeDataPartCNCHPtr /* part */, bool /*set_column_mutation*/)
 {
     // if (set_column_mutation)
     // {
