@@ -509,7 +509,7 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
 bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics)
 {
     auto storage_settings = storage.getSettings();
-    /// const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
+    const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
 
     SCOPE_EXIT(if (auto total = metrics.elapsed_get_data_parts + metrics.elapsed_calc_visible_parts + metrics.elapsed_calc_merge_parts
                        + metrics.elapsed_select_parts;
@@ -585,6 +585,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         getMergePred(merging_mutating_parts_snapshot),
         storage_settings->max_bytes_to_merge_at_max_space_in_pool,
         false, /// aggressive
+        enable_batch_select,
         false, /// merge_with_ttl_allowed
         nullptr); /// log
 
@@ -750,8 +751,6 @@ String CnchMergeMutateThread::triggerPartMerge(
     auto & storage = checkAndGetCnchTable(istorage);
     auto storage_settings = storage.getSettings();
 
-    [[maybe_unused]] bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
-
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(
         storage,
@@ -760,6 +759,7 @@ String CnchMergeMutateThread::triggerPartMerge(
         getMergePred(merging_mutating_parts_snapshot),
         storage_settings->max_bytes_to_merge_at_max_space_in_pool,
         aggressive, /// aggressive
+        false, /// enable_batch_select
         false, /// merge_with_ttl_allowed
         log);
 

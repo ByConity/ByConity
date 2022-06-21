@@ -56,6 +56,12 @@ static double mapPiecewiseLinearToUnit(double value, double min, double max)
 
 IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partitions, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler)
 {
+    if (settings.enable_batch_select)
+    {
+        LOG_ERROR(&Poco::Logger::get("DanceMergeSelector"), "Calling select() with enable_batch_select=1 is not supported!");
+        return {};
+    }
+
     for (auto & partition : partitions)
     {
         if (partition.size() >= 2)
@@ -68,11 +74,18 @@ IMergeSelector::PartsRange DanceMergeSelector::select(const PartsRanges & partit
             selectWithinPartition(partition, max_total_size_to_merge, merge_scheduler);
     }
 
-    auto it = std::min_element(
-        best_ranges.begin(), best_ranges.end(), [](auto & lhs, auto & rhs) { return lhs.second.min_score < rhs.second.min_score; });
-    if (it != best_ranges.end() && it->second.valid())
-        return PartsRange(it->second.best_begin, it->second.best_end);
+    BestRangeWithScore res{};
+    for (const auto & [_, ranges_in_partition] : best_ranges)
+    {
+        if (!ranges_in_partition.empty())
+        {
+            auto & range = ranges_in_partition.front();
+            res.update(range.min_score, range.best_begin, range.best_end);
+        }
+    }
 
+    if (res.valid())
+        return PartsRange(res.best_begin, res.best_end);
     return {};
 }
 
@@ -91,12 +104,15 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
     }
 
     std::vector<BestRangeWithScore *> range_vec;
-    for (auto & [_, range] : best_ranges)
+    for (auto & [_, ranges] : best_ranges)
     {
-        if (range.valid())
-            range_vec.push_back(&range);
+        for (auto & range : ranges)
+        {
+            if (range.valid())
+                range_vec.push_back(&range);
+        }
     }
-    std::sort(range_vec.begin(), range_vec.end(), [](auto * lhs, auto * rhs) { return lhs->min_score < rhs->min_score; });
+    std::sort(range_vec.begin(), range_vec.end(), [](auto & lhs, auto & rhs) { return lhs->min_score < rhs->min_score; });
 
     PartsRanges res;
     for (auto & range : range_vec)
@@ -105,19 +121,89 @@ IMergeSelector::PartsRanges DanceMergeSelector::selectMulti(const PartsRanges & 
     return res;
 }
 
+/**
+ * @brief scan range [i, j] of score_table and select at most n ranges ordered by score.
+ * 
+ * @param parts source data parts.
+ * @param score_table the score table.
+ * @param i begin position (inclusive)
+ * @param j end position (inclusive)
+ * @param num_max_out the max size of the result vector.
+ * @param max_width the max length of a result range.
+ * @param out output collector.
+ */
+void DanceMergeSelector::selectRangesFromScoreTable(
+    const PartsRange & parts, 
+    const std::vector<std::vector<double>> & score_table, 
+    size_t i, 
+    size_t j, 
+    size_t num_max_out,
+    size_t max_width,
+    std::vector<BestRangeWithScore> & out)
+{
+    if (i >= j || out.size() >= num_max_out)
+        return;
+    double min_score = std::numeric_limits<double>::max();
+    size_t min_i = 0, min_j = 0;
+    
+    for (auto m = i; m <= j; m++)
+    {
+        if (m >= score_table.size())
+            break;
+
+        for (auto n = m + 1; n <= j && n - m + 1 <= max_width; n++)
+        {
+            if (n - m + 1 >= score_table[m].size())
+                break;
+
+            if (score_table[m][n - m + 1] < min_score)
+            {
+                min_score = score_table[m][n - m + 1];
+                min_i = m;
+                min_j = n;
+            }
+        }
+    }
+    if (min_score == std::numeric_limits<double>::max())
+        return;
+
+    BestRangeWithScore range{};
+    range.update(min_score, parts.begin() + min_i, parts.begin() + min_j + 1);
+    out.push_back(range);
+
+    if (min_i > i + 1)
+        selectRangesFromScoreTable(parts, score_table, i, min_i - 1, num_max_out, max_width, out);
+
+    if (min_j < j - 1)
+        selectRangesFromScoreTable(parts, score_table, min_j + 1, j, num_max_out, max_width, out);
+}
+
 void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const size_t max_total_size_to_merge, [[maybe_unused]] MergeScheduler * merge_scheduler)
 {
     if (parts.size() <= 1)
         return;
 
-    BestRangeWithScore current_range;
+    BestRangeWithScore best_range;
 
-    for (size_t begin = 0; begin < parts.size(); ++begin)
+    /// If there are too many parts, limit the max_begin and max_end.
+    size_t max_parts_to_break = settings.max_parts_to_break;
+    size_t max_begin = parts.size() < max_parts_to_break ? parts.size() - 1 : max_parts_to_break - 1;
+    size_t max_end = max_begin + 1;
+
+    auto & partition_id = toPart(parts.front().data)->info.partition_id;
+    bool enable_batch_select = enable_batch_select_for_partition(partition_id);
+
+    /// score_table[i][j] means begin with i and length is j --> range [i, i + j - 1]
+    std::vector<std::vector<double>> score_table;
+    size_t max_parts_to_merge = settings.max_parts_to_merge_base;
+    if (enable_batch_select)
     {
-        /// If too many parts, select only from first, to avoid complexity.
-        if (begin > settings.max_parts_to_break)
-            break;
+        for (size_t i = 0; i <= max_begin; i++)
+            score_table.emplace_back(std::vector<double>(max_parts_to_merge + 1, std::numeric_limits<double>::max()));
+    }
 
+    for (size_t begin = 0; begin < max_begin; ++begin)
+    {
         if (!parts[begin].shall_participate_in_merges)
             continue;
 
@@ -126,13 +212,14 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
         size_t min_age = parts[begin].age;
         size_t max_size = parts[begin].size;
 
-        for (size_t end = begin + 2; end <= parts.size(); ++end)
+        for (size_t end = begin + 2; end <= max_end; ++end)
         {
-            if (settings.max_parts_to_merge_base && end - begin > settings.max_parts_to_merge_base)
+            if (end - begin > max_parts_to_merge)
                 break;
 
             if (!parts[end - 1].shall_participate_in_merges)
-                continue;
+                /// TODO(zuochuang.zema): need to set begin to end ?
+                break;
 
             size_t cur_size = parts[end - 1].size;
             size_t cur_rows = parts[end - 1].rows;
@@ -172,19 +259,51 @@ void DanceMergeSelector::selectWithinPartition(const PartsRange & parts, const s
                 && parts[end - 1].size < (0.001 + settings.enable_penalty_for_small_parts_at_right_ratio_base / (end - begin)))
                 current_score *= settings.score_penalty_for_small_parts_at_right;
 
-            current_range.update(current_score, parts.begin() + begin, parts.begin() + end);
+            best_range.update(current_score, parts.begin() + begin, parts.begin() + end);
+            if (enable_batch_select)
+                score_table[begin][end - begin] = current_score;
         }
     }
 
-    if (!current_range.valid())
-        return;
+    /// If batch_select is disabled, then only track one best range for each partition.
+    if (!enable_batch_select)
+    {
+        if (!best_range.valid())
+            return;
 
-    auto & partition_id = toPart(parts.front().data)->info.partition_id;
-    auto num_parts_of_partition = num_parts_of_partitions[partition_id];
-    if (num_parts_of_partition < settings.min_parts_to_enable_multi_selection)
-        best_ranges["all"].update(current_range.min_score, current_range.best_begin, current_range.best_end);
-    else
-        best_ranges[partition_id].update(current_range.min_score, current_range.best_begin, current_range.best_end);
+        if (is_small_partition(partition_id))
+            best_ranges["all"].front().update(best_range.min_score, best_range.best_begin, best_range.best_end);
+        else
+        {
+            if (best_ranges[partition_id].empty())
+                best_ranges[partition_id].push_back({});
+            best_ranges[partition_id].front().update(best_range.min_score, best_range.best_begin, best_range.best_end);
+        }
+        return;
+    }
+
+    /// If batch_select is enabled, then get a bundle of ranges from score_table for each partition.
+    size_t num_expected_ranges = expected_ranges_num(max_begin);
+    std::vector<BestRangeWithScore> res_ranges;
+    if (best_range.valid())
+    {
+        res_ranges.emplace_back(best_range);
+        size_t begin = best_range.best_begin - parts.begin();
+        size_t end = best_range.best_end - parts.begin() - 1;
+        if (begin > 1)
+            selectRangesFromScoreTable(parts, score_table, 0, begin - 1, num_expected_ranges, max_parts_to_merge, res_ranges);
+
+        if (end + 2 < max_end)
+            selectRangesFromScoreTable(parts, score_table, end + 1, max_end - 1, num_expected_ranges, max_parts_to_merge, res_ranges);
+    }
+
+    for (const auto & range : res_ranges)
+    {
+        if (is_small_partition(partition_id))
+            best_ranges["all"].front().update(range.min_score, range.best_begin, range.best_end);
+        else 
+            best_ranges[partition_id].emplace_back(range);
+    }
 }
 
 bool DanceMergeSelector::allow(double sum_size, double max_size, double min_age, double range_size)
