@@ -1043,10 +1043,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool has_hdfs_disk = false;
     if( has_hdfs_disk )
     {
-        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
-        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
         const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
-        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_io_error_num_to_reconnect);
     }
 
     /// TODO: @pengxindong @rmq

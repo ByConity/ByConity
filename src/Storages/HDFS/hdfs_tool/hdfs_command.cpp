@@ -64,43 +64,42 @@ int main(int argc, char ** argv) {
     if (options.count("nnproxy"))
         nnproxy = options["nnproxy"].as<string>();
     DB::HDFSConnectionParams hdfs_params(DB::HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy) ;
-    DB::registerDefaultHdfsFileSystem(hdfs_params, 100000, 100, 10);
+    DB::registerDefaultHdfsFileSystem(hdfs_params, 10);
+
+    auto& hdfs_fs = DB::getDefaultHdfsFileSystem();
 
     if (options.count("mkdir"))
     {
         auto directory = options["mkdir"].as<string>();
-        DB::HDFSCommon::File file(directory);
-        file.createDirectory();
+
+        hdfs_fs->createDirectory(directory);
         std::cout << "mkdir " << directory << " success" << std::endl;
     }
     else if (options.count("rmdir"))
     {
         auto directory = options["rmdir"].as<string>();
-        DB::HDFSCommon::File file(directory);
-        file.remove();
+        hdfs_fs->remove(directory, false);
         std::cout << "rmdir " << directory << " success" << std::endl;
     }
     else if (options.count("rmr"))
     {
         auto directory = options["rmr"].as<string>();
-        DB::HDFSCommon::File file(directory);
-        file.remove(true);
+        hdfs_fs->remove(directory, true);
         std::cout << "rmr " << directory << " success" << std::endl;
     }
     else if (options.count("ls"))
     {
         auto directory = options["ls"].as<string>();
-        DB::HDFSCommon::File file(directory);
-        if (!file.exists())
+        if (!hdfs_fs->exists(directory))
         {
             std::cout << directory << " No such file or directory" << std::endl;
             return 0;
         }
-        std::vector<DB::HDFSCommon::File> files;
-        file.list(files);
+        std::vector<String> files;
+        hdfs_fs->list(directory, files);
         for (auto & f : files)
         {
-            std::cout << directory << "/" << f.getPath() << std::endl;
+            std::cout << directory << "/" << f << std::endl;
         }
     }
     else if (options.count("read_entire_file"))

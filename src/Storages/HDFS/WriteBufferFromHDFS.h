@@ -3,8 +3,7 @@
 #include <Common/config.h>
 
 #if USE_HDFS
-#include <IO/WriteBuffer.h>
-#include <IO/BufferWithOwnMemory.h>
+#include <IO/WriteBufferFromFileBase.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <string>
 #include <memory>
@@ -15,7 +14,7 @@ namespace DB
 /** Accepts HDFS path to file and opens it.
  * Closes file by himself (thus "owns" a file descriptor).
  */
-class WriteBufferFromHDFS final : public BufferWithOwnMemory<WriteBuffer>
+class WriteBufferFromHDFS final : public WriteBufferFromFileBase
 {
 
 public:
@@ -32,15 +31,13 @@ public:
         const size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         int flag = O_WRONLY);
 
-    WriteBufferFromHDFS(WriteBufferFromHDFS &&) = default;
-
     ~WriteBufferFromHDFS() override;
 
     void nextImpl() override;
 
     void sync() override;
     off_t getPositionInFile();
-    std::string getFileName() const;  
+    std::string getFileName() const override;
     void finalize() override;
 
 private:

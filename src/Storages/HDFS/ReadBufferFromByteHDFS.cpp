@@ -65,7 +65,7 @@ ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
     , offset_in_current_file(0)
     , builder(nullptr)
     // for nnproxy, we create a filesystem for each readbuffer. Otherwise, we use the global filesystem.
-    , fs(hdfs_params_.conn_type == HDFSConnectionParams::CONN_NNPROXY ? nullptr : DB::getDefaultHdfsFileSystem()->GetFS())
+    , fs(hdfs_params_.conn_type == HDFSConnectionParams::CONN_NNPROXY ? nullptr : DB::getDefaultHdfsFileSystem()->getFS())
     , fin{nullptr}
     , total_network_throttler(total_network_throttler_)
 {

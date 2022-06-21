@@ -3,6 +3,8 @@
 #include <Common/PODArray.h>
 #include <Common/ThreadPool.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Poco/URI.h>
 #include <Poco/Random.h>
 #include <Poco/File.h>
@@ -25,8 +27,9 @@ namespace ErrorCodes
 HDFSDumper::HDFSDumper(const String & hdfs_user_, const String & hdfs_nnproxy_, size_t buffer_size_)
     : buffer_size(buffer_size_)
 {
-    HDFSConnectionParams hdfsParams(HDFSConnectionParams::CONN_NNPROXY, hdfs_user_, hdfs_nnproxy_);
-    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfsParams, 100000, 100, 10);
+    hdfs_params = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY,
+        hdfs_user_, hdfs_nnproxy_);
+    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfs_params, 0);
 }
 
 void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & remote_path, std::vector<String> & parts_to_upload)
@@ -46,8 +49,8 @@ void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & r
         catch(Exception & e)
         {
             // clean incomplete file.
-            if (hdfs_filesystem->Exists(remote_file))
-                hdfs_filesystem->Delete(remote_file);
+            if (hdfs_filesystem->exists(remote_file))
+                hdfs_filesystem->remove(remote_file);
             
             throw e;
         }
@@ -100,12 +103,12 @@ std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const D
 
     String source_dir = Poco::URI(remote_path).getPath();
     std::vector<String> remote_files;
-    hdfs_filesystem->List(source_dir, remote_files);
+    hdfs_filesystem->list(source_dir, remote_files);
     ThreadPool pool;
     for (auto & file_name : remote_files)
     {
         String full_source_file_path = fs::path(source_dir) / file_name;
-        if (hdfs_filesystem->IsDirectory(full_source_file_path))
+        if (hdfs_filesystem->isDirectory(full_source_file_path))
             continue;
 
         size_t filename_len = file_name.length();
@@ -113,7 +116,7 @@ std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const D
         if (!(filename_len > 4 && endsWith(file_name, COMPRESSION_SUFFIX) ))
             throw Exception("File has wrong part file format. " + String(full_source_file_path), ErrorCodes::UNKNOWN_FORMAT);
 
-        auto disk_ptr = get_disk_and_local_path(hdfs_filesystem->GetSize(full_source_file_path));
+        auto disk_ptr = get_disk_and_local_path(hdfs_filesystem->getFileSize(full_source_file_path));
         // create local directory if not exists.
         if (!disk_ptr->exists(relative_local_path))
             disk_ptr->createDirectory(relative_local_path);
@@ -161,10 +164,7 @@ void HDFSDumper::uploadFileToRemote(const String & local_path, const String & re
 {
     LOG_DEBUG(log, "Uploading local file {} to remote {}", local_path, remote_path);
     // open remote file for write
-    int fd = hdfs_filesystem->Open(remote_path, O_WRONLY|O_CREAT, 0);
-
-    if (fd <=0)
-        throw Exception("Cannot open remote file : " + remote_path, ErrorCodes::CANNOT_OPEN_FILE);
+    WriteBufferFromHDFS write_buffer(remote_path, hdfs_params);
 
     // open local file for read
     FILE * fin = std::fopen(local_path.data(), "r+");
@@ -178,7 +178,7 @@ void HDFSDumper::uploadFileToRemote(const String & local_path, const String & re
     {
         bytes_read = std::fread(buffer.data(), 1, buffer_size, fin);
         if (bytes_read > 0)
-            hdfs_filesystem->Write(fd, buffer.data(), bytes_read);
+            write_buffer.write(buffer.data(), bytes_read);
         else
             break;
     }
@@ -189,10 +189,7 @@ void HDFSDumper::getFileFromRemote(const String & remote_path, const String & lo
 {
     LOG_DEBUG(log, "Downloading remote file {} to local {}", remote_path, local_path);
     // open remote file for read
-    int fd = hdfs_filesystem->Open(remote_path, O_RDONLY, 0);
-
-    if (fd <=0)
-        throw Exception("Cannot open remote file : " + remote_path, ErrorCodes::CANNOT_OPEN_FILE);
+    ReadBufferFromByteHDFS read_buffer(remote_path, false, hdfs_params);
 
     // open local file for write
     FILE * fout = std::fopen(local_path.data(), "w+");
@@ -204,7 +201,7 @@ void HDFSDumper::getFileFromRemote(const String & remote_path, const String & lo
 
     while (true)
     {
-        bytes_read = hdfs_filesystem->Read(fd, buffer.data(), buffer_size);
+        bytes_read = read_buffer.read(buffer.data(), buffer_size);
         if (bytes_read < 0)
             throw Exception("Fail to read HDFS file: " + remote_path, ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
 
