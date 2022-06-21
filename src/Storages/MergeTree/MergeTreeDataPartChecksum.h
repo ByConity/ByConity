@@ -14,6 +14,7 @@ class SipHash;
 
 namespace DB
 {
+using StorageType = DiskType::Type;
 
 /// Checksum of one file.
 struct MergeTreeDataPartChecksum
@@ -25,6 +26,10 @@ struct MergeTreeDataPartChecksum
     uint128 file_hash {};
 
     bool is_compressed = false;
+    /// MOCK for MergeTreeCNCHDataDumper
+    bool is_deleted = false;
+    Int64 mutation = 0;
+
     UInt64 uncompressed_size {};
     uint128 uncompressed_hash {};
 
@@ -50,6 +55,8 @@ struct MergeTreeDataPartChecksums
     using FileChecksums = std::map<String, Checksum>;
     using Versions = std::shared_ptr<MergeTreeDataPartVersions>;
     FileChecksums files;
+
+    StorageType storage_type = StorageType::Local ;
 
     Versions versions = std::make_shared<MergeTreeDataPartVersions>(false);
 

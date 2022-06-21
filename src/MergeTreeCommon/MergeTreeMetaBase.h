@@ -280,7 +280,19 @@ public:
     /// Merging params - what additional actions to perform during merge.
     const MergingParams merging_params;
 
+    ///TODO: MOCK FOR MergeTreeDataDumper
+    /// Names of columns for primary key.
+    Names primary_key_columns;
+
+    ExpressionActionsPtr sorting_key_expr;
+
+
     bool is_custom_partitioned = false;
+
+    ///TODO: MOCK FOR MergeTreeDataDumper
+    ExpressionActionsPtr minmax_idx_expr;
+    Names minmax_idx_columns;
+    DataTypes minmax_idx_column_types;
 
     /// Used only for old syntax tables. Never changes after init.
     Int64 minmax_idx_date_column_pos = -1; /// In a common case minmax index includes a date column.
