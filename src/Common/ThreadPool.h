@@ -81,6 +81,7 @@ public:
     void setMaxFreeThreads(size_t value);
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
+    size_t getMaxQueueSize() const;
 
 private:
     mutable std::mutex mutex;

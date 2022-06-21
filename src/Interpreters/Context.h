@@ -867,6 +867,10 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
 
+    ThreadPool & getLocalDiskCacheThreadPool() const;
+    ThreadPool & getLocalDiskCacheEvictThreadPool() const;
+    ThrottlerPtr getDiskCacheThrottler() const;
+
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
