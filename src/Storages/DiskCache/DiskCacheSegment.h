@@ -1,12 +1,10 @@
 #pragma once
 
-#include <Core/UUID.h>
-#include <Core/UUIDHelpers.h>
 #include <IO/UncompressedCache.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
-#include "Storages/HDFS/HDFSCommon.h"
 
 namespace DB
 {
