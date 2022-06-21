@@ -1,6 +1,5 @@
 #include "IDiskCacheSegment.h"
 
-#include <Core/UUIDHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>

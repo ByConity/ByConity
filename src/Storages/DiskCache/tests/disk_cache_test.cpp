@@ -6,7 +6,7 @@
 #include <Poco/Logger.h>
 #include <Poco/PatternFormatter.h>
 #include <Poco/Util/JSONConfiguration.h>
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <Disks/DiskSpaceMonitor.h>
 #include <Disks/registerDisks.h>
 #include <IO/ReadBufferFromFile.h>

@@ -1,6 +1,6 @@
 #include "MetaFileDiskCacheSegment.h"
 
-#include <Core/UUIDHelpers.h>
+#include <Core/UUID.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
