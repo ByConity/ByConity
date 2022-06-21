@@ -1,20 +1,37 @@
 #include <CloudServices/CnchCreateQueryHelper.h>
 
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
-
+#include <Storages/StorageFactory.h>
 
 namespace DB
 {
 
-std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query)
+std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query, const Context & context)
 {
     ParserCreateQuery parser_create;
-    return std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, 0, 0));
+    auto & settings = context.getSettingsRef();
+    return std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
+}
+
+StoragePtr createStorageFromQuery(const String & query, const Context & context)
+{
+    auto ast = getASTCreateQueryFromString(query, context);
+
+    return StorageFactory::instance().get(
+        *ast,
+        "",
+        context.getQueryContext(),
+        context.getGlobalContext(),
+        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context.getSessionContext(), false),
+        InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints),
+        false /*has_force_restore_data_flag*/);
 }
 
 void replaceCnchWithCloud(ASTCreateQuery & create_query, const String & new_table_name, const String & cnch_db, const String & cnch_table)
@@ -62,4 +79,5 @@ void modifyOrAddSetting(ASTCreateQuery & create_query, const String & name, Fiel
 
     modifyOrAddSetting(*storage->settings, name, std::move(value));
 }
+
 }

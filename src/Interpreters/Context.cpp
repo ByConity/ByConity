@@ -150,6 +150,7 @@
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/CnchBGThreadsMap.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <Catalog/Catalog.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
@@ -529,6 +530,8 @@ struct ContextSharedPart
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
     mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
 
+    mutable std::optional<CnchBGThreadsMapArray> cnch_bg_threads_array;
+
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
 
@@ -657,6 +660,7 @@ struct ContextSharedPart
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
 
+            cnch_bg_threads_array.reset();
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
@@ -994,14 +998,14 @@ IResourceGroup * Context::tryGetResourceGroup() const
     return resource_group.load(std::memory_order_acquire);
 }
 
-IResourceGroupManager * Context::tryGetResourceGroupManager() 
+IResourceGroupManager * Context::tryGetResourceGroupManager()
 {
     if (shared->resource_group_manager)
         return shared->resource_group_manager.get();
     return nullptr;
 }
 
-IResourceGroupManager * Context::tryGetResourceGroupManager() const 
+IResourceGroupManager * Context::tryGetResourceGroupManager() const
 {
     if (shared->resource_group_manager)
         return shared->resource_group_manager.get();
@@ -3800,5 +3804,29 @@ ResourceManagerClientPtr Context::getResourceManagerClient() const
    return shared->rm_client;
 }
 
+void Context::initCnchBGThreads()
+{
+    shared->cnch_bg_threads_array.emplace(shared_from_this());
+}
+
+CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
+{
+    return shared->cnch_bg_threads_array->at(type);
+}
+
+CnchBGThreadPtr Context::getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const
+{
+    return getCnchBGThreadsMap(type)->getThread(storage_id);
+}
+
+CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const
+{
+    return getCnchBGThreadsMap(type)->tryGetThread(storage_id);
+}
+
+void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
+{
+    getCnchBGThreadsMap(type)->controlThread(storage_id, action);
+}
 
 }

@@ -5,6 +5,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
@@ -141,6 +142,9 @@ using CnchServerClientPool = RpcClientPool<CnchServerClient>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class CnchWorkerClientPools;
+class ICnchBGThread;
+using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
+class CnchBGThreadsMap;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -1088,7 +1092,13 @@ public:
     CnchWorkerClientPools & getCnchWorkerClientPools() const;
 
     void initCnchTransactionCoordinator();
-    TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const; 
+    TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
+
+    void initCnchBGThreads();
+    CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
+    CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
+    CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
+    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

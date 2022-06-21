@@ -59,17 +59,17 @@ namespace RPCHelpers
         };
     }
 
-    // inline BpQueryKeyPtr createBpQueryKey(const Protos::BpQueryKey & bqk) 
+    // inline BpQueryKeyPtr createBpQueryKey(const Protos::BpQueryKey & bqk)
     // {
     //     return shared_ptr<BpQueryKey>(new BpQueryKey(
     //         bqk.query(),
     //         bqk.settings_string(),
     //         bqk.stage(),
-    //         bqk.concat_cols() 
+    //         bqk.concat_cols()
     //     ));
     // }
 
-    // inline BpObjIdentifierPtr createBpObjIdentifier(const Protos::BpObjIdentifier & hi) 
+    // inline BpObjIdentifierPtr createBpObjIdentifier(const Protos::BpObjIdentifier & hi)
     // {
     //     return shared_ptr<BpObjIdentifier>(new BpObjIdentifier(
     //         hi.path(),
@@ -90,13 +90,13 @@ namespace RPCHelpers
         pb_hp.set_exchange_status_port(hp.exchange_status_port);
     }
 
-    // inline void fillBpQueryKey(BpQueryKeyPtr query_key, Protos::BpQueryKey & pb_bqk) 
+    // inline void fillBpQueryKey(BpQueryKeyPtr query_key, Protos::BpQueryKey & pb_bqk)
     // {
     //     pb_bqk.set_query(query_key->getQuery());
     //     pb_bqk.set_settings_string(query_key->getSettingsString());
     //     pb_bqk.set_stage(query_key->getStage());
     //     pb_bqk.set_concat_cols(query_key->getConcatCols());
-    // } 
+    // }
 
     // inline void fillBpObjIdentifier(BpObjIdentifierPtr id, Protos::BpObjIdentifier & pb_hi)
     // {
@@ -117,7 +117,7 @@ namespace RPCHelpers
             checkException(r.exception());
     }
 
-    // Context createSessionContext(Context & global_context, google::protobuf::RpcController & controller);
+    ContextMutablePtr createSessionContextForRPC(const ContextPtr & context, google::protobuf::RpcController & controller);
 
     template <typename Resp, typename Func>
     void serviceHandler(google::protobuf::Closure * done, Resp * resp, Func && f)

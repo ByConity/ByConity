@@ -40,20 +40,19 @@ namespace RPCHelpers
         throw readException(in);
     }
 
-    // Context createSessionContext(Context & global_context, google::protobuf::RpcController & cntl_base)
-    // {
-    //     auto & controller = static_cast<brpc::Controller &>(cntl_base);
+    ContextMutablePtr createSessionContextForRPC(const ContextPtr & context, google::protobuf::RpcController & cntl_base)
+    {
+        auto & controller = static_cast<brpc::Controller &>(cntl_base);
 
-    //     Context rpc_context = global_context;
-    //     rpc_context.setSessionContext(rpc_context);
+        auto rpc_context = Context::createCopy(context);
+        rpc_context->makeSessionContext();
 
-    //     auto & client_info = rpc_context.getClientInfo();
+        auto & client_info = rpc_context->getClientInfo();
+        client_info.interface = ClientInfo::Interface::BRPC;
+        client_info.current_address = Poco::Net::SocketAddress(butil::endpoint2str(controller.remote_side()).c_str());
+        client_info.initial_address = client_info.current_address;
 
-    //     client_info.interface = ClientInfo::Interface::RPC;
-    //     client_info.current_address = Poco::Net::SocketAddress(butil::endpoint2str(controller.remote_side()).c_str());
-    //     client_info.initial_address = client_info.current_address;
-
-    //     return rpc_context;
-    // }
+        return rpc_context;
+    }
 }
 }

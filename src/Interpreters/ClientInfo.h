@@ -93,6 +93,7 @@ public:
     UInt64 connection_id = 0;
 
     /// For brpc inter server communication protocol
+    UInt16 rpc_port = 0;
     UInt32 brpc_protocol_version = 0;
 
     /// Comma separated list of forwarded IP addresses (from X-Forwarded-For for HTTP interface).
