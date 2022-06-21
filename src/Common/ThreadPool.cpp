@@ -83,6 +83,12 @@ void ThreadPoolImpl<Thread>::setQueueSize(size_t value)
     queue_size = value;
 }
 
+template <typename Thread>
+size_t ThreadPoolImpl<Thread>::getMaxQueueSize() const
+{
+    std::lock_guard lock(mutex);
+    return queue_size;
+}
 
 template <typename Thread>
 template <typename ReturnType>

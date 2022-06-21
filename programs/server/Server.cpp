@@ -33,6 +33,7 @@
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/TCPHandlerFactory.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -1059,6 +1060,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // }
 
 #endif
+
+    DiskCacheFactory::instance().init(*global_context);
 
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;

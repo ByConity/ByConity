@@ -282,6 +282,11 @@
     M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
     M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \
     \
+    M(DiskCacheGetMicroSeconds, "Total time for disk cache get operation") \
+    M(DiskCacheAcquireStatsLock, "Total time for acquire table stats lock") \
+    M(DiskCacheScheduleCacheTaskMicroSeconds, "Total time for schedule disk cache task") \
+    M(DiskCacheUpdateStatsMicroSeconds, "Total time for update disk cache statistics") \
+    \
     M(CnchTxnAborted, "Total number of aborted transactions (excludes preempting transactions)") \
     M(CnchTxnCommitted, "Total number of committed transactions") \
     M(CnchTxnExpired, "Total number of expired transactions") \
