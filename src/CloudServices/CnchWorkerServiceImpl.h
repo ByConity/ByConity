@@ -1,0 +1,202 @@
+#pragma once
+
+#include <Interpreters/Context_fwd.h>
+#include <Protos/cnch_worker_rpc.pb.h>
+#include <common/logger_useful.h>
+
+
+namespace DB
+{
+
+class CnchWorkerServiceImpl : protected WithContext, public DB::Protos::CnchWorkerService
+{
+public:
+    CnchWorkerServiceImpl(ContextPtr global_context);
+    ~CnchWorkerServiceImpl() override;
+
+    void executeSimpleQuery(
+        google::protobuf::RpcController * cntl,
+        const Protos::ExecuteSimpleQueryReq * request,
+        Protos::ExecuteSimpleQueryResp * response,
+        google::protobuf::Closure * done) override;
+
+    void submitManipulationTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitManipulationTaskReq * request,
+        Protos::SubmitManipulationTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void GetPreallocatedStatus(
+        google::protobuf::RpcController *,
+        const Protos::GetPreallocatedStatusReq * request,
+        Protos::GetPreallocatedStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+    void SetQueryIntent(
+        google::protobuf::RpcController *,
+        const Protos::SetQueryIntentReq * request,
+        Protos::SetQueryIntentResp * response,
+        google::protobuf::Closure * done) override;
+
+    void SubmitSyncTask(
+        google::protobuf::RpcController *,
+        const Protos::SubmitSyncTaskReq * request,
+        Protos::SubmitSyncTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void ResetQueryIntent(
+        google::protobuf::RpcController *,
+        const Protos::ResetQueryIntentReq * request,
+        Protos::ResetQueryIntentResp * response,
+        google::protobuf::Closure * done) override;
+
+    void SubmitScaleTask(
+        google::protobuf::RpcController *,
+        const Protos::SubmitScaleTaskReq * request,
+        Protos::SubmitScaleTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void ClearPreallocatedDataParts(
+        google::protobuf::RpcController *,
+        const Protos::ClearPreallocatedDataPartsReq * request,
+        Protos::ClearPreallocatedDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void createDedupWorker(
+        google::protobuf::RpcController *,
+        const Protos::CreateDedupWorkerReq * request,
+        Protos::CreateDedupWorkerResp * response,
+        google::protobuf::Closure * done) override;
+
+    void dropDedupWorker(
+        google::protobuf::RpcController *,
+        const Protos::DropDedupWorkerReq * request,
+        Protos::DropDedupWorkerResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getDedupWorkerStatus(
+        google::protobuf::RpcController *,
+        const Protos::GetDedupWorkerStatusReq * request,
+        Protos::GetDedupWorkerStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+// #if USE_RDKAFKA
+    void submitKafkaConsumeTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitKafkaConsumeTaskReq * request,
+        Protos::SubmitKafkaConsumeTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getConsumerStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetConsumerStatusReq * request,
+        Protos::GetConsumerStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getOffsetsFromMemoryBuffer(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetOffsetsFromMemoryBufferReq * request,
+        Protos::GetOffsetsFromMemoryBufferResp * response,
+        google::protobuf::Closure * done) override;
+/// #endif
+
+    void preloadChecksumsAndPrimaryIndex(
+        google::protobuf::RpcController * cntl,
+        const Protos::PreloadChecksumsAndPrimaryIndexReq * request,
+        Protos::PreloadChecksumsAndPrimaryIndexResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getManipulationTasks(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetManipulationTasksReq * request,
+        Protos::GetManipulationTasksResp * response,
+        google::protobuf::Closure * done) override;
+
+    void createCloudMemoryBuffer(
+        google::protobuf::RpcController * cntl,
+        const Protos::CreateCloudMemoryBufferReq * request,
+        Protos::CreateCloudMemoryBufferResp * response,
+        google::protobuf::Closure * done) override;
+
+    void dropCloudMemoryBuffer(
+        google::protobuf::RpcController * cntl,
+        const Protos::DropCloudMemoryBufferReq * request,
+        Protos::DropCloudMemoryBufferResp * response,
+        google::protobuf::Closure * done) override;
+
+    void flushCloudMemoryBuffer(
+        google::protobuf::RpcController * cntl,
+        const Protos::FlushCloudMemoryBufferReq * request,
+        Protos::FlushCloudMemoryBufferResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getCloudMemoryBufferStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetCloudMemoryBufferStatusReq * request,
+        Protos::GetCloudMemoryBufferStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getCloudMergeTreeStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetCloudMergeTreeStatusReq * request,
+        Protos::GetCloudMergeTreeStatusResp * response,
+        google::protobuf::Closure * done) override;
+
+    void sendCreateQuery(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendCreateQueryReq * request,
+        Protos::SendCreateQueryResp * response,
+        google::protobuf::Closure * done) override;
+
+    void sendQueryDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendDataPartsReq * request,
+        Protos::SendDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    /*
+    void sendQueryVirtualDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendVirtualDataPartsReq * request,
+        Protos::SendVirtualDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+        */
+
+    void sendCnchHiveDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendCnchHiveDataPartsReq * request,
+        Protos::SendCnchHiveDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void checkDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::CheckDataPartsReq * request,
+        Protos::CheckDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void sendOffloading(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendOffloadingReq * request,
+        Protos::SendOffloadingResp * response,
+        google::protobuf::Closure * done) override;
+
+    void sendFinishTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendFinishTaskReq * request,
+        Protos::SendFinishTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void submitIngestPartitionTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitIngestPartitionTaskReq * request,
+        Protos::SubmitIngestPartitionTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+private:
+    Poco::Logger * log;
+
+    // class PreloadHandler;
+    // std::shared_ptr<PreloadHandler> preload_handler;
+};
+
+}

@@ -1,0 +1,242 @@
+#pragma once
+
+#include <Interpreters/Context_fwd.h>
+#include <Protos/cnch_server_rpc.pb.h>
+#include <common/logger_useful.h>
+
+namespace DB
+{
+
+class CnchServerServiceImpl : protected WithMutableContext, public DB::Protos::CnchServerService
+{
+public:
+    CnchServerServiceImpl(ContextMutablePtr global_context);
+    ~CnchServerServiceImpl() override = default;
+
+    void reportTaskHeartbeat(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportTaskHeartbeatReq * request,
+        Protos::ReportTaskHeartbeatResp * response,
+        google::protobuf::Closure * done) override;
+
+    void reportBufferHeartbeat(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportBufferHeartbeatReq * request,
+        Protos::ReportBufferHeartbeatResp * response,
+        google::protobuf::Closure * done) override;
+
+    void reportDeduperHeartbeat(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportDeduperHeartbeatReq * request,
+        Protos::ReportDeduperHeartbeatResp * response,
+        google::protobuf::Closure * done) override;
+
+    void createTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::CreateTransactionReq * request,
+        Protos::CreateTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void finishTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::FinishTransactionReq * request,
+        Protos::FinishTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void commitTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::CommitTransactionReq * request,
+        Protos::CommitTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void precommitTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::PrecommitTransactionReq * request,
+        Protos::PrecommitTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void rollbackTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::RollbackTransactionReq * request,
+        Protos::RollbackTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void checkConsumerValidity(
+        google::protobuf::RpcController * cntl,
+        const Protos::CheckConsumerValidityReq * request,
+        Protos::CheckConsumerValidityResp * response,
+        google::protobuf::Closure * done) override;
+
+    void createTransactionForKafka(
+        google::protobuf::RpcController * cntl,
+        const Protos::CreateKafkaTransactionReq * request,
+        Protos::CreateKafkaTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void commitParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::CommitPartsReq * request,
+        Protos::CommitPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void fetchDataParts(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::FetchDataPartsReq * request,
+        ::DB::Protos::FetchDataPartsResp * response,
+        ::google::protobuf::Closure * done) override;
+
+    void fetchUniqueTableMeta(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::FetchUniqueTableMetaReq * request,
+        ::DB::Protos::FetchUniqueTableMetaResp * response,
+        ::google::protobuf::Closure * done) override;
+
+    void getMinActiveTimestamp(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetMinActiveTimestampReq * request,
+        Protos::GetMinActiveTimestampResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getWorkerListWithBuffer(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetWorkerListWithBufferReq * request,
+        Protos::GetWorkerListWithBufferResp * response,
+        google::protobuf::Closure * done) override;
+
+    /***
+     *  About CNCH background threads
+     */
+    void getBackgroundThreadStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::BackgroundThreadStatusReq * request,
+        Protos::BackgroundThreadStatusResp * response,
+        google::protobuf::Closure * done) override;
+    void getNumBackgroundThreads(
+        google::protobuf::RpcController * cntl,
+        const Protos::BackgroundThreadNumReq * request,
+        Protos::BackgroundThreadNumResp * response,
+        google::protobuf::Closure * done) override;
+    void controlCnchBGThread(
+        google::protobuf::RpcController * cntl,
+        const Protos::ControlCnchBGThreadReq * request,
+        Protos::ControlCnchBGThreadResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getTablePartitionInfo(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetTablePartitionInfoReq * request,
+        Protos::GetTablePartitionInfoResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getTableInfo(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetTableInfoReq * request,
+        Protos::GetTableInfoResp * response,
+        google::protobuf::Closure * done) override;
+
+    void invalidateBytepond(
+        google::protobuf::RpcController * cntl,
+        const Protos::InvalidateBytepondReq * request,
+        Protos::InvalidateBytepondResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getTransactionStatus(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::GetTransactionStatusReq * request,
+        ::DB::Protos::GetTransactionStatusResp * response,
+        ::google::protobuf::Closure * done) override;
+
+    void commitWorkerRPCByKey(
+        google::protobuf::RpcController * cntl,
+        const Protos::CommitWorkerRPCByKeyReq * request,
+        Protos::CommitWorkerRPCByKeyResp * response,
+        google::protobuf::Closure * done) override;
+
+    void cleanTransaction(
+        google::protobuf::RpcController * cntl,
+        const Protos::CleanTransactionReq * request,
+        Protos::CleanTransactionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void acquireLock(
+        google::protobuf::RpcController * cntl,
+        const Protos::AcquireLockReq * request,
+        Protos::AcquireLockResp * response,
+        google::protobuf::Closure * done) override;
+
+    void releaseLock(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReleaseLockReq * request,
+        Protos::ReleaseLockResp * response,
+        google::protobuf::Closure * done) override;
+
+    void reportCnchLockHeartBeat(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportCnchLockHeartBeatReq * request,
+        Protos::ReportCnchLockHeartBeatResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getServerStartTime(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetServerStartTimeReq * request,
+        Protos::GetServerStartTimeResp * response,
+        google::protobuf::Closure * done) override;
+
+    /***
+     *  About GlobalGC
+     */
+    void scheduleGlobalGC(
+        google::protobuf::RpcController * cntl,
+        const Protos::ScheduleGlobalGCReq * request,
+        Protos::ScheduleGlobalGCResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getNumOfTablesCanSendForGlobalGC(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetNumOfTablesCanSendForGlobalGCReq * request,
+        Protos::GetNumOfTablesCanSendForGlobalGCResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getDeletingTablesInGlobalGC(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetDeletingTablesInGlobalGCReq * request,
+        Protos::GetDeletingTablesInGlobalGCResp * response,
+        google::protobuf::Closure * done) override;
+
+    /// forward part commit request to host server.
+    // void handleRedirectCommitRequest(
+    //     google::protobuf::RpcController * controller,
+    //     const Protos::RedirectCommitPartsReq * request,
+    //     Protos::RedirectCommitPartsResp * response,
+    //     google::protobuf::Closure * done,
+    //     bool final_commit) override;
+
+    void redirectCommitParts(
+        google::protobuf::RpcController * controller,
+        const Protos::RedirectCommitPartsReq * request,
+        Protos::RedirectCommitPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void redirectSetCommitTime(
+        google::protobuf::RpcController * controller,
+        const Protos::RedirectCommitPartsReq * request,
+        Protos::RedirectCommitPartsResp * response,
+        google::protobuf::Closure * done) override;
+
+    void removeMergeMutateTasksOnPartition(
+        google::protobuf::RpcController * cntl,
+        const Protos::RemoveMergeMutateTasksOnPartitionReq * request,
+        Protos::RemoveMergeMutateTasksOnPartitionResp * response,
+        google::protobuf::Closure * done) override;
+
+    void submitQueryWorkerMetrics(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitQueryWorkerMetricsReq * request,
+        Protos::SubmitQueryWorkerMetricsResp * response,
+        google::protobuf::Closure * done) override;
+
+private:
+    Poco::Logger * log;
+};
+
+}
