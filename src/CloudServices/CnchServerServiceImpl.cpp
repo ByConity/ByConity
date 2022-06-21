@@ -65,6 +65,7 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
     [[maybe_unused]] Protos::GetMinActiveTimestampResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
+    /*
     RPCHelpers::serviceHandler(
         done,
         response,
@@ -84,6 +85,7 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
             }
         }
     );
+    */
 }
 
 
