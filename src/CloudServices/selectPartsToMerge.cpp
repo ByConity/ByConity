@@ -15,6 +15,7 @@ ServerSelectPartsDecision selectPartsToMergeMulti(
     ServerCanMergeCallback can_merge_callback,
     size_t max_total_size_to_merge,
     bool aggressive,
+    const bool enable_batch_select,
     [[maybe_unused]] bool merge_with_ttl_allowed,
     Poco::Logger * log)
 {
@@ -178,6 +179,7 @@ ServerSelectPartsDecision selectPartsToMergeMulti(
         merge_settings.loadFromConfig(config);
         /// Override value from table settings
         merge_settings.max_parts_to_merge_base = data_settings->max_parts_to_merge_at_once;
+        merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.min_parts_to_merge_base = 1;
         merge_selector = std::make_unique<DanceMergeSelector>(data, merge_settings);
