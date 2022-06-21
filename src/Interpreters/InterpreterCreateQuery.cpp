@@ -1151,7 +1151,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             false);
     }
 
-    auto merge_tree_storage = dynamic_cast<MergeTreeData *>(res.get());
+    auto * merge_tree_storage = dynamic_cast<MergeTreeData *>(res.get());
     if (merge_tree_storage)
     {
         try

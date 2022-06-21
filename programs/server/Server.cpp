@@ -1591,6 +1591,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Must be done after initialization of `servers`, because async_metrics will access `servers` variable from its thread.
         async_metrics.start();
         global_context->enableNamedSessions();
+        global_context->enableNamedCnchSessions();
 
         {
             String level_str = config().getString("text_log.level", "");

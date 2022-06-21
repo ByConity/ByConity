@@ -7,7 +7,8 @@
 namespace DB
 {
 
-class MergeTreeMeta {
+class MergeTreeMeta
+{
 
 public:
 

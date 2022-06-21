@@ -22,6 +22,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/QueryParameterVisitor.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/NamedSession.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/HTTPHandlerRequestFilter.h>
 #include <Server/IServer.h>

@@ -647,7 +647,7 @@ namespace Catalog
             [&] {
                 LOG_INFO(log, "start createTable {} {}.{}", name_space, db, name);
                 /// To get table uuid.
-                StoragePtr storage = CatalogFactory::getTableByDefinition(const_cast<Context &>(query_context), db, name, create_query);
+                StoragePtr storage = CatalogFactory::getTableByDefinition(query_context.shared_from_this(), db, name, create_query);
                 Protos::DataModelTable tb_data;
 
                 tb_data.set_database(db);
@@ -4112,7 +4112,7 @@ namespace Catalog
 
     StoragePtr Catalog::createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model)
     {
-        StoragePtr res = CatalogFactory::getTableByDataModel(const_cast<Context &>(session_context), &data_model);
+        StoragePtr res = CatalogFactory::getTableByDataModel(session_context.shared_from_this(), &data_model);
 
         /// set worker group for StorageCnchMergeTree if virtual warehouse is exists.
         ///FIXME: if StorageCnchMergeTree is ready

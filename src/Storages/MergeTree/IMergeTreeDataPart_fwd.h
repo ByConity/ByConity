@@ -25,6 +25,6 @@ using ImmutableDeleteBitmapVector = std::vector<ImmutableDeleteBitmapPtr>;
 using MergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 using MergeTreeMutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 using MergeTreeDataPartsVector = std::vector<MergeTreeDataPartPtr>;
-using MergeTreeMutableDataPartsVector = std::vector<MergeTreeDataPartPtr>;
+using MergeTreeMutableDataPartsVector = std::vector<MergeTreeMutableDataPartPtr>;
 
 }

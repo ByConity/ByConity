@@ -12,6 +12,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int NO_SUCH_SERVICE;
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
     extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
 }
@@ -34,14 +35,14 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     WorkerGroupHandleSource source_,
     String vw_name_,
     HostWithPortsVec hosts_,
-    const ContextPtr  global_context_,
+    const ContextPtr & context_,
     const WorkerGroupMetrics & metrics_)
-    : WithContext(global_context_)
+    : WithContext(context_->getGlobalContext())
     , id(std::move(id_))
-    , source(source_)
+    , source(std::move(source_))
     , vw_name(std::move(vw_name_))
-    , hosts(hosts_)
-    , metrics(metrics_) 
+    , hosts(std::move(hosts_))
+    , metrics(metrics_)
 {
     // const auto & settings = context.getSettingsRef();
     // const auto & config = context.getConfigRef();
@@ -94,8 +95,8 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     // }
 }
 
-WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr global_context_)
-    : WorkerGroupHandleImpl(data.id, WorkerGroupHandleSource::RM, data.vw_name, data.host_ports_vec, global_context_, data.metrics)
+WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)
+    : WorkerGroupHandleImpl(data.id, WorkerGroupHandleSource::RM, data.vw_name, data.host_ports_vec, context_, data.metrics)
 {
     type = data.type;
 }
@@ -116,6 +117,16 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
     // {
     //     ring = buildRing(this->shards_info, global_context);
     // }
+}
+
+CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(const HostWithPorts & host_ports) const
+{
+    if (auto index = indexOf(host_ports))
+    {
+        return worker_clients.at(index.value());
+    }
+
+    throw Exception("Can't get WorkerClient for host_ports: " + host_ports.toDebugString(), ErrorCodes::NO_SUCH_SERVICE);
 }
 
 bool WorkerGroupHandleImpl::isSame(const WorkerGroupData & data) const
@@ -166,7 +177,7 @@ Strings WorkerGroupHandleImpl::getWorkerIDVec() const
 std::vector<std::pair<String, UInt16>> WorkerGroupHandleImpl::getReadWorkers() const
 {
     std::vector<std::pair<String, UInt16>> res;
-    auto & settings = getContext()->getSettingsRef();
+    const auto & settings = getContext()->getSettingsRef();
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings);
     for (const auto & shard_info : shards_info)
     {

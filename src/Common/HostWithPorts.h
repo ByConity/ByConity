@@ -57,8 +57,7 @@ struct HostWithPorts
         }
     };
 
-    bool
-    isSameEndpoint(const HostWithPorts & rhs) const
+    bool isSameEndpoint(const HostWithPorts & rhs) const
     {
         return IsSameEndpoint{}(*this, rhs);
     }
@@ -79,8 +78,17 @@ struct hash<DB::HostWithPorts>
 {
     std::size_t operator()(const DB::HostWithPorts & hp) const
     {
-        using namespace std;
-        return hash<string>()(hp.host) ^ hash<uint16_t>()(hp.rpc_port) ^ (hash<uint16_t>()(hp.tcp_port) << 16);
+        return std::hash<string>()(hp.host) ^ std::hash<uint16_t>()(hp.rpc_port) ^ (std::hash<uint16_t>()(hp.tcp_port) << 16);
     }
 };
+
+template <>
+struct equal_to<DB::HostWithPorts>
+{
+    bool operator()(const DB::HostWithPorts & lhs, const DB::HostWithPorts & rhs) const
+    {
+        return DB::HostWithPorts::IsSameEndpoint{}(lhs, rhs);
+    }
+};
+
 }

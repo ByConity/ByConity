@@ -437,7 +437,7 @@ message SendOffloadingResp
 message SendFinishTaskReq
 {
   required uint64 txn_id = 1;
-  optional bool clean_resource = 2;
+  required bool only_clean = 2;
 }
 
 message SendFinishTaskResp

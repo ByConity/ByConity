@@ -151,7 +151,14 @@ using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 class IVolume;
 using VolumePtr = std::shared_ptr<IVolume>;
 struct NamedSession;
+struct NamedCnchSession;
 struct BackgroundTaskSchedulingSettings;
+class TxnTimestamp;
+
+class CnchWorkerResource;
+class CnchServerResource;
+using CnchWorkerResourcePtr = std::shared_ptr<CnchWorkerResource>;
+using CnchServerResourcePtr = std::shared_ptr<CnchServerResource>;
 
 class Throttler;
 using ThrottlerPtr = std::shared_ptr<Throttler>;
@@ -214,6 +221,7 @@ namespace TSO
 {
     class TSOClient;
 }
+using TSOClientPool = RpcClientPool<TSO::TSOClient>;
 
 namespace Catalog
 {
@@ -394,12 +402,15 @@ private:
     /// A flag, used to distinguish between user query and internal query to a database engine (MaterializePostgreSQL).
     bool is_internal_query = false;
 
+    CnchWorkerResourcePtr worker_resource;
+    CnchServerResourcePtr server_resource;
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
 
 private:
-    friend class NamedSessions;
+    friend struct NamedCnchSession;
 
     using SampleBlockCache = std::unordered_map<std::string, Block>;
     mutable SampleBlockCache sample_block_cache;
@@ -745,7 +756,16 @@ public:
     /// The method must be called at the server startup.
     void enableNamedSessions();
 
-    std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check);
+    void enableNamedCnchSessions();
+
+    std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+    std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
+
+    void initCnchSessionResource(const TxnTimestamp & txn_id);
+    CnchServerResourcePtr getCnchServerResource();
+    CnchServerResourcePtr tryGetCnchServerResource() const;
+    CnchWorkerResourcePtr getCnchWorkerResource() const;
+    CnchWorkerResourcePtr tryGetCnchWorkerResource() const;
 
     /// For methods below you may need to acquire the context lock by yourself.
 
@@ -1094,7 +1114,7 @@ public:
     WorkerGroupHandle getCurrentWorkerGroup() const;
     WorkerGroupHandle tryGetCurrentWorkerGroup() const;
 
-    void setCurrentVW(VirtualWarehouseHandle warehouse);
+    void setCurrentVW(VirtualWarehouseHandle vw);
     VirtualWarehouseHandle getCurrentVW() const;
     VirtualWarehouseHandle tryGetCurrentVW() const;
 
@@ -1127,7 +1147,7 @@ public:
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
-    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
+    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster();
@@ -1155,29 +1175,6 @@ private:
 
     /// If the password is not set, the password will not be checked
     void setUserImpl(const String & name, const std::optional<String> & password, const Poco::Net::SocketAddress & address);
-};
-
-
-class NamedSessions;
-
-/// User name and session identifier. Named sessions are local to users.
-using NamedSessionKey = std::pair<String, String>;
-
-/// Named sessions. The user could specify session identifier to reuse settings and temporary tables in subsequent requests.
-struct NamedSession
-{
-    NamedSessionKey key;
-    UInt64 close_cycle = 0;
-    ContextMutablePtr context;
-    std::chrono::steady_clock::duration timeout;
-    NamedSessions & parent;
-
-    NamedSession(NamedSessionKey key_, ContextPtr context_, std::chrono::steady_clock::duration timeout_, NamedSessions & parent_)
-        : key(key_), context(Context::createCopy(context_)), timeout(timeout_), parent(parent_)
-    {
-    }
-
-    void release();
 };
 
 }

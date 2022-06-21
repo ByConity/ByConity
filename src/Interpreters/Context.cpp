@@ -93,6 +93,7 @@
 #include <Interpreters/HaReplicaHandler.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
+#include <Interpreters/NamedSession.h>
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SystemLog.h>
@@ -151,14 +152,14 @@
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchBGThreadsMap.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <Catalog/Catalog.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Common/RpcClientPool.h>
+#include <MergeTreeCommon/CnchServerResource.h>
 #include <TSO/TSOClient.h>
-
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -234,184 +235,6 @@ namespace ErrorCodes
 
 }
 
-using TSOClientPool = RpcClientPool<TSO::TSOClient>;
-
-class NamedSessions
-{
-public:
-    using Key = NamedSessionKey;
-
-    ~NamedSessions()
-    {
-        try
-        {
-            {
-                std::lock_guard lock{mutex};
-                quit = true;
-            }
-
-            cond.notify_one();
-            thread.join();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__);
-        }
-    }
-
-    /// Find existing session or create a new.
-    std::shared_ptr<NamedSession> acquireSession(
-        const String & session_id,
-        ContextMutablePtr context,
-        std::chrono::steady_clock::duration timeout,
-        bool throw_if_not_found)
-    {
-        std::unique_lock lock(mutex);
-
-        auto & user_name = context->client_info.current_user;
-
-        if (user_name.empty())
-            throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
-
-        Key key(user_name, session_id);
-
-        auto it = sessions.find(key);
-        if (it == sessions.end())
-        {
-            if (throw_if_not_found)
-                throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
-
-            /// Create a new session from current context.
-            it = sessions.insert(std::make_pair(key, std::make_shared<NamedSession>(key, context, timeout, *this))).first;
-        }
-        else if (it->second->key.first != context->client_info.current_user)
-        {
-            throw Exception("Session belongs to a different user", ErrorCodes::SESSION_IS_LOCKED);
-        }
-
-        /// Use existing session.
-        const auto & session = it->second;
-
-        if (!session.unique())
-            throw Exception("Session is locked by a concurrent client.", ErrorCodes::SESSION_IS_LOCKED);
-
-        session->context->client_info = context->client_info;
-
-        return session;
-    }
-
-    void releaseSession(NamedSession & session)
-    {
-        std::unique_lock lock(mutex);
-        scheduleCloseSession(session, lock);
-    }
-
-private:
-    class SessionKeyHash
-    {
-    public:
-        size_t operator()(const Key & key) const
-        {
-            SipHash hash;
-            hash.update(key.first);
-            hash.update(key.second);
-            return hash.get64();
-        }
-    };
-
-    /// TODO it's very complicated. Make simple std::map with time_t or boost::multi_index.
-    using Container = std::unordered_map<Key, std::shared_ptr<NamedSession>, SessionKeyHash>;
-    using CloseTimes = std::deque<std::vector<Key>>;
-    Container sessions;
-    CloseTimes close_times;
-    std::chrono::steady_clock::duration close_interval = std::chrono::seconds(1);
-    std::chrono::steady_clock::time_point close_cycle_time = std::chrono::steady_clock::now();
-    UInt64 close_cycle = 0;
-
-    void scheduleCloseSession(NamedSession & session, std::unique_lock<std::mutex> &)
-    {
-        /// Push it on a queue of sessions to close, on a position corresponding to the timeout.
-        /// (timeout is measured from current moment of time)
-
-        const UInt64 close_index = session.timeout / close_interval + 1;
-        const auto new_close_cycle = close_cycle + close_index;
-
-        if (session.close_cycle != new_close_cycle)
-        {
-            session.close_cycle = new_close_cycle;
-            if (close_times.size() < close_index + 1)
-                close_times.resize(close_index + 1);
-            close_times[close_index].emplace_back(session.key);
-        }
-    }
-
-    void cleanThread()
-    {
-        setThreadName("SessionCleaner");
-        std::unique_lock lock{mutex};
-
-        while (true)
-        {
-            auto interval = closeSessions(lock);
-
-            if (cond.wait_for(lock, interval, [this]() -> bool { return quit; }))
-                break;
-        }
-    }
-
-    /// Close sessions, that has been expired. Returns how long to wait for next session to be expired, if no new sessions will be added.
-    std::chrono::steady_clock::duration closeSessions(std::unique_lock<std::mutex> & lock)
-    {
-        const auto now = std::chrono::steady_clock::now();
-
-        /// The time to close the next session did not come
-        if (now < close_cycle_time)
-            return close_cycle_time - now;  /// Will sleep until it comes.
-
-        const auto current_cycle = close_cycle;
-
-        ++close_cycle;
-        close_cycle_time = now + close_interval;
-
-        if (close_times.empty())
-            return close_interval;
-
-        auto & sessions_to_close = close_times.front();
-
-        for (const auto & key : sessions_to_close)
-        {
-            const auto session = sessions.find(key);
-
-            if (session != sessions.end() && session->second->close_cycle <= current_cycle)
-            {
-                if (!session->second.unique())
-                {
-                    /// Skip but move it to close on the next cycle.
-                    session->second->timeout = std::chrono::steady_clock::duration{0};
-                    scheduleCloseSession(*session->second, lock);
-                }
-                else
-                    sessions.erase(session);
-            }
-        }
-
-        close_times.pop_front();
-        return close_interval;
-    }
-
-    std::mutex mutex;
-    std::condition_variable cond;
-    std::atomic<bool> quit{false};
-    ThreadFromGlobalPool thread{&NamedSessions::cleanThread, this};
-};
-
-
-void NamedSession::release()
-{
-    parent.releaseSession(*this);
-}
-
-
 /** Set of known objects (environment), that could be used in query.
   * Shared (global) part. Order of members (especially, order of destruction) is very important.
   */
@@ -465,9 +288,9 @@ struct ContextSharedPart
     mutable VolumePtr tmp_volume;                           /// Volume for the the temporary files that occur when processing the request.
 
 
-    String hdfsUser; // libhdfs3 user name
-    String hdfsNNProxy; // libhdfs3 namenode proxy
-    HDFSConnectionParams hdfsConnectionParams;
+    String hdfs_user; // libhdfs3 user name
+    String hdfs_nn_proxy; // libhdfs3 namenode proxy
+    HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -556,7 +379,8 @@ struct ContextSharedPart
     RemoteHostFilter remote_host_filter; /// Allowed URL from config.xml
 
     std::optional<TraceCollector> trace_collector;        /// Thread collecting traces from threads executing queries
-    std::optional<NamedSessions> named_sessions;        /// Controls named HTTP sessions.
+    std::optional<NamedSessions> named_sessions;          /// Controls named HTTP sessions.
+    std::optional<NamedCnchSessions> named_cnch_sessions; /// Controls named Cnch sessions.
 
     /// Clusters for distributed tables
     /// Initialized on demand (on distributed storages initialization) since Settings should be initialized
@@ -581,7 +405,7 @@ struct ContextSharedPart
     Stopwatch uptime_watch;
 
     Context::ApplicationType application_type = Context::ApplicationType::SERVER;
-    mutable std::unique_ptr<TSOClientPool> tso_client_pool;
+    std::unique_ptr<TSOClientPool> tso_client_pool;
 
     /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
@@ -806,13 +630,64 @@ void Context::enableNamedSessions()
     shared->named_sessions.emplace();
 }
 
+void Context::enableNamedCnchSessions()
+{
+    shared->named_cnch_sessions.emplace();
+}
+
 std::shared_ptr<NamedSession>
-Context::acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check)
+Context::acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const
 {
     if (!shared->named_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
 
-    return shared->named_sessions->acquireSession(session_id, shared_from_this(), timeout, session_check);
+    auto user_name = client_info.current_user;
+
+    if (user_name.empty())
+        throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
+
+    auto res = shared->named_sessions->acquireSession({session_id, user_name}, shared_from_this(), timeout, session_check);
+
+    if (res->context->getClientInfo().current_user != user_name)
+        throw Exception("Session belongs to a different user", ErrorCodes::SESSION_IS_LOCKED);
+
+    return res;
+}
+
+std::shared_ptr<NamedCnchSession>
+Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const
+{
+    if (!shared->named_cnch_sessions)
+        throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
+
+    return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
+}
+
+CnchServerResourcePtr Context::getCnchServerResource()
+{
+    /// TODO: replace getTimestamp with txn_id
+    if (!server_resource)
+        server_resource = std::make_shared<CnchServerResource>(TxnTimestamp(getTimestamp()));
+
+    return server_resource;
+}
+
+CnchServerResourcePtr Context::tryGetCnchServerResource() const
+{
+    return server_resource;
+}
+
+CnchWorkerResourcePtr Context::getCnchWorkerResource() const
+{
+    if (!worker_resource)
+        throw Exception("Can't get CnchWorkerResource", ErrorCodes::SESSION_NOT_FOUND);
+
+    return worker_resource;
+}
+
+CnchWorkerResourcePtr Context::tryGetCnchWorkerResource() const
+{
+    return worker_resource;
 }
 
 String Context::resolveDatabase(const String & database_name) const
@@ -990,7 +865,7 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     {
         if (!shared->resource_group_manager)
             initResourceGroupManager(config);
-        
+
         if (shared->resource_group_manager)
             shared->resource_group_manager->initialize(*shared->users_config);
     }
@@ -3339,31 +3214,31 @@ bool Context::isReadyForQuery() const
 
 void Context::setHdfsUser(const String & name)
 {
-    shared->hdfsUser = name;
+    shared->hdfs_user = name;
 }
 
 String Context::getHdfsUser() const
 {
-    return shared->hdfsUser;
+    return shared->hdfs_user;
 }
 
 void Context::setHdfsNNProxy(const String & name)
 {
-    shared->hdfsNNProxy = name;
+    shared->hdfs_nn_proxy = name;
 }
 
 String Context::getHdfsNNProxy() const
 {
-    return shared->hdfsNNProxy;
+    return shared->hdfs_nn_proxy;
 }
 
 
 void Context::setHdfsConnectionParams(const HDFSConnectionParams& params)  {
-    shared->hdfsConnectionParams = params;
+    shared->hdfs_connection_params = params;
 }
 
 HDFSConnectionParams Context::getHdfsConnectionParams() const{
-    return shared->hdfsConnectionParams;
+    return shared->hdfs_connection_params;
 }
 
 
@@ -3383,7 +3258,7 @@ DeleteBitmapCachePtr Context::getDeleteBitmapCache() const
 
 void Context::setMetaChecker()
 {
-    auto metaChecker = [this]() {
+    auto meta_checker = [this]() {
         Poco::Logger *log = &Poco::Logger::get("MetaChecker");
 
         Stopwatch stopwatch;
@@ -3400,15 +3275,18 @@ void Context::setMetaChecker()
         }
         else
         {
-            auto database_snapshot = DatabaseCatalog::instance().getNonCnchDatabases();
+            auto database_snapshots = DatabaseCatalog::instance().getNonCnchDatabases();
 
-            for (auto it = database_snapshot.begin(); it != database_snapshot.end(); it++) {
-                try {
-                    String current_database_name = it->first;
-                    DatabasePtr current_database = it->second;
+            for (const auto & database_snapshot : database_snapshots)
+            {
+                try
+                {
+                    String current_database_name = database_snapshot.first;
+                    DatabasePtr current_database = database_snapshot.second;
 
-                    DatabaseCatalog::instance().assertDatabaseExists(it->first);
-                    for (auto tb_it = current_database->getTablesIterator(this->shared_from_this()); tb_it->isValid(); tb_it->next()) {
+                    DatabaseCatalog::instance().assertDatabaseExists(current_database_name);
+                    for (auto tb_it = current_database->getTablesIterator(this->shared_from_this()); tb_it->isValid(); tb_it->next())
+                    {
                         String current_table_name = tb_it->name();
                         StoragePtr current_table = tb_it->table();
                         /// skip if current table is removed or the table is not in MergeTree family.
@@ -3425,7 +3303,8 @@ void Context::setMetaChecker()
                         table_count++;
                     }
                 }
-                catch (...) {
+                catch (...)
+                {
                     tryLogCurrentException(log, __PRETTY_FUNCTION__);
                 }
             }
@@ -3437,7 +3316,7 @@ void Context::setMetaChecker()
         this->shared->meta_checker->scheduleAfter(std::max(delay_ms,task_min_interval));
     };
 
-    shared->meta_checker = getLocalSchedulePool().createTask("MetaCheck", metaChecker);
+    shared->meta_checker = getLocalSchedulePool().createTask("MetaCheck", meta_checker);
     shared->meta_checker->activate();
     /// do not start sync immediately, delay 10min
     shared->meta_checker->scheduleAfter(10*60*1000);
@@ -3556,7 +3435,7 @@ void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & co
 
 void Context::initServiceDiscoveryClient()
 {
-    auto & config = getConfigRef();
+    const auto & config = getConfigRef();
     shared->sd = ServiceDiscoveryFactory::instance().create(config);
 }
 
@@ -3697,9 +3576,9 @@ UInt16 Context::getRPCPort() const
         auto sd_client = this->getServiceDiscoveryClient();
         if(sd_client->getName() == "consul")
         {
-            const char * rpcPort = getenv("PORT1");
-            if(rpcPort != nullptr)
-                return parse<UInt16>(rpcPort);
+            const char * rpc_port = getenv("PORT1");
+            if(rpc_port != nullptr)
+                return parse<UInt16>(rpc_port);
         }
     }
 
@@ -3862,12 +3741,12 @@ VirtualWarehouseHandle Context::tryGetCurrentVW() const
 void Context::initResourceManagerClient()
 {
     LOG_DEBUG(&Poco::Logger::get("Context"), "Initialising Resource Manager Client");
-    auto & root_config = getRootConfig();
+    const auto & root_config = getRootConfig();
 
-    auto & election_ns = root_config.bytejournal.name_space;
+    const auto & election_ns = root_config.bytejournal.name_space;
     String election_point = root_config.bytejournal.cnch_prefix.value + "rm_election_point";
-    auto & max_retry_count = root_config.resource_manager.init_client_tries;
-    auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
+    const auto & max_retry_count = root_config.resource_manager.init_client_tries;
+    const auto & retry_interval_ms = root_config.resource_manager.init_client_retry_interval_ms;
 
     size_t retry_count = 0;
     do
@@ -3915,7 +3794,7 @@ CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const Storage
     return getCnchBGThreadsMap(type)->tryGetThread(storage_id);
 }
 
-void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
+void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
 }
@@ -3994,10 +3873,10 @@ InterserverCredentialsPtr Context::getCnchInterserverCredentials()
 std::shared_ptr<Cluster> Context::mockCnchServersCluster()
 {
     // get CNCH servers by PSM
-    String psmName = this->getCnchServerClientPool().getServiceName();
+    String psm_name = this->getCnchServerClientPool().getServiceName();
     auto sd_client = this->getServiceDiscoveryClient();
 
-    auto endpoints = sd_client->lookup(psmName, ComponentType::SERVER);
+    auto endpoints = sd_client->lookup(psm_name, ComponentType::SERVER);
 
     std::vector<Cluster::Addresses> addresses;
 
@@ -4018,4 +3897,3 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster()
 }
 
 }
-

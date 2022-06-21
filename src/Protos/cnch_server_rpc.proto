@@ -6,11 +6,13 @@ import "cnch_common.proto";
 
 option cc_generic_services = true;
 
-message ReportTaskHeartbeatReq {
+message ReportTaskHeartbeatReq
+{
   required string task_id = 1;
 }
 
-message ReportTaskHeartbeatResp {
+message ReportTaskHeartbeatResp
+{
   optional string exception = 1;
 }
 
@@ -39,83 +41,97 @@ message ReportDeduperHeartbeatReq
 
 message ReportDeduperHeartbeatResp
 {
-  required uint32 code = 1;
+  optional uint32 code = 1;
   optional string exception = 2;
 }
 
-message CheckConsumerValidityReq {
+message CheckConsumerValidityReq
+{
   required UUID uuid = 1;
   required uint64 consumer_index = 2;
   required string table_name = 3;
 }
 
-message CheckConsumerValidityResp {
+message CheckConsumerValidityResp
+{
   optional string exception = 1;
 }
 
-message CreateKafkaTransactionReq {
+message CreateKafkaTransactionReq
+{
   required UUID uuid = 1;
   required uint64 consumer_index = 2;
   required string table_name = 3;
 };
 
-message CreateKafkaTransactionResp {
+message CreateKafkaTransactionResp
+{
   optional string exception = 1;
-  required uint64 txn_id = 2;
-  required uint64 start_time = 3;
+  optional uint64 txn_id = 2;
+  optional uint64 start_time = 3;
 };
 
-message CreateTransactionReq {
+message CreateTransactionReq
+{
   optional uint64 primary_txn_id = 1;
 };
 
-message CreateTransactionResp {
+message CreateTransactionResp
+{
   optional string exception = 1;
   required uint64 txn_id = 2;
   required uint64 start_time = 3;
 };
 
-message FinishTransactionReq {
+message FinishTransactionReq
+{
   required uint64 txn_id = 1;
 };
 
-message FinishTransactionResp {
+message FinishTransactionResp
+{
   optional string exception = 1;
 };
 
-message CommitTransactionReq {
+message CommitTransactionReq
+{
   required uint64 txn_id = 1;
   optional string insertion_label = 2;
   optional StorageID kafka_storage_id = 3;
   optional uint64 kafka_consumer_index = 4;
 };
 
-message CommitTransactionResp {
+message CommitTransactionResp
+{
   optional string exception = 1;
   optional uint64 commit_ts = 2;
 };
 
-message PrecommitTransactionReq {
+message PrecommitTransactionReq
+{
   required uint64 txn_id = 1;
   required UUID main_table_uuid = 2;
 };
 
-message PrecommitTransactionResp {
-
+message PrecommitTransactionResp
+{
   optional string exception = 1;
 };
 
-message RollbackTransactionReq {
+message RollbackTransactionReq
+{
   required uint64 txn_id = 1;
   optional bool only_clean_data = 2;
 };
 
-message RollbackTransactionResp {
+message RollbackTransactionResp
+{
   optional string exception = 1;
   optional uint64 commit_ts = 2;
 };
 
-message CommitPartsReq {
+message CommitPartsReq
+{
   required string database = 1;
   required string table = 2;
   required UUID uuid = 3;
@@ -134,16 +150,19 @@ message CommitPartsReq {
   optional string from_buffer_uuid = 15;
 };
 
-message CommitPartsResp {
+message CommitPartsResp
+{
   optional string exception = 1;
-  required uint64 commit_timestamp = 2;
+  optional uint64 commit_timestamp = 2;
 }
 
-message GetMinActiveTimestampReq {
+message GetMinActiveTimestampReq
+{
   required StorageID storage_id = 1;
 }
 
-message GetMinActiveTimestampResp {
+message GetMinActiveTimestampResp
+{
   optional string exception = 1;
   optional uint64 timestamp = 2;
 }
@@ -160,7 +179,8 @@ message ControlCnchBGThreadResp
   optional string exception = 1;
 }
 
-enum BackgroundTaskAction {
+enum BackgroundTaskAction
+{
   Launch = 0;
   Stop = 1;
   Wakeup = 2;
@@ -176,12 +196,14 @@ message BackgroundThreadStatusReq {
   required uint32 type = 1;
 }
 
-message BackgroundThreadStatusResp {
+message BackgroundThreadStatusResp
+{
   repeated BackgroundThreadStatus status = 1;
   optional string exception = 2;
 }
 
-message BackgroundThreadNumReq {
+message BackgroundThreadNumReq
+{
   required uint32 type = 1;
 }
 
@@ -190,8 +212,9 @@ message CommitWorkerRPCByKeyReq
   required string key = 1;
 }
 
-message BackgroundThreadNumResp {
-  required uint32 num = 1;
+message BackgroundThreadNumResp
+{
+  optional uint32 num = 1;
   optional string exception = 2;
  }
 
@@ -306,7 +329,7 @@ message GetTransactionStatusReq
 message GetTransactionStatusResp
 {
   optional string exception = 1;
-  required TransactionStatus status = 2;
+  optional TransactionStatus status = 2;
 }
 
 message CleanTransactionReq
@@ -367,8 +390,8 @@ message ScheduleGlobalGCReq
 
 message ScheduleGlobalGCResp
 {
-  required bool ret = 1;
-  optional string exception = 2; 
+  optional bool ret = 1;
+  optional string exception = 2;
 }
 
 message GetNumOfTablesCanSendForGlobalGCReq
@@ -408,10 +431,10 @@ message RedirectCommitPartsResp
   optional string exception = 1;
 }
 
-message RemoveMergeMutateTasksOnPartitionReq 
+message RemoveMergeMutateTasksOnPartitionReq
 {
-  required StorageID storage_id = 1;  
-  required string partition_id = 2;  
+  required StorageID storage_id = 1;
+  required string partition_id = 2;
 }
 
 message RemoveMergeMutateTasksOnPartitionResp
@@ -430,7 +453,8 @@ message SubmitQueryWorkerMetricsResp
   optional string exception = 1;
 }
 
-service CnchServerService {
+service CnchServerService
+{
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq) returns (ReportTaskHeartbeatResp);
   rpc reportBufferHeartbeat(ReportBufferHeartbeatReq) returns (ReportBufferHeartbeatResp);
   rpc reportDeduperHeartbeat(ReportDeduperHeartbeatReq) returns (ReportDeduperHeartbeatResp);

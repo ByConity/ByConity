@@ -4,6 +4,7 @@
 
 #include <Poco/Net/StreamSocket.h>
 
+#include <Common/HostWithPorts.h>
 #include <Common/Throttler.h>
 #if !defined(ARCADIA_BUILD)
 #   include <Common/config.h>
@@ -150,6 +151,9 @@ public:
     const String & getPassword() const;
     UInt16 getExchangePort() const;
     UInt16 getExchangeStatusPort() const;
+
+    /// TODO:
+    HostWithPorts getHostWithPorts() const { return {"virtual_id", host, 0, port}; }
 
     Protocol::Compression getCompression() const { return compression; }
 

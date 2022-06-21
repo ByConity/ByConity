@@ -1,15 +1,27 @@
 #include <CloudServices/CnchWorkerServiceImpl.h>
 
-#include <Interpreters/Context.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Transaction/CnchWorkerTransaction.h>
-#include <WorkerTasks/ManipulationTask.h>
-#include <Protos/DataModelHelpers.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/NamedSession.h>
+#include <Protos/RPCHelpers.h>
+#include <Protos/DataModelHelpers.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <WorkerTasks/ManipulationList.h>
+#include <WorkerTasks/ManipulationTask.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
 
+#include <brpc/closure_guard.h>
+#include <brpc/controller.h>
+#include <brpc/stream.h>
+#include <condition_variable>
+#include <mutex>
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -19,8 +31,8 @@ namespace ErrorCodes
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
 }
 
-CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextPtr global_context)
-    : WithContext(global_context), log(&Poco::Logger::get("CnchWorkerService"))
+CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextPtr context_)
+    : WithContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
 {
 }
 
@@ -48,8 +60,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         if (local_context->getManipulationList().size() > max_running_task)
             throw Exception(ErrorCodes::TOO_MANY_SIMULTANEOUS_TASKS, "Too many simultaneous tasks. Maximum: {}", max_running_task);
 
-        StoragePtr storage = createStorageFromQuery(request->create_table_query(), *local_context);
-        auto data = dynamic_cast<MergeTreeData *>(storage.get());
+        StoragePtr storage = createStorageFromQuery(request->create_table_query(), local_context);
+        auto * data = dynamic_cast<MergeTreeData *>(storage.get());
         if (!data)
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not CloudMergeTree", storage->getStorageID().getNameForLogs());
 
@@ -87,6 +99,212 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             /// CurrentThread::attachQueryContext(c);
             DB::executeManipulationTask(*p, c);
         }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::sendCreateQuery(
+    google::protobuf::RpcController * cntl,
+    const Protos::SendCreateQueryReq * request,
+    Protos::SendCreateQueryResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        LOG_TRACE(log, "Receiving create queries for Session: ", request->txn_id());
+        /// set client_info.
+        auto rpc_context = RPCHelpers::createSessionContext(getContext(), *cntl);
+
+        auto timeout = std::chrono::seconds(request->timeout());
+        auto & query_context = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false)->context;
+        // session->context->setTemporaryTransaction(request->txn_id(), request->primary_txn_id());
+        auto worker_resource = query_context->getCnchWorkerResource();
+
+        /// store cloud tables in cnch_session_resource.
+        for (const auto & create_query: request->create_queries())
+        {
+            /// create a copy of session_context to avoid modify in SessionResource
+            auto temp_context = Context::createCopy(query_context);
+            worker_resource->executeCreateQuery(query_context, create_query);
+        }
+
+        // query_context.worker_type = WorkerType::normal_worker;
+        LOG_TRACE(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::sendQueryDataParts(
+    google::protobuf::RpcController *,
+    const Protos::SendDataPartsReq * request,
+    Protos::SendDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        const auto & query_context = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true)->context;
+
+        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
+        auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
+
+        LOG_DEBUG(log, "Receiving parts for table {}(txn_id: {})", cloud_merge_tree.getStorageID().getNameForLogs(), request->txn_id());
+
+        // TODO:
+        MergeTreeMutableDataPartsVector data_parts;
+        if (cloud_merge_tree.getInMemoryMetadata().hasUniqueKey())
+            data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts(), request->bitmaps());
+        else
+            data_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts());
+        cloud_merge_tree.loadDataParts(data_parts);
+
+        LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
+
+        // std::unordered_set<Int64> required_bucket_numbers;
+        // for (const auto & bucket_number: request->bucket_numbers())
+        //     required_bucket_numbers.insert(bucket_number);
+
+        // cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
+
+        // std::map<String, UInt64> udf_infos;
+        // for (const auto & udf_info: request->udf_infos())
+        //     udf_infos.emplace(udf_info.function_name(), udf_info.version());
+
+        // UserDefinedObjectsLoader::instance().checkAndLoadUDFFromStorage(query_context, udf_infos, true);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::sendCnchHiveDataParts(
+    google::protobuf::RpcController *,
+    const Protos::SendCnchHiveDataPartsReq *,
+    Protos::SendCnchHiveDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        // TODO
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::checkDataParts(
+    google::protobuf::RpcController * cntl,
+    const Protos::CheckDataPartsReq * request,
+    Protos::CheckDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        /// set client_info
+        auto rpc_context = RPCHelpers::createSessionContext(getContext(), *cntl);
+
+        auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), {}, false);
+        auto & query_context = session->context;
+
+        auto worker_resource = query_context->getCnchWorkerResource();
+        worker_resource->executeCreateQuery(query_context, request->create_query());
+
+        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
+        auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
+
+        LOG_DEBUG(log, "Receiving parts for table {} to check.", cloud_merge_tree.getStorageID().getNameForLogs());
+
+        // auto data_parts = createPartVectorFromModelsForSend<MutableDataPartPtr>(cloud_merge_tree, request->parts());
+        MutableMergeTreeDataPartsCNCHVector data_parts = {};
+
+        bool is_passed = false;
+        String message;
+
+        for (auto & part : data_parts)
+        {
+            try
+            {
+                // TODO: checkDataParts(part);
+                // dynamic_cast<MergeTreeDataPartCNCH*>(part.get())->loadFromFileSystem(storage.get());
+                is_passed = true;
+                message.clear();
+            }
+            catch (const Exception & e)
+            {
+                is_passed = false;
+                message = e.message();
+            }
+
+            *response->mutable_part_path()->Add() = part->name;
+            *response->mutable_is_passed()->Add() = is_passed;
+            *response->mutable_message()->Add() = message;
+        }
+
+        session->release();
+        LOG_DEBUG(log, "Send check results back for {} parts.", data_parts.size());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::sendOffloading(
+    google::protobuf::RpcController *,
+    const Protos::SendOffloadingReq *,
+    Protos::SendOffloadingResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        /// TODO
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::sendFinishTask(
+    google::protobuf::RpcController *,
+    const Protos::SendFinishTaskReq * request,
+    Protos::SendFinishTaskResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+
+        if (request->only_clean())
+        {
+            if (auto worker_resource = session->context->tryGetCnchWorkerResource())
+                worker_resource->removeResource();
+        }
+        else
+        {
+            /// remove resource in worker
+            session->release();
+        }
     }
     catch (...)
     {

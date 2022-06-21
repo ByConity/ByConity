@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Databases/IDatabase.h>
 // #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Dictionaries/IDictionary.h>
@@ -20,9 +20,9 @@ public:
 
     static DatabasePtr getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context);
 
-    static StoragePtr  getTableByDataModel(Context & context, const DB::Protos::DataModelTable * tb_model);
+    static StoragePtr getTableByDataModel(ContextPtr context, const DB::Protos::DataModelTable * table_model);
 
-    static StoragePtr getTableByDefinition(Context & context, const String & db, const String & table, const String & create);
+    static StoragePtr getTableByDefinition(ContextPtr context, const String & db, const String & table, const String & create);
 
     static ASTPtr getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary * dict_model);
 };

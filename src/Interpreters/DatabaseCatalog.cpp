@@ -22,6 +22,7 @@
 
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <Databases/DatabaseCnch.h>
 #include <Common/Status.h>
 #include <Protos/RPCHelpers.h>
@@ -243,6 +244,18 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         if (exception)
             exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Cannot find table: StorageID is empty");
         return {};
+    }
+
+    if (auto worker_resource = context_->tryGetCnchWorkerResource())
+    {
+        /// try get table from session resource
+        /// Note: the tables in cnch session doesn't belong to any DatabasePtr
+
+        // if (worker_resource->isCnchTableInWorker(table_id))
+        //     return getCnchTable()
+
+        if (auto table = worker_resource->getTable(table_id))
+            return {nullptr, table};
     }
 
     if (table_id.hasUUID())

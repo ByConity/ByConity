@@ -1,9 +1,11 @@
 #pragma once
 
+#include <Common/config.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_worker_rpc.pb.h>
-#include <common/logger_useful.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -11,7 +13,7 @@ namespace DB
 class CnchWorkerServiceImpl : protected WithContext, public DB::Protos::CnchWorkerService
 {
 public:
-    CnchWorkerServiceImpl(ContextPtr global_context);
+    CnchWorkerServiceImpl(ContextPtr context_);
     ~CnchWorkerServiceImpl() override;
 
     void executeSimpleQuery(
