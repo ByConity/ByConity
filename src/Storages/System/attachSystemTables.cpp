@@ -80,6 +80,9 @@
 #include <Storages/System/StorageSystemPrivileges.h>
 #include <Storages/System/StorageSystemMetastore.h>
 #include <Storages/System/StorageSystemBrokenTables.h>
+#include <Storages/System/StorageSystemVirtualWarehouses.h>
+#include <Storages/System/StorageSystemWorkerGroups.h>
+#include <Storages/System/StorageSystemWorkers.h>
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>

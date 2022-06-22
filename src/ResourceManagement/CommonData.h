@@ -45,6 +45,17 @@ struct VirtualWarehouseSettings
     size_t auto_suspend{0};
     size_t auto_resume{1};
     VWScheduleAlgo vw_schedule_algo{VWScheduleAlgo::Random};
+    size_t max_auto_borrow_links{0};
+    size_t max_auto_lend_links{0};
+    size_t cpu_threshold_for_borrow{100};
+    size_t mem_threshold_for_borrow{100};
+    size_t cpu_threshold_for_lend{0};
+    size_t mem_threshold_for_lend{0};
+    size_t cpu_threshold_for_recall{100};
+    size_t mem_threshold_for_recall{100};
+    size_t cooldown_seconds_after_auto_link{300};
+    size_t cooldown_seconds_after_auto_unlink{300};
+
 
     void fillProto(Protos::VirtualWarehouseSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings);
@@ -69,6 +80,16 @@ struct VirtualWarehouseAlterSettings
     std::optional<size_t> auto_suspend;
     std::optional<size_t> auto_resume;
     std::optional<VWScheduleAlgo> vw_schedule_algo;
+    std::optional<size_t> max_auto_borrow_links;
+    std::optional<size_t> max_auto_lend_links;
+    std::optional<size_t> cpu_threshold_for_borrow;
+    std::optional<size_t> mem_threshold_for_borrow;
+    std::optional<size_t> cpu_threshold_for_lend;
+    std::optional<size_t> mem_threshold_for_lend;
+    std::optional<size_t> cpu_threshold_for_recall;
+    std::optional<size_t> mem_threshold_for_recall;
+    std::optional<size_t> cooldown_seconds_after_auto_link;
+    std::optional<size_t> cooldown_seconds_after_auto_unlink;
 
     void fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const;
     void parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings);
@@ -94,6 +115,10 @@ struct VirtualWarehouseData
     size_t num_workers{0};
     size_t running_query_count;
     size_t queued_query_count;
+    size_t num_borrowed_worker_groups{0};
+    size_t num_lent_worker_groups{0};
+    uint64_t last_borrow_timestamp{0};
+    uint64_t last_lend_timestamp{0};
 
     void fillProto(Protos::VirtualWarehouseData & pb_data) const;
     void parseFromProto(const Protos::VirtualWarehouseData & pb_data);
@@ -134,6 +159,13 @@ struct WorkerNodeCatalogData
     static WorkerNodeCatalogData createFromProto(const Protos::WorkerNodeData & worker_data);
 };
 
+enum class WorkerState
+{
+    Registering,
+    Running,
+    Stopped, /// We don't have a Stopping state as we regard the worker as stopped immediately when RM receive a unregister request.
+};
+
 struct WorkerNodeResourceData
 {
     HostWithPorts host_ports;
@@ -150,7 +182,13 @@ struct WorkerNodeResourceData
     UInt64 cpu_limit;
     UInt64 memory_limit;
 
+    UInt32 register_time;
     UInt32 last_update_time;
+    
+    UInt64 reserved_memory_bytes;
+    UInt32 reserved_cpu_cores;
+    WorkerState state;
+
     std::string serializeAsString() const;
     void parseFromString(const std::string & s);
 
@@ -186,18 +224,16 @@ struct WorkerNodeResourceData
 ///  3. Require the avg. cpu of the worker/wg not higher than 80%.
 struct ResourceRequirement
 {
-    /// the target worker/wg's max/avg cpu must be lower than this limit.
-    double limit_cpu{0};
-
-    /// request memory in bytes, eg: a insert query requests 5000 MB memory.
     size_t request_mem_bytes{0};
-
-    /// request disk in bytes, eg: a merge task requests 10 GB disk.
     size_t request_disk_bytes{0};
-
     uint32_t expected_workers{0};
-
     String worker_group{};
+    uint32_t request_cpu_cores{0};
+    double cpu_usage_max_threshold{0};
+    uint32_t task_cold_startup_sec{0};
+    std::unordered_set<String> blocklist;
+    bool forbid_random_result{false};
+    bool no_repeat{false};
 
     void fillProto(Protos::ResourceRequirement & proto) const;
     void parseFromProto(const Protos::ResourceRequirement & proto);
@@ -212,11 +248,15 @@ struct ResourceRequirement
     inline String toDebugString() const
     {
         std::stringstream ss;
-        ss << "{limit_cpu:" << limit_cpu
-              << ", request_mem_bytes:" << request_mem_bytes
-              << ", request_disk_bytes:" << request_disk_bytes
-              << ", expected_workers:" << expected_workers
-              << "}";
+        ss << "{request_cpu_cores:" << request_cpu_cores
+           << ", cpu_usage_max_threshold:" << cpu_usage_max_threshold
+           << ", request_mem_bytes:" << request_mem_bytes
+           << ", request_disk_bytes:" << request_disk_bytes
+           << ", expected_workers:" << expected_workers
+           << ", worker_group:" << worker_group
+           << ", task_cold_startup_sec:" << task_cold_startup_sec
+           << ", blocklist size: " << blocklist.size()
+           << "}";
         return ss.str();
     }
 
@@ -261,15 +301,21 @@ struct WorkerGroupMetrics
 
     bool available(const ResourceRequirement & requirement) const
     {
-        /// Worker group is unavailable if there are no enough active workers.
+        /// Worker group is unavailable if there are not enough active workers.
         if (num_workers < requirement.expected_workers)
             return false;
-        /// Worker group is unavailable if any worker's cpu usage is higher than limit.
-        if (requirement.limit_cpu && max_cpu_usage > requirement.limit_cpu)
+
+        /// Worker group is unavailable if any worker's cpu usage is higher than the threshold.
+        if (requirement.cpu_usage_max_threshold > 0.01 && max_cpu_usage > requirement.cpu_usage_max_threshold)
             return false;
+
         /// Worker group is unavailable if any worker's available memory space is less than request.
-        if (requirement.request_mem_bytes && min_mem_available < requirement.request_mem_bytes * 1000)
+        if (requirement.request_mem_bytes && min_mem_available < requirement.request_mem_bytes)
             return false;
+
+        if (requirement.blocklist.contains(id))
+            return false;
+
         return true;
     }
 
@@ -300,6 +346,9 @@ struct WorkerGroupData
     /// For query scheduler
     WorkerGroupMetrics metrics;
 
+    bool is_auto_linked {false};
+    std::string linked_vw_name;
+
     std::string serializeAsString() const;
     void parseFromString(const std::string & s);
 
@@ -314,6 +363,7 @@ struct WorkerGroupData
     }
 };
 
+// Struct used for synchronising Query Queue information with Resource Manager
 struct QueryQueueInfo
 {
     UInt32 queued_query_count {0};

@@ -28,6 +28,7 @@ InterpreterCreateWarehouseQuery::InterpreterCreateWarehouseQuery(const ASTPtr & 
 BlockIO InterpreterCreateWarehouseQuery::execute()
 {
     auto & create = query_ptr->as<ASTCreateWarehouseQuery &>();
+    auto & vw_name = create.name;
 
     bool num_workers_in_settings(false);
 
@@ -84,6 +85,46 @@ BlockIO InterpreterCreateWarehouseQuery::execute()
                     throw Exception("Wrong vw_schedule_algo: " + value, ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
                 vw_settings.vw_schedule_algo = algo;
             }
+            else if (change.name == "max_auto_borrow_links")
+            {
+                vw_settings.max_auto_borrow_links = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "max_auto_lend_links")
+            {
+                vw_settings.max_auto_lend_links = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_borrow")
+            {
+                vw_settings.cpu_threshold_for_borrow = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_borrow")
+            {
+                vw_settings.mem_threshold_for_borrow = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_lend")
+            {
+                vw_settings.cpu_threshold_for_lend= change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_lend")
+            {
+                vw_settings.mem_threshold_for_lend = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_recall")
+            {
+                vw_settings.cpu_threshold_for_recall= change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_recall")
+            {
+                vw_settings.mem_threshold_for_recall = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cooldown_seconds_after_auto_link")
+            {
+                vw_settings.cooldown_seconds_after_auto_link = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cooldown_seconds_after_auto_unlink")
+            {
+                vw_settings.cooldown_seconds_after_auto_unlink = change.value.safeGet<size_t>();
+            }
             else
             {
                 throw Exception("Unknown setting " + change.name, ErrorCodes::RESOURCE_MANAGER_UNKNOWN_SETTING);
@@ -103,7 +144,7 @@ BlockIO InterpreterCreateWarehouseQuery::execute()
         throw Exception("min_worker_groups should be less than or equal to max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCOMPATIBLE_SETTINGS);
 
     auto client = getContext()->getResourceManagerClient();
-    client->createVirtualWarehouse(create.name, vw_settings, create.if_not_exists);
+    client->createVirtualWarehouse(vw_name, vw_settings, create.if_not_exists);
 
     return {};
 }

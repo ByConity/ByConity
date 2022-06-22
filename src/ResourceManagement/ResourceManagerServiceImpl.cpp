@@ -88,6 +88,7 @@ void ResourceManagerServiceImpl::registerWorkerNode(
 
         auto data = WorkerNodeResourceData::createFromProto(request->resource_data());
         rm_controller.registerWorkerNode(data);
+        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {}", data.toDebugString());
     }
     catch (...)
     {
@@ -282,10 +283,8 @@ void ResourceManagerServiceImpl::createWorkerGroup(
             return;
 
         auto worker_group_data = WorkerGroupData::createFromProto(request->worker_group_data());
-        auto group = group_manager.createWorkerGroup(worker_group_data.id, request->if_not_exists(), request->vw_name(), worker_group_data);
-        auto vw = rm_controller.getVirtualWarehouseManager().getVirtualWarehouse(request->vw_name());
-        vw->addWorkerGroup(group);
-        group->setVWName(vw->getName());
+
+        rm_controller.createWorkerGroup(worker_group_data.id, request->if_not_exists(), request->vw_name(), worker_group_data);
     }
     catch (...)
     {
@@ -308,7 +307,7 @@ void ResourceManagerServiceImpl::dropWorkerGroup(
             return;
 
         LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Drop worker group: {}", request->worker_group_id());
-        group_manager.dropWorkerGroup(request->worker_group_id(), request->if_exists());
+        rm_controller.dropWorkerGroup(request->worker_group_id(), request->if_exists());
     }
     catch (...)
     {
@@ -331,9 +330,8 @@ void ResourceManagerServiceImpl::getWorkerGroups(
             return;
 
         auto groups = vw_manager.getVirtualWarehouse(request->vw_name())->getAllWorkerGroups();
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Got {} worker groups of {}", 
-                    groups.size(), request->vw_name());
-        for (auto const & group : groups)
+        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Got {} worker groups of {}", groups.size(), request->vw_name());
+        for (const auto & group : groups)
             group->getData(true).fillProto(*response->add_worker_group_data(), true, true);
     }
     catch (...)
@@ -387,12 +385,54 @@ void ResourceManagerServiceImpl::pickWorker(
         auto & query_scheduler = vw->getQueryScheduler();
         auto vw_schedule_algo = VWScheduleAlgo(request->vw_schedule_algo());
         auto requirement = ResourceRequirement::createFromProto(request->requirement());
+        if (requirement.expected_workers == 0)
+            requirement.expected_workers = 1;
         auto host_ports = query_scheduler.pickWorker(vw_schedule_algo, requirement);
 
         if (!host_ports.empty())
         {
             RPCHelpers::fillHostWithPorts(host_ports, *response->mutable_host_ports());
-            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked worker {}", host_ports.host);
+            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked worker {} from vw {}", host_ports.host, request->vw_name());
+        }
+        else
+            throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void ResourceManagerServiceImpl::pickWorkers(
+    [[maybe_unused]] ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::RMScheduleReq * request,
+    ::DB::Protos::PickWorkersResp * response,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+
+        if (!checkForLeader(response))
+            return;
+
+        auto vw = vw_manager.getVirtualWarehouse(request->vw_name());
+        auto & query_scheduler = vw->getQueryScheduler();
+        auto vw_schedule_algo = VWScheduleAlgo(request->vw_schedule_algo());
+        auto requirement = ResourceRequirement::createFromProto(request->requirement());
+        if (requirement.expected_workers == 0)
+            throw Exception("Call pickWorkers() without setting 'expected_workers'!", ErrorCodes::LOGICAL_ERROR);
+
+        auto workers = query_scheduler.pickWorkers(vw_schedule_algo, requirement);
+
+        if (!workers.empty())
+        {
+            for (const auto & worker : workers)
+            {
+                RPCHelpers::fillHostWithPorts(worker, *response->add_workers());
+            }
+            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked {} workers from vw {}", workers.size(), request->vw_name());
         }
         else
             throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
@@ -424,7 +464,7 @@ void ResourceManagerServiceImpl::pickWorkerGroup(
         if (requirement.expected_workers == 0)
             requirement.expected_workers = vw->getExpectedNumWorkers() >> 1;
         auto group = query_scheduler.pickWorkerGroup(vw_schedule_algo, requirement);
-        auto const & group_data = group->getData();
+        const auto & group_data = group->getData();
         if (group_data.host_ports_vec.empty() && group_data.psm.empty())
             throw Exception("No available worker group for " + request->vw_name(), ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP);
 

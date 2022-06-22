@@ -28,6 +28,7 @@ InterpreterAlterWarehouseQuery::InterpreterAlterWarehouseQuery(const ASTPtr & qu
 BlockIO InterpreterAlterWarehouseQuery::execute()
 {
     auto & alter = query_ptr->as<ASTAlterWarehouseQuery &>();
+    auto & vw_name = alter.name;
 
     if (!alter.rename_to.empty())
         throw Exception("Renaming VirtualWarehouse is currently unsupported.", ErrorCodes::LOGICAL_ERROR);
@@ -87,6 +88,46 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
                     throw Exception("Wrong vw_schedule_algo: " + value, ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
                 vw_alter_settings.vw_schedule_algo = algo;
             }
+            else if (change.name == "max_auto_borrow_links")
+            {
+                vw_alter_settings.max_auto_borrow_links = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "max_auto_lend_links")
+            {
+                vw_alter_settings.max_auto_lend_links = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_borrow")
+            {
+                vw_alter_settings.cpu_threshold_for_borrow = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_borrow")
+            {
+                vw_alter_settings.mem_threshold_for_borrow = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_lend")
+            {
+                vw_alter_settings.cpu_threshold_for_lend = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_lend")
+            {
+                vw_alter_settings.mem_threshold_for_lend = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cpu_threshold_for_recall")
+            {
+                vw_alter_settings.cpu_threshold_for_recall = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "mem_threshold_for_recall")
+            {
+                vw_alter_settings.mem_threshold_for_recall = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cooldown_seconds_after_auto_link")
+            {
+                vw_alter_settings.cooldown_seconds_after_auto_link = change.value.safeGet<size_t>();
+            }
+            else if (change.name == "cooldown_seconds_after_auto_unlink")
+            {
+                vw_alter_settings.cooldown_seconds_after_auto_unlink = change.value.safeGet<size_t>();
+            }
             else
             {
                 throw Exception("Unknown setting " + change.name, ErrorCodes::RESOURCE_MANAGER_UNKNOWN_SETTING);
@@ -98,8 +139,8 @@ BlockIO InterpreterAlterWarehouseQuery::execute()
         && vw_alter_settings.min_worker_groups > vw_alter_settings.max_worker_groups)
         throw Exception("min_worker_groups should be less than or equal to max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCOMPATIBLE_SETTINGS);
 
-    // auto client = getContext()->getResourceManagerClient();
-    // client->updateVirtualWarehouse(vw_name, vw_alter_settings);
+    auto client = getContext()->getResourceManagerClient();
+    client->updateVirtualWarehouse(vw_name, vw_alter_settings);
 
     return {};
 }

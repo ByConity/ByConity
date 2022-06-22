@@ -42,6 +42,7 @@ private:
     std::mutex node_mutex;
     std::unordered_map<std::string, WorkerNodePtr> worker_nodes;
     BackgroundSchedulePool::TaskHolder background_task;
+    size_t register_granularity_sec;
 };
 
 using ResourceTrackerPtr = std::unique_ptr<ResourceTracker>;

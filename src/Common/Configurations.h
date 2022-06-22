@@ -7,10 +7,20 @@ namespace DB
     M(UInt64, port, "", 9000, ConfigFlag::Default, "desc: rpc port") \
     M(String, election_point_key, "", "rm_point_default", ConfigFlag::Default, "") \
     M(UInt64, init_client_tries, "", 3, ConfigFlag::Default, "") \
-    M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "")
+    M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "") \
+    M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
+    M(UInt64, check_leader_info_interval_ms, "", 1000, ConfigFlag::Default, "") \
+    M(UInt64, bytejournal_renewal_interval_ms, "", 1000, ConfigFlag::Default, "") \
+    M(UInt64, bytejournal_polling_interval_ms, "", 1000, ConfigFlag::Default, "") \
+    M(UInt64, bytejournal_error_retry_interval_ms, "", 1000, ConfigFlag::Default, "") \
+    M(UInt64, bytejournal_lease_interval_ms, "", 3000, ConfigFlag::Default, "") \
+    M(UInt64, bytejournal_failover_interval_ms, "", 5000, ConfigFlag::Default, "") \
+    M(UInt64, wait_before_become_leader_ms, "", 3000, ConfigFlag::Default, "") \
+    M(Bool, enable_auto_resource_sharing, "", false, ConfigFlag::Default, "") \
+    M(UInt64, auto_resource_sharing_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
+    M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change worker's Registering state to Running every N seconds to avoid changing worker topology frequently.") \
 
 DECLARE_CONFIG_DATA(RMConfigurationData, RM_CONFIG_FIELDS_LIST)
-
 struct RMConfiguration final : public RMConfigurationData
 {
 };
@@ -45,6 +55,7 @@ struct BJConfiguration final : public BJConfigurationData
     M(String, catalog_psm, "catalog.psm", "data.cnch.catalog", ConfigFlag::Recommended, "") \
     M(String, tso_psm, "tso.psm", "data.cnch.tso", ConfigFlag::Recommended, "") \
     M(String, daemon_manager_psm, "daemon_manager.psm", "data.cnch.daemon_manager", ConfigFlag::Recommended, "") \
+    M(String, resource_manager_host, "resource_manager.node.host", "127.0.0.1", ConfigFlag::Default, "") \
     M(String, resource_manager_psm, "resource_manager.psm", "data.cnch.resource_manager", ConfigFlag::Default, "") \
     M(String, bytepond_psm, "bytepond.psm", "data.cnch.bytepond", ConfigFlag::Default, "")
 

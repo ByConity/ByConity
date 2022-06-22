@@ -7,6 +7,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int RESOURCE_MANAGER_NO_LINKED_GROUP;
 }
 }
 
@@ -16,7 +17,10 @@ namespace DB::ResourceManagement
 size_t SharedWorkerGroup::getNumWorkers() const
 {
     std::lock_guard lock(state_mutex);
-    return linked_group->getNumWorkers();
+    auto res = 0;
+    if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
+        res = linked_grp_shared_ptr->getNumWorkers();
+    return res;
 }
 
 std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkers() const
@@ -27,10 +31,13 @@ std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkers() const
 
 std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkersImpl(std::lock_guard<std::mutex> & /*lock*/) const
 {
-    return linked_group->getWorkers();
+    std::map<String, WorkerNodePtr> res;
+    if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
+        res = linked_grp_shared_ptr->getWorkers();
+    return res;
 }
 
-WorkerGroupData SharedWorkerGroup::getData(bool with_metrics) const
+WorkerGroupData SharedWorkerGroup::getData(bool with_metrics, bool only_running_state) const
 {
     WorkerGroupData data;
     data.id = getID();
@@ -41,23 +48,32 @@ WorkerGroupData SharedWorkerGroup::getData(bool with_metrics) const
     {
         std::lock_guard lock(state_mutex);
 
-        if (linked_group)
-            data.linked_id = linked_group->getID();
+        if (auto linked_group_ptr = tryGetLinkedGroup())
+            data.linked_id = linked_group_ptr->getID();
         for (const auto & [_, worker] : getWorkersImpl(lock))
-            data.host_ports_vec.push_back(worker->host);
+        {
+            if(!only_running_state || worker->state.load(std::memory_order_relaxed) == WorkerState::Running)
+                data.host_ports_vec.push_back(worker->host);
+        }
     }
 
     data.num_workers = data.host_ports_vec.size();
 
     if (with_metrics)
         data.metrics = getAggregatedMetrics();
+
+    data.is_auto_linked = isAutoLinked();
+    data.linked_vw_name = tryGetLinkedGroupVWName();
     return data;
 }
 
 WorkerGroupMetrics SharedWorkerGroup::getAggregatedMetrics() const
 {
     std::lock_guard lock(state_mutex);
-    return linked_group->getAggregatedMetrics();
+    WorkerGroupMetrics res;
+    if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
+        res = linked_grp_shared_ptr->getAggregatedMetrics();
+    return res;
 }
 
 void SharedWorkerGroup::registerNode(const WorkerNodePtr &)
@@ -75,6 +91,29 @@ void SharedWorkerGroup::setLinkedGroup(WorkerGroupPtr group)
     /// TODO: (zuochuang.zema) maybe in future we can remove this lock for SharedWorkerGroup.
     std::lock_guard lock(state_mutex);
     linked_group = std::move(group);
+}
+
+String SharedWorkerGroup::tryGetLinkedGroupVWName() const
+{
+    std::lock_guard lock(state_mutex);
+    String res;
+    if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
+        res = linked_grp_shared_ptr->getVWName();
+    return res;
+}
+
+WorkerGroupPtr SharedWorkerGroup::getLinkedGroup() const
+{
+    auto linked_grp_shared_ptr = linked_group.lock();
+    if (!linked_grp_shared_ptr)
+        throw Exception("Linked group no longer exists for shared group " + id, ErrorCodes::RESOURCE_MANAGER_NO_LINKED_GROUP);
+
+    return linked_grp_shared_ptr;
+}
+
+WorkerGroupPtr SharedWorkerGroup::tryGetLinkedGroup() const
+{
+    return linked_group.lock();
 }
 
 }

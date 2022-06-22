@@ -4,8 +4,8 @@
 #include <Core/UUID.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceManagerController.h>
-#include <Catalog/Catalog.h>
 #include <ResourceManagement/ResourceTracker.h>
+#include <ResourceManagement/WorkerGroupManager.h>
 
 namespace DB
 {
@@ -27,6 +27,12 @@ VirtualWarehouseManager::VirtualWarehouseManager(ResourceManagerController & rm_
 
 void VirtualWarehouseManager::loadVirtualWarehouses()
 {
+    auto vw_lock = getLock();
+    loadVirtualWarehousesImpl(&vw_lock);
+}
+
+void VirtualWarehouseManager::loadVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
+{
     auto catalog = rm_controller.getCnchCatalog();
 
     LOG_DEBUG(log, "Loading virtual warehouses...");
@@ -47,9 +53,15 @@ void VirtualWarehouseManager::loadVirtualWarehouses()
 
 VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouse(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists)
 {
+    auto vw_lock = getLock();
+    return createVirtualWarehouseImpl(name, settings, if_not_exists, &vw_lock);
+}
+
+VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseSettings & settings, const bool if_not_exists, std::lock_guard<std::mutex> * vw_lock)
+{
     if (if_not_exists)
     {
-        auto vw = tryGetVirtualWarehouse(name);
+        auto vw = tryGetVirtualWarehouseImpl(name, vw_lock);
         if (vw)
             return vw;
     }
@@ -89,6 +101,12 @@ VirtualWarehousePtr VirtualWarehouseManager::createVirtualWarehouse(const std::s
 
 VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouse(const std::string & name)
 {
+    auto vw_lock = getLock();
+    return tryGetVirtualWarehouseImpl(name, &vw_lock);
+}
+
+VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * /*vw_lock*/)
+{
     auto res = tryGet(name);
     if (!res && need_sync_with_catalog.load(std::memory_order_relaxed))
     {
@@ -105,7 +123,13 @@ VirtualWarehousePtr VirtualWarehouseManager::tryGetVirtualWarehouse(const std::s
 
 VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouse(const std::string & name)
 {
-    auto res = tryGetVirtualWarehouse(name);
+    auto vw_lock = getLock();
+    return getVirtualWarehouseImpl(name, &vw_lock);
+}
+
+VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouseImpl(const std::string & name, std::lock_guard<std::mutex> * vw_lock)
+{
+    auto res = tryGetVirtualWarehouseImpl(name, vw_lock);
     if (!res)
         throw Exception("Virtual warehouse `" + name + "` not found.", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
     return res;
@@ -113,7 +137,13 @@ VirtualWarehousePtr VirtualWarehouseManager::getVirtualWarehouse(const std::stri
 
 void VirtualWarehouseManager::alterVirtualWarehouse(const std::string & name, const VirtualWarehouseAlterSettings & settings)
 {
-    auto res = getVirtualWarehouse(name);
+    auto vw_lock = getLock();
+    alterVirtualWarehouseImpl(name, settings, &vw_lock);
+}
+
+void VirtualWarehouseManager::alterVirtualWarehouseImpl(const std::string & name, const VirtualWarehouseAlterSettings & settings, std::lock_guard<std::mutex> * vw_lock)
+{
+    auto res = getVirtualWarehouseImpl(name, vw_lock);
     auto catalog = rm_controller.getCnchCatalog();
     try
     {
@@ -129,7 +159,13 @@ void VirtualWarehouseManager::alterVirtualWarehouse(const std::string & name, co
 
 void VirtualWarehouseManager::dropVirtualWarehouse(const std::string & name, const bool if_exists)
 {
-    auto res = tryGetVirtualWarehouse(name);
+    auto vw_lock = getLock();
+    dropVirtualWarehouseImpl(name, if_exists, &vw_lock);
+}
+
+void VirtualWarehouseManager::dropVirtualWarehouseImpl(const std::string & name, const bool if_exists, std::lock_guard<std::mutex> * vw_lock)
+{
+    auto res = tryGetVirtualWarehouseImpl(name, vw_lock);
 
     if (!res)
     {
@@ -163,9 +199,26 @@ void VirtualWarehouseManager::dropVirtualWarehouse(const std::string & name, con
     }
 }
 
+std::unordered_map<String, VirtualWarehousePtr> VirtualWarehouseManager::getAllVirtualWarehouses()
+{
+    auto vw_lock = getLock();
+    return getAllVirtualWarehousesImpl(&vw_lock);
+}
+
+std::unordered_map<String, VirtualWarehousePtr> VirtualWarehouseManager::getAllVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
+{
+    return getAll();
+}
+
 void VirtualWarehouseManager::clearVirtualWarehouses()
 {
-    std::lock_guard lock(cells_mutex);
+    auto vw_lock = getLock();
+    clearVirtualWarehousesImpl(&vw_lock);
+}
+
+void VirtualWarehouseManager::clearVirtualWarehousesImpl(std::lock_guard<std::mutex> * /*vw_lock*/)
+{
+    std::lock_guard cells_lock(cells_mutex);
     cells.clear();
 }
 

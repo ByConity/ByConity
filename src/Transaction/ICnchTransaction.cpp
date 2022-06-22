@@ -4,7 +4,7 @@
 // #include <MergeTreeCommon/CnchPartsHelper.h>
 // #include <MergeTreeCommon/CnchServerClient.h>
 // #include <MergeTreeCommon/CnchServerClientPool.h>
-// #include <ResourceGroup/IResourceGroupManager.h>
+#include <ResourceGroup/IResourceGroupManager.h>
 #include <Transaction/LockManager.h>
 #include <cppkafka/topic_partition_list.h>
 #include <Common/serverLocality.h>
@@ -19,9 +19,8 @@ namespace ErrorCodes
 
 bool isReadOnlyTransaction(const DB::IAST * ast)
 {
-    // ResourceSelectCase::QueryType query_type = ResourceSelectCase::getQueryType(ast);
-    // return query_type == ResourceSelectCase::QueryType::SELECT || query_type == ResourceSelectCase::QueryType::OTHER;
-    return ast->as<ASTSelectQuery>() || ast->as<ASTSelectWithUnionQuery>();
+    ResourceSelectCase::QueryType query_type = ResourceSelectCase::getQueryType(ast);
+    return query_type == ResourceSelectCase::QueryType::SELECT || query_type == ResourceSelectCase::QueryType::OTHER;
 }
 
 CnchTransactionStatus ICnchTransaction::getStatus() const

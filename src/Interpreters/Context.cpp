@@ -982,7 +982,14 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     auto lock = getLock();
     shared->users_config = config;
     shared->access_control_manager.setUsersConfig(*shared->users_config);
-    shared->resource_group_manager->initialize(*shared->users_config);
+    if (getServerType() == ServerType::cnch_server)
+    {
+        if (!shared->resource_group_manager)
+            initResourceGroupManager(config);
+        
+        if (shared->resource_group_manager)
+            shared->resource_group_manager->initialize(*shared->users_config);
+    }
 }
 
 ConfigurationPtr Context::getUsersConfig()
@@ -991,11 +998,39 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::initResourceGroupManager(const ConfigurationPtr & config)
+{
+    if (!config->has("resource_groups"))
+    {
+        LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+        return ;
+    }
+    auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
+    if (resource_group_manager_type == "vw")
+    {
+        if (!getResourceManagerClient())
+        {
+            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+            return;
+        }
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+        shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
+    }
+    else if (resource_group_manager_type == "internal")
+    {
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+        shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
+    }
+    else
+        throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+}
+
 void Context::setResourceGroup(const IAST * ast)
 {
-    if (auto lock = getLock(); shared->resource_group_manager->isInUse())
+    if (auto lock = getLock(); shared->resource_group_manager && shared->resource_group_manager->isInUse())
         resource_group = shared->resource_group_manager->selectGroup(*this, ast);
-    resource_group = nullptr;
+    else
+        resource_group = nullptr;
 }
 
 IResourceGroup * Context::tryGetResourceGroup() const

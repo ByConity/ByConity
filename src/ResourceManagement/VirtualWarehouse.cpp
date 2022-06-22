@@ -20,41 +20,66 @@ VirtualWarehouse::VirtualWarehouse(String n, UUID u, const VirtualWarehouseSetti
     query_scheduler = std::make_unique<QueryScheduler>(*this);
 }
 
-void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & new_settings, const Catalog::CatalogPtr & catalog)
+void VirtualWarehouse::applySettings(const VirtualWarehouseAlterSettings & setting_changes, const Catalog::CatalogPtr & catalog)
 {
-    catalog->alterVirtualWarehouse(name, getData());
+    auto data = getData();
+    VirtualWarehouseSettings & new_settings = data.settings;
+
+    if (setting_changes.type)
+        new_settings.type = *setting_changes.type;
+    if (setting_changes.max_worker_groups)
+    {
+        if ((setting_changes.min_worker_groups
+                && setting_changes.min_worker_groups.value() > setting_changes.max_worker_groups.value())
+            || (!setting_changes.min_worker_groups && settings.min_worker_groups > setting_changes.max_worker_groups.value()))
+            throw Exception("min_worker_groups cannot be less than max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCORRECT_SETTING);
+        new_settings.max_worker_groups = *setting_changes.max_worker_groups;
+    }
+    if (setting_changes.min_worker_groups)
+    {
+        new_settings.min_worker_groups = *setting_changes.min_worker_groups;
+    }
+    if (setting_changes.num_workers)
+    {
+        new_settings.num_workers = *setting_changes.num_workers;
+    }
+    if (setting_changes.auto_suspend)
+        new_settings.auto_suspend = *setting_changes.auto_suspend;
+    if (setting_changes.auto_resume)
+        new_settings.auto_resume = *setting_changes.auto_resume;
+    if (setting_changes.max_concurrent_queries)
+        new_settings.max_concurrent_queries = *setting_changes.max_concurrent_queries;
+    if (setting_changes.max_queued_queries)
+        new_settings.max_queued_queries = *setting_changes.max_queued_queries;
+    if (setting_changes.max_queued_waiting_ms)
+        new_settings.max_queued_waiting_ms = *setting_changes.max_queued_waiting_ms;
+    if (setting_changes.vw_schedule_algo)
+        new_settings.vw_schedule_algo = *setting_changes.vw_schedule_algo;
+    if (setting_changes.max_auto_borrow_links)
+        new_settings.max_auto_borrow_links = *setting_changes.max_auto_borrow_links;
+    if (setting_changes.max_auto_lend_links)
+        new_settings.max_auto_lend_links = *setting_changes.max_auto_lend_links;
+    if (setting_changes.cpu_threshold_for_borrow)
+        new_settings.cpu_threshold_for_borrow = *setting_changes.cpu_threshold_for_borrow;
+    if (setting_changes.mem_threshold_for_borrow)
+        new_settings.mem_threshold_for_borrow = *setting_changes.mem_threshold_for_borrow;
+    if (setting_changes.cpu_threshold_for_lend)
+        new_settings.cpu_threshold_for_lend = *setting_changes.cpu_threshold_for_lend;
+    if (setting_changes.mem_threshold_for_lend)
+        new_settings.mem_threshold_for_lend = *setting_changes.mem_threshold_for_lend;
+    if (setting_changes.cpu_threshold_for_recall)
+        new_settings.cpu_threshold_for_recall = *setting_changes.cpu_threshold_for_recall;
+    if (setting_changes.mem_threshold_for_recall)
+        new_settings.mem_threshold_for_recall = *setting_changes.mem_threshold_for_recall;
+    if (setting_changes.cooldown_seconds_after_auto_link)
+        new_settings.cooldown_seconds_after_auto_link = *setting_changes.cooldown_seconds_after_auto_link;
+    if (setting_changes.cooldown_seconds_after_auto_unlink)
+        new_settings.cooldown_seconds_after_auto_unlink = *setting_changes.cooldown_seconds_after_auto_unlink;
+
+    catalog->alterVirtualWarehouse(name, data);
     {
         auto wlock = getWriteLock();
-        if (new_settings.type)
-            settings.type = *new_settings.type;
-        if (new_settings.max_worker_groups)
-        {
-            if ((new_settings.min_worker_groups
-                 && new_settings.min_worker_groups.value() > new_settings.max_worker_groups.value())
-                || (!new_settings.min_worker_groups && settings.min_worker_groups > new_settings.max_worker_groups.value()))
-                throw Exception("min_worker_groups cannot be less than max_worker_groups", ErrorCodes::RESOURCE_MANAGER_INCORRECT_SETTING);
-            settings.max_worker_groups = *new_settings.max_worker_groups;
-        }
-        if (new_settings.min_worker_groups)
-        {
-            settings.min_worker_groups = *new_settings.min_worker_groups;
-        }
-        if (new_settings.num_workers)
-        {
-            settings.num_workers = *new_settings.num_workers;
-        }
-        if (new_settings.auto_suspend)
-            settings.auto_suspend = *new_settings.auto_suspend;
-        if (new_settings.auto_resume)
-            settings.auto_resume = *new_settings.auto_resume;
-        if (new_settings.max_concurrent_queries)
-            settings.max_concurrent_queries = *new_settings.max_concurrent_queries;
-        if (new_settings.max_queued_queries)
-            settings.max_queued_queries = *new_settings.max_queued_queries;
-        if (new_settings.max_queued_waiting_ms)
-            settings.max_queued_waiting_ms = *new_settings.max_queued_waiting_ms;
-        if (new_settings.vw_schedule_algo)
-            settings.vw_schedule_algo = *new_settings.vw_schedule_algo;
+        settings = new_settings;
     }
 }
 
@@ -68,6 +93,10 @@ VirtualWarehouseData VirtualWarehouse::getData() const
     data.settings = settings;
     data.num_worker_groups = groups.size();
     data.num_workers = getNumWorkersImpl(rlock);
+    data.num_borrowed_worker_groups = getNumBorrowedGroupsImpl(rlock);
+    data.num_lent_worker_groups = getNumLentGroupsImpl(rlock);
+    data.last_borrow_timestamp = getLastBorrowTimestamp();
+    data.last_lend_timestamp = getLastLendTimestamp();
 
     return data;
 }
@@ -84,18 +113,73 @@ std::vector<WorkerGroupPtr> VirtualWarehouse::getAllWorkerGroups() const
     return res;
 }
 
+std::vector<WorkerGroupPtr> VirtualWarehouse::getNonborrowedGroups() const
+{
+    std::vector<WorkerGroupPtr> res;
+
+    auto rlock = getReadLock();
+
+    for (const auto & [_, group]: groups)
+    {
+        if (borrowed_groups.find(group->getID()) == borrowed_groups.end())
+            res.emplace_back(group);
+    }
+
+    return res;
+}
+
+std::vector<WorkerGroupPtr> VirtualWarehouse::getBorrowedGroups() const
+{
+    std::vector<WorkerGroupPtr> res;
+
+    auto rlock = getReadLock();
+
+    for (const auto & id : borrowed_groups)
+    {
+        if (auto it = groups.find(id); it == groups.end())
+            throw Exception("Borrowed worker group " + id + "cannot be found in VW " + getName(), ErrorCodes::LOGICAL_ERROR);
+        else
+            res.emplace_back(it->second);
+    }
+
+    return res;
+}
+
+std::vector<WorkerGroupPtr> VirtualWarehouse::getLentGroups() const
+{
+    std::vector<WorkerGroupPtr> res;
+
+    auto rlock = getReadLock();
+
+    for (const auto & [id, _] : lent_groups)
+    {
+        if (auto it = groups.find(id); it == groups.end())
+            throw Exception("Lent worker group " + id + "cannot be found in VW " + getName(), ErrorCodes::LOGICAL_ERROR);
+        else
+            res.emplace_back(it->second);
+    }
+
+    return res;
+}
+
 size_t VirtualWarehouse::getNumGroups() const
 {
     auto rlock = getReadLock();
     return groups.size();
 }
 
-void VirtualWarehouse::addWorkerGroup(const WorkerGroupPtr & group)
+void VirtualWarehouse::addWorkerGroup(const WorkerGroupPtr & group, const bool is_auto_linked /* = false */)
 {
     auto wlock = getWriteLock();
     auto res = groups.try_emplace(group->getID(), group).second;
     if (!res)
         throw Exception("Worker group " + group->getID() + " already exists in VW " + getName(), ErrorCodes::LOGICAL_ERROR);
+
+    if (is_auto_linked)
+    {
+        auto id = group->getID();
+        borrowed_groups.insert(id);
+    }
 }
 
 void VirtualWarehouse::loadGroup(const WorkerGroupPtr & group)
@@ -103,9 +187,74 @@ void VirtualWarehouse::loadGroup(const WorkerGroupPtr & group)
     addWorkerGroup(group);
 }
 
+void VirtualWarehouse::lendGroup(const String & id)
+{
+   auto wlock = getWriteLock();
+
+   // Update lend count of group
+   auto it = lent_groups.find(id);
+
+   if (it != lent_groups.end())
+   {
+       it->second += 1;
+   }
+   else
+   {
+       lent_groups[id] = 1;
+   }
+}
+
+void VirtualWarehouse::unlendGroup(const String & id)
+{
+   auto wlock = getWriteLock();
+   auto it = lent_groups.find(id);
+   if (it == lent_groups.end())
+   {
+       throw Exception("Lent group " + id + " does not exist in VW " + name, ErrorCodes::LOGICAL_ERROR);
+   }
+   else
+   {
+       if (it->second == 1)
+           lent_groups.erase(it); // Erase group from lent groups if this is the last link
+       else
+           it->second -= 1;
+   }
+}
+
+size_t VirtualWarehouse::getNumBorrowedGroups() const
+{
+    auto rlock = getReadLock();
+    return getNumBorrowedGroupsImpl(rlock);
+}
+
+size_t VirtualWarehouse::getNumBorrowedGroupsImpl(ReadLock & /*rlock*/) const
+{
+    return borrowed_groups.size();
+}
+
+size_t VirtualWarehouse::getNumLentGroups() const
+{
+    auto rlock = getReadLock();
+    return getNumLentGroupsImpl(rlock);
+}
+
+size_t VirtualWarehouse::getNumLentGroupsImpl(ReadLock & /*rlock*/) const
+{
+    auto res = 0;
+    for (const auto & [_, count] : lent_groups)
+    {
+        res += count;
+    }
+
+    return res;
+}
+
 void VirtualWarehouse::removeGroup(const String & id)
 {
     auto wlock = getWriteLock();
+
+    borrowed_groups.erase(id);
+
     size_t num = groups.erase(id);
     if (num == 0)
         throw Exception("Cannot remove a nonexistent worker group " + id + " in VW " + getName(), ErrorCodes::LOGICAL_ERROR);

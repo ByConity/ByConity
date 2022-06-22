@@ -28,15 +28,15 @@ namespace ResourceManagement
 {
 struct WorkerNode;
 
-String fetchByteJournalLeader(ContextMutablePtr context, String election_ns, String election_point);
+String fetchByteJournalLeader(ContextPtr context, String election_ns, String election_point);
 
-class ResourceManagerClient : public RpcLeaderClientBase, protected WithMutableContext
+class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
 {
     friend class ResourceReporterTask;
 public:
     static String getName() { return "ResourceManagerClient"; }
 
-    ResourceManagerClient(ContextMutablePtr global_context_, const String & election_ns_, const String & election_point_);
+    ResourceManagerClient(ContextPtr global_context_, const String & election_ns_, const String & election_point_);
     ~ResourceManagerClient() override;
 
     void getVirtualWarehouse(const std::string & name, VirtualWarehouseData & vw_data);
