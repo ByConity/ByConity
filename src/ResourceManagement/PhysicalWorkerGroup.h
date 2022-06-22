@@ -24,12 +24,20 @@ public:
 
     size_t getNumWorkers() const override;
     std::map<String, WorkerNodePtr> getWorkers() const override;
-    WorkerGroupData getData(bool with_metrics = false) const override;
+    WorkerGroupData getData(bool with_metrics = false, bool only_running_state = true) const override;
     void refreshAggregatedMetrics() override;
     WorkerGroupMetrics getAggregatedMetrics() const override;
 
     void registerNode(const WorkerNodePtr & node) override;
     void removeNode(const String & worker_id) override;
+
+    void addLentGroupDestID(const String & group_id);
+
+    void removeLentGroupDestID(const String & group_id);
+
+    void clearLentGroups();
+
+    std::unordered_set<String> getLentGroupsDestIDs() const;
 
     bool empty() const override
     {
@@ -37,7 +45,7 @@ public:
         return workers.empty();
     }
 
-    WorkerNodePtr randomWorker() const override;
+    std::vector<WorkerNodePtr> randomWorkers(const size_t n, const std::unordered_set<String> & blocklist) const override;
 
 private:
     std::map<String, WorkerNodePtr> getWorkersImpl(std::lock_guard<std::mutex> & lock) const;
@@ -46,6 +54,7 @@ private:
     std::map<String, WorkerNodePtr> workers;
     WorkerGroupMetrics aggregated_metrics;
     BackgroundSchedulePool::TaskHolder refresh_metrics_task;
+    std::unordered_set<String> lent_groups_dest_ids;
 
 };
 

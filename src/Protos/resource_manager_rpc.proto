@@ -198,6 +198,14 @@ message PickWorkerResp
   optional int32 cancel_task = 5;
 }
 
+message PickWorkersResp
+{
+  optional bool is_leader = 1;
+  optional string leader_host_port = 2;
+  optional string exception = 3;
+  repeated HostWithPorts workers = 4;
+}
+
 message PickWorkerGroupResp
 {
   optional bool is_leader = 1;
@@ -235,6 +243,7 @@ service ResourceManagerService
   rpc getAllWorkers(GetAllWorkersReq) returns (GetAllWorkersResp);
   rpc pickWorkerGroup(RMScheduleReq) returns (PickWorkerGroupResp);
   rpc pickWorker(RMScheduleReq) returns (PickWorkerResp);
+  rpc pickWorkers(RMScheduleReq) returns (PickWorkersResp);
 
   rpc createWorkerGroup(CreateWorkerGroupReq) returns (CreateWorkerGroupResp);
   rpc dropWorkerGroup(DropWorkerGroupReq) returns (DropWorkerGroupResp);

@@ -20,24 +20,27 @@ extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
 namespace DB::ResourceManagement
 {
 
-ResourceManagerClient::ResourceManagerClient(ContextMutablePtr global_context_, const String & election_ns_, const String & election_point_)
+ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_, const String & election_ns_, const String & election_point_)
     : RpcLeaderClientBase(getName(), DB::ResourceManagement::fetchByteJournalLeader(global_context_, election_ns_, election_point_))
-    , WithMutableContext(global_context_)
+    , WithContext(global_context_)
     , stub(std::make_unique<Protos::ResourceManagerService_Stub>(&getChannel()))
     , election_ns(election_ns_)
     , election_point(election_point_)
 {
 }
 
-String fetchByteJournalLeader([[maybe_unused]] ContextMutablePtr context, [[maybe_unused]]  String election_ns, [[maybe_unused]]  String election_point)
+String fetchByteJournalLeader([[maybe_unused]] ContextPtr context, [[maybe_unused]] String election_ns, [[maybe_unused]] String election_point)
 {
     // TODO(zuochuang.zema) MERGE bj
-    // auto leader_addr = getResult(context.getByteJournalClient()->GetLeaderInfo(election_ns, election_point)).addr;
-    // LOG_DEBUG(
-    //     &Logger::get("fetchRMByteJournalLeader"),
-    //     "fetched rm_leader_host_port from Bytejournal : [" << leader_addr << "] namespace [" << election_ns << "] election point ["
-    //                                                        << election_point << "]");
-    // return leader_addr;
+    #if BYTEJOURNAL_AVAILABLE
+    auto leader_addr = getResult(context->getByteJournalClient()->GetLeaderInfo(election_ns, election_point)).addr;
+    LOG_DEBUG(
+        &Logger::get("fetchRMByteJournalLeader"),
+        "fetched rm_leader_host_port from Bytejournal : [" << leader_addr << "] namespace [" << election_ns << "] election point ["
+                                                           << election_point << "]");
+    return leader_addr;
+    #endif
+
     return "";
 }
 

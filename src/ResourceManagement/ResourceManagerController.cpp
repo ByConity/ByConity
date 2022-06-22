@@ -2,10 +2,14 @@
 
 #include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
+#include <Poco/Util/Application.h>
+#include <ResourceManagement/ElectionController.h>
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
 #include <Core/UUID.h>
+#include <ResourceManagement/WorkerGroupResourceCoordinator.h>
+
 #include <ResourceManagement/ElectionController.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
 
@@ -14,6 +18,7 @@ namespace DB::ErrorCodes
     extern const int KNOWN_WORKER_GROUP;
     extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
     extern const int VIRTUAL_WAREHOUSE_NOT_INITIALIZED;
+    extern const int WORKER_GROUP_NOT_FOUND;
 }
 
 namespace DB::ResourceManagement
@@ -24,6 +29,7 @@ ResourceManagerController::ResourceManagerController(ContextPtr global_context_)
     resource_tracker = std::make_unique<ResourceTracker>(*this);
     vw_manager = std::make_unique<VirtualWarehouseManager>(*this);
     group_manager = std::make_unique<WorkerGroupManager>(*this);
+    wg_resource_coordinator = std::make_unique<WorkerGroupResourceCoordinator>(*this);
     election_controller = std::make_unique<ElectionController>(*this);
 }
 
@@ -104,6 +110,10 @@ void ResourceManagerController::createWorkerGroupsFromConfig(const String & pref
 
     config->keys(prefix, config_keys);
     String prefix_key;
+
+    auto vw_lock  = vw_manager->getLock();
+    auto wg_lock = group_manager->getLock();
+
     for (const String & key: config_keys)
     {
         prefix_key = prefix + "." + key;
@@ -115,7 +125,7 @@ void ResourceManagerController::createWorkerGroupsFromConfig(const String & pref
                 continue;
             }
             String name = config->getString(prefix_key + ".name");
-            if (group_manager->tryGetWorkerGroup(name))
+            if (group_manager->tryGetWorkerGroupImpl(name, &vw_lock, &wg_lock))
             {
                 LOG_DEBUG(log, "Worker group " + name + " already exists, skipping creation");
                 continue;
@@ -139,7 +149,7 @@ void ResourceManagerController::createWorkerGroupsFromConfig(const String & pref
             if (config->has(prefix_key + ".shared_group"))
                 group_data.linked_id = config->getString(prefix_key + ".shared_group");
 
-            group_manager->createWorkerGroup(name, false, vw_name, group_data);
+            createWorkerGroup(name, false, vw_name, group_data, &vw_lock, &wg_lock);
             LOG_DEBUG(log, "Created worker group " + name + " in Virtual Warehouse " + vw_name + " using config");
         }
     }
@@ -158,6 +168,7 @@ void ResourceManagerController::initialize()
     for (auto & [_, vw] : vws)
         uuid_to_vw[vw->getUUID()] = vw;
 
+    // Link worker groups to respective VWs
     for (auto & [_, group] : groups)
     {
         auto vw_uuid = group->getVWUUID();
@@ -169,16 +180,61 @@ void ResourceManagerController::initialize()
         }
 
         auto vw_it = uuid_to_vw.find(vw_uuid);
-        if (vw_it != uuid_to_vw.end())
+        if (vw_it == uuid_to_vw.end())
         {
-            auto & vw = vw_it->second;
-            vw->addWorkerGroup(group);
-            group->setVWName(vw->getName());
-            LOG_DEBUG(log, "Add worker group {} to virtual warehouse {}", group->getID(), vw->getName());
+            LOG_WARNING(log, "Worker group {} belongs to a nonexistent virtual warehouse {}", group->getID(), toString(vw_uuid));
+            continue;
+        }
+
+        auto & vw = vw_it->second;
+        if (auto shared_group = dynamic_pointer_cast<SharedWorkerGroup>(group); shared_group && shared_group->isAutoLinked())
+        {
+            vw->addWorkerGroup(group, true);
         }
         else
         {
-            LOG_DEBUG(log, "Worker group {} belongs to a nonexistent virtual warehouse {}", group->getID(), toString(vw_uuid));
+            vw->addWorkerGroup(group);
+        }
+        group->setVWName(vw->getName());
+        LOG_DEBUG(log, "Add worker group {} to virtual warehouse {}", group->getID(), vw->getName());
+    }
+
+    // Link lent groups to their original VWs
+    for (auto & [_, group] : groups)
+    {
+        if (auto shared_group = dynamic_pointer_cast<SharedWorkerGroup>(group); shared_group && shared_group->isAutoLinked())
+        {
+            auto vw_uuid = group->getVWUUID();
+            auto vw_it = uuid_to_vw.find(vw_uuid);
+            if (vw_it == uuid_to_vw.end())
+            {
+                LOG_WARNING(log, "Worker group {} belongs to a nonexistent virtual warehouse {}", group->getID(), toString(vw_uuid));
+                continue;
+            }
+            auto & vw = vw_it->second;
+            auto source_vw_name = shared_group->tryGetLinkedGroupVWName();
+            if (source_vw_name.empty())
+            {
+                LOG_DEBUG(log, "Auto-borrowed worker group {}'s physical group does not have a virtual warehouse", group->getID());
+                continue;
+            }
+            if (auto source_vw_it = vws.find(source_vw_name); source_vw_it == vws.end())
+            {
+                LOG_WARNING(log, "Auto-borrowed worker group's physical group's VW {} does not exist", source_vw_name);
+                continue;
+            }
+            else
+            {
+                LOG_DEBUG(log, "Linking WG {} from VW {} to VW {}", group->getID(), source_vw_name, vw->getName());
+                auto data = shared_group->getData();
+                auto source_group = group_manager->getWorkerGroup(data.linked_id);
+                auto source_physical_group = dynamic_pointer_cast<PhysicalWorkerGroup>(source_group);
+                if (!source_physical_group)
+                    throw Exception("Lent group is not of Physical type", ErrorCodes::LOGICAL_ERROR);
+                auto source_vw = source_vw_it->second;
+                source_vw->lendGroup(data.linked_id);
+                source_physical_group->addLentGroupDestID(group->getID());
+            }
         }
     }
 }
@@ -199,20 +255,25 @@ void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData 
     const auto & worker_id = worker_node->getID();
     const auto & worker_group_id = worker_node->worker_group_id;
 
-    auto group = group_manager->tryGetWorkerGroup(worker_group_id);
-    if (!group)
+    WorkerGroupPtr group;
     {
-        auto vw = vw_manager->tryGetVirtualWarehouse(vw_name);
-        if (!vw)
-            throw Exception("Worker node's Virtual Warehouse `" + vw_name + "` has not been created", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_INITIALIZED);
+        auto vw_lock = vw_manager->getLock();
+        auto wg_lock = group_manager->getLock();
+        group = group_manager->tryGetWorkerGroupImpl(worker_group_id, &vw_lock, &wg_lock);
+        if (!group)
+        {
+            auto vw = vw_manager->tryGetVirtualWarehouseImpl(vw_name, &vw_lock);
+            if (!vw)
+                throw Exception("Worker node's Virtual Warehouse `" + vw_name + "` has not been created", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_INITIALIZED);
 
-        // Create group if not found
-        WorkerGroupData worker_group_data;
-        worker_group_data.id = worker_group_id;
-        worker_group_data.vw_name = vw_name;
-        group = group_manager->createWorkerGroup(worker_group_id, false, vw_name, worker_group_data);
-        vw->addWorkerGroup(group);
-        group->setVWName(vw->getName());
+            // Create group if not found
+            WorkerGroupData worker_group_data;
+            worker_group_data.id = worker_group_id;
+            worker_group_data.vw_name = vw_name;
+            group = createWorkerGroup(worker_group_id, false, vw_name, worker_group_data, &vw_lock, &wg_lock);
+            vw->addWorkerGroup(group);
+            group->setVWName(vw->getName());
+        }
     }
 
     if (outdated)
@@ -241,6 +302,127 @@ void ResourceManagerController::removeWorkerNode(const std::string & worker_id, 
 
     auto group = group_manager->getWorkerGroup(group_id);
     group->removeNode(worker_id);
+
+    resource_tracker->removeNode(worker_id);
+}
+
+WorkerGroupPtr ResourceManagerController::createWorkerGroup(
+    const std::string & group_id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
+{
+    std::unique_ptr<std::lock_guard<std::mutex>> vw_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> wg_lock_guard;
+
+    if ((wg_lock != nullptr) ^ (vw_lock != nullptr))
+        throw Exception("vw_lock and wg_lock must both be set or left empty", ErrorCodes::LOGICAL_ERROR);
+    else if (wg_lock == nullptr && vw_lock == nullptr)
+    {
+        // VirtualWarehouseManager's lock should be obtained before WorkerGroupManager's
+        vw_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(vw_manager->getMutex());
+        wg_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(group_manager->getMutex());
+        vw_lock = vw_lock_guard.get();
+        wg_lock = wg_lock_guard.get();
+    }
+
+    VirtualWarehousePtr source_vw;
+    WorkerGroupPtr source_group;
+    auto is_auto_linked = data.is_auto_linked;
+
+    if (is_auto_linked)
+    {
+        source_group = group_manager->getWorkerGroupImpl(data.linked_id, vw_lock, wg_lock);
+        auto source_physical_group = dynamic_pointer_cast<PhysicalWorkerGroup>(source_group);
+        if (!source_physical_group)
+            throw Exception("Lent group is not of Physical type", ErrorCodes::LOGICAL_ERROR);
+        source_vw = vw_manager->getVirtualWarehouseImpl(source_group->getVWName(), vw_lock);
+        LOG_DEBUG(log, "Linking " + source_group->getID() + " from " + source_vw->getName() + " as " + group_id + " to " + vw_name);
+        source_vw->lendGroup(data.linked_id);
+        source_physical_group->addLentGroupDestID(group_id);
+    }
+
+    auto dest_group = group_manager->createWorkerGroupImpl(group_id, if_not_exists, vw_name, data, vw_lock, wg_lock);
+    auto vw = vw_manager->getVirtualWarehouseImpl(vw_name, vw_lock);
+    vw->addWorkerGroup(dest_group, is_auto_linked);
+    dest_group->setVWName(vw->getName());
+
+    return dest_group;
+}
+
+void ResourceManagerController::dropWorkerGroup(const std::string & group_id, bool if_exists, std::lock_guard<std::mutex> * vw_lock, std::lock_guard<std::mutex> * wg_lock)
+{
+    std::unique_ptr<std::lock_guard<std::mutex>> vw_lock_guard;
+    std::unique_ptr<std::lock_guard<std::mutex>> wg_lock_guard;
+
+    if ((wg_lock != nullptr) ^ (vw_lock != nullptr))
+        throw Exception("vw_lock and wg_lock must both be set or left empty", ErrorCodes::LOGICAL_ERROR);
+    else if (wg_lock == nullptr && vw_lock == nullptr)
+    {
+        // VirtualWarehouseManager's lock should be obtained before WorkerGroupManager's
+        vw_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(vw_manager->getMutex());
+        wg_lock_guard = std::make_unique<std::lock_guard<std::mutex>>(group_manager->getMutex());
+        vw_lock = vw_lock_guard.get();
+        wg_lock = wg_lock_guard.get();
+    }
+
+    auto group = group_manager->tryGetWorkerGroupImpl(group_id, vw_lock, wg_lock);
+    if (!group)
+    {
+        if (if_exists)
+            return;
+        else
+            throw Exception("Worker group `" + group_id + "` not found", ErrorCodes::WORKER_GROUP_NOT_FOUND);
+    }
+
+    auto vw_name = group->getVWName();
+
+    if (!vw_name.empty())
+    {
+        auto vw = vw_manager->getVirtualWarehouseImpl(vw_name, vw_lock);
+        if (auto shared_group = dynamic_pointer_cast<SharedWorkerGroup>(group); shared_group && shared_group->isAutoLinked())
+        {
+            // Unlend worker_group
+            try
+            {
+                auto lender_vw_name = shared_group->tryGetLinkedGroupVWName();
+                auto lender_vw = vw_manager->tryGetVirtualWarehouseImpl(lender_vw_name, vw_lock);
+                if (lender_vw)
+                {
+                    auto time_now = time(nullptr);
+                    lender_vw->unlendGroup(shared_group->getData().linked_id);
+                    lender_vw->setLastLendTimestamp(time_now);
+                }
+                else
+                {
+                    LOG_DEBUG(log, "Auto linked WG's physical group's virtual warehouse no longer exists");
+                }
+                auto lender_group = shared_group->getLinkedGroup();
+                auto lender_physical_group = dynamic_pointer_cast<PhysicalWorkerGroup>(lender_group);
+                if (lender_physical_group)
+                {
+                    lender_physical_group->removeLentGroupDestID(group_id);
+                }
+                else
+                {
+                    LOG_DEBUG(log, "Auto linked WG's physical group no longer exists");
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log);
+            }
+        }
+        else if (auto physical_group = dynamic_pointer_cast<PhysicalWorkerGroup>(group); physical_group)
+        {
+            // Drop auto linked groups by resource coordinator
+            auto lent_groups_ids = physical_group->getLentGroupsDestIDs();
+            for (const auto & lent_groups_id : lent_groups_ids)
+            {
+                dropWorkerGroup(lent_groups_id, true, vw_lock, wg_lock);
+            }
+        }
+
+        vw->removeGroup(group_id);
+    }
+    group_manager->dropWorkerGroupImpl(group_id, wg_lock);
 }
 
 }

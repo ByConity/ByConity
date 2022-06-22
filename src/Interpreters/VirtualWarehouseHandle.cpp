@@ -254,7 +254,7 @@ void VirtualWarehouseHandleImpl::filterGroup(const Requirement & requirement, st
 {
     /// TODO: (zuochuang.zema) read-write lock.
     std::lock_guard lock(state_mutex);
-    for (auto const & [_, group] : worker_groups)
+    for (const auto & [_, group] : worker_groups)
     {
         if (!group->empty())
         {
@@ -292,7 +292,7 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::selectGroup(const VWScheduleAlgo &
             comparator = cmp_group_mem;
             break;
         default:
-            auto const & s = std::string(ResourceManagement::toString(algo));
+            const auto & s = std::string(ResourceManagement::toString(algo));
             throw Exception("Wrong vw_schedule_algo for local scheduler: " + s, ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
     }
 

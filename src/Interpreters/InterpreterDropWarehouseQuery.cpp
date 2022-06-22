@@ -19,10 +19,11 @@ InterpreterDropWarehouseQuery::InterpreterDropWarehouseQuery(const ASTPtr & quer
 
 BlockIO InterpreterDropWarehouseQuery::execute()
 {
-    // auto & drop = query_ptr->as<ASTDropWarehouseQuery &>();
+    auto & drop = query_ptr->as<ASTDropWarehouseQuery &>();
+    auto & vw_name = drop.name;
 
-    // auto client = getContext()->getResourceManagerClient();
-    // client->dropVirtualWarehouse(vw_name, drop.if_exists);
+    auto client = getContext()->getResourceManagerClient();
+    client->dropVirtualWarehouse(vw_name, drop.if_exists);
 
     return {};
 }

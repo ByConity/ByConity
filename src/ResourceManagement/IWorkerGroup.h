@@ -14,6 +14,7 @@ class IWorkerGroup : private boost::noncopyable
 {
 public:
     IWorkerGroup(WorkerGroupType type_, String id_, UUID vw_uuid_) : type(type_), id(std::move(id_)), vw_uuid(vw_uuid_) { }
+
     virtual ~IWorkerGroup() { }
 
     WorkerGroupType getType() const { return type; }
@@ -35,7 +36,7 @@ public:
 
     virtual size_t getNumWorkers() const = 0;
     virtual std::map<String, WorkerNodePtr> getWorkers() const = 0;
-    virtual WorkerGroupData getData(bool with_metrics = false) const = 0;
+    virtual WorkerGroupData getData(bool with_metrics = false, bool only_running_state = true) const = 0;
 
     /// Only physical worker groups need to refresh metrics.
     virtual void refreshAggregatedMetrics() {}
@@ -46,7 +47,7 @@ public:
     virtual void removeNode(const String &) { }
 
     virtual bool empty() const = 0;
-    virtual WorkerNodePtr randomWorker() const = 0;
+    virtual std::vector<WorkerNodePtr> randomWorkers(const size_t n, const std::unordered_set<String> & blocklist) const = 0;
 
 protected:
     const WorkerGroupType type;
@@ -58,5 +59,6 @@ protected:
 };
 
 using WorkerGroupPtr = std::shared_ptr<IWorkerGroup>;
+using WorkerGroupWeakPtr = std::weak_ptr<IWorkerGroup>;
 
 }

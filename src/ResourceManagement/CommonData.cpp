@@ -27,6 +27,26 @@ void VirtualWarehouseSettings::fillProto(Protos::VirtualWarehouseSettings & pb_s
     if (max_queued_waiting_ms)
         pb_settings.set_max_queued_waiting_ms(max_queued_waiting_ms);
     pb_settings.set_vw_schedule_algo(int(vw_schedule_algo));
+    if (max_auto_borrow_links)
+        pb_settings.set_max_auto_borrow_links(max_auto_borrow_links);
+    if (max_auto_lend_links)
+        pb_settings.set_max_auto_lend_links(max_auto_lend_links);
+    if (cpu_threshold_for_borrow)
+        pb_settings.set_cpu_threshold_for_borrow(cpu_threshold_for_borrow);
+    if (mem_threshold_for_borrow)
+        pb_settings.set_mem_threshold_for_borrow(mem_threshold_for_borrow);
+    if (cpu_threshold_for_lend)
+        pb_settings.set_cpu_threshold_for_lend(cpu_threshold_for_lend);
+    if (mem_threshold_for_lend)
+        pb_settings.set_mem_threshold_for_lend(mem_threshold_for_lend);
+    if (cpu_threshold_for_recall)
+        pb_settings.set_cpu_threshold_for_recall(cpu_threshold_for_recall);
+    if (mem_threshold_for_recall)
+        pb_settings.set_mem_threshold_for_recall(mem_threshold_for_recall);
+    if (cooldown_seconds_after_auto_link)
+        pb_settings.set_cooldown_seconds_after_auto_link(cooldown_seconds_after_auto_link);
+    if (cooldown_seconds_after_auto_unlink)
+        pb_settings.set_cooldown_seconds_after_auto_unlink(cooldown_seconds_after_auto_unlink);
 }
 
 void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSettings & pb_settings)
@@ -41,6 +61,16 @@ void VirtualWarehouseSettings::parseFromProto(const Protos::VirtualWarehouseSett
     max_queued_queries = pb_settings.max_queued_queries();
     max_queued_waiting_ms = pb_settings.max_queued_waiting_ms();
     vw_schedule_algo = VWScheduleAlgo(pb_settings.vw_schedule_algo());
+    max_auto_borrow_links = pb_settings.max_auto_borrow_links();
+    max_auto_lend_links = pb_settings.max_auto_lend_links();
+    cpu_threshold_for_borrow = pb_settings.cpu_threshold_for_borrow();
+    mem_threshold_for_borrow = pb_settings.mem_threshold_for_borrow();
+    cpu_threshold_for_lend = pb_settings.cpu_threshold_for_lend();
+    mem_threshold_for_lend = pb_settings.mem_threshold_for_lend();
+    cpu_threshold_for_recall = pb_settings.cpu_threshold_for_recall();
+    mem_threshold_for_recall = pb_settings.mem_threshold_for_recall();
+    cooldown_seconds_after_auto_link = pb_settings.cooldown_seconds_after_auto_link();
+    cooldown_seconds_after_auto_unlink = pb_settings.cooldown_seconds_after_auto_unlink();
 }
 
 void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSettings & pb_settings) const
@@ -65,6 +95,26 @@ void VirtualWarehouseAlterSettings::fillProto(Protos::VirtualWarehouseAlterSetti
         pb_settings.set_max_queued_waiting_ms(*max_queued_waiting_ms);
     if (vw_schedule_algo)
         pb_settings.set_vw_schedule_algo(int(*vw_schedule_algo));
+    if (max_auto_borrow_links)
+        pb_settings.set_max_auto_borrow_links(*max_auto_borrow_links);
+    if (max_auto_lend_links)
+        pb_settings.set_max_auto_lend_links(*max_auto_lend_links);
+    if (cpu_threshold_for_borrow)
+        pb_settings.set_cpu_threshold_for_borrow(*cpu_threshold_for_borrow);
+    if (mem_threshold_for_borrow)
+        pb_settings.set_mem_threshold_for_borrow(*mem_threshold_for_borrow);
+    if (cpu_threshold_for_lend)
+        pb_settings.set_cpu_threshold_for_lend(*cpu_threshold_for_lend);
+    if (mem_threshold_for_lend)
+        pb_settings.set_mem_threshold_for_lend(*mem_threshold_for_lend);
+    if (cpu_threshold_for_recall)
+        pb_settings.set_cpu_threshold_for_recall(*cpu_threshold_for_recall);
+    if (mem_threshold_for_recall)
+        pb_settings.set_mem_threshold_for_recall(*mem_threshold_for_recall);
+    if (cooldown_seconds_after_auto_link)
+        pb_settings.set_cooldown_seconds_after_auto_link(*cooldown_seconds_after_auto_link);
+    if (cooldown_seconds_after_auto_unlink)
+        pb_settings.set_cooldown_seconds_after_auto_unlink(*cooldown_seconds_after_auto_unlink);
 }
 
 void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehouseAlterSettings & pb_settings)
@@ -89,6 +139,26 @@ void VirtualWarehouseAlterSettings::parseFromProto(const Protos::VirtualWarehous
         max_queued_waiting_ms = pb_settings.max_queued_waiting_ms();
     if (pb_settings.has_vw_schedule_algo())
         vw_schedule_algo = VWScheduleAlgo(pb_settings.vw_schedule_algo());
+    if (pb_settings.has_max_auto_borrow_links())
+        max_auto_borrow_links = pb_settings.max_auto_borrow_links();
+    if (pb_settings.has_max_auto_lend_links())
+        max_auto_lend_links = pb_settings.max_auto_lend_links();
+    if (pb_settings.has_cpu_threshold_for_borrow())
+        cpu_threshold_for_borrow = pb_settings.cpu_threshold_for_borrow();
+    if (pb_settings.has_mem_threshold_for_borrow())
+        mem_threshold_for_borrow = pb_settings.mem_threshold_for_borrow();
+    if (pb_settings.has_cpu_threshold_for_lend())
+        cpu_threshold_for_lend = pb_settings.cpu_threshold_for_lend();
+    if (pb_settings.has_mem_threshold_for_lend())
+        mem_threshold_for_lend = pb_settings.mem_threshold_for_lend();
+    if (pb_settings.has_cpu_threshold_for_recall())
+        cpu_threshold_for_recall = pb_settings.cpu_threshold_for_recall();
+    if (pb_settings.has_mem_threshold_for_recall())
+        mem_threshold_for_recall = pb_settings.mem_threshold_for_recall();
+    if (pb_settings.has_cooldown_seconds_after_auto_link())
+        cooldown_seconds_after_auto_link = pb_settings.cooldown_seconds_after_auto_link();
+    if (pb_settings.has_cooldown_seconds_after_auto_unlink())
+        cooldown_seconds_after_auto_unlink = pb_settings.cooldown_seconds_after_auto_unlink();
 }
 
 void VirtualWarehouseData::fillProto(Protos::VirtualWarehouseData & pb_data) const
@@ -98,6 +168,10 @@ void VirtualWarehouseData::fillProto(Protos::VirtualWarehouseData & pb_data) con
     settings.fillProto(*pb_data.mutable_settings());
     pb_data.set_num_worker_groups(num_worker_groups);
     pb_data.set_num_workers(num_workers);
+    pb_data.set_num_borrowed_worker_groups(num_borrowed_worker_groups);
+    pb_data.set_num_lent_worker_groups(num_lent_worker_groups);
+    pb_data.set_last_borrow_timestamp(last_borrow_timestamp);
+    pb_data.set_last_lend_timestamp(last_lend_timestamp);
 }
 
 void VirtualWarehouseData::parseFromProto(const Protos::VirtualWarehouseData & pb_data)
@@ -107,6 +181,10 @@ void VirtualWarehouseData::parseFromProto(const Protos::VirtualWarehouseData & p
     settings.parseFromProto(pb_data.settings());
     num_worker_groups = pb_data.num_worker_groups();
     num_workers = pb_data.num_workers();
+    num_borrowed_worker_groups = pb_data.num_borrowed_worker_groups();
+    num_lent_worker_groups = pb_data.num_lent_worker_groups();
+    last_borrow_timestamp = pb_data.last_borrow_timestamp();
+    last_lend_timestamp = pb_data.last_lend_timestamp();
 }
 
 std::string VirtualWarehouseData::serializeAsString() const
@@ -182,7 +260,10 @@ void WorkerNodeResourceData::parseFromString(const std::string & s)
     memory_limit = pb_data.memory_limit();
     last_update_time = pb_data.last_update_time();
 
-
+    reserved_memory_bytes = pb_data.reserved_memory_bytes();
+    reserved_cpu_cores = pb_data.reserved_cpu_cores();
+    register_time = pb_data.register_time();
+    state = WorkerState(pb_data.state());
 }
 
 void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource_info) const
@@ -210,6 +291,14 @@ void WorkerNodeResourceData::fillProto(Protos::WorkerNodeResourceData & resource
 
     if (last_update_time)
         resource_info.set_last_update_time(last_update_time);
+
+    if (reserved_memory_bytes)
+        resource_info.set_reserved_memory_bytes(reserved_memory_bytes);
+    if (reserved_cpu_cores)
+        resource_info.set_reserved_cpu_cores(reserved_cpu_cores);
+    if (register_time)
+        resource_info.set_register_time(register_time);
+    resource_info.set_state(static_cast<uint32_t>(state));
 }
 
 WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::WorkerNodeResourceData & resource_info)
@@ -238,25 +327,47 @@ WorkerNodeResourceData WorkerNodeResourceData::createFromProto(const Protos::Wor
     if (resource_info.has_last_update_time())
         res.last_update_time = resource_info.last_update_time();
 
+    if (resource_info.has_reserved_memory_bytes())
+        res.reserved_memory_bytes = resource_info.reserved_memory_bytes();
+    if (resource_info.has_reserved_cpu_cores())
+        res.reserved_cpu_cores = resource_info.reserved_cpu_cores();
+    if (resource_info.has_register_time())
+        res.register_time = resource_info.register_time();
+    res.state = WorkerState(resource_info.state());
+
     return res;
 }
 
 void ResourceRequirement::fillProto(Protos::ResourceRequirement & proto) const
 {
-    proto.set_limit_cpu(limit_cpu);
+    proto.set_request_cpu_cores(request_cpu_cores);
+    proto.set_cpu_usage_max_threshold(cpu_usage_max_threshold);
     proto.set_request_mem_bytes(request_mem_bytes);
     proto.set_request_disk_bytes(request_disk_bytes);
     proto.set_expected_workers(expected_workers);
     proto.set_worker_group(worker_group);
+    proto.set_task_cold_startup_sec(task_cold_startup_sec);
+
+    for (const auto & id : blocklist)
+        proto.add_blocklist(id);
+    proto.set_forbid_random_result(forbid_random_result);
+    proto.set_no_repeat(no_repeat);
 }
 
 void ResourceRequirement::parseFromProto(const Protos::ResourceRequirement & proto)
 {
-    limit_cpu = proto.limit_cpu();
+    request_cpu_cores = proto.request_cpu_cores();
+    cpu_usage_max_threshold = proto.cpu_usage_max_threshold();
     request_mem_bytes = proto.request_mem_bytes();
     request_disk_bytes = proto.request_disk_bytes();
     expected_workers = proto.expected_workers();
     worker_group = proto.worker_group();
+    task_cold_startup_sec = proto.task_cold_startup_sec();
+
+    for (const auto & id : proto.blocklist())
+        blocklist.insert(std::move(id));
+    forbid_random_result = proto.forbid_random_result();
+    no_repeat = proto.no_repeat();
 }
 
 void WorkerGroupMetrics::reset()
@@ -343,6 +454,10 @@ void WorkerGroupData::fillProto(Protos::WorkerGroupData & pb_data, const bool wi
 
     if (with_metrics)
         metrics.fillProto(*pb_data.mutable_metrics());
+
+    pb_data.set_is_auto_linked(is_auto_linked);
+    if (!linked_vw_name.empty())
+        pb_data.set_linked_vw_name(linked_vw_name);
 }
 
 void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
@@ -365,6 +480,12 @@ void WorkerGroupData::parseFromProto(const Protos::WorkerGroupData & pb_data)
 
     if (pb_data.has_metrics())
         metrics.parseFromProto(pb_data.metrics());
+
+    if (pb_data.has_is_auto_linked())
+        is_auto_linked = pb_data.is_auto_linked();
+
+    if (pb_data.has_linked_vw_name())
+        linked_vw_name = pb_data.linked_vw_name();
 }
 
 void QueryQueueInfo::fillProto(Protos::QueryQueueInfo & pb_data) const

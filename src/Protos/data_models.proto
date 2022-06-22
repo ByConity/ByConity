@@ -319,13 +319,6 @@ message DataModelTopologyVersions
     repeated DataModelTopology topologies = 1;
 }
 
-message ResourceGroup
-{
-    optional int64 soft_max_memory_usage = 1;
-    optional int32 max_concurrent_queries = 2;
-    optional int32 max_queued = 3;
-    optional int32 priority = 4;
-}
 message DataModelMaskingPolicy
 {
     optional string name = 1; // must be unique
@@ -364,6 +357,16 @@ message VirtualWarehouseSettings
     optional uint32 vw_schedule_algo = 9;
     optional uint32 max_queued_queries = 10;
     optional uint32 max_queued_waiting_ms = 11;
+    optional uint32 max_auto_borrow_links = 12;
+    optional uint32 max_auto_lend_links = 13;
+    optional uint32 cpu_threshold_for_borrow = 14;
+    optional uint32 mem_threshold_for_borrow = 15;
+    optional uint32 cpu_threshold_for_lend = 16;
+    optional uint32 mem_threshold_for_lend = 17;
+    optional uint32 cpu_threshold_for_recall = 18;
+    optional uint32 mem_threshold_for_recall = 19;
+    optional uint32 cooldown_seconds_after_auto_link = 20;
+    optional uint32 cooldown_seconds_after_auto_unlink = 21;
 };
 
 message VirtualWarehouseAlterSettings
@@ -381,6 +384,16 @@ message VirtualWarehouseAlterSettings
     optional uint32 vw_schedule_algo = 9;
     optional uint32 max_queued_queries = 10;
     optional uint32 max_queued_waiting_ms = 11;
+    optional uint32 max_auto_borrow_links = 12;
+    optional uint32 max_auto_lend_links = 13;
+    optional uint32 cpu_threshold_for_borrow = 14;
+    optional uint32 mem_threshold_for_borrow = 15;
+    optional uint32 cpu_threshold_for_lend = 16;
+    optional uint32 mem_threshold_for_lend = 17;
+    optional uint32 cpu_threshold_for_recall = 18;
+    optional uint32 mem_threshold_for_recall = 19;
+    optional uint32 cooldown_seconds_after_auto_link = 20;
+    optional uint32 cooldown_seconds_after_auto_unlink = 21;
 };
 
 message VirtualWarehouseData
@@ -390,6 +403,10 @@ message VirtualWarehouseData
     required VirtualWarehouseSettings settings = 3;
     required uint32 num_worker_groups = 4;
     required uint32 num_workers = 5;
+    optional uint32 num_borrowed_worker_groups = 6;
+    optional uint32 num_lent_worker_groups = 7;
+    optional uint64 last_borrow_timestamp = 8;
+    optional uint64 last_lend_timestamp = 9;
 };
 
 // WorkNodeCatalogData
@@ -418,6 +435,11 @@ message WorkerNodeResourceData
     optional string worker_group_id = 11;
 
     optional uint32 last_update_time = 12;
+
+    optional uint64 reserved_memory_bytes = 13;
+    optional uint32 reserved_cpu_cores = 14;
+    optional uint32 register_time = 15;
+    optional uint32 state = 16;
 }
 
 message WorkerGroupData
@@ -431,6 +453,8 @@ message WorkerGroupData
   repeated HostWithPorts host_ports_vec = 7;
   optional uint32 num_workers = 8;
   optional WorkerGroupMetrics metrics = 9;
+  optional bool is_auto_linked = 10;
+  optional string linked_vw_name = 11;
 }
 
 message WorkerGroupMetrics
@@ -452,15 +476,42 @@ message WorkerGroupMetrics
 
 message ResourceRequirement
 {
-    optional double limit_cpu = 1;
-    optional uint64 request_mem_bytes  = 2;
+    /// See cpu_usage_max_threshold.
+    /// optional double limit_cpu = 1;
+    reserved 1;
+
+    /// Request memory in bytes.
+    optional uint64 request_mem_bytes = 2;
+
     optional uint64 request_disk_bytes = 3;
 
-    /// How many workers does this query/task want.
+    /// How many workers does this query/request want.
     optional uint32 expected_workers = 4;
 
     /// Specified worker group (may be used by pickWorker)
     optional string worker_group = 5;
+
+    /// Request cpu cores.
+    /// fetch_add operation is not supported for atomic double, so use an int type.
+    optional uint32 request_cpu_cores = 6;
+
+    /// The worker/worker group's max cpu usage should not be greater than this threshold (0 ~ 100).
+    optional double cpu_usage_max_threshold = 7;
+
+    /// RM will reserve $request_cpu_cores and $request_mem_bytes from the target worker's memory_available and cpu_usage for a while.
+    /// This ensure RM not assign too many tasks to workers with low workload when handling high concurrent requests.
+    optional uint32 task_cold_startup_sec = 8;
+
+    /// Block list. 
+    /// Worker group id for picking a worker group.
+    /// Worker id for picking workers.
+    repeated string blocklist = 9;
+
+    /// Forbid returning random result when there is not enough available candidates.
+    optional bool forbid_random_result = 10;
+    
+    /// No repeated workers in the response.
+    optional bool no_repeat = 11;
 }
 
 /// vw queue

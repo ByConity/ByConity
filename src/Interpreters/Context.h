@@ -568,6 +568,7 @@ public:
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
 
+    void initResourceGroupManager(const ConfigurationPtr & config);
     void setResourceGroup(const IAST *ast);
     IResourceGroup* tryGetResourceGroup() const;
     IResourceGroupManager * tryGetResourceGroupManager();
