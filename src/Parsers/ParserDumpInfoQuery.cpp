@@ -1,7 +1,9 @@
 #include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ParserDumpInfoQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/formatAST.h>
 namespace DB
 {
 bool ParserDumpInfoQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
@@ -12,22 +14,19 @@ bool ParserDumpInfoQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
         return false;
     }
     auto query = std::make_shared<ASTDumpInfoQuery>();
-    ParserQuery parser(end, dt);
-    String error_message = "";
-    const char * begin = pos->begin;
-    query->dump_string = String(begin);
-    ASTPtr res = tryParseQuery(parser, begin, end, error_message, false, "", false, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-//    ASTPtr res = tryParseQuery(parser, pos, end, error_message, false, query_description, allow_multi_statements, max_query_size, max_parser_depth);
-
-    while (!pos->isEnd())
-        ++pos;
-    query->dump_query = res;
-    if (res)
+    ParserSelectWithUnionQuery select_p(dt);
+    ASTPtr sub_query;
+    if(select_p.parse(pos, sub_query, expected))
     {
-        query->children.emplace_back(res);
+        WriteBufferFromOwnString buf;
+        formatAST(*sub_query, buf, false, false);
+        query->dump_string = buf.str();
+        query->children.emplace_back(sub_query);
+        query->dump_query = std::move(sub_query);
     }
-    query->syntax_error = error_message;
-    node = query;
+    else
+        return false;
+    node = std::move(query);
     return true;
 }
 

@@ -15,7 +15,7 @@ class ParserDumpInfoQuery : public IParserDialectBase
 {
 protected:
     const char * end;
-    const char * getName() const override { return "Dump query"; }
+    const char * getName() const override { return "DUMP"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 public:
