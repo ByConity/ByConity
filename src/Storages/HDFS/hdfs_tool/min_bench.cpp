@@ -26,7 +26,6 @@
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 
 using namespace DB;
-using namespace DB::HDFSCommon;
 
 
 String randomString(size_t length)
@@ -275,13 +274,14 @@ protected:
 
     virtual void globalSetUp() override
     {
-        if (HDFSCommon::exists(file_path_))
+        auto& hdfs_fs = getDefaultHdfsFileSystem();
+        if (hdfs_fs->exists(file_path_))
         {
             LOG_INFO(&logger, "{} not exist",file_path_);
         }
         else
         {
-            HDFSCommon::createDirectory(file_path_);
+            hdfs_fs->createDirectory(file_path_);
         }
     }
 
@@ -472,7 +472,8 @@ protected:
     {
         if (!using_existing_file_ && auto_clean_)
         {
-            HDFSCommon::remove(bench_file_path_);
+            auto& hdfs_fs = getDefaultHdfsFileSystem();
+            hdfs_fs->remove(bench_file_path_);
         }
     }
 
@@ -578,7 +579,7 @@ int main(int argc, char** argv) {
         String nnproxy = options["nnproxy"].as<String>();
         String path = options["path"].as<String>();
         HDFSConnectionParams params(HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy);
-        registerDefaultHdfsFileSystem(params, 100, 10, 1);
+        registerDefaultHdfsFileSystem(params, 1);
 
         int file_num = options["file_num"].as<int>();
         int read_num = options["read_num"].as<int>();

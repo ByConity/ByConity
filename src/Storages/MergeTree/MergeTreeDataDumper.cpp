@@ -165,13 +165,13 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, co
 
     String new_full_path = new_part->getFullPath();
 #if USE_HDFS
-    HDFSCommon::File dir(new_full_path);
-    if (dir.exists())
+    auto& fs = getDefaultHdfsFileSystem();
+    if (fs->exists(new_full_path))
     {
         LOG_WARNING(log, "Removing old temporary directory " + new_full_path);
-        dir.remove(true);
+        fs->remove(new_full_path, true);
     }
-    dir.createDirectories();
+    fs->createDirectories(new_full_path);
 #endif
 
     /// write meta file
