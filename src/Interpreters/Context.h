@@ -18,7 +18,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
-
+#include "Transaction/TxnTimestamp.h"
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -185,7 +185,10 @@ class CnchTopologyMaster;
 class CnchServerTopology;
 class CnchServerManager;
 struct RootConfiguration;
+class TxnTimestamp;
 class TransactionCoordinatorRcCnch;
+class ICnchTransaction;
+using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 
 class VirtualWarehousePool;
 class VirtualWarehouseHandleImpl;
@@ -416,6 +419,9 @@ private:
     /// VirtualWarehouse for each query, session level
     mutable VirtualWarehouseHandle current_vw;
     mutable WorkerGroupHandle current_worker_group;
+
+    /// Transaction for each query, query level
+    TransactionCnchPtr current_cnch_txn;
 
     Context();
     Context(const Context &);
@@ -1095,8 +1101,13 @@ public:
     void initCnchWorkerClientPools();
     CnchWorkerClientPools & getCnchWorkerClientPools() const;
 
+    /// Transaction related APIs
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
+    void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id);
+    TransactionCnchPtr getCurrentTransaction() const;
+    TxnTimestamp getCurrentTransactionID() const;
 
     void initCnchBGThreads();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
