@@ -162,6 +162,8 @@
 #include <WorkerTasks/ManipulationList.h>
 
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Transaction/CnchServerTransaction.h>
+#include <Transaction/CnchWorkerTransaction.h>
 
 namespace fs = std::filesystem;
 
@@ -3738,19 +3740,6 @@ CnchWorkerClientPools & Context::getCnchWorkerClientPools() const
     return *shared->cnch_worker_client_pools;
 }
 
-void Context::initCnchTransactionCoordinator()
-{
-    auto lock = getLock();
-
-    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
-}
-
-TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
-{
-    auto lock = getLock();
-
-    return *shared->cnch_txn_coordinator;
-}
 
 String Context::getVirtualWarehousePSM() const
 {
@@ -3864,5 +3853,69 @@ void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
 }
+void Context::initCnchTransactionCoordinator()
+{
+    auto lock = getLock();
+
+    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
+}
+
+TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
+{
+    auto lock = getLock();
+    return *shared->cnch_txn_coordinator;
+}
+
+void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
+{
+    auto lock = getLock();
+
+    if (current_cnch_txn && finish_txn && getServerType() == ServerType::cnch_server)
+        getCnchTransactionCoordinator().finishTransaction(current_cnch_txn);
+
+    current_cnch_txn = std::move(txn);
+}
+
+TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
+{
+    auto lock = getLock();
+
+    if (shared->server_type == ServerType::cnch_server)
+    {
+        auto txn_record = getCnchCatalog()->tryGetTransactionRecord((txn_id));
+        if (!txn_record)
+        {
+            txn_record = std::make_optional<TransactionRecord>();
+            txn_record->setID(txn_id).setType(CnchTransactionType::Implicit).setStatus(CnchTransactionStatus::Running);
+            txn_record->read_only = true;
+        }
+
+        current_cnch_txn = std::make_shared<CnchServerTransaction>(*getGlobalContext(), std::move(*txn_record));
+    }
+    else
+        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(*this, txn_id, primary_txn_id);
+
+    return current_cnch_txn;
+}
+
+TransactionCnchPtr Context::getCurrentTransaction() const
+{
+    auto lock = getLock();
+
+    return current_cnch_txn;
+}
+
+TxnTimestamp Context::getCurrentTransactionID() const
+{
+    if (!current_cnch_txn)
+        throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
+
+    auto txn_id = current_cnch_txn->getTransactionID();
+    if (0 == UInt64(txn_id))
+        throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
+
+    return txn_id;
+}
 
 }
+

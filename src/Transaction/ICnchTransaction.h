@@ -15,10 +15,10 @@
 #include <common/logger_useful.h>
 #include <cppkafka/topic_partition_list.h>
 #include <MergeTreeCommon/InsertionLabel.h>
-#include "Common/serverLocality.h"
+#include <Common/serverLocality.h>
 #include <Common/TypePromotion.h>
 #include <common/getFQDNOrHostName.h>
-#include "Core/BackgroundSchedulePool.h"
+#include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
 
 #include <memory>

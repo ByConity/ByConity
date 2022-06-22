@@ -10,7 +10,7 @@ namespace DB
 class CnchServerServiceImpl : protected WithMutableContext, public DB::Protos::CnchServerService
 {
 public:
-    CnchServerServiceImpl(ContextMutablePtr global_context);
+    explicit CnchServerServiceImpl(ContextMutablePtr global_context);
     ~CnchServerServiceImpl() override = default;
 
     void reportTaskHeartbeat(
