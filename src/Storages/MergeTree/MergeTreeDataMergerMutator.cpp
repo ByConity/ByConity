@@ -1699,7 +1699,7 @@ void MergeTreeDataMergerMutator::generateRowStoreFromStorage(MergeTreeData::Muta
         checksums->files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
         checksums->files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
 
-        auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME, 4096);
+        auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME, {.buffer_size = 4096});
         HashingWriteBuffer out_hashing(*out);
         UniqueRowStoreMeta meta(new_part->getColumns(), {});
         meta.write(out_hashing);
@@ -1712,7 +1712,7 @@ void MergeTreeDataMergerMutator::generateRowStoreFromStorage(MergeTreeData::Muta
 
     {
         /// Rewrite file with checksums, it's safe to replace the origin one in merge process.
-        auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / "checksums.txt", 4096);
+        auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / "checksums.txt", {.buffer_size = 4096});
         checksums->write(*out);
         out->finalize();
         if (sync)
@@ -1947,7 +1947,7 @@ bool MergeTreeDataMergerMutator::tryMergeRowStoreIntoNewPart(
     checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_size = unique_row_store_file_info.file_size;
     checksums.files[UNIQUE_ROW_STORE_DATA_NAME].file_hash = unique_row_store_file_info.file_hash;
 
-    auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME, 4096);
+    auto out = new_part->volume->getDisk()->writeFile(fs::path(new_part->getFullRelativePath()) / UNIQUE_ROW_STORE_META_NAME, {.buffer_size = 4096});
     HashingWriteBuffer out_hashing(*out);
     UniqueRowStoreMeta meta(columns, {});
     meta.write(out_hashing);
@@ -3174,7 +3174,7 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
     auto new_part_checksums_ptr = new_data_part->getChecksums();
     if (new_data_part->uuid != UUIDHelpers::Nil)
     {
-        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, 4096);
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, {.buffer_size = 4096});
         HashingWriteBuffer out_hashing(*out);
         writeUUIDText(new_data_part->uuid, out_hashing);
         new_part_checksums_ptr->files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
@@ -3184,7 +3184,7 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
     if (need_remove_expired_values)
     {
         /// Write a file with ttl infos in json format.
-        auto out_ttl = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "ttl.txt", 4096);
+        auto out_ttl = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "ttl.txt", {.buffer_size = 4096});
         HashingWriteBuffer out_hashing(*out_ttl);
         new_data_part->ttl_infos.write(out_hashing);
         new_part_checksums_ptr->files["ttl.txt"].file_size = out_hashing.count();
@@ -3193,19 +3193,19 @@ void MergeTreeDataMergerMutator::finalizeMutatedPart(
 
     {
         /// Write file with checksums.
-        auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
+        auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", {.buffer_size = 4096});
         new_part_checksums_ptr->versions = new_data_part->versions;
         new_part_checksums_ptr->write(*out_checksums);
     } /// close fd
 
     {
-        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, 4096);
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, {.buffer_size = 4096});
         DB::writeText(queryToString(codec->getFullCodecDesc()), *out);
     }
 
     {
         /// Write a file with a description of columns.
-        auto out_columns = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "columns.txt", 4096);
+        auto out_columns = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "columns.txt", {.buffer_size = 4096});
         new_data_part->getColumns().writeText(*out_columns);
     } /// close fd
 

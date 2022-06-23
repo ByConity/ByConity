@@ -49,11 +49,11 @@ MergeTreeDataPartWriterOnDisk::Stream::Stream(
     escaped_column_name(escaped_column_name_),
     data_file_extension{data_file_extension_},
     marks_file_extension{marks_file_extension_},
-    plain_file(disk_->writeFile(data_path_ + data_file_extension, max_compress_block_size_, is_compact_map ? WriteMode::Append: WriteMode::Rewrite)),
+    plain_file(disk_->writeFile(data_path_ + data_file_extension, {.buffer_size = max_compress_block_size_, .mode = is_compact_map ? WriteMode::Append: WriteMode::Rewrite})),
     plain_hashing(*plain_file),
     compressed_buf(plain_hashing, compression_codec_, max_compress_block_size_),
     compressed(compressed_buf),
-    marks_file(disk_->writeFile(marks_path_ + marks_file_extension, 4096, is_compact_map ? WriteMode::Append: WriteMode::Rewrite)), marks(*marks_file),
+    marks_file(disk_->writeFile(marks_path_ + marks_file_extension, {.buffer_size = 4096, .mode = is_compact_map ? WriteMode::Append: WriteMode::Rewrite})), marks(*marks_file),
     data_file_offset(is_compact_map ? disk_->getFileSize(data_path_ + data_file_extension): 0),
     marks_file_offset(is_compact_map ? disk_->getFileSize(marks_path_ + marks_file_extension): 0)
 {
@@ -197,7 +197,7 @@ void MergeTreeDataPartWriterOnDisk::initPrimaryIndex()
 {
     if (metadata_snapshot->hasPrimaryKey())
     {
-        index_file_stream = data_part->volume->getDisk()->writeFile(part_path + "primary.idx", DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Rewrite);
+        index_file_stream = data_part->volume->getDisk()->writeFile(part_path + "primary.idx", {.mode = WriteMode::Rewrite});
         index_stream = std::make_unique<HashingWriteBuffer>(*index_file_stream);
     }
 }

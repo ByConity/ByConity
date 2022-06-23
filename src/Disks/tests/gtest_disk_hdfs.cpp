@@ -25,7 +25,7 @@ TEST(DiskTestHDFS, RemoveFileHDFS)
     DB::HDFSBuilderWrapper builder = DB::createHDFSBuilder(hdfs_uri, *config);
     DB::HDFSFSPtr fs = DB::createHDFSFS(builder.get());
 
-    disk.writeFile(file_name, 1024, DB::WriteMode::Rewrite);
+    disk.writeFile(file_name, {.buffer_size = 1024, .mode = DB::WriteMode::Rewrite});
     auto metadata = disk.readMeta(file_name);
 
     const String hdfs_file_name = metadata.remote_fs_objects[0].first;
@@ -47,13 +47,13 @@ TEST(DiskTestHDFS, WriteReadHDFS)
     auto disk = DB::DiskHDFS("disk_hdfs", hdfs_uri, std::move(settings), metadata_path, *config);
 
     {
-        auto out = disk.writeFile(file_name, 1024, DB::WriteMode::Rewrite);
+        auto out = disk.writeFile(file_name, {.buffer_size = 1024, .mode = DB::WriteMode::Rewrite});
         writeString("Test write to file", *out);
     }
 
     {
         DB::String result;
-        auto in = disk.readFile(file_name, 1024, 1024, 1024, 1024, nullptr);
+        auto in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
         readString(result, *in);
         EXPECT_EQ("Test write to file", result);
     }
@@ -70,13 +70,13 @@ TEST(DiskTestHDFS, RewriteFileHDFS)
 
     for (size_t i = 1; i <= 10; ++i)
     {
-        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, 1024, DB::WriteMode::Rewrite);
+        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, {.buffer_size = 1024, .mode = DB::WriteMode::Rewrite});
         writeString("Text" + DB::toString(i), *out);
     }
 
     {
         String result;
-        auto in = disk.readFile(file_name, 1024, 1024, 1024, 1024, nullptr);
+        auto in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
         readString(result, *in);
         EXPECT_EQ("Text10", result);
         readString(result, *in);
@@ -94,7 +94,7 @@ TEST(DiskTestHDFS, AppendFileHDFS)
     auto disk = DB::DiskHDFS("disk_hdfs", hdfs_uri, std::move(settings), metadata_path, *config);
 
     {
-        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, 1024, DB::WriteMode::Append);
+        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, {.buffer_size = 1024, .mode = DB::WriteMode::Append});
         writeString("Text", *out);
         for (size_t i = 0; i < 10; ++i)
         {
@@ -104,7 +104,7 @@ TEST(DiskTestHDFS, AppendFileHDFS)
 
     {
         String result, expected;
-        auto in = disk.readFile(file_name, 1024, 1024, 1024, 1024, nullptr);
+        auto in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
 
         readString(result, *in);
         EXPECT_EQ("Text0123456789", result);
@@ -124,14 +124,14 @@ TEST(DiskTestHDFS, SeekHDFS)
     auto disk = DB::DiskHDFS("disk_hdfs", hdfs_uri, std::move(settings), metadata_path, *config);
 
     {
-        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, 1024, DB::WriteMode::Rewrite);
+        std::unique_ptr<DB::WriteBuffer> out = disk.writeFile(file_name, {.buffer_size = 1024, .mode = DB::WriteMode::Rewrite});
         writeString("test data", *out);
     }
 
     /// Test SEEK_SET
     {
         String buf(4, '0');
-        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, 1024, 1024, 1024, 1024, nullptr);
+        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
 
         in->seek(5, SEEK_SET);
 
@@ -141,7 +141,7 @@ TEST(DiskTestHDFS, SeekHDFS)
 
     /// Test SEEK_CUR
     {
-        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, 1024, 1024, 1024, 1024, nullptr);
+        std::unique_ptr<DB::SeekableReadBuffer> in = disk.readFile(file_name, {.buffer_size = 1024, .estimated_size = 1024, .aio_threshold = 1024, .mmap_threshold = 1024});
         String buf(4, '0');
 
         in->readStrict(buf.data(), 4);

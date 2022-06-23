@@ -113,21 +113,18 @@ void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_nam
 }
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(
-    const String & path, size_t buf_size, size_t, size_t, size_t,
-    MMappedFileCache *) const
+    const String & path, const ReadSettings& settings) const
 {
     return std::make_unique<ReadBufferFromByteHDFS>(
-        path, true, hdfs_params, buf_size);
+        path, true, hdfs_params, settings.buffer_size);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(
-    const String & path,
-    size_t buf_size,
-    WriteMode mode)
+    const String & path, const WriteSettings& settings)
 {
-    int write_mode = mode == WriteMode::Append ? O_APPEND : O_WRONLY;
+    int write_mode = settings.mode == WriteMode::Append ? O_APPEND : O_WRONLY;
     return std::make_unique<WriteBufferFromHDFS>(path,
-        hdfs_params, buf_size, write_mode);
+        hdfs_params, settings.buffer_size, write_mode);
 }
 
 void DiskByteHDFS::removeFile(const String & path)

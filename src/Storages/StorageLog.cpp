@@ -92,7 +92,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, size_t offset, size_t max_read_buffer_size_)
-            : plain(disk->readFile(data_path, std::min(max_read_buffer_size_, disk->getFileSize(data_path))))
+            : plain(disk->readFile(data_path, {.buffer_size = std::min(max_read_buffer_size_, disk->getFileSize(data_path))}))
             , compressed(*plain)
         {
             if (offset)
@@ -213,7 +213,7 @@ public:
         , metadata_snapshot(metadata_snapshot_)
         , lock(std::move(lock_))
         , marks_stream(
-            storage.disk->writeFile(storage.marks_file_path, 4096, WriteMode::Rewrite))
+            storage.disk->writeFile(storage.marks_file_path, {.buffer_size = 4096, .mode = WriteMode::Rewrite}))
     {
         if (!lock)
             throw Exception("Lock timeout exceeded", ErrorCodes::TIMEOUT_EXCEEDED);
@@ -257,7 +257,7 @@ private:
     struct Stream
     {
         Stream(const DiskPtr & disk, const String & data_path, CompressionCodecPtr codec, size_t max_compress_block_size) :
-            plain(disk->writeFile(data_path, max_compress_block_size, WriteMode::Append)),
+            plain(disk->writeFile(data_path, {.buffer_size = max_compress_block_size, .mode = WriteMode::Append})),
             compressed(*plain, std::move(codec), max_compress_block_size),
             plain_offset(disk->getFileSize(data_path))
         {
@@ -559,7 +559,7 @@ void StorageLog::loadMarks(std::chrono::seconds lock_timeout)
         for (auto & file : files_by_index)
             file->second.marks.reserve(marks_count);
 
-        std::unique_ptr<ReadBuffer> marks_rb = disk->readFile(marks_file_path, 32768);
+        std::unique_ptr<ReadBuffer> marks_rb = disk->readFile(marks_file_path, {.buffer_size = 32768});
         while (!marks_rb->eof())
         {
             for (auto & file : files_by_index)

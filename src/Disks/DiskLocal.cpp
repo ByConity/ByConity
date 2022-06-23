@@ -215,16 +215,16 @@ void DiskLocal::replaceFile(const String & from_path, const String & to_path)
 
 std::unique_ptr<ReadBufferFromFileBase>
 DiskLocal::readFile(
-    const String & path, size_t buf_size, size_t estimated_size, size_t aio_threshold, size_t mmap_threshold, MMappedFileCache * mmap_cache) const
+    const String & path, const ReadSettings& settings) const
 {
-    return createReadBufferFromFileBase(fs::path(disk_path) / path, estimated_size, aio_threshold, mmap_threshold, mmap_cache, buf_size);
+    return createReadBufferFromFileBase(fs::path(disk_path) / path, settings);
 }
 
 std::unique_ptr<WriteBufferFromFileBase>
-DiskLocal::writeFile(const String & path, size_t buf_size, WriteMode mode)
+DiskLocal::writeFile(const String & path, const WriteSettings& settings)
 {
-    int flags = (mode == WriteMode::Append) ? (O_APPEND | O_CREAT | O_WRONLY) : -1;
-    return std::make_unique<WriteBufferFromFile>(fs::path(disk_path) / path, buf_size, flags);
+    int flags = (settings.mode == WriteMode::Append) ? (O_APPEND | O_CREAT | O_WRONLY) : -1;
+    return std::make_unique<WriteBufferFromFile>(fs::path(disk_path) / path, settings.buffer_size, flags);
 }
 
 void DiskLocal::removeFile(const String & path)

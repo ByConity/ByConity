@@ -90,11 +90,14 @@ MergeTreeReaderStream::MergeTreeReaderStream(
             {
                 return disk->readFile(
                     path_prefix + data_file_extension,
-                    buffer_size,
-                    sum_mark_range_bytes,
-                    settings.min_bytes_to_use_direct_io,
-                    settings.min_bytes_to_use_mmap_io,
-                    settings.mmap_cache.get());
+                    {
+                        .buffer_size = buffer_size,
+                        .estimated_size = sum_mark_range_bytes,
+                        .aio_threshold = settings.min_bytes_to_use_direct_io,
+                        .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                        .mmap_cache = settings.mmap_cache.get()
+                    }
+                );
             },
             uncompressed_cache,
             /* allow_different_codecs = */false,
@@ -116,11 +119,14 @@ MergeTreeReaderStream::MergeTreeReaderStream(
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
             disk->readFile(
                 path_prefix + data_file_extension,
-                buffer_size,
-                sum_mark_range_bytes,
-                settings.min_bytes_to_use_direct_io,
-                settings.min_bytes_to_use_mmap_io,
-                settings.mmap_cache.get()),
+                {
+                    .buffer_size = buffer_size,
+                    .estimated_size = sum_mark_range_bytes,
+                    .aio_threshold = settings.min_bytes_to_use_direct_io,
+                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                    settings.mmap_cache.get()
+                }
+            ),
             /* allow_different_codecs = */false,
             data_file_offset,
             data_file_size_,
