@@ -1,7 +1,7 @@
 #include <Catalog/CatalogFactory.h>
 #include <Dictionaries/DictionaryFactory.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <MergeTreeCommon/CnchTableHelper.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -64,7 +64,7 @@ StoragePtr CatalogFactory::getTableByDefinition(
         [[maybe_unused]] const DB::String &table,
         const DB::String &create) {
 
-    auto res = CnchTableHelper::createStorageFromQuery(create, context);
+    auto res = createStorageFromQuery(create, context);
 
     res->setCreateTableSql(create);
 

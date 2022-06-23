@@ -58,13 +58,24 @@ public:
 
     VirtualWarehouseData getData() const;
     std::vector<WorkerGroupPtr> getAllWorkerGroups() const;
+    std::vector<WorkerGroupPtr> getNonborrowedGroups() const;
+    std::vector<WorkerGroupPtr> getBorrowedGroups() const;
+    std::vector<WorkerGroupPtr> getLentGroups() const;
 
     /// Worker group operations
     size_t getNumGroups() const;
 
-    void addWorkerGroup(const WorkerGroupPtr & group);
+    void addWorkerGroup(const WorkerGroupPtr & group, const bool is_auto_linked = false);
     void loadGroup(const WorkerGroupPtr & group);
     void removeGroup(const String & id);
+
+    // Lends a group via the auto-sharing feature
+    void lendGroup(const String & group_id);
+    // Unlends a group via the auto-sharing feature
+    void unlendGroup(const String & group_id);
+
+    size_t getNumBorrowedGroups() const;
+    size_t getNumLentGroups() const;
 
     WorkerGroupPtr getWorkerGroup(const String & id);
     WorkerGroupPtr getWorkerGroup(const size_t & index);
@@ -79,6 +90,12 @@ public:
     void updateQueueInfo(const String & server_id, const QueryQueueInfo & server_query_queue_info);
     QueryQueueInfo getAggQueueInfo();
 
+    size_t getLastBorrowTimestamp() const { return last_borrow_timestamp; }
+    size_t getLastLendTimestamp() const { return last_lend_timestamp; }
+
+    void setLastBorrowTimestamp(UInt64 last_borrow_timestamp_) { last_borrow_timestamp = last_borrow_timestamp_; }
+    void setLastLendTimestamp(UInt64 last_lend_timestamp_) { last_lend_timestamp = last_lend_timestamp_; }
+
 private:
     const WorkerGroupPtr & getWorkerGroupImpl(const String & id, ReadLock & rlock);
     const WorkerGroupPtr & getWorkerGroupExclusiveImpl(const String & id, WriteLock & wlock);
@@ -86,6 +103,9 @@ private:
     void registerNodeImpl(const WorkerNodePtr & node, WriteLock & wlock);
 
     size_t getNumWorkersImpl(ReadLock & lock) const;
+
+    size_t getNumBorrowedGroupsImpl(ReadLock & rlock) const;
+    size_t getNumLentGroupsImpl(ReadLock & rlock) const;
 
     const WorkerGroupPtr & randomWorkerGroup() const;
 
@@ -100,6 +120,10 @@ private:
     VirtualWarehouseSettings settings;
 
     std::map<String, WorkerGroupPtr> groups;
+    std::unordered_set<String> borrowed_groups; // Set of group_ids
+    std::unordered_map<String, size_t> lent_groups; // Map of group_id to lend count
+    UInt64 last_borrow_timestamp{0};
+    UInt64 last_lend_timestamp{0};
 
     std::unique_ptr<QueryScheduler> query_scheduler;
 

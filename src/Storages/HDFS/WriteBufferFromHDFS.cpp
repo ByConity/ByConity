@@ -114,7 +114,7 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
 
 WriteBufferFromHDFS::WriteBufferFromHDFS(
     const std::string & hdfs_name_, const Poco::Util::AbstractConfiguration & config_, size_t buf_size_, int flags_)
-    : BufferWithOwnMemory<WriteBuffer>(buf_size_)
+    : WriteBufferFromFileBase(buf_size_, nullptr, 0)
     , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, config_, flags_))
     , hdfs_name(hdfs_name_)
 {
@@ -123,7 +123,7 @@ WriteBufferFromHDFS::WriteBufferFromHDFS(
 
 WriteBufferFromHDFS::WriteBufferFromHDFS(
     const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params, const size_t buf_size_, int flag)
-    : BufferWithOwnMemory<WriteBuffer>(buf_size_, nullptr, 0)
+    : WriteBufferFromFileBase(buf_size_, nullptr, 0)
     , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag))
     , hdfs_name(hdfs_name_)
 {

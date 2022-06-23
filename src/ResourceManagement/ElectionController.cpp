@@ -1,9 +1,12 @@
 #include <ResourceManagement/ElectionController.h>
 #include <Catalog/Catalog.h>
+#include <Common/Configurations.h>
 #include <common/getFQDNOrHostName.h>
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
 #include <ResourceManagement/WorkerGroupManager.h>
+#include <ResourceManagement/WorkerGroupResourceCoordinator.h>
+
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/PartCacheManager.h>
 // #include <TSO/TSOClient.h>
@@ -14,21 +17,35 @@
 namespace DB::ResourceManagement
 {
 
+ElectionLeader::ElectionLeader(ContextPtr context_, ResourceManagerController & rm_controller_)
+    : rm_controller(rm_controller_)
+{
+    if (context_->getRootConfig().resource_manager.enable_auto_resource_sharing)
+    {
+        rm_controller.getWorkerGroupResourceCoordinator().start();
+    }
+}
+
+ElectionLeader::~ElectionLeader()
+{
+    rm_controller.getWorkerGroupResourceCoordinator().stop();
+}
+
 ElectionController::ElectionController(ResourceManagerController & rm_controller_) : rm_controller(rm_controller_)
 {
     #if BYTEJOURNAL_AVAILABLE
     bj_client = getContext()->getByteJournalClient();
     #endif
 
-    auto & config = getContext()->getConfigRef();
-    election_ns = config.getString("bytejournal.namespace");
-    election_point = config.getString("bytejournal.cnch_prefix", "default_cnch_ci_random_") + "rm_election_point";
+    auto & root_config = getContext()->getRootConfig();
+    election_ns = root_config.bytejournal.name_space;
+    election_point = String(root_config.bytejournal.cnch_prefix) + "rm_election_point";
     LOG_DEBUG(&Poco::Logger::get("ElectionController"), 
                 "Running for leader election in namespace: {}, election_point: {}",
                 election_ns, election_point);
-    UInt64 interval = getContext()->getConfigRef().getUInt64("resource_manager.check_leader_info_interval_ms", 1000);
 
-    leader_info_checker = getContext()->getSchedulePool().createTask("LeaseInfoChecker", [this, interval](){
+    leader_info_checker = getContext()->getSchedulePool().createTask("LeaseInfoChecker", [this](){
+        UInt64 interval = getContext()->getRootConfig().resource_manager.check_leader_info_interval_ms;
         try
         {
             checkLeaderInfo(interval);
@@ -79,19 +96,18 @@ void ElectionController::startLeaderElection()
     }
     else
     {
-        auto & config = getContext()->getConfigRef();
-        port = config.getInt("resource_manager.port", 8989);
-        host_port = createHostPortString(config.getString("service_discovery.resource_manager.node.host", "127.0.0.1"), port);
-
+        auto & root_config = getContext()->getRootConfig();
+        port = root_config.resource_manager.port;
+        host_port = createHostPortString(root_config.service_discovery.resource_manager_host, port);
     }
     election_opts.addr = host_port;
     election_opts.on_leader_cb = [&](String addr) { onLeader(addr); };
     election_opts.on_follower_cb = [&](String addr) { onFollower(addr); };
-    election_opts.renewal_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.renewal_interval_ms", 1000);
-    election_opts.polling_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.polling_interval_ms", 1000);
-    election_opts.error_retry_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.error_retry_interval_ms", 1000);
-    election_opts.lease_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.lease_interval_ms", 3000);
-    election_opts.failover_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.failover_interval_ms", 5000);
+    election_opts.renewal_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_renewal_interval_ms;
+    election_opts.polling_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_polling_interval_ms;
+    election_opts.error_retry_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_error_retry_interval_ms;
+    election_opts.lease_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_lease_interval_ms;
+    election_opts.failover_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_failover_interval_ms;
 
     leader_runner = getResult<std::unique_ptr<::bytejournal::sdk::LeaderElectionRunner>>(bj_client->CreateLeaderElectionRunner(election_ns, election_point, election_opts));
     leader_runner->Start();
@@ -102,7 +118,7 @@ void ElectionController::onLeader(const String & leader_addr)
 {
     LOG_INFO(log, "Starting leader callback for " + leader_addr);
     setLeaderElectionResult({}, false);
-    waitFor(getContext()->getConfigRef().getInt(config_prefix + ".wait_before_become_leader_ms", 3000));
+    waitFor(getContext()->getRootConfig().resource_manager.wait_before_become_leader_ms);
     if (!pullState())
     {
         #if BYTEJOURNAL_AVAILABLE
@@ -110,13 +126,14 @@ void ElectionController::onLeader(const String & leader_addr)
 
         // Start background thread for resignation, since synchronous execution does not work
         ThreadFromGlobalPool([this] {
-            auto failover_interval_ms = getContext()->getConfigRef().getInt(config_prefix + ".bytejournal.failover_interval_ms", 5000);
+            auto & failover_interval_ms = getContext()->getRootConfig().resource_manager.bytejournal_failover_interval_ms;
             leader_runner->Resign(failover_interval_ms);
         }).detach();
         #endif
     }
     else
     {
+        leader = std::make_unique<ElectionLeader>(getContext(), rm_controller);
         setLeaderElectionResult(leader_addr, true);
         LOG_INFO(log, "Current RM node " + leader_addr + " has become leader. ");
     }
@@ -125,6 +142,7 @@ void ElectionController::onLeader(const String & leader_addr)
 void ElectionController::onFollower(const String & leader_addr)
 {
     setLeaderElectionResult(leader_addr, false);
+    leader.reset();
     LOG_INFO(log, "Current RM node has become follower. Leader is now {}", leader_addr);
 }
 
@@ -173,7 +191,7 @@ void ElectionController::checkLeaderInfo(const UInt64 & check_interval)
         return;
 
     #if BYTEJOURNAL_AVAILABLE
-    int max_retry_times = getContext()->getConfigRef().getUInt64(config_prefix + ".max_retry_times", 3);
+    int max_retry_times = context.getRootConfig().resource_manager.max_retry_times;
     int retry_count = 0;
     while (retry_count++ < max_retry_times)
     {

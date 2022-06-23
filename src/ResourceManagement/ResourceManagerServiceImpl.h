@@ -104,6 +104,12 @@ public:
         ::DB::Protos::PickWorkerResp * response,
         ::google::protobuf::Closure * done) override;
 
+    void pickWorkers(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::RMScheduleReq * request,
+        ::DB::Protos::PickWorkersResp * response,
+        ::google::protobuf::Closure * done) override;
+
     void pickWorkerGroup(
         ::google::protobuf::RpcController * controller,
         const ::DB::Protos::RMScheduleReq * request,

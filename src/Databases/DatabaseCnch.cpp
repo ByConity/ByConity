@@ -1,15 +1,16 @@
 #include <Databases/DatabaseCnch.h>
-#include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/formatAST.h>
 
 #include <Catalog/Catalog.h>
+#include <Interpreters/Context.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ParserCreateQuery.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/formatAST.h>
 #include <Transaction/Actions/DDLCreateAction.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -46,9 +47,7 @@ void DatabaseCnch::createTable(
     //assert(table_name == create.table);
     LOG_DEBUG(log, "Create table {} in query {}", table_name, local_context->getCurrentQueryId());
 
-    WriteBufferFromOwnString buf;
-    formatAST(*query, buf, false, false);
-    String statement = buf.str();
+    String statement = serializeAST(*query);
 
 #if 1
     getContext()->getCnchCatalog()->createTable(*local_context, getDatabaseName(), table_name, statement, "", 0, 0);

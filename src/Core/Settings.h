@@ -96,6 +96,9 @@ class IColumn;
     M(UInt64, background_unique_table_schedule_pool_size, 16, "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", 0) \
     M(UInt64, background_memory_table_schedule_pool_size, 24, "Number of threads performing background tasks for memory table. Only has meaning at server startup.", 0) \
     M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
+    M(UInt64, local_disk_cache_thread_pool_size, 16, "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server startup.", 0) \
+    M(UInt64, local_disk_cache_evict_thread_pool_size, 16, "Number of threads perforrming asynchronous remove disk cache file.", 0) \
+    M(UInt64, max_bandwidth_for_disk_cache, 0, "The maximum speed for loading from disk cache. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_fetches_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited. Only has meaning at server startup.", 0) \
     M(UInt64, max_replicated_sends_network_bandwidth_for_server, 0, "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited. Only has meaning at server startup.", 0) \
     \

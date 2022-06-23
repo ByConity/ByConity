@@ -1,6 +1,9 @@
 #include <ResourceManagement/PhysicalWorkerGroup.h>
 #include <ResourceManagement/CommonData.h>
 
+#include <iterator>
+#include <algorithm>
+#include <random>
 
 namespace DB::ErrorCodes
 {
@@ -26,7 +29,7 @@ std::map<String, WorkerNodePtr> PhysicalWorkerGroup::getWorkersImpl(std::lock_gu
     return workers;
 }
 
-WorkerGroupData PhysicalWorkerGroup::getData(bool with_metrics) const
+WorkerGroupData PhysicalWorkerGroup::getData(bool with_metrics, bool only_running_state) const
 {
     WorkerGroupData data;
     data.id = getID();
@@ -35,7 +38,10 @@ WorkerGroupData PhysicalWorkerGroup::getData(bool with_metrics) const
     data.vw_name = getVWName();
     data.psm = psm;
     for (const auto & [_, worker] : getWorkers())
-        data.host_ports_vec.push_back(worker->host);
+    {
+        if(!only_running_state || worker->state.load(std::memory_order_relaxed) == WorkerState::Running)
+            data.host_ports_vec.push_back(worker->host);
+    }
     data.num_workers = data.host_ports_vec.size();
 
     if (with_metrics)
@@ -52,7 +58,7 @@ void PhysicalWorkerGroup::refreshAggregatedMetrics()
 
         auto workers_ = getWorkersImpl(lock);
         auto count = workers_.size();
-        for (auto const & [_, worker] : workers_)
+        for (const auto & [_, worker] : workers_)
         {
             auto worker_cpu_usage = worker->cpu_usage.load(std::memory_order_relaxed);
             if (worker_cpu_usage < aggregated_metrics.min_cpu_usage)
@@ -103,19 +109,58 @@ void PhysicalWorkerGroup::removeNode(const String & worker_id)
     workers.erase(worker_id);
 }
 
-WorkerNodePtr PhysicalWorkerGroup::randomWorker() const
+void PhysicalWorkerGroup::addLentGroupDestID(const String & group_id)
 {
+    std::lock_guard lock(state_mutex);
+    lent_groups_dest_ids.insert(group_id);
+}
+
+void PhysicalWorkerGroup::removeLentGroupDestID(const String & group_id)
+{
+    std::lock_guard lock(state_mutex);
+    auto it = lent_groups_dest_ids.find(group_id);
+    if (it == lent_groups_dest_ids.end())
+        throw Exception("Auto linked group id not found", ErrorCodes::LOGICAL_ERROR);
+
+    lent_groups_dest_ids.erase(it);
+}
+
+void PhysicalWorkerGroup::clearLentGroups()
+{
+    std::lock_guard lock(state_mutex);
+    lent_groups_dest_ids.clear();
+}
+
+std::unordered_set<String> PhysicalWorkerGroup::getLentGroupsDestIDs() const
+{
+    std::lock_guard lock(state_mutex);
+    return lent_groups_dest_ids;
+}
+
+std::vector<WorkerNodePtr> PhysicalWorkerGroup::randomWorkers(const size_t n, const std::unordered_set<String> & blocklist) const
+{
+    std::vector<WorkerNodePtr> candidates;
+
     {
         std::lock_guard lock(state_mutex);
         if (!workers.empty())
         {
-            std::uniform_int_distribution dist;
-            auto index = dist(thread_local_rng) % workers.size();
-            return std::next(workers.begin(), index)->second;
+            candidates.reserve(workers.size() - blocklist.size());
+            for (const auto & [_, worker] : workers)
+            {
+                if (!blocklist.contains(worker->id))
+                    candidates.push_back(worker);
+            }
         }
     }
 
-    throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    if (candidates.empty())
+        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+
+    std::vector<WorkerNodePtr> res;
+    res.reserve(n);
+    std::sample(candidates.begin(), candidates.end(), std::back_inserter(res), n, std::mt19937{std::random_device{}()});
+    return res;
 }
 
 }

@@ -10,6 +10,16 @@
 
 namespace DB::ResourceManagement
 {
+class ElectionLeader
+{
+public:
+    ElectionLeader(ContextPtr context_, ResourceManagerController & rm_controller_);
+    ~ElectionLeader();
+
+private:
+    ResourceManagerController & rm_controller;
+};
+
 
 /** ElectionController is used for Resource Manager leader election (handled by ByteJournal)
   * It contains a background thread to check for leader information, and ensures that a newly elected
@@ -56,6 +66,7 @@ private:
     String election_ns;
     String election_point;
 
+    std::unique_ptr<ElectionLeader> leader;
     #if BYTEJOURNAL_AVAILABLE
     ByteJournalClientPtr bj_client;
     std::unique_ptr<::bytejournal::sdk::LeaderElectionRunner> leader_runner;

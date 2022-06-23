@@ -6,6 +6,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int RESOURCE_GROUP_INTERNAL_ERROR;
+}
+
 NamesAndTypesList StorageSystemResourceGroups::getNamesAndTypes()
 {
     return {
@@ -39,7 +44,11 @@ NamesAndTypesList StorageSystemResourceGroups::getNamesAndTypes()
 
 void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    DB::ResourceGroupInfoVec infos = context->tryGetResourceGroupManager()->getInfoVec();
+    auto manager = context->tryGetResourceGroupManager();
+    if (!manager)
+        throw Exception("Resource group manager not available!", ErrorCodes::RESOURCE_GROUP_INTERNAL_ERROR);
+
+    ResourceGroupInfoVec infos = manager->getInfoVec();
 
     for (const auto & info : infos)
     {
@@ -47,7 +56,7 @@ void StorageSystemResourceGroups::fillData(MutableColumns & res_columns, Context
         res_columns[i++]->insert(info.name);
         res_columns[i++]->insert(info.parent_resource_group);
 
-        res_columns[i++]->insert(context->tryGetResourceGroupManager()->isInUse());
+        res_columns[i++]->insert(manager->isInUse());
 
         res_columns[i++]->insert(info.can_run_more);
         res_columns[i++]->insert(info.can_queue_more);

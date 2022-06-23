@@ -147,14 +147,14 @@ void IResourceGroup::internalUpdateQueryTime()
 void IResourceGroup::internalRefreshStats()
 {
     Int64 newCacheMemoryUsage = 0, queryMemoryUsage;
-    for (auto const & query : running_queries)
+    for (const auto & query : running_queries)
     {
         queryMemoryUsage = 0;
         if (query->query_status != nullptr)
             queryMemoryUsage = query->query_status->getUsedMemory();
         newCacheMemoryUsage += queryMemoryUsage < min_query_memory_usage ? min_query_memory_usage : queryMemoryUsage;
     }
-    for (auto const & item : children)
+    for (const auto & item : children)
     {
         item.second->internalRefreshStats();
         newCacheMemoryUsage += item.second->cached_memory_usage_bytes;
@@ -191,12 +191,12 @@ bool IResourceGroup::internalProcessNext()
                     --group->descendent_queued_queries;
                     group = group->parent;
                 }
-                eligible_iterator++;
+                ++eligible_iterator;
                 return true;
             }
             else
             {
-                eligible_iterator++;
+                ++eligible_iterator;
                 ++inEligibleGroupsNum;
             }
         }
@@ -204,12 +204,12 @@ bool IResourceGroup::internalProcessNext()
         {
             if ((*eligible_iterator)->internalProcessNext())
             {
-                eligible_iterator++;
+                ++eligible_iterator;
                 return true;
             }
             else
             {
-                eligible_iterator++;
+                ++eligible_iterator;
                 ++inEligibleGroupsNum;
             }
         }

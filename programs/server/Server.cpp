@@ -33,6 +33,7 @@
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
 #include <Server/TCPHandlerFactory.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -1042,10 +1043,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool has_hdfs_disk = false;
     if( has_hdfs_disk )
     {
-        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
-        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
         const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
-        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_io_error_num_to_reconnect);
     }
 
     /// TODO: @pengxindong @rmq
@@ -1059,6 +1058,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // }
 
 #endif
+
+    DiskCacheFactory::instance().init(*global_context);
 
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;

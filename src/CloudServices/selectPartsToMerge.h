@@ -23,6 +23,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     ServerCanMergeCallback can_merge_callback,
     size_t max_total_size_to_merge,
     bool aggressive,
+    const bool enable_batch_select,
     bool merge_with_ttl_allowed,
     Poco::Logger * log);
 }

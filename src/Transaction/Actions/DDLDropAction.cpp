@@ -5,12 +5,12 @@
 #include <Parsers/ASTDropQuery.h>
 // #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-// #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 // #include <MergeTreeCommon/MemoryBufferManager.h>
 // #include <DaemonManager/DaemonManagerClient.h>
-// #include <MergeTreeCommon/CnchServerClient.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include "Common/ErrorCodes.h"
+#include <Common/ErrorCodes.h>
 
 namespace DB
 {

@@ -150,6 +150,7 @@
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/CnchBGThreadsMap.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <Catalog/Catalog.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
@@ -163,6 +164,8 @@
 #include <WorkerTasks/ManipulationList.h>
 
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Transaction/CnchServerTransaction.h>
+#include <Transaction/CnchWorkerTransaction.h>
 
 namespace fs = std::filesystem;
 
@@ -498,6 +501,9 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
     std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
+    mutable std::optional<ThreadPool> local_disk_cache_thread_pool;  /// A thread pool that can run parts caching from cloud storage in background (used in cloud tables)
+    mutable std::optional<ThreadPool> local_disk_cache_evict_thread_pool;  /// A thread pool that asynchronous remove local disk cache file
+    mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
 
@@ -531,6 +537,8 @@ struct ContextSharedPart
 
     mutable std::unique_ptr<CnchServerClientPool> cnch_server_client_pool;
     mutable std::unique_ptr<CnchWorkerClientPools> cnch_worker_client_pools;
+
+    mutable std::optional<CnchBGThreadsMapArray> cnch_bg_threads_array;
 
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
@@ -661,6 +669,7 @@ struct ContextSharedPart
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
 
+            cnch_bg_threads_array.reset();
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
@@ -977,7 +986,14 @@ void Context::setUsersConfig(const ConfigurationPtr & config)
     auto lock = getLock();
     shared->users_config = config;
     shared->access_control_manager.setUsersConfig(*shared->users_config);
-    shared->resource_group_manager->initialize(*shared->users_config);
+    if (getServerType() == ServerType::cnch_server)
+    {
+        if (!shared->resource_group_manager)
+            initResourceGroupManager(config);
+        
+        if (shared->resource_group_manager)
+            shared->resource_group_manager->initialize(*shared->users_config);
+    }
 }
 
 ConfigurationPtr Context::getUsersConfig()
@@ -986,11 +1002,39 @@ ConfigurationPtr Context::getUsersConfig()
     return shared->users_config;
 }
 
+void Context::initResourceGroupManager(const ConfigurationPtr & config)
+{
+    if (!config->has("resource_groups"))
+    {
+        LOG_DEBUG(&Poco::Logger::get("Context"), "No config found. Not creating Resource Group Manager");
+        return ;
+    }
+    auto resource_group_manager_type = config->getRawString("resource_groups.type", "vw");
+    if (resource_group_manager_type == "vw")
+    {
+        if (!getResourceManagerClient())
+        {
+            LOG_ERROR(&Poco::Logger::get("Context"), "Cannot create VW Resource Group Manager since Resource Manager client is not initialised.");
+            return;
+        }
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating VW Resource Group Manager");
+        shared->resource_group_manager = std::make_shared<VWResourceGroupManager>(getGlobalContext());
+    }
+    else if (resource_group_manager_type == "internal")
+    {
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Creating Internal Resource Group Manager");
+        shared->resource_group_manager = std::make_shared<InternalResourceGroupManager>();
+    }
+    else
+        throw Exception("Unknown Resource Group Manager type", ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+}
+
 void Context::setResourceGroup(const IAST * ast)
 {
-    if (auto lock = getLock(); shared->resource_group_manager->isInUse())
+    if (auto lock = getLock(); shared->resource_group_manager && shared->resource_group_manager->isInUse())
         resource_group = shared->resource_group_manager->selectGroup(*this, ast);
-    resource_group = nullptr;
+    else
+        resource_group = nullptr;
 }
 
 IResourceGroup * Context::tryGetResourceGroup() const
@@ -998,14 +1042,14 @@ IResourceGroup * Context::tryGetResourceGroup() const
     return resource_group.load(std::memory_order_acquire);
 }
 
-IResourceGroupManager * Context::tryGetResourceGroupManager() 
+IResourceGroupManager * Context::tryGetResourceGroupManager()
 {
     if (shared->resource_group_manager)
         return shared->resource_group_manager.get();
     return nullptr;
 }
 
-IResourceGroupManager * Context::tryGetResourceGroupManager() const 
+IResourceGroupManager * Context::tryGetResourceGroupManager() const
 {
     if (shared->resource_group_manager)
         return shared->resource_group_manager.get();
@@ -2047,6 +2091,39 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
         shared->extra_schedule_pools[SchedulePool::CNCHTopology].emplace(
             settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopologyPool");
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
+}
+
+ThreadPool & Context::getLocalDiskCacheThreadPool() const
+{
+    auto lock = getLock();
+    if (!shared->local_disk_cache_thread_pool)
+        shared->local_disk_cache_thread_pool.emplace(
+            settings.local_disk_cache_thread_pool_size,
+            settings.local_disk_cache_thread_pool_size,
+            settings.local_disk_cache_thread_pool_size * 100);
+    return *shared->local_disk_cache_thread_pool;
+}
+
+ThreadPool & Context::getLocalDiskCacheEvictThreadPool() const
+{
+    auto lock = getLock();
+    if (!shared->local_disk_cache_evict_thread_pool)
+        shared->local_disk_cache_evict_thread_pool.emplace(
+            settings.local_disk_cache_evict_thread_pool_size,
+            settings.local_disk_cache_evict_thread_pool_size,
+            settings.local_disk_cache_evict_thread_pool_size * 100);
+    return *shared->local_disk_cache_evict_thread_pool;
+}
+
+ThrottlerPtr Context::getDiskCacheThrottler() const
+{
+    auto lock = getLock();
+    if (!shared->disk_cache_throttler)
+    {
+        shared->disk_cache_throttler = std::make_shared<Throttler>(settings.max_bandwidth_for_disk_cache);
+    }
+
+    return shared->disk_cache_throttler;
 }
 
 ThrottlerPtr Context::getReplicatedSendsThrottler() const
@@ -3724,19 +3801,6 @@ CnchWorkerClientPools & Context::getCnchWorkerClientPools() const
     return *shared->cnch_worker_client_pools;
 }
 
-void Context::initCnchTransactionCoordinator()
-{
-    auto lock = getLock();
-
-    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
-}
-
-TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
-{
-    auto lock = getLock();
-
-    return *shared->cnch_txn_coordinator;
-}
 
 String Context::getVirtualWarehousePSM() const
 {
@@ -3826,5 +3890,93 @@ ResourceManagerClientPtr Context::getResourceManagerClient() const
    return shared->rm_client;
 }
 
+void Context::initCnchBGThreads()
+{
+    shared->cnch_bg_threads_array.emplace(shared_from_this());
+}
+
+CnchBGThreadsMap * Context::getCnchBGThreadsMap(CnchBGThreadType type) const
+{
+    return shared->cnch_bg_threads_array->at(type);
+}
+
+CnchBGThreadPtr Context::getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const
+{
+    return getCnchBGThreadsMap(type)->getThread(storage_id);
+}
+
+CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const
+{
+    return getCnchBGThreadsMap(type)->tryGetThread(storage_id);
+}
+
+void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
+{
+    getCnchBGThreadsMap(type)->controlThread(storage_id, action);
+}
+void Context::initCnchTransactionCoordinator()
+{
+    auto lock = getLock();
+
+    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
+}
+
+TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
+{
+    auto lock = getLock();
+    return *shared->cnch_txn_coordinator;
+}
+
+void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
+{
+    auto lock = getLock();
+
+    if (current_cnch_txn && finish_txn && getServerType() == ServerType::cnch_server)
+        getCnchTransactionCoordinator().finishTransaction(current_cnch_txn);
+
+    current_cnch_txn = std::move(txn);
+}
+
+TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
+{
+    auto lock = getLock();
+
+    if (shared->server_type == ServerType::cnch_server)
+    {
+        auto txn_record = getCnchCatalog()->tryGetTransactionRecord((txn_id));
+        if (!txn_record)
+        {
+            txn_record = std::make_optional<TransactionRecord>();
+            txn_record->setID(txn_id).setType(CnchTransactionType::Implicit).setStatus(CnchTransactionStatus::Running);
+            txn_record->read_only = true;
+        }
+
+        current_cnch_txn = std::make_shared<CnchServerTransaction>(*getGlobalContext(), std::move(*txn_record));
+    }
+    else
+        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(*this, txn_id, primary_txn_id);
+
+    return current_cnch_txn;
+}
+
+TransactionCnchPtr Context::getCurrentTransaction() const
+{
+    auto lock = getLock();
+
+    return current_cnch_txn;
+}
+
+TxnTimestamp Context::getCurrentTransactionID() const
+{
+    if (!current_cnch_txn)
+        throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
+
+    auto txn_id = current_cnch_txn->getTransactionID();
+    if (0 == UInt64(txn_id))
+        throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
+
+    return txn_id;
+}
 
 }
+

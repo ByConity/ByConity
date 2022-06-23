@@ -92,7 +92,9 @@
     \
     M(CnchTxnActiveTransactions, "Number of active transactions") \
     M(CnchTxnTransactionRecords, "Number of transaction records") \
-
+    \
+    M(DiskCacheEvictQueueLength, "Length of disk cache evict queue") \
+    M(DiskCacheRoughSingleStatsBucketSize, "Diskcache single statistics bucket size") \
 
 
 namespace CurrentMetrics

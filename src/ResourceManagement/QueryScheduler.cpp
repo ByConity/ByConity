@@ -7,6 +7,7 @@
 namespace DB::ErrorCodes
 {
     extern const int RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO;
+    extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
 }
 
 namespace DB::ResourceManagement
@@ -24,17 +25,20 @@ static inline bool cmp_group_mem(const WorkerGroupAndMetrics & a, const WorkerGr
 
 static inline bool cmp_worker_cpu(const WorkerNodePtr & a, const WorkerNodePtr & b)
 {
-    return a->cpu_usage < b->cpu_usage;
+    return a->convertCoresToPercents() + a->cpu_usage.load(std::memory_order_relaxed) 
+        < b->convertCoresToPercents() + b->cpu_usage.load(std::memory_order_relaxed);
 }
 
 static inline bool cmp_worker_mem(const WorkerNodePtr & a, const WorkerNodePtr & b)
 {
-    return a->memory_usage < b->memory_usage;
+    /// Use add but not sub to avoid uint overflow.
+    return a->memory_available.load(std::memory_order_relaxed) + b->reserved_memory_bytes.load(std::memory_order_relaxed) 
+        < b->memory_available.load(std::memory_order_relaxed) + a->reserved_memory_bytes.load(std::memory_order_relaxed);
 }
 
 static inline bool cmp_worker_disk(const WorkerNodePtr & a, const WorkerNodePtr & b)
 {
-    return a->disk_space > b->disk_space;
+    return a->disk_space.load(std::memory_order_relaxed) > b->disk_space.load(std::memory_order_relaxed);
 }
 
 QueryScheduler::QueryScheduler(VirtualWarehouse & vw_) : vw(vw_)
@@ -46,7 +50,7 @@ QueryScheduler::QueryScheduler(VirtualWarehouse & vw_) : vw(vw_)
 void QueryScheduler::filterGroup(const Requirement & requirement, std::vector<WorkerGroupAndMetrics> & res) const
 {
     auto rlock = vw.getReadLock();
-    for (auto const & [_, group] : vw.groups)
+    for (const auto & [_, group] : vw.groups)
     {
         if (auto metrics = group->getAggregatedMetrics(); metrics.available(requirement))
             res.emplace_back(group, metrics);
@@ -100,7 +104,7 @@ WorkerGroupPtr QueryScheduler::pickWorkerGroup(const VWScheduleAlgo & algo, cons
     filterGroup(requirement, available_groups);
     if (available_groups.empty())
     {
-        LOG_WARNING(log, "No available worker group for requirement: {}, choose on randomly.", requirement.toDebugString());
+        LOG_WARNING(log, "No available worker group for requirement: {}, choose one randomly.", requirement.toDebugString());
         return vw.randomWorkerGroup();
     }
     return selectGroup(algo, available_groups);
@@ -116,7 +120,7 @@ void QueryScheduler::filterWorker(const Requirement & requirement, std::vector<W
     if (!requirement.worker_group.empty())
     {
         auto required_group = vw.getWorkerGroup(requirement.worker_group);
-        for (auto const & [_, worker] : required_group->getWorkers())
+        for (const auto & [_, worker] : required_group->getWorkers())
         {
             if (worker->available(requirement))
             {
@@ -127,9 +131,9 @@ void QueryScheduler::filterWorker(const Requirement & requirement, std::vector<W
     }
 
     /// Otherwise, scan all.
-    for (auto const & [_, group] : vw.groups)
+    for (const auto & [_, group] : vw.groups)
     {
-        for (auto const & [_, worker] : group->getWorkers())
+        for (const auto & [_, worker] : group->getWorkers())
         {
             if (worker->available(requirement))
             {
@@ -139,19 +143,24 @@ void QueryScheduler::filterWorker(const Requirement & requirement, std::vector<W
     }
 }
 
-/// pickWorker stage 2: select a worker order by algo.
-HostWithPorts QueryScheduler::selectWorker(const VWScheduleAlgo & algo, const std::vector<WorkerNodePtr> & available_workers)
+/// pickWorker stage 2: select n workers order by algo and reserve quotas.
+std::vector<WorkerNodePtr> QueryScheduler::selectWorkers(const VWScheduleAlgo & algo, const Requirement & requirement, std::vector<WorkerNodePtr> & available_workers)
 {
-    if (available_workers.size() == 1)
-        return available_workers[0]->host;
-
+    auto n = requirement.expected_workers;
+    std::vector<WorkerNodePtr> res;
+    res.reserve(n);
     auto comparator = cmp_worker_mem;
     switch (algo)
     {
         case VWScheduleAlgo::GlobalRoundRobin:
         {
-            size_t index = pick_worker_sequence.fetch_add(1, std::memory_order_relaxed) % available_workers.size();
-            return available_workers[index]->host;
+            for (size_t i = 0; i < n; ++i)
+            {
+                size_t index = pick_worker_sequence.fetch_add(1, std::memory_order_relaxed) % available_workers.size();
+                available_workers[index]->reserveResourceQuotas(requirement);
+                res.push_back(available_workers[index]);
+            }
+            return res;
         }
 
         case VWScheduleAlgo::GlobalLowMem:
@@ -169,24 +178,68 @@ HostWithPorts QueryScheduler::selectWorker(const VWScheduleAlgo & algo, const st
             throw Exception("Wrong vw_schedule_algo for query scheduler: " + std::string(toString(algo)), ErrorCodes::RESOURCE_MANAGER_WRONG_VW_SCHEDULE_ALGO);
     }
 
-    auto it = std::min_element(available_workers.begin(), available_workers.end(), comparator);
-    return (*it)->host;
+    for (size_t i = 0; i < n; ++i)
+    {
+        auto it = std::min_element(available_workers.begin(), available_workers.end(), comparator);
+        (*it)->reserveResourceQuotas(requirement);
+        res.push_back(*it);
+        if (i == n - 1)
+            break;
+        if (requirement.no_repeat)
+            available_workers.erase(it);
+    }
+    return res;
 }
 
-/// Picking a worker from the virtual warehouse. Two stages:
-/// - 1. filter workers by resource requirement. @see filterWorker
-/// - 2. select one from filtered workers by algo. @see selectWorker
 HostWithPorts QueryScheduler::pickWorker(const VWScheduleAlgo & algo, const Requirement & requirement)
 {
+    return pickWorkers(algo, requirement)[0];
+}
+
+/// Picking n workers from the virtual warehouse. Two stages:
+/// - 1. filter workers by resource requirement. @see filterWorker
+/// - 2. select at most n workers from filtered workers by algo. @see selectWorkers
+std::vector<HostWithPorts> QueryScheduler::pickWorkers(const VWScheduleAlgo & algo, const Requirement & requirement)
+{
+    std::vector<WorkerNodePtr> workers{};
+    bool need_reserve_quotas = true;
+
     std::vector<WorkerNodePtr> available_workers;
     filterWorker(requirement, available_workers);
+
+    /// If there is no worker meets the requirement, 
+    /// - If random result is allowed, then do a sampling among all workers.
+    /// - If random result is not allowed, then just return an empty result set.
     if (available_workers.empty())
     {
-        LOG_ERROR(log, "No available worker for requirement: {}, choose one randomly.", requirement.toDebugString());
-        auto group = requirement.worker_group.empty() ? vw.randomWorkerGroup() : vw.getWorkerGroup(requirement.worker_group);
-        return group->randomWorker()->host;
+        LOG_WARNING(log, "No available worker for requirement: {}", requirement.toDebugString());
+        if (!requirement.forbid_random_result)
+        {
+            auto group = requirement.worker_group.empty() ? vw.randomWorkerGroup() : vw.getWorkerGroup(requirement.worker_group);
+            workers = group->randomWorkers(requirement.expected_workers, requirement.blocklist);
+        }
     }
-    return selectWorker(algo, available_workers);
+    /// If have not enough available workers, just return all of them.
+    else if (available_workers.size() <= requirement.expected_workers && requirement.no_repeat)
+    {
+        workers = std::move(available_workers);
+    }
+    /// We have enough available workers, so select some of them according to vw_schedule_algo.
+    else
+    {
+        workers = selectWorkers(algo, requirement, available_workers);
+        need_reserve_quotas = false;
+    }
+
+    std::vector<HostWithPorts> res;
+    res.reserve(workers.size());
+    for (const auto & worker : workers)
+    {
+        if (need_reserve_quotas)
+            worker->reserveResourceQuotas(requirement);
+        res.push_back(worker->host);
+    }
+    return res;
 }
 
 }

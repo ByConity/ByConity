@@ -16,29 +16,29 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
 }
 
-// CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, CnchServerClientPtr client)
-//     : ICnchTransaction(context_), server_client(std::move(client))
-// {
-//     checkServerClient();
-//     auto [start_ts, txn_id] = server_client->createTransaction();
-//     TransactionRecord record;
-//     record.setID(txn_id).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Worker)).setStatus(CnchTransactionStatus::Running);
-//     setTransactionRecord(std::move(record));
-//     isInitiator = true;
-// }
+CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, CnchServerClientPtr client)
+    : ICnchTransaction(context_), server_client(std::move(client))
+{
+    checkServerClient();
+    auto [start_ts, txn_id] = server_client->createTransaction();
+    TransactionRecord record;
+    record.setID(txn_id).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Worker)).setStatus(CnchTransactionStatus::Running);
+    setTransactionRecord(std::move(record));
+    isInitiator = true;
+}
 
-// CnchWorkerTransaction::CnchWorkerTransaction(
-//     Context & context_, CnchServerClientPtr client, StorageID kafka_table_id_, size_t consumer_index_)
-//     : ICnchTransaction(context_), server_client(std::move(client)),
-//     kafka_table_id(std::move(kafka_table_id_)), kafka_consumer_index(consumer_index_)
-// {
-//     checkServerClient();
-//     auto [start_ts, txn_id] = server_client->createTransactionForKafka(kafka_table_id, kafka_consumer_index);
-//     TransactionRecord record;
-//     record.setID(txn_id).setStatus(CnchTransactionStatus::Running).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Kafka));
-//     setTransactionRecord(std::move(record));
-//     isInitiator = true;
-// }
+CnchWorkerTransaction::CnchWorkerTransaction(
+    Context & context_, CnchServerClientPtr client, StorageID kafka_table_id_, size_t consumer_index_)
+    : ICnchTransaction(context_), server_client(std::move(client)),
+    kafka_table_id(std::move(kafka_table_id_)), kafka_consumer_index(consumer_index_)
+{
+    checkServerClient();
+    auto [start_ts, txn_id] = server_client->createTransactionForKafka(kafka_table_id, kafka_consumer_index);
+    TransactionRecord record;
+    record.setID(txn_id).setStatus(CnchTransactionStatus::Running).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Kafka));
+    setTransactionRecord(std::move(record));
+    isInitiator = true;
+}
 
 CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
     : ICnchTransaction(context_)
@@ -53,38 +53,38 @@ CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, const TxnTimest
 CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, StorageID kafka_table_id_)
     : ICnchTransaction(context_), kafka_table_id(std::move(kafka_table_id_)) {}
 
-CnchWorkerTransaction::~CnchWorkerTransaction() = default;
-// {
-    // try
-    // {
-    //     if (isInitiator && getTransactionID())
-    //     {
-    //         checkServerClient();
-    //         server_client->finishTransaction(getTransactionID());
-    //     }
-    // }
-    // catch (...)
-    // {
-    //     tryLogCurrentException(log, __PRETTY_FUNCTION__);
-    // }
-// }
+CnchWorkerTransaction::~CnchWorkerTransaction()
+{
+    try
+    {
+        if (isInitiator && getTransactionID())
+        {
+            checkServerClient();
+            server_client->finishTransaction(getTransactionID());
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
+}
 
-// void CnchWorkerTransaction::checkServerClient() const
-// {
-//     if (!server_client)
-//         throw Exception("Server client is unset", ErrorCodes::LOGICAL_ERROR);
-// }
+void CnchWorkerTransaction::checkServerClient() const
+{
+    if (!server_client)
+        throw Exception("Server client is unset", ErrorCodes::LOGICAL_ERROR);
+}
 
-// CnchServerClientPtr CnchWorkerTransaction::getServerClient() const
-// {
-//     checkServerClient();
-//     return server_client;
-// }
+CnchServerClientPtr CnchWorkerTransaction::getServerClient() const
+{
+    checkServerClient();
+    return server_client;
+}
 
-// void CnchWorkerTransaction::setServerClient(CnchServerClientPtr client)
-// {
-//     server_client = std::move(client);
-// }
+void CnchWorkerTransaction::setServerClient(CnchServerClientPtr client)
+{
+    server_client = std::move(client);
+}
 
 void CnchWorkerTransaction::precommit()
 {

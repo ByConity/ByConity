@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Interpreters/StorageID.h>
-// #include <MergeTreeCommon/CnchServerClient.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
@@ -17,11 +17,11 @@ class CnchWorkerTransaction : public ICnchTransaction
 public:
     // ctor for worker initiated tranasction
     // Create a server transaction on cnch server using `client`
-    // CnchWorkerTransaction(Context & context_, CnchServerClientPtr client);
+    CnchWorkerTransaction(Context & context_, CnchServerClientPtr client);
 
     // ctor for kafka initiated transaction
     // Create a server transaction on server, and maintain kafka_table_id in the transaction
-    // CnchWorkerTransaction(Context & context_, CnchServerClientPtr client, StorageID kafka_table_id, size_t consumer_index);
+    CnchWorkerTransaction(Context & context_, CnchServerClientPtr client, StorageID kafka_table_id, size_t consumer_index);
 
     // ctor for server initiated transaction
     // Server created a transaction and continue to execute on worker
@@ -38,10 +38,10 @@ public:
     String getTxnType() const override { return "CnchWorkerTransaction"; }
 
     // Return nullptr if server client is not set.
-    // CnchServerClientPtr tryGetServerClient() const { return server_client; }
+    CnchServerClientPtr tryGetServerClient() const { return server_client; }
     // Throws if server client is not set.
-    // CnchServerClientPtr getServerClient() const;
-    // void setServerClient(CnchServerClientPtr client);
+    CnchServerClientPtr getServerClient() const;
+    void setServerClient(CnchServerClientPtr client);
 
     void setKafkaStorageID(StorageID storage_id) override { kafka_table_id = std::move(storage_id); }
     StorageID getKafkaTableID() const override { return kafka_table_id; }
@@ -64,7 +64,7 @@ private:
     void checkServerClient() const;
 
 private:
-    // CnchServerClientPtr server_client;
+    CnchServerClientPtr server_client;
     StorageID kafka_table_id{StorageID::createEmpty()};
     size_t kafka_consumer_index{SIZE_MAX};
     Poco::Logger * log {&Poco::Logger::get("CnchWorkerTransaction")};

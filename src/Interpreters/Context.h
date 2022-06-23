@@ -5,6 +5,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Settings.h>
 #include <Core/UUID.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
@@ -17,7 +18,7 @@
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
 #include <common/types.h>
-
+#include "Transaction/TxnTimestamp.h"
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -141,6 +142,9 @@ using CnchServerClientPool = RpcClientPool<CnchServerClient>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class CnchWorkerClientPools;
+class ICnchBGThread;
+using CnchBGThreadPtr = std::shared_ptr<ICnchBGThread>;
+class CnchBGThreadsMap;
 
 class IOutputFormat;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
@@ -181,7 +185,10 @@ class CnchTopologyMaster;
 class CnchServerTopology;
 class CnchServerManager;
 struct RootConfiguration;
+class TxnTimestamp;
 class TransactionCoordinatorRcCnch;
+class ICnchTransaction;
+using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;
 
 class VirtualWarehousePool;
 class VirtualWarehouseHandleImpl;
@@ -420,6 +427,9 @@ private:
     mutable VirtualWarehouseHandle current_vw;
     mutable WorkerGroupHandle current_worker_group;
 
+    /// Transaction for each query, query level
+    TransactionCnchPtr current_cnch_txn;
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -567,6 +577,7 @@ public:
     ClientInfo & getClientInfo() { return client_info; }
     const ClientInfo & getClientInfo() const { return client_info; }
 
+    void initResourceGroupManager(const ConfigurationPtr & config);
     void setResourceGroup(const IAST *ast);
     IResourceGroup* tryGetResourceGroup() const;
     IResourceGroupManager * tryGetResourceGroupManager();
@@ -876,6 +887,10 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
 
+    ThreadPool & getLocalDiskCacheThreadPool() const;
+    ThreadPool & getLocalDiskCacheEvictThreadPool() const;
+    ThrottlerPtr getDiskCacheThrottler() const;
+
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
@@ -1098,8 +1113,19 @@ public:
     void initCnchWorkerClientPools();
     CnchWorkerClientPools & getCnchWorkerClientPools() const;
 
+    /// Transaction related APIs
     void initCnchTransactionCoordinator();
-    TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const; 
+    TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
+    void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id);
+    TransactionCnchPtr getCurrentTransaction() const;
+    TxnTimestamp getCurrentTransactionID() const;
+
+    void initCnchBGThreads();
+    CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
+    CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
+    CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
+    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

@@ -1,5 +1,6 @@
 #include <ResourceManagement/ResourceTracker.h>
 
+#include <Common/Configurations.h>
 #include <Common/Exception.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/CommonData.h>
@@ -130,7 +131,9 @@ std::pair<bool, WorkerNodePtr> ResourceTracker::registerNodeImpl(const WorkerNod
         worker_nodes.erase(it);
     }
 
-    auto new_node = std::make_shared<WorkerNode>(data);
+    size_t uptime_sec = rm_controller.getContext()->getUptimeSeconds();
+    auto set_running = uptime_sec < (register_granularity_sec / 2);
+    auto new_node = std::make_shared<WorkerNode>(data, set_running);
     worker_nodes.emplace(worker_id, new_node);
     return {false, new_node};
 }
@@ -149,7 +152,7 @@ bool ResourceTracker::updateNode(const WorkerNodeResourceData & data)
 
     if (auto it = worker_nodes.find(worker_id); it != worker_nodes.end())
     {
-        it->second->update(data);
+        it->second->update(data, register_granularity_sec);
         return true;
     }
     else

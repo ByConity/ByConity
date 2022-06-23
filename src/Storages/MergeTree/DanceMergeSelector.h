@@ -10,6 +10,7 @@ class MergeScheduler;
 class MergeTreeMetaBase;
 
 #define LIST_OF_DANCE_MERGE_SELECTOR_SETTINGS(M) \
+    M(Bool, enable_batch_select, false, "", 0) \
     M(UInt64, max_parts_to_merge_base, 100, "", 0) \
     M(UInt64, min_parts_to_merge_base, 5, "", 0) \
 \
@@ -47,7 +48,10 @@ public:
     using Iterator = PartsRange::const_iterator;
     using Settings = DanceMergeSelectorSettings;
 
-    DanceMergeSelector(const MergeTreeMetaBase & data_, const Settings & settings_) : data(data_), settings(settings_) {}
+    DanceMergeSelector(const MergeTreeMetaBase & data_, const Settings & settings_) : data(data_), settings(settings_)
+    {
+        best_ranges["all"].push_back(BestRangeWithScore{});
+    }
 
     PartsRange select(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
     PartsRanges selectMulti(const PartsRanges & parts_ranges, const size_t max_total_size_to_merge, MergeScheduler * merge_scheduler = nullptr) override;
@@ -79,7 +83,24 @@ private:
     const Settings settings;
 
     std::unordered_map<String, size_t> num_parts_of_partitions;
-    std::unordered_map<String, BestRangeWithScore> best_ranges;
+    std::unordered_map<String, std::vector<BestRangeWithScore>> best_ranges;
+
+    void selectRangesFromScoreTable(const PartsRange & parts, const std::vector<std::vector<double>> & score_table, size_t i, size_t j, size_t n, size_t max_width, std::vector<BestRangeWithScore> & out);
+
+    inline bool enable_batch_select_for_partition(const String & partition_id)
+    {
+        return settings.enable_batch_select && !is_small_partition(partition_id);
+    }
+
+    inline bool is_small_partition(const String & partition_id)
+    {
+        return num_parts_of_partitions[partition_id] < settings.min_parts_to_enable_multi_selection;
+    }
+
+    inline size_t expected_ranges_num(const size_t num_parts)
+    {
+        return (num_parts / settings.max_parts_to_merge_base) + 3;
+    }
 };
 
 }
