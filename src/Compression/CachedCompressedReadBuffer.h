@@ -62,6 +62,11 @@ public:
         profile_callback = profile_callback_;
         clock_type = clock_type_;
     }
+
+    String getPath() const
+    {
+        return path;
+    }
 };
 
 }
