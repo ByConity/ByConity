@@ -255,12 +255,13 @@ class HashTableGrower
 {
     /// The state of this structure is enough to get the buffer size of the hash table.
 
-    UInt8 size_degree = initial_size_degree;
     size_t cached_mask = (1ULL << initial_size_degree) - 1;
     size_t cached_max_fill = 1ULL << (initial_size_degree - 1);
 
 protected:
-    void updateSizeDegree()
+    UInt8 size_degree = initial_size_degree;
+
+    void updateCachedValues()
     {
         cached_mask = (1ULL << size_degree) - 1;
         cached_max_fill = 1ULL << (size_degree - 1);
@@ -291,7 +292,7 @@ public:
     void increaseSize()
     {
         size_degree += size_degree >= 23 ? 1 : 2;
-        updateMask();
+        updateCachedValues();
     }
 
     /// Set the buffer size by the number of elements in the hash table. Used when deserializing a hash table.
@@ -302,13 +303,13 @@ public:
              : ((initial_size_degree > static_cast<size_t>(log2(num_elems - 1)) + 2)
                  ? initial_size_degree
                  : (static_cast<size_t>(log2(num_elems - 1)) + 2));
-        updateMask();
+        updateCachedValues();
     }
 
     void setBufSize(size_t buf_size_)
     {
         size_degree = static_cast<size_t>(log2(buf_size_ - 1) + 1);
-        updateMask();
+        updateCachedValues();
     }
 };
 
