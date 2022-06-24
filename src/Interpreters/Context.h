@@ -208,6 +208,13 @@ enum class ServerType
     cnch_bytepond,
 };
 
+template <class T>
+class RpcClientPool;
+namespace TSO
+{
+    class TSOClient;
+}
+
 namespace Catalog
 {
     class Catalog;
@@ -426,6 +433,8 @@ private:
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
+
+    std::shared_ptr<TSO::TSOClient> getCnchTSOClient() const;
 
 public:
     /// Create initial Context with ContextShared and etc.
@@ -1047,8 +1056,10 @@ public:
     void initServiceDiscoveryClient();
     ServiceDiscoveryClientPtr getServiceDiscoveryClient() const;
 
+    void initTSOClientPool(const String & service_name);
     UInt64 getTimestamp() const;
     UInt64 tryGetTimestamp(const String & pretty_func_name = "Context") const;
+    UInt64 getTimestamps(UInt32 size) const;
     UInt64 getPhysicalTimestamp() const;
 
     void setCnchStorageCache(size_t max_cache_size);

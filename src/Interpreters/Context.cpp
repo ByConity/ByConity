@@ -156,6 +156,8 @@
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Common/RpcClientPool.h>
+#include <TSO/TSOClient.h>
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
@@ -232,6 +234,7 @@ namespace ErrorCodes
 
 }
 
+using TSOClientPool = RpcClientPool<TSO::TSOClient>;
 
 class NamedSessions
 {
@@ -578,6 +581,7 @@ struct ContextSharedPart
     Stopwatch uptime_watch;
 
     Context::ApplicationType application_type = Context::ApplicationType::SERVER;
+    mutable std::unique_ptr<TSOClientPool> tso_client_pool;
 
     /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
@@ -3561,19 +3565,41 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
     return shared->sd;
 }
 
-UInt64 Context::getTimestamp() const
+void Context::initTSOClientPool(const String & service_name)
 {
-//    return getTSOResponse(GET_TIMESTAMP);
-    /// FIXME: when tso is available
-    return 0;
+    shared->tso_client_pool
+        = std::make_unique<TSOClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
 }
 
+std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
+{
+    if (!shared->tso_client_pool)
+        throw Exception("Cnch tso client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
 
+    return shared->tso_client_pool->get();
+}
+
+UInt64 Context::getTimestamp() const
+{
+    return getCnchTSOClient()->getTimestamp().timestamp();
+}
 
 UInt64 Context::tryGetTimestamp([[maybe_unused]]const String & pretty_func_name) const
 {
-    /// FIXME: when tso is available
-    return 0;
+    try
+    {
+        return getTimestamp();
+    }
+    catch (...)
+    {
+        LOG_DEBUG(&Poco::Logger::get(pretty_func_name), "Unable to reach TSO during call to tryGetTimestamp and falling back to fallbackTS.");
+        return TxnTimestamp::fallbackTS();
+    }
+}
+
+UInt64 Context::getTimestamps(UInt32 size) const
+{
+    return getCnchTSOClient()->getTimestamps(size).max_timestamp();
 }
 
 UInt64 Context::getPhysicalTimestamp() const
