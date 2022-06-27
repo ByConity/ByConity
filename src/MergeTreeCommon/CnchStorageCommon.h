@@ -1,0 +1,92 @@
+#pragma once
+
+#include <Interpreters/WorkerGroupHandle.h>
+#include <Transaction/Actions/DDLAlterAction.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <DataStreams/NullBlockOutputStream.h>
+#include <DataStreams/copyData.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Interpreters/ProcessList.h>
+
+namespace DB
+{
+
+enum class WorkerGroupUsageType
+{
+    NORMAL,
+    WRITE,    /// write group for INSERT SELECT and INSERT INFILE
+    BUFFER,
+};
+
+inline static String typeToString(WorkerGroupUsageType type)
+{
+    switch (type)
+    {
+        case WorkerGroupUsageType::NORMAL:
+            return "NORMAL";
+        case WorkerGroupUsageType::WRITE:
+            return "WRITE";
+        case WorkerGroupUsageType::BUFFER:
+            return "BUFFER";
+    }
+}
+
+class VirtualWarehouseHandleImpl;
+class CnchTopologyMaster;
+class ProcessListEntry;
+
+class CnchStorageCommonHelper
+{
+public:
+    CnchStorageCommonHelper(const StorageID & table_id_, const String & remote_database_, const String & remote_table_);
+
+    bool forwardQueryToServerIfNeeded(ContextPtr query_context, const UUID & storage_uuid) const;
+
+    static bool healthCheckForWorkerGroup(ContextPtr context, WorkerGroupHandle & worker_group);
+
+    static void sendQueryPerShard(
+        ContextPtr context,
+        const String & query,
+        const WorkerGroupHandleImpl::ShardInfo & shard_info);
+
+    String getCloudTableName(ContextPtr context) const;
+
+    // For each condition, we construct a block containing
+    // arguments of condition and then run a function to execute this block.
+    // The result of this condition will update mask for removing parts.
+    static void filterCondition(
+        const ASTPtr & expression,
+        const ColumnsWithTypeAndName & columns,
+        const std::map<String, size_t> & nameToIdx,
+        ContextPtr context,
+        std::vector<int> & mask,
+        const SelectQueryInfo & query_info);
+
+    // Get all conditions.
+    // The method assumes that the expression are linearized,
+    // which only concated by 'and'.
+    // This is reasonable since we concat all possible conditions by 'and'
+    // when move these conditions from where to implicit_where.
+    static ASTs getConditions(const ASTPtr & ast);
+
+    String getCreateQueryForCloudTable(
+        const String & query,
+        const String & local_table_name,
+        const std::optional<ContextPtr> & context = std::nullopt,
+        bool enable_staging_area = false,
+        const std::optional<StorageID> & cnch_storage_id = std::nullopt) const;
+
+    static void rewritePlanSegmentQueryImpl(ASTPtr & query, const std::string & database, const std::string & table);
+
+    /// select query has database, table and table function names as AST pointers
+    /// Creates a copy of query, changes database, table and table function names.
+    static ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table);
+
+    StorageID table_id;
+    String remote_database;
+    String remote_table;
+    size_t index_for_subquery = 0;
+};
+
+}

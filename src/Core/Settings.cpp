@@ -140,6 +140,18 @@ void Settings::checkNoSettingNamesAtTopLevel(const Poco::Util::AbstractConfigura
     }
 }
 
+SettingsChanges Settings::getChangedSettings() const
+{
+    SettingsChanges res;
+
+    for (const auto & setting : allChanged())
+    {
+        res.emplace_back(setting.getName(), setting.getValue());
+    }
+
+    return res;
+}
+
 IMPLEMENT_SETTINGS_TRAITS(FormatFactorySettingsTraits, FORMAT_FACTORY_SETTINGS)
 
 }

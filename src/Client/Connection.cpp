@@ -151,6 +151,11 @@ void Connection::disconnect()
     connected = false;
 }
 
+void Connection::tryConnect(const ConnectionTimeouts & timeouts)
+{
+    if (!connected)
+        connect(timeouts);
+}
 
 void Connection::sendHello()
 {

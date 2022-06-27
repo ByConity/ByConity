@@ -17,7 +17,7 @@ struct TransactionRecordLite
     UInt64 commit_ts;
     CnchTransactionStatus status;
     TransactionRecordLite() = default;
-    TransactionRecordLite(UInt64 commit_ts, CnchTransactionStatus status) : commit_ts(commit_ts), status(status) {};
+    TransactionRecordLite(UInt64 commit_ts_, CnchTransactionStatus status_) : commit_ts(commit_ts_), status(status_) {}
 }; 
 
 template <typename T, typename Operation>

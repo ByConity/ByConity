@@ -41,7 +41,7 @@ void ICnchTransaction::setTransactionRecord(TransactionRecord record)
     txn_record = std::move(record);
 }
 
-MergeTreeDataPartsCNCHVector ICnchTransaction::getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, const Context &  /*query_context*/)
+MergeTreeDataPartsCNCHVector ICnchTransaction::getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, ContextPtr  /*query_context*/)
 {
     if (parts.empty())
         return {};
@@ -50,7 +50,7 @@ MergeTreeDataPartsCNCHVector ICnchTransaction::getLatestCheckpointWithVersionCha
     return parts;
 }
 
-ServerDataPartsVector ICnchTransaction::getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, const Context &  /*query_context*/)
+ServerDataPartsVector ICnchTransaction::getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr  /*query_context*/)
 {
     if (parts.empty())
         return {};

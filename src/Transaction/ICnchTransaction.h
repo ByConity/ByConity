@@ -83,8 +83,8 @@ public:
     void setKafkaTpl(const String & consumer_group, const cppkafka::TopicPartitionList & tpl);
     void getKafkaTpl(String & consumer_group, cppkafka::TopicPartitionList & tpl) const;
     /// can be used for both preallocate mode and on-demand mode
-    MergeTreeDataPartsCNCHVector getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, const Context & query_context);
-    ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, const Context & query_context);
+    MergeTreeDataPartsCNCHVector getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, ContextPtr query_context);
+    ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
     std::shared_ptr<TAction> createAction(Args &&... args) const

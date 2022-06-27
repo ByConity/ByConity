@@ -17,6 +17,9 @@ class QueryPlan;
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
+class WorkerGroupHandleImpl;
+using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
+
 namespace ClusterProxy
 {
 
@@ -33,6 +36,11 @@ class IStreamFactory;
 /// @return new Context with adjusted settings
 ContextMutablePtr updateSettingsForCluster(const Cluster & cluster, ContextPtr context, const Settings & settings, Poco::Logger * log = nullptr);
 
+/// removes different restrictions (like max_concurrent_queries_for_user, max_memory_usage_for_user, etc.)
+/// from settings and creates new context with them
+ContextMutablePtr removeUserRestrictionsFromSettings(ContextPtr context, const Settings & settings);
+Settings getUserRestrictionsRemoved(const Settings & settings);
+
 /// Execute a distributed query, creating a vector of BlockInputStreams, from which the result can be read.
 /// `stream_factory` object encapsulates the logic of creating streams for a different type of query
 /// (currently SELECT, DESCRIBE).
@@ -43,6 +51,11 @@ void executeQuery(
     const ExpressionActionsPtr & sharding_key_expr,
     const std::string & sharding_key_column_name,
     const ClusterPtr & not_optimized_cluster);
+
+void executeQuery(
+    QueryPlan & query_plan,
+    IStreamFactory & stream_factory, Poco::Logger * log,
+    const ASTPtr & query_ast, ContextPtr context, const WorkerGroupHandle & cluster);
 
 }
 

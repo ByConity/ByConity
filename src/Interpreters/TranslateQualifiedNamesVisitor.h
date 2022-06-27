@@ -59,6 +59,20 @@ private:
 /// It finds columns and translate their names to the normal form. Expand asterisks and qualified asterisks with column names.
 using TranslateQualifiedNamesVisitor = TranslateQualifiedNamesMatcher::Visitor;
 
+/// Restore ASTTableExpressions to long form, change subquery table_name in case of distributed.
+struct RestoreTableExpressionsMatcher
+{
+    struct Data
+    {
+        String database;
+    };
+
+    static bool needChildVisit(ASTPtr & node, const ASTPtr & child);
+    static void visit(ASTPtr & ast, Data & data);
+    static void visit(ASTTableExpression & expression, ASTPtr & ast, Data & data);
+};
+
+using RestoreTableExpressionsVisitor = InDepthNodeVisitor<RestoreTableExpressionsMatcher, true>;
 
 /// Restore ASTIdentifiers to long form, change table name in case of distributed.
 struct RestoreQualifiedNamesMatcher

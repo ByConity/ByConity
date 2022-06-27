@@ -276,6 +276,12 @@ class IColumn;
     M(Bool, prefer_column_name_to_alias, false, "Prefer using column names instead of aliases if possible.", 0) \
     M(Bool, prefer_global_in_and_join, false, "If enabled, all IN/JOIN operators will be rewritten as GLOBAL IN/JOIN. It's useful when the to-be-joined tables are only available on the initiator and we need to always scatter their data on-the-fly during distributed processing with the GLOBAL keyword. It's also useful to reduce the need to access the external sources joining external tables.", 0) \
     M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
+    M(UInt64, connection_check_pool_size, 16, "Number of thread for connection check", 0) \
+    M(Bool, query_worker_fault_tolerance, false, "Whether to retry when worker failures are detected when allocating metadata during query execution.", 0) \
+    M(Bool, enable_partition_prune, false, "prune partition based on where expression analysis.", 0) \
+    M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
+    M(Bool, cnch_skip_memory_buffers, false, "Skip data memory buffers", 0) \
+    M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
     \
     /**  settings about bitmap index */\
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
@@ -750,6 +756,9 @@ struct Settings : public BaseSettings<SettingsTraits>
     /// Check that there is no user-level settings at the top level in config.
     /// This is a common source of mistake (user don't know where to write user-level setting).
     static void checkNoSettingNamesAtTopLevel(const Poco::Util::AbstractConfiguration & config, const String & config_path);
+
+    /// Get all changed settings
+    SettingsChanges getChangedSettings() const;
 };
 
 /*
