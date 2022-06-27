@@ -1152,6 +1152,15 @@ public:
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster();
 
+    /// Part allocation
+    // Consistent hash algorithm for part allocation
+    enum PartAllocator : int
+    {
+        JUMP_CONSISTENT_HASH = 0,
+        RING_CONSISTENT_HASH = 1,
+    };
+    PartAllocator getPartAllocationAlgo() const;
+
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;
 
