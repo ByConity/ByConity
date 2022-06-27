@@ -174,7 +174,7 @@ template <
     typename Key,
     typename Cell,
     typename Hash = DefaultHash<Key>,
-    typename Grower = HashTableGrower<>,
+    typename Grower = HashTableGrowerWithPrecalculation<>,
     typename Allocator = HashTableAllocator>
 class HashMapTable : public HashTable<Key, Cell, Hash, Grower, Allocator>
 {
@@ -282,7 +282,7 @@ template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
-    typename Grower = HashTableGrower<>,
+    typename Grower = HashTableGrowerWithPrecalculation<>,
     typename Allocator = HashTableAllocator>
 using HashMap = HashMapTable<Key, HashMapCell<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 
@@ -291,7 +291,7 @@ template <
     typename Key,
     typename Mapped,
     typename Hash = DefaultHash<Key>,
-    typename Grower = HashTableGrower<>,
+    typename Grower = HashTableGrowerWithPrecalculation<>,
     typename Allocator = HashTableAllocator>
 using HashMapWithSavedHash = HashMapTable<Key, HashMapCellWithSavedHash<Key, Mapped, Hash>, Hash, Grower, Allocator>;
 

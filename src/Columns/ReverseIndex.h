@@ -147,10 +147,10 @@ namespace
       * separately.
       */
     template <typename Key, typename Cell, typename Hash>
-    class ReverseIndexHashTableBase : public HashTable<Key, Cell, Hash, HashTableGrower<>, HashTableAllocator>
+    class ReverseIndexHashTableBase : public HashTable<Key, Cell, Hash, HashTableGrowerWithPrecalculation<>, HashTableAllocator>
     {
         using State = typename Cell::State;
-        using Base = HashTable<Key, Cell, Hash, HashTableGrower<>, HashTableAllocator>;
+        using Base = HashTable<Key, Cell, Hash, HashTableGrowerWithPrecalculation<>, HashTableAllocator>;
 
     public:
         using Base::Base;

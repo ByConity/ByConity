@@ -48,7 +48,7 @@ std::set<std::string> convertToSet(const HashTable & table)
 
 TEST(HashTable, Insert)
 {
-    using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+    using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
     Cont cont;
 
@@ -60,7 +60,7 @@ TEST(HashTable, Insert)
 
 TEST(HashTable, Emplace)
 {
-    using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+    using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
     Cont cont;
 
@@ -81,7 +81,7 @@ TEST(HashTable, Emplace)
 
 TEST(HashTable, Lookup)
 {
-    using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+    using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
     Cont cont;
 
@@ -100,7 +100,7 @@ TEST(HashTable, Lookup)
 
 TEST(HashTable, Iteration)
 {
-    using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+    using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
     Cont cont;
 
@@ -118,7 +118,7 @@ TEST(HashTable, Erase)
 {
     {
         /// Check zero element deletion
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         cont.insert(0);
@@ -130,7 +130,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(0) == nullptr);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [.(1)..............] erase of (1).
@@ -143,7 +143,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(1) == nullptr);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [.(1)(2)(3)............] erase of (1) does not break search for (2) (3).
@@ -163,7 +163,7 @@ TEST(HashTable, Erase)
         ASSERT_EQ(cont.size(), 0);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [.(1)(17).............] erase of (1) breaks search for (17) because their natural position is 1.
@@ -175,7 +175,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(17) != nullptr && cont.find(17)->getKey() == 17);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [.(1)(2)(3)(17)...........] erase of (2) breaks search for (17) because their natural position is 1.
@@ -192,7 +192,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(17) != nullptr && cont.find(17)->getKey() == 17);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [(16)(30)............(14)(15)] erase of (16) breaks search for (30) because their natural position is 14.
@@ -208,7 +208,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(30) != nullptr && cont.find(30)->getKey() == 30);
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<4>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<4>>;
         Cont cont;
 
         /// [(16)(30)............(14)(15)] erase of (15) breaks search for (30) because their natural position is 14.
@@ -224,7 +224,7 @@ TEST(HashTable, Erase)
         ASSERT_TRUE(cont.find(30) != nullptr && cont.find(30)->getKey() == 30);
     }
     {
-        using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+        using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
         Cont cont;
 
         for (size_t i = 0; i < 5000; ++i)
@@ -260,7 +260,7 @@ TEST(HashTable, SerializationDeserialization)
 {
     {
         /// Use dummy hash to make it reproducible if default hash implementation will be changed
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<1>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
         Cont cont;
 
@@ -282,7 +282,7 @@ TEST(HashTable, SerializationDeserialization)
         ASSERT_EQ(convertToSet(cont), convertToSet(deserialized));
     }
     {
-        using Cont = HashSet<int, DefaultHash<int>, HashTableGrower<1>>;
+        using Cont = HashSet<int, DefaultHash<int>, HashTableGrowerWithPrecalculation<1>>;
 
         Cont cont;
 
@@ -300,7 +300,7 @@ TEST(HashTable, SerializationDeserialization)
         ASSERT_EQ(convertToSet(cont), convertToSet(deserialized));
     }
     {
-        using Cont = HashSet<int, DummyHash<int>, HashTableGrower<1>>;
+        using Cont = HashSet<int, DummyHash<int>, HashTableGrowerWithPrecalculation<1>>;
         Cont cont;
 
         WriteBufferFromOwnString wb;
