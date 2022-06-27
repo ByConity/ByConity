@@ -1,6 +1,5 @@
 SET enable_optimize_predicate_expression = 1;
 SET joined_subquery_requires_alias = 0;
-set enable_optimizer = 0;
 
 -- https://github.com/ClickHouse/ClickHouse/issues/3885
 -- https://github.com/ClickHouse/ClickHouse/issues/5485
@@ -9,7 +8,7 @@ SELECT k, v, d, i FROM (SELECT t.1 AS k, t.2 AS v, runningDifference(v) AS d, ru
 
 -- https://github.com/ClickHouse/ClickHouse/issues/5682
 EXPLAIN SYNTAX SELECT co,co2,co3,num FROM ( SELECT co,co2,co3,count() AS num FROM ( SELECT 1 AS co,2 AS co2 ,3 AS co3 ) GROUP BY cube (co,co2,co3) ) WHERE co!=0 AND co2 !=2;
-SELECT co,co2,co3,num FROM ( SELECT co,co2,co3,count() AS num FROM ( SELECT 1 AS co,2 AS co2 ,3 AS co3 ) GROUP BY cube (co,co2,co3) ) WHERE co!=0 AND co2 !=2;
+SELECT co,co2,co3,num FROM ( SELECT co,co2,co3,count() AS num FROM ( SELECT 1 AS co,2 AS co2 ,3 AS co3 ) GROUP BY cube (co,co2,co3) ) WHERE co!=0 AND co2 !=2 SETTINGS enable_optimizer = 0;
 
 -- https://github.com/ClickHouse/ClickHouse/issues/6734
 EXPLAIN SYNTAX SELECT alias AS name FROM ( SELECT name AS alias FROM system.settings ) ANY INNER JOIN ( SELECT name FROM system.settings ) USING (name) WHERE name = 'enable_optimize_predicate_expression';

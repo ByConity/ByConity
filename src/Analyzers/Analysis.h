@@ -32,7 +32,12 @@ struct JoinUsingAnalysis
 {
     std::vector<ASTPtr> join_key_asts;
     std::vector<size_t> left_join_fields;
+    DataTypes left_coercions;
     std::vector<size_t> right_join_fields;
+    DataTypes right_coercions;
+    // field index of scope -> join key index of using list
+    std::unordered_map<size_t, size_t> left_join_field_reverse_map;
+    std::unordered_map<size_t, size_t> right_join_field_reverse_map;
     std::vector<bool> require_right_keys;
 };
 
@@ -40,9 +45,14 @@ struct JoinEqualityCondition
 {
     ASTPtr left_ast;
     ASTPtr right_ast;
+    DataTypePtr left_coercion;
+    DataTypePtr right_coercion;
 
-    JoinEqualityCondition(ASTPtr left_ast_, ASTPtr right_ast_)
-        : left_ast(std::move(left_ast_)), right_ast(std::move(right_ast_))
+    JoinEqualityCondition(ASTPtr left_ast_, ASTPtr right_ast_, DataTypePtr left_coercion_, DataTypePtr right_coercion_)
+        : left_ast(std::move(left_ast_))
+        , right_ast(std::move(right_ast_))
+        , left_coercion(std::move(left_coercion_))
+        , right_coercion(std::move(right_coercion_))
     {}
 };
 
@@ -51,9 +61,15 @@ struct JoinInequalityCondition
     ASTPtr left_ast;
     ASTPtr right_ast;
     ASOF::Inequality inequality;
+    DataTypePtr left_coercion;
+    DataTypePtr right_coercion;
 
-    JoinInequalityCondition(ASTPtr left_ast_, ASTPtr right_ast_, ASOF::Inequality inequality_)
-        : left_ast(std::move(left_ast_)), right_ast(std::move(right_ast_)), inequality(inequality_)
+    JoinInequalityCondition(ASTPtr left_ast_, ASTPtr right_ast_, ASOF::Inequality inequality_, DataTypePtr left_coercion_, DataTypePtr right_coercion_)
+        : left_ast(std::move(left_ast_))
+        , right_ast(std::move(right_ast_))
+        , inequality(inequality_)
+        , left_coercion(std::move(left_coercion_))
+        , right_coercion(std::move(right_coercion_))
     {}
 };
 
@@ -294,10 +310,16 @@ struct Analysis
     const std::vector<SubColumnIDSet> & getUsedSubColumns(const IAST & table_ast);
 
     /// Type coercion
-    //  A scalar subquery should cast its type to Nullable type
-    std::unordered_set<ASTPtr> scalar_subquery_nullable_coercions;
-    void setScalarSubqueryNullableCoercion(const ASTPtr & subquery);
-    bool getScalarSubqueryNullableCoercion(const ASTPtr & subquery);
+    // expression-level coercion
+    std::unordered_map<ASTPtr, DataTypePtr> type_coercions;
+    void setTypeCoercion(const ASTPtr & expression, const DataTypePtr & coerced_type);
+    DataTypePtr getTypeCoercion(const ASTPtr & expression);
+
+    // Type coercion for set operation element
+    std::unordered_map<IAST *, DataTypes> relation_type_coercions;
+    void setRelationTypeCoercion(IAST &, const DataTypes &);
+    bool hasRelationTypeCoercion(IAST &);
+    const DataTypes & getRelationTypeCoercion(IAST &);
 };
 
 }

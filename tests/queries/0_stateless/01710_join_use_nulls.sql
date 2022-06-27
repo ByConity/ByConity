@@ -1,4 +1,3 @@
-set enable_optimizer=0; -- join key type
 DROP TABLE IF EXISTS X;
 DROP TABLE IF EXISTS Y;
 

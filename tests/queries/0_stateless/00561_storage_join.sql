@@ -1,4 +1,3 @@
-set enable_optimizer=0; -- join table
 drop table IF EXISTS joinbug;
 
 CREATE TABLE joinbug (

@@ -30,10 +30,12 @@ struct PlanBuilder
     {
     }
 
-    PlanNodePtr & getRoot() { return plan; }
+    PlanNodePtr getRoot() { return plan; }
+    TranslationMapPtr getTranslation() { return translation; }
 
     // delegation methods
     void addStep(QueryPlanStepPtr step, PlanNodes children = {});
+    void withNewRoot(const PlanNodePtr & new_root) { plan = new_root; }
     const DataStream & getCurrentDataStream() const { return plan->getCurrentDataStream(); }
     Names getOutputNames() const { return plan->getOutputNames(); }
     NamesAndTypes getOutputNamesAndTypes() const { return plan->getOutputNamesAndTypes(); }

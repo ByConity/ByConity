@@ -1,5 +1,4 @@
 SET max_threads = 1;
-set enable_optimizer=0; -- union type
 
 SELECT * FROM (SELECT 1 as x UNION ALL SELECT -1) ORDER BY x DESC;
 SELECT * FROM (SELECT x, toTypeName(x) FROM (SELECT 1 AS x UNION ALL SELECT -1)) ORDER BY x DESC;

@@ -13,6 +13,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeSet.h>
 #include <DataTypes/FieldToDataType.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/misc.h>
@@ -58,6 +59,7 @@ public:
         analysis(analysis_),
         options(std::move(options_)),
         use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI),
+        enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion),
         scopes({scope_})
     {}
 
@@ -68,6 +70,7 @@ private:
     Analysis & analysis;
     const ExprAnalyzerOptions options;
     const bool use_ansi_semantic;
+    const bool enable_implicit_type_conversion;
 
     std::vector<ScopePtr> scopes;
     // whether we are in an aggregate function
@@ -236,13 +239,13 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const
 {
     auto type = handleSubquery(node);
 
-    // when a scalar subquery has 0 rows, it returns NULL instead, hence we change its type to Nullable type
+    // when a scalar subquery has 0 rows, it returns NULL, hence we change its type to Nullable type
     // note that this feature is not compatible with subquery with multiple output returning Tuple type
     // see test 00420_null_in_scalar_subqueries
     if (!type->isNullable() && type->canBeInsideNullable())
     {
         type = makeNullable(type);
-        analysis.setScalarSubqueryNullableCoercion(node);
+        analysis.setTypeCoercion(node, type);
     }
 
     analysis.scalar_subqueries[options.select_query].push_back(node);
@@ -469,9 +472,24 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeGroupingOperation(ASTFunctionP
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeInSubquery(ASTFunctionPtr & function)
 {
-    // TODO: check type compatible
-    process(function->arguments->children[0]);
-    handleSubquery(function->arguments->children[1]);
+    auto & lhs_ast = function->arguments->children[0];
+    auto & rhs_ast = function->arguments->children[1];
+    auto lhs_type = process(lhs_ast).type;
+    auto rhs_type = handleSubquery(rhs_ast);
+
+    if (!lhs_type->equals(*rhs_type))
+    {
+        DataTypePtr super_type = nullptr;
+        if (enable_implicit_type_conversion)
+            super_type = getLeastSupertype({lhs_type, rhs_type});
+        if (!super_type)
+            throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
+        if (!lhs_type->equals(*super_type))
+            analysis.setTypeCoercion(lhs_ast, super_type);
+        if (!rhs_type->equals(*super_type))
+            analysis.setTypeCoercion(rhs_ast, super_type);
+    }
+
     analysis.in_subqueries[options.select_query].push_back(function);
     return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
 }

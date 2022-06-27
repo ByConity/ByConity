@@ -662,6 +662,7 @@ class IColumn;
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
+    M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \

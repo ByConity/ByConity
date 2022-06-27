@@ -7,6 +7,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
@@ -60,11 +61,12 @@ public:
     Void visitASTSubquery(ASTPtr & node, const Void &) override;
 
     QueryAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr outer_query_scope_):
-        context(std::move(context_)),
-        analysis(analysis_),
-        outer_query_scope(outer_query_scope_),
-        use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
+        context(std::move(context_))
+        , analysis(analysis_)
+        , outer_query_scope(outer_query_scope_)
+        , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
+        , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
     {}
 
 private:
@@ -73,6 +75,7 @@ private:
     const ScopePtr outer_query_scope;
     const bool use_ansi_semantic;
     const bool enable_shared_cte;
+    const bool enable_implicit_type_conversion;
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -214,47 +217,76 @@ Void QueryAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 
 void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
 {
-    process(selects[0]);
-    FieldDescriptions set_output_desc = analysis.getOutputDescription(*selects[0]);
+    size_t column_size = 0;
 
-    for (size_t query_num = 1; query_num < selects.size(); ++query_num)
+    // analyze union elements
+    for (auto & select: selects)
     {
-        auto & set_elem = selects[query_num];
-        process(set_elem);
-        const auto & set_elem_output_desc = analysis.getOutputDescription(*set_elem);
+        process(select);
 
-        if (set_elem_output_desc.size() != set_output_desc.size())
-            throw Exception(
-                "Different number of columns for UNION ALL elements(the first and the " +
-                    std::to_string(query_num) +"-th): " + serializeAST(*node),
-                ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+        if (column_size == 0)
+            column_size = analysis.getOutputDescription(*select).size();
+        else if (column_size != analysis.getOutputDescription(*select).size())
+            throw Exception("Different number of columns for UNION ALL elements: " + serializeAST(*node),
+                            ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+    }
 
-        for (size_t column_num = 0; column_num < set_output_desc.size(); ++column_num)
+    // analyze output fields
+    FieldDescriptions output_desc;
+    if (selects.size() == 1)
+    {
+        output_desc = analysis.getOutputDescription(*selects[0]);
+    }
+    else
+    {
+        auto & first_input_desc = analysis.getOutputDescription(*selects[0]);
+
+        for (size_t column_idx = 0; column_idx < column_size; ++column_idx)
         {
-            if (set_output_desc[column_num].type->getName() != set_elem_output_desc[column_num].type->getName())
-            {
-                auto expect_type = set_output_desc[column_num].type->getName();
-                auto actual_type = set_elem_output_desc[column_num].type->getName();
-                std::ostringstream errormsg;
-                errormsg << "Different type of columns in UNION ALL elements(the first and the "
-                         << query_num << "-th): " << serializeAST(*node) << ", the " << column_num
-                         << "-th column should be " << expect_type << " but actually is " << actual_type;
-                throw Exception(errormsg.str(), ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
-            }
-            // TODO@jingpeng type coercion
-        }
+            DataTypes elem_types;
+            for (auto & select: selects)
+                elem_types.push_back(analysis.getOutputDescription(*select)[column_idx].type);
 
-        // if there are set operations, invalidate origin_table/origin_column/...
-        if (query_num == 1)
-        {
-            for (auto & col : set_output_desc)
-            {
-                col = FieldDescription {col.name, col.type};
-            }
+            // promote output type to super type if necessary
+            auto output_type = getLeastSupertype(elem_types);
+            output_desc.emplace_back(first_input_desc[column_idx].name, output_type);
         }
     }
 
-    analysis.setOutputDescription(*node, set_output_desc);
+    // record type coercion
+    if (selects.size() != 1)
+    {
+        for (auto & select: selects)
+        {
+            auto & input_desc = analysis.getOutputDescription(*select);
+            DataTypes type_coercion(column_size, nullptr);
+
+            for (size_t column_idx = 0; column_idx < column_size; ++column_idx)
+            {
+                auto input_type = input_desc[column_idx].type;
+                auto output_type = output_desc[column_idx].type;
+
+                if (!input_type->equals(*output_type))
+                {
+                    if (enable_implicit_type_conversion)
+                    {
+                        type_coercion[column_idx] = output_type;
+                    }
+                    else
+                    {
+                        std::ostringstream errormsg;
+                        errormsg << "Column type mismatch for UNION: " << serializeAST(*node) << ", expect type: "
+                                 << output_type->getName() << ", but found type: " << input_type->getName();
+                        throw Exception(errormsg.str(), ErrorCodes::UNION_ALL_RESULT_STRUCTURES_MISMATCH);
+                    }
+                }
+            }
+
+            analysis.setRelationTypeCoercion(*select, type_coercion);
+        }
+    }
+
+    analysis.setOutputDescription(*node, output_desc);
 }
 
 ScopePtr QueryAnalyzerVisitor::analyzeWithoutFrom(ASTSelectQuery & select_query)
@@ -598,13 +630,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
     std::vector<ASTPtr> join_key_asts;
     std::vector<size_t> left_join_fields;
     std::vector<size_t> right_join_fields;
+    DataTypes left_coercions;
+    DataTypes right_coercions;
+    std::unordered_map<size_t, size_t> left_join_field_reverse_map;
+    std::unordered_map<size_t, size_t> right_join_field_reverse_map;
     std::vector<bool> require_right_keys;  // Clickhouse semantic specific
     NameSet seen_names;
     FieldDescriptions output_fields;
 
     if (use_ansi_semantic)
     {
-        auto resolve_name = [&](const QualifiedName & name, ScopePtr scope, bool left, std::vector<size_t> & join_field_indices) -> ResolvedField
+        auto resolve_join_key = [&](const QualifiedName & name, ScopePtr scope, bool left, std::vector<size_t> & join_field_indices) -> ResolvedField
         {
             std::optional<ResolvedField> resolved = scope->resolveFieldByAnsi(name);
 
@@ -633,20 +669,30 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             join_key_asts.push_back(join_key_ast);
             QualifiedName qualified_name {iden->name()};
 
-            resolve_name(qualified_name, left_scope, true, left_join_fields);
-            resolve_name(qualified_name, right_scope, false, right_join_fields);
+            auto left_field = resolve_join_key(qualified_name, left_scope, true, left_join_fields);
+            auto right_field = resolve_join_key(qualified_name, right_scope, false, right_join_fields);
+            auto left_type = left_field.getFieldDescription().type;
+            auto right_type = right_field.getFieldDescription().type;
+            DataTypePtr output_type = nullptr;
 
-            // TODO: check type compatibility & add type coercion if possible
+            if (left_type->equals(*right_type))
+            {
+                output_type = left_type;
+            }
+            else if (enable_implicit_type_conversion)
+            {
+                output_type = getLeastSupertype({left_type, right_type});
+            }
+
+            if (!output_type)
+                throw Exception("Type mismatch for join keys: " + serializeAST(table_join), ErrorCodes::TYPE_MISMATCH);
+
+            left_coercions.push_back(left_type->equals(*output_type) ? nullptr : output_type);
+            right_coercions.push_back(right_type->equals(*output_type) ? nullptr : output_type);
+            output_fields.emplace_back(left_field.getFieldDescription().name, output_type);
         }
 
-        /// Step 2. build output info
-        // join fields are from left table
-        for (auto & field_id : left_join_fields)
-        {
-            const auto & origin_field = left_scope->at(field_id);
-            output_fields.emplace_back(origin_field.name, origin_field.type);
-        }
-
+        /// Step 2. add non join fields
         auto add_non_join_fields = [&](ScopePtr scope, std::vector<size_t> & join_fields_list)
         {
             std::unordered_set<size_t> join_fields {join_fields_list.begin(), join_fields_list.end()};
@@ -663,9 +709,12 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
     }
     else
     {
+        DataTypes join_key_output_types;
+
         /// Step 1. resolve join key
-        for (const auto& join_key_ast : expr_list)
+        for (size_t i = 0, true_index = 0; i < expr_list.size(); ++i)
         {
+            const auto & join_key_ast = expr_list[i];
             String key_name = join_key_ast->getAliasOrColumnName();
 
             // see also 00702_join_with_using:
@@ -685,11 +734,15 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             //     LIMIT 10
             // In rewrite phase, identifier 'n' will be rewritten to 'number / 2 AS n'.
             // For this case, we record join field as -1, and plan an additional projection before join.
-            ExprAnalyzer::analyze(join_key_ast, left_scope, context, analysis, "JOIN USING"s);
+            auto left_type = ExprAnalyzer::analyze(join_key_ast, left_scope, context, analysis, "JOIN USING"s);
+            size_t left_field_index = -1;
             if (auto col_ref = analysis.tryGetColumnReference(join_key_ast))
-                left_join_fields.emplace_back(col_ref->hierarchy_index);
-            else
-                left_join_fields.emplace_back(-1);
+            {
+                left_field_index = col_ref->hierarchy_index;
+            }
+            left_join_fields.emplace_back(left_field_index);
+            left_join_field_reverse_map[left_field_index] = true_index;
+
 
             // resolve name in right table
             auto resolved = right_scope->resolveFieldByClickhouse(key_name);
@@ -698,22 +751,44 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
                 throw Exception("Can not find column " + key_name + " on right side", ErrorCodes::UNKNOWN_IDENTIFIER);
 
             right_join_fields.emplace_back(resolved->hierarchy_index);
+            right_join_field_reverse_map[resolved->hierarchy_index] = true_index;
+
+            auto right_type = resolved->getFieldDescription().type;
+            DataTypePtr output_type = nullptr;
+
+            if (left_type->equals(*right_type))
+            {
+                output_type = left_type;
+            }
+            else if (enable_implicit_type_conversion)
+            {
+                output_type = getLeastSupertype({left_type, right_type});
+            }
+
+            if (!output_type)
+                throw Exception("Type mismatch for join keys: " + serializeAST(table_join), ErrorCodes::TYPE_MISMATCH);
+
+            join_key_output_types.push_back(output_type);
+            left_coercions.push_back(left_type->equals(*output_type) ? nullptr : output_type);
+            right_coercions.push_back(right_type->equals(*output_type) ? nullptr : output_type);
+
+            ++true_index;
         }
 
         /// Step 2. build output info
-
         // process left
         for (size_t i = 0; i < left_scope->size(); ++i)
         {
             const auto & input_field = left_scope->at(i);
 
-            if (std::find(left_join_fields.begin(), left_join_fields.end(), i) == left_join_fields.end())
+            // TODO: one column used as multiple keys? e.g. SELECT a AS c, a AS d FROM (SELECT a, b FROM x) JOIN (SELECT c, d FROM y) USING (c, d)
+            if (left_join_field_reverse_map.count(i))
             {
-                output_fields.emplace_back(input_field);
+                output_fields.emplace_back(input_field.name, join_key_output_types[left_join_field_reverse_map[i]]);
             }
             else
             {
-                output_fields.emplace_back(input_field.name, input_field.type);
+                output_fields.emplace_back(input_field);
             }
         }
 
@@ -725,30 +800,33 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
         auto source_columns = collectNames(left_scope);
         auto required_columns = columns_context.requiredColumns();
         require_right_keys.resize(right_join_fields.size(), false);
-        std::unordered_map<size_t, size_t> right_joins_field_reverse_map;
-
-        for (size_t i = 0; i < right_join_fields.size(); ++i)
-            right_joins_field_reverse_map[right_join_fields[i]] = i;
 
         for (size_t i = 0; i < right_scope->size(); ++i)
         {
             const auto & input_field = right_scope->at(i);
             auto new_name = qualifyJoinedName(input_field.name, right_table_qualifier, source_columns);
 
-            if (right_joins_field_reverse_map.find(i) == right_joins_field_reverse_map.end())
+            if (!right_join_field_reverse_map.count(i))
             {
                 output_fields.emplace_back(input_field.withNewName(new_name));
             }
-            else if (required_columns.find(new_name) != required_columns.end() &&
-                     source_columns.find(new_name) == source_columns.end())
+            else if (required_columns.count(new_name) && !source_columns.count(new_name))
             {
-                output_fields.emplace_back(new_name, input_field.type);
-                require_right_keys[right_joins_field_reverse_map[i]] = true;
+                auto join_key_index = right_join_field_reverse_map[i];
+                output_fields.emplace_back(new_name, join_key_output_types[join_key_index]);
+                require_right_keys[join_key_index] = true;
             }
         }
     }
 
-    analysis.join_using_results[&table_join] = JoinUsingAnalysis {join_key_asts, left_join_fields, right_join_fields, require_right_keys};
+    analysis.join_using_results[&table_join] = JoinUsingAnalysis {join_key_asts
+                                                                 , left_join_fields
+                                                                 , left_coercions
+                                                                 , right_join_fields
+                                                                 , right_coercions
+                                                                 , left_join_field_reverse_map
+                                                                 , right_join_field_reverse_map
+                                                                 , require_right_keys};
     return createScope(output_fields);
 }
 
@@ -848,17 +926,44 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
 
                 using namespace ASOF;
 
-                auto add_join_exprs = [&](const ASTPtr & first_table_ast, const ASTPtr & second_table_ast, Inequality inequality)
+                auto add_join_exprs = [&](const ASTPtr & left_ast, const ASTPtr & right_ast, Inequality inequality)
                 {
+                    DataTypePtr left_coercion = nullptr;
+                    DataTypePtr right_coercion = nullptr;
+
+                    // for non-ASOF join, inequality_conditions will be included in join filter, so don't have to do type coercion
+                    if (func->name == "equals" || isAsofJoin(table_join))
+                    {
+                        DataTypePtr left_type = analysis.getExpressionType(left_ast);
+                        DataTypePtr right_type = analysis.getExpressionType(right_ast);
+
+                        if (!left_type->equals(*right_type))
+                        {
+                            DataTypePtr super_type = nullptr;
+
+                            if (enable_implicit_type_conversion)
+                            {
+                                super_type = getLeastSupertype({left_type, right_type});
+                                if (!left_type->equals(*super_type))
+                                    left_coercion = super_type;
+                                if (!right_type->equals(*super_type))
+                                    right_coercion = super_type;
+                            }
+
+                            if (!super_type){
+                                throw Exception("Type mismatch for join keys: " + serializeAST(table_join), ErrorCodes::TYPE_MISMATCH);
+                            }
+                        }
+                    }
+
                     if (func->name == "equals")
-                        equality_conditions.emplace_back(first_table_ast, second_table_ast);
+                        equality_conditions.emplace_back(left_ast, right_ast, left_coercion, right_coercion);
                     else
-                        inequality_conditions.emplace_back(first_table_ast, second_table_ast, inequality);
+                        inequality_conditions.emplace_back(left_ast, right_ast, inequality, left_coercion, right_coercion);
 
                     is_join_expr = true;
                 };
 
-                // TODO: check type compatibility & add type coercion if possible
                 if (table_for_left == 1 && table_for_right == 2)
                     add_join_exprs(left_arg, right_arg, getInequality(func->name));
                 else if (table_for_left == 2 && table_for_right == 1)

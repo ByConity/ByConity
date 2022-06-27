@@ -2,6 +2,7 @@
 
 #include <Core/Types.h>
 #include <Core/NamesAndTypes.h>
+#include <Core/Block.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -57,6 +58,11 @@ inline ASTPtr toSymbolRef(const String & symbol_name)
 }
 
 void putIdentities(const NamesAndTypes & columns, Assignments & assignments, NameToType & types);
+
+inline void putIdentities(const Block & block, Assignments & assignments, NameToType & types)
+{
+    putIdentities(block.getNamesAndTypes(), assignments, types);
+}
 
 FieldSymbolInfos mapSymbols(const FieldSymbolInfos & field_symbol_infos, const std::unordered_map<String, String> & old_to_new);
 

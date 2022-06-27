@@ -265,14 +265,29 @@ const std::unordered_map<String, ResolvedWindowPtr> & Analysis::getRegisteredWin
     return registered_windows[&select_query];
 }
 
-void Analysis::setScalarSubqueryNullableCoercion(const ASTPtr & subquery)
+void Analysis::setTypeCoercion(const ASTPtr & expression, const DataTypePtr & coerced_type)
 {
-    scalar_subquery_nullable_coercions.insert(subquery);
+    type_coercions[expression] = coerced_type;
 }
 
-bool Analysis::getScalarSubqueryNullableCoercion(const ASTPtr & subquery)
+DataTypePtr Analysis::getTypeCoercion(const ASTPtr & expression)
 {
-    return scalar_subquery_nullable_coercions.find(subquery) != scalar_subquery_nullable_coercions.end();
+    return type_coercions.count(expression) ? type_coercions[expression] : nullptr;
+}
+
+void Analysis::setRelationTypeCoercion(IAST & ast, const DataTypes & coerced_types)
+{
+    MAP_SET(relation_type_coercions, &ast, coerced_types);
+}
+
+bool Analysis::hasRelationTypeCoercion(IAST & ast)
+{
+    return relation_type_coercions.count(&ast);
+}
+
+const DataTypes & Analysis::getRelationTypeCoercion(IAST & ast)
+{
+    MAP_GET(relation_type_coercions, &ast);
 }
 
 void Analysis::setSubColumnReference(const ASTPtr & ast, const SubColumnReference & reference)
