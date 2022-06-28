@@ -60,6 +60,11 @@ public:
     {
         file_in.setProfileCallback(profile_callback_, clock_type_);
     }
+
+    String getPath() const
+    {
+        return file_in.getFileName();
+    }
 };
 
 }

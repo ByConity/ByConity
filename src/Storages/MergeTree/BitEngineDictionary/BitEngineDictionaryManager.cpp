@@ -600,7 +600,7 @@ void BitEngineDictionaryManager::finalizeEncodedPart(
 
     if (new_data_part->uuid != UUIDHelpers::Nil)
     {
-        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, 4096);
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::UUID_FILE_NAME, {.buffer_size = 4096});
         HashingWriteBuffer out_hashing(*out);
         writeUUIDText(new_data_part->uuid, out_hashing);
         new_data_part->getChecksums()->files[IMergeTreeDataPart::UUID_FILE_NAME].file_size = out_hashing.count();
@@ -621,21 +621,21 @@ void BitEngineDictionaryManager::finalizeEncodedPart(
     {
         /// Write file with checksums.
 //        LOG_DEBUG(log, "Now write checksums.txt");
-        auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", 4096);
+        auto out_checksums = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "checksums.txt", {.buffer_size = 4096});
         new_data_part->getChecksums()->versions = new_data_part->versions;
         new_data_part->getChecksums()->write(*out_checksums);
     } /// close fd
 
     {
 //        LOG_DEBUG(log, "Now write codec file name");
-        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, 4096);
+        auto out = disk->writeFile(new_data_part->getFullRelativePath() + IMergeTreeDataPart::DEFAULT_COMPRESSION_CODEC_FILE_NAME, {.buffer_size = 4096});
         DB::writeText(queryToString(codec->getFullCodecDesc()), *out);
     }
 
     {
         /// Write a file with a description of columns.
 //        LOG_DEBUG(log, "Now write columns.txt");
-        auto out_columns = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "columns.txt", 4096);
+        auto out_columns = disk->writeFile(fs::path(new_data_part->getFullRelativePath()) / "columns.txt", {.buffer_size = 4096});
         new_data_part->getColumns().writeText(*out_columns);
     } /// close fd
 

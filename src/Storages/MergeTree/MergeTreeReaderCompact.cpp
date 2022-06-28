@@ -52,11 +52,14 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
             [&, full_data_path, buffer_size]() {
                 return data_part->volume->getDisk()->readFile(
                     full_data_path,
-                    buffer_size,
-                    0,
-                    settings.min_bytes_to_use_direct_io,
-                    settings.min_bytes_to_use_mmap_io,
-                    settings.mmap_cache.get());
+                    {
+                        .buffer_size = buffer_size,
+                        .estimated_size = 0,
+                        .aio_threshold = settings.min_bytes_to_use_direct_io,
+                        .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                        .mmap_cache = settings.mmap_cache.get()
+                    }
+                );
             },
             uncompressed_cache,
             /* allow_different_codecs = */ true);
@@ -75,11 +78,14 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
             data_part->volume->getDisk()->readFile(
                 full_data_path,
-                buffer_size,
-                0,
-                settings.min_bytes_to_use_direct_io,
-                settings.min_bytes_to_use_mmap_io,
-                settings.mmap_cache.get()),
+                {
+                    .buffer_size = buffer_size,
+                    .estimated_size = 0,
+                    .aio_threshold = settings.min_bytes_to_use_direct_io,
+                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                    .mmap_cache = settings.mmap_cache.get()
+                }
+            ),
             /* allow_different_codecs = */ true);
 
         if (profile_callback_)

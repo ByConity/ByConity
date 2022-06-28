@@ -93,7 +93,7 @@ DiskHDFS::DiskHDFS(
 }
 
 
-std::unique_ptr<ReadBufferFromFileBase> DiskHDFS::readFile(const String & path, size_t buf_size, size_t, size_t, size_t, MMappedFileCache *) const
+std::unique_ptr<ReadBufferFromFileBase> DiskHDFS::readFile(const String & path, const ReadSettings& rd_settings) const
 {
     auto metadata = readMeta(path);
 
@@ -101,26 +101,26 @@ std::unique_ptr<ReadBufferFromFileBase> DiskHDFS::readFile(const String & path, 
         "Read from file by path: {}. Existing HDFS objects: {}",
         backQuote(metadata_path + path), metadata.remote_fs_objects.size());
 
-    auto reader = std::make_unique<ReadIndirectBufferFromHDFS>(config, remote_fs_root_path, metadata, buf_size);
+    auto reader = std::make_unique<ReadIndirectBufferFromHDFS>(config, remote_fs_root_path, metadata, rd_settings.buffer_size);
     return std::make_unique<SeekAvoidingReadBuffer>(std::move(reader), settings->min_bytes_for_seek);
 }
 
 
-std::unique_ptr<WriteBufferFromFileBase> DiskHDFS::writeFile(const String & path, size_t buf_size, WriteMode mode)
+std::unique_ptr<WriteBufferFromFileBase> DiskHDFS::writeFile(const String & path, const WriteSettings& wr_settings)
 {
-    auto metadata = readOrCreateMetaForWriting(path, mode);
+    auto metadata = readOrCreateMetaForWriting(path, wr_settings.mode);
 
     /// Path to store new HDFS object.
     auto file_name = getRandomName();
     auto hdfs_path = remote_fs_root_path + file_name;
 
-    LOG_DEBUG(log, "{} to file by path: {}. HDFS path: {}", mode == WriteMode::Rewrite ? "Write" : "Append",
+    LOG_DEBUG(log, "{} to file by path: {}. HDFS path: {}", wr_settings.mode == WriteMode::Rewrite ? "Write" : "Append",
               backQuote(metadata_path + path), remote_fs_root_path + hdfs_path);
 
     /// Single O_WRONLY in libhdfs adds O_TRUNC
     auto hdfs_buffer = std::make_unique<WriteBufferFromHDFS>(hdfs_path,
-                                                             config, buf_size,
-                                                             mode == WriteMode::Rewrite ? O_WRONLY :  O_WRONLY | O_APPEND);
+                                                             config, wr_settings.buffer_size,
+                                                             wr_settings.mode == WriteMode::Rewrite ? O_WRONLY :  O_WRONLY | O_APPEND);
 
     return std::make_unique<WriteIndirectBufferFromRemoteFS<WriteBufferFromHDFS>>(std::move(hdfs_buffer),
                                                                                 std::move(metadata),

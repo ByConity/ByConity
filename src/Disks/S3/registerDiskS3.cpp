@@ -33,13 +33,13 @@ namespace
 {
 void checkWriteAccess(IDisk & disk)
 {
-    auto file = disk.writeFile("test_acl", DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Rewrite);
+    auto file = disk.writeFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE, .mode = WriteMode::Rewrite});
     file->write("test", 4);
 }
 
 void checkReadAccess(const String & disk_name, IDisk & disk)
 {
-    auto file = disk.readFile("test_acl", DBMS_DEFAULT_BUFFER_SIZE);
+    auto file = disk.readFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE});
     String buf(4, '0');
     file->readStrict(buf.data(), 4);
     if (buf != "test")

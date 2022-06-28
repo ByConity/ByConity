@@ -1,6 +1,7 @@
 #pragma once
 
 #include <IO/ReadBufferFromFileBase.h>
+#include <IO/ReadSettings.h>
 #include <string>
 #include <memory>
 
@@ -20,11 +21,7 @@ class MMappedFileCache;
   */
 std::unique_ptr<ReadBufferFromFileBase> createReadBufferFromFileBase(
     const std::string & filename_,
-    size_t estimated_size,
-    size_t aio_threshold,
-    size_t mmap_threshold,
-    MMappedFileCache * mmap_cache,
-    size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+    const ReadSettings& settings_,
     int flags_ = -1,
     char * existing_memory_ = nullptr,
     size_t alignment = 0);

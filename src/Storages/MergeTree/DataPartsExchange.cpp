@@ -626,7 +626,7 @@ void Service::sendPartS3Metadata(const MergeTreeData::DataPartPtr & part, WriteB
         writeStringBinary(it.first, out);
         writeBinary(file_size, out);
 
-        auto file_in = createReadBufferFromFileBase(metadata_file, 0, 0, 0, nullptr, DBMS_DEFAULT_BUFFER_SIZE);
+        auto file_in = createReadBufferFromFileBase(metadata_file, {});
         HashingWriteBuffer hashing_out(out);
         copyDataWithThrottler(*file_in, hashing_out, blocker.getCounter(), data.getSendsThrottler());
         if (blocker.isCancelled())
@@ -1205,7 +1205,7 @@ void Fetcher::downloadBaseOrProjectionPartToDisk(
                 ErrorCodes::INSECURE_PATH);
 
         auto file_out = disk->writeFile(
-            fs::path(part_download_path) / file_name, DBMS_DEFAULT_BUFFER_SIZE, need_append ? WriteMode::Append : WriteMode::Rewrite);
+            fs::path(part_download_path) / file_name, {.mode = need_append ? WriteMode::Append : WriteMode::Rewrite});
         HashingWriteBuffer hashing_out(*file_out);
         copyDataWithThrottler(in, hashing_out, file_size, blocker.getCounter(), throttler);
 

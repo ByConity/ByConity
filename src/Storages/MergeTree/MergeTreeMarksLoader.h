@@ -28,6 +28,8 @@ public:
 
     bool initialized() const { return marks != nullptr; }
 
+    size_t marksCount() const { return marks_count; }
+
 private:
     DiskPtr disk;
     MarkCache * mark_cache = nullptr;

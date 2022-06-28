@@ -46,13 +46,9 @@ public:
 
     std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        size_t buf_size,
-        size_t estimated_size,
-        size_t aio_threshold,
-        size_t mmap_threshold,
-        MMappedFileCache * mmap_cache) const override;
+        const ReadSettings& rd_settings) const override;
 
-    std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, size_t buf_size, WriteMode mode) override;
+    std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, const WriteSettings& wr_settings) override;
 
     void removeFromRemoteFS(RemoteFSPathKeeperPtr fs_paths_keeper) override;
 

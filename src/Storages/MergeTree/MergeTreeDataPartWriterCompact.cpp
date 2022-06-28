@@ -29,9 +29,9 @@ MergeTreeDataPartWriterCompact::CompactDataWriter::CompactDataWriter(
     : default_codec(default_codec_)
     , marks_file_extension(marks_file_extension_)
     , plain_file(disk->writeFile(
-          part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION, settings.max_compress_block_size, WriteMode::Rewrite))
+          part_path + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION, {.buffer_size = settings.max_compress_block_size, .mode = WriteMode::Rewrite}))
     , plain_hashing(*plain_file)
-    , marks_file(disk->writeFile(part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension, 4096, WriteMode::Rewrite))
+    , marks_file(disk->writeFile(part_path + MergeTreeDataPartCompact::DATA_FILE_NAME + marks_file_extension, {.buffer_size = 4096, .mode = WriteMode::Rewrite}))
     , marks(*marks_file)
 {
 }

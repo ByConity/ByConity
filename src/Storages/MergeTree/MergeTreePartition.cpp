@@ -186,7 +186,7 @@ namespace
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
 {
-    return disk->readFile(path, std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path)));
+    return disk->readFile(path, {.buffer_size = std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path))});
 }
 
 String MergeTreePartition::getID(const MergeTreeMetaBase & storage) const

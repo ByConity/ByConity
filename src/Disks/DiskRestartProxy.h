@@ -45,12 +45,8 @@ public:
     void listFiles(const String & path, std::vector<String> & file_names) override;
     std::unique_ptr<ReadBufferFromFileBase> readFile(
         const String & path,
-        size_t buf_size,
-        size_t estimated_size,
-        size_t aio_threshold,
-        size_t mmap_threshold,
-        MMappedFileCache * mmap_cache) const override;
-    std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, size_t buf_size, WriteMode mode) override;
+        const ReadSettings& settings) const override;
+    std::unique_ptr<WriteBufferFromFileBase> writeFile(const String & path, const WriteSettings& setting) override;
     void removeFile(const String & path) override;
     void removeFileIfExists(const String & path) override;
     void removeDirectory(const String & path) override;

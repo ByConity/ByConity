@@ -69,7 +69,7 @@ CompressedReadBufferFromFile::CompressedReadBufferFromFile(
     size_t file_size_,
     bool is_limit_)
     : BufferWithOwnMemory<ReadBuffer>(0)
-    , p_file_in(createReadBufferFromFileBase(path, estimated_size, aio_threshold, mmap_threshold, mmap_cache, buf_size))
+    , p_file_in(createReadBufferFromFileBase(path, {.buffer_size = buf_size, .estimated_size = estimated_size, .aio_threshold = aio_threshold, .mmap_threshold = mmap_threshold, .mmap_cache = mmap_cache}))
     , file_in(*p_file_in)
     , limit_offset_in_file(file_offset_ + file_size_)
     , is_limit(is_limit_)

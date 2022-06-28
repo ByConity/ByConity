@@ -7,6 +7,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
+#include "Storages/DiskCache/IDiskCacheSegment.h"
 
 namespace DB
 {
@@ -34,6 +35,15 @@ String DiskCacheSegment::getSegmentKey(const IMergeTreeDataPartPtr & data_part, 
 {
     return IDiskCacheSegment::formatSegmentName(
         UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, column_name, segment_number_, extension);
+}
+
+String DiskCacheSegment::getSegmentKey(const StorageID& storage_id,
+    const String& part_name, const String& stream_name, UInt32 segment_index,
+    const String& extension)
+{
+    return IDiskCacheSegment::formatSegmentName(
+        UUIDHelpers::UUIDToString(storage_id.uuid), part_name, stream_name,
+        segment_index, extension);
 }
 
 String DiskCacheSegment::getSegmentName() const

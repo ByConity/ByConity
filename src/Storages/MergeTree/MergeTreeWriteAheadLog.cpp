@@ -51,7 +51,7 @@ MergeTreeWriteAheadLog::~MergeTreeWriteAheadLog()
 
 void MergeTreeWriteAheadLog::init()
 {
-    out = disk->writeFile(path, DBMS_DEFAULT_BUFFER_SIZE, WriteMode::Append);
+    out = disk->writeFile(path, {.mode = WriteMode::Append});
 
     /// Small hack: in NativeBlockOutputStream header is used only in `getHeader` method.
     /// To avoid complex logic of changing it during ALTERs we leave it empty.
@@ -123,7 +123,7 @@ MergeTreeData::MutableDataPartsVector MergeTreeWriteAheadLog::restore(const Stor
     std::unique_lock lock(write_mutex);
 
     MergeTreeData::MutableDataPartsVector parts;
-    auto in = disk->readFile(path, DBMS_DEFAULT_BUFFER_SIZE);
+    auto in = disk->readFile(path);
     NativeBlockInputStream block_in(*in, 0);
     NameSet dropped_parts;
 
