@@ -1,5 +1,6 @@
 #include <Optimizer/ExpressionInterpreter.h>
 
+#include <Analyzers/ASTEquals.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -43,7 +44,7 @@ static ASTPtr optimizerConjunctPredicate(const ConstASTPtr & node)
     // TODO@wangtao: optimize inside evaluate?
     //               optimize NULL, optimize OR, optimize recursive
     auto conjuncts = PredicateUtils::extractConjuncts(node);
-    std::unordered_set<ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals> conjuncts_set;
+    ASTSet<ConstASTPtr> conjuncts_set;
     std::vector<ASTPtr> simplify_conjuncts;
     for (auto & conjunct : conjuncts)
     {

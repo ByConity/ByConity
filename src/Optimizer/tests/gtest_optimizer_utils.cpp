@@ -1,3 +1,4 @@
+#include <Analyzers/ASTEquals.h>
 #include <Optimizer/Utils.h>
 
 #include <Parsers/ASTFunction.h>
@@ -11,7 +12,7 @@ using namespace DB;
 
 void checkAstTreeEquals(const ASTPtr & left, const ASTPtr & right, bool expect)
 {
-    if (expect != Utils::astTreeEquals(left, right))
+    if (expect != ASTEquality::compareTree(left, right))
         GTEST_FAIL() << "AST equal check fails, left: " << serializeAST(*left) << ", right: " << serializeAST(*right)
                      << ", expect: " << expect << std::endl;
 }

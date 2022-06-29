@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Analyzers/ASTEquals.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Parsers/ASTVisitor.h>
@@ -9,7 +10,7 @@
 
 namespace DB
 {
-using ConstASTMap = std::unordered_map<ConstASTPtr, ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals>;
+using ConstASTMap = ASTMap<ConstASTPtr, ConstASTPtr>;
 
 class ExpressionRewriter
 {

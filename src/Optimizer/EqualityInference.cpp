@@ -14,7 +14,7 @@ EqualityInference EqualityInference::newInstance(const ConstASTPtr & predicate, 
 EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> & predicates, ContextMutablePtr & context)
 {
     DisjointSet equalities;
-    std::unordered_set<ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals> candidates;
+    std::unordered_set<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> candidates;
     for (auto & predicate : predicates)
     {
         auto conjuncts = PredicateUtils::extractConjuncts(predicate);
@@ -37,7 +37,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
     std::vector<ConstASTSet> equivalent_classes = equalities.getEquivalentClasses();
 
     // Map every expression to the set of equivalent expressions
-    std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> by_expressions;
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> by_expressions;
     for (auto & equivalence : equivalent_classes)
     {
         for (auto & expr : equivalence)
@@ -77,8 +77,7 @@ EqualityInference EqualityInference::newInstance(const std::vector<ConstASTPtr> 
         }
     }
 
-    std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> equality_sets
-        = makeEqualitySets(equalities);
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets = makeEqualitySets(equalities);
     ConstASTMap canonical_mappings;
 
     for (auto & equality_set : equality_sets)
@@ -128,10 +127,10 @@ bool EqualityInference::mayReturnNullOnNonNullInput(const ASTFunction & predicat
     return false;
 }
 
-std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals>
+std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals>
 EqualityInference::makeEqualitySets(DisjointSet equalities)
 {
-    std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> equality_sets;
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets;
     auto equivalent_classes = equalities.getEquivalentClasses();
     for (auto & equivalent_class : equivalent_classes)
     {
@@ -179,7 +178,7 @@ ASTPtr EqualityInference::rewrite(const ConstASTPtr & expression, std::set<Strin
         ConstASTSet sub_expressions_remove_itself;
         for (auto & sub_expression : sub_expressions)
         {
-            if (!Utils::astTreeEquals(sub_expression, expression))
+            if (!ASTEquality::compareTree(sub_expression, expression))
             {
                 sub_expressions_remove_itself.emplace(sub_expression);
             }
@@ -398,7 +397,7 @@ ConstASTPtr DisjointSet::find(ConstASTPtr element)
 
 std::vector<ConstASTSet> DisjointSet::getEquivalentClasses()
 {
-    std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> root_to_tree_elements;
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> root_to_tree_elements;
     for (auto & entry : map)
     {
         const ConstASTPtr & node = entry.first;

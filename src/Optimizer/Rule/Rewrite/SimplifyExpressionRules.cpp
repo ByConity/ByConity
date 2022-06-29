@@ -255,7 +255,7 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
         else
             throw Exception("Unexpected result of ExpressionInterpreter::evaluate", ErrorCodes::LOGICAL_ERROR);
 
-        if (!Utils::ConstASTEquals()(assignments.back().second, assignment.second))
+        if (!ASTEquality::compareTree(assignments.back().second, assignment.second))
             rewrite = true;
     }
     if (!rewrite)

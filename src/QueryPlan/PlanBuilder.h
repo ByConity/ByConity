@@ -57,9 +57,13 @@ struct PlanBuilder
     {
         return translation->withScope(scope, field_symbol_infos, remove_mappings);
     }
-    TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos, const AstToSymbol & expression_symbols = {}) // NOLINT(readability-make-member-function-const)
+    TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos, const AstToSymbol & expression_symbols)
     {
         return translation->withNewMappings(field_symbol_infos, expression_symbols);
+    }
+    TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos)
+    {
+        return translation->withNewMappings(field_symbol_infos, createScopeAwaredASTMap<String>(analysis));
     }
     TranslationMap & removeMappings() { return translation->removeMappings(); } // NOLINT(readability-make-member-function-const)
     TranslationMap & withAdditionalMapping(const ASTPtr & expression, const String & symbol) // NOLINT(readability-make-member-function-const)
@@ -73,6 +77,7 @@ struct PlanBuilder
 
     // utils
     Names translateToSymbols(ASTs & expressions) const;
+    Names translateToUniqueSymbols(ASTs & expressions) const;
     void appendProjection(ASTs & expressions);
     void appendProjection(const ASTPtr & expression)
     {

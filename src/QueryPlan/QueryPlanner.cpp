@@ -647,7 +647,7 @@ void QueryPlannerVisitor::planJoinOn(ASTTableJoin & table_join, PlanBuilder & le
     // left_builder.setWithNonJoinStreamIfNecessary(table_join);
 
     // 6. for inner join, build a FilterNode for join filter
-    if (isNormalInnerJoin(table_join) && !Utils::astTreeEquals(join_filter, PredicateConst::TRUE_VALUE))
+    if (isNormalInnerJoin(table_join) && !ASTEquality::compareTree(join_filter, PredicateConst::TRUE_VALUE))
     {
         auto filter_step = std::make_shared<FilterStep>(left_builder.getCurrentDataStream(), join_filter);
         left_builder.addStep(filter_step);
@@ -1024,7 +1024,7 @@ PlanBuilder QueryPlannerVisitor::planFrom(ASTSelectQuery & select_query)
 
 void QueryPlannerVisitor::planFilter(PlanBuilder & builder, ASTSelectQuery & select_query, const ASTPtr & filter)
 {
-    if (!filter || Utils::astTreeEquals(filter, PredicateConst::TRUE_VALUE))
+    if (!filter || ASTEquality::compareTree(filter, PredicateConst::TRUE_VALUE))
         return;
 
     /// In clickhouse, if filter contains non-determinism functions reference to select, these functions may compute twice.
@@ -1071,10 +1071,10 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
     }
 
     // build aggregation descriptions
-    AstToSymbol mappings_for_aggregate;
+    AstToSymbol mappings_for_aggregate = createScopeAwaredASTMap<String>(analysis);
     AggregateDescriptions aggregate_descriptions;
 
-    auto uniq_aggs = deduplicateByAst(aggregate_analysis, std::mem_fn(&AggregateAnalysis::expression));
+    auto uniq_aggs = deduplicateByAst(aggregate_analysis, analysis, std::mem_fn(&AggregateAnalysis::expression));
     for (auto & agg_item: uniq_aggs)
     {
         AggregateDescription agg_desc;
@@ -1090,13 +1090,22 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     // build grouping operations
     // TODO: grouping function only work, when group by with rollup?
-    // TODO: use scope aware to dedup grouping
     NameToNameMap grouping_operations_descs;
     for (auto & grouping_op : analysis.getGroupingOperations(select_query))
     {
         auto arg_symbol = builder.translateToSymbol(grouping_op->arguments->children[0]);
-        auto output_symbol = context->getSymbolAllocator()->newSymbol(grouping_op);
-        grouping_operations_descs.emplace(arg_symbol, output_symbol);
+        String output_symbol;
+
+        if (!grouping_operations_descs.count(arg_symbol))
+        {
+            output_symbol = context->getSymbolAllocator()->newSymbol(grouping_op);
+            grouping_operations_descs.emplace(arg_symbol, output_symbol);
+        }
+        else
+        {
+            output_symbol = grouping_operations_descs.at(arg_symbol);
+        }
+
         mappings_for_aggregate.emplace(grouping_op, output_symbol);
     }
 
@@ -1105,7 +1114,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
     {
         NameSet grouping_key_set;
         FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
-        AstToSymbol complex_expressions;
+        AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
 
         for (auto & grouping_expr: group_by_analysis.grouping_expressions)
         {
@@ -1246,10 +1255,13 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
     // add window steps
     for (const auto & [_, window_desc]: window_descriptions)
     {
-        AstToSymbol mappings;
+        AstToSymbol mappings = createScopeAwaredASTMap<String>(analysis);
 
         for (const auto & window_func: window_desc.window_functions)
-            mappings.insert({window_func.function_node->shared_from_this(), window_func.column_name});
+        {
+            ASTPtr window_expr = std::const_pointer_cast<IAST>(window_func.function_node->shared_from_this());
+            mappings.emplace(window_expr, window_func.column_name);
+        }
 
         auto window_step = std::make_shared<WindowStep>(builder.getCurrentDataStream(), window_desc, true);
         builder.addStep(std::move(window_step));
@@ -1352,8 +1364,6 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
     if (!select_query.limitBy())
         return;
 
-    // TODO: use ScopeAware to deduplicate
-
     // project limit by keys
     ASTs & limit_by_expressions = select_query.limitBy()->children;
     planSubqueryExpression(builder, select_query, limit_by_expressions);
@@ -1365,7 +1375,7 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
                     builder.getCurrentDataStream(),
                     analysis.getLimitByValue(select_query),
                     0, // TODO
-                    builder.translateToSymbols(limit_by_expressions));
+                    builder.translateToUniqueSymbols(limit_by_expressions));
     builder.addStep(std::move(step));
     PRINT_PLAN(builder.plan, plan_limit_by);
 }

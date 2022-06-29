@@ -1,12 +1,13 @@
 #pragma once
 
+#include <Analyzers/ASTEquals.h>
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/Utils.h>
 
 namespace DB
 {
-using ConstASTSet = std::unordered_set<ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals>;
+using ConstASTSet = ASTSet<ConstASTPtr>;
 
 class ExpressionExtractor
 {

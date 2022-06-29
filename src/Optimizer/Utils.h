@@ -34,38 +34,6 @@ namespace Utils
         return checkFunctionName(function_ptr->as<ASTFunction &>(), expect_name);
     }
 
-    bool astTreeEquals(const IAST & left, const IAST & right);
-    inline bool astTreeEquals(const ASTPtr & left, const ASTPtr & right)
-    {
-        return (left == right) || (left && right && astTreeEquals(*left, *right));
-    }
-    inline bool astTreeEquals(const ConstASTPtr & left, const ConstASTPtr & right)
-    {
-        return (left == right) || (left && right && astTreeEquals(*left, *right));
-    }
-
-    bool astNodeEquals(const ASTFunction & left, const ASTFunction & right);
-    bool astNodeEquals(const ASTLiteral & left, const ASTLiteral & right);
-    bool astNodeEquals(const ASTIdentifier & left, const ASTIdentifier & right);
-    bool astNodeEquals(const ASTExpressionList & left, const ASTExpressionList & right);
-    bool astNodeEquals(const ASTWindowDefinition & left, const ASTWindowDefinition & right);
-    bool astNodeEquals(const ASTSubquery & left, const ASTSubquery & right);
-    bool astNodeEquals(const ASTOrderByElement & left, const ASTOrderByElement & right);
-
-    struct ASTHash
-    {
-        size_t operator()(const ASTPtr & ast) const
-        {
-            auto hash = ast->getTreeHash();
-            return static_cast<size_t>(hash.first ^ hash.second);
-        }
-    };
-
-    struct ASTEquals
-    {
-        bool operator()(const ASTPtr & left, const ASTPtr & right) const { return astTreeEquals(left, right); }
-    };
-
     /**
      * Ordering used to determine ASTPtr preference when determining canonicals
      *
@@ -77,26 +45,6 @@ namespace Utils
     struct ConstASTPtrOrdering
     {
         bool operator()(const ConstASTPtr & predicate_1, const ConstASTPtr & predicate_2) const;
-    };
-
-    struct ConstASTHash
-    {
-        size_t operator()(const ASTPtr & ast) const
-        {
-            auto hash = ast->getTreeHash();
-            return static_cast<size_t>(hash.first ^ hash.second);
-        }
-
-        size_t operator()(const ConstASTPtr & ast) const
-        {
-            auto hash = ast->getTreeHash();
-            return static_cast<size_t>(hash.first ^ hash.second);
-        }
-    };
-
-    struct ConstASTEquals
-    {
-        bool operator()(const ConstASTPtr & left, const ConstASTPtr & right) const { return astTreeEquals(left, right); }
     };
 
 }

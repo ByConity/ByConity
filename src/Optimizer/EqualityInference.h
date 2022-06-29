@@ -15,8 +15,8 @@ namespace DB
 {
 struct DisjointSet;
 struct EqualityPartition;
-using ConstASTMap = std::unordered_map<ConstASTPtr, ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals>;
-using ConstASTSet = std::unordered_set<ConstASTPtr, Utils::ConstASTHash, Utils::ConstASTEquals>;
+using ConstASTMap = ASTMap<ConstASTPtr, ConstASTPtr>;
+using ConstASTSet = ASTSet<ConstASTPtr>;
 /**
  * Makes equality based inferences to rewrite Expressions and
  * generate equality sets in terms of specified symbol scopes.
@@ -37,7 +37,7 @@ public:
      */
     static bool isInferenceCandidate(const ConstASTPtr & predicate, ContextMutablePtr & context);
     static bool mayReturnNullOnNonNullInput(const ASTFunction & predicate);
-    static std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals>
+    static std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals>
     makeEqualitySets(DisjointSet equalities);
     static ConstASTPtr getMin(ConstASTSet & equivalence);
 
@@ -60,7 +60,7 @@ public:
 
 private:
     EqualityInference(
-        std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> equality_sets_,
+        std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets_,
         ConstASTMap canonical_map_,
         ConstASTSet derived_expressions_)
         : equality_sets(std::move(equality_sets_))
@@ -69,7 +69,7 @@ private:
     {
     }
     // Indexed by canonical expression
-    std::unordered_map<ConstASTPtr, ConstASTSet, Utils::ConstASTHash, Utils::ConstASTEquals> equality_sets;
+    std::unordered_map<ConstASTPtr, ConstASTSet, ASTEquality::ASTHash, ASTEquality::ASTEquals> equality_sets;
     // Map each known expression to canonical expression
     ConstASTMap canonical_map;
     ConstASTSet derived_expressions;
@@ -108,7 +108,7 @@ private:
         int rank;
     };
 
-    std::unordered_map<ConstASTPtr, Entry, Utils::ConstASTHash, Utils::ConstASTEquals> map;
+    std::unordered_map<ConstASTPtr, Entry, ASTEquality::ASTHash, ASTEquality::ASTEquals> map;
     bool union_(ConstASTPtr & element_1, ConstASTPtr & element_2);
     ConstASTPtr findInternal(const ConstASTPtr & element);
 };

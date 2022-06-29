@@ -18,7 +18,8 @@ TranslationMap::TranslationMap(TranslationMapPtr outer_context_,
     context(std::move(context_)),
     outer_context(std::move(outer_context_)),
     scope(scope_),
-    field_symbol_infos(std::move(field_symbol_infos_))
+    field_symbol_infos(std::move(field_symbol_infos_)),
+    expression_symbols(createScopeAwaredASTMap<String>(analysis))
 {
     checkSymbols();
 }

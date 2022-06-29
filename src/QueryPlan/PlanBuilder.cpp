@@ -18,14 +18,26 @@ Names PlanBuilder::translateToSymbols(ASTs & expressions) const
     return symbols;
 }
 
+Names PlanBuilder::translateToUniqueSymbols(ASTs & expressions) const
+{
+    Names symbols;
+    NameSet exists;
+    for (auto & expr : expressions)
+    {
+        auto symbol = translateToSymbol(expr);
+        if (exists.emplace(symbol).second)
+            symbols.push_back(symbol);
+    }
+    return symbols;
+}
+
 void PlanBuilder::appendProjection(ASTs & expressions)
 {
     Assignments assignments;
     NameToType types;
     putIdentities(getOutputNamesAndTypes(), assignments, types);
     bool has_new_projection = false;
-    // TODO: use ScopeAware
-    AstToSymbol expression_to_symbols;
+    AstToSymbol expression_to_symbols = createScopeAwaredASTMap<String>(analysis);
 
     for (auto & expr : expressions)
     {

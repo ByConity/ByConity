@@ -21,10 +21,8 @@ SELECT a AS b FROM t GROUP BY a ORDER BY b + 1;
 SELECT a + b FROM t GROUP BY a + b, c;
 SELECT (a + b) + 2 FROM t GROUP BY a + b, c;
 
--- TODO:
---   1. for optimizer, this check depends on ScopeAware
---   2. for non-optimizer, this query has a wrong result
--- SELECT arrayMap(a -> a + b, c) FROM t GROUP BY a + b, c; -- expect serverError 215
+-- TODO: wrong result when setting enable_optimizer=0
+SELECT arrayMap(a -> a + b, c) FROM t GROUP BY a + b, c SETTINGS enable_optimizer=1; -- { serverError 215 }
 
 SELECT arrayMap(x -> x + (a + b), c) FROM t GROUP BY a + b, c;
 

@@ -1,5 +1,6 @@
 #include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/ExprAnalyzer.h>
+#include <Analyzers/ScopeAwareEquals.h>
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
 #include <Analyzers/ExpressionVisitor.h>
@@ -1518,15 +1519,14 @@ namespace
         }
 
         PostAggregateExpressionTraverser(ExpressionVisitor<const Void> & user_visitor_, const Void & user_context_, Analysis & analysis_,
-                                         ContextPtr context_, std::unordered_set<ASTPtr, Utils::ASTHash, Utils::ASTEquals> grouping_expressions_):
+                                         ContextPtr context_, ScopeAwaredASTSet grouping_expressions_):
             ExpressionTraversalVisitor(user_visitor_, user_context_, analysis_, context_), grouping_expressions(std::move(grouping_expressions_))
         {}
 
         using ExpressionTraversalVisitor::process;
 
     private:
-        // TODO: use ScopeAware
-        std::unordered_set<ASTPtr, Utils::ASTHash, Utils::ASTEquals> grouping_expressions;
+        ScopeAwaredASTSet grouping_expressions;
     };
 
 }
@@ -1545,8 +1545,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
         return;
     }
 
-    // TODO: use ScopeAware
-    std::unordered_set<ASTPtr, Utils::ASTHash, Utils::ASTEquals> grouping_expressions;
+    ScopeAwaredASTSet grouping_expressions = createScopeAwaredASTSet(analysis);
     std::unordered_set<size_t> grouping_field_indices;
     auto & group_by_analysis = analysis.getGroupByAnalysis(select_query);
 

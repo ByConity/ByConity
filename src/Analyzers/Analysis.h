@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Analyzers/ASTEquals.h>
 #include <Analyzers/Scope.h>
 #include <Analyzers/SubColumnID.h>
 #include <Analyzers/ResolvedWindow.h>
@@ -248,7 +249,7 @@ struct Analysis
     // TODO: support qualified comparison subquery
 
     // CTE(common table expressions)
-    std::unordered_map<ASTPtr, CTEAnalysis, Utils::ASTHash, Utils::ASTEquals> common_table_expressions;
+    ASTMap<CTEAnalysis> common_table_expressions;
     void registerCTE(ASTSubquery & subquery);
     bool isSharableCTE(ASTSubquery & subquery);
     CTEAnalysis & getCTEAnalysis(ASTSubquery & subquery);

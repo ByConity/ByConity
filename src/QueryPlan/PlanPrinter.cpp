@@ -1,5 +1,6 @@
 #include <QueryPlan/PlanPrinter.h>
 
+#include <Analyzers/ASTEquals.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PredicateConst.h>
 #include <Optimizer/PredicateUtils.h>
@@ -196,7 +197,7 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         for (size_t i = 1; i < join->getLeftKeys().size(); i++)
             out << ", " << join->getLeftKeys()[i] << " == " << join->getRightKeys()[i];
 
-        if (!Utils::astTreeEquals(join->getFilter(), PredicateConst::TRUE_VALUE))
+        if (!ASTEquality::compareTree(join->getFilter(), PredicateConst::TRUE_VALUE))
         {
             out << intent.detailIntent() << "Filter: ";
             out << serializeAST(*join->getFilter());

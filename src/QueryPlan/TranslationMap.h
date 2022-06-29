@@ -2,9 +2,8 @@
 
 #include <Analyzers/Scope.h>
 #include <Analyzers/Analysis.h>
+#include <Analyzers/ScopeAwareEquals.h>
 #include <QueryPlan/planning_models.h>
-// TODO: move ASTEquals to Analyzer
-#include <Optimizer/Utils.h>
 
 #include <unordered_map>
 #include <memory>
@@ -14,7 +13,7 @@
 namespace DB
 {
 
-using AstToSymbol = std::unordered_map<ConstASTPtr, String, Utils::ConstASTHash, Utils::ConstASTEquals>;
+using AstToSymbol = ScopeAwaredASTMap<String>;
 struct TranslationMap;
 using TranslationMapPtr = std::shared_ptr<TranslationMap>;
 

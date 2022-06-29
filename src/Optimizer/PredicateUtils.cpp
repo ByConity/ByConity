@@ -1,3 +1,4 @@
+#include <Analyzers/ASTEquals.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/PredicateConst.h>
@@ -14,12 +15,12 @@ namespace DB
 
 bool PredicateUtils::equals(ASTPtr & p1, ASTPtr & p2)
 {
-    return Utils::astTreeEquals(p1, p2);
+    return ASTEquality::compareTree(p1, p2);
 }
 
 bool PredicateUtils::equals(ConstASTPtr & p1, ConstASTPtr & p2)
 {
-    return Utils::astTreeEquals(p1, p2);
+    return ASTEquality::compareTree(p1, p2);
 }
 
 std::vector<ConstASTPtr> PredicateUtils::extractConjuncts(ConstASTPtr predicate)
@@ -233,7 +234,7 @@ ASTPtr PredicateUtils::combineConjuncts(const std::vector<ConstASTPtr> & predica
         return PredicateConst::TRUE_VALUE;
     }
 
-    std::unordered_set<ASTPtr, Utils::ASTHash, Utils::ASTEquals> conjuncts;
+    ASTSet<> conjuncts;
     for (const auto & predicate : predicates)
     {
         assert(predicate.get() && "predicate can't be null");

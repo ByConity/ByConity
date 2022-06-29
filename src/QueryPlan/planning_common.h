@@ -4,6 +4,7 @@
 #include <Core/NamesAndTypes.h>
 #include <Core/Block.h>
 #include <Parsers/IAST_fwd.h>
+#include <Analyzers/ScopeAwareEquals.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/planning_models.h>
@@ -38,11 +39,10 @@ void append(Container1 & v1, Container2 && v2, F && transformer)
     }
 }
 
-// TODO: use ScopeAware
 template <typename Container, typename F>
-Container deduplicateByAst(Container container, F && extractor)
+Container deduplicateByAst(Container container, Analysis & analysis, F && extractor)
 {
-    std::unordered_set<ASTPtr, Utils::ASTHash, Utils::ASTEquals> existing;
+    auto existing = createScopeAwaredASTSet(analysis);
     container.erase(
         std::remove_if(container.begin(), container.end(), [&] (auto & elem) -> bool
                        {

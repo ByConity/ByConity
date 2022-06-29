@@ -11,8 +11,7 @@ SELECT grouping(a) FROM t; -- { serverError 184 }
 SELECT count(*), grouping(a) FROM t; -- { serverError 184 }
 SELECT count(*), grouping(a) FROM t GROUP BY ROLLUP(a);
 SELECT count(*), grouping(a) FROM t GROUP BY ROLLUP(b); -- { serverError 184 }
--- TODO: need ScopeAware
--- SELECT count(*), arrayFilter(a -> grouping(a) ? 0 : 1, c) FROM t GROUP BY ROLLUP(a, c); -- expect serverError 184 }
+SELECT count(*), arrayFilter(a -> grouping(a) ? 0 : 1, c) FROM t GROUP BY ROLLUP(a, c); -- { serverError 184 }
 SELECT count(*), arrayFilter(b -> grouping(a) ? 0 : 1, c) FROM t GROUP BY ROLLUP(a, c);
 
 DROP TABLE IF EXISTS t;
