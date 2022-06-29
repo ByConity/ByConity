@@ -11,6 +11,8 @@ struct PartitionMetrics
     std::atomic<UInt64> total_parts_size {0};
     std::atomic<UInt64> total_parts_number {0};
     std::atomic<UInt64> total_rows_count {0};
+
+    bool validateMetrics() { return true; }
 };
 
 enum class CacheStatus

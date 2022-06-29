@@ -1,5 +1,5 @@
 #include <CloudServices/CnchServerClient.h>
-
+#include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
 
 #include <brpc/channel.h>
@@ -132,6 +132,121 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafk
     RPCHelpers::checkResponse(response);
 
     return {response.txn_id(), response.start_time()};
+}
+
+ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
+{
+    brpc::Controller cntl;
+    Protos::FetchDataPartsReq request;
+    Protos::FetchDataPartsResp response;
+
+    request.set_remote_host(remote_host);
+    request.set_database(table->getDatabaseName());
+    request.set_table(table->getTableName());
+    request.set_table_commit_time(table->commit_time);
+    request.set_timestamp(ts.toUInt64());
+
+    for (auto & partition_id : partition_list)
+        request.add_partitions(partition_id);
+
+    stub->fetchDataParts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    auto & storage = dynamic_cast<MergeTreeMetaBase &>(*table);
+    return createServerPartsFromModels(storage, response.parts());
+}
+
+void buildRedirectCommitRequestBase(
+    const StoragePtr & table,
+    const Catalog::CommitItems & commit_data,
+    Protos::RedirectCommitPartsReq & request)
+{
+    request.set_database(table->getDatabaseName());
+    request.set_table(table->getTableName());
+    RPCHelpers::fillUUID(table->getStorageUUID(), *request.mutable_uuid());
+
+    for (auto & part : commit_data.data_parts)
+    {
+        fillPartModel(*table, *part, *request.add_parts());
+    }
+
+    for (auto & staged_part : commit_data.staged_parts)
+    {
+        fillPartModel(*table, *staged_part, *request.add_staged_parts());
+    }
+
+    for (auto & delete_bitmap : commit_data.delete_bitmaps)
+    {
+        auto * new_bitmap = request.add_delete_bitmaps();
+        new_bitmap->CopyFrom(*(delete_bitmap->getModel()));
+    }
+}
+
+void CnchServerClient::redirectCommitParts(
+    const StoragePtr & table,
+    const Catalog::CommitItems & commit_data,
+    const TxnTimestamp & txnID,
+    const bool is_merged_parts,
+    const bool preallocate_mode)
+{
+    brpc::Controller cntl;
+    Protos::RedirectCommitPartsReq request;
+    Protos::RedirectCommitPartsResp response;
+
+    buildRedirectCommitRequestBase(table, commit_data, request);
+
+    request.set_txn_id(txnID.toUInt64());
+    request.set_from_merge_task(is_merged_parts);
+    request.set_preallocate_mode(preallocate_mode);
+
+    stub->redirectCommitParts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::redirectSetCommitTime(
+    const StoragePtr & table,
+    const Catalog::CommitItems & commit_data,
+    const TxnTimestamp & commitTs,
+    const UInt64 txn_id)
+{
+    brpc::Controller cntl;
+    Protos::RedirectCommitPartsReq request;
+    Protos::RedirectCommitPartsResp response;
+
+    buildRedirectCommitRequestBase(table, commit_data, request);
+
+    request.set_txn_id(txn_id);
+    request.set_commit_ts(commitTs.toUInt64());
+
+    stub->redirectSetCommitTime(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
+CnchServerClient::getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables)
+{
+    brpc::Controller cntl;
+    Protos::GetTableInfoReq request;
+    Protos::GetTableInfoResp response;
+
+    for (auto & table : tables)
+    {
+        DB::Protos::TableIdentifier * table_id = request.add_table_ids();
+        table_id->CopyFrom(*table);
+    }
+
+    stub->getTableInfo(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.table_infos();
 }
 
 }

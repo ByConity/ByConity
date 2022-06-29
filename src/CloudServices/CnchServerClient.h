@@ -5,6 +5,9 @@
 #include <Storages/IStorage_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include "Transaction/ICnchTransaction.h"
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Catalog/CatalogUtils.h>
 
 namespace DB
 {
@@ -33,6 +36,23 @@ public:
     void precommitTransaction(const TxnTimestamp & txn_id, const UUID & uuid = UUIDHelpers::Nil);
     TxnTimestamp rollbackTransaction(const TxnTimestamp & txn_id);
     void finishTransaction(const TxnTimestamp & txn_id);
+
+    ServerDataPartsVector fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+    void redirectCommitParts(
+        const StoragePtr & table,
+        const Catalog::CommitItems & commit_data,
+        const TxnTimestamp & txnID,
+        const bool is_merged_parts,
+        const bool preallocate_mode);
+    
+    void redirectSetCommitTime(
+        const StoragePtr & table,
+        const Catalog::CommitItems & commit_data,
+        const TxnTimestamp & commitTs,
+        const UInt64 txn_id);
+
+    google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
+    getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
 
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;

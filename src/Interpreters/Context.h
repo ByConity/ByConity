@@ -1088,6 +1088,8 @@ public:
     void initVirtualWarehousePool();
     VirtualWarehousePool & getVirtualWarehousePool() const;
 
+    StoragePtr tryGetCnchTable(const String & database_name, const String & table_name) const;
+
     void setCurrentWorkerGroup(WorkerGroupHandle group);
     WorkerGroupHandle getCurrentWorkerGroup() const;
     WorkerGroupHandle tryGetCurrentWorkerGroup() const;
@@ -1126,6 +1128,9 @@ public:
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
+
+    InterserverCredentialsPtr getCnchInterserverCredentials();
+    std::shared_ptr<Cluster> mockCnchServersCluster();
 
 private:
     std::unique_lock<std::recursive_mutex> getLock() const;

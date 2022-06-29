@@ -203,13 +203,13 @@ public:
         Protos::GetDeletingTablesInGlobalGCResp * response,
         google::protobuf::Closure * done) override;
 
-    /// forward part commit request to host server.
-    // void handleRedirectCommitRequest(
-    //     google::protobuf::RpcController * controller,
-    //     const Protos::RedirectCommitPartsReq * request,
-    //     Protos::RedirectCommitPartsResp * response,
-    //     google::protobuf::Closure * done,
-    //     bool final_commit) override;
+    // forward part commit request to host server.
+    void handleRedirectCommitRequest(
+        google::protobuf::RpcController * controller,
+        const Protos::RedirectCommitPartsReq * request,
+        Protos::RedirectCommitPartsResp * response,
+        google::protobuf::Closure * done,
+        bool final_commit);
 
     void redirectCommitParts(
         google::protobuf::RpcController * controller,
