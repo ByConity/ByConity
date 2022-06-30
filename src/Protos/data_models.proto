@@ -74,6 +74,17 @@ message DataModelPartInfo
 /**
  Any new added filed should be appended behind the last filed of current message definition. Do not change current fields' index.
  */
+ message MetaFilesPos
+ {
+     optional int64 checksums_file_offset = 1;
+     optional uint64 checksums_file_size = 2;
+     optional int64 index_file_offset = 3;
+     optional uint64 index_file_size = 4;
+ }
+
+/**
+ Any new added filed should be appended behind the last filed of current message definition. Do not change current fields' index.
+ */
 message DataModelPart
 {
     required DataModelPartInfo part_info = 1;  // part info
@@ -98,6 +109,7 @@ message DataModelPart
     // the correct relative path can be constructed.
     optional uint64 staging_txn_id = 19;
     optional uint64 virtual_part_size = 20;
+    optional MetaFilesPos meta_files_pos = 21;
 };
 
 message CnchHivePartInfo

@@ -539,6 +539,44 @@ Cluster::Cluster(const Settings & settings, const std::vector<std::vector<String
     initMisc();
 }
 
+Cluster::Cluster(const Settings & settings, const std::vector<Addresses> & shards, bool treat_local_as_remote)
+{
+    UInt32 current_shard_num = 1;
+
+    for (const auto & shard : shards)
+    {
+        addresses_with_failover.emplace_back(shard);
+
+        Addresses shard_local_addresses;
+        ConnectionPoolPtrs all_replicas;
+        all_replicas.reserve(shard.size());
+
+        for (const auto & replica : shard)
+        {
+            auto replica_pool = std::make_shared<ConnectionPool>(
+                    settings.distributed_connections_pool_size,
+                    replica.host_name, replica.port,
+                    replica.default_database, replica.user, replica.password,
+                    replica.cluster, replica.cluster_secret,
+                    "server", replica.compression, replica.secure, replica.priority, replica.exchange_port, replica.exchange_status_port);
+            all_replicas.emplace_back(replica_pool);
+            if (replica.is_local && !treat_local_as_remote)
+                shard_local_addresses.push_back(replica);
+        }
+
+        ConnectionPoolWithFailoverPtr shard_pool = std::make_shared<ConnectionPoolWithFailover>(
+                all_replicas, settings.load_balancing,
+                settings.distributed_replica_error_half_life.totalSeconds(), settings.distributed_replica_error_cap);
+
+        slot_to_shard.insert(std::end(slot_to_shard), default_weight, shards_info.size());
+        shards_info.push_back({{}, current_shard_num, default_weight, std::move(shard_local_addresses), std::move(shard_pool),
+                std::move(all_replicas), false});
+        ++current_shard_num;
+    }
+
+    initMisc();
+}
+
 
 Poco::Timespan Cluster::saturate(Poco::Timespan v, Poco::Timespan limit)
 {

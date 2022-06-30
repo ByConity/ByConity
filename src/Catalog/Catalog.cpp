@@ -22,11 +22,11 @@
 // #include <Access/MaskingPolicyCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TxnTimestamp.h>
-// #include <Transaction/getCommitted.h>
-// #include <MergeTreeCommon/CnchServerClient.h>
+#include <Transaction/getCommitted.h>
+#include <CloudServices/CnchServerClient.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
-// #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
@@ -1191,11 +1191,10 @@ namespace Catalog
                 }
 
                 /// remove uncommitted parts
-                /// FIXME:
-                // if (ts)
-                // {
-                //     getCommittedDataParts(res, ts, this);
-                // }
+                if (ts)
+                {
+                    getCommittedDataParts(res, ts, this);
+                }
                 outRes = res;
             },
             ProfileEvents::GetStagedPartsSuccess,
@@ -1271,10 +1270,8 @@ namespace Catalog
                 {
                     try
                     {
-                        /// FIXME:
-                        // res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDataParts(host_with_rpc, storage, partitions, ts);
-                        throw Exception("CNCH client is not ready for use", -1);
-                        // source = "TargetServer(" + host_with_rpc + ")";
+                        res = context.getCnchServerClientPool().get(host_with_rpc)->fetchDataParts(host_with_rpc, storage, partitions, ts);
+                        source = "TargetServer(" + host_with_rpc + ")";
                     }
                     catch (...)
                     {
@@ -1284,25 +1281,24 @@ namespace Catalog
                     }
                 }
 
-                ///FIXME:
-                // if (ts)
-                // {
-                //     LOG_TRACE(
-                //         log,
-                //         "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}"
-                //         ,storage->getStorageID().getNameForLogs()
-                //         ,res.size()
-                //         ,ts.toString());
+                if (ts)
+                {
+                    LOG_TRACE(
+                        log,
+                        "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}"
+                        ,storage->getStorageID().getNameForLogs()
+                        ,res.size()
+                        ,ts.toString());
 
-                //     getCommittedServerDataParts(res, ts, this);
+                    getCommittedServerDataParts(res, ts, this);
 
-                //     LOG_TRACE(
-                //         log,
-                //         "{} Finish handle intermediate parts. Total number of parts is {}, timestamp: {}"
-                //         ,storage->getStorageID().getNameForLogs()
-                //         ,res.size()
-                //         ,ts.toString());
-                // }
+                    LOG_TRACE(
+                        log,
+                        "{} Finish handle intermediate parts. Total number of parts is {}, timestamp: {}"
+                        ,storage->getStorageID().getNameForLogs()
+                        ,res.size()
+                        ,ts.toString());
+                }
 
                 LOG_DEBUG(
                     log,
@@ -2419,10 +2415,9 @@ namespace Catalog
                             ,host_port.toDebugString()
                             ,table->getStorageID().getNameForLogs()
                             ,txnID);
-                        /// FIXME:
-                        // context.getCnchServerClientPool().get(host_port)->redirectCommitParts(
-                        //     table, commit_data, txnID, is_merged_parts, preallocate_mode);
-                        // throw Exception("CNCH client is not ready for use", -1);
+
+                        context.getCnchServerClientPool().get(host_port)->redirectCommitParts(
+                            table, commit_data, txnID, is_merged_parts, preallocate_mode);
                         return;
                     }
                     catch (Exception & e)
@@ -2517,9 +2512,8 @@ namespace Catalog
                             ,host_port.toDebugString()
                             ,table->getStorageID().getNameForLogs()
                             ,txn_id);
-                        ///FIXME:
-                        //context.getCnchServerClientPool().get(host_port)->redirectSetCommitTime(table, commit_data, ts, txn_id);
-                        // throw Exception("CNCH client is not ready for use", -1);
+
+                        context.getCnchServerClientPool().get(host_port)->redirectSetCommitTime(table, commit_data, ts, txn_id);
                         return;
                     }
                     catch (Exception & e)
@@ -2657,9 +2651,6 @@ namespace Catalog
     void Catalog::clearParts(
         const StoragePtr & storage,
         const CommitItems & commit_data,
-        // const DataPartsVector & parts,
-        // const DeleteBitmapMetaPtrVector & delete_bitmaps,
-        // const DataPartsVector & staged_parts,
         const bool skip_part_cache)
     {
         runWithMetricSupport(
@@ -4294,8 +4285,7 @@ namespace Catalog
                     createDeleteBitmapMetaPtr,
                     ts);
                 // NOTE: the below logic does is to filter out uncommited bitmaps at this moment.
-                ///FIXME: @guanzhe.andy
-                // getCommittedBitmaps(all_bitmaps, ts, this);
+                getCommittedBitmaps(all_bitmaps, ts, this);
                 outRes = all_bitmaps;
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
@@ -4507,24 +4497,24 @@ namespace Catalog
         std::shared_ptr<Protos::BufferManagerMetadata> outRes;
         runWithMetricSupport(
             [&] {
-                (void) storage;
-                // auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+                auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
 
-                // auto uuid = cnch_table->getStorageID().uuid;
-                // auto res = meta_proxy->tryGetBufferManagerMetadata(name_space, uuid);
-                // if (res)
-                // {
-                //     outRes = res;
-                //     return;
-                // }
-                // res = std::make_shared<Protos::BufferManagerMetadata>();
-                // RPCHelpers::fillStorageID(cnch_table->getStorageID(), *res->mutable_storage_id());
-                // res->set_wal_type(cnch_table->settings.wal_type);
-                // res->set_memory_buffer_num(cnch_table->settings.cnch_memory_buffer_size);
-                // res->set_status(0);
+                auto uuid = cnch_table->getStorageID().uuid;
+                auto res = meta_proxy->tryGetBufferManagerMetadata(name_space, uuid);
+                if (res)
+                {
+                    outRes = res;
+                    return;
+                }
+                res = std::make_shared<Protos::BufferManagerMetadata>();
+                RPCHelpers::fillStorageID(cnch_table->getStorageID(), *res->mutable_storage_id());
+                /// FIXME: if CnchStorageMergeTree is ready
+                // res->set_wal_type(cnch_table->getSettings()->wal_type);
+                // res->set_memory_buffer_num(cnch_table->getSettings()->cnch_memory_buffer_size);
+                res->set_status(0);
 
-                // meta_proxy->setBufferManagerMetadata(name_space, uuid, *res);
-                // outRes = res;
+                meta_proxy->setBufferManagerMetadata(name_space, uuid, *res);
+                outRes = res;
             },
             ProfileEvents::GetOrSetBufferManagerMetadataSuccess,
             ProfileEvents::GetOrSetBufferManagerMetadataFailed);

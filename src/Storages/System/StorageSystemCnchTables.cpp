@@ -1,0 +1,236 @@
+#include <Catalog/Catalog.h>
+#include <Parsers/queryToString.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <DataTypes/DataTypeUUID.h>
+#include <Interpreters/Context.h>
+#include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/VirtualColumnUtils.h>
+#include <Common/Status.h>
+#include <common/logger_useful.h>
+// #include <Parsers/ASTClusterByElement.h>
+#include <DataStreams/NullBlockInputStream.h>
+#include <DataStreams/OneBlockInputStream.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
+
+namespace DB
+{
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
+
+
+StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
+    : IStorage(table_id_)
+{
+    StorageInMemoryMetadata storage_metadata;
+    storage_metadata.setColumns(ColumnsDescription(
+        {
+            {"database", std::make_shared<DataTypeString>()},
+            {"name", std::make_shared<DataTypeString>()},
+            {"uuid", std::make_shared<DataTypeUUID>()},
+            {"vw_name", std::make_shared<DataTypeString>()},
+            {"definition", std::make_shared<DataTypeString>()},
+            {"txn_id", std::make_shared<DataTypeUInt64>()},
+            {"previous_version", std::make_shared<DataTypeUInt64>()},
+            {"current_version", std::make_shared<DataTypeUInt64>()},
+            {"modification_time", std::make_shared<DataTypeDateTime>()},
+            {"is_preallocated", std::make_shared<DataTypeUInt8>()},
+            {"is_detached", std::make_shared<DataTypeUInt8>()},
+            {"partition_key", std::make_shared<DataTypeString>()},
+            {"sorting_key", std::make_shared<DataTypeString>()},
+            {"primary_key", std::make_shared<DataTypeString>()},
+            {"sampling_key", std::make_shared<DataTypeString>()},
+            {"cluster_key", std::make_shared<DataTypeString>()},
+            {"split_number", std::make_shared<DataTypeInt64>()},
+            {"with_range", std::make_shared<DataTypeUInt8>()},
+        }));
+    setInMemoryMetadata(storage_metadata);
+}
+
+static std::unordered_set<String> key_columns = 
+{
+    "partition_key",
+    "sorting_key",
+    "primary_key",
+    "sampling_key",
+    "cluster_key",
+    "split_number",
+    "with_range"
+};
+
+Pipe StorageSystemCnchTables::read(
+    const Names & column_names,
+    const StorageMetadataPtr & metadata_snapshot,
+    SelectQueryInfo & query_info,
+    ContextPtr context,
+    QueryProcessingStage::Enum /*processed_stage*/,
+    const size_t /*max_block_size*/,
+    const unsigned /*num_streams*/)
+{
+    Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
+    
+    if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
+        throw Exception("Table system.cnch_tables_history only support cnch_server", ErrorCodes::LOGICAL_ERROR);
+
+    bool require_key_columns = false;
+    for (auto & name : column_names)
+    {
+        if (key_columns.count(name))
+        {
+            require_key_columns = true;
+            break;
+        }
+    }
+
+    NameSet names_set(column_names.begin(), column_names.end());
+
+    Block sample_block = metadata_snapshot->getSampleBlock();
+    Block res_block;
+
+    std::vector<UInt8> columns_mask(sample_block.columns());
+    for (size_t i = 0, size = columns_mask.size(); i < size; ++i)
+    {
+        if (names_set.count(sample_block.getByPosition(i).name))
+        {
+            columns_mask[i] = 1;
+            res_block.insert(sample_block.getByPosition(i));
+        }
+    }
+
+    Catalog::Catalog::DataModelTables table_models = cnch_catalog->getAllTables();
+
+    Block block_to_filter;
+
+    /// Add `database` column.
+    MutableColumnPtr database_column_mut = ColumnString::create();
+    /// Add `name` column.
+    MutableColumnPtr name_column_mut = ColumnString::create();
+    /// Add `uuid` column
+    MutableColumnPtr uuid_column_mut = ColumnUInt128::create();
+    /// ADD 'index' column
+    MutableColumnPtr index_column_mut = ColumnUInt64::create();
+
+    for (size_t i=0; i<table_models.size(); i++)
+    {
+        database_column_mut->insert(table_models[i].database());
+        name_column_mut->insert(table_models[i].name());
+        uuid_column_mut->insert(RPCHelpers::createUUID(table_models[i].uuid()));
+        index_column_mut->insert(i);
+    }
+
+    block_to_filter.insert(ColumnWithTypeAndName(std::move(database_column_mut), std::make_shared<DataTypeString>(), "database"));
+    block_to_filter.insert(ColumnWithTypeAndName(std::move(name_column_mut), std::make_shared<DataTypeString>(), "name"));
+    block_to_filter.insert(ColumnWithTypeAndName(std::move(uuid_column_mut), std::make_shared<DataTypeUUID>(), "uuid"));
+    block_to_filter.insert(ColumnWithTypeAndName(std::move(index_column_mut), std::make_shared<DataTypeUInt64>(), "index"));
+
+    VirtualColumnUtils::filterBlockWithQuery(query_info.query, block_to_filter, context);
+
+    if (!block_to_filter.rows())
+        return {};
+
+    ColumnPtr filtered_index_column = block_to_filter.getByName("index").column;
+
+    MutableColumns res_columns = metadata_snapshot->getSampleBlock().cloneEmptyColumns();
+
+    for (size_t i = 0; i<filtered_index_column->size(); i++)
+    {
+        auto table_model = table_models[(*filtered_index_column)[i].get<UInt64>()];
+        if (Status::isDeleted(table_model.status()))
+            continue;
+
+        size_t col_num = 0;
+        res_columns[col_num++]->insert(table_model.database());
+        res_columns[col_num++]->insert(table_model.name());
+        res_columns[col_num++]->insert(RPCHelpers::createUUID(table_model.uuid()));
+        res_columns[col_num++]->insert(table_model.vw_name());
+        res_columns[col_num++]->insert(table_model.definition());
+        res_columns[col_num++]->insert(table_model.txnid());
+        res_columns[col_num++]->insert(table_model.previous_version());
+        res_columns[col_num++]->insert(table_model.commit_time());
+        auto modification_time = (table_model.commit_time() >> 18) ;  // first 48 bits represent times
+        res_columns[col_num++]->insert(modification_time/1000) ; // convert to seconds
+        res_columns[col_num++]->insert(table_model.vw_name().size() != 0); // is_preallocated should be 1 when vw_name exists
+        res_columns[col_num++]->insert(Status::isDetached(table_model.status())) ;
+
+        if (require_key_columns)
+        {
+            const char * begin = table_model.definition().data();
+            const char * end = begin + table_model.definition().size();
+            ParserQuery parser(end);
+            IAST * ast_partition_by = nullptr;
+            IAST * ast_primary_key = nullptr;
+            IAST * ast_order_by = nullptr;
+            IAST * ast_sample_by = nullptr;
+            IAST * ast_cluster_by = nullptr;
+            /// create AST from CREATE query to extract storage info
+            ASTPtr ast;
+
+            try
+            {
+                ast = parseQuery(parser, begin, end, "", 0, 0);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(&Poco::Logger::get("StorageSystemCnchTables"));
+            }
+
+            if (ast)
+            {
+                const auto & ast_create_query = ast->as<ASTCreateQuery &>();
+                const ASTStorage * ast_storage = ast_create_query.storage;
+                if (ast_storage) {
+                    ast_partition_by = ast_storage->partition_by;
+                    ast_order_by = ast_storage->order_by;
+                    ast_primary_key = ast_storage->primary_key;
+                    ast_sample_by = ast_storage->sample_by;
+                    ast_cluster_by = ast_storage->cluster_by;
+                }
+            }
+
+            ast_partition_by ? (res_columns[col_num++]->insert(queryToString(*ast_partition_by))) : (res_columns[col_num++]->insertDefault());
+
+            ast_order_by ? (res_columns[col_num++]->insert(queryToString(*ast_order_by))) : (res_columns[col_num++]->insertDefault());
+
+            ast_primary_key ? (res_columns[col_num++]->insert(queryToString(*ast_primary_key))) : (res_columns[col_num++]->insertDefault());
+
+            ast_sample_by ? (res_columns[col_num++]->insert(queryToString(*ast_sample_by))) : (res_columns[col_num++]->insertDefault());
+
+            if(ast_cluster_by)
+            {
+                /// FIXME: complete if we support bucket table.
+                // auto cluster_by = ast_cluster_by->as<ASTClusterByElement>();
+                // res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
+                // res_columns[col_num++]->insert(cluster_by->split_number);
+                // res_columns[col_num++]->insert(cluster_by->is_with_range);
+            }
+            else
+            {
+                res_columns[col_num++]->insertDefault();
+                res_columns[col_num++]->insert(-1); // shard ratio is not available
+                res_columns[col_num++]->insert(0); // with range is not available
+            }
+        }
+    }
+
+    Block res = metadata_snapshot->getSampleBlock().cloneEmpty();
+    size_t col_num = 0;
+    size_t num_columns = res.columns();
+    while (col_num < num_columns)
+    {
+        res.getByPosition(col_num).column = std::move(res_columns[col_num]);
+        ++col_num;
+    }
+
+    UInt64 num_rows = res_columns.at(0)->size();
+    Chunk chunk(std::move(res_columns), num_rows);
+
+    return Pipe(std::make_shared<SourceFromSingleChunk>(std::move(res), std::move(chunk)));
+}
+
+}

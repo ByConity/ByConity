@@ -3820,6 +3820,11 @@ VirtualWarehousePool & Context::getVirtualWarehousePool() const
     return *shared->vw_pool;
 }
 
+StoragePtr Context::tryGetCnchTable(const String & , const String & ) const
+{
+    throw Exception("Not implemented yet. ", ErrorCodes::NOT_IMPLEMENTED);
+}
+
 void Context::setCurrentWorkerGroup(WorkerGroupHandle worker_group)
 {
     current_worker_group = std::move(worker_group);
@@ -3914,6 +3919,7 @@ void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
 }
+
 void Context::initCnchTransactionCoordinator()
 {
     auto lock = getLock();
@@ -3976,6 +3982,39 @@ TxnTimestamp Context::getCurrentTransactionID() const
         throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
 
     return txn_id;
+}
+
+InterserverCredentialsPtr Context::getCnchInterserverCredentials()
+{
+    /// FIXME: any special for cnch ?
+    return getInterserverCredentials();
+}
+
+// In CNCH, form a virtual cluster which include all servers.
+std::shared_ptr<Cluster> Context::mockCnchServersCluster()
+{
+    // get CNCH servers by PSM
+    String psmName = this->getCnchServerClientPool().getServiceName();
+    auto sd_client = this->getServiceDiscoveryClient();
+
+    auto endpoints = sd_client->lookup(psmName, ComponentType::SERVER);
+
+    std::vector<Cluster::Addresses> addresses;
+
+    auto credential_ptr = getCnchInterserverCredentials();
+
+    // create new cluster from scratch
+    for (auto & e : endpoints)
+    {
+        Cluster::Address address(e.getTCPAddress(), credential_ptr->getUser(), credential_ptr->getPassword(), this->getTCPPort(), false);
+        // assume there are only one replica in each shard
+        addresses.push_back({address});
+    }
+
+    //Context query_context = context;
+    // as CNCH server might be out-of-service for unknown reason, it is ok to skip it
+    const_cast<Settings&>(settings).skip_unavailable_shards = true;  //FIXME
+    return std::make_shared<Cluster>(this->getSettings(), addresses, false);
 }
 
 }

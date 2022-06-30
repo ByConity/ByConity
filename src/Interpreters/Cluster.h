@@ -155,6 +155,9 @@ public:
     using Addresses = std::vector<Address>;
     using AddressesWithFailover = std::vector<Addresses>;
 
+    /// Construct a cluster by Addresses
+    Cluster(const Settings & settings, const std::vector<Addresses> & shards, bool treat_local_as_remote);
+
     /// Name of directory for asynchronous write to StorageDistributed if has_internal_replication
     ///
     /// Contains different path for permutations of:

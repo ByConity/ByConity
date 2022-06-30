@@ -88,6 +88,14 @@
 #include <Storages/System/StorageSystemStackTrace.h>
 #endif
 
+#include <Storages/System/StorageSystemCnchParts.h>
+#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/System/StorageSystemCnchPartsInfo.h>
+#include <Storages/System/StorageSystemCnchTableInfo.h>
+#include <Storages/System/StorageSystemCnchTablesHistory.h>
+#include <Storages/System/StorageSystemCnchDatabases.h>
+#include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/System/StorageSystemCnchDatabasesHistory.h>
 
 namespace DB
 {
@@ -184,6 +192,14 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 
     attach<StorageSystemMetastore>(system_database, "metastore");
     attach<StorageSystemBrokenTables>(system_database, "broken_tables");
+    attach<StorageSystemCnchParts>(system_database, "cnch_parts");
+    attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
+    attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");
+    attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
+    attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
+    attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
+    attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
+    attach<StorageSystemCnchTables>(system_database, "cnch_tables");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

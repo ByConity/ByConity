@@ -2,14 +2,20 @@
 
 #include <Protos/RPCHelpers.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Interpreters/Context.h>
 #include <Protos/RPCHelpers.h>
+#include <Protos/DataModelHelpers.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
+#include <Common/serverLocality.h>
+#include <Catalog/Catalog.h>
+#include <Catalog/CatalogFactory.h>
+#include <Storages/PartCacheManager.h>
 
 namespace DB
 {
@@ -319,4 +325,161 @@ void CnchServerServiceImpl::createTransactionForKafka(
         }
     });
 }
+
+void CnchServerServiceImpl::fetchDataParts(
+    [[maybe_unused]] ::google::protobuf::RpcController* controller,
+    [[maybe_unused]] const ::DB::Protos::FetchDataPartsReq* request,
+    [[maybe_unused]] ::DB::Protos::FetchDataPartsResp* response,
+    [[maybe_unused]] ::google::protobuf::Closure* done)
+{
+    ContextPtr context_ptr = context.lock();
+    if (!context_ptr)
+        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage = global_context.getCnchCatalog()->getTable(
+                global_context, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
+
+            auto calculated_host = global_context.getCnchTopologyMaster()
+                                       ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true)
+                                       .getRPCAddress();
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(global_context.getRPCPort())))
+                throw Exception(
+                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Strings partition_list;
+            for (const auto & partition : request->partitions())
+                partition_list.emplace_back(partition);
+
+            auto parts
+                = global_context.getCnchCatalog()->getServerDataPartsInPartitions(storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+            auto & mutable_parts = *response->mutable_parts();
+            for (const auto & part : parts)
+                *mutable_parts.Add() = part->part_model();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::handleRedirectCommitRequest(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done,
+    bool final_commit)
+{
+    ContextPtr context_ptr = context.lock();
+    if (!context_ptr)
+        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, final_commit=final_commit, &global_context = *context_ptr, log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
+            StoragePtr storage = global_context.getCnchCatalog()->tryGetTableByUUID(
+                global_context, table_uuid, TxnTimestamp::maxTS());
+            
+            if (!storage)
+                throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
+
+            auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+            if (!cnch)
+                throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+
+            auto parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->parts(), nullptr);
+            auto staged_parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->staged_parts(), nullptr);
+            DeleteBitmapMetaPtrVector delete_bitmaps;
+            delete_bitmaps.reserve(request->delete_bitmaps_size());
+            for (auto & bitmap_model : request->delete_bitmaps())
+                delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
+
+
+            if (!final_commit)
+            {
+                TxnTimestamp txnID{request->txn_id()};
+                global_context.getCnchCatalog()->writeParts(storage, txnID, 
+                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
+            }
+            else
+            {
+                TxnTimestamp commitTs {request->commit_ts()};
+                global_context.getCnchCatalog()->setCommitTime(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts},
+                    commitTs, request->txn_id());
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::redirectCommitParts(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    handleRedirectCommitRequest(controller, request, response, done, false);
+}
+
+void CnchServerServiceImpl::redirectSetCommitTime(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
+    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    handleRedirectCommitRequest(controller, request, response, done, true);
+}
+
+void CnchServerServiceImpl::getTableInfo(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    [[maybe_unused]] const Protos::GetTableInfoReq* request,
+    [[maybe_unused]] Protos::GetTableInfoResp* response,
+    [[maybe_unused]] google::protobuf::Closure* done)
+{
+    ContextPtr context_ptr = context.lock();
+    if (!context_ptr)
+        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [ req = request, rsp = response, d = done, &global_context = *context_ptr, logger=log] {
+            brpc::ClosureGuard inner_guard(d);
+            try
+            {
+                auto part_cache_manager = global_context.getPartCacheManager();
+                for (auto & table_id : req->table_ids())
+                {
+                    UUID uuid(stringToUUID(table_id.uuid()));
+                    Protos::DataModelTableInfo * table_info = rsp->add_table_infos();
+                    table_info->set_database(table_id.database());
+                    table_info->set_table(table_id.name());
+                    table_info->set_last_modification_time(part_cache_manager->getTableLastUpdateTime(uuid));
+                    table_info->set_cluster_status(part_cache_manager->getTableClusterStatus(uuid));
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(rsp->mutable_exception());
+            }
+        }
+    );
+}
+
 }
