@@ -1,11 +1,11 @@
 #pragma once
 #include <QueryPlan/ITransformingStep.h>
 #include <DataStreams/SizeLimits.h>
+#include <Processors/Transforms/AggregatingTransform.h>
 
 namespace DB
 {
 
-struct AggregatingTransformParams;
 using AggregatingTransformParamsPtr = std::shared_ptr<AggregatingTransformParams>;
 
 /// This step finishes aggregation. See AggregatingSortedTransform.
@@ -31,6 +31,7 @@ public:
     AggregatingTransformParamsPtr getParams() const { return params; }
 
     const Names & getKeys() const { return keys; }
+    const AggregateDescriptions & getAggregates() const { return params->params.aggregates; }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);

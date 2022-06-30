@@ -19,7 +19,7 @@ PlanCostMap CostCalculator::calculate(QueryPlan & plan, const Context & context)
         return plan_cost_map;
     size_t worker_size = WorkerSizeFinder::find(plan, context);
     auto cte_ref_counts = plan.getCTEInfo().collectCTEReferenceCounts(plan.getPlanNode());
-    PlanCostVisitor visitor{CostModel{context}, context, worker_size, plan.getCTEInfo(), cte_ref_counts};
+    PlanCostVisitor visitor{CostModel{context}, worker_size, plan.getCTEInfo(), cte_ref_counts};
     VisitorUtil::accept(plan.getPlanNode(), visitor, plan_cost_map);
     return plan_cost_map;
 }
@@ -33,7 +33,7 @@ PlanNodeCost CostCalculator::calculate(
 {
     static CostVisitor visitor;
     CostContext cost_context{
-        .cost_model = CostModel{context}, .context = context, .stats = stats, .children_stats = children_stats, .worker_size = worker_size};
+        .cost_model = CostModel{context}, .stats = stats, .children_stats = children_stats, .worker_size = worker_size};
     return VisitorUtil::accept(step, visitor, cost_context);
 }
 
@@ -198,7 +198,7 @@ CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, P
     }
 
     static CostVisitor visitor;
-    CostContext cost_context{.cost_model = cost_model, .context = context, .stats = node.getStatistics().value_or(nullptr),
+    CostContext cost_context{.cost_model = cost_model, .stats = node.getStatistics().value_or(nullptr),
                              .children_stats = children_stats, .worker_size = worker_size};
     cost += VisitorUtil::accept(node.getStep(), visitor, cost_context).getCost();
     plan_cost_map.emplace(node.getId(), cost);

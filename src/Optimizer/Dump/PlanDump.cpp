@@ -144,92 +144,80 @@ void cleanPlanDumpFiles(String dump_path, String query_id)
 }
 void dumpQuery(const String & sql, ContextPtr context)
 {
-    if (context->getSettingsRef().enable_optimizer)
-    {
-        String dump_path = context->getSettingsRef().graphviz_path.toString();
-        String query_id = context->getCurrentQueryId();
-        cleanPlanDumpFiles(dump_path, query_id);
+    String dump_path = context->getSettingsRef().graphviz_path.toString();
+    String query_id = context->getCurrentQueryId();
+    cleanPlanDumpFiles(dump_path, query_id);
 
-        std::stringstream path;
-        path << dump_path + query_id + "/";
-        path << "query"
-             << ".sql";
-        std::ofstream out(path.str());
-        out << sql;
-        out.close();
-    }
+    std::stringstream path;
+    path << dump_path + query_id + "/";
+    path << "query"
+         << ".sql";
+    std::ofstream out(path.str());
+    out << sql;
+    out.close();
 }
 void dumpDdlStats(QueryPlan & plan, ContextMutablePtr context)
 {
-    if (context->getSettingsRef().enable_optimizer)
-    {
-        Poco::JSON::Object query_ddl_object;
-        Poco::JSON::Object query_stats_object;
+    Poco::JSON::Object query_ddl_object;
+    Poco::JSON::Object query_stats_object;
 
-        NodeDumper node_dumper{query_ddl_object, query_stats_object, context, &plan.getCTEInfo()};
-        Void void_context{};
-        VisitorUtil::accept(plan.getPlanNode(), node_dumper, void_context);
-        Poco::Dynamic::Var query_ddl(query_ddl_object);
-        Poco::Dynamic::Var query_stats(query_stats_object);
+    NodeDumper node_dumper{query_ddl_object, query_stats_object, context, &plan.getCTEInfo()};
+    Void void_context{};
+    VisitorUtil::accept(plan.getPlanNode(), node_dumper, void_context);
+    Poco::Dynamic::Var query_ddl(query_ddl_object);
+    Poco::Dynamic::Var query_stats(query_stats_object);
 
-        String dump_path = context->getSettingsRef().graphviz_path.toString();
-        String query_id = context->getCurrentQueryId();
-        cleanPlanDumpFiles(dump_path, query_id);
+    String dump_path = context->getSettingsRef().graphviz_path.toString();
+    String query_id = context->getCurrentQueryId();
+    cleanPlanDumpFiles(dump_path, query_id);
 
-        //        save the ddl data
-        std::stringstream path;
-        path << dump_path + query_id + "/";
-        path << "ddl"
-             << ".json";
-        std::ofstream out(path.str());
-        out << query_ddl.toString();
-        out.close();
+    //        save the ddl data
+    std::stringstream path;
+    path << dump_path + query_id + "/";
+    path << "ddl"
+         << ".json";
+    std::ofstream out(path.str());
+    out << query_ddl.toString();
+    out.close();
 
-        //        save the statistic data
-        std::stringstream path_stats;
-        path_stats << dump_path + query_id + "/";
-        path_stats << "stats"
-                   << ".json";
-        std::ofstream outS(path_stats.str());
-        outS << query_stats.toString();
-        outS.close();
+    //        save the statistic data
+    std::stringstream path_stats;
+    path_stats << dump_path + query_id + "/";
+    path_stats << "stats"
+               << ".json";
+    std::ofstream outS(path_stats.str());
+    outS << query_stats.toString();
+    outS.close();
 
-        dumpSetting(context);
-    }
+    dumpSetting(context);
 }
 void dumpSetting(ContextPtr context)
 {
-    if (context->getSettingsRef().enable_optimizer)
-    {
-        Poco::JSON::Object settings_change;
-        context->getSettingsRef().dumpToJSON(settings_change);
-        Poco::Dynamic::Var Settings_Change(settings_change);
+    Poco::JSON::Object settings_change;
+    context->getSettingsRef().dumpToJSON(settings_change);
+    Poco::Dynamic::Var Settings_Change(settings_change);
 
-        String dump_path = context->getSettingsRef().graphviz_path.toString();
-        String query_id = context->getCurrentQueryId();
+    String dump_path = context->getSettingsRef().graphviz_path.toString();
+    String query_id = context->getCurrentQueryId();
 
-        std::stringstream path;
-        path << dump_path + query_id + "/";
-        path << "settings_changed"
-             << ".json";
-        std::ofstream out(path.str());
-        out << Settings_Change.toString();
-        out.close();
-    }
+    std::stringstream path;
+    path << dump_path + query_id + "/";
+    path << "settings_changed"
+         << ".json";
+    std::ofstream out(path.str());
+    out << Settings_Change.toString();
+    out.close();
 }
 void dumpClusterInfo(ContextPtr context, size_t parallel)
 {
-    if (context->getSettingsRef().enable_optimizer)
-    {
-        Poco::JSON::Object other_json;
-        String path = context->getSettingsRef().graphviz_path.toString();
-        String other_path = path + context->getCurrentQueryId() + "/others.json";
-        other_json.set("memory_catalog_worker_size", toString(parallel));
-        other_json.set("CurrentDatabase", context->getCurrentDatabase());
-        std::ofstream out(other_path);
-        out << PVar(other_json).toString();
-        out.close();
-    }
+    Poco::JSON::Object other_json;
+    String path = context->getSettingsRef().graphviz_path.toString();
+    String other_path = path + context->getCurrentQueryId() + "/others.json";
+    other_json.set("memory_catalog_worker_size", toString(parallel));
+    other_json.set("CurrentDatabase", context->getCurrentDatabase());
+    std::ofstream out(other_path);
+    out << PVar(other_json).toString();
+    out.close();
 }
 
 void loadStats(ContextPtr context, const String & path)
@@ -252,30 +240,31 @@ void loadStats(ContextPtr context, const String & path)
     auto catalog = createCatalogAdaptor(context);
     auto logger = &Poco::Logger::get("load stats");
 
-    UInt64 ts = 0;
-
-    for (auto it = object.begin(); it != object.end(); ++it)
+    for (auto & it : object)
     {
         //traverse tables ,the json format is database_table->{TableBasic,Columns},
         // Columns ->{Column_name,Column_name2,...},Column_name->{ColumnBasic,NdvBucketsResult};
-        String database_table = it->first; //table_name
-        size_t pos = database_table.find(".");
-        if (pos == database_table.npos)
+        String database_table = it.first; //table_name
+        size_t pos = database_table.find('.');
+        if (pos == String::npos)
         {
             throw Exception("Table not found in the database_table string", ErrorCodes::LOGICAL_ERROR);
         }
-
         String db_name = database_table.substr(0, pos);
         String table_name = database_table.substr(pos + 1);
         auto table_id_opt = catalog->getTableIdByName(db_name, table_name);
         if (!table_id_opt)
         {
-            auto msg = "table " + table_name + " not exist in database " + db_name;
+            String info_warning = "table ";
+            info_warning.append(table_name);
+            info_warning.append(" not exist in database ");
+            info_warning.append(db_name);
+            auto msg = info_warning;
             logger->warning(msg);
             continue;
         }
-        //        auto ts = context.tryGetTimestamp();
-        PVar table_var = it->second;
+        UInt64 ts = 0;
+        PVar table_var = it.second;
         PObject table_object = *table_var.extract<PObject::Ptr>();
 
         //traverse TableBasic;

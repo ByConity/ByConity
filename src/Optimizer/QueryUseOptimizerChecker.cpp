@@ -118,8 +118,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
             {
                 auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
                 auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
-                if (!QueryUseOptimizerChecker::check(subquery, context))
-                    return false;
+                return QueryUseOptimizerChecker::check(subquery, context);
             }
 
             if (!dynamic_cast<const StorageDistributed *>(storage_table.get()))

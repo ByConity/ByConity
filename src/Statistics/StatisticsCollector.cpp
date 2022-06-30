@@ -186,8 +186,9 @@ static ColumnCollectConfig get_column_config(CatalogAdaptorPtr catalog, const Da
     {
         config.wrapper_kind = WrapperKind::StringToHash64;
     }
-    else if (isDecimal(type))
+    else if (isDecimal(type) || isDateTime64(type) || isTime(type))
     {
+        // Note: DateTime64 is a Decimal, convert it to float64
         config.wrapper_kind = WrapperKind::DecimalToFloat64;
     }
     else
@@ -301,7 +302,9 @@ void StatisticsCollector::collectColumnsNdv(
         auto bucket_blob = bounds->serialize();
         auto bucket_blob_b64 = base64Encode(bucket_blob);
         auto text = col_desc.name;
-        if (isDecimal(Statistics::decayDataType(col_desc.type)))
+        auto type = Statistics::decayDataType(col_desc.type);
+        auto config = get_column_config(catalog, type);
+        if (config.wrapper_kind == WrapperKind::DecimalToFloat64)
         {
             text = fmt::format(FMT_STRING("toFloat64({})"), text);
         }

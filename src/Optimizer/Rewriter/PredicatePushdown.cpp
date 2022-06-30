@@ -271,11 +271,6 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
     ConstASTPtr right_effective_predicate = EffectivePredicateExtractor::extract(right, cte_info, context);
     ConstASTPtr join_predicate = PredicateUtils::extractJoinPredicate(node);
 
-    if (step->getStrictness() == ASTTableJoin::Strictness::Asof)
-    {
-        return processChild(node, predicate_context);
-    }
-
     std::set<String> left_symbols;
     for (const auto & column : left->getStep()->getOutputStream().header)
     {

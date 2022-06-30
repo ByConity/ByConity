@@ -22,6 +22,8 @@
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/TableJoin.h>
+#include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
+#include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
@@ -168,6 +170,19 @@ namespace
         ReplaceViewWithSubquery data{context};
         ReplaceViewWithSubqueryVisitor(data).visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-view");
+    }
+
+    void normalizeUnion(ASTPtr & query, ContextMutablePtr context)
+    {
+        {
+            SelectIntersectExceptQueryVisitor::Data data{context->getSettingsRef()};
+            SelectIntersectExceptQueryVisitor{data}.visit(query);
+        }
+
+        {
+            NormalizeSelectWithUnionQueryVisitor::Data data{context->getSettingsRef().union_default_mode};
+            NormalizeSelectWithUnionQueryVisitor{data}.visit(query);
+        }
     }
 
     void normalizeFunctions(ASTPtr & query, ContextMutablePtr context)
@@ -487,6 +502,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context)
         /// Statement rewriting
         expandCte(query, context);
         expandView(query, context);
+        normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
 
         /// Expression rewriting
         markTupleLiteralsAsLegacy(query, context);
@@ -500,6 +516,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context)
         applyWithAlias(query, context);
         expandCte(query, context);
         expandView(query, context);
+        normalizeUnion(query, context);
 
         markTupleLiteralsAsLegacy(query, context);
 

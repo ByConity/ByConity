@@ -35,7 +35,7 @@ void SelectIntersectExceptQueryMatcher::visit(ASTSelectWithUnionQuery & ast, Dat
 
     const auto & union_modes = ast.list_of_modes;
 
-    if (union_modes.empty())
+    if (ast.is_normalized || union_modes.empty())
         return;
 
     auto selects = std::move(ast.list_of_selects->children);

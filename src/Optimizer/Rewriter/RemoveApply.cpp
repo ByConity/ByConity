@@ -537,10 +537,10 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
 
     // step 8 project match values
     ASTPtr count_matches_greater_zero
-        = makeASTFunction("greater", ASTs{std::make_shared<ASTIdentifier>(aggregate_desc_1.column_name), std::make_shared<ASTLiteral>(0)});
+        = makeASTFunction("greater", ASTs{std::make_shared<ASTIdentifier>(aggregate_desc_1.column_name), std::make_shared<ASTLiteral>(0u)});
     ASTPtr true_value = std::make_shared<ASTLiteral>(true);
     ASTPtr count_null_matches_greater_zero
-        = makeASTFunction("greater", ASTs{std::make_shared<ASTIdentifier>(aggregate_desc_2.column_name), std::make_shared<ASTLiteral>(0)});
+        = makeASTFunction("greater", ASTs{std::make_shared<ASTIdentifier>(aggregate_desc_2.column_name), std::make_shared<ASTLiteral>(0u)});
     ASTPtr false_value = std::make_shared<ASTLiteral>(false);
     ASTPtr else_value = std::make_shared<ASTLiteral>(false);
     ASTPtr multi_if = makeASTFunction(
@@ -640,7 +640,7 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
     }
 
     String non_null = context->getSymbolAllocator()->newSymbol("build_side_non_null_symbol");
-    ASTPtr value = std::make_shared<ASTLiteral>(1);
+    ASTPtr value = std::make_shared<ASTLiteral>(1u);
     Assignment ass{non_null, value};
     assignments.emplace_back(ass);
     name_to_type[non_null] = std::make_shared<DataTypeUInt8>();
@@ -693,12 +693,12 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
     // compute in/notIn function result, project it as a bool symbol.
     if (in_fun.name == "in" || in_fun.name == "globalIn")
     {
-        ASTPtr true_predicate = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null), std::make_shared<ASTLiteral>(1));
-        ASTPtr true_value = std::make_shared<ASTLiteral>(1);
+        ASTPtr true_predicate = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null), std::make_shared<ASTLiteral>(1u));
+        ASTPtr true_value = std::make_shared<ASTLiteral>(1u);
         ASTPtr false_predicate
             = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null), std::make_shared<ASTLiteral>(Field()));
-        ASTPtr false_value = std::make_shared<ASTLiteral>(0);
-        ASTPtr else_value = std::make_shared<ASTLiteral>(0);
+        ASTPtr false_value = std::make_shared<ASTLiteral>(0u);
+        ASTPtr else_value = std::make_shared<ASTLiteral>(0u);
         auto multi_if = makeASTFunction("multiIf", true_predicate, true_value, false_predicate, false_value, else_value);
         auto cast = makeASTFunction("cast", multi_if, std::make_shared<ASTLiteral>("UInt8"));
 
@@ -825,7 +825,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         Assignments non_null_assignments;
         NameToType non_null_name_to_type;
         String non_null_symbol = context->getSymbolAllocator()->newSymbol("build_side_non_null_symbol");
-        Assignment non_null_assignment{non_null_symbol, std::make_shared<ASTLiteral>(1)};
+        Assignment non_null_assignment{non_null_symbol, std::make_shared<ASTLiteral>(1u)};
         non_null_assignments.emplace_back(non_null_assignment);
         non_null_name_to_type[non_null_symbol] = std::make_shared<DataTypeUInt8>();
         for (const auto & column : distinct_node->getStep()->getOutputStream().header)
@@ -881,7 +881,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
             if (column.name == non_null_symbol)
             {
                 ASTPtr coalesce
-                    = makeASTFunction("coalesce", ASTs{std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(0)});
+                    = makeASTFunction("coalesce", ASTs{std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(0u)});
                 auto cast = makeASTFunction("cast", coalesce, std::make_shared<ASTLiteral>("UInt8"));
                 Assignment exists{apply_step.getAssignment().first, cast};
                 exists_assignments.emplace_back(exists);
@@ -911,7 +911,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     Assignments non_null_assignments;
     NameToType non_null_name_to_type;
     String non_null_symbol = context->getSymbolAllocator()->newSymbol("build_side_non_null_symbol");
-    Assignment non_null_assignment{non_null_symbol, std::make_shared<ASTLiteral>(1)};
+    Assignment non_null_assignment{non_null_symbol, std::make_shared<ASTLiteral>(1u)};
     non_null_assignments.emplace_back(non_null_assignment);
     non_null_name_to_type[non_null_symbol] = std::make_shared<DataTypeUInt8>();
     for (const auto & column : subquery_ptr->getStep()->getOutputStream().header)
@@ -974,10 +974,10 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         if (column.name == non_null_symbol)
         {
             ASTPtr non_null_predicate
-                = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(1));
+                = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(1u));
             filter.emplace_back(non_null_predicate);
             ASTPtr filter_predicate = PredicateUtils::combineConjuncts(filter);
-            auto if_fun = makeASTFunction("if", filter_predicate, std::make_shared<ASTLiteral>(1), std::make_shared<ASTLiteral>(Field()));
+            auto if_fun = makeASTFunction("if", filter_predicate, std::make_shared<ASTLiteral>(1u), std::make_shared<ASTLiteral>(Field()));
             Assignment if_assignment{non_null_symbol, if_fun};
             filter_assignments.emplace_back(if_assignment);
             filter_name_to_type[non_null_symbol] = std::make_shared<DataTypeUInt8>();
@@ -1002,12 +1002,12 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
         if (column.name == non_null_symbol)
         {
             ASTPtr true_predicate
-                = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(1));
-            ASTPtr true_value = std::make_shared<ASTLiteral>(1);
+                = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(1u));
+            ASTPtr true_value = std::make_shared<ASTLiteral>(1u);
             ASTPtr false_predicate
                 = makeASTFunction("equals", std::make_shared<ASTIdentifier>(non_null_symbol), std::make_shared<ASTLiteral>(Field()));
-            ASTPtr false_value = std::make_shared<ASTLiteral>(0);
-            ASTPtr else_value = std::make_shared<ASTLiteral>(0);
+            ASTPtr false_value = std::make_shared<ASTLiteral>(0u);
+            ASTPtr else_value = std::make_shared<ASTLiteral>(0u);
             auto multi_if = makeASTFunction("multiIf", true_predicate, true_value, false_predicate, false_value, else_value);
             auto cast = makeASTFunction("cast", multi_if, std::make_shared<ASTLiteral>("UInt8"));
             Assignment remove_null{non_null_symbol, cast};
@@ -1056,7 +1056,7 @@ PlanNodePtr CorrelatedExistsSubqueryVisitor::visitApplyNode(ApplyNode & node, Vo
     {
         if (column.name == count_non_null_value)
         {
-            ASTs arguments{std::make_shared<ASTIdentifier>(count_non_null_value), std::make_shared<ASTLiteral>(0)};
+            ASTs arguments{std::make_shared<ASTIdentifier>(count_non_null_value), std::make_shared<ASTLiteral>(0u)};
             auto predicate = makeASTFunction("greater", arguments);
             Assignment exists{apply_step.getAssignment().first, predicate};
             exist_assignments.emplace_back(exists);

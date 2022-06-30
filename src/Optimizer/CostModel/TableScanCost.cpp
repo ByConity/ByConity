@@ -8,7 +8,7 @@ PlanNodeCost TableScanCost::calculate(const TableScanStep &, CostContext & conte
 {
     if (!context.stats)
         return PlanNodeCost::ZERO;
-    return PlanNodeCost::cpuCost(context.stats->getRowCount()) * context.cost_model.getReadFromStorageCostWeight();
+    return PlanNodeCost::cpuCost(context.stats->getRowCount()) * context.cost_model.getTableScanCostWeight();
 }
 
 }

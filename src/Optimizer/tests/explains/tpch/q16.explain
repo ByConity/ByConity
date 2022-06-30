@@ -15,24 +15,25 @@ Projection est. 93366 rows
                                  │     if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, NULL, 0, 0), 'UInt8'))
                                  └─ Left Join est. 691275 rows
                                     │     Condition: ps_suppkey == s_suppkey
-                                    ├─ Inner Join est. 691275 rows
-                                    │  │     Condition: ps_partkey == p_partkey
-                                    │  ├─ Repartition Exchange est. 800000 rows
-                                    │  │  │     Partition by: {ps_partkey}
-                                    │  │  └─ TableScan tpch.partsupp est. 800000 rows
-                                    │  └─ Repartition Exchange est. 172819 rows
-                                    │     │     Partition by: {p_partkey}
-                                    │     └─ Filter est. 172819 rows
-                                    │        │     (p_type NOT LIKE 'MEDIUM POLISHED%') AND (p_size IN (49, 14, 23, 45, 19, 3, 36, 9)) AND (p_brand != 'Brand#45')
-                                    │        └─ TableScan tpch.part est. 200000 rows
-                                    └─ Broadcast Exchange est. 8980 rows
-                                       └─ Projection est. 8980 rows
-                                          └─ MergingAggregated est. 8980 rows
-                                             └─ Repartition Exchange est. 8980 rows
-                                                │     Partition by: {s_suppkey}
-                                                └─ Aggregating est. 8980 rows
-                                                   │     Group by: {s_suppkey}
-                                                   └─ Projection est. 9000 rows
-                                                      └─ Filter est. 9000 rows
-                                                         │     s_comment LIKE '%Customer%Complaints%'
-                                                         └─ TableScan tpch.supplier est. 10000 rows
+                                    ├─ Repartition Exchange est. 691275 rows
+                                    │  │     Partition by: {ps_suppkey}
+                                    │  └─ Inner Join est. 691275 rows
+                                    │     │     Condition: ps_partkey == p_partkey
+                                    │     ├─ Repartition Exchange est. 800000 rows
+                                    │     │  │     Partition by: {ps_partkey}
+                                    │     │  └─ TableScan tpch.partsupp est. 800000 rows
+                                    │     └─ Repartition Exchange est. 172819 rows
+                                    │        │     Partition by: {p_partkey}
+                                    │        └─ Filter est. 172819 rows
+                                    │           │     (p_type NOT LIKE 'MEDIUM POLISHED%') AND (p_size IN (49, 14, 23, 45, 19, 3, 36, 9)) AND (p_brand != 'Brand#45')
+                                    │           └─ TableScan tpch.part est. 200000 rows
+                                    └─ Projection est. 8980 rows
+                                       └─ MergingAggregated est. 8980 rows
+                                          └─ Repartition Exchange est. 8980 rows
+                                             │     Partition by: {s_suppkey}
+                                             └─ Aggregating est. 8980 rows
+                                                │     Group by: {s_suppkey}
+                                                └─ Projection est. 9000 rows
+                                                   └─ Filter est. 9000 rows
+                                                      │     s_comment LIKE '%Customer%Complaints%'
+                                                      └─ TableScan tpch.supplier est. 10000 rows

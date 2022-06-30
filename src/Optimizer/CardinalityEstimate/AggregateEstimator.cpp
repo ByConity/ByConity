@@ -77,17 +77,17 @@ PlanNodeStatisticsPtr AggregateEstimator::estimate(PlanNodeStatisticsPtr & child
     const Names & group_keys = step.getKeys();
     double row_count = estimateGroupBy(symbol_statistics, child_stats, group_keys);
 
-//    const AggregateDescriptions & agg_descs = step.getAggregates();
-//    std::unordered_map<String, DataTypePtr> name_to_type;
-//    for (const auto & item : step.getOutputStream().header)
-//    {
-//        name_to_type[item.name] = item.type;
-//    }
-//    for (auto & agg_desc : agg_descs)
-//    {
-//        symbol_statistics[agg_desc.column_name]
-//            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
-//    }
+    const AggregateDescriptions & agg_descs = step.getAggregates();
+    std::unordered_map<String, DataTypePtr> name_to_type;
+    for (const auto & item : step.getOutputStream().header)
+    {
+        name_to_type[item.name] = item.type;
+    }
+    for (const auto & agg_desc : agg_descs)
+    {
+        symbol_statistics[agg_desc.column_name]
+            = AggregateEstimator::estimateAggFun(agg_desc.function, row_count, name_to_type[agg_desc.column_name]);
+    }
 
     return std::make_shared<PlanNodeStatistics>(row_count, symbol_statistics);
 }

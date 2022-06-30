@@ -27,7 +27,6 @@ public:
 struct CostContext
 {
     CostModel cost_model;
-    const Context & context;
     PlanNodeStatisticsPtr stats;
     const std::vector<PlanNodeStatisticsPtr> & children_stats;
     size_t worker_size;
@@ -75,8 +74,8 @@ class PlanCostVisitor : public PlanNodeVisitor<CostWithCTEReferenceCounts, PlanC
 {
 public:
     PlanCostVisitor(
-        CostModel cost_model_, const Context & context_, size_t worker_size_, CTEInfo & cte_info_, const std::unordered_map<CTEId, UInt64> & cte_ref_counts_)
-        : cost_model(std::move(cost_model_)), context(context_), worker_size(worker_size_), cte_info(cte_info_), cte_ref_counts(cte_ref_counts_)
+        CostModel cost_model_, size_t worker_size_, CTEInfo & cte_info_, const std::unordered_map<CTEId, UInt64> & cte_ref_counts_)
+        : cost_model(std::move(cost_model_)), worker_size(worker_size_), cte_info(cte_info_), cte_ref_counts(cte_ref_counts_)
     {
     }
 
@@ -85,7 +84,6 @@ public:
 
 private:
     CostModel cost_model;
-    const Context & context;
     size_t worker_size;
     CTEInfo & cte_info;
     const std::unordered_map<CTEId, UInt64> & cte_ref_counts;
