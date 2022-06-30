@@ -65,6 +65,8 @@ public:
     {
         return file_in.getFileName();
     }
+
+    size_t getSizeCompressed() const { return size_compressed; }
 };
 
 }

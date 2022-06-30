@@ -17,15 +17,11 @@ class DiskCacheSegment : public IDiskCacheSegment
 {
 public:
     DiskCacheSegment(
-        IMergeTreeDataPartPtr data_part_,
-        const String & stream_name_,
-        const String & extension_,
-        String full_path_,
         UInt32 segment_number_,
-        UInt32 segment_size_);
-
-    static String
-    getSegmentKey(const IMergeTreeDataPartPtr & data_part, const String & column_name, UInt32 segment_number, const String & extension);
+        UInt32 segment_size_,
+        const IMergeTreeDataPartPtr & data_part_,
+        const String & stream_name_,
+        const String & extension_);
 
     static String
     getSegmentKey(const StorageID& storage_id, const String& part_name,
@@ -35,21 +31,14 @@ public:
     void cacheToDisk(IDiskCache & cache) override;
 
 private:
-    off_t getSegmentStartOffset() const;
-    size_t getSegmentEndOffset() const;
-    MergeTreeReaderStream & getStream() const;
+    MergeTreeReaderStream & getStream();
+    size_t getSegmentStartOffset();
+    size_t getSegmentEndOffset();
 
     IMergeTreeDataPartPtr data_part;
-    String uuid;
-    String part_name;
-
     String stream_name;
     String extension;
-    String full_path;
-    UncompressedCachePtr uncompressed_cache;
-    MarkCachePtr mark_cache;
-    HDFSConnectionParams hdfs_params;
-    mutable std::unique_ptr<MergeTreeReaderStream> remote_stream;
+    std::unique_ptr<MergeTreeReaderStream> reader_stream;
 };
 
 }

@@ -3,19 +3,12 @@
 #include <Core/Types.h>
 #include <Storages/DiskCache/BucketLRUCache.h>
 #include <Storages/DiskCache/IDiskCache.h>
-#include <Poco/File.h>
-
-class DiskCacheTest_LoadV1Meta_Test;
-class DiskCacheTest_LoadV2Meta_Test;
-class DiskCacheTest_LoadMetaWithNonExistSegment_Test;
-class DiskCacheTest_Collect_Test;
-class DiskCacheTest_LoadV1MetaAndCollect_Test;
-class DiskCacheTest_LoadV2MetaAndCollect_Test;
 
 namespace DB
 {
 // #define DISK_CACHE_LRU_META_HEADER_SIZE 256
 class IDisk;
+using DiskPtr = std::shared_ptr<IDisk>;
 
 enum class DiskCacheState
 {
@@ -26,11 +19,17 @@ enum class DiskCacheState
 
 struct DiskCacheMeta
 {
-    DiskCacheMeta(DiskCacheState state_, size_t size_, const String & disk_name_) : state(state_), size(size_), disk_name(disk_name_) { }
+    DiskCacheMeta(DiskCacheState state_, size_t size_) : state(state_), size(size_) { }
+
     DiskCacheState state;
     size_t size;
-    String disk_name;
     mutable std::mutex mutex;
+
+    void setDisk(const DiskPtr & disk) { disk_wp = disk; }
+    DiskPtr getDisk() const { return disk_wp.lock(); }
+
+private:
+    std::weak_ptr<IDisk> disk_wp;
 };
 
 struct DiskCacheWeightFunction
@@ -58,20 +57,13 @@ public:
     size_t getCachedSize() const override { return weight(); }
 
 private:
-    friend class ::DiskCacheTest_LoadV1Meta_Test;
-    friend class ::DiskCacheTest_LoadV2Meta_Test;
-    friend class ::DiskCacheTest_LoadMetaWithNonExistSegment_Test;
-    friend class ::DiskCacheTest_Collect_Test;
-    friend class ::DiskCacheTest_LoadV1MetaAndCollect_Test;
-    friend class ::DiskCacheTest_LoadV2MetaAndCollect_Test;
-
     size_t loadSegmentsFromVolume(const IVolume & volume);
-    size_t loadSegmentsFromDisk(IDisk & disk, const String & current_path, String & partial_cache_name);
-    bool loadSegmentFromFile(IDisk & disk, const String & segment_rel_path, const String & segment_name);
-    bool loadSegment(IDisk & disk, const String & segment_rel_path, const String & segment_name, bool need_check_existence);
+    size_t loadSegmentsFromDisk(const DiskPtr & disk, const String & current_path, String & partial_cache_name);
+    bool loadSegmentFromFile(const DiskPtr & disk, const String & segment_rel_path, const String & segment_name);
+    bool loadSegment(const DiskPtr & disk, const String & segment_rel_path, const String & segment_name, bool need_check_existence);
 
-    // return disk name and file size
-    std::pair<String, size_t> writeSegment(const String & key, ReadBuffer & value, size_t weight_hint);
+    // return cached disk
+    DiskPtr writeSegment(const String & key, ReadBuffer & value, size_t weight_hint);
     void removeExternal(const Key & key, const std::shared_ptr<DiskCacheMeta> & value, size_t) override;
     bool isExist(const String & key);
 

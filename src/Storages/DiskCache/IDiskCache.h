@@ -27,6 +27,8 @@ public:
     IDiskCache(const IDiskCache &) = delete;
     IDiskCache & operator=(const IDiskCache &) = delete;
 
+    void asyncLoad();
+
     /// set segment name in cache and write value to disk cache
     virtual void set(const String & key, ReadBuffer & value, size_t weight_hint) = 0;
 
