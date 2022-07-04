@@ -1,44 +1,51 @@
 name: CI
 trigger:
   change:
+  manual:
     types: ["create", "push", "submit"]
 jobs:
-  scm_build:
-    name: SCM Build for clang11 ch_vanilla_debian_ci
-    image: hub.byted.org/data-ci-debian:latest
-    runs-on:
-      spec: m1.4xlarge
-      env: online
-    steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - uses: actions/scm
-        id: scm_build
-        inputs:
-          scm_repo: dp/clickhouse/ch_vanilla_clang_ci
-          version_type: test
-          sync_bvc: false
-          sync_aws: false
-          sync_oss: false
-          envs: {CUSTOM_CMAKE_BUILD_TYPE: "RelWithDebInfo"}
+#  scm_build:
+#    name: Build binary (for clang11 ch_vanilla_debian_ci)
+#    image: hub.byted.org/data-ci-debian:latest
+#    runs-on:
+#      spec: m1.4xlarge
+#      env: online
+#    steps:
+#      - uses: actions/checkout
+#        inputs:
+#          depth: 1
+#      - uses: actions/scm
+#        id: scm_build
+#        inputs:
+#          scm_repo: dp/clickhouse/ch_vanilla_clang_ci
+#          version_type: test
+#          sync_bvc: false
+#          sync_aws: false
+#          sync_oss: false
+#          envs: {CUSTOM_CMAKE_BUILD_TYPE: "Release"}
 
-  FuntionalStatelessTest:
+  FuntionalStatelessTest: &default_test
     name: FuntionalStatelessTest
-    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
-    depends: [scm_build]
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
+#    depends: [scm_build]
+    envs:
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
     runs-on:
       spec: m1.4xlarge
       env: online
     steps:
-      - uses: actions/checkout
+      - &action_checkout
+        uses: actions/checkout
         inputs:
           depth: 1
-      - name: Download From SCM
+      - &download_scm_binary
+        name: Download From SCM
         commands:
           - echo $(pwd)
           - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_VERSION=1.0.0.1969
           - CLICKHOUSE_PREFIX="clickhouse"
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
@@ -50,125 +57,118 @@ jobs:
           - cp -r /home/code/docker/test/stateless/. .
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
-      - name: Upload Artifact
+      - &upload_artifact
+        name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
           name: test_output
           path: /test_output
-      - name: Analyse Result
+      - &analyse_result
+        name: Analyse Result
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
-  FuntionalStatefulTest:
-    name: FuntionalStatefulTest
-    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
-    depends: [scm_build]
-    runs-on:
-      spec: m1.4xlarge
-      env: online
+  FuntionalStatelessTestWithOptimizer:
+    <<: *default_test
+    name: FuntionalStatelessTestWithOptimizer
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run FuntionalStatelessTest
         commands:
-          - echo $(pwd)
           - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          - CLICKHOUSE_PREFIX="clickhouse"
-          - mkdir -p $CLICKHOUSE_PREFIX
-          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+          - cp -r /home/code/docker/test/stateless/. .
+          - export ADDITIONAL_OPTIONS='--client-option enable_optimizer=1'   # enable optimizer for test
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *analyse_result
+
+  FuntionalStatefulTest:
+    <<: *default_test
+    name: FuntionalStatefulTest
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
       - name: Run FuntionalStatefulTest
         commands:
           - cd /
           - cp -r /home/code/docker/test/stateful/. .
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Analyse Result
+      - *upload_artifact
+      - *analyse_result
+
+  FuntionalStatefulTestWithOptimizer:
+    <<: *default_test
+    name: FuntionalStatefulTestWithOptimizer
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run FuntionalStatefulTest with Optimizer
         commands:
-          - /bin/bash /home/code/docker/test/result.sh
+          - cd /
+          - cp -r /home/code/docker/test/stateful/. .
+          - export ADDITIONAL_OPTIONS='--client-option enable_optimizer=1'   # enable optimizer for test
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *analyse_result
 
   CertificateStatefullTest:
+    <<: *default_test
     name: CertificateStatefullTest
-    image: hub.byted.org/bytehouse/clickhouse-certificate-stateful-test:gdb11.2
-    depends: [scm_build]
-    runs-on:
-      spec: m1.4xlarge
-      env: online
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
-        commands:
-          - echo $(pwd)
-          - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          - CLICKHOUSE_PREFIX="clickhouse"
-          - mkdir -p $CLICKHOUSE_PREFIX
-          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - *action_checkout
+      - *download_scm_binary
       - name: Run CertificateStatefullTest
         commands:
           - cd /
           - cp /home/code/docker/test/certificate/run.sh run.sh
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Analyse Result
+      - *upload_artifact
+      - *analyse_result
+
+  CertificateStatefullTestWithOptimizer:
+    <<: *default_test
+    name: CertificateStatefullTestWithOptimizer
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run CertificateStatefullTest
         commands:
-          - /bin/bash /home/code/docker/test/result.sh
+          - cd /
+          - cp /home/code/docker/test/certificate/run.sh run.sh
+          - export ADDITIONAL_OPTIONS='--client-option enable_optimizer=1'   # enable optimizer for test
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *analyse_result
 
   StressTest:
+    <<: *default_test
     name: StressTest
-    image: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2
-    depends: [scm_build]
-    runs-on:
-      spec: m1.4xlarge
-      env: online
+    image: hub.byted.org/bytehouse/clickhouse-stress-test:gdb11.2v1
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
-        commands:
-          - echo $(pwd)
-          - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          - CLICKHOUSE_PREFIX="clickhouse"
-          - mkdir -p $CLICKHOUSE_PREFIX
-          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - *action_checkout
+      - *download_scm_binary
       - name: Run FuntionalStressTest
         commands:
           - cd /
           - cp /home/code/docker/test/stress/run.sh run.sh
           - cp /home/code/docker/test/stress/stress stress
           - /bin/bash run.sh
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Analyse Result
-        commands:
-          - /bin/bash /home/code/docker/test/result.sh
+      - *upload_artifact
+      - *analyse_result
 
   scm_build_ASAN: #Build will be skipped by default
-    name: SCM Build_ASAN for clang11 ch_vanilla_debian_ci
+    name: Build ASAN enabled binary (for clang11 ch_vanilla_debian_ci)
     image: hub.byted.org/data-ci-debian:latest
     runs-on:
       spec: m1.4xlarge
@@ -187,11 +187,12 @@ jobs:
           sync_aws: false
           sync_oss: false
           envs:
+            CUSTOM_CMAKE_BUILD_TYPE: "Debug"
             CUSTOM_SANITIZE: "address"
 
-  FuntionalStatelessTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
+  FuntionalStatelessTest-ASAN: &default_test_asan #Test will be skipped by default if SCM ASAN build is skipped
     name: FuntionalStatelessTest-ASAN
-    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
     depends: [scm_build_ASAN]
     runs-on:
       spec: m1.4xlarge
@@ -199,11 +200,13 @@ jobs:
     if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
     envs:
       ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
+      - *action_checkout
+      - &action_checkout_asan
+        name: Download From SCM
         commands:
           - echo $(pwd)
           - cd /
@@ -216,45 +219,86 @@ jobs:
       - name: Run FuntionalStatelessTest
         commands:
           - cd /
-          - cp /home/code/docker/test/stateless/run.sh run.sh
-          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - cp -r /home/code/docker/test/stateless/. .
           - /bin/bash run.sh
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Upload sanitizer log
+      - *upload_artifact
+      - &upload_sanitizer_log
+        name: Upload sanitizer log
         uses: actions/upload-artifact
         inputs:
           name: sanitizer_log_output
           path: /sanitizer_log_output
-      - name: Analyse Result
+      - *analyse_result
+
+  FuntionalStatefulTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
+    <<: *default_test_asan
+    name: FuntionalStatefulTest-ASAN
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2v1
+    steps:
+      - *action_checkout
+      - *action_checkout_asan
+      - name: Run FuntionalStatefulTest
         commands:
-          - /bin/bash /home/code/docker/test/result.sh
+          - cp /home/code/docker/test/stateful/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
+
+  FuntionalStatelessTest-ASAN-LocateASANError:
+    <<: *default_test_asan
+    name: FuntionalStatelessTest-ASAN-LocateASANError
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
+    timeout: 360
+    steps:
+      - *action_checkout
+      - *action_checkout_asan
+      - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
+        commands:
+          - cd /
+          - cp -r /home/code/docker/test/stateless/. .
+          - export ADDITIONAL_OPTIONS='--jobs 1 --locate-asan-error-to-case'
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
+
+  FuntionalStatelessTestWithOptimizer-ASAN-LocateASANError:
+    <<: *default_test_asan
+    name: FuntionalStatelessTestWithOptimizer-ASAN-LocateASANError
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2v1
+    timeout: 360
+    steps:
+      - *action_checkout
+      - *action_checkout_asan
+      - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
+        commands:
+          - cd /
+          - cp -r /home/code/docker/test/stateless/. .
+          - export ADDITIONAL_OPTIONS='--jobs=1 --locate-asan-error-to-case --client-option enable_optimizer=1'   # enable optimizer for test
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
 
   IntegrationTestsRelease0:
     name: IntegrationTestRelease0
     image: minikube:1.22.0
     timeout: 360
+    envs:
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
     runs-on:
       linux: {}
-    depends: [scm_build]
+#    depends: [scm_build]
     if: ${{ false }}
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
-        commands:
-          - echo $(pwd)
-          - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          - CLICKHOUSE_PREFIX="clickhouse"
-          - mkdir -p $CLICKHOUSE_PREFIX
-          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - *action_checkout
+      - *download_scm_binary
       - name: Run IntegrationTest-CI-Runner
         continue-on-error: true
         commands:
@@ -262,39 +306,24 @@ jobs:
           - export RUN_BY_HASH_NUM=0
           - export RUN_BY_HASH_TOTAL=2
           - /bin/bash /home/code/tests/integration/run.sh
-      - name: Upload Artifact
-        continue-on-error: true
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Analyse Result
-        continue-on-error: true
-        commands:
-          - /bin/bash /home/code/docker/test/result.sh
+      - *upload_artifact
+      - *analyse_result
 
   IntegrationTestsRelease1:
     name: IntegrationTestRelease1
     image: minikube:1.22.0
     timeout: 360
+    envs:
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
     runs-on:
       linux: {}
-    depends: [scm_build]
+#    depends: [scm_build]
     if: ${{ false }}
     steps:
-      - uses: actions/checkout
-        inputs:
-          depth: 1
-      - name: Download From SCM
-        commands:
-          - echo $(pwd)
-          - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          - CLICKHOUSE_PREFIX="clickhouse"
-          - mkdir -p $CLICKHOUSE_PREFIX
-          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - *action_checkout
+      - *download_scm_binary
       - name: Run IntegrationTest-CI-Runner
         continue-on-error: true
         commands:
@@ -302,103 +331,138 @@ jobs:
           - export RUN_BY_HASH_NUM=1
           - export RUN_BY_HASH_TOTAL=2
           - /bin/bash /home/code/tests/integration/run.sh
-      - name: Upload Artifact
-        continue-on-error: true
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Analyse Result
-        continue-on-error: true
-        commands:
-          - /bin/bash /home/code/docker/test/result.sh
+      - *upload_artifact
+      - *analyse_result
 
-  FuntionalStatefulTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
-    name: FuntionalStatefulTest-ASAN
-    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb11.2
-    depends: [scm_build_ASAN]
+  scm_build_TSAN:
+    name: Build TSAN enabled binary (for clang11 ch_vanilla_debian_ci)
+    image: hub.byted.org/data-ci-debian:latest
     runs-on:
       spec: m1.4xlarge
       env: online
-    if: ${{ Jobs.scm_build_ASAN.Conclusion == "success" }}
-    envs:
-      ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
+    if: ${{ false }}
     steps:
-      - uses: actions/checkout
+      - *action_checkout
+      - uses: actions/scm
+        id: scm_build
         inputs:
-          depth: 1
-      - name: Download From SCM
+          scm_repo: dp/clickhouse/ch_vanilla_clang_ci
+          version_type: test
+          sync_bvc: false
+          sync_aws: false
+          sync_oss: false
+          envs:
+            CUSTOM_CMAKE_BUILD_TYPE: "Debug"
+            CUSTOM_SANITIZE: "thread"
+
+  FuntionalStatelessTest-TSAN0: &default_test_tsan  #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+    name: FuntionalStatelessTest-TSAN0
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+    depends: [scm_build_TSAN]
+    timeout: 360
+    if: ${{ Jobs.scm_build_TSAN.Conclusion == "success" }}
+    runs-on:
+      spec: m1.8xlarge
+      env: online
+    envs:
+      TSAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/tsan.log"
+      CONSUL_HTTP_HOST: "10.8.156.215"
+      CONSUL_HTTP_PORT: "2280"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
+    steps:
+      - *action_checkout
+      - &download_scm_binary_tsan
+        name: Download From SCM
         commands:
           - echo $(pwd)
           - cd /
-          - CLICKHOUSE_VERSION=${{ Jobs["scm_build_ASAN"].Steps["scm_build"].Outputs["version"] }}
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build_TSAN"].Steps["scm_build"].Outputs["version"] }}
           - CLICKHOUSE_PREFIX="clickhouse"
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+      - name: Run FuntionalStatelessTest
+        continue-on-error: true
+        commands:
+          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
+          - export CLICKHOUSE_WATCHDOG_ENABLE=0
+          - export RUN_BY_HASH_NUM=0
+          - export RUN_BY_HASH_TOTAL=3
+          - cd /
+          - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
+
+  FuntionalStatelessTest-TSAN1: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+    <<: *default_test_tsan
+    name: FuntionalStatelessTest-TSAN1
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+    steps:
+      - *action_checkout
+      - *download_scm_binary_tsan
+      - name: Run FuntionalStatelessTest
+        continue-on-error: true
+        commands:
+          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
+          - export CLICKHOUSE_WATCHDOG_ENABLE=0
+          - export RUN_BY_HASH_NUM=1
+          - export RUN_BY_HASH_TOTAL=3
+          - cd /
+          - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
+
+  FuntionalStatelessTest-TSAN2: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+    <<: *default_test_tsan
+    name: FuntionalStatelessTest-TSAN2
+    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
+    steps:
+      - *action_checkout
+      - *download_scm_binary_tsan
+      - name: Run FuntionalStatelessTest
+        continue-on-error: true
+        commands:
+          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
+          - export CLICKHOUSE_WATCHDOG_ENABLE=0
+          - export RUN_BY_HASH_NUM=2
+          - export RUN_BY_HASH_TOTAL=3
+          - cd /
+          - cp /home/code/docker/test/stateless/run.sh run.sh
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - /bin/bash run.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result
+
+  FuntionalStatefulTest-TSAN:
+    <<: *default_test_tsan
+    name: FuntionalStatefulTest-TSAN
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
+    depends: [scm_build_TSAN]
+    if: ${{ Jobs.scm_build_TSAN.Conclusion == "success" }}
+    runs-on:
+      spec: m1.8xlarge
+      env: online
+    envs:
+      TSAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/tsan.log"
+    steps:
+      - *action_checkout
+      - *download_scm_binary_tsan
       - name: Run FuntionalStatefulTest
         commands:
+          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
+          - export CLICKHOUSE_WATCHDOG_ENABLE=0
           - cd /
           - cp /home/code/docker/test/stateful/run.sh run.sh
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: test_output
-          path: /test_output
-      - name: Upload sanitizer log
-        uses: actions/upload-artifact
-        inputs:
-          name: sanitizer_log_output
-          path: /sanitizer_log_output
-      - name: Analyse Result
-        commands:
-          - /bin/bash /home/code/docker/test/result.sh
-
-  FuntionalStatelessTest-ASAN-LocateASANError:
-      name: FuntionalStatelessTest-ASAN-LocateASANError
-      image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb11.2
-      timeout: 360
-      depends: [scm_build_ASAN]
-      runs-on:
-        spec: m1.4xlarge
-        env: online
-      if: ${{ Jobs.scm_build_ASAN.Conclusion = "success" }}
-      envs:
-        ASAN_OPTIONS: "halt_on_error=false,log_path=/var/log/clickhouse-server/asan.log"
-      steps:
-        - uses: actions/checkout
-          inputs:
-            depth: 1
-        - name: Download From SCM
-          commands:
-            - echo $(pwd)
-            - cd /
-            - CLICKHOUSE_VERSION=${{ Jobs["scm_build_ASAN"].Steps["scm_build"].Outputs["version"] }}
-            - CLICKHOUSE_PREFIX="clickhouse"
-            - mkdir -p $CLICKHOUSE_PREFIX
-            - echo 'ok'
-            - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
-            - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
-            - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
-        - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
-          commands:
-            - cd /
-            - cp /home/code/docker/test/stateless_locate_asan_error/run.sh run.sh
-            - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-            - /bin/bash run.sh
-        - name: Upload Artifact
-          uses: actions/upload-artifact
-          inputs:
-            name: test_output
-            path: /test_output
-        - name: Upload sanitizer log
-          uses: actions/upload-artifact
-          inputs:
-            name: sanitizer_log_output
-            path: /sanitizer_log_output
-        - name: Analyse Result
-          commands:
-            - /bin/bash /home/code/docker/test/result.sh
+      - *upload_artifact
+      - *upload_sanitizer_log
+      - *analyse_result

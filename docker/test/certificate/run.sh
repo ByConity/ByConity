@@ -79,25 +79,31 @@ function run_tests()
     # more idiologically correct.
     read -ra ADDITIONAL_OPTIONS <<< "${ADDITIONAL_OPTIONS:-}"
 
-    # Skip these tests, because they fail when we rerun them multiple times
-    if [ "$NUM_TRIES" -gt "1" ]; then
-        ADDITIONAL_OPTIONS+=('--order=random')
-        ADDITIONAL_OPTIONS+=('--skip')
-        ADDITIONAL_OPTIONS+=('00000_no_tests_to_skip')
-        # Note that flaky check must be ran in parallel, but for now we run
-        # everything in parallel except DatabaseReplicated. See below.
-    fi
-
-    if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
-        ADDITIONAL_OPTIONS+=('--replicated-database')
-        ADDITIONAL_OPTIONS+=('--jobs')
-        ADDITIONAL_OPTIONS+=('2')
-    else
-        # Too many tests fail for DatabaseReplicated in parallel. All other
-        # configurations are OK.
-        ADDITIONAL_OPTIONS+=('--jobs')
-        ADDITIONAL_OPTIONS+=('8')
-    fi
+#    # Skip these tests, because they fail when we rerun them multiple times
+#    if [ "$NUM_TRIES" -gt "1" ]; then
+#        ADDITIONAL_OPTIONS+=('--order=random')
+#        ADDITIONAL_OPTIONS+=('--skip')
+#        ADDITIONAL_OPTIONS+=('00000_no_tests_to_skip')
+#        # Note that flaky check must be ran in parallel, but for now we run
+#        # everything in parallel except DatabaseReplicated. See below.
+#    fi
+#
+#    if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
+#        ADDITIONAL_OPTIONS+=('--replicated-database')
+#        ADDITIONAL_OPTIONS+=('--jobs')
+#        ADDITIONAL_OPTIONS+=('2')
+#    else
+#        # Too many tests fail for DatabaseReplicated in parallel. All other
+#        # configurations are OK.
+#
+#        # set --jobs 16 if no --jobs in ADDITIONAL_OPTIONS
+#        NUMBER_OF_LOG=$( echo "${ADDITIONAL_OPTIONS[@]}" | grep -c 'jobs' )
+#        if [[ $NUMBER_OF_LOG -eq 0 ]]; then
+#          ADDITIONAL_OPTIONS+=('--jobs')
+#          ADDITIONAL_OPTIONS+=('16')
+#        fi
+#
+#    fi
 
     echo "load tables for certificate"
     python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_1_certificate_aeolus_bp_edu
@@ -109,9 +115,7 @@ function run_tests()
     python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_7_certificate_motor_dzx
     echo "load tables for certificates done"
 
-    clickhouse-test --hung-check --print-time --run certificate 2>&1 \
-        | ts '%Y-%m-%d %H:%M:%S' \
-        | tee -a test_output/test_result.txt
+    clickhouse-test --hung-check --print-time --run certificate "${ADDITIONAL_OPTIONS[@]}" 2>&1  | ts '%Y-%m-%d %H:%M:%S'   | tee -a test_output/test_result.txt || true
 }
 
 export -f run_tests

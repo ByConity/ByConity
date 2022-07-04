@@ -18,6 +18,8 @@ RETRIES_SIGN = "Some tests were restarted"
 
 ASAN_FAIL = "asan check failed"
 
+SERVER_HEALTH_CHECK = "Server does not respond to health check"
+
 def process_test_log(log_path):
     total = 0
     skipped = 0
@@ -26,6 +28,7 @@ def process_test_log(log_path):
     success = 0
     hung = False
     asan_fail = False
+    server_health_check = False
     retries = False
     task_timeout = True
     test_results = []
@@ -40,6 +43,8 @@ def process_test_log(log_path):
                 retries = True
             if ASAN_FAIL in line:
                 asan_fail = True
+            if SERVER_HEALTH_CHECK in line:
+                server_health_check = True
             if any(sign in line for sign in (OK_SIGN, FAIL_SIGN, UNKNOWN_SIGN, SKIPPED_SIGN)):
                 test_name = line.split(' ')[2].split(':')[0]
 
@@ -67,7 +72,7 @@ def process_test_log(log_path):
                 else:
                     success += int(OK_SIGN in line)
                     test_results.append((test_name, "OK", test_time))
-    return total, skipped, unknown, failed, success, hung, asan_fail, task_timeout, retries, test_results
+    return total, skipped, unknown, failed, success, hung, asan_fail, server_health_check, task_timeout, retries, test_results
 
 def process_result(result_path):
     test_results = []
@@ -83,7 +88,7 @@ def process_result(result_path):
         state = "error"
 
     if result_path and os.path.exists(result_path):
-        total, skipped, unknown, failed, success, hung, asan_fail, task_timeout, retries, test_results = process_test_log(result_path)
+        total, skipped, unknown, failed, success, hung, asan_fail, server_health_check, task_timeout, retries, test_results = process_test_log(result_path)
         is_flacky_check = 1 < int(os.environ.get('NUM_TRIES', 1))
         # If no tests were run (success == 0) it indicates an error (e.g. server did not start or crashed immediately)
         # But it's Ok for "flaky checks" - they can contain just one test for check which is marked as skipped.
@@ -125,6 +130,11 @@ def process_result(result_path):
         state = "test failed"
         if test_results is []:
             test_results.append(("Asan filed", "FAIL", "0"))
+    
+    if server_health_check:
+        description += "Server does not respond to health check, Please check the log"
+        state = "test failed"
+        test_results.append(("Server health check failed", "FAIL", "0"))
     print(state, description)
     return state, description, test_results
 

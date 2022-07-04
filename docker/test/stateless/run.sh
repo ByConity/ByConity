@@ -92,14 +92,19 @@ function run_tests()
     else
         # Too many tests fail for DatabaseReplicated in parallel. All other
         # configurations are OK.
-        ADDITIONAL_OPTIONS+=('--jobs')
-        ADDITIONAL_OPTIONS+=('16')
+
+        # set --jobs 16 if no --jobs in ADDITIONAL_OPTIONS
+        NUMBER_OF_LOG=$( echo "${ADDITIONAL_OPTIONS[@]}" | grep -c 'jobs' )
+        if [[ $NUMBER_OF_LOG -eq 0 ]]; then
+          ADDITIONAL_OPTIONS+=('--jobs')
+          ADDITIONAL_OPTIONS+=('16')
+        fi
     fi
 
     clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
            --use-skip-list --run stateless --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
-        | tee -a test_output/test_result.txt
+        | tee -a test_output/test_result.txt || true
 }
 
 export -f run_tests
