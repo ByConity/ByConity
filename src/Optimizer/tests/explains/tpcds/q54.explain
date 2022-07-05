@@ -32,11 +32,11 @@ Projection est. 100 rows
                                                 │  │  │     │     Condition: ss_customer_sk == c_customer_sk
                                                 │  │  │     ├─ Local Exchange est. 2879987999 rows
                                                 │  │  │     │  └─ Filter est. 2879987999 rows
-                                                │  │  │     │     │     Dynamic Filters: {ss_customer_sk:range}
+                                                │  │  │     │     │     Dynamic Filters: {ss_customer_sk:bloomfilter,ss_customer_sk:range}
                                                 │  │  │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                                │  │  │     └─ Projection est. 1975 rows
-                                                │  │  │        │     Dynamic Filters Builder: {c_customer_sk}
-                                                │  │  │        └─ Broadcast Exchange est. 1975 rows
+                                                │  │  │     └─ Broadcast Exchange est. 1975 rows
+                                                │  │  │        └─ Projection est. 1975 rows
+                                                │  │  │           │     Dynamic Filters Builder: {c_customer_sk}
                                                 │  │  │           └─ Inner Join est. 1975 rows
                                                 │  │  │              │     Condition: ca_county == s_county, ca_state == s_state
                                                 │  │  │              ├─ Repartition Exchange est. 22246 rows
@@ -64,28 +64,28 @@ Projection est. 100 rows
                                                 │  │  │              │                          │  ├─ Union est. 2159980792 rows
                                                 │  │  │              │                          │  │  ├─ Local Exchange est. 1439980416 rows
                                                 │  │  │              │                          │  │  │  └─ Filter est. 1439980416 rows
-                                                │  │  │              │                          │  │  │     │     Dynamic Filters: {cs_item_sk:range,cs_sold_date_sk:range}
+                                                │  │  │              │                          │  │  │     │     Dynamic Filters: {cs_item_sk:bloomfilter,cs_item_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                                                 │  │  │              │                          │  │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
                                                 │  │  │              │                          │  │  └─ Local Exchange est. 720000376 rows
                                                 │  │  │              │                          │  │     └─ Filter est. 720000376 rows
-                                                │  │  │              │                          │  │        │     Dynamic Filters: {ws_item_sk:range,ws_sold_date_sk:range}
+                                                │  │  │              │                          │  │        │     Dynamic Filters: {ws_item_sk:bloomfilter,ws_item_sk:range,ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
                                                 │  │  │              │                          │  │        └─ TableScan tpcds.web_sales est. 720000376 rows
-                                                │  │  │              │                          │  └─ Projection est. 758 rows
-                                                │  │  │              │                          │     │     Dynamic Filters Builder: {i_item_sk}
-                                                │  │  │              │                          │     └─ Broadcast Exchange est. 758 rows
+                                                │  │  │              │                          │  └─ Broadcast Exchange est. 758 rows
+                                                │  │  │              │                          │     └─ Projection est. 758 rows
+                                                │  │  │              │                          │        │     Dynamic Filters Builder: {i_item_sk}
                                                 │  │  │              │                          │        └─ Filter est. 758 rows
                                                 │  │  │              │                          │           │     (i_category = 'Women') AND (i_class = 'maternity')
                                                 │  │  │              │                          │           └─ TableScan tpcds.item est. 300000 rows
-                                                │  │  │              │                          └─ Projection est. 30 rows
-                                                │  │  │              │                             │     Dynamic Filters Builder: {d_date_sk}
-                                                │  │  │              │                             └─ Broadcast Exchange est. 30 rows
+                                                │  │  │              │                          └─ Broadcast Exchange est. 30 rows
+                                                │  │  │              │                             └─ Projection est. 30 rows
+                                                │  │  │              │                                │     Dynamic Filters Builder: {d_date_sk}
                                                 │  │  │              │                                └─ Filter est. 30 rows
                                                 │  │  │              │                                   │     (d_year = 1998) AND (d_moy = 12)
                                                 │  │  │              │                                   └─ TableScan tpcds.date_dim est. 73049 rows
-                                                │  │  │              └─ Projection est. 1002 rows
-                                                │  │  │                 │     Dynamic Filters Builder: {s_county,s_state}
-                                                │  │  │                 └─ Repartition Exchange est. 1002 rows
-                                                │  │  │                    │     Partition by: {s_county, s_state}
+                                                │  │  │              └─ Repartition Exchange est. 1002 rows
+                                                │  │  │                 │     Partition by: {s_county, s_state}
+                                                │  │  │                 └─ Projection est. 1002 rows
+                                                │  │  │                    │     Dynamic Filters Builder: {s_county,s_state}
                                                 │  │  │                    └─ TableScan tpcds.store est. 1002 rows
                                                 │  │  └─ Repartition Exchange est. 73049 rows
                                                 │  │     │     Partition by: {d_date_sk_1}
@@ -116,4 +116,4 @@ Projection est. 100 rows
                                                                         └─ Filter est. 30 rows
                                                                            │     (d_moy_3 = 12) AND (d_year_3 = 1998)
                                                                            └─ TableScan tpcds.date_dim est. 73049 rows
-note: Dynamic Filter is applied for 9 times.
+note: Dynamic Filter is applied for 14 times.

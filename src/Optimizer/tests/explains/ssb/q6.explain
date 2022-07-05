@@ -19,19 +19,19 @@ Projection est. 2421 rows
                                  │     │     Condition: LO_PARTKEY == P_PARTKEY
                                  │     ├─ Local Exchange est. 5999989813 rows
                                  │     │  └─ Filter est. 5999989813 rows
-                                 │     │     │     Dynamic Filters: {LO_PARTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
+                                 │     │     │     Dynamic Filters: {LO_PARTKEY:bloomfilter,LO_PARTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
                                  │     │     └─ TableScan ssb.lineorder est. 5999989813 rows
-                                 │     └─ Projection est. 1968 rows
-                                 │        │     Dynamic Filters Builder: {P_PARTKEY}
-                                 │        └─ Broadcast Exchange est. 1968 rows
+                                 │     └─ Broadcast Exchange est. 1968 rows
+                                 │        └─ Projection est. 1968 rows
+                                 │           │     Dynamic Filters Builder: {P_PARTKEY}
                                  │           └─ Filter est. 1968 rows
                                  │              │     P_BRAND = 'MFGR#2221'
                                  │              └─ TableScan ssb.part est. 2000000 rows
-                                 └─ Projection est. 400686 rows
-                                    │     Dynamic Filters Builder: {S_SUPPKEY}
-                                    └─ Repartition Exchange est. 400686 rows
-                                       │     Partition by: {S_SUPPKEY}
+                                 └─ Repartition Exchange est. 400686 rows
+                                    │     Partition by: {S_SUPPKEY}
+                                    └─ Projection est. 400686 rows
+                                       │     Dynamic Filters Builder: {S_SUPPKEY}
                                        └─ Filter est. 400686 rows
                                           │     S_REGION = 'EUROPE'
                                           └─ TableScan ssb.supplier est. 2000000 rows
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 4 times.

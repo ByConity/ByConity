@@ -8,14 +8,6 @@
 
 namespace DB
 {
-namespace
-{
-constexpr UInt32 MINIMUM_FILTER_ROWS = 10000;
-constexpr double MAXIMAL_FILTER_FACTOR = 0.7;
-constexpr bool ENABLE_EXCHANGE_FILTER = true;
-constexpr bool ENABLE_AGGREGATE_FILTER = true;
-}
-
 void AddDynamicFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     if (!context->getSettingsRef().enable_dynamic_filter)
@@ -41,10 +33,9 @@ void AddDynamicFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         dynamic_filters.dynamic_filter_statistics,
         dynamic_filters.dynamic_filter_cost,
         dynamic_filters.merged_dynamic_filters,
-        MINIMUM_FILTER_ROWS,
-        MAXIMAL_FILTER_FACTOR,
-        ENABLE_EXCHANGE_FILTER,
-        ENABLE_AGGREGATE_FILTER};
+        context->getSettingsRef().dynamic_filter_min_filter_rows,
+        context->getSettingsRef().dynamic_filter_max_filter_factor,
+        context->getSettingsRef().enable_dynamic_filter_for_join};
     PlanWithDynamicFilterPredicates result = predicate_rewriter.rewrite(plan.getPlanNode(), context);
 
     GraphvizPrinter::printLogicalPlan(plan, context, "3902-AddDynamicFilters");
@@ -206,18 +197,16 @@ AddDynamicFilters::DynamicFilterPredicatesRewriter::DynamicFilterPredicatesRewri
     const std::unordered_map<DynamicFilterId, SymbolStatisticsPtr> & dynamic_filter_statistics_,
     const std::unordered_map<DynamicFilterId, size_t> & dynamic_filter_cost_,
     const std::unordered_map<DynamicFilterId, DynamicFilterId> & merged_dynamic_filters_,
-    UInt32 minimum_filter_rows_,
-    double maximal_filter_factor_,
-    bool enable_aggregate_filter_,
-    bool enable_exchange_filter_)
+    UInt64 min_filter_rows_,
+    double max_filter_factor_,
+    bool enable_dynamic_filter_for_join_)
     : cte_helper(cte_info_)
     , dynamic_filter_statistics(dynamic_filter_statistics_)
     , dynamic_filter_cost(dynamic_filter_cost_)
     , merged_dynamic_filters(merged_dynamic_filters_)
-    , minimum_filter_rows(minimum_filter_rows_)
-    , maximal_filter_factor(maximal_filter_factor_)
-    , enable_aggregate_filter(enable_aggregate_filter_)
-    , enable_exchange_filter(enable_exchange_filter_)
+    , min_filter_rows(min_filter_rows_)
+    , max_filter_factor(max_filter_factor_)
+    , enable_dynamic_filter_for_join(enable_dynamic_filter_for_join_)
 {
 }
 
@@ -268,7 +257,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitFilter
     auto child_stats = CardinalityEstimator::estimate(*node.getChildren()[0], cte_helper.getCTEInfo(), context.context);
     const auto * filter_step = dynamic_cast<const FilterStep *>(node.getStep().get());
 
-    if (!child_stats || child_stats.value()->getRowCount() < minimum_filter_rows)
+    if (!child_stats || child_stats.value()->getRowCount() < min_filter_rows)
     {
         return PlanWithScanRows{
             PlanNodeBase::createPlanNode(
@@ -300,7 +289,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitFilter
             auto filter_cost = dynamic_filter_cost.at(build_id);
             double filter_factor = DynamicFilters::estimateSelectivity(
                 description, dynamic_filter_statistics.at(build_id), child_stats.value(), *filter_step, context.context);
-            if (filter_factor <= maximal_filter_factor && child.scan_rows > filter_cost)
+            if (filter_factor <= max_filter_factor && child.scan_rows > filter_cost)
             {
                 predicates.emplace_back(DynamicFilters::createDynamicFilterExpression(description));
                 effective_dynamic_filters[description.id].emplace(description.type);
@@ -321,10 +310,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitFilter
 PlanWithScanRows
 AddDynamicFilters::DynamicFilterPredicatesRewriter::visitAggregatingNode(AggregatingNode & node, AllowedDynamicFilters & context)
 {
-    if (enable_aggregate_filter)
-    {
-        context.effective_dynamic_filters.insert(context.allowed_dynamic_filters.begin(), context.allowed_dynamic_filters.end());
-    }
+    context.effective_dynamic_filters.insert(context.allowed_dynamic_filters.begin(), context.allowed_dynamic_filters.end());
     return visitPlanNode(node, context);
 }
 
@@ -333,7 +319,7 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitExchan
 {
     const auto * exchange = dynamic_cast<const ExchangeStep *>(node.getStep().get());
     if (exchange->getExchangeMode() != ExchangeMode::UNKNOWN && exchange->getExchangeMode() != ExchangeMode::LOCAL_NO_NEED_REPARTITION
-        && exchange->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION && enable_exchange_filter)
+        && exchange->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
     {
         context.effective_dynamic_filters.insert(context.allowed_dynamic_filters.begin(), context.allowed_dynamic_filters.end());
     }
@@ -342,13 +328,19 @@ PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitExchan
 
 PlanWithScanRows AddDynamicFilters::DynamicFilterPredicatesRewriter::visitJoinNode(JoinNode & plan, AllowedDynamicFilters & context)
 {
+    context.effective_dynamic_filters.insert(context.allowed_dynamic_filters.begin(), context.allowed_dynamic_filters.end());
     AllowedDynamicFilters left_context{context.allowed_dynamic_filters, context.effective_dynamic_filters, context.context};
 
     auto right_child = plan.getChildren()[1];
     if (const auto * right_projection_step = dynamic_cast<const ProjectionStep *>(right_child->getStep().get()))
         for (const auto & item : right_projection_step->getDynamicFilters())
+        {
             if (merged_dynamic_filters.contains(item.second.id))
                 left_context.allowed_dynamic_filters.emplace(merged_dynamic_filters.at(item.second.id));
+            if (enable_dynamic_filter_for_join) {
+                left_context.effective_dynamic_filters.emplace(item.second.id);
+            }
+        }
 
 
     auto left = VisitorUtil::accept(plan.getChildren()[0], *this, left_context);

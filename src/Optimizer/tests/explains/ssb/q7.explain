@@ -23,17 +23,17 @@ Projection est. 60525 rows
                                  │     │     │     (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
                                  │     │     │     Dynamic Filters: {LO_CUSTKEY:bloomfilter,LO_CUSTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
                                  │     │     └─ TableScan ssb.lineorder est. 5999989813 rows
-                                 │     └─ Projection est. 400039 rows
-                                 │        │     Dynamic Filters Builder: {S_SUPPKEY}
-                                 │        └─ Repartition Exchange est. 400039 rows
-                                 │           │     Partition by: {S_SUPPKEY}
+                                 │     └─ Repartition Exchange est. 400039 rows
+                                 │        │     Partition by: {S_SUPPKEY}
+                                 │        └─ Projection est. 400039 rows
+                                 │           │     Dynamic Filters Builder: {S_SUPPKEY}
                                  │           └─ Filter est. 400039 rows
                                  │              │     S_REGION = 'ASIA'
                                  │              └─ TableScan ssb.supplier est. 2000000 rows
-                                 └─ Projection est. 6002311 rows
-                                    │     Dynamic Filters Builder: {C_CUSTKEY}
-                                    └─ Repartition Exchange est. 6002311 rows
-                                       │     Partition by: {C_CUSTKEY}
+                                 └─ Repartition Exchange est. 6002311 rows
+                                    │     Partition by: {C_CUSTKEY}
+                                    └─ Projection est. 6002311 rows
+                                       │     Dynamic Filters Builder: {C_CUSTKEY}
                                        └─ Filter est. 6002311 rows
                                           │     C_REGION = 'ASIA'
                                           └─ TableScan ssb.customer est. 30000000 rows

@@ -18,20 +18,20 @@ Projection est. ? rows
                      │              │     Condition: ps_suppkey == s_suppkey
                      │              ├─ Local Exchange est. 800000 rows
                      │              │  └─ Filter est. 800000 rows
-                     │              │     │     Dynamic Filters: {ps_suppkey:range}
+                     │              │     │     Dynamic Filters: {ps_suppkey:bloomfilter,ps_suppkey:range}
                      │              │     └─ TableScan tpch.partsupp est. 800000 rows
-                     │              └─ Projection est. 400 rows
-                     │                 │     Dynamic Filters Builder: {s_suppkey}
-                     │                 └─ Broadcast Exchange est. 400 rows
+                     │              └─ Broadcast Exchange est. 400 rows
+                     │                 └─ Projection est. 400 rows
+                     │                    │     Dynamic Filters Builder: {s_suppkey}
                      │                    └─ Inner Join est. 400 rows
                      │                       │     Condition: s_nationkey == n_nationkey
                      │                       ├─ Local Exchange est. 10000 rows
                      │                       │  └─ Filter est. 10000 rows
-                     │                       │     │     Dynamic Filters: {s_nationkey:range}
+                     │                       │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                      │                       │     └─ TableScan tpch.supplier est. 10000 rows
-                     │                       └─ Projection est. 1 rows
-                     │                          │     Dynamic Filters Builder: {n_nationkey}
-                     │                          └─ Broadcast Exchange est. 1 rows
+                     │                       └─ Broadcast Exchange est. 1 rows
+                     │                          └─ Projection est. 1 rows
+                     │                             │     Dynamic Filters Builder: {n_nationkey}
                      │                             └─ Filter est. 1 rows
                      │                                │     n_name = 'GERMANY'
                      │                                └─ TableScan tpch.nation est. 25 rows
@@ -46,21 +46,21 @@ Projection est. ? rows
                                           │     Condition: ps_suppkey_1 == s_suppkey_1
                                           ├─ Local Exchange est. 800000 rows
                                           │  └─ Filter est. 800000 rows
-                                          │     │     Dynamic Filters: {ps_suppkey_1:range}
+                                          │     │     Dynamic Filters: {ps_suppkey_1:bloomfilter,ps_suppkey_1:range}
                                           │     └─ TableScan tpch.partsupp est. 800000 rows
-                                          └─ Projection est. 400 rows
-                                             │     Dynamic Filters Builder: {s_suppkey_1}
-                                             └─ Broadcast Exchange est. 400 rows
+                                          └─ Broadcast Exchange est. 400 rows
+                                             └─ Projection est. 400 rows
+                                                │     Dynamic Filters Builder: {s_suppkey_1}
                                                 └─ Inner Join est. 400 rows
                                                    │     Condition: s_nationkey_1 == n_nationkey_1
                                                    ├─ Local Exchange est. 10000 rows
                                                    │  └─ Filter est. 10000 rows
-                                                   │     │     Dynamic Filters: {s_nationkey_1:range}
+                                                   │     │     Dynamic Filters: {s_nationkey_1:bloomfilter,s_nationkey_1:range}
                                                    │     └─ TableScan tpch.supplier est. 10000 rows
-                                                   └─ Projection est. 1 rows
-                                                      │     Dynamic Filters Builder: {n_nationkey_1}
-                                                      └─ Broadcast Exchange est. 1 rows
+                                                   └─ Broadcast Exchange est. 1 rows
+                                                      └─ Projection est. 1 rows
+                                                         │     Dynamic Filters Builder: {n_nationkey_1}
                                                          └─ Filter est. 1 rows
                                                             │     n_name_1 = 'GERMANY'
                                                             └─ TableScan tpch.nation est. 25 rows
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 8 times.

@@ -14,11 +14,11 @@ Projection est. 400 rows
                      │     ├─ Local Exchange est. 10000 rows
                      │     │  └─ Filter est. 10000 rows
                      │     │     │     isNotNull(s_suppkey)
-                     │     │     │     Dynamic Filters: {s_nationkey:range}
+                     │     │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                      │     │     └─ TableScan tpch.supplier est. 10000 rows
-                     │     └─ Projection est. 1 rows
-                     │        │     Dynamic Filters Builder: {n_nationkey}
-                     │        └─ Broadcast Exchange est. 1 rows
+                     │     └─ Broadcast Exchange est. 1 rows
+                     │        └─ Projection est. 1 rows
+                     │           │     Dynamic Filters Builder: {n_nationkey}
                      │           └─ Filter est. 1 rows
                      │              │     n_name = 'CANADA'
                      │              └─ TableScan tpch.nation est. 25 rows
@@ -45,11 +45,11 @@ Projection est. 400 rows
                                  │     │              ├─ Local Exchange est. 909643 rows
                                  │     │              │  └─ Filter est. 909643 rows
                                  │     │              │     │     isNotNull(l_suppkey) AND (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey)
-                                 │     │              │     │     Dynamic Filters: {l_partkey:bloomfilter,l_partkey:range,l_suppkey:bloomfilter,l_suppkey:range,l_suppkey:range}
+                                 │     │              │     │     Dynamic Filters: {l_partkey:bloomfilter,l_partkey:range,l_suppkey:bloomfilter,l_suppkey:bloomfilter,l_suppkey:range,l_suppkey:range}
                                  │     │              │     └─ TableScan tpch.lineitem est. 6001215 rows
-                                 │     │              └─ Projection est. 399 rows
-                                 │     │                 │     Dynamic Filters Builder: {s_suppkey_1}
-                                 │     │                 └─ Broadcast Exchange est. 399 rows
+                                 │     │              └─ Broadcast Exchange est. 399 rows
+                                 │     │                 └─ Projection est. 399 rows
+                                 │     │                    │     Dynamic Filters Builder: {s_suppkey_1}
                                  │     │                    └─ MergingAggregated est. 399 rows
                                  │     │                       └─ Repartition Exchange est. 399 rows
                                  │     │                          │     Partition by: {s_suppkey_1}
@@ -61,28 +61,28 @@ Projection est. 400 rows
                                  │     │                                   ├─ Local Exchange est. 10000 rows
                                  │     │                                   │  └─ Filter est. 10000 rows
                                  │     │                                   │     │     isNotNull(s_suppkey)
-                                 │     │                                   │     │     Dynamic Filters: {s_nationkey:range}
+                                 │     │                                   │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                                  │     │                                   │     └─ TableScan tpch.supplier est. 10000 rows
-                                 │     │                                   └─ Projection est. 1 rows
-                                 │     │                                      │     Dynamic Filters Builder: {n_nationkey}
-                                 │     │                                      └─ Broadcast Exchange est. 1 rows
+                                 │     │                                   └─ Broadcast Exchange est. 1 rows
+                                 │     │                                      └─ Projection est. 1 rows
+                                 │     │                                         │     Dynamic Filters Builder: {n_nationkey}
                                  │     │                                         └─ Filter est. 1 rows
                                  │     │                                            │     n_name = 'CANADA'
                                  │     │                                            └─ TableScan tpch.nation est. 25 rows
-                                 │     └─ Projection est. 31990 rows
-                                 │        │     Dynamic Filters Builder: {ps_partkey,ps_suppkey}
-                                 │        └─ Repartition Exchange est. 31990 rows
-                                 │           │     Partition by: {ps_partkey, ps_suppkey}
+                                 │     └─ Repartition Exchange est. 31990 rows
+                                 │        │     Partition by: {ps_partkey, ps_suppkey}
+                                 │        └─ Projection est. 31990 rows
+                                 │           │     Dynamic Filters Builder: {ps_partkey,ps_suppkey}
                                  │           └─ Inner Join est. 31990 rows
                                  │              │     Condition: ps_suppkey == s_suppkey_1
                                  │              ├─ Local Exchange est. 800000 rows
                                  │              │  └─ Filter est. 800000 rows
                                  │              │     │     isNotNull(ps_partkey) AND isNotNull(ps_suppkey)
-                                 │              │     │     Dynamic Filters: {ps_suppkey:range}
+                                 │              │     │     Dynamic Filters: {ps_suppkey:bloomfilter,ps_suppkey:range}
                                  │              │     └─ TableScan tpch.partsupp est. 800000 rows
-                                 │              └─ Projection est. 399 rows
-                                 │                 │     Dynamic Filters Builder: {s_suppkey_1}
-                                 │                 └─ Broadcast Exchange est. 399 rows
+                                 │              └─ Broadcast Exchange est. 399 rows
+                                 │                 └─ Projection est. 399 rows
+                                 │                    │     Dynamic Filters Builder: {s_suppkey_1}
                                  │                    └─ MergingAggregated est. 399 rows
                                  │                       └─ Repartition Exchange est. 399 rows
                                  │                          │     Partition by: {s_suppkey_1}
@@ -94,11 +94,11 @@ Projection est. 400 rows
                                  │                                   ├─ Local Exchange est. 10000 rows
                                  │                                   │  └─ Filter est. 10000 rows
                                  │                                   │     │     isNotNull(s_suppkey)
-                                 │                                   │     │     Dynamic Filters: {s_nationkey:range}
+                                 │                                   │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                                  │                                   │     └─ TableScan tpch.supplier est. 10000 rows
-                                 │                                   └─ Projection est. 1 rows
-                                 │                                      │     Dynamic Filters Builder: {n_nationkey}
-                                 │                                      └─ Broadcast Exchange est. 1 rows
+                                 │                                   └─ Broadcast Exchange est. 1 rows
+                                 │                                      └─ Projection est. 1 rows
+                                 │                                         │     Dynamic Filters Builder: {n_nationkey}
                                  │                                         └─ Filter est. 1 rows
                                  │                                            │     n_name = 'CANADA'
                                  │                                            └─ TableScan tpch.nation est. 25 rows
@@ -112,4 +112,4 @@ Projection est. 400 rows
                                                 │     (p_name LIKE 'forest%') AND isNotNull(p_partkey)
                                                 └─ TableScan tpch.part est. 200000 rows
 note: Magic Set is applied for 2 parts.
-note: Dynamic Filter is applied for 9 times.
+note: Dynamic Filter is applied for 14 times.

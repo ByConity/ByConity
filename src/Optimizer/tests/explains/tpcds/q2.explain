@@ -26,15 +26,15 @@ Projection est. 2562 rows
                         │                 ├─ Union est. 2159980792 rows
                         │                 │  ├─ Local Exchange est. 720000376 rows
                         │                 │  │  └─ Filter est. 720000376 rows
-                        │                 │  │     │     Dynamic Filters: {ws_sold_date_sk:range}
+                        │                 │  │     │     Dynamic Filters: {ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
                         │                 │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
                         │                 │  └─ Local Exchange est. 1439980416 rows
                         │                 │     └─ Filter est. 1439980416 rows
-                        │                 │        │     Dynamic Filters: {cs_sold_date_sk:range}
+                        │                 │        │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                         │                 │        └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                        │                 └─ Projection est. 364 rows
-                        │                    │     Dynamic Filters Builder: {d_date_sk}
-                        │                    └─ Broadcast Exchange est. 364 rows
+                        │                 └─ Broadcast Exchange est. 364 rows
+                        │                    └─ Projection est. 364 rows
+                        │                       │     Dynamic Filters Builder: {d_date_sk}
                         │                       └─ Inner Join est. 364 rows
                         │                          │     Condition: d_week_seq == d_week_seq_4
                         │                          ├─ TableScan tpcds.date_dim est. 73049 rows
@@ -69,15 +69,15 @@ Projection est. 2562 rows
                                                 ├─ Union est. 2159980792 rows
                                                 │  ├─ Local Exchange est. 720000376 rows
                                                 │  │  └─ Filter est. 720000376 rows
-                                                │  │     │     Dynamic Filters: {ws_sold_date_sk_2:range}
+                                                │  │     │     Dynamic Filters: {ws_sold_date_sk_2:bloomfilter,ws_sold_date_sk_2:range}
                                                 │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
                                                 │  └─ Local Exchange est. 1439980416 rows
                                                 │     └─ Filter est. 1439980416 rows
-                                                │        │     Dynamic Filters: {cs_sold_date_sk_1:range}
+                                                │        │     Dynamic Filters: {cs_sold_date_sk_1:bloomfilter,cs_sold_date_sk_1:range}
                                                 │        └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                                                └─ Projection est. 364 rows
-                                                   │     Dynamic Filters Builder: {d_date_sk_2}
-                                                   └─ Broadcast Exchange est. 364 rows
+                                                └─ Broadcast Exchange est. 364 rows
+                                                   └─ Projection est. 364 rows
+                                                      │     Dynamic Filters Builder: {d_date_sk_2}
                                                       └─ Inner Join est. 364 rows
                                                          │     Condition: d_week_seq_2 == d_week_seq_5
                                                          ├─ TableScan tpcds.date_dim est. 73049 rows
@@ -92,4 +92,4 @@ Projection est. 2562 rows
                                                                            │     d_year_3 = cast(2002, 'UInt32')
                                                                            └─ TableScan tpcds.date_dim est. 73049 rows
 note: Magic Set is applied for 2 parts.
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 8 times.

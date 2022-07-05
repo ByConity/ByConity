@@ -37,18 +37,18 @@ Projection est. 1 rows
                               │                    │        │  │     │     Condition: cs_ship_date_sk == d_date_sk
                               │                    │        │  │     ├─ Local Exchange est. 1439980416 rows
                               │                    │        │  │     │  └─ Filter est. 1439980416 rows
-                              │                    │        │  │     │     │     Dynamic Filters: {cs_ship_addr_sk:bloomfilter,cs_ship_addr_sk:range,cs_ship_date_sk:range}
+                              │                    │        │  │     │     │     Dynamic Filters: {cs_ship_addr_sk:bloomfilter,cs_ship_addr_sk:range,cs_ship_date_sk:bloomfilter,cs_ship_date_sk:range}
                               │                    │        │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                              │                    │        │  │     └─ Projection est. 60 rows
-                              │                    │        │  │        │     Dynamic Filters Builder: {d_date_sk}
-                              │                    │        │  │        └─ Broadcast Exchange est. 60 rows
+                              │                    │        │  │     └─ Broadcast Exchange est. 60 rows
+                              │                    │        │  │        └─ Projection est. 60 rows
+                              │                    │        │  │           │     Dynamic Filters Builder: {d_date_sk}
                               │                    │        │  │           └─ Filter est. 60 rows
                               │                    │        │  │              │     (d_date >= '2002-2-01') AND (d_date <= cast(11779, 'Date'))
                               │                    │        │  │              └─ TableScan tpcds.date_dim est. 73049 rows
-                              │                    │        │  └─ Projection est. 307020 rows
-                              │                    │        │     │     Dynamic Filters Builder: {ca_address_sk}
-                              │                    │        │     └─ Repartition Exchange est. 307020 rows
-                              │                    │        │        │     Partition by: {ca_address_sk}
+                              │                    │        │  └─ Repartition Exchange est. 307020 rows
+                              │                    │        │     │     Partition by: {ca_address_sk}
+                              │                    │        │     └─ Projection est. 307020 rows
+                              │                    │        │        │     Dynamic Filters Builder: {ca_address_sk}
                               │                    │        │        └─ Filter est. 307020 rows
                               │                    │        │           │     ca_state = 'GA'
                               │                    │        │           └─ TableScan tpcds.customer_address est. 6000000 rows
@@ -67,4 +67,4 @@ Projection est. 1 rows
                                        └─ Aggregating est. 96543494 rows
                                           │     Group by: {cr_order_number}
                                           └─ TableScan tpcds.catalog_returns est. 143996756 rows
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 4 times.

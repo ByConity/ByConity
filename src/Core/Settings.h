@@ -636,18 +636,22 @@ class IColumn;
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
+    M(Bool, enum_repartition, true, "Enum repartition join", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
-    M(Bool, enable_left_join_to_right_join, false, "Whether enable convert left join to right join", 0) \
+    M(Bool, enable_left_join_to_right_join, true, "Whether enable convert left join to right join", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
-    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for join", 0) \
+    M(UInt64, dynamic_filter_min_filter_rows, 10000, "Set minimum row to enable dynamic filter", 0) \
+    M(Float, dynamic_filter_max_filter_factor, 0.7, "Set maximal filter factor to enable dynamic filter", 0) \
+    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for bloom filter", 0) \
+    M(Bool, enable_dynamic_filter_for_join, true, "Whether enable dynamic filter for join", 0) \
     M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \

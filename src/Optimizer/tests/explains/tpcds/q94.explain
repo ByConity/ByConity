@@ -35,23 +35,23 @@ Projection est. 1 rows
                               │                    │        │  │  │     Condition: ws_ship_date_sk == d_date_sk
                               │                    │        │  │  ├─ Local Exchange est. 720000376 rows
                               │                    │        │  │  │  └─ Filter est. 720000376 rows
-                              │                    │        │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:range,ws_ship_date_sk:range,ws_web_site_sk:range}
+                              │                    │        │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:bloomfilter,ws_ship_addr_sk:range,ws_ship_date_sk:bloomfilter,ws_ship_date_sk:range,ws_web_site_sk:bloomfilter,ws_web_site_sk:range}
                               │                    │        │  │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                              │                    │        │  │  └─ Projection est. 59 rows
-                              │                    │        │  │     │     Dynamic Filters Builder: {d_date_sk}
-                              │                    │        │  │     └─ Broadcast Exchange est. 59 rows
+                              │                    │        │  │  └─ Broadcast Exchange est. 59 rows
+                              │                    │        │  │     └─ Projection est. 59 rows
+                              │                    │        │  │        │     Dynamic Filters Builder: {d_date_sk}
                               │                    │        │  │        └─ Filter est. 59 rows
                               │                    │        │  │           │     (d_date <= cast(10683, 'Date')) AND (d_date >= '1999-2-01')
                               │                    │        │  │           └─ TableScan tpcds.date_dim est. 73049 rows
-                              │                    │        │  └─ Projection est. 194532 rows
-                              │                    │        │     │     Dynamic Filters Builder: {ca_address_sk}
-                              │                    │        │     └─ Broadcast Exchange est. 194532 rows
+                              │                    │        │  └─ Broadcast Exchange est. 194532 rows
+                              │                    │        │     └─ Projection est. 194532 rows
+                              │                    │        │        │     Dynamic Filters Builder: {ca_address_sk}
                               │                    │        │        └─ Filter est. 194532 rows
                               │                    │        │           │     ca_state = 'IL'
                               │                    │        │           └─ TableScan tpcds.customer_address est. 6000000 rows
-                              │                    │        └─ Projection est. 8 rows
-                              │                    │           │     Dynamic Filters Builder: {web_site_sk}
-                              │                    │           └─ Broadcast Exchange est. 8 rows
+                              │                    │        └─ Broadcast Exchange est. 8 rows
+                              │                    │           └─ Projection est. 8 rows
+                              │                    │              │     Dynamic Filters Builder: {web_site_sk}
                               │                    │              └─ Filter est. 8 rows
                               │                    │                 │     web_company_name = 'pri'
                               │                    │                 └─ TableScan tpcds.web_site est. 54 rows
@@ -66,4 +66,4 @@ Projection est. 1 rows
                                        └─ Aggregating est. 44205501 rows
                                           │     Group by: {wr_order_number}
                                           └─ TableScan tpcds.web_returns est. 71997522 rows
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 6 times.

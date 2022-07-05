@@ -29,7 +29,7 @@ Projection est. 1 rows
                         │           │  │  ├─ Local Exchange est. 720000376 rows
                         │           │  │  │  └─ Filter est. 720000376 rows
                         │           │  │  │     │     isNotNull(ws_order_number)
-                        │           │  │  │     │     Dynamic Filters: {ws_ship_date_sk:range,ws_web_site_sk:range}
+                        │           │  │  │     │     Dynamic Filters: {ws_ship_date_sk:bloomfilter,ws_ship_date_sk:range,ws_web_site_sk:bloomfilter,ws_web_site_sk:range}
                         │           │  │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
                         │           │  │  └─ Broadcast Exchange est. 101712 rows
                         │           │  │     └─ Aggregating est. 101712 rows
@@ -71,35 +71,35 @@ Projection est. 1 rows
                         │           │  │                                         │  │  ├─ Local Exchange est. 720000376 rows
                         │           │  │                                         │  │  │  └─ Filter est. 720000376 rows
                         │           │  │                                         │  │  │     │     isNotNull(ws_order_number)
-                        │           │  │                                         │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:range,ws_ship_date_sk:range,ws_web_site_sk:range}
+                        │           │  │                                         │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:bloomfilter,ws_ship_addr_sk:range,ws_ship_date_sk:bloomfilter,ws_ship_date_sk:range,ws_web_site_sk:bloomfilter,ws_web_site_sk:range}
                         │           │  │                                         │  │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                        │           │  │                                         │  │  └─ Projection est. 59 rows
-                        │           │  │                                         │  │     │     Dynamic Filters Builder: {d_date_sk}
-                        │           │  │                                         │  │     └─ Broadcast Exchange est. 59 rows
+                        │           │  │                                         │  │  └─ Broadcast Exchange est. 59 rows
+                        │           │  │                                         │  │     └─ Projection est. 59 rows
+                        │           │  │                                         │  │        │     Dynamic Filters Builder: {d_date_sk}
                         │           │  │                                         │  │        └─ Filter est. 59 rows
                         │           │  │                                         │  │           │     (d_date <= cast(10683, 'Date')) AND (d_date >= '1999-2-01')
                         │           │  │                                         │  │           └─ TableScan tpcds.date_dim est. 73049 rows
-                        │           │  │                                         │  └─ Projection est. 194532 rows
-                        │           │  │                                         │     │     Dynamic Filters Builder: {ca_address_sk}
-                        │           │  │                                         │     └─ Broadcast Exchange est. 194532 rows
+                        │           │  │                                         │  └─ Broadcast Exchange est. 194532 rows
+                        │           │  │                                         │     └─ Projection est. 194532 rows
+                        │           │  │                                         │        │     Dynamic Filters Builder: {ca_address_sk}
                         │           │  │                                         │        └─ Filter est. 194532 rows
                         │           │  │                                         │           │     ca_state = 'IL'
                         │           │  │                                         │           └─ TableScan tpcds.customer_address est. 6000000 rows
-                        │           │  │                                         └─ Projection est. 8 rows
-                        │           │  │                                            │     Dynamic Filters Builder: {web_site_sk}
-                        │           │  │                                            └─ Broadcast Exchange est. 8 rows
+                        │           │  │                                         └─ Broadcast Exchange est. 8 rows
+                        │           │  │                                            └─ Projection est. 8 rows
+                        │           │  │                                               │     Dynamic Filters Builder: {web_site_sk}
                         │           │  │                                               └─ Filter est. 8 rows
                         │           │  │                                                  │     web_company_name = 'pri'
                         │           │  │                                                  └─ TableScan tpcds.web_site est. 54 rows
-                        │           │  └─ Projection est. 59 rows
-                        │           │     │     Dynamic Filters Builder: {d_date_sk}
-                        │           │     └─ Broadcast Exchange est. 59 rows
+                        │           │  └─ Broadcast Exchange est. 59 rows
+                        │           │     └─ Projection est. 59 rows
+                        │           │        │     Dynamic Filters Builder: {d_date_sk}
                         │           │        └─ Filter est. 59 rows
                         │           │           │     (d_date <= cast(10683, 'Date')) AND (d_date >= '1999-2-01')
                         │           │           └─ TableScan tpcds.date_dim est. 73049 rows
-                        │           └─ Projection est. 8 rows
-                        │              │     Dynamic Filters Builder: {web_site_sk}
-                        │              └─ Broadcast Exchange est. 8 rows
+                        │           └─ Broadcast Exchange est. 8 rows
+                        │              └─ Projection est. 8 rows
+                        │                 │     Dynamic Filters Builder: {web_site_sk}
                         │                 └─ Filter est. 8 rows
                         │                    │     web_company_name = 'pri'
                         │                    └─ TableScan tpcds.web_site est. 54 rows
@@ -136,25 +136,25 @@ Projection est. 1 rows
                                                             │  │  ├─ Local Exchange est. 720000376 rows
                                                             │  │  │  └─ Filter est. 720000376 rows
                                                             │  │  │     │     isNotNull(ws_order_number)
-                                                            │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:range,ws_ship_date_sk:range,ws_web_site_sk:range}
+                                                            │  │  │     │     Dynamic Filters: {ws_ship_addr_sk:bloomfilter,ws_ship_addr_sk:range,ws_ship_date_sk:bloomfilter,ws_ship_date_sk:range,ws_web_site_sk:bloomfilter,ws_web_site_sk:range}
                                                             │  │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                                                            │  │  └─ Projection est. 59 rows
-                                                            │  │     │     Dynamic Filters Builder: {d_date_sk}
-                                                            │  │     └─ Broadcast Exchange est. 59 rows
+                                                            │  │  └─ Broadcast Exchange est. 59 rows
+                                                            │  │     └─ Projection est. 59 rows
+                                                            │  │        │     Dynamic Filters Builder: {d_date_sk}
                                                             │  │        └─ Filter est. 59 rows
                                                             │  │           │     (d_date <= cast(10683, 'Date')) AND (d_date >= '1999-2-01')
                                                             │  │           └─ TableScan tpcds.date_dim est. 73049 rows
-                                                            │  └─ Projection est. 194532 rows
-                                                            │     │     Dynamic Filters Builder: {ca_address_sk}
-                                                            │     └─ Broadcast Exchange est. 194532 rows
+                                                            │  └─ Broadcast Exchange est. 194532 rows
+                                                            │     └─ Projection est. 194532 rows
+                                                            │        │     Dynamic Filters Builder: {ca_address_sk}
                                                             │        └─ Filter est. 194532 rows
                                                             │           │     ca_state = 'IL'
                                                             │           └─ TableScan tpcds.customer_address est. 6000000 rows
-                                                            └─ Projection est. 8 rows
-                                                               │     Dynamic Filters Builder: {web_site_sk}
-                                                               └─ Broadcast Exchange est. 8 rows
+                                                            └─ Broadcast Exchange est. 8 rows
+                                                               └─ Projection est. 8 rows
+                                                                  │     Dynamic Filters Builder: {web_site_sk}
                                                                   └─ Filter est. 8 rows
                                                                      │     web_company_name = 'pri'
                                                                      └─ TableScan tpcds.web_site est. 54 rows
 note: Magic Set is applied for 2 parts.
-note: Dynamic Filter is applied for 8 times.
+note: Dynamic Filter is applied for 16 times.

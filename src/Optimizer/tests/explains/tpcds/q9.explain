@@ -39,7 +39,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │           └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │              └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │                 └─ Filter est. 547237844 rows
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │                 └─ Filter est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                    │     (ss_quantity <= 20) AND (ss_quantity >= 1)
       │  │  │  │  │  │  │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -47,7 +47,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter est. 547237844 rows
+      │  │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │                 │     (ss_quantity_1 <= 20) AND (ss_quantity_1 >= 1)
       │  │  │  │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -55,7 +55,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter est. 547237844 rows
+      │  │  │  │  │  │  │  │  │  │  │  │              └─ Filter est. 576030837 rows
       │  │  │  │  │  │  │  │  │  │  │  │                 │     (ss_quantity_2 <= 20) AND (ss_quantity_2 >= 1)
       │  │  │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -64,7 +64,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │  │  │           └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │              └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │  │                 └─ Filter est. 568778656 rows
+      │  │  │  │  │  │  │  │  │  │  │                 └─ Filter est. 575978660 rows
       │  │  │  │  │  │  │  │  │  │  │                    │     (ss_quantity_3 >= 21) AND (ss_quantity_3 <= 40)
       │  │  │  │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -72,7 +72,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │              └─ Filter est. 568778656 rows
+      │  │  │  │  │  │  │  │  │  │              └─ Filter est. 575978660 rows
       │  │  │  │  │  │  │  │  │  │                 │     (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 40)
       │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -80,7 +80,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │  │  │  │              └─ Filter est. 547178111 rows
+      │  │  │  │  │  │  │  │  │              └─ Filter est. 575978660 rows
       │  │  │  │  │  │  │  │  │                 │     (ss_quantity_5 <= 40) AND (ss_quantity_5 >= 21)
       │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -89,7 +89,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │  │           └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │  │              └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │  │  │  │                 └─ Filter est. 566409367 rows
+      │  │  │  │  │  │  │  │                 └─ Filter est. 576008001 rows
       │  │  │  │  │  │  │  │                    │     (ss_quantity_6 >= 41) AND (ss_quantity_6 <= 60)
       │  │  │  │  │  │  │  │                    └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -97,7 +97,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │  │              └─ Filter est. 547212858 rows
+      │  │  │  │  │  │  │              └─ Filter est. 576008001 rows
       │  │  │  │  │  │  │                 │     (ss_quantity_7 <= 60) AND (ss_quantity_7 >= 41)
       │  │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -105,7 +105,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │  │  │              │     Group by: {}
-      │  │  │  │  │  │              └─ Filter est. 547212858 rows
+      │  │  │  │  │  │              └─ Filter est. 576008001 rows
       │  │  │  │  │  │                 │     (ss_quantity_8 <= 60) AND (ss_quantity_8 >= 41)
       │  │  │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -114,7 +114,7 @@ Gather Exchange est. ? rows
       │  │  │  │  │           └─ Gather Exchange est. 1 rows
       │  │  │  │  │              └─ Aggregating est. 1 rows
       │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │                 └─ Filter est. 547189356 rows
+      │  │  │  │  │                 └─ Filter est. 575996220 rows
       │  │  │  │  │                    │     (ss_quantity_9 <= 80) AND (ss_quantity_9 >= 61)
       │  │  │  │  │                    └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -122,7 +122,7 @@ Gather Exchange est. ? rows
       │  │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │  │           └─ Aggregating est. 1 rows
       │  │  │  │              │     Group by: {}
-      │  │  │  │              └─ Filter est. 561592514 rows
+      │  │  │  │              └─ Filter est. 575996220 rows
       │  │  │  │                 │     (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
       │  │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  │  └─ Broadcast Exchange est. 1 rows
@@ -130,7 +130,7 @@ Gather Exchange est. ? rows
       │  │  │        └─ Gather Exchange est. 1 rows
       │  │  │           └─ Aggregating est. 1 rows
       │  │  │              │     Group by: {}
-      │  │  │              └─ Filter est. 561592514 rows
+      │  │  │              └─ Filter est. 575996220 rows
       │  │  │                 │     (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
       │  │  │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  │  └─ Broadcast Exchange est. 1 rows
@@ -139,7 +139,7 @@ Gather Exchange est. ? rows
       │  │           └─ Gather Exchange est. 1 rows
       │  │              └─ Aggregating est. 1 rows
       │  │                 │     Group by: {}
-      │  │                 └─ Filter est. 547174932 rows
+      │  │                 └─ Filter est. 575974279 rows
       │  │                    │     (ss_quantity_12 <= 100) AND (ss_quantity_12 >= 81)
       │  │                    └─ TableScan tpcds.store_sales est. 2879987999 rows
       │  └─ Broadcast Exchange est. 1 rows
@@ -147,7 +147,7 @@ Gather Exchange est. ? rows
       │        └─ Gather Exchange est. 1 rows
       │           └─ Aggregating est. 1 rows
       │              │     Group by: {}
-      │              └─ Filter est. 547174932 rows
+      │              └─ Filter est. 575974279 rows
       │                 │     (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
       │                 └─ TableScan tpcds.store_sales est. 2879987999 rows
       └─ Broadcast Exchange est. 1 rows
@@ -155,6 +155,6 @@ Gather Exchange est. ? rows
             └─ Gather Exchange est. 1 rows
                └─ Aggregating est. 1 rows
                   │     Group by: {}
-                  └─ Filter est. 547174932 rows
+                  └─ Filter est. 575974279 rows
                      │     (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
                      └─ TableScan tpcds.store_sales est. 2879987999 rows

@@ -17,18 +17,18 @@ Projection est. 1 rows
                                  │  │     Condition: ss_sold_date_sk == d_date_sk
                                  │  ├─ Local Exchange est. 2879987999 rows
                                  │  │  └─ Filter est. 2879987999 rows
-                                 │  │     │     Dynamic Filters: {ss_item_sk:range,ss_sold_date_sk:range}
+                                 │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                                  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                 │  └─ Projection est. 30 rows
-                                 │     │     Dynamic Filters Builder: {d_date_sk}
-                                 │     └─ Broadcast Exchange est. 30 rows
+                                 │  └─ Broadcast Exchange est. 30 rows
+                                 │     └─ Projection est. 30 rows
+                                 │        │     Dynamic Filters Builder: {d_date_sk}
                                  │        └─ Filter est. 30 rows
                                  │           │     (d_moy = 11) AND (d_year = 2000)
                                  │           └─ TableScan tpcds.date_dim est. 73049 rows
-                                 └─ Projection est. 5420 rows
-                                    │     Dynamic Filters Builder: {i_item_sk}
-                                    └─ Broadcast Exchange est. 5420 rows
+                                 └─ Broadcast Exchange est. 5420 rows
+                                    └─ Projection est. 5420 rows
+                                       │     Dynamic Filters Builder: {i_item_sk}
                                        └─ Filter est. 5420 rows
                                           │     i_manager_id = 1
                                           └─ TableScan tpcds.item est. 300000 rows
-note: Dynamic Filter is applied for 2 times.
+note: Dynamic Filter is applied for 4 times.

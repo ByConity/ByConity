@@ -21,17 +21,17 @@ Projection est. 100 rows
                         │     │     │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
                         │     │     │  ├─ Local Exchange est. 1439980416 rows
                         │     │     │  │  └─ Filter est. 1439980416 rows
-                        │     │     │  │     │     Dynamic Filters: {cs_bill_cdemo_sk:range,cs_sold_date_sk:range}
+                        │     │     │  │     │     Dynamic Filters: {cs_bill_cdemo_sk:bloomfilter,cs_bill_cdemo_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                         │     │     │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                        │     │     │  └─ Projection est. 137200 rows
-                        │     │     │     │     Dynamic Filters Builder: {cd_demo_sk}
-                        │     │     │     └─ Broadcast Exchange est. 137200 rows
+                        │     │     │  └─ Broadcast Exchange est. 137200 rows
+                        │     │     │     └─ Projection est. 137200 rows
+                        │     │     │        │     Dynamic Filters Builder: {cd_demo_sk}
                         │     │     │        └─ Filter est. 137200 rows
                         │     │     │           │     (cd_education_status = 'Unknown') AND (cd_gender = 'F')
                         │     │     │           └─ TableScan tpcds.customer_demographics est. 1920800 rows
-                        │     │     └─ Projection est. 365 rows
-                        │     │        │     Dynamic Filters Builder: {d_date_sk}
-                        │     │        └─ Broadcast Exchange est. 365 rows
+                        │     │     └─ Broadcast Exchange est. 365 rows
+                        │     │        └─ Projection est. 365 rows
+                        │     │           │     Dynamic Filters Builder: {d_date_sk}
                         │     │           └─ Filter est. 365 rows
                         │     │              │     d_year = 1998
                         │     │              └─ TableScan tpcds.date_dim est. 73049 rows
@@ -59,4 +59,4 @@ Projection est. 100 rows
                         └─ Repartition Exchange est. 300000 rows
                            │     Partition by: {i_item_sk}
                            └─ TableScan tpcds.item est. 300000 rows
-note: Dynamic Filter is applied for 2 times.
+note: Dynamic Filter is applied for 4 times.

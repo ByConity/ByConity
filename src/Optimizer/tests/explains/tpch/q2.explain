@@ -42,11 +42,11 @@ Projection est. 100 rows
                         │                          │  │  │     │     Condition: ps_partkey_1 == p_partkey_1
                         │                          │  │  │     ├─ Local Exchange est. 800000 rows
                         │                          │  │  │     │  └─ Filter est. 800000 rows
-                        │                          │  │  │     │     │     Dynamic Filters: {ps_partkey_1:range}
+                        │                          │  │  │     │     │     Dynamic Filters: {ps_partkey_1:bloomfilter,ps_partkey_1:range}
                         │                          │  │  │     │     └─ TableScan tpch.partsupp est. 800000 rows
-                        │                          │  │  │     └─ Projection est. 3496 rows
-                        │                          │  │  │        │     Dynamic Filters Builder: {p_partkey_1}
-                        │                          │  │  │        └─ Broadcast Exchange est. 3496 rows
+                        │                          │  │  │     └─ Broadcast Exchange est. 3496 rows
+                        │                          │  │  │        └─ Projection est. 3496 rows
+                        │                          │  │  │           │     Dynamic Filters Builder: {p_partkey_1}
                         │                          │  │  │           └─ MergingAggregated est. 3496 rows
                         │                          │  │  │              └─ Repartition Exchange est. 3496 rows
                         │                          │  │  │                 │     Partition by: {p_partkey_1}
@@ -65,19 +65,19 @@ Projection est. 100 rows
                         │                             └─ Filter est. 1 rows
                         │                                │     r_name_1 = 'EUROPE'
                         │                                └─ TableScan tpch.region est. 5 rows
-                        └─ Projection est. 2000 rows
-                           │     Dynamic Filters Builder: {s_suppkey}
-                           └─ Repartition Exchange est. 2000 rows
-                              │     Partition by: {s_suppkey}
+                        └─ Repartition Exchange est. 2000 rows
+                           │     Partition by: {s_suppkey}
+                           └─ Projection est. 2000 rows
+                              │     Dynamic Filters Builder: {s_suppkey}
                               └─ Inner Join est. 2000 rows
                                  │     Condition: s_nationkey == n_nationkey
                                  ├─ Local Exchange est. 10000 rows
                                  │  └─ Filter est. 10000 rows
-                                 │     │     Dynamic Filters: {s_nationkey:range}
+                                 │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                                  │     └─ TableScan tpch.supplier est. 10000 rows
-                                 └─ Projection est. 5 rows
-                                    │     Dynamic Filters Builder: {n_nationkey}
-                                    └─ Broadcast Exchange est. 5 rows
+                                 └─ Broadcast Exchange est. 5 rows
+                                    └─ Projection est. 5 rows
+                                       │     Dynamic Filters Builder: {n_nationkey}
                                        └─ Inner Join est. 5 rows
                                           │     Condition: n_regionkey == r_regionkey
                                           ├─ Repartition Exchange est. 25 rows
@@ -89,4 +89,4 @@ Projection est. 100 rows
                                                 │     r_name = 'EUROPE'
                                                 └─ TableScan tpch.region est. 5 rows
 note: Magic Set is applied for 1 parts.
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 6 times.

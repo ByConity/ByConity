@@ -20,10 +20,10 @@ Projection est. 10 rows
                                     │     │     l_shipdate > cast(9204, 'Date')
                                     │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:range}
                                     │     └─ TableScan tpch.lineitem est. 6001215 rows
-                                    └─ Projection est. 440948 rows
-                                       │     Dynamic Filters Builder: {o_orderkey}
-                                       └─ Repartition Exchange est. 440948 rows
-                                          │     Partition by: {o_orderkey}
+                                    └─ Repartition Exchange est. 440948 rows
+                                       │     Partition by: {o_orderkey}
+                                       └─ Projection est. 440948 rows
+                                          │     Dynamic Filters Builder: {o_orderkey}
                                           └─ Inner Join est. 440948 rows
                                              │     Condition: o_custkey == c_custkey
                                              ├─ Repartition Exchange est. 727297 rows
@@ -32,10 +32,10 @@ Projection est. 10 rows
                                              │     │     o_orderdate < cast(9204, 'Date')
                                              │     │     Dynamic Filters: {o_custkey:bloomfilter,o_custkey:range}
                                              │     └─ TableScan tpch.orders est. 1500000 rows
-                                             └─ Projection est. 30142 rows
-                                                │     Dynamic Filters Builder: {c_custkey}
-                                                └─ Repartition Exchange est. 30142 rows
-                                                   │     Partition by: {c_custkey}
+                                             └─ Repartition Exchange est. 30142 rows
+                                                │     Partition by: {c_custkey}
+                                                └─ Projection est. 30142 rows
+                                                   │     Dynamic Filters Builder: {c_custkey}
                                                    └─ Filter est. 30142 rows
                                                       │     c_mktsegment = 'BUILDING'
                                                       └─ TableScan tpch.customer est. 150000 rows

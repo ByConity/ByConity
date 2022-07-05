@@ -46,17 +46,17 @@ Projection est. ? rows
                      │                       │                 │  │     Condition: ss_item_sk == i_item_sk
                      │                       │                 │  ├─ Local Exchange est. 2879987999 rows
                      │                       │                 │  │  └─ Filter est. 2879987999 rows
-                     │                       │                 │  │     │     Dynamic Filters: {ss_item_sk:range,ss_store_sk:range}
+                     │                       │                 │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_store_sk:bloomfilter,ss_store_sk:range}
                      │                       │                 │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                     │                       │                 │  └─ Projection est. 6621 rows
-                     │                       │                 │     │     Dynamic Filters Builder: {i_item_sk}
-                     │                       │                 │     └─ Broadcast Exchange est. 6621 rows
+                     │                       │                 │  └─ Broadcast Exchange est. 6621 rows
+                     │                       │                 │     └─ Projection est. 6621 rows
+                     │                       │                 │        │     Dynamic Filters Builder: {i_item_sk}
                      │                       │                 │        └─ Filter est. 6621 rows
                      │                       │                 │           │     i_color = 'peach'
                      │                       │                 │           └─ TableScan tpcds.item est. 300000 rows
-                     │                       │                 └─ Projection est. 84 rows
-                     │                       │                    │     Dynamic Filters Builder: {s_store_sk}
-                     │                       │                    └─ Broadcast Exchange est. 84 rows
+                     │                       │                 └─ Broadcast Exchange est. 84 rows
+                     │                       │                    └─ Projection est. 84 rows
+                     │                       │                       │     Dynamic Filters Builder: {s_store_sk}
                      │                       │                       └─ Filter est. 84 rows
                      │                       │                          │     s_market_id = 8
                      │                       │                          └─ TableScan tpcds.store est. 1002 rows
@@ -87,11 +87,11 @@ Projection est. ? rows
                                                    │     │     │     Condition: ss_store_sk_1 == s_store_sk_1
                                                    │     │     ├─ Local Exchange est. 2879987999 rows
                                                    │     │     │  └─ Filter est. 2879987999 rows
-                                                   │     │     │     │     Dynamic Filters: {ss_store_sk_1:range}
+                                                   │     │     │     │     Dynamic Filters: {ss_store_sk_1:bloomfilter,ss_store_sk_1:range}
                                                    │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                                   │     │     └─ Projection est. 84 rows
-                                                   │     │        │     Dynamic Filters Builder: {s_store_sk_1}
-                                                   │     │        └─ Broadcast Exchange est. 84 rows
+                                                   │     │     └─ Broadcast Exchange est. 84 rows
+                                                   │     │        └─ Projection est. 84 rows
+                                                   │     │           │     Dynamic Filters Builder: {s_store_sk_1}
                                                    │     │           └─ Filter est. 84 rows
                                                    │     │              │     s_market_id_1 = 8
                                                    │     │              └─ TableScan tpcds.store est. 1002 rows
@@ -116,7 +116,7 @@ Projection est. ? rows
                                                          └─ Repartition Exchange est. 6000000 rows
                                                             │     Partition by: {ca_address_sk_1}
                                                             └─ TableScan tpcds.customer_address est. 6000000 rows
-note: Dynamic Filter is applied for 5 times.
+note: Dynamic Filter is applied for 8 times.
 Projection est. ? rows
 └─ MergingSorted est. ? rows
    └─ MergeSorting est. ? rows
@@ -165,17 +165,17 @@ Projection est. ? rows
                      │                       │                 │  │     Condition: ss_item_sk_2 == i_item_sk_2
                      │                       │                 │  ├─ Local Exchange est. 2879987999 rows
                      │                       │                 │  │  └─ Filter est. 2879987999 rows
-                     │                       │                 │  │     │     Dynamic Filters: {ss_item_sk_2:range,ss_store_sk_2:range}
+                     │                       │                 │  │     │     Dynamic Filters: {ss_item_sk_2:bloomfilter,ss_item_sk_2:range,ss_store_sk_2:bloomfilter,ss_store_sk_2:range}
                      │                       │                 │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                     │                       │                 │  └─ Projection est. 6646 rows
-                     │                       │                 │     │     Dynamic Filters Builder: {i_item_sk_2}
-                     │                       │                 │     └─ Broadcast Exchange est. 6646 rows
+                     │                       │                 │  └─ Broadcast Exchange est. 6646 rows
+                     │                       │                 │     └─ Projection est. 6646 rows
+                     │                       │                 │        │     Dynamic Filters Builder: {i_item_sk_2}
                      │                       │                 │        └─ Filter est. 6646 rows
                      │                       │                 │           │     i_color_2 = 'saddle'
                      │                       │                 │           └─ TableScan tpcds.item est. 300000 rows
-                     │                       │                 └─ Projection est. 84 rows
-                     │                       │                    │     Dynamic Filters Builder: {s_store_sk_2}
-                     │                       │                    └─ Broadcast Exchange est. 84 rows
+                     │                       │                 └─ Broadcast Exchange est. 84 rows
+                     │                       │                    └─ Projection est. 84 rows
+                     │                       │                       │     Dynamic Filters Builder: {s_store_sk_2}
                      │                       │                       └─ Filter est. 84 rows
                      │                       │                          │     s_market_id_2 = 8
                      │                       │                          └─ TableScan tpcds.store est. 1002 rows
@@ -206,11 +206,11 @@ Projection est. ? rows
                                                    │     │     │     Condition: ss_store_sk_3 == s_store_sk_3
                                                    │     │     ├─ Local Exchange est. 2879987999 rows
                                                    │     │     │  └─ Filter est. 2879987999 rows
-                                                   │     │     │     │     Dynamic Filters: {ss_store_sk_3:range}
+                                                   │     │     │     │     Dynamic Filters: {ss_store_sk_3:bloomfilter,ss_store_sk_3:range}
                                                    │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                                   │     │     └─ Projection est. 84 rows
-                                                   │     │        │     Dynamic Filters Builder: {s_store_sk_3}
-                                                   │     │        └─ Broadcast Exchange est. 84 rows
+                                                   │     │     └─ Broadcast Exchange est. 84 rows
+                                                   │     │        └─ Projection est. 84 rows
+                                                   │     │           │     Dynamic Filters Builder: {s_store_sk_3}
                                                    │     │           └─ Filter est. 84 rows
                                                    │     │              │     s_market_id_3 = 8
                                                    │     │              └─ TableScan tpcds.store est. 1002 rows
@@ -235,4 +235,4 @@ Projection est. ? rows
                                                          └─ Repartition Exchange est. 6000000 rows
                                                             │     Partition by: {ca_address_sk_3}
                                                             └─ TableScan tpcds.customer_address est. 6000000 rows
-note: Dynamic Filter is applied for 5 times.
+note: Dynamic Filter is applied for 8 times.

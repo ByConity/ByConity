@@ -19,20 +19,20 @@ Projection est. 100 rows
                                     │  └─ Filter est. 2879987999 rows
                                     │     │     Dynamic Filters: {ss_ticket_number:bloomfilter,ss_ticket_number:range}
                                     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                    └─ Projection est. 4430765 rows
-                                       │     Dynamic Filters Builder: {sr_ticket_number}
-                                       └─ Repartition Exchange est. 4430765 rows
-                                          │     Partition by: {sr_item_sk, sr_ticket_number}
+                                    └─ Repartition Exchange est. 4430765 rows
+                                       │     Partition by: {sr_item_sk, sr_ticket_number}
+                                       └─ Projection est. 4430765 rows
+                                          │     Dynamic Filters Builder: {sr_ticket_number}
                                           └─ Inner Join est. 4430765 rows
                                              │     Condition: sr_reason_sk == r_reason_sk
                                              ├─ Local Exchange est. 287999764 rows
                                              │  └─ Filter est. 287999764 rows
-                                             │     │     Dynamic Filters: {sr_reason_sk:range}
+                                             │     │     Dynamic Filters: {sr_reason_sk:bloomfilter,sr_reason_sk:range}
                                              │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                                             └─ Projection est. 1 rows
-                                                │     Dynamic Filters Builder: {r_reason_sk}
-                                                └─ Broadcast Exchange est. 1 rows
+                                             └─ Broadcast Exchange est. 1 rows
+                                                └─ Projection est. 1 rows
+                                                   │     Dynamic Filters Builder: {r_reason_sk}
                                                    └─ Filter est. 1 rows
                                                       │     r_reason_desc = 'reason 28'
                                                       └─ TableScan tpcds.reason est. 65 rows
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 4 times.

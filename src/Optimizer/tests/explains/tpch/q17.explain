@@ -25,11 +25,11 @@ Projection est. 1 rows
                                  │     Condition: l_partkey_1 == p_partkey_1
                                  ├─ Local Exchange est. 6001215 rows
                                  │  └─ Filter est. 6001215 rows
-                                 │     │     Dynamic Filters: {l_partkey_1:range}
+                                 │     │     Dynamic Filters: {l_partkey_1:bloomfilter,l_partkey_1:range}
                                  │     └─ TableScan tpch.lineitem est. 6001215 rows
-                                 └─ Projection est. 197 rows
-                                    │     Dynamic Filters Builder: {p_partkey_1}
-                                    └─ Broadcast Exchange est. 197 rows
+                                 └─ Broadcast Exchange est. 197 rows
+                                    └─ Projection est. 197 rows
+                                       │     Dynamic Filters Builder: {p_partkey_1}
                                        └─ MergingAggregated est. 197 rows
                                           └─ Repartition Exchange est. 197 rows
                                              │     Partition by: {p_partkey_1}
@@ -40,4 +40,4 @@ Projection est. 1 rows
                                                       │     (p_brand = 'Brand#23') AND (p_container = 'MED BOX')
                                                       └─ TableScan tpch.part est. 200000 rows
 note: Magic Set is applied for 1 parts.
-note: Dynamic Filter is applied for 1 times.
+note: Dynamic Filter is applied for 2 times.

@@ -78,7 +78,11 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
         return {replicate_node};
     }
 
-    result.emplace_back(repartition_node);
+    if (context.context->getSettingsRef().enum_repartition)
+    {
+        result.emplace_back(repartition_node);
+    }
+
 
     if (context.context->getSettingsRef().enum_replicate && left_stats && right_stats)
     {

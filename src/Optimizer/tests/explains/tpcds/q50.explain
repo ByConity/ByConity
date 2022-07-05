@@ -23,19 +23,19 @@ Projection est. 100 rows
                                     │  │  │  └─ Filter est. 2879987999 rows
                                     │  │  │     │     Dynamic Filters: {ss_customer_sk:bloomfilter,ss_customer_sk:range,ss_ticket_number:bloomfilter,ss_ticket_number:range}
                                     │  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                    │  │  └─ Projection est. 4283585 rows
-                                    │  │     │     Dynamic Filters Builder: {sr_customer_sk,sr_ticket_number}
-                                    │  │     └─ Repartition Exchange est. 4283585 rows
-                                    │  │        │     Partition by: {sr_customer_sk, sr_item_sk, sr_ticket_number}
+                                    │  │  └─ Repartition Exchange est. 4283585 rows
+                                    │  │     │     Partition by: {sr_customer_sk, sr_item_sk, sr_ticket_number}
+                                    │  │     └─ Projection est. 4283585 rows
+                                    │  │        │     Dynamic Filters Builder: {sr_customer_sk,sr_ticket_number}
                                     │  │        └─ Inner Join est. 4283585 rows
                                     │  │           │     Condition: sr_returned_date_sk == d_date_sk_1
                                     │  │           ├─ Local Exchange est. 287999764 rows
                                     │  │           │  └─ Filter est. 287999764 rows
-                                    │  │           │     │     Dynamic Filters: {sr_returned_date_sk:range}
+                                    │  │           │     │     Dynamic Filters: {sr_returned_date_sk:bloomfilter,sr_returned_date_sk:range}
                                     │  │           │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                                    │  │           └─ Projection est. 30 rows
-                                    │  │              │     Dynamic Filters Builder: {d_date_sk_1}
-                                    │  │              └─ Broadcast Exchange est. 30 rows
+                                    │  │           └─ Broadcast Exchange est. 30 rows
+                                    │  │              └─ Projection est. 30 rows
+                                    │  │                 │     Dynamic Filters Builder: {d_date_sk_1}
                                     │  │                 └─ Filter est. 30 rows
                                     │  │                    │     (d_moy_1 = 8) AND (d_year_1 = 2001)
                                     │  │                    └─ TableScan tpcds.date_dim est. 73049 rows
@@ -43,4 +43,4 @@ Projection est. 100 rows
                                     │     └─ TableScan tpcds.store est. 1002 rows
                                     └─ Broadcast Exchange est. 73049 rows
                                        └─ TableScan tpcds.date_dim est. 73049 rows
-note: Dynamic Filter is applied for 5 times.
+note: Dynamic Filter is applied for 6 times.

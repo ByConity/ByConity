@@ -20,10 +20,10 @@ Projection est. 20 rows
                                     │     │     l_returnflag = 'R'
                                     │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:range}
                                     │     └─ TableScan tpch.lineitem est. 6001215 rows
-                                    └─ Projection est. 57049 rows
-                                       │     Dynamic Filters Builder: {o_orderkey}
-                                       └─ Repartition Exchange est. 57049 rows
-                                          │     Partition by: {o_orderkey}
+                                    └─ Repartition Exchange est. 57049 rows
+                                       │     Partition by: {o_orderkey}
+                                       └─ Projection est. 57049 rows
+                                          │     Dynamic Filters Builder: {o_orderkey}
                                           └─ Inner Join est. 57049 rows
                                              │     Condition: c_nationkey == n_nationkey
                                              ├─ Inner Join est. 57049 rows

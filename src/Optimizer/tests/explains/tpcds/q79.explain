@@ -24,25 +24,25 @@ Projection est. 100 rows
                            │              │  │  │     Condition: ss_sold_date_sk == d_date_sk
                            │              │  │  ├─ Local Exchange est. 2879987999 rows
                            │              │  │  │  └─ Filter est. 2879987999 rows
-                           │              │  │  │     │     Dynamic Filters: {ss_hdemo_sk:range,ss_sold_date_sk:range}
+                           │              │  │  │     │     Dynamic Filters: {ss_hdemo_sk:bloomfilter,ss_hdemo_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                            │              │  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                           │              │  │  └─ Projection est. 156 rows
-                           │              │  │     │     Dynamic Filters Builder: {d_date_sk}
-                           │              │  │     └─ Broadcast Exchange est. 156 rows
+                           │              │  │  └─ Broadcast Exchange est. 156 rows
+                           │              │  │     └─ Projection est. 156 rows
+                           │              │  │        │     Dynamic Filters Builder: {d_date_sk}
                            │              │  │        └─ Filter est. 156 rows
                            │              │  │           │     (d_year IN (1999, 2000, 2001)) AND (d_dow = 1)
                            │              │  │           └─ TableScan tpcds.date_dim est. 73049 rows
-                           │              │  └─ Projection est. 2880 rows
-                           │              │     │     Dynamic Filters Builder: {hd_demo_sk}
-                           │              │     └─ Broadcast Exchange est. 2880 rows
+                           │              │  └─ Broadcast Exchange est. 2880 rows
+                           │              │     └─ Projection est. 2880 rows
+                           │              │        │     Dynamic Filters Builder: {hd_demo_sk}
                            │              │        └─ Filter est. 2880 rows
                            │              │           │     (hd_vehicle_count > 2) OR (hd_dep_count = 6)
                            │              │           └─ TableScan tpcds.household_demographics est. 7200 rows
-                           │              └─ Broadcast Exchange est. 939 rows
-                           │                 └─ Filter est. 939 rows
+                           │              └─ Broadcast Exchange est. 946 rows
+                           │                 └─ Filter est. 946 rows
                            │                    │     (s_number_employees <= 295) AND (s_number_employees >= 200)
                            │                    └─ TableScan tpcds.store est. 1002 rows
                            └─ Repartition Exchange est. 12000000 rows
                               │     Partition by: {c_customer_sk}
                               └─ TableScan tpcds.customer est. 12000000 rows
-note: Dynamic Filter is applied for 2 times.
+note: Dynamic Filter is applied for 4 times.

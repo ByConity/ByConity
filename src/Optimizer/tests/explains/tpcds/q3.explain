@@ -17,11 +17,11 @@ Projection est. 16 rows
                                  │  │     Condition: ss_item_sk == i_item_sk
                                  │  ├─ Local Exchange est. 2879987999 rows
                                  │  │  └─ Filter est. 2879987999 rows
-                                 │  │     │     Dynamic Filters: {ss_item_sk:range}
+                                 │  │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range}
                                  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                 │  └─ Projection est. 533 rows
-                                 │     │     Dynamic Filters Builder: {i_item_sk}
-                                 │     └─ Broadcast Exchange est. 533 rows
+                                 │  └─ Broadcast Exchange est. 533 rows
+                                 │     └─ Projection est. 533 rows
+                                 │        │     Dynamic Filters Builder: {i_item_sk}
                                  │        └─ Filter est. 533 rows
                                  │           │     i_manufact_id = 128
                                  │           └─ TableScan tpcds.item est. 300000 rows
@@ -29,4 +29,4 @@ Projection est. 16 rows
                                     └─ Filter est. 6000 rows
                                        │     d_moy = 11
                                        └─ TableScan tpcds.date_dim est. 73049 rows
-note: Dynamic Filter is applied for 1 times.
+note: Dynamic Filter is applied for 2 times.

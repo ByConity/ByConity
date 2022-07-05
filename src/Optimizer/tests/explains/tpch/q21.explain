@@ -53,20 +53,20 @@ Projection est. 100 rows
                                                    │                          │              ├─ Local Exchange est. 6001215 rows
                                                    │                          │              │  └─ Filter est. 6001215 rows
                                                    │                          │              │     │     l_receiptdate > l_commitdate
-                                                   │                          │              │     │     Dynamic Filters: {l_suppkey:range}
+                                                   │                          │              │     │     Dynamic Filters: {l_suppkey:bloomfilter,l_suppkey:range}
                                                    │                          │              │     └─ TableScan tpch.lineitem est. 6001215 rows
-                                                   │                          │              └─ Projection est. 400 rows
-                                                   │                          │                 │     Dynamic Filters Builder: {s_suppkey}
-                                                   │                          │                 └─ Broadcast Exchange est. 400 rows
+                                                   │                          │              └─ Broadcast Exchange est. 400 rows
+                                                   │                          │                 └─ Projection est. 400 rows
+                                                   │                          │                    │     Dynamic Filters Builder: {s_suppkey}
                                                    │                          │                    └─ Inner Join est. 400 rows
                                                    │                          │                       │     Condition: s_nationkey == n_nationkey
                                                    │                          │                       ├─ Local Exchange est. 10000 rows
                                                    │                          │                       │  └─ Filter est. 10000 rows
-                                                   │                          │                       │     │     Dynamic Filters: {s_nationkey:range}
+                                                   │                          │                       │     │     Dynamic Filters: {s_nationkey:bloomfilter,s_nationkey:range}
                                                    │                          │                       │     └─ TableScan tpch.supplier est. 10000 rows
-                                                   │                          │                       └─ Projection est. 1 rows
-                                                   │                          │                          │     Dynamic Filters Builder: {n_nationkey}
-                                                   │                          │                          └─ Broadcast Exchange est. 1 rows
+                                                   │                          │                       └─ Broadcast Exchange est. 1 rows
+                                                   │                          │                          └─ Projection est. 1 rows
+                                                   │                          │                             │     Dynamic Filters Builder: {n_nationkey}
                                                    │                          │                             └─ Filter est. 1 rows
                                                    │                          │                                │     n_name = 'SAUDI ARABIA'
                                                    │                          │                                └─ TableScan tpch.nation est. 25 rows
@@ -80,4 +80,4 @@ Projection est. 100 rows
                                                          └─ Filter est. 6001215 rows
                                                             │     l_receiptdate_2 > l_commitdate_2
                                                             └─ TableScan tpch.lineitem est. 6001215 rows
-note: Dynamic Filter is applied for 2 times.
+note: Dynamic Filter is applied for 4 times.

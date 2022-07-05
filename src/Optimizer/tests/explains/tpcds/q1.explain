@@ -27,11 +27,11 @@ Projection est. 100 rows
                               │           │  │     Condition: sr_store_sk == s_store_sk_1
                               │           │  ├─ Local Exchange est. 287999764 rows
                               │           │  │  └─ Filter est. 287999764 rows
-                              │           │  │     │     Dynamic Filters: {sr_returned_date_sk:range,sr_store_sk:bloomfilter,sr_store_sk:range,sr_store_sk:range}
+                              │           │  │     │     Dynamic Filters: {sr_returned_date_sk:bloomfilter,sr_returned_date_sk:range,sr_store_sk:bloomfilter,sr_store_sk:bloomfilter,sr_store_sk:range,sr_store_sk:range}
                               │           │  │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                              │           │  └─ Projection est. 41 rows
-                              │           │     │     Dynamic Filters Builder: {s_store_sk_1}
-                              │           │     └─ Broadcast Exchange est. 41 rows
+                              │           │  └─ Broadcast Exchange est. 41 rows
+                              │           │     └─ Projection est. 41 rows
+                              │           │        │     Dynamic Filters Builder: {s_store_sk_1}
                               │           │        └─ MergingAggregated est. 41 rows
                               │           │           └─ Repartition Exchange est. 41 rows
                               │           │              │     Partition by: {s_store_sk_1}
@@ -41,9 +41,9 @@ Projection est. 100 rows
                               │           │                    └─ Filter est. 41 rows
                               │           │                       │     s_state = 'TN'
                               │           │                       └─ TableScan tpcds.store est. 1002 rows
-                              │           └─ Projection est. 366 rows
-                              │              │     Dynamic Filters Builder: {d_date_sk}
-                              │              └─ Broadcast Exchange est. 366 rows
+                              │           └─ Broadcast Exchange est. 366 rows
+                              │              └─ Projection est. 366 rows
+                              │                 │     Dynamic Filters Builder: {d_date_sk}
                               │                 └─ Filter est. 366 rows
                               │                    │     d_year = 2000
                               │                    └─ TableScan tpcds.date_dim est. 73049 rows
@@ -67,11 +67,11 @@ Projection est. 100 rows
                                     │                       │  │     Condition: sr_store_sk_1 == s_store_sk_2
                                     │                       │  ├─ Local Exchange est. 287999764 rows
                                     │                       │  │  └─ Filter est. 287999764 rows
-                                    │                       │  │     │     Dynamic Filters: {sr_returned_date_sk_1:range,sr_store_sk_1:bloomfilter,sr_store_sk_1:range,sr_store_sk_1:range}
+                                    │                       │  │     │     Dynamic Filters: {sr_returned_date_sk_1:bloomfilter,sr_returned_date_sk_1:range,sr_store_sk_1:bloomfilter,sr_store_sk_1:bloomfilter,sr_store_sk_1:range,sr_store_sk_1:range}
                                     │                       │  │     └─ TableScan tpcds.store_returns est. 287999764 rows
-                                    │                       │  └─ Projection est. 41 rows
-                                    │                       │     │     Dynamic Filters Builder: {s_store_sk_2}
-                                    │                       │     └─ Broadcast Exchange est. 41 rows
+                                    │                       │  └─ Broadcast Exchange est. 41 rows
+                                    │                       │     └─ Projection est. 41 rows
+                                    │                       │        │     Dynamic Filters Builder: {s_store_sk_2}
                                     │                       │        └─ MergingAggregated est. 41 rows
                                     │                       │           └─ Repartition Exchange est. 41 rows
                                     │                       │              │     Partition by: {s_store_sk_2}
@@ -81,18 +81,18 @@ Projection est. 100 rows
                                     │                       │                    └─ Filter est. 41 rows
                                     │                       │                       │     s_state = 'TN'
                                     │                       │                       └─ TableScan tpcds.store est. 1002 rows
-                                    │                       └─ Projection est. 366 rows
-                                    │                          │     Dynamic Filters Builder: {d_date_sk_1}
-                                    │                          └─ Broadcast Exchange est. 366 rows
+                                    │                       └─ Broadcast Exchange est. 366 rows
+                                    │                          └─ Projection est. 366 rows
+                                    │                             │     Dynamic Filters Builder: {d_date_sk_1}
                                     │                             └─ Filter est. 366 rows
                                     │                                │     d_year_1 = 2000
                                     │                                └─ TableScan tpcds.date_dim est. 73049 rows
-                                    └─ Projection est. 41 rows
-                                       │     Dynamic Filters Builder: {s_store_sk}
-                                       └─ Repartition Exchange est. 41 rows
-                                          │     Partition by: {s_store_sk}
+                                    └─ Repartition Exchange est. 41 rows
+                                       │     Partition by: {s_store_sk}
+                                       └─ Projection est. 41 rows
+                                          │     Dynamic Filters Builder: {s_store_sk}
                                           └─ Filter est. 41 rows
                                              │     s_state = 'TN'
                                              └─ TableScan tpcds.store est. 1002 rows
 note: Magic Set is applied for 2 parts.
-note: Dynamic Filter is applied for 8 times.
+note: Dynamic Filter is applied for 12 times.

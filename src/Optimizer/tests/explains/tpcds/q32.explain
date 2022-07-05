@@ -11,7 +11,7 @@ Projection est. 1 rows
                │  │     Filter: cs_ext_discount_amt > (1.3 * `expr#avg(cs_ext_discount_amt)`)
                │  ├─ Local Exchange est. 1439980416 rows
                │  │  └─ Filter est. 1439980416 rows
-               │  │     │     Dynamic Filters: {cs_sold_date_sk:range}
+               │  │     │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
                │  └─ Broadcast Exchange est. 113 rows
                │     └─ Inner Join est. 85 rows
@@ -33,11 +33,11 @@ Projection est. 1 rows
                │                       │  │     Condition: cs_item_sk_1 == i_item_sk_1
                │                       │  ├─ Local Exchange est. 1439980416 rows
                │                       │  │  └─ Filter est. 1439980416 rows
-               │                       │  │     │     Dynamic Filters: {cs_item_sk_1:range,cs_sold_date_sk_1:range}
+               │                       │  │     │     Dynamic Filters: {cs_item_sk_1:bloomfilter,cs_item_sk_1:range,cs_sold_date_sk_1:bloomfilter,cs_sold_date_sk_1:range}
                │                       │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-               │                       │  └─ Projection est. 83 rows
-               │                       │     │     Dynamic Filters Builder: {i_item_sk_1}
-               │                       │     └─ Broadcast Exchange est. 83 rows
+               │                       │  └─ Broadcast Exchange est. 83 rows
+               │                       │     └─ Projection est. 83 rows
+               │                       │        │     Dynamic Filters Builder: {i_item_sk_1}
                │                       │        └─ MergingAggregated est. 83 rows
                │                       │           └─ Repartition Exchange est. 83 rows
                │                       │              │     Partition by: {i_item_sk_1}
@@ -47,17 +47,17 @@ Projection est. 1 rows
                │                       │                    └─ Filter est. 83 rows
                │                       │                       │     i_manufact_id = 977
                │                       │                       └─ TableScan tpcds.item est. 300000 rows
-               │                       └─ Projection est. 90 rows
-               │                          │     Dynamic Filters Builder: {d_date_sk_1}
-               │                          └─ Broadcast Exchange est. 90 rows
+               │                       └─ Broadcast Exchange est. 90 rows
+               │                          └─ Projection est. 90 rows
+               │                             │     Dynamic Filters Builder: {d_date_sk_1}
                │                             └─ Filter est. 90 rows
                │                                │     (d_date_1 >= '2000-01-27') AND (d_date_1 <= cast(11073, 'Date'))
                │                                └─ TableScan tpcds.date_dim est. 73049 rows
-               └─ Projection est. 90 rows
-                  │     Dynamic Filters Builder: {d_date_sk}
-                  └─ Broadcast Exchange est. 90 rows
+               └─ Broadcast Exchange est. 90 rows
+                  └─ Projection est. 90 rows
+                     │     Dynamic Filters Builder: {d_date_sk}
                      └─ Filter est. 90 rows
                         │     (d_date >= '2000-01-27') AND (d_date <= cast(11073, 'Date'))
                         └─ TableScan tpcds.date_dim est. 73049 rows
 note: Magic Set is applied for 1 parts.
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 6 times.

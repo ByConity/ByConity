@@ -16,6 +16,7 @@ public:
         settings.emplace("cascades_optimizer_timeout", "300000");
 #endif
 
+        settings.emplace("enable_left_join_to_right_join", "false");
         tester = std::make_shared<DB::BaseTpchPlanTest>(settings);
     }
 

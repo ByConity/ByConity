@@ -92,10 +92,9 @@ public:
         const std::unordered_map<DynamicFilterId, SymbolStatisticsPtr> & dynamicFilterStatistics,
         const std::unordered_map<DynamicFilterId, size_t> & dynamic_filter_cost,
         const std::unordered_map<DynamicFilterId, DynamicFilterId> & merged_dynamic_filters,
-        UInt32 minimum_filter_rows,
+        UInt64 minimum_filter_rows,
         double maximal_filter_factor,
-        bool enable_aggregate_filter,
-        bool enable_exchange_filter);
+        bool enable_dynamic_filter_for_join);
 
     PlanWithDynamicFilterPredicates rewrite(const PlanNodePtr & plan, ContextMutablePtr & context);
 
@@ -113,10 +112,9 @@ private:
     const std::unordered_map<DynamicFilterId, SymbolStatisticsPtr> & dynamic_filter_statistics;
     const std::unordered_map<DynamicFilterId, size_t> & dynamic_filter_cost;
     const std::unordered_map<DynamicFilterId, DynamicFilterId> & merged_dynamic_filters;
-    const UInt32 minimum_filter_rows;
-    const double maximal_filter_factor;
-    const bool enable_aggregate_filter;
-    const bool enable_exchange_filter;
+    const UInt64 min_filter_rows;
+    const double max_filter_factor;
+    const bool enable_dynamic_filter_for_join;
 
     std::unordered_map<DynamicFilterId, DynamicFilterTypes> effective_dynamic_filters{};
 };

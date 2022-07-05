@@ -80,7 +80,7 @@ double Histogram::estimateEqual(double value) const
     return 0.0;
 }
 
-double Histogram::estimateLessThanOrLessThanEqualFilter(double value, bool) const
+double Histogram::estimateLessThanOrLessThanEqualFilter(double value, bool equal) const
 {
     if (getTotalCount() == 0)
         return 0;
@@ -93,7 +93,7 @@ double Histogram::estimateLessThanOrLessThanEqualFilter(double value, bool) cons
             break;
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value))
+        else if (bucket->isAfter(value) || (equal && bucket->isUpperClosed() && bucket->getUpperBound() == value))
         {
             hit_count += bucket->getCount();
         }
@@ -107,13 +107,13 @@ double Histogram::estimateLessThanOrLessThanEqualFilter(double value, bool) cons
     return static_cast<double>(hit_count) / getTotalCount();
 }
 
-double Histogram::estimateGreaterThanOrGreaterThanEqualFilter(double value, bool) const
+double Histogram::estimateGreaterThanOrGreaterThanEqualFilter(double value, bool equal) const
 {
     UInt64 hit_count = 0;
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value))
+        if (bucket->isBefore(value) || (equal && bucket->isLowerClosed() && bucket->getLowerBound() == value))
         {
             hit_count += bucket->getCount();
         }
@@ -280,7 +280,7 @@ Histogram Histogram::createLessThanOrLessThanEqualFilter(double value, bool equa
             break;
         }
         // ----- upper_bound ----- point -----
-        else if (bucket->isAfter(value))
+        else if (bucket->isAfter(value) || (equal && bucket->isUpperClosed() && bucket->getUpperBound() == value))
         {
             new_buckets.emplace_back(bucket);
         }
@@ -303,7 +303,7 @@ Histogram Histogram::createGreaterThanOrGreaterThanEqualFilter(double value, boo
     for (const auto & bucket : buckets)
     {
         // ----- point ----- lower_bound -----
-        if (bucket->isBefore(value))
+        if (bucket->isBefore(value) || (equal && bucket->isLowerClosed() && bucket->getLowerBound() == value))
         {
             new_buckets.emplace_back(bucket);
         }

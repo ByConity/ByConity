@@ -12,8 +12,8 @@ Projection est. 1 rows
                │  └─ Filter est. 1500048 rows
                │     │     (l_shipmode IN ('AIR', 'AIR REG')) AND (l_shipinstruct = 'DELIVER IN PERSON')
                │     └─ TableScan tpch.lineitem est. 6001215 rows
-               └─ Repartition Exchange est. 195980 rows
+               └─ Repartition Exchange est. 200000 rows
                   │     Partition by: {p_partkey}
-                  └─ Filter est. 195980 rows
+                  └─ Filter est. 200000 rows
                      │     p_size >= 1
                      └─ TableScan tpch.part est. 200000 rows

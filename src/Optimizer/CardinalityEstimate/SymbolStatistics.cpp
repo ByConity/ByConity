@@ -53,9 +53,7 @@ bool SymbolStatistics::isString() const
 
 bool SymbolStatistics::isDate() const
 {
-    auto tmp_type = type;
-    if (isNullable())
-        tmp_type = dynamic_cast<const DataTypeNullable *>(type.get())->getNestedType();
+    auto tmp_type = Statistics::decayDataType(type);
     return tmp_type->getTypeId() == TypeIndex::Date;
 }
 

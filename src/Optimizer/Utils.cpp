@@ -56,29 +56,23 @@ void checkArgument(bool expression, const String & msg)
     }
 }
 
+bool isIdentity(const String & symbol, const ConstASTPtr & expression) {
+    return isIdentity(std::make_pair(symbol, expression));
+}
+
+bool isIdentity(const Assignment & assignment)
+{
+    String symbol = assignment.first;
+    if (const auto * identifier = assignment.second->as<const ASTIdentifier>())
+        return identifier->name() == symbol;
+    return false;
+}
+
 bool isIdentity(const Assignments & assignments)
 {
-    bool is_identity = true;
-    for (auto & assignment : assignments)
-    {
-        String symbol = assignment.first;
-        auto value = assignment.second;
-        if (value->as<const ASTIdentifier>())
-        {
-            auto & identifier = value->as<const ASTIdentifier &>();
-            if (symbol != identifier.name())
-            {
-                is_identity = false;
-                break;
-            }
-        }
-        else
-        {
-            is_identity = false;
-            break;
-        }
-    }
-    return is_identity;
+    return std::all_of(assignments.begin(), assignments.end(), [](const Assignment & assignment) {
+        return isIdentity(assignment);
+    });
 }
 
 bool isIdentity(const ProjectionStep & step)

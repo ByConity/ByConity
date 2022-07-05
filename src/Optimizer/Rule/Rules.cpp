@@ -9,6 +9,7 @@
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
+#include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 
@@ -53,7 +54,8 @@ std::vector<RulePtr> Rules::pushPartialStepRules()
     return {
         std::make_shared<PushPartialAggThroughExchange>(),
         std::make_shared<PushPartialSortingThroughExchange>(),
-        std::make_shared<PushPartialLimitThroughExchange>()};
+        std::make_shared<PushPartialLimitThroughExchange>(),
+        std::make_shared<PushDynamicFilterBuilderThroughExchange>()};
 }
 
 std::vector<RulePtr> Rules::removeRedundantRules()

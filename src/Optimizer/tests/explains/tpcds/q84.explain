@@ -19,10 +19,10 @@ Projection est. 100 rows
                                  ├─ Repartition Exchange est. 1920800 rows
                                  │  │     Partition by: {cd_demo_sk}
                                  │  └─ TableScan tpcds.customer_demographics est. 1920800 rows
-                                 └─ Projection est. 30899 rows
-                                    │     Dynamic Filters Builder: {c_current_cdemo_sk}
-                                    └─ Repartition Exchange est. 30899 rows
-                                       │     Partition by: {c_current_cdemo_sk}
+                                 └─ Repartition Exchange est. 30899 rows
+                                    │     Partition by: {c_current_cdemo_sk}
+                                    └─ Projection est. 30899 rows
+                                       │     Dynamic Filters Builder: {c_current_cdemo_sk}
                                        └─ Inner Join est. 30899 rows
                                           │     Condition: c_current_hdemo_sk == hd_demo_sk
                                           ├─ Repartition Exchange est. 123958 rows
@@ -31,18 +31,18 @@ Projection est. 100 rows
                                           │     │     Condition: c_current_addr_sk == ca_address_sk
                                           │     ├─ Local Exchange est. 12000000 rows
                                           │     │  └─ Filter est. 12000000 rows
-                                          │     │     │     Dynamic Filters: {c_current_addr_sk:range,c_current_hdemo_sk:bloomfilter,c_current_hdemo_sk:range}
+                                          │     │     │     Dynamic Filters: {c_current_addr_sk:bloomfilter,c_current_addr_sk:range,c_current_hdemo_sk:bloomfilter,c_current_hdemo_sk:range}
                                           │     │     └─ TableScan tpcds.customer est. 12000000 rows
-                                          │     └─ Projection est. 54438 rows
-                                          │        │     Dynamic Filters Builder: {ca_address_sk}
-                                          │        └─ Broadcast Exchange est. 54438 rows
+                                          │     └─ Broadcast Exchange est. 54438 rows
+                                          │        └─ Projection est. 54438 rows
+                                          │           │     Dynamic Filters Builder: {ca_address_sk}
                                           │           └─ Filter est. 54438 rows
                                           │              │     ca_city = 'Edgewood'
                                           │              └─ TableScan tpcds.customer_address est. 6000000 rows
-                                          └─ Projection est. 1800 rows
-                                             │     Dynamic Filters Builder: {hd_demo_sk}
-                                             └─ Repartition Exchange est. 1800 rows
-                                                │     Partition by: {hd_demo_sk}
+                                          └─ Repartition Exchange est. 1800 rows
+                                             │     Partition by: {hd_demo_sk}
+                                             └─ Projection est. 1800 rows
+                                                │     Dynamic Filters Builder: {hd_demo_sk}
                                                 └─ Inner Join est. 1800 rows
                                                    │     Condition: hd_income_band_sk == ib_income_band_sk
                                                    ├─ TableScan tpcds.household_demographics est. 7200 rows
@@ -50,4 +50,4 @@ Projection est. 100 rows
                                                       └─ Filter est. 5 rows
                                                          │     (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
                                                          └─ TableScan tpcds.income_band est. 20 rows
-note: Dynamic Filter is applied for 4 times.
+note: Dynamic Filter is applied for 5 times.

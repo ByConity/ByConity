@@ -28,16 +28,16 @@ Projection est. 100 rows
                                        │        │  │     │     Partition by: {ss_customer_sk}
                                        │        │  │     └─ Aggregating est. 12170480 rows
                                        │        │  │        │     Group by: {ss_customer_sk}
-                                       │        │  │        └─ Inner Join est. 169594106 rows
+                                       │        │  │        └─ Inner Join est. 186709108 rows
                                        │        │  │           │     Condition: ss_sold_date_sk == d_date_sk
                                        │        │  │           ├─ Local Exchange est. 2879987999 rows
                                        │        │  │           │  └─ Filter est. 2879987999 rows
-                                       │        │  │           │     │     Dynamic Filters: {ss_sold_date_sk:range}
+                                       │        │  │           │     │     Dynamic Filters: {ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                                        │        │  │           │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                       │        │  │           └─ Projection est. 109 rows
-                                       │        │  │              │     Dynamic Filters Builder: {d_date_sk}
-                                       │        │  │              └─ Broadcast Exchange est. 109 rows
-                                       │        │  │                 └─ Filter est. 109 rows
+                                       │        │  │           └─ Broadcast Exchange est. 120 rows
+                                       │        │  │              └─ Projection est. 120 rows
+                                       │        │  │                 │     Dynamic Filters Builder: {d_date_sk}
+                                       │        │  │                 └─ Filter est. 120 rows
                                        │        │  │                    │     (d_moy >= 1) AND (d_year = 2002) AND (d_moy <= cast(4, 'UInt16'))
                                        │        │  │                    └─ TableScan tpcds.date_dim est. 73049 rows
                                        │        │  └─ Repartition Exchange est. 12000000 rows
@@ -65,16 +65,16 @@ Projection est. 100 rows
                                        │                 │     Partition by: {ws_bill_customer_sk}
                                        │                 └─ Aggregating est. 12117049 rows
                                        │                    │     Group by: {ws_bill_customer_sk}
-                                       │                    └─ Inner Join est. 42398725 rows
+                                       │                    └─ Inner Join est. 46677496 rows
                                        │                       │     Condition: ws_sold_date_sk == d_date_sk_1
                                        │                       ├─ Local Exchange est. 720000376 rows
                                        │                       │  └─ Filter est. 720000376 rows
-                                       │                       │     │     Dynamic Filters: {ws_sold_date_sk:range}
+                                       │                       │     │     Dynamic Filters: {ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
                                        │                       │     └─ TableScan tpcds.web_sales est. 720000376 rows
-                                       │                       └─ Projection est. 109 rows
-                                       │                          │     Dynamic Filters Builder: {d_date_sk_1}
-                                       │                          └─ Broadcast Exchange est. 109 rows
-                                       │                             └─ Filter est. 109 rows
+                                       │                       └─ Broadcast Exchange est. 120 rows
+                                       │                          └─ Projection est. 120 rows
+                                       │                             │     Dynamic Filters Builder: {d_date_sk_1}
+                                       │                             └─ Filter est. 120 rows
                                        │                                │     (d_moy_1 >= 1) AND (d_year_1 = 2002) AND (d_moy_1 <= cast(4, 'UInt16'))
                                        │                                └─ TableScan tpcds.date_dim est. 73049 rows
                                        └─ Projection est. 12170480 rows
@@ -83,16 +83,16 @@ Projection est. 100 rows
                                                 │     Partition by: {cs_ship_customer_sk}
                                                 └─ Aggregating est. 12170480 rows
                                                    │     Group by: {cs_ship_customer_sk}
-                                                   └─ Inner Join est. 68791334 rows
+                                                   └─ Inner Join est. 92752361 rows
                                                       │     Condition: cs_sold_date_sk == d_date_sk_2
                                                       ├─ Local Exchange est. 1439980416 rows
                                                       │  └─ Filter est. 1439980416 rows
-                                                      │     │     Dynamic Filters: {cs_sold_date_sk:range}
+                                                      │     │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
                                                       │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
-                                                      └─ Projection est. 89 rows
-                                                         │     Dynamic Filters Builder: {d_date_sk_2}
-                                                         └─ Broadcast Exchange est. 89 rows
-                                                            └─ Filter est. 89 rows
+                                                      └─ Broadcast Exchange est. 120 rows
+                                                         └─ Projection est. 120 rows
+                                                            │     Dynamic Filters Builder: {d_date_sk_2}
+                                                            └─ Filter est. 120 rows
                                                                │     (d_moy_2 <= cast(4, 'UInt16')) AND (d_moy_2 >= 1) AND (d_year_2 = 2002)
                                                                └─ TableScan tpcds.date_dim est. 73049 rows
-note: Dynamic Filter is applied for 3 times.
+note: Dynamic Filter is applied for 6 times.

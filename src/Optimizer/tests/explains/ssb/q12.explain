@@ -27,24 +27,24 @@ Projection est. 77472 rows
                                  │     │     │     │     (toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)
                                  │     │     │     │     Dynamic Filters: {LO_CUSTKEY:bloomfilter,LO_CUSTKEY:range,LO_PARTKEY:bloomfilter,LO_PARTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
                                  │     │     │     └─ TableScan ssb.lineorder est. 5999989813 rows
-                                 │     │     └─ Projection est. 399954 rows
-                                 │     │        │     Dynamic Filters Builder: {S_SUPPKEY}
-                                 │     │        └─ Repartition Exchange est. 399954 rows
-                                 │     │           │     Partition by: {S_SUPPKEY}
+                                 │     │     └─ Repartition Exchange est. 399954 rows
+                                 │     │        │     Partition by: {S_SUPPKEY}
+                                 │     │        └─ Projection est. 399954 rows
+                                 │     │           │     Dynamic Filters Builder: {S_SUPPKEY}
                                  │     │           └─ Filter est. 399954 rows
                                  │     │              │     S_REGION = 'AMERICA'
                                  │     │              └─ TableScan ssb.supplier est. 2000000 rows
-                                 │     └─ Projection est. 6000975 rows
-                                 │        │     Dynamic Filters Builder: {C_CUSTKEY}
-                                 │        └─ Repartition Exchange est. 6000975 rows
-                                 │           │     Partition by: {C_CUSTKEY}
+                                 │     └─ Repartition Exchange est. 6000975 rows
+                                 │        │     Partition by: {C_CUSTKEY}
+                                 │        └─ Projection est. 6000975 rows
+                                 │           │     Dynamic Filters Builder: {C_CUSTKEY}
                                  │           └─ Filter est. 6000975 rows
                                  │              │     C_REGION = 'AMERICA'
                                  │              └─ TableScan ssb.customer est. 30000000 rows
-                                 └─ Projection est. 719565 rows
-                                    │     Dynamic Filters Builder: {P_PARTKEY}
-                                    └─ Repartition Exchange est. 719565 rows
-                                       │     Partition by: {P_PARTKEY}
+                                 └─ Repartition Exchange est. 719565 rows
+                                    │     Partition by: {P_PARTKEY}
+                                    └─ Projection est. 719565 rows
+                                       │     Dynamic Filters Builder: {P_PARTKEY}
                                        └─ Filter est. 719565 rows
                                           │     (P_MFGR = 'MFGR#1') OR (P_MFGR = 'MFGR#2')
                                           └─ TableScan ssb.part est. 2000000 rows

@@ -22,6 +22,8 @@ namespace Utils
     void checkState(bool expression, const String & msg);
     void checkArgument(bool expression);
     void checkArgument(bool expression, const String & msg);
+    bool isIdentity(const String & symbol, const ConstASTPtr & expression);
+    bool isIdentity(const Assignment & assignment);
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);

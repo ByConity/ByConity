@@ -20,11 +20,11 @@ Projection est. 10 rows
                                  │     │  │     Condition: ss_sold_date_sk == d_date_sk
                                  │     │  ├─ Local Exchange est. 2879987999 rows
                                  │     │  │  └─ Filter est. 2879987999 rows
-                                 │     │  │     │     Dynamic Filters: {ss_sold_date_sk:range}
+                                 │     │  │     │     Dynamic Filters: {ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
                                  │     │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
-                                 │     │  └─ Projection est. 90 rows
-                                 │     │     │     Dynamic Filters Builder: {d_date_sk}
-                                 │     │     └─ Broadcast Exchange est. 90 rows
+                                 │     │  └─ Broadcast Exchange est. 90 rows
+                                 │     │     └─ Projection est. 90 rows
+                                 │     │        │     Dynamic Filters Builder: {d_date_sk}
                                  │     │        └─ Filter est. 90 rows
                                  │     │           │     (d_qoy = 2) AND (d_year = 1998)
                                  │     │           └─ TableScan tpcds.date_dim est. 73049 rows
@@ -62,4 +62,4 @@ Projection est. 10 rows
                                                                            └─ Filter est. 5880977 rows
                                                                               │     c_preferred_cust_flag = 'Y'
                                                                               └─ TableScan tpcds.customer est. 12000000 rows
-note: Dynamic Filter is applied for 1 times.
+note: Dynamic Filter is applied for 2 times.
