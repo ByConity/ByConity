@@ -4,17 +4,19 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
+#include "Storages/MergeTree/IMergeTreeReaderStream.h"
 
 
 namespace DB
 {
 
 /// Class for reading a single column (or index).
-class MergeTreeReaderStream
+class MergeTreeReaderStream: public IMergeTreeReaderStream
 {
 public:
     MergeTreeReaderStream(
@@ -29,11 +31,13 @@ public:
         off_t data_file_offset_, size_t data_file_size_,
         off_t mark_file_offset_, size_t mark_file_size_);
 
-    void seekToMark(size_t index);
+    virtual void seekToMark(size_t index) override;
 
     void seekToStart();
 
     size_t getCurrentBlockCompressedSize() const;
+
+    virtual void seekToStart() override;
 
 private:
     DiskPtr disk;

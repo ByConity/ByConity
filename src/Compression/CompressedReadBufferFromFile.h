@@ -67,6 +67,11 @@ public:
     }
 
     size_t getSizeCompressed() const { return size_compressed; }
+
+    size_t compressedOffset() const
+    {
+        return file_in.getPosition();
+    }
 };
 
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Core/BackgroundSchedulePool.h>
+#include <Disks/IDisk.h>
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 

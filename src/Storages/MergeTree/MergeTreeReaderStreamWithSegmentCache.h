@@ -1,52 +1,24 @@
 #pragma once
 
 #include <memory>
+#include <IO/ReadBuffer.h>
+#include <IO/UncompressedCache.h>
 #include <Storages/MarkCache.h>
+#include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeRangeReader.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
-#include <Storages/DiskCache/IDiskCache.h>
-#include <bits/types/clockid_t.h>
-#include "Compression/CachedCompressedReadBuffer.h"
-#include "Compression/CompressedReadBufferFromFile.h"
-#include "DataStreams/MarkInCompressedFile.h"
-#include "IO/ReadBuffer.h"
-#include "IO/ReadBufferFromFileBase.h"
-#include "IO/UncompressedCache.h"
-#include "Interpreters/StorageID.h"
-#include "Storages/HDFS/HDFSCommon.h"
-#include "Storages/MergeTree/IMergeTreeDataPart.h"
-#include "Storages/MergeTree/MergeTreeIndexGranularity.h"
+#include <Storages/MergeTree/MergeTreeIndexGranularity.h>
+#include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 
 namespace DB
 {
 
-class MergeTreeReaderStreamReadBuffer
-{
-public:
-    MergeTreeReaderStreamReadBuffer(): non_cached_buffer(nullptr), cached_buffer(nullptr) {}
-
-    void seek(size_t offset_in_compressed_data, size_t offset_in_decompressed_block);
-    bool initialized() const;
-    void initialize(std::unique_ptr<CompressedReadBufferFromFile> ncb,
-        std::unique_ptr<CachedCompressedReadBuffer> cb);
-    void reset();
-    ReadBuffer* readBuffer();
-
-    void setProfileCallback(ReadBufferFromFileBase::ProfileCallback callback,
-        clockid_t clock_type);
-    void disableChecksumming();
-    String path() const;
-
-private:
-    std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
-    std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
-};
-
-class MergeTreeReaderStreamWithSegmentCache
+class MergeTreeReaderStreamWithSegmentCache: public IMergeTreeReaderStream
 {
 public:
     MergeTreeReaderStreamWithSegmentCache(
@@ -61,50 +33,19 @@ public:
         const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
         clockid_t clock_type_);
 
-    void seekToMark(size_t mark);
+    virtual void seekToMark(size_t mark) override;
 
-    void seekToStart();
-
-    ReadBuffer* data_buffer;
+    virtual void seekToStart() override;
 
 private:
     static void markRangeStatistics(const MarkRanges& all_mark_ranges,
         MergeTreeMarksLoader& marks_loader, size_t file_size,
         size_t* max_mark_range_bytes, size_t* sum_mark_range_bytes);
 
-    void seekToPosition(size_t mark, const MarkInCompressedFile& mark_pos);
-    void initSourceBufferIfNeeded();
-    void initCacheBufferIfNeeded(const DiskPtr& cache_disk, const String& cache_path);
-
-    bool seekToMarkInSegmentCache(size_t mark, const MarkInCompressedFile& mark_pos);
-
-    const StorageID storage_id;
-    const String part_name;
-    const String stream_name;
-
-    DiskPtr disk;
-
-    String data_file_path;
-    off_t data_file_offset;
-    size_t data_file_size;
-
-    UncompressedCache* uncompressed_cache;
-
-    IDiskCache* segment_cache;
-    size_t cache_segment_size;
-
-    // Read buffer configurations
-    ReadBufferFromFileBase::ProfileCallback profile_callback;
-    clockid_t clock_type;
-    size_t buffer_size;
-    size_t estimate_range_bytes;
-
-    MergeTreeReaderSettings settings;
-
     MergeTreeMarksLoader marks_loader;
 
-    MergeTreeReaderStreamReadBuffer cache_buffer;
-    MergeTreeReaderStreamReadBuffer source_buffer;
+    std::unique_ptr<MergedReadBufferWithSegmentCache> read_buffer_holder;
+
 };
 
 }
