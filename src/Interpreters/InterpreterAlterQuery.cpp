@@ -23,6 +23,8 @@
 #include <boost/range/algorithm_ext/push_back.hpp>
 
 #include <algorithm>
+#include <common/logger_useful.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 
 
 namespace DB
@@ -33,6 +35,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INCORRECT_QUERY;
     extern const int NOT_IMPLEMENTED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 
@@ -63,8 +66,23 @@ BlockIO InterpreterAlterQuery::execute()
     }
 
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+
     auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
+
+    TransactionCnchPtr cnch_txn{nullptr};
+    //IntentLockPtr cnch_table_lock{nullptr};
+    if (database->getEngineName() == "Cnch")
+    {
+        cnch_txn = getContext()->getCurrentTransaction();
+
+        if (!cnch_txn)
+            throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+        LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
+        //cnch_table_lock = cnch_txn->createIntentLock(table->getStorageID());
+    }
+
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
     AddDefaultDatabaseVisitor visitor(table_id.getDatabaseName());
@@ -97,6 +115,14 @@ BlockIO InterpreterAlterQuery::execute()
         else
             throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
     }
+
+#if 0
+    if (database->getEngineName() == "Cnch")
+    {
+        if (!partition_commands.empty())
+            cnch_table_lock->lock();
+    }
+#endif
 
     if (typeid_cast<DatabaseReplicated *>(database.get()))
     {
@@ -160,7 +186,6 @@ BlockIO InterpreterAlterQuery::execute()
 
     return res;
 }
-
 
 AccessRightsElements InterpreterAlterQuery::getRequiredAccess() const
 {

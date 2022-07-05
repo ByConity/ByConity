@@ -82,6 +82,10 @@ public:
         return {};
     }
 
+
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
+    void alter(const AlterCommands & commands, ContextPtr context, TableLockHolder & table_lock_holder) override;
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

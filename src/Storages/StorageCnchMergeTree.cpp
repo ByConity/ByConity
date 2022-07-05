@@ -13,11 +13,14 @@
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/AlterCommands.h>
+#include <Storages/PartitionCommands.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <Databases/DatabaseOnDisk.h>
 
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -739,7 +742,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             }
             auto create_target_query = target_table->getCreateTableSql();
             bool enable_staging_area = cnch_merge->getInMemoryMetadataPtr()->hasUniqueKey() && bool(local_context->getSettingsRef().enable_staging_area_for_write);
-            auto create_local_target_query = getCreateQueryForCloudTable(create_target_query, cnch_merge->getTableName() + "_" + table_suffix, 
+            auto create_local_target_query = getCreateQueryForCloudTable(create_target_query, cnch_merge->getTableName() + "_" + table_suffix,
             local_context, enable_staging_area, cnch_merge->getStorageID());
             create_view_sqls.emplace_back(create_local_target_query);
             create_view_sqls.emplace_back(replaceMatierializedViewQuery(mv, table_suffix));
@@ -1181,4 +1184,47 @@ ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(Con
     return target_parts;
 }
 
+void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands*/, ContextPtr /*context*/) const
+{
+    //checkAlterInCnchServer(commands, context);
+    //checkAlterSettings(commands);
 }
+
+void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
+{
+    auto table_id = getStorageID();
+    //auto old_storage_settings = getSettings();
+
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+    StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
+
+    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
+    TransactionCnchPtr txn = local_context->getCurrentTransaction();
+    DDLAlterActionPtr alter_act = txn->createAction<DDLAlterAction>(shared_from_this());
+    alter_act->setMutationCommmands(commands.getMutationCommands(old_metadata, false, local_context));
+
+    commands.apply(table_id, new_metadata, local_context);
+    checkColumnsValidity(new_metadata.columns);
+
+    {
+        String create_table_query = getCreateTableSql();
+        ParserCreateQuery p_create_query;
+        ASTPtr ast = parseQuery(p_create_query, create_table_query, local_context->getSettingsRef().max_query_size
+            , local_context->getSettingsRef().max_parser_depth);
+
+        applyMetadataChangesToCreateQuery(ast, new_metadata);
+        alter_act->setNewSchema(queryToString(ast));
+        txn->appendAction(alter_act);
+    }
+
+    //setProperties(new_metadata, false);
+    //updateHDFSRootPaths(new_metadata.root_paths_ast);
+    //setTTLExpressions(new_metadata.ttl_for_table_ast);
+    //setCreateTableSql(alter_act->getNewSchema());
+
+    txn_coordinator.commitV1(txn);
+    LOG_DEBUG(log, "Updated shared metadata in Catalog.");
+}
+
+
+} // end namespace DB
