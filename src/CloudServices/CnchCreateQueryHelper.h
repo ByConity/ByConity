@@ -11,7 +11,7 @@ class ASTCreateQuery;
 class ASTSetQuery;
 
 /// see Databases/DatabaseOnDisk.h
-extern String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach = std::nullopt);
+extern String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach);
 
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query, const Context & context);
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage);
