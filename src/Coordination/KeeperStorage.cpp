@@ -15,12 +15,24 @@
 #include <Poco/Base64Encoder.h>
 #include <Poco/SHA1Engine.h>
 #include <common/defines.h>
+#include <common/logger_useful.h>
+
+#include <Common/ZooKeeper/ZooKeeperCommon.h>
+#include <Common/SipHash.h>
+#include <Common/ZooKeeper/ZooKeeperConstants.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <Common/ZooKeeper/IKeeper.h>
+#include <Common/hex.h>
+#include <Common/setThreadName.h>
+#include <Coordination/pathUtils.h>
 
 #include <sstream>
 #include <iomanip>
 #include <mutex>
 #include <functional>
 #include <concepts>
+#include <filesystem>
+#include <string_view>
 
 namespace DB
 {
@@ -1170,6 +1182,7 @@ struct KeeperStorageListRequestProcessor final : public KeeperStorageRequestProc
         }
 
         auto & container = storage.container;
+
         auto node_it = container.find(request.path);
         if (node_it == container.end())
         {
@@ -1187,8 +1200,30 @@ struct KeeperStorageListRequestProcessor final : public KeeperStorageRequestProc
             const auto & children = node_it->value.getChildren();
             response.names.reserve(children.size());
 
+            const auto add_child = [&](const auto child)
+            {
+                auto list_request_type = Coordination::ListRequestType::ALL;
+                if (auto * filtered_list = dynamic_cast<Coordination::ZooKeeperFilteredListRequest *>(&request))
+                    list_request_type = filtered_list->list_request_type;
+
+                if (list_request_type == Coordination::ListRequestType::ALL)
+                    return true;
+
+                auto child_path = (std::filesystem::path(request.path) / child.toView()).generic_string();
+                auto child_it = container.find(child_path);
+                if (child_it == container.end())
+                    onStorageInconsistency();
+
+                const auto is_ephemeral = child_it->value.stat.ephemeralOwner != 0;
+                return (is_ephemeral && list_request_type == Coordination::ListRequestType::EPHEMERAL_ONLY)
+                    || (!is_ephemeral && list_request_type == Coordination::ListRequestType::PERSISTENT_ONLY);
+            };
+
             for (const auto child : children)
-                response.names.push_back(child.toString());
+            {
+                if (add_child(child))
+                    response.names.push_back(child.toString());
+            }
 
             response.stat = node_it->value.stat;
             response.error = Coordination::Error::ZOK;
@@ -1632,7 +1667,7 @@ struct KeeperStorageAuthRequestProcessor final : public KeeperStorageRequestProc
 void KeeperStorage::finalize()
 {
     if (finalized)
-        throw DB::Exception("Testkeeper storage already finalized", ErrorCodes::LOGICAL_ERROR);
+        throw DB::Exception("KeeperStorage already finalized", ErrorCodes::LOGICAL_ERROR);
 
     finalized = true;
 
@@ -1698,6 +1733,7 @@ KeeperStorageRequestProcessorsFactory::KeeperStorageRequestProcessorsFactory()
     registerKeeperRequestProcessor<Coordination::OpNum::Set, KeeperStorageSetRequestProcessor>(*this);
     registerKeeperRequestProcessor<Coordination::OpNum::List, KeeperStorageListRequestProcessor>(*this);
     registerKeeperRequestProcessor<Coordination::OpNum::SimpleList, KeeperStorageListRequestProcessor>(*this);
+    registerKeeperRequestProcessor<Coordination::OpNum::FilteredList, KeeperStorageListRequestProcessor>(*this);
     registerKeeperRequestProcessor<Coordination::OpNum::Check, KeeperStorageCheckRequestProcessor>(*this);
     registerKeeperRequestProcessor<Coordination::OpNum::Multi, KeeperStorageMultiRequestProcessor>(*this);
     registerKeeperRequestProcessor<Coordination::OpNum::SetACL, KeeperStorageSetACLRequestProcessor>(*this);

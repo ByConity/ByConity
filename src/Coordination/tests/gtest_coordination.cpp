@@ -21,6 +21,7 @@
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <Common/Exception.h>
+#include <Common/SipHash.h>
 #include <common/logger_useful.h>
 #include <libnuraft/nuraft.hxx> // Y_IGNORE
 #include <thread>
@@ -28,6 +29,7 @@
 #include <Coordination/Changelog.h>
 #include <Coordination/SnapshotableHashTable.h>
 #include <Coordination/KeeperStorage.h>
+#include <Coordination/pathUtils.h>
 #include <filesystem>
 
 
