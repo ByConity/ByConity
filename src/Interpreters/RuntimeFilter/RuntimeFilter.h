@@ -5,7 +5,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Aggregator.h>
-#include <Interpreters/BloomFilter.h>
+#include <Interpreters/BloomFilterV2.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Parsers/IAST.h>
@@ -13,8 +13,8 @@
 
 namespace DB
 {
-class BloomFilter;
-using BloomFilterPtr = std::shared_ptr<BloomFilter>;
+class BloomFilterV2;
+using BloomFilterV2Ptr = std::shared_ptr<BloomFilterV2>;
 
 class RuntimeFilter
 {
@@ -50,24 +50,24 @@ public:
 
     size_t size();
 
-    size_t getBuildTime() { return build_time; }
+    size_t getBuildTime() const { return build_time; }
 
-    size_t getBuildBytes() { return build_bytes; }
+    size_t getBuildBytes() const { return build_bytes; }
 
     void setRangeValid(bool valid) { range_valid = valid; }
 
-    bool getRangeValid() { return range_valid; }
+    bool getRangeValid() const { return range_valid; }
 
-    BloomFilterPtr getBloomFilterByColumn(const String & col_name);
+    BloomFilterV2Ptr getBloomFilterByColumn(const String & col_name);
 
     std::unordered_map<std::string, std::pair<ASTPtr, ASTPtr>> getMinMax();
 
-public:
+private:
     void initAggregator(const Block & stream_header);
 
     ASTPtr parseJoinKey(const String & bloom_key);
     ASTPtr parseRangeKey(const ColumnWithTypeAndName & range_key, size_t row);
-    std::unordered_map<std::string, std::shared_ptr<BloomFilter>> col_to_bf;
+    std::unordered_map<std::string, std::shared_ptr<BloomFilterV2>> col_to_bf;
     Settings settings;
     Block build_join_keys;
     std::unordered_map<String, String> join_column_map;

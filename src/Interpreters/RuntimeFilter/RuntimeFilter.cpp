@@ -11,11 +11,6 @@
 
 namespace DB
 {
-
-constexpr size_t DEFAULT_BLOOM_FILTER_BYTES = 1024 * 256;
-constexpr size_t DEFAULT_BLOOM_HASH_NUM = 4;
-constexpr size_t DEFAULT_BLOOM_FILTER_BITS = DEFAULT_BLOOM_FILTER_BYTES << 3;
-
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -45,7 +40,8 @@ void RuntimeFilter::init(
     if (enable_bloom_filter)
     {
         for (const auto & name : build_join_keys.getNames())
-            col_to_bf[name] = std::make_shared<BloomFilter>(DEFAULT_BLOOM_FILTER_BYTES, DEFAULT_BLOOM_HASH_NUM, DEFAULT_BLOOM_FILTER_BITS);
+            col_to_bf[name] = std::make_shared<BloomFilterV2>(
+                context_->getSettingsRef().dynamic_filter_default_bytes, context_->getSettingsRef().dynamic_filter_default_hashes);
     }
 
     if (enable_range_filter)
@@ -146,7 +142,7 @@ void RuntimeFilter::merge(RuntimeFilter & other_filter)
             else
             {
                 auto & rf = col_to_bf[iter.first];
-                rf->merge(*iter.second);
+                rf->mergeInplace(*iter.second);
             }
         }
     }
@@ -191,7 +187,7 @@ void RuntimeFilter::mergeBatchFilers(std::vector<std::shared_ptr<RuntimeFilter>>
                 else
                 {
                     auto & rf = col_to_bf[iter.first];
-                    rf->merge(*iter.second);
+                    rf->mergeInplace(*iter.second);
                 }
             }
         }
@@ -242,20 +238,13 @@ void RuntimeFilter::add(Block & block)
                     if (const auto * nullable = checkAndGetColumn<ColumnNullable>(col.column.get()))
                     {
                         if (nullable->isNullAt(i))
-                        {
-                            StringRef null_key("NULL");
-                            bf_ptr->add(null_key.data, null_key.size);
-                        }
+                            bf_ptr->addKey(StringRef("NULL"));
                         else
-                        {
-                            auto key_ref = nullable->getNestedColumn().getDataAt(i);
-                            bf_ptr->add(key_ref.data, key_ref.size);
-                        }
+                            bf_ptr->addKey(nullable->getNestedColumn().getDataAt(i));
                     }
                     else
                     {
-                        auto key_ref = col.column->getDataAt(i);
-                        bf_ptr->add(key_ref.data, key_ref.size);
+                        bf_ptr->addKey(col.column->getDataAt(i));
                     }
                 }
             }
@@ -387,8 +376,7 @@ void RuntimeFilter::deserialize(ReadBuffer & read_buf, bool transform)
         {
             String column_name;
             readBinary(column_name, read_buf);
-            std::shared_ptr<BloomFilter> bf
-                = std::make_shared<BloomFilter>(DEFAULT_BLOOM_FILTER_BYTES, DEFAULT_BLOOM_HASH_NUM, DEFAULT_BLOOM_FILTER_BITS);
+            std::shared_ptr<BloomFilterV2> bf = std::make_shared<BloomFilterV2>();
             bf->deserialize(read_buf);
             col_to_bf.emplace(column_name, bf);
         }
@@ -524,7 +512,7 @@ ASTs RuntimeFilter::getPredicate(const String & seg_key)
     return conditions;
 }
 
-BloomFilterPtr RuntimeFilter::getBloomFilterByColumn(const String & col_name)
+BloomFilterV2Ptr RuntimeFilter::getBloomFilterByColumn(const String & col_name)
 {
     if (enable_bloom_filter)
     {
@@ -543,7 +531,7 @@ size_t RuntimeFilter::size()
     if (enable_bloom_filter)
     {
         for (const auto & bf : col_to_bf)
-            total_size += bf.second->getSize();
+            total_size += bf.second->size();
     }
     total_size += build_join_keys.bytes();
     return total_size;

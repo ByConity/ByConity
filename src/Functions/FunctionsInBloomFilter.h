@@ -65,7 +65,7 @@ public:
             return DataTypeUInt8().createColumnConst(input_rows_count, field);
         }
 
-        BloomFilterPtr bloom_filter = runtime_filter->getBloomFilterByColumn(column_key);
+        auto bloom_filter = runtime_filter->getBloomFilterByColumn(column_key);
         if (!bloom_filter)
         {
             LOG_DEBUG(log, "RuntimeFilter Can not find bloom filter with key-" + column_key);
@@ -81,12 +81,12 @@ public:
             if (const auto * nullable = checkAndGetColumn<ColumnNullable>(join_key.column.get()))
             {
                 StringRef key = nullable->isNullAt(i) ? "NULL" : nullable->getNestedColumn().getDataAt(i);
-                vec_to[i] = bloom_filter->find(key.data, key.size);
+                vec_to[i] = bloom_filter->probeKey(key);
             }
             else
             {
                 StringRef key = join_key.column->getDataAt(i);
-                vec_to[i] = bloom_filter->find(key.data, key.size);
+                vec_to[i] = bloom_filter->probeKey(key);
             }
         }
         return col_to;

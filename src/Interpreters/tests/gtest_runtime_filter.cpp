@@ -1,6 +1,7 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/BloomFilter.h>
+#include <Interpreters/BloomFilterV2.h>
 
 #include <gtest/gtest.h>
 
@@ -72,4 +73,39 @@ TEST(RuntimeFilterTest, BloomFilterMerge2)
     EXPECT_FALSE(bloom_filter.find(key2.data, key2.size));
     bloom_filter.merge(bloom_filter2);
     EXPECT_TRUE(bloom_filter.find(key2.data, key2.size));
+}
+
+TEST(RuntimeFilterTest, BloomFilterV2)
+{
+    BloomFilterV2 bloom_filter{DEFAULT_BLOOM_FILTER_BYTES};
+
+    auto col = ColumnVector<UInt64>::create();
+    col->insert(Field{794873});
+    col->insert(Field{1190443});
+    auto key1 = col->getDataAt(0);
+    auto key2 = col->getDataAt(1);
+    bloom_filter.addKey(key1);
+
+    BloomFilterV2 bloom_filter2{DEFAULT_BLOOM_FILTER_BYTES};
+    bloom_filter2.addKey(key2);
+
+    EXPECT_FALSE(bloom_filter.probeKey(key2));
+    bloom_filter.mergeInplace(bloom_filter2);
+    EXPECT_TRUE(bloom_filter.probeKey(key2));
+
+    /**
+     * serialize to buffer
+     */
+    WriteBufferFromOwnString write_buffer;
+    bloom_filter.serializeToBuffer(write_buffer);
+
+    /**
+     * deserialize from buffer
+     */
+    ReadBufferFromString read_buffer(write_buffer.str());
+    BloomFilterV2 new_bloom_filter{DEFAULT_BLOOM_FILTER_BYTES};
+    new_bloom_filter.deserialize(read_buffer);
+
+    EXPECT_TRUE(new_bloom_filter.probeKey(key1));
+    EXPECT_TRUE(new_bloom_filter.probeKey(key2));
 }
