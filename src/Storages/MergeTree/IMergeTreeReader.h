@@ -118,7 +118,7 @@ protected:
     using ColumnPosition = std::optional<size_t>;
     virtual ColumnPosition findColumnForOffsets(const String & column_name) const;
 
-    using FileStreams = std::map<std::string, std::unique_ptr<MergeTreeReaderStream>>;
+    using FileStreams = std::map<std::string, std::unique_ptr<IMergeTreeReaderStream>>;
     using Serializations = std::map<std::string, SerializationPtr>;
 
     FileStreams streams;

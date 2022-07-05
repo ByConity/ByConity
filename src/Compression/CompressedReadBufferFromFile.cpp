@@ -95,6 +95,9 @@ void CompressedReadBufferFromFile::seek(size_t offset_in_compressed_file, size_t
         file_in.seek(offset_in_compressed_file, SEEK_SET);
 
         bytes += offset();
+
+        resetWorkingBuffer();
+
         nextImpl();
 
         if (offset_in_decompressed_block > working_buffer.size())

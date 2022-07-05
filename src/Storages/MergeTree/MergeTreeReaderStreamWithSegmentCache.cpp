@@ -50,8 +50,8 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     read_buffer_holder = std::make_unique<MergedReadBufferWithSegmentCache>(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
         data_size_, cache_segment_size_, segment_cache_, sum_mark_range_bytes,
-        buffer_size, settings_, total_segment_count, marks_loader,
-        uncompressed_cache_, profile_callback_, clock_type_
+        buffer_size, settings_, total_segment_count, marks_loader, uncompressed_cache_,
+        profile_callback_, clock_type_
     );
 }
 

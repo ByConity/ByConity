@@ -5,9 +5,10 @@
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Interpreters/StorageID.h>
+#include <Storages/MarkCache.h>
 #include <Storages/DiskCache/IDiskCache.h>
-#include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
+#include <Storages/MergeTree/MergeTreeMarksLoader.h>
 
 namespace DB
 {
@@ -63,10 +64,13 @@ private:
     bool seekToMarkInSegmentCache(size_t segment_idx, const MarkInCompressedFile& mark_pos);
     void initSourceBufferIfNeeded();
 
+    inline size_t toSourceDataOffset(size_t logical_offset) const;
+    inline size_t fromSourceDataOffset(size_t physical_offset) const;
+
     // Reader stream info
-    const StorageID& storage_id;
-    const String part_name;
-    const String stream_name;
+    StorageID storage_id;
+    String part_name;
+    String stream_name;
 
     // Source file info
     DiskPtr source_disk;
@@ -78,22 +82,23 @@ private:
     const size_t cache_segment_size;
     IDiskCache* segment_cache;
 
+    // Readbuffer's settings
     size_t estimated_range_bytes;
     size_t buffer_size;
-
     MergeTreeReaderSettings settings;
+    UncompressedCache* uncompressed_cache;
+    ReadBufferFromFileBase::ProfileCallback profile_callback;
+    clockid_t clock_type;
 
     size_t total_segment_count;
 
     MergeTreeMarksLoader& marks_loader;
 
-    UncompressedCache* uncompressed_cache;
-    ReadBufferFromFileBase::ProfileCallback profile_callback;
-    clockid_t clock_type;
-
+    // current segment index is guarantee to be consistent with cache_buffer
     size_t current_segment_idx;
-    size_t current_segment_start_offset;
-    size_t compressed_offset;
+    // Current compressed offset of underlying data, if this object has_value,
+    // then there must encounter end of a segment
+    std::optional<size_t> current_compressed_offset;
     DualCompressedReadBuffer cache_buffer;
     DualCompressedReadBuffer source_buffer;
 

@@ -437,7 +437,7 @@ void IMergeTreeReader::readData(
             if (it == streams.end())
                 return nullptr;
 
-            MergeTreeReaderStream & stream = *it->second;
+            IMergeTreeReaderStream & stream = *it->second;
 
             if (stream_for_prefix)
             {

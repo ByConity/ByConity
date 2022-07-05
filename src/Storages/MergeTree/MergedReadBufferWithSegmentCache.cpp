@@ -1,8 +1,17 @@
 #include <memory>
+#include <optional>
 #include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
 #include <Storages/DiskCache/DiskCacheSegment.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <IO/createReadBufferFromFileBase.h>
+#include "Compression/CachedCompressedReadBuffer.h"
+#include "Compression/CompressedReadBufferFromFile.h"
+
+namespace ProfileEvents
+{
+    extern const Event CnchReadSizeFromDiskCache;
+    extern const Event CnchReadSizeFromRemote;
+}
 
 namespace DB
 {
@@ -105,10 +114,10 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         source_data_offset(source_data_offset_), source_data_size(source_data_size_),
         cache_segment_size(cache_segment_size_), segment_cache(segment_cache_),
         estimated_range_bytes(estimated_range_bytes_), buffer_size(buffer_size_),
-        settings(settings_), total_segment_count(total_segment_count_),
-        marks_loader(marks_loader_), uncompressed_cache(uncompressed_cache_),
+        settings(settings_), uncompressed_cache(uncompressed_cache_),
         profile_callback(profile_callback_), clock_type(clock_type_),
-        current_segment_idx(0), current_segment_start_offset(0), compressed_offset(0),
+        total_segment_count(total_segment_count_), marks_loader(marks_loader_),
+        current_segment_idx(0), current_compressed_offset(std::nullopt),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
 {
     seekToStart();
@@ -138,40 +147,43 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
             // Adjust underlying buffer's cursor to working buffer's end
             active_buffer.position() += buf_size;
 
-            // Update compressed offset of underlying file
-            compressed_offset = current_segment_start_offset + cache_buffer.compressedOffset();
+            ProfileEvents::increment(ProfileEvents::CnchReadSizeFromDiskCache,
+                buf_size);
 
             return true;
         }
 
-        LOG_TRACE(logger, "Cache buffer of segment {}"
-            " encounter eof, underlying offset {}", current_segment_idx,
-            compressed_offset);
+        current_compressed_offset = marks_loader.getMark(current_segment_idx * cache_segment_size).offset_in_compressed_file
+            + cache_buffer.compressedOffset();
 
         cache_buffer.reset();
 
+        LOG_TRACE(logger, fmt::format("Cache buffer of segment {} encounter "
+            "eof, compressed offset {}", current_segment_idx, current_compressed_offset.value()));
+
         // Current cache buffer encounter eof, there maybe following conditions
         // 1. This is last segment of stream, we encounter true eof
-        if (current_segment_idx + 1 >= total_segment_count)
-        {
-            return false;
-        }
         // 2. This is just eof of one segment, we still have data to read
     }
 
     // Trying to adjust current segment index
-    size_t new_segment_idx = current_segment_idx;
-    while (unlikely(new_segment_idx + 1 < total_segment_count)
-        && (compressed_offset >= marks_loader.getMark((new_segment_idx + 1) * cache_segment_size).offset_in_compressed_file))
+    // No need to do this if segment cache is not enabled
+    if (unlikely(segment_cache != nullptr && current_compressed_offset.has_value()))
     {
-        ++new_segment_idx;
-    }
-    if (new_segment_idx != current_segment_idx)
-    {
-        LOG_TRACE(logger, "Seek to cache segment {}"
-            ", compressed offset {}", new_segment_idx, compressed_offset);
+        if (current_segment_idx + 1 >= total_segment_count)
+        {
+            return false;
+        }
+        size_t new_segment_idx = current_segment_idx;
+        while (new_segment_idx + 1 < total_segment_count
+            && (current_compressed_offset.value() >= marks_loader.getMark((new_segment_idx + 1) * cache_segment_size).offset_in_compressed_file))
+        {
+            ++new_segment_idx;
+        }
+
         // Seek to corresponding position, init cache/source buffer if necessary
-        seekToPosition(new_segment_idx, {compressed_offset, 0});
+        // will reset current_compressed_offset
+        seekToPosition(new_segment_idx, {current_compressed_offset.value(), 0});
     }
 
     ReadBuffer& active_buffer = cache_buffer.initialized() ?
@@ -185,9 +197,26 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
         BufferBase::set(buf_pos, buf_size, 0);
         active_buffer.position() += buf_size;
 
-        compressed_offset = cache_buffer.initialized() ?
-            current_segment_start_offset + cache_buffer.compressedOffset() :
-            source_buffer.compressedOffset();
+        ProfileEvents::increment(
+            cache_buffer.initialized() ?
+                ProfileEvents::CnchReadSizeFromDiskCache
+                : ProfileEvents::CnchReadSizeFromRemote,
+            buf_size);
+
+        if (segment_cache != nullptr && !cache_buffer.initialized())
+        {
+            // We are reading from source, should check if we need to seek to next
+            // segment
+            size_t source_compressed_offset = fromSourceDataOffset(
+                source_buffer.compressedOffset());
+            if (unlikely(current_segment_idx + 1 < total_segment_count
+                && source_compressed_offset >= marks_loader.getMark(cache_segment_size * (current_segment_idx + 1)).offset_in_compressed_file))
+            {
+                LOG_TRACE(logger, fmt::format("Offset {}, need seek to next segment {}",
+                    source_compressed_offset, current_segment_idx));
+                current_compressed_offset = source_compressed_offset;
+            }
+        }
     }
 
     return !encounter_eof;
@@ -209,6 +238,8 @@ void MergedReadBufferWithSegmentCache::seekToPosition(size_t segment_idx,
     // Reset current working/internal buffer first
     reset();
 
+    current_compressed_offset = std::nullopt;
+
     if (seekToMarkInSegmentCache(segment_idx, mark_pos))
     {
         return;
@@ -222,15 +253,14 @@ void MergedReadBufferWithSegmentCache::seekToPosition(size_t segment_idx,
     // No segment cache, trying to use source reader
     initSourceBufferIfNeeded();
 
-    LOG_TRACE(logger, "Seek to {}, offset {}:{}", segment_idx,
-        mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block);
+    LOG_TRACE(logger, fmt::format("Seek to {}, offset {}:{}, base offset {}, limit {}",
+        segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block,
+        source_data_offset, source_data_size));
 
     // seek to mark
-    source_buffer.seek(mark_pos.offset_in_compressed_file,
+    source_buffer.seek(toSourceDataOffset(mark_pos.offset_in_compressed_file),
         mark_pos.offset_in_decompressed_block);
     current_segment_idx = segment_idx;
-    current_segment_start_offset = marks_loader.getMark(current_segment_idx).offset_in_compressed_file;
-    compressed_offset = source_buffer.compressedOffset();
 }
 
 bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_idx,
@@ -244,25 +274,25 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     String segment_key = DiskCacheSegment::getSegmentKey(storage_id, part_name,
         stream_name, segment_idx, DATA_FILE_EXTENSION);
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
-    const DiskPtr& cache_disk = cache_entry.first;
-    const String& cache_path = cache_entry.second;
-    if (cache_disk == nullptr)
+    if (cache_entry.first != nullptr)
     {
         return false;
     }
+
+    DiskPtr& cache_disk = cache_entry.first;
+    const String& cache_path = cache_entry.second;
 
     try
     {
         size_t segment_start_compressed_offset =
             marks_loader.getMark(segment_idx * cache_segment_size).offset_in_compressed_file;
 
-        LOG_TRACE(logger, "Seek to diskcache {}, segment {}, offset {}:{}",
-            fullPath(cache_disk, cache_path), segment_idx, mark_pos.offset_in_compressed_file,
-            mark_pos.offset_in_decompressed_block);
+        LOG_TRACE(logger, fmt::format("Seek to diskcache {}, segment {}, offset {}:{}",
+            cache_path, segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block));
 
         // There isn't any segment reading right now, or it's not the segment we
         // are looking for, initialize one
-        if (!cache_buffer.initialized() || cache_buffer.path() != fullPath(cache_disk, cache_path))
+        if (!cache_buffer.initialized() || cache_buffer.path() != cache_path)
         {
             cache_buffer.reset();
 
@@ -271,7 +301,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
             {
                 auto cached_compressed_buffer = std::make_unique<CachedCompressedReadBuffer>(
                     fullPath(cache_disk, cache_path),
-                    [this, &cache_disk, &cache_path] () {
+                    [this, cache_disk, cache_path]() {
                         return cache_disk->readFile(
                             cache_path, {
                                 .buffer_size = buffer_size,
@@ -290,9 +320,15 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
             else
             {
                 auto non_cached_compressed_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                    cache_path, estimated_range_bytes, settings.min_bytes_to_use_direct_io,
-                    settings.min_bytes_to_use_mmap_io, settings.mmap_cache.get(),
-                    buffer_size
+                    cache_disk->readFile(
+                        cache_path, {
+                            .buffer_size = buffer_size,
+                            .estimated_size = estimated_range_bytes,
+                            .aio_threshold = settings.min_bytes_to_use_direct_io,
+                            .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                            .mmap_cache = settings.mmap_cache.get()
+                        }
+                    )
                 );
 
                 cache_buffer.initialize(nullptr, std::move(non_cached_compressed_buffer));
@@ -312,8 +348,6 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
         cache_buffer.seek(mark_pos.offset_in_compressed_file - segment_start_compressed_offset,
             mark_pos.offset_in_decompressed_block);
         current_segment_idx = segment_idx;
-        current_segment_start_offset = marks_loader.getMark(current_segment_idx).offset_in_compressed_file;
-        compressed_offset = cache_buffer.compressedOffset() + segment_start_compressed_offset;
     }
     catch(...)
     {
@@ -345,7 +379,7 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
                     .mmap_cache = settings.mmap_cache.get()
                 });
             },
-            uncompressed_cache, source_data_offset, source_data_size, true
+            uncompressed_cache, false, source_data_offset, source_data_size, true
         );
 
         source_buffer.initialize(std::move(cached_compressed_buffer), nullptr);
@@ -375,6 +409,22 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
     {
         source_buffer.disableChecksumming();
     }
+}
+
+size_t MergedReadBufferWithSegmentCache::toSourceDataOffset(size_t logical_offset) const
+{
+    return logical_offset + source_data_offset;
+}
+
+size_t MergedReadBufferWithSegmentCache::fromSourceDataOffset(size_t physical_offset) const
+{
+    if (unlikely(physical_offset < source_data_offset))
+    {
+        throw Exception(fmt::format("Try to convert invalid physical offset {}"
+            ", source data offset {}, source data limit {}", physical_offset,
+            source_data_offset, source_data_size), ErrorCodes::LOGICAL_ERROR);
+    }
+    return physical_offset - source_data_offset;
 }
 
 }
