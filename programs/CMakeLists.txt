@@ -54,6 +54,7 @@ option (ENABLE_CLICKHOUSE_KEEPER "ClickHouse alternative to ZooKeeper" ${ENABLE_
 option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into clickhouse-keeper snapshot" ${ENABLE_CLICKHOUSE_ALL})
 
 option (ENABLE_CLICKHOUSE_TSO_SERVER "Enable tso_server" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -160,6 +161,12 @@ if (ENABLE_CLICKHOUSE_KEEPER_CONVERTER)
     message(STATUS "ClickHouse keeper-converter mode: ON")
 else()
     message(STATUS "ClickHouse keeper-converter mode: OFF")
+endif()
+
+if (ENABLE_CLICKHOUSE_DAEMON_MANAGER)
+    message(STATUS "ClickHouse daemon-manager mode: ON")
+else()
+    message(STATUS "ClickHouse daemon-manager mode: OFF")
 endif()
 
 if(NOT (MAKE_STATIC_LIBRARIES OR SPLIT_SHARED_LIBRARIES))
@@ -462,7 +469,11 @@ else ()
         install (FILES ${CMAKE_CURRENT_BINARY_DIR}/tso_server DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE tso_server)
     endif ()
-
+    if (ENABLE_CLICKHOUSE_DAEMON_MANAGER)
+        add_custom_target (daemon-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse daemon-manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/daemon-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE daemon-manager)
+    endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
 

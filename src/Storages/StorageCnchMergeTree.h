@@ -86,6 +86,12 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
     void alter(const AlterCommands & commands, ContextPtr context, TableLockHolder & table_lock_holder) override;
 
+    void truncate(
+        const ASTPtr & /*query*/,
+        const StorageMetadataPtr & /* metadata_snapshot */,
+        ContextPtr /* context */,
+        TableExclusiveLockHolder &) override;
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

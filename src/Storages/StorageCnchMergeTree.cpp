@@ -1226,5 +1226,16 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     LOG_DEBUG(log, "Updated shared metadata in Catalog.");
 }
 
+void StorageCnchMergeTree::truncate(
+    const ASTPtr & /*query*/,
+    const StorageMetadataPtr & /* metadata_snapshot */,
+    ContextPtr /* context */,
+    TableExclusiveLockHolder &)
+{
+    //if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
+    //    return;
+}
+
+
 
 } // end namespace DB

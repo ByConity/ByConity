@@ -69,6 +69,9 @@ int mainEntryClickHouseStop(int argc, char ** argv);
 int mainEntryClickHouseStatus(int argc, char ** argv);
 int mainEntryClickHouseRestart(int argc, char ** argv);
 #endif
+#if ENABLE_CLICKHOUSE_DAEMON_MANAGER
+int mainEntryClickHouseDaemonManager(int argc, char ** argv);
+#endif
 
 int mainEntryClickHouseHashBinary(int, char **)
 {
@@ -133,6 +136,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"restart", mainEntryClickHouseRestart},
 #endif
     {"hash-binary", mainEntryClickHouseHashBinary},
+#if ENABLE_CLICKHOUSE_DAEMON_MANAGER
+    {"daemon-manager", mainEntryClickHouseDaemonManager},
+#endif
 };
 
 
@@ -162,7 +168,8 @@ bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)
 
     /// Use app if clickhouse binary is run through symbolic link with name clickhouse-app
     std::string app_name = "clickhouse-" + app_suffix;
-    return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name));
+    return !argv.empty() && (app_name == argv[0] || endsWith(argv[0], "/" + app_name) ||
+                             app_suffix == argv[0] || endsWith(argv[0], "/" + app_suffix));
 }
 
 
