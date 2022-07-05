@@ -74,7 +74,7 @@ private:
 
     void seekToPosition(size_t mark, const MarkInCompressedFile& mark_pos);
     void initSourceBufferIfNeeded();
-    void initCacheBufferIfNeeded(const String& cache_path);
+    void initCacheBufferIfNeeded(const DiskPtr& cache_disk, const String& cache_path);
 
     bool seekToMarkInSegmentCache(size_t mark, const MarkInCompressedFile& mark_pos);
 

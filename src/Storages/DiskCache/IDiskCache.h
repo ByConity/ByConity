@@ -14,9 +14,11 @@ class ReadBuffer;
 class WriteBuffer;
 class Throttler;
 class IVolume;
+class IDisk;
 
 using ThrottlerPtr = std::shared_ptr<Throttler>;
 using VolumePtr = std::shared_ptr<IVolume>;
+using DiskPtr = std::shared_ptr<IDisk>;
 
 class IDiskCache
 {
@@ -33,7 +35,7 @@ public:
     virtual void set(const String & key, ReadBuffer & value, size_t weight_hint) = 0;
 
     /// get segment from cache and return local path if exists.
-    virtual std::optional<String> get(const String & key) = 0;
+    virtual std::pair<DiskPtr, String> get(const String & key) = 0;
 
     /// initialize disk cache from local disk
     virtual void load() = 0;

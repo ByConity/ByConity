@@ -103,7 +103,7 @@ DiskPtr DiskCacheLRU::writeSegment(const String & key, ReadBuffer & value, size_
     return disk;
 }
 
-std::optional<String> DiskCacheLRU::get(const String & key)
+std::pair<DiskPtr, String> DiskCacheLRU::get(const String & key)
 {
     Stopwatch watch;
     SCOPE_EXIT(ProfileEvents::increment(ProfileEvents::DiskCacheGetMicroSeconds, watch.elapsedMicroseconds()));
@@ -117,15 +117,18 @@ std::optional<String> DiskCacheLRU::get(const String & key)
         auto disk = meta->getDisk();
         if (!disk)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "No disk for {}", key);
-        return fs::path(disk->getPath()) / base_path / key;
+        String path = fs::path(base_path) / key;
+        if (disk->exists(path))
+            return {std::move(disk), std::move(path)};
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "No disk cache path found {} in disk {}", path, disk->getName());
     }
     catch (...)
     {
         Base::remove(key);
         tryLogCurrentException(logger);
+        return {};
     }
-
-    return {};
 }
 
 void DiskCacheLRU::load()

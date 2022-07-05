@@ -227,8 +227,8 @@ bool MergeTreeReaderStreamWithSegmentCache::seekToMarkInSegmentCache(size_t mark
     size_t segment_index = mark / cache_segment_size;
     String segment_key = DiskCacheSegment::getSegmentKey(storage_id, part_name,
         stream_name, segment_index, DATA_FILE_EXTENSION);
-    std::optional<String> cache_path = segment_cache->get(segment_key);
-    if (!cache_path.has_value())
+    auto [cache_disk, cache_path] = segment_cache->get(segment_key);
+    if (!cache_disk || cache_path.empty())
     {
         return false;
     }
@@ -241,14 +241,14 @@ bool MergeTreeReaderStreamWithSegmentCache::seekToMarkInSegmentCache(size_t mark
             mark_pos.offset_in_compressed_file - segment_start_mark_pos.offset_in_compressed_file;
 
         // No need to set limit since each file only contains one stream
-        initCacheBufferIfNeeded(cache_path.value());
+        initCacheBufferIfNeeded(cache_disk, cache_path);
 
         cache_buffer.seek(offset_in_segment_buffer, mark_pos.offset_in_decompressed_block);
     }
     catch(...)
     {
-        String extra_msg = fmt::format("Failed to seek to cache buffer, mark: {}, segment_index: {}, segment_key: {}, cache_path: {}",
-            mark, segment_index, segment_key, cache_path.value());
+        String extra_msg = fmt::format("Failed to seek to cache buffer, mark: {}, segment_index: {}, segment_key: {}, cache_disk: {} cache_path: {}",
+            mark, segment_index, segment_key, cache_disk->getName(), cache_path);
         tryLogCurrentException("MergeTreeReaderStreamWithSegmentCache",
             extra_msg);
         return false;
@@ -258,7 +258,7 @@ bool MergeTreeReaderStreamWithSegmentCache::seekToMarkInSegmentCache(size_t mark
 }
 
 void MergeTreeReaderStreamWithSegmentCache::initCacheBufferIfNeeded(
-    const String& cache_path)
+    const DiskPtr& cache_disk, const String& cache_path)
 {
     if (cache_buffer.initialized() && cache_buffer.path() == cache_path)
     {
@@ -275,8 +275,8 @@ void MergeTreeReaderStreamWithSegmentCache::initCacheBufferIfNeeded(
         // NOTE(wsy): Let segment cache return corresponding disk?
         auto cached_buffer = std::make_unique<CachedCompressedReadBuffer>(
             cache_path,
-            [this, &cache_path]() {
-                return createReadBufferFromFileBase(cache_path, {
+            [this, &cache_disk, &cache_path]() {
+                return cache_disk->readFile(cache_path, {
                     .buffer_size = buffer_size,
                     .estimated_size = estimate_range_bytes,
                     .aio_threshold = settings.min_bytes_to_use_direct_io,
@@ -292,9 +292,15 @@ void MergeTreeReaderStreamWithSegmentCache::initCacheBufferIfNeeded(
     else
     {
         auto non_cached_buffer = std::make_unique<CompressedReadBufferFromFile>(
-            cache_path, estimate_range_bytes, settings.min_bytes_to_use_direct_io,
-            settings.min_bytes_to_use_mmap_io, settings.mmap_cache.get(),
-            buffer_size
+            cache_disk->readFile(
+                cache_path, {
+                    .buffer_size = buffer_size,
+                    .estimated_size = estimate_range_bytes,
+                    .aio_threshold = settings.min_bytes_to_use_direct_io,
+                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
+                    .mmap_cache = settings.mmap_cache.get()
+                }
+            )
         );
 
         cache_buffer.initialize(std::move(non_cached_buffer), nullptr);

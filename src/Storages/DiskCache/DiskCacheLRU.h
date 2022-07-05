@@ -51,7 +51,7 @@ public:
     DiskCacheLRU(Context & context_, VolumePtr storage_volume_, const DiskCacheSettings & settings_);
 
     virtual void set(const String & key, ReadBuffer & value, size_t weight_hint) override;
-    virtual std::optional<String> get(const String & key) override;
+    virtual std::pair<DiskPtr, String> get(const String & key) override;
     virtual void load() override;
     size_t getKeyCount() const override { return count(); }
     size_t getCachedSize() const override { return weight(); }
