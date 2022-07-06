@@ -26,7 +26,7 @@ public:
     using TSOProxyPtr = std::shared_ptr<TSOProxy>;
     using TSOServicePtr = std::shared_ptr<TSOImpl>;
 
-    TSOServer ();
+    TSOServer () {}
 
     ~TSOServer() override = default;
 
