@@ -138,7 +138,7 @@ bool PartCacheManager::trySetCachedNHUTForUpdate(const UUID & uuid, const UInt64
     {
         if (it->second == pts)
             return false;
-        
+
         /// renew the cached NHUT;
         it->second = pts;
     }
@@ -580,7 +580,7 @@ void PartCacheManager::loadActiveTables()
         auto entry = getTableMeta(RPCHelpers::createUUID(table_meta.uuid()));
         if (!entry)
         {
-            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(context, &table_meta);
+            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(context.shared_from_this(), &table_meta);
 
             auto host_port = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
             if (host_port.empty())
@@ -614,8 +614,8 @@ void PartCacheManager::updateTablePartitionsMetrics(bool skip_if_already_loaded)
 
 inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_ptr, const UInt64 & ts)
 {
-    return ts == 0 
-        || (UInt64(part_wrapper_ptr->part_model->part_info().mutation()) <= ts 
+    return ts == 0
+        || (UInt64(part_wrapper_ptr->part_model->part_info().mutation()) <= ts
             && part_wrapper_ptr->part_model->commit_time() <= ts);
 }
 
@@ -645,13 +645,13 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
         }
         return res;
     }
-    
+
     if (meta_ptr->load_parts_by_partition)
         res = getServerPartsByPartition(storage, meta_ptr, partitions, all_existing_partitions, load_func, ts);
     else
         res = getServerPartsInternal(storage, meta_ptr, partitions, all_existing_partitions, load_func, ts);
 
-    return res; 
+    return res;
 }
 
 static const size_t LOG_PARTS_SIZE = 100000;
@@ -663,7 +663,7 @@ static void logPartsVector(const MergeTreeMetaBase & storage, const ServerDataPa
 }
 
 DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
-    const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr, const Strings & partitions, 
+    const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr, const Strings & partitions,
     const Strings & all_existing_partitions, PartCacheManager::LoadPartsFunc & load_func, const UInt64 & ts)
 {
     ServerDataPartsVector res;
@@ -785,8 +785,8 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
     return res;
 }
 
-ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr, 
-    const Strings & partitions, const Strings & all_existing_partitions, 
+ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
+    const Strings & partitions, const Strings & all_existing_partitions,
     PartCacheManager::LoadPartsFunc & load_func, const UInt64 & ts)
 {
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Get parts by partitions for table : {}", storage.getLogName());
@@ -860,7 +860,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                 }
 
                 auto lock = meta_ptr->writeLock();
-                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make 
+                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
                 /// sure the cache contains all parts of the partition.
                 auto cached = partCachePtr->get({uuid, partition_id});
                 if (!cached)
@@ -869,7 +869,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                     cached = std::make_shared<DataPartModelsMap>();
                     partCachePtr->insert({uuid, partition_id}, cached);
                 }
-                
+
                 for (auto & data_wrapper_ptr : fetched_data)
                 {
                     auto final_wrapper_ptr = data_wrapper_ptr;
@@ -984,7 +984,7 @@ std::unordered_map<String, std::pair<size_t, size_t>> PartCacheManager::getTable
     }
     if (!cachePtr)
         return {};
-    
+
     return cachePtr->getTableCacheInfo();
 }
 

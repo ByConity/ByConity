@@ -398,16 +398,16 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
     {
         std::set<String> res_partition_set;
         Names partition_key_columns;
-        for (auto & name : partition_key_sample)
+        for (const auto & name : partition_key_sample)
         {
             partition_key_columns.emplace_back(name.name);
         }
         KeyCondition partition_condition(query_info, local_context, partition_key_columns, partition_key_expr);
         DataTypes result;
         result.reserve(partition_key_sample.getDataTypes().size());
-        for (const auto & dataType : partition_key_sample.getDataTypes())
+        for (const auto & data_type : partition_key_sample.getDataTypes())
         {
-            result.push_back(DataTypeFactory::instance().get(dataType->getName(), dataType->getFlags()));
+            result.push_back(DataTypeFactory::instance().get(data_type->getName(), data_type->getFlags()));
         }
 
         for (auto & partition : partition_list)
@@ -451,7 +451,7 @@ void StorageCnchMergeTree::eliminateParts(
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     for (const auto & part : parts)
     {
-        auto & partition_key = part->partition().value;
+        const auto & partition_key = part->partition().value;
         for (size_t i = 0; i < partition_key.size(); ++i)
             columns[i]->insert(partition_key[i]);
         if (partition_key.size() != columns.size())
@@ -476,9 +476,9 @@ void StorageCnchMergeTree::eliminateParts(
     }
 
     // Get index of the column in ColumnsWithTypeAndName
-    std::map<String, size_t> nameToIdx;
+    std::map<String, size_t> name_to_idx;
     for (size_t idx = 0; idx < columns_with_type_and_name.size(); ++idx)
-        nameToIdx.insert({columns_with_type_and_name[idx].name, idx});
+        name_to_idx.insert({columns_with_type_and_name[idx].name, idx});
 
     // Mask is for recoding whether a part can be removed.
     // 0 represents it can be removed.
@@ -488,7 +488,7 @@ void StorageCnchMergeTree::eliminateParts(
     {
         try
         {
-            filterCondition(condition, columns_with_type_and_name, nameToIdx, local_context, mask, query_info);
+            filterCondition(condition, columns_with_type_and_name, name_to_idx, local_context, mask, query_info);
         }
         catch (Exception & e)
         {
@@ -694,7 +694,7 @@ static String replaceMatierializedViewQuery(StorageMaterializedView * mv, const 
 
 String StorageCnchMergeTree::extractTableSuffix(const String & gen_table_name)
 {
-    return gen_table_name.substr(gen_table_name.find_last_of("_") + 1);
+    return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
 }
 
 Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix)
@@ -724,7 +724,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             continue;
         }
 
-        if (auto mv = dynamic_cast<StorageMaterializedView*>(table.get()))
+        if (auto * mv = dynamic_cast<StorageMaterializedView*>(table.get()))
         {
             auto target_table = mv->tryGetTargetTable();
             if (!target_table)
@@ -734,7 +734,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             }
 
             /// target table should be CnchMergeTree
-            auto cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+            auto * cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (!cnch_merge)
             {
                 LOG_WARNING(log, "table type not matched for {}, CnchMergeTree is expected", target_table->getTableName());
@@ -796,7 +796,7 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
             throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
 
         std::size_t index = std::hash<String>{}(local_context->getCurrentQueryId() + std::to_string(retry)) % num_of_workers;
-        auto *write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+        auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
 
         // TODO: healthy check by rpc
         if (settings.query_worker_fault_tolerance)
@@ -1096,7 +1096,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
 
     /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         /// search for the first bitmap
         while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info()))

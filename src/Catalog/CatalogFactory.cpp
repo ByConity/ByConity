@@ -6,6 +6,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Common/Status.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 
 #include <Databases/DatabaseCnch.h>
@@ -20,10 +21,12 @@ namespace ErrorCodes
     extern const int CATALOG_SERVICE_INTERNAL_ERROR;
 }
 
-namespace Catalog {
+namespace Catalog
+{
 
-CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB &db_model, const ContextPtr & context) {
-    DatabasePtr db {nullptr};
+CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context)
+{
+    DatabasePtr db{nullptr};
     if (db_model.has_uuid())
     {
         db = std::make_shared<DatabaseCnch>(db_model.name(), RPCHelpers::createUUID(db_model.uuid()), context);
@@ -36,38 +39,36 @@ CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Pro
 }
 
 StoragePtr CatalogFactory::getTableByDataModel(
-        Context &context,
-        const DB::Protos::DataModelTable *table_model)
+    ContextPtr context,
+    const DB::Protos::DataModelTable * table_model)
 {
-    auto & db = table_model->database();
-    auto & table = table_model->name();
-    auto & create_query = table_model->definition();
-    auto storagePtr = getTableByDefinition(context, db, table, create_query);
-    storagePtr->commit_time =  TxnTimestamp{table_model->commit_time()};
-    if (dynamic_cast<MergeTreeMetaBase*>(storagePtr.get()))
+    const auto & db = table_model->database();
+    const auto & table = table_model->name();
+    const auto & create_query = table_model->definition();
+    auto storage_ptr = getTableByDefinition(context, db, table, create_query);
+    storage_ptr->commit_time = TxnTimestamp{table_model->commit_time()};
+    if (dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get()))
     {
-        storagePtr->part_columns = std::make_shared<NamesAndTypesList>(storagePtr->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
-        for (auto & version : table_model->definitions())
+        storage_ptr->part_columns = std::make_shared<NamesAndTypesList>(storage_ptr->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
+        for (const auto & version : table_model->definitions())
         {
             auto s = getTableByDefinition(context, db, table, version.definition());
-            storagePtr->previous_versions_part_columns[version.commit_time()] = std::make_shared<NamesAndTypesList>(s->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
+            storage_ptr->previous_versions_part_columns[version.commit_time()] = std::make_shared<NamesAndTypesList>(s->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
         }
     }
-    storagePtr->is_dropped = DB::Status::isDeleted(table_model->status());
-    storagePtr->is_detached = DB::Status::isDetached(table_model->status());
-    return storagePtr;
+    storage_ptr->is_dropped = DB::Status::isDeleted(table_model->status());
+    storage_ptr->is_detached = DB::Status::isDetached(table_model->status());
+    return storage_ptr;
 }
 
 StoragePtr CatalogFactory::getTableByDefinition(
-        DB::Context &context,
-        [[maybe_unused]] const DB::String &db,
-        [[maybe_unused]] const DB::String &table,
-        const DB::String &create) {
-
+    ContextPtr context,
+    [[maybe_unused]] const String & db,
+    [[maybe_unused]] const String & table,
+    const String & create)
+{
     auto res = createStorageFromQuery(create, context);
-
     res->setCreateTableSql(create);
-
     return res;
 }
 
@@ -86,6 +87,5 @@ ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataMode
 }
 
 }
-
 
 }

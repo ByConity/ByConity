@@ -534,8 +534,7 @@ void Connection::sendPlanSegment(
     const ConnectionTimeouts & timeouts,
     const PlanSegment * plan_segment,
     const Settings * settings,
-    const ClientInfo * client_info
-)
+    const ClientInfo * client_info)
 {
      if (!connected)
         connect(timeouts);

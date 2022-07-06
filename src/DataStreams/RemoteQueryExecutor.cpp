@@ -16,6 +16,7 @@
 #include <Client/MultiplexedConnections.h>
 #include <Client/HedgedConnections.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
+#include <MergeTreeCommon/CnchServerResource.h>
 
 namespace DB
 {
@@ -152,10 +153,24 @@ static Block adaptBlockStructure(const Block & block, const Block & header)
     return res;
 }
 
+void RemoteQueryExecutor::sendResource()
+{
+    auto server_resource = context->tryGetCnchServerResource();
+
+    if (server_resource)
+    {
+        /// TODO: get HostWithPorts
+        server_resource->sendResource(context, {});
+    }
+}
+
 void RemoteQueryExecutor::sendQuery()
 {
     if (sent_query)
         return;
+
+    /// send QueryResource(CreateQueries, DataParts) for cnch if needed before send query
+    sendResource();
 
     connections = create_connections();
 

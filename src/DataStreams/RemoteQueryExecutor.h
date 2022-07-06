@@ -58,6 +58,9 @@ public:
 
     ~RemoteQueryExecutor();
 
+    /// Send CreateCloudTable queries and data parts.
+    void sendResource();
+
     /// Create connection and send query, external tables and scalars.
     void sendQuery();
 

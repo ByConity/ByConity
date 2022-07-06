@@ -55,8 +55,8 @@ public:
 
     using WorkerGroupType = ResourceManagement::WorkerGroupType;
 
-    WorkerGroupHandleImpl(String id, WorkerGroupHandleSource source, String vw_name, HostWithPortsVec workers, const ContextPtr global_context_, const WorkerGroupMetrics & metrics_ = {});
-    WorkerGroupHandleImpl(const WorkerGroupData & worker_group_data, const ContextPtr global_context_);
+    WorkerGroupHandleImpl(String id_, WorkerGroupHandleSource source_, String vw_name_, HostWithPortsVec hosts_, const ContextPtr & context_, const WorkerGroupMetrics & metrics_ = {});
+    WorkerGroupHandleImpl(const WorkerGroupData & worker_group_data, const ContextPtr & context_);
     WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from, const std::vector<size_t> & indices);
 
     auto & getID() const { return id; }
@@ -81,11 +81,12 @@ public:
         metrics = metrics_;
     }
 
-    auto & getWorkerClients() const { return worker_clients; }
-
+    const auto & getWorkerClients() const { return worker_clients; }
     const ShardsInfo & getShardsInfo() const { return shards_info; }
 
-    std::optional<size_t> indexOf(const HostWithPorts & host_ports)
+    CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;
+
+    std::optional<size_t> indexOf(const HostWithPorts & host_ports) const
     {
         for (size_t i = 0, size = hosts.size(); i < size; i++)
         {

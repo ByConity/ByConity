@@ -10,6 +10,7 @@
 // #include <Bytepond/core/mapping/BpQueryKey.h>
 // #include <Bytepond/core/storage/BlockHdfsStorageManager.h>
 #include <Interpreters/StorageID.h>
+#include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_common.pb.h>
 
 #include <brpc/closure_guard.h>
@@ -25,11 +26,7 @@ namespace brpc
 class Controller;
 }
 
-namespace DB
-{
-class Context;
-
-namespace RPCHelpers
+namespace DB::RPCHelpers
 {
     inline UUID createUUID(const Protos::UUID & uuid) { return UUID(UInt128{uuid.low(), uuid.high()}); }
     inline void fillUUID(UUID uuid, Protos::UUID & pb_uuid)
@@ -107,8 +104,9 @@ namespace RPCHelpers
     // }
 
     void handleException(std::string * exception_str);
-
     [[noreturn]] void checkException(const std::string & exception_str);
+
+    ContextMutablePtr createSessionContext(ContextPtr global_context, google::protobuf::RpcController & cntl_base);
 
     template <class R>
     inline void checkResponse(const R & r)
@@ -117,7 +115,7 @@ namespace RPCHelpers
             checkException(r.exception());
     }
 
-    ContextMutablePtr createSessionContextForRPC(const ContextPtr & context, google::protobuf::RpcController & controller);
+    ContextMutablePtr createSessionContextForRPC(const ContextPtr & context, google::protobuf::RpcController & cntl_base);
 
     template <typename Resp, typename Func>
     void serviceHandler(google::protobuf::Closure * done, Resp * resp, Func && f)
@@ -135,5 +133,4 @@ namespace RPCHelpers
             RPCHelpers::handleException(resp->mutable_exception());
         }
     }
-}
 }
