@@ -73,6 +73,7 @@ add_subdirectory (Transaction)
 add_subdirectory (MergeTreeCommon)
 add_subdirectory (Catalog)
 add_subdirectory (TSO)
+add_subdirectory (DaemonManager)
 
 
 set(dbms_headers)
@@ -402,6 +403,7 @@ dbms_target_link_libraries (
         catalog_lib
         resource_manager_lib
         tso_lib
+        daemon_manager_lib
 )
 
 target_include_directories(clickhouse_common_io PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/Core/include") # uses some includes from core
