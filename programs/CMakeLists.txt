@@ -53,7 +53,7 @@ option (ENABLE_CLICKHOUSE_KEEPER "ClickHouse alternative to ZooKeeper" ${ENABLE_
 
 option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper logs and snapshots into clickhouse-keeper snapshot" ${ENABLE_CLICKHOUSE_ALL})
 
-option (ENABLE_CLICKHOUSE_TSO_SERVER "Enable tso server" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent timestamps" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
