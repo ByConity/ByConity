@@ -188,11 +188,12 @@ public:
     /// Compute part block id for zero level part. Otherwise throws an exception.
     String getZeroLevelPartBlockID() const;
 
-    auto const & get_name() const { return name; }
-    auto const & get_info() const { return info; }
-    auto const & get_partition() const { return partition; }
-    auto const & get_deleted() const { return deleted; }
-    auto const & get_commit_time() const { return commit_time; }
+    const auto & get_name() const { return name; }
+    const auto & get_info() const { return info; }
+    const auto & get_partition() const { return partition; }
+    const auto & get_deleted() const { return deleted; }
+    const auto & get_commit_time() const { return commit_time; }
+    const auto & getUUID() const { return uuid; }
 
     const MergeTreeMetaBase & storage;
 
@@ -479,7 +480,7 @@ public:
     DeleteBitmapPtr readDeleteFileWithVersion(UInt64 version, bool log_on_error = true) const;
     std::vector<UInt64> listDeleteFiles(UInt64 min_version) const;
 
-    void writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync);
+    void writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync) const;
     DeleteBitmapPtr readDeleteFile(bool log_on_error = true) const;
 
     /// For unique table: when attach a new part into table, we need to allocate a new lsn

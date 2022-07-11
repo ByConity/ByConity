@@ -161,7 +161,7 @@ inline std::vector<T> createPartVectorFromModelsForSend(
     std::map<UInt64, NamesAndTypesListPtr> columns_versions;
     for (int i = 0; i < parts_model.size(); ++i)
     {
-        auto & part_model = parts_model[i];
+        const auto & part_model = parts_model[i];
         auto part = createPartFromModelCommon(storage, part_model, (paths ? std::optional(paths->Get(i)) : std::nullopt));
         part->columns_commit_time = part_model.columns_commit_time();
         if (part_model.has_columns())

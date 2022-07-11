@@ -67,7 +67,7 @@ public:
       * columns data files & idx files
       * -------------------------------
       */
-    MergeTreeMetaBase::MutableDataPartPtr dumpTempPart(MergeTreeMetaBase::DataPartPtr stale_part, const StorageLevel level = 1);
+    MergeTreeMetaBase::MutableDataPartPtr dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, StorageLevel storage_level = 1);
 
 private:
     std::unique_ptr<WriteBuffer> createWriteBuffer(const String & file_name, const StorageType & /*type*/);

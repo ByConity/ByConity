@@ -5,6 +5,7 @@
 #include <Protos/DataModelHelpers.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -24,6 +25,42 @@ CnchWorkerClient::CnchWorkerClient(HostWithPorts host_ports_)
 
 CnchWorkerClient::~CnchWorkerClient() = default;
 
+void CnchWorkerClient::submitManipulationTask(
+    const MergeTreeMetaBase & storage,
+    const ManipulationTaskParams & params,
+    TxnTimestamp txn_id,
+    TxnTimestamp begin_ts)
+{
+    if (!params.rpc_port)
+        throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
+
+    brpc::Controller cntl;
+    Protos::SubmitManipulationTaskReq request;
+    Protos::SubmitManipulationTaskResp response;
+
+    request.set_txn_id(txn_id);
+    request.set_timestamp(begin_ts);
+    request.set_type(static_cast<UInt32>(params.type));
+    request.set_task_id(params.task_id);
+    request.set_rpc_port(params.rpc_port);
+    request.set_columns_commit_time(params.columns_commit_time);
+    request.set_is_bucket_table(params.is_bucket_table);
+    if (!params.create_table_query.empty())
+        request.set_create_table_query(params.create_table_query);
+    fillPartsModelForSend(storage, params.source_parts, *request.mutable_source_parts());
+
+    if (params.type == ManipulationType::Mutate)
+    {
+        request.set_mutation_commit_time(params.mutation_commit_time);
+        WriteBufferFromString write_buf(*request.mutable_mutate_commands());
+        params.mutation_commands->writeText(write_buf);
+    }
+
+    stub->submitManipulationTask(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
 
 void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries)
 {
@@ -62,7 +99,7 @@ void CnchWorkerClient::sendQueryDataParts(
     request.set_table_name(local_table_name);
 
     fillBasePartAndDeleteBitmapModels(*storage, data_parts, *request.mutable_parts(), *request.mutable_bitmaps());
-    for (auto & bucket_num: required_bucket_numbers)
+    for (const auto & bucket_num: required_bucket_numbers)
         *request.mutable_bucket_numbers()->Add() = bucket_num;
 
     // TODO:

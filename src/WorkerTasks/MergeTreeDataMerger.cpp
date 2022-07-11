@@ -1,5 +1,7 @@
 #include <WorkerTasks/MergeTreeDataMerger.h>
 
+#include <Common/ProfileEvents.h>
+#include <Common/filesystemHelpers.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
@@ -14,19 +16,18 @@
 #include <Processors/Merges/VersionedCollapsingTransform.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
-#include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/MergeTreeDataPartWide.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
-#include <Common/ProfileEvents.h>
-#include <Common/filesystemHelpers.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+
 
 namespace ProfileEvents
 {
-extern const Event CloudMergeStarted;
-extern const Event CloudMergeEnded;
+    extern const Event CloudMergeStarted;
+    extern const Event CloudMergeEnded;
 }
 
 namespace DB
@@ -36,7 +37,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int ABORTED;
     extern const int DIRECTORY_ALREADY_EXISTS;
-    extern const int CANNOT_OPEN_FILE;
 }
 
 namespace
@@ -55,7 +55,7 @@ namespace
     String toDebugString(const MergeTreeDataPartsVector & parts)
     {
         WriteBufferFromOwnString out;
-        for (auto & part : parts)
+        for (const auto & part : parts)
         {
             out << part->name;
             out << ' ';
@@ -76,7 +76,7 @@ namespace
 }
 
 MergeTreeDataMerger::MergeTreeDataMerger(
-    MergeTreeData & data_,
+    MergeTreeMetaBase & data_,
     const ManipulationTaskParams & params_,
     ContextPtr context_,
     ManipulationListElement * manipulation_entry_,
@@ -125,7 +125,7 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
         std::copy(projection_columns_vec.cbegin(), projection_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
     }
 
-    auto & merging_params = data.merging_params;
+    const auto & merging_params = data.merging_params;
 
     /// Force unique key columns and extra column for Unique mode,
     /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
@@ -178,7 +178,7 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
 
 void MergeTreeDataMerger::prepareNewParts()
 {
-    auto & new_part_name = params.new_part_names.front();
+    const auto & new_part_name = params.new_part_names.front();
 
     /// Check directory
     /// String new_part_tmp_path = TMP_PREFIX + toString(UInt64(context.getCurrentCnchStartTime())) + '-' + new_part_name + "/";
@@ -193,7 +193,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + new_part_name, disk, 0);
     auto part_info = MergeTreePartInfo::fromPartName(new_part_name, data.format_version);
-    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path, nullptr);
+    new_data_part = std::make_shared<MergeTreeDataPartCNCH>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path);
 
     /// Common fields
     /// TODO uuid
@@ -209,7 +209,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// use max_mutation_commit_time
     /// because we will remove outdated columns, indices, build bitmap indices, skip indices if need when merge new parts.
     TxnTimestamp mutation_commit_time = 0;
-    for (auto & part : params.source_data_parts)
+    for (const auto & part : params.source_data_parts)
         mutation_commit_time = std::max(mutation_commit_time, part->mutation_commit_time);
     new_data_part->mutation_commit_time = mutation_commit_time;
 
@@ -237,7 +237,7 @@ void MergeTreeDataMerger::chooseMergeAlgorithm()
     // If there are too many keys, it may exhaust all file handles.
     if (is_supported_storage)
     {
-        for (auto column : gathering_columns)
+        for (const auto & column : gathering_columns)
         {
             if (column.type->isMap() || column.type->lowCardinality())
             {
@@ -264,7 +264,7 @@ void MergeTreeDataMerger::prepareForProgress()
     if (merge_alg == MergeAlgorithm::Vertical)
     {
         /// calc map { column -> size }
-        for (auto & part : params.source_data_parts)
+        for (const auto & part : params.source_data_parts)
             part->accumulateColumnSizes(merged_column_to_size);
 
         column_sizes.emplace(merged_column_to_size, merging_column_names, gathering_column_names);
@@ -382,7 +382,7 @@ void MergeTreeDataMerger::createMergedStream()
 
     UInt64 merge_block_size = data_settings->merge_max_block_size;
 
-    auto & merging_params = data.merging_params;
+    const auto & merging_params = data.merging_params;
     switch (merging_params.mode)
     {
         case MergeTreeMetaBase::MergingParams::Ordinary:
@@ -541,7 +541,7 @@ void MergeTreeDataMerger::gatherColumn(const String & column_name)
     LOG_TRACE(log, "Gather column {} weight {} in progress {}", column_name, column_weight, progress_before);
 
     /// Prepare input streams
-    auto & parts = params.source_data_parts;
+    const auto & parts = params.source_data_parts;
     BlockInputStreams column_part_streams(parts.size());
 
     for (size_t part_num = 0; part_num < parts.size(); ++part_num)
@@ -626,7 +626,7 @@ void MergeTreeDataMerger::gatherColumn(const String & column_name)
 
 void MergeTreeDataMerger::gatherColumns()
 {
-    auto & parts = params.source_data_parts;
+    const auto & parts = params.source_data_parts;
 
     /// Set horizontal stage progress
     manipulation_entry->columns_written.store(merging_column_names.size(), std::memory_order_relaxed);
@@ -683,7 +683,7 @@ void MergeTreeDataMerger::finalizePart()
 
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 {
-    auto & parts = params.source_data_parts;
+    const auto & parts = params.source_data_parts;
     space_reservation = data.reserveSpace(estimateNeededDiskSpace(parts));
 
     /// TODO: do we need to support (1) TTL merge ? (2) deduplicate

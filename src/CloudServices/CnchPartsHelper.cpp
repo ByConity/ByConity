@@ -52,7 +52,7 @@ namespace
     template <class Vec>
     Vec calcVisiblePartsImpl(
         Vec & all_parts,
-        bool flattern,
+        bool flatten,
         bool skip_drop_ranges,
         Vec * visible_alone_drop_ranges,
         Vec * invisible_dropped_parts,
@@ -160,7 +160,7 @@ namespace
                 ++curr_it;
         }
 
-        if (flattern)
+        if (flatten)
             flattenPartsVector(visible_parts);
 
         if (logging == EnableLogging)
@@ -179,14 +179,14 @@ namespace
 
 } /// end of namespace
 
-MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flattern, LoggingOption logging)
+MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flatten, LoggingOption logging)
 {
-    return calcVisiblePartsImpl<MergeTreeDataPartsVector>(all_parts, flattern, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
+    return calcVisiblePartsImpl<MergeTreeDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flattern, LoggingOption logging)
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging)
 {
-    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flattern, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
+    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
 ServerDataPartsVector calcVisiblePartsForGC(

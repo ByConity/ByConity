@@ -14,18 +14,20 @@
 namespace DB
 {
 
-class ManipulationTask : private boost::noncopyable
+class ManipulationTask : public WithContext, private boost::noncopyable
 {
 public:
     ManipulationTask(ManipulationTaskParams params, ContextPtr context_);
-    virtual ~ManipulationTask() {}
+    virtual ~ManipulationTask() = default;
 
-    virtual void execute() {}
+    virtual void executeImpl() = 0;
+
+    void execute();
 
     virtual bool isCancelled() { return getManipulationListElement()->is_cancelled.load(std::memory_order_relaxed); }
     virtual void setCancelled() { getManipulationListElement()->is_cancelled.store(true, std::memory_order_relaxed); }
 
-    void setManipulationEntry(ManipulationListEntry && entry) { manipulation_entry.emplace(std::move(entry)); }
+    void setManipulationEntry();
 
     ManipulationListElement * getManipulationListElement() { return manipulation_entry->get(); }
 
@@ -33,15 +35,13 @@ public:
 
 protected:
     ManipulationTaskParams params;
-    ContextPtr context;
 
-    std::optional<ManipulationListEntry> manipulation_entry;
-    //std::atomic_bool is_cancelled{false};
+    std::unique_ptr<ManipulationListEntry> manipulation_entry;
 };
 
 using ManipulationTaskPtr = std::shared_ptr<ManipulationTask>;
 
-/// Sync
-void executeManipulationTask(const ManipulationTaskParams & params, ContextPtr context);
+/// Async
+void executeManipulationTask(ManipulationTaskParams params, ContextPtr context);
 
 }

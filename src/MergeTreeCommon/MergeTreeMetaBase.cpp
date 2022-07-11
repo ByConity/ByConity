@@ -22,6 +22,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MutationCommands.h>
 #include <Interpreters/ExpressionAnalyzer.h>
@@ -574,7 +575,7 @@ String MergeTreeMetaBase::getFullPathOnDisk(const DiskPtr & disk) const
 NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
 {
     /// Array(Tuple(String, String))
-    static const auto _map_column_keys_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(
+    static const auto map_column_keys_type = std::make_shared<DataTypeArray>(std::make_shared<DataTypeTuple>(
         DataTypes{std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()}));
 
     return NamesAndTypesList{
@@ -582,7 +583,7 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_part_index", std::make_shared<DataTypeUInt64>()),
         NameAndTypePair("_part_uuid", std::make_shared<DataTypeUUID>()),
         NameAndTypePair("_part_map_files", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())),
-        NameAndTypePair("_map_column_keys", _map_column_keys_type),
+        NameAndTypePair("_map_column_keys", map_column_keys_type),
         NameAndTypePair("_partition_id", std::make_shared<DataTypeString>()),
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
@@ -713,18 +714,29 @@ MergeTreeDataPartType MergeTreeMetaBase::choosePartTypeOnDisk(size_t bytes_uncom
 }
 
 
-MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(const String & name,
-    MergeTreeDataPartType type, const MergeTreePartInfo & part_info,
-    const VolumePtr & volume, const String & relative_path, const IMergeTreeDataPart * parent_part) const
+MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
+    const String & name,
+    MergeTreeDataPartType type,
+    const MergeTreePartInfo & part_info,
+    const VolumePtr & volume,
+    const String & relative_path,
+    const IMergeTreeDataPart * parent_part) const
 {
-    if (type == MergeTreeDataPartType::COMPACT)
-        return std::make_shared<MergeTreeDataPartCompact>(*this, name, part_info, volume, relative_path, parent_part);
-    else if (type == MergeTreeDataPartType::WIDE)
-        return std::make_shared<MergeTreeDataPartWide>(*this, name, part_info, volume, relative_path, parent_part);
-    else if (type == MergeTreeDataPartType::IN_MEMORY)
-        return std::make_shared<MergeTreeDataPartInMemory>(*this, name, part_info, volume, relative_path, parent_part);
-    else
-        throw Exception("Unknown type of part " + relative_path, ErrorCodes::UNKNOWN_PART_TYPE);
+    switch (type.getValue())
+    {
+        case MergeTreeDataPartType::COMPACT:
+            return std::make_shared<MergeTreeDataPartCompact>(*this, name, part_info, volume, relative_path, parent_part);
+        case MergeTreeDataPartType::WIDE:
+            return std::make_shared<MergeTreeDataPartWide>(*this, name, part_info, volume, relative_path, parent_part);
+        case MergeTreeDataPartType::IN_MEMORY:
+            return std::make_shared<MergeTreeDataPartInMemory>(*this, name, part_info, volume, relative_path, parent_part);
+        case MergeTreeDataPartType::CNCH:
+            return std::make_shared<MergeTreeDataPartCNCH>(*this, name, part_info, volume, relative_path);
+        case MergeTreeDataPartType::UNKNOWN:
+            throw Exception("Unknown type of part " + relative_path, ErrorCodes::UNKNOWN_PART_TYPE);
+    }
+
+    __builtin_unreachable();
 }
 
 static MergeTreeDataPartType getPartTypeFromMarkExtension(const String & mrk_ext)

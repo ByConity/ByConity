@@ -5,7 +5,7 @@
 
 namespace DB
 {
-class MergeTreeData;
+class MergeTreeMetaBase;
 
 enum class ServerSelectPartsDecision
 {
@@ -17,13 +17,13 @@ enum class ServerSelectPartsDecision
 using ServerCanMergeCallback = std::function<bool(const ServerDataPartPtr &, const ServerDataPartPtr &)>;
 
 ServerSelectPartsDecision selectPartsToMerge(
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
     ServerCanMergeCallback can_merge_callback,
     size_t max_total_size_to_merge,
     bool aggressive,
-    const bool enable_batch_select,
+    bool enable_batch_select,
     bool merge_with_ttl_allowed,
     Poco::Logger * log);
 }

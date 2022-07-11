@@ -2,23 +2,25 @@
 #include <CloudServices/ICnchBGThread.h>
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
-#include <CloudServices/CnchWorkerClient.h>
-#include <CloudServices/CnchWorkerClientPools.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
-#include <WorkerTasks/ManipulationTaskParams.h>
 
 namespace DB
 {
+
+class CnchWorkerClient;
+using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+using CnchWorkerClientPool = RpcClientPool<CnchWorkerClient>;
+using CnchWorkerClientPoolPtr = std::shared_ptr<CnchWorkerClientPool>;
 
 class CnchMergeMutateThread;
 struct PartMergeLogElement;
 
 struct ManipulationTaskRecord
 {
-    ManipulationTaskRecord(CnchMergeMutateThread & p) : parent(p) { }
+    explicit ManipulationTaskRecord(CnchMergeMutateThread & p) : parent(p) {}
     ~ManipulationTaskRecord();
 
     CnchMergeMutateThread & parent;
@@ -132,13 +134,12 @@ private:
 
     bool needCollectExtendedMergeMetrics();
 
-    auto copy_currently_merging_mutating_parts()
+    auto copyCurrentlyMergingMutatingParts()
     {
         std::lock_guard lock(currently_merging_mutating_parts_mutex);
         return currently_merging_mutating_parts;
     }
 
-private:
     std::mutex currently_merging_mutating_parts_mutex;
     NameSet currently_merging_mutating_parts;
 

@@ -9,7 +9,7 @@ namespace DB
 
 class IMergeTreeDataPart;
 
-/// Deprected
+/// Deprecated
 using IMergeTreeDataPartPtr = std::shared_ptr<const IMergeTreeDataPart>;
 using IMergeTreeMutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 using IMergeTreeDataPartsVector = std::vector<IMergeTreeDataPartPtr>;

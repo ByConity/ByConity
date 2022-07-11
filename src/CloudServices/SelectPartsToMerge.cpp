@@ -1,21 +1,21 @@
-#include <CloudServices/selectPartsToMerge.h>
+#include <CloudServices/SelectPartsToMerge.h>
 
 #include <Catalog/DataModelPartWrapper.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/DanceMergeSelector.h>
-#include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/SimpleMergeSelector.h>
 
 namespace DB
 {
 
 ServerSelectPartsDecision selectPartsToMergeMulti(
-    const MergeTreeData & data,
+    const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,
     ServerCanMergeCallback can_merge_callback,
     size_t max_total_size_to_merge,
     bool aggressive,
-    const bool enable_batch_select,
+    bool enable_batch_select,
     [[maybe_unused]] bool merge_with_ttl_allowed,
     Poco::Logger * log)
 {

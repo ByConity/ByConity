@@ -3,14 +3,19 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/selectPartsToMerge.h>
+#include <CloudServices/SelectPartsToMerge.h>
+#include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <Common/Configurations.h>
 #include <Interpreters/PartMergeLog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/PartCacheManager.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Common/Configurations.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
+
 
 namespace DB
 {
@@ -148,7 +153,7 @@ std::shared_ptr<ManipulationTaskRecord> FutureManipulationTask::moveRecord()
 }
 
 CnchMergeMutateThread::CnchMergeMutateThread(ContextPtr context_, const StorageID & id)
-    : ICnchBGThread(context_, CnchBGThreadType::MergeMutate, id)
+    : ICnchBGThread(context_->getGlobalContext(), CnchBGThreadType::MergeMutate, id)
 {
 }
 
@@ -529,7 +534,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     /// Step 1: copy currently_merging_mutating_parts
     /// Must do it before getting data parts so that the copy won't change during selection
     /// Because we can accept stale data parts but cannot accept stale merging_mutating_parts
-    auto merging_mutating_parts_snapshot = copy_currently_merging_mutating_parts();
+    auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
     /// Step 2: get parts & calc visible parts
     Stopwatch watch;
@@ -664,7 +669,7 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
 
     /// get specific version storage
     auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
-    /// auto & cnch_table = checkAndGetCnchTable(istorage);
+    auto & cnch_table = checkAndGetCnchTable(istorage);
 
     /// fill task parameters
     ManipulationTaskParams params(istorage);
@@ -690,8 +695,7 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
     task_record.task_id = params.task_id;
     task_record.worker = worker_client;
     task_record.result_part_name = params.new_part_names.front();
-    task_record.manipulation_entry
-        = std::make_unique<ManipulationListEntry>(local_context->getGlobalContext()->getManipulationList().insert(params, true));
+    task_record.manipulation_entry = local_context->getGlobalContext()->getManipulationList().insert(params, true);
     task_record.manipulation_entry->get()->related_node = worker_client->getRPCAddress();
 
     try
@@ -706,7 +710,7 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
                 ++running_mutation_tasks;
         }
 
-        /// worker_client->submitManipulationTask(cnch_table, params, transaction_id, transaction->getStartTime());
+        worker_client->submitManipulationTask(cnch_table, params, transaction_id, transaction->getStartTime());
         LOG_DEBUG(log, "Submitted manipulation task to {}, {}", worker_client->getHostWithPorts().toDebugString(), params.toDebugString());
     }
     catch (...)
@@ -732,7 +736,7 @@ String CnchMergeMutateThread::triggerPartMerge(
 
     NameSet merging_mutating_parts_snapshot;
     if (!try_execute)
-        merging_mutating_parts_snapshot = copy_currently_merging_mutating_parts();
+        merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
     ServerDataPartsVector data_parts;
     if (partition_id.empty() || partition_id == "all")
