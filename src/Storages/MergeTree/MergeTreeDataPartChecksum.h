@@ -91,6 +91,11 @@ struct MergeTreeDataPartChecksums
     bool readV2(ReadBuffer & in);
     bool readV3(ReadBuffer & in);
     bool readV4(ReadBuffer & from);
+    /// CNCH
+    bool readV5(ReadBuffer & in);
+    bool readV6(ReadBuffer & in);
+    // CNCH, encryption
+    bool readV7(ReadBuffer & in);
 
     void write(WriteBuffer & to) const;
 

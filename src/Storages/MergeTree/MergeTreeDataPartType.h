@@ -21,6 +21,9 @@ public:
         /// Format with buffering data in RAM.
         IN_MEMORY,
 
+        /// CNCH cloud storage.
+        CNCH,
+
         UNKNOWN,
     };
 
