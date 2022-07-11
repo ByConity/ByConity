@@ -33,7 +33,7 @@ public:
 
     void seekToStart();
 
-    ReadBuffer * data_buffer;
+    size_t getCurrentBlockCompressedSize() const;
 
 private:
     DiskPtr disk;
@@ -52,6 +52,9 @@ private:
 
     std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
     std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
+
+public:
+    ReadBuffer * data_buffer;
 
     MergeTreeMarksLoader marks_loader;
 };

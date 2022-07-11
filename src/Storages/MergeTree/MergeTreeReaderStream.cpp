@@ -188,4 +188,12 @@ void MergeTreeReaderStream::seekToStart()
     }
 }
 
+size_t MergeTreeReaderStream::getCurrentBlockCompressedSize() const
+{
+    if (cached_buffer)
+        return cached_buffer->getSizeCompressed();
+
+    return non_cached_buffer->getSizeCompressed();
+}
+
 }

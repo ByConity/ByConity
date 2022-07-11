@@ -18,13 +18,18 @@ IDiskCache::IDiskCache(Context & context_, VolumePtr volume_, const DiskCacheSet
     , disk_cache_throttler(context.getDiskCacheThrottler())
     , random_drop_threshold(settings_.random_drop_threshold)
 {
-    sync_task = context.getSchedulePool().createTask("DiskCacheMetaSync", [this] { load(); });
-    sync_task->activateAndSchedule();
 }
 
 IDiskCache::~IDiskCache()
 {
-    sync_task->deactivate();
+    if (sync_task)
+        sync_task->deactivate();
+}
+
+void IDiskCache::asyncLoad()
+{
+    sync_task = context.getSchedulePool().createTask("DiskCacheMetaSync", [this] { load(); });
+    sync_task->activateAndSchedule();
 }
 
 void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)

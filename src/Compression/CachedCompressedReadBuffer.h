@@ -67,6 +67,8 @@ public:
     {
         return path;
     }
+
+    size_t getSizeCompressed() const { return owned_cell->compressed_size; }
 };
 
 }

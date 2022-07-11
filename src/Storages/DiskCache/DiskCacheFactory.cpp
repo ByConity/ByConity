@@ -19,8 +19,9 @@ void DiskCacheFactory::init(Context & context)
     // TODO: volume
     VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
     auto disk_cache = std::make_shared<DiskCacheLRU>(context, disk_cache_volume, cache_settings);
-    auto cache_strategy = std::make_shared<DiskCacheSimpleStrategy>(strategy_settings);
+    disk_cache->asyncLoad();
 
+    auto cache_strategy = std::make_shared<DiskCacheSimpleStrategy>(strategy_settings);
     default_cache = std::make_pair(std::move(disk_cache), std::move(cache_strategy));
 }
 
