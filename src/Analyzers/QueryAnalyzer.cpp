@@ -1107,11 +1107,35 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         }
         else if (select_item->as<ASTQualifiedAsterisk>())
         {
-            throw Exception("not implement", ErrorCodes::NOT_IMPLEMENTED);
+            if (select_item->children.empty() && select_item->getChildren()[0]->as<ASTTableIdentifier>())
+                throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
+
+            ASTIdentifier& astidentifier = select_item->getChildren()[0]->as<ASTTableIdentifier&>();
+            auto prefix =  QualifiedName::extractQualifiedName(astidentifier);
+            bool matched = false;
+
+            for (size_t field_index = 0; field_index < source_scope->size(); ++field_index)
+            {
+                if (source_scope->at(field_index).substituted_by_asterisk && source_scope->at(field_index).prefix.hasSuffix(prefix))
+                {
+                    matched = true;
+                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    add_select_expression(field_reference);
+                }
+            }
+            if(!matched)
+                throw Exception("Can not find column of " + prefix.toString() + " in Scope", ErrorCodes::UNKNOWN_IDENTIFIER);
         }
-        else if (select_item->as<ASTColumnsMatcher>())
+        else if (auto * asterisk_pattern = select_item->as<ASTColumnsMatcher>())
         {
-            throw Exception("not implement", ErrorCodes::NOT_IMPLEMENTED);
+            for (size_t field_index = 0; field_index < source_scope->size(); ++field_index)
+            {
+                if (source_scope->at(field_index).substituted_by_asterisk && asterisk_pattern->isColumnMatching(source_scope->at(field_index).name))
+                {
+                    auto field_reference = std::make_shared<ASTFieldReference>(field_index);
+                    add_select_expression(field_reference);
+                }
+            }
         }
         else
             add_select_expression(select_item);
