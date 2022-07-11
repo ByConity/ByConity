@@ -18,6 +18,7 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/JSON.h>
 #include <common/logger_useful.h>
+#include "Storages/KeyDescription.h"
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
 #include <DataTypes/NestedUtils.h>
@@ -45,6 +46,7 @@ namespace CurrentMetrics
     extern const Metric PartsWide;
     extern const Metric PartsCompact;
     extern const Metric PartsInMemory;
+    extern const Metric PartsCNCH;
 }
 
 namespace DB
@@ -322,6 +324,9 @@ static void incrementTypeMetric(MergeTreeDataPartType type)
         case MergeTreeDataPartType::IN_MEMORY:
             CurrentMetrics::add(CurrentMetrics::PartsInMemory);
             return;
+        case MergeTreeDataPartType::CNCH:
+            CurrentMetrics::add(CurrentMetrics::PartsCNCH);
+            return;
         case MergeTreeDataPartType::UNKNOWN:
             return;
     }
@@ -339,6 +344,9 @@ static void decrementTypeMetric(MergeTreeDataPartType type)
             return;
         case MergeTreeDataPartType::IN_MEMORY:
             CurrentMetrics::sub(CurrentMetrics::PartsInMemory);
+            return;
+        case MergeTreeDataPartType::CNCH:
+            CurrentMetrics::sub(CurrentMetrics::PartsCNCH);
             return;
         case MergeTreeDataPartType::UNKNOWN:
             return;
@@ -786,6 +794,48 @@ void IMergeTreeDataPart::loadIndexGranularity(const size_t , const std::vector<s
     throw Exception("Method 'loadIndexGranularity' is not implemented for part with type " + getType().toString(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
+IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndexFromBuffer(ReadBuffer & index_file, const KeyDescription & primary_key) const
+{
+    size_t key_size = primary_key.column_names.size();
+    if (key_size)
+    {
+        MutableColumns loaded_index;
+        loaded_index.resize(key_size);
+
+        for (size_t i = 0; i < key_size; ++i)
+        {
+            loaded_index[i] = primary_key.data_types[i]->createColumn();
+            loaded_index[i]->reserve(index_granularity.getMarksCount());
+        }
+
+        Serializations serializations(key_size);
+        for (size_t j = 0; j < key_size; ++j)
+            serializations[j] = primary_key.data_types[j]->getDefaultSerialization();
+
+        size_t marks_count = index_granularity.getMarksCount();
+
+        for (size_t i = 0; i < marks_count; ++i) //-V756
+            for (size_t j = 0; j < key_size; ++j)
+                serializations[j]->deserializeBinary(*loaded_index[j], index_file);
+
+        for (size_t i = 0; i < key_size; ++i)
+        {
+            loaded_index[i]->protect();
+            if (loaded_index[i]->size() != marks_count)
+                throw Exception("Cannot read all data from index file " + String(fs::path(getFullPath()) / "primary.idx")
+                    + "(expected size: " + toString(marks_count) + ", read: " + toString(loaded_index[i]->size()) + ")",
+                    ErrorCodes::CANNOT_READ_ALL_DATA);
+        }
+
+        if (!index_file.eof())
+            throw Exception("Index file " + String(fs::path(getFullPath()) / "primary.idx") + " is unexpectedly long", ErrorCodes::EXPECTED_END_OF_FILE);
+
+        return std::make_shared<Index>(std::make_move_iterator(loaded_index.begin()), std::make_move_iterator(loaded_index.end()));
+    }
+
+    return {};
+}
+
 void IMergeTreeDataPart::loadIndex()
 {
     /// It can be empty in case of mutations
@@ -800,41 +850,9 @@ void IMergeTreeDataPart::loadIndex()
 
     if (key_size)
     {
-        MutableColumns loaded_index;
-        loaded_index.resize(key_size);
-
-        for (size_t i = 0; i < key_size; ++i)
-        {
-            loaded_index[i] = primary_key.data_types[i]->createColumn();
-            loaded_index[i]->reserve(index_granularity.getMarksCount());
-        }
-
         String index_path = fs::path(getFullRelativePath()) / "primary.idx";
         auto index_file = openForReading(volume->getDisk(), index_path);
-
-        size_t marks_count = index_granularity.getMarksCount();
-
-        Serializations serializations(key_size);
-        for (size_t j = 0; j < key_size; ++j)
-            serializations[j] = primary_key.data_types[j]->getDefaultSerialization();
-
-        for (size_t i = 0; i < marks_count; ++i) //-V756
-            for (size_t j = 0; j < key_size; ++j)
-                serializations[j]->deserializeBinary(*loaded_index[j], *index_file);
-
-        for (size_t i = 0; i < key_size; ++i)
-        {
-            loaded_index[i]->protect();
-            if (loaded_index[i]->size() != marks_count)
-                throw Exception("Cannot read all data from index file " + index_path
-                    + "(expected size: " + toString(marks_count) + ", read: " + toString(loaded_index[i]->size()) + ")",
-                    ErrorCodes::CANNOT_READ_ALL_DATA);
-        }
-
-        if (!index_file->eof())
-            throw Exception("Index file " + fullPath(volume->getDisk(), index_path) + " is unexpectedly long", ErrorCodes::EXPECTED_END_OF_FILE);
-
-        index->assign(std::make_move_iterator(loaded_index.begin()), std::make_move_iterator(loaded_index.end()));
+        index = loadIndexFromBuffer(*index_file, primary_key);
     }
 }
 
@@ -1746,6 +1764,16 @@ String IMergeTreeDataPart::getUniqueId() const
     return id;
 }
 
+IMergeTreeDataPartPtr IMergeTreeDataPart::getBasePart() const
+{
+    IMergeTreeDataPartPtr part = shared_from_this();
+    while (part->isPartial())
+    {
+        if (part = part->tryGetPreviousPart(); !part)
+            throw Exception("Previous part of partial part " + name + " is absent", ErrorCodes::LOGICAL_ERROR);
+    }
+    return part;
+}
 
 String IMergeTreeDataPart::getZeroLevelPartBlockID() const
 {
@@ -1885,6 +1913,11 @@ bool isWidePart(const MergeTreeDataPartPtr & data_part)
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part)
 {
     return (data_part && data_part->getType() == MergeTreeDataPartType::IN_MEMORY);
+}
+
+bool isCnchPart(const MergeTreeDataPartPtr & data_part)
+{
+    return (data_part && data_part->getType() == MergeTreeDataPartType::CNCH);
 }
 
 UInt32 IMergeTreeDataPart::numDeletedRows() const

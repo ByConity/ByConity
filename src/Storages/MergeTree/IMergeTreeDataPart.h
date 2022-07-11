@@ -156,7 +156,7 @@ public:
 
     /// Initialize columns (from columns.txt if exists, or create from column files if not).
     /// Load checksums from checksums.txt if exists. Load index if required.
-    void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency);
+    virtual void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency);
 
     String getMarksFileExtension() const { return index_granularity_info.marks_file_extension; }
 
@@ -602,8 +602,8 @@ public:
     }
 
     void setPreviousPart(IMergeTreeDataPartPtr part) const { prev_part = std::move(part); }
-
     const IMergeTreeDataPartPtr & tryGetPreviousPart() const { return prev_part; }
+    IMergeTreeDataPartPtr getBasePart() const;
 
     bool isPartial() const { return info.hint_mutation; }
 
@@ -678,6 +678,11 @@ protected:
 
     std::map<String, std::shared_ptr<IMergeTreeDataPart>> projection_parts;
 
+    /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
+    /// to prevent checksums_ptr from being modified and corvered by multiple threads.
+    mutable std::mutex checksums_mutex;
+    mutable std::mutex index_mutex;
+
     void removeIfNeeded();
 
     virtual void checkConsistency(bool require_part_metadata) const;
@@ -693,6 +698,8 @@ protected:
 
     ColumnSize getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const;
 
+    IndexPtr loadIndexFromBuffer(ReadBuffer & index_file, const KeyDescription & primary_key) const;
+
 private:
     /// In compact parts order of columns is necessary
     NameToNumber column_name_to_position;
@@ -707,13 +714,13 @@ private:
     void loadVersions();
 
     /// If checksums.txt exists, reads file's checksums (and sizes) from it
-    ChecksumsPtr loadChecksums(bool require);
+    virtual ChecksumsPtr loadChecksums(bool require);
 
     /// Loads marks index granularity into memory
     virtual void loadIndexGranularity();
 
     /// Loads index file.
-    void loadIndex();
+    virtual void loadIndex();
 
     /// Load rows count for this part from disk (for the newer storage format version).
     /// For the older format version calculates rows count from the size of a column with a fixed size.
@@ -739,12 +746,6 @@ private:
     mutable std::mutex row_store_meta_mutex;
     /// Row store meta contains columns and removed columns info
     mutable UniqueRowStoreMetaPtr row_store_meta;
-
-    /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
-    /// to prevent checksums_ptr from being modified and corvered by multiple threads.
-    mutable std::mutex checksums_mutex;
-
-    mutable std::mutex index_mutex;
 
     mutable IMergeTreeDataPartPtr prev_part;
 
@@ -778,5 +779,6 @@ using MergeTreeMutableDataPartPtr = std::shared_ptr<IMergeTreeDataPart>;
 bool isCompactPart(const MergeTreeDataPartPtr & data_part);
 bool isWidePart(const MergeTreeDataPartPtr & data_part);
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
+bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
 }
