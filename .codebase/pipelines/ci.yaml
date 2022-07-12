@@ -45,7 +45,7 @@ jobs:
         commands:
           - echo $(pwd)
           - cd /
-          - CLICKHOUSE_VERSION=1.0.0.1969
+          - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
           - CLICKHOUSE_PREFIX="clickhouse"
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
