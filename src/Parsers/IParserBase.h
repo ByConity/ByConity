@@ -54,8 +54,6 @@ struct ParserSettings
     };
 
     const static inline ParserSettingsImpl ANSI {
-        // turn off decimal parsing to make sure TPC-DS can run
-        // TODO: turn on if we have support implicit type conversion
         .parse_literal_as_decimal = false,
     };
 
