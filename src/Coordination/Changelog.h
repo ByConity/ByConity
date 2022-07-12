@@ -142,7 +142,6 @@ private:
     /// Init writer for existing log with some entries already written
     void initWriter(const ChangelogFileDescription & description);
 
-private:
     const std::string changelogs_dir;
     const uint64_t rotate_interval;
     const bool force_sync;
@@ -160,7 +159,6 @@ private:
     /// min_log_id + 1 == max_log_id means empty log storage for NuRaft
     uint64_t min_log_id = 0;
     uint64_t max_log_id = 0;
-    uint64_t start_index = 0;
 };
 
 }

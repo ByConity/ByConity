@@ -87,11 +87,14 @@ KeeperServer::KeeperServer(
     : server_id(configuration_and_settings_->server_id)
     , coordination_settings(configuration_and_settings_->coordination_settings)
     , state_machine(nuraft::cs_new<KeeperStateMachine>(
-                        responses_queue_, snapshots_queue_,
-                        configuration_and_settings_->snapshot_storage_path,
-                        coordination_settings,
-                        checkAndGetSuperdigest(configuration_and_settings_->super_digest)))
-    , state_manager(nuraft::cs_new<KeeperStateManager>(server_id, "keeper_server", configuration_and_settings_->log_storage_path, config, coordination_settings))
+          responses_queue_,
+          snapshots_queue_,
+          configuration_and_settings_->snapshot_storage_path,
+          coordination_settings,
+          checkAndGetSuperdigest(configuration_and_settings_->super_digest)/*,
+          config.getBool("keeper_server.digest_enabled", true)*/))
+    , state_manager(nuraft::cs_new<KeeperStateManager>(
+          server_id, "keeper_server", configuration_and_settings_->log_storage_path, configuration_and_settings_->state_file_path, config, coordination_settings))
     , log(&Poco::Logger::get("KeeperServer"))
 {
     if (coordination_settings->quorum_reads)

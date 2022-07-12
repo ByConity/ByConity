@@ -5,6 +5,9 @@
 #    include "config_core.h"
 #endif
 
+#include <Core/Defines.h>
+#include <IO/WriteHelpers.h>
+
 #if USE_NURAFT
 #include <Poco/ConsoleChannel.h>
 #include <Poco/Logger.h>
@@ -105,13 +108,13 @@ TEST_P(CoordinationTest, BufferSerde)
 template <typename StateMachine>
 struct SimpliestRaftServer
 {
-    SimpliestRaftServer(int server_id_, const std::string & hostname_, int port_, const std::string & logs_path)
+    SimpliestRaftServer(int server_id_, const std::string & hostname_, int port_, const std::string & logs_path, const std::string & state_path)
         : server_id(server_id_)
         , hostname(hostname_)
         , port(port_)
         , endpoint(hostname + ":" + std::to_string(port))
         , state_machine(nuraft::cs_new<StateMachine>())
-        , state_manager(nuraft::cs_new<DB::KeeperStateManager>(server_id, hostname, port, logs_path))
+        , state_manager(nuraft::cs_new<DB::KeeperStateManager>(server_id, hostname, port, logs_path, state_path))
     {
         state_manager->loadLogStore(1, 0);
         nuraft::raft_params params;
@@ -185,7 +188,11 @@ nuraft::ptr<nuraft::buffer> getBuffer(int64_t number)
 TEST_P(CoordinationTest, TestSummingRaft1)
 {
     ChangelogDirTest test("./logs");
-    SummingRaftServer s1(1, "localhost", 44444, "./logs");
+    SummingRaftServer s1(1, "localhost", 44444, "./logs", "./state");
+    SCOPE_EXIT(
+        if (std::filesystem::exists("./state"))
+            std::filesystem::remove("./state");
+    );
 
     /// Single node is leader
     EXPECT_EQ(s1.raft_instance->get_leader(), 1);
@@ -1011,6 +1018,13 @@ void addNode(DB::KeeperStorage & storage, const std::string & path, const std::s
     node.data = data;
     node.stat.ephemeralOwner = ephemeral_owner;
     storage.container.insertOrReplace(path, node);
+    auto child_it = storage.container.find(path);
+    auto child_path = DB::getBaseName(child_it->key);
+    storage.container.updateValue(DB::parentPath(StringRef{path}), [&](auto & parent)
+    {
+        parent.addChild(child_path);
+        parent.stat.numChildren++;
+    });
 }
 
 TEST_P(CoordinationTest, TestStorageSnapshotSimple)
@@ -1169,6 +1183,9 @@ TEST_P(CoordinationTest, TestStorageSnapshotMode)
         }
         EXPECT_EQ(storage.container.size(), 26);
         EXPECT_EQ(storage.container.snapshotSize(), 101);
+        /// TODO:
+        // EXPECT_EQ(storage.container.snapshotSizeWithVersion().first, 102);
+        // EXPECT_EQ(storage.container.snapshotSizeWithVersion().second, 1);
         auto buf = manager.serializeSnapshotToBuffer(snapshot);
         manager.serializeSnapshotBufferToDisk(*buf, 50);
     }
@@ -1532,6 +1549,452 @@ TEST_P(CoordinationTest, TestStorageSnapshotDifferentCompressions)
     EXPECT_EQ(restored_storage->ephemerals[3].size(), 1);
     EXPECT_EQ(restored_storage->ephemerals[1].size(), 1);
     EXPECT_EQ(restored_storage->session_and_timeout.size(), 2);
+}
+
+TEST_P(CoordinationTest, ChangelogInsertThreeTimesSmooth)
+{
+    auto params = GetParam();
+    ChangelogDirTest test("./logs");
+    {
+        std::cerr << "================First time=====================\n";
+        DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+        changelog.init(1, 0);
+        auto entry = getLogEntry("hello_world", 1000);
+        changelog.append(entry);
+        changelog.end_of_append_batch(0, 0);
+        EXPECT_EQ(changelog.next_slot(), 2);
+    }
+
+    {
+        std::cerr << "================Second time=====================\n";
+        DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+        changelog.init(1, 0);
+        auto entry = getLogEntry("hello_world", 1000);
+        changelog.append(entry);
+        changelog.end_of_append_batch(0, 0);
+        EXPECT_EQ(changelog.next_slot(), 3);
+    }
+
+    {
+        std::cerr << "================Third time=====================\n";
+        DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+        changelog.init(1, 0);
+        auto entry = getLogEntry("hello_world", 1000);
+        changelog.append(entry);
+        changelog.end_of_append_batch(0, 0);
+        EXPECT_EQ(changelog.next_slot(), 4);
+    }
+
+    {
+        std::cerr << "================Fourth time=====================\n";
+        DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+        changelog.init(1, 0);
+        auto entry = getLogEntry("hello_world", 1000);
+        changelog.append(entry);
+        changelog.end_of_append_batch(0, 0);
+        EXPECT_EQ(changelog.next_slot(), 5);
+    }
+}
+
+
+TEST_P(CoordinationTest, ChangelogInsertMultipleTimesSmooth)
+{
+    auto params = GetParam();
+    ChangelogDirTest test("./logs");
+    for (size_t i = 0; i < 36; ++i)
+    {
+        std::cerr << "================First time=====================\n";
+        DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+        changelog.init(1, 0);
+        for (size_t j = 0; j < 7; ++j)
+        {
+            auto entry = getLogEntry("hello_world", 7);
+            changelog.append(entry);
+        }
+        changelog.end_of_append_batch(0, 0);
+    }
+
+    DB::KeeperLogStore changelog("./logs", 100, true, params.enable_compression);
+    changelog.init(1, 0);
+    EXPECT_EQ(changelog.next_slot(), 36 * 7 + 1);
+}
+
+TEST_P(CoordinationTest, ChangelogInsertThreeTimesHard)
+{
+    auto params = GetParam();
+    ChangelogDirTest test("./logs");
+    std::cerr << "================First time=====================\n";
+    DB::KeeperLogStore changelog1("./logs", 100, true, params.enable_compression);
+    changelog1.init(1, 0);
+    auto entry = getLogEntry("hello_world", 1000);
+    changelog1.append(entry);
+    changelog1.end_of_append_batch(0, 0);
+    EXPECT_EQ(changelog1.next_slot(), 2);
+
+    std::cerr << "================Second time=====================\n";
+    DB::KeeperLogStore changelog2("./logs", 100, true, params.enable_compression);
+    changelog2.init(1, 0);
+    entry = getLogEntry("hello_world", 1000);
+    changelog2.append(entry);
+    changelog2.end_of_append_batch(0, 0);
+    EXPECT_EQ(changelog2.next_slot(), 3);
+
+    std::cerr << "================Third time=====================\n";
+    DB::KeeperLogStore changelog3("./logs", 100, true, params.enable_compression);
+    changelog3.init(1, 0);
+    entry = getLogEntry("hello_world", 1000);
+    changelog3.append(entry);
+    changelog3.end_of_append_batch(0, 0);
+    EXPECT_EQ(changelog3.next_slot(), 4);
+
+    std::cerr << "================Fourth time=====================\n";
+    DB::KeeperLogStore changelog4("./logs", 100, true, params.enable_compression);
+    changelog4.init(1, 0);
+    entry = getLogEntry("hello_world", 1000);
+    changelog4.append(entry);
+    changelog4.end_of_append_batch(0, 0);
+    EXPECT_EQ(changelog4.next_slot(), 5);
+}
+
+TEST_P(CoordinationTest, TestStorageSnapshotEqual)
+{
+    auto params = GetParam();
+    ChangelogDirTest test("./snapshots");
+    std::optional<UInt128> snapshot_hash;
+    for (size_t i = 0; i < 15; ++i)
+    {
+        DB::KeeperSnapshotManager manager("./snapshots", 3, params.enable_compression);
+
+        DB::KeeperStorage storage(500, "", true);
+        addNode(storage, "/hello", "");
+        for (size_t j = 0; j < 5000; ++j)
+        {
+            addNode(storage, "/hello_" + std::to_string(j), "world", 1);
+            addNode(storage, "/hello/somepath_" + std::to_string(j), "somedata", 3);
+        }
+
+        storage.session_id_counter = 5;
+
+        storage.ephemerals[3] = {"/hello"};
+        storage.ephemerals[1] = {"/hello/somepath"};
+
+        for (size_t j = 0; j < 3333; ++j)
+            storage.getSessionID(130 * j);
+
+        DB::KeeperStorageSnapshot snapshot(&storage, storage.zxid);
+
+        auto buf = manager.serializeSnapshotToBuffer(snapshot);
+
+        auto new_hash = sipHash128(reinterpret_cast<char *>(buf->data()), buf->size());
+        if (!snapshot_hash.has_value())
+        {
+            snapshot_hash = new_hash;
+        }
+        else
+        {
+            EXPECT_EQ(*snapshot_hash, new_hash);
+        }
+    }
+}
+
+
+TEST_P(CoordinationTest, TestLogGap)
+{
+    using namespace Coordination;
+    auto test_params = GetParam();
+    ChangelogDirTest logs("./logs");
+    DB::KeeperLogStore changelog("./logs", 100, true, test_params.enable_compression);
+
+    changelog.init(0, 3);
+    for (size_t i = 1; i < 55; ++i)
+    {
+        std::shared_ptr<ZooKeeperCreateRequest> request = std::make_shared<ZooKeeperCreateRequest>();
+        request->path = "/hello_" + std::to_string(i);
+        auto entry = getLogEntryFromZKRequest(0, 1, i, request);
+        changelog.append(entry);
+        changelog.end_of_append_batch(0, 0);
+    }
+
+    DB::KeeperLogStore changelog1("./logs", 100, true, test_params.enable_compression);
+    changelog1.init(61, 3);
+
+    /// Logs discarded
+    EXPECT_FALSE(fs::exists("./logs/changelog_1_100.bin" + test_params.extension));
+    EXPECT_EQ(changelog1.start_index(), 61);
+    EXPECT_EQ(changelog1.next_slot(), 61);
+}
+
+template <typename ResponseType>
+ResponseType getSingleResponse(const auto & responses)
+{
+    EXPECT_FALSE(responses.empty());
+    return dynamic_cast<ResponseType &>(*responses[0].response);
+}
+
+TEST_P(CoordinationTest, TestUncommittedStateBasicCrud)
+{
+    using namespace DB;
+    using namespace Coordination;
+
+    DB::KeeperStorage storage{500, "", true};
+
+    constexpr std::string_view path = "/test";
+
+    const auto get_committed_data = [&]() -> std::optional<String>
+    {
+        auto request = std::make_shared<ZooKeeperGetRequest>();
+        request->path = path;
+        auto responses = storage.processRequest(request, 0, std::nullopt, true, true);
+        const auto & get_response = getSingleResponse<ZooKeeperGetResponse>(responses);
+
+        if (get_response.error != Error::ZOK)
+            return std::nullopt;
+
+        return get_response.data;
+    };
+
+    const auto preprocess_get = [&](int64_t zxid)
+    {
+        auto get_request = std::make_shared<ZooKeeperGetRequest>();
+        get_request->path = path;
+        storage.preprocessRequest(get_request, 0, 0, zxid);
+        return get_request;
+    };
+
+    const auto create_request = std::make_shared<ZooKeeperCreateRequest>();
+    create_request->path = path;
+    create_request->data = "initial_data";
+    storage.preprocessRequest(create_request, 0, 0, 1);
+    storage.preprocessRequest(create_request, 0, 0, 2);
+
+    ASSERT_FALSE(get_committed_data());
+
+    const auto after_create_get = preprocess_get(3);
+
+    ASSERT_FALSE(get_committed_data());
+
+    const auto set_request = std::make_shared<ZooKeeperSetRequest>();
+    set_request->path = path;
+    set_request->data = "new_data";
+    storage.preprocessRequest(set_request, 0, 0, 4);
+
+    const auto after_set_get = preprocess_get(5);
+
+    ASSERT_FALSE(get_committed_data());
+
+    const auto remove_request = std::make_shared<ZooKeeperRemoveRequest>();
+    remove_request->path = path;
+    storage.preprocessRequest(remove_request, 0, 0, 6);
+    storage.preprocessRequest(remove_request, 0, 0, 7);
+
+    const auto after_remove_get = preprocess_get(8);
+
+    ASSERT_FALSE(get_committed_data());
+
+    {
+        const auto responses = storage.processRequest(create_request, 0, 1);
+        const auto & create_response = getSingleResponse<ZooKeeperCreateResponse>(responses);
+        ASSERT_EQ(create_response.error, Error::ZOK);
+    }
+
+    {
+        const auto responses = storage.processRequest(create_request, 0, 2);
+        const auto & create_response = getSingleResponse<ZooKeeperCreateResponse>(responses);
+        ASSERT_EQ(create_response.error, Error::ZNODEEXISTS);
+    }
+
+    {
+        const auto responses = storage.processRequest(after_create_get, 0, 3);
+        const auto & get_response = getSingleResponse<ZooKeeperGetResponse>(responses);
+        ASSERT_EQ(get_response.error, Error::ZOK);
+        ASSERT_EQ(get_response.data, "initial_data");
+    }
+
+    ASSERT_EQ(get_committed_data(), "initial_data");
+
+    {
+        const auto responses = storage.processRequest(set_request, 0, 4);
+        const auto & create_response = getSingleResponse<ZooKeeperSetResponse>(responses);
+        ASSERT_EQ(create_response.error, Error::ZOK);
+    }
+
+    {
+        const auto responses = storage.processRequest(after_set_get, 0, 5);
+        const auto & get_response = getSingleResponse<ZooKeeperGetResponse>(responses);
+        ASSERT_EQ(get_response.error, Error::ZOK);
+        ASSERT_EQ(get_response.data, "new_data");
+    }
+
+    ASSERT_EQ(get_committed_data(), "new_data");
+
+    {
+        const auto responses = storage.processRequest(remove_request, 0, 6);
+        const auto & create_response = getSingleResponse<ZooKeeperRemoveResponse>(responses);
+        ASSERT_EQ(create_response.error, Error::ZOK);
+    }
+
+    {
+        const auto responses = storage.processRequest(remove_request, 0, 7);
+        const auto & create_response = getSingleResponse<ZooKeeperRemoveResponse>(responses);
+        ASSERT_EQ(create_response.error, Error::ZNONODE);
+    }
+
+    {
+        const auto responses = storage.processRequest(after_remove_get, 0, 8);
+        const auto & get_response = getSingleResponse<ZooKeeperGetResponse>(responses);
+        ASSERT_EQ(get_response.error, Error::ZNONODE);
+    }
+
+    ASSERT_FALSE(get_committed_data());
+}
+
+TEST_P(CoordinationTest, TestListRequestTypes)
+{
+    using namespace DB;
+    using namespace Coordination;
+
+    KeeperStorage storage{500, "", true};
+
+    int64_t zxid = 0;
+
+    static constexpr std::string_view path = "/test";
+
+    const auto create_path = [&](bool is_ephemeral)
+    {
+        const auto create_request = std::make_shared<ZooKeeperCreateRequest>();
+        int new_zxid = ++zxid;
+        create_request->path = path;
+        create_request->is_sequential = true;
+        create_request->is_ephemeral = is_ephemeral;
+        storage.preprocessRequest(create_request, 1, 0, new_zxid);
+        auto responses = storage.processRequest(create_request, 1, new_zxid);
+
+        EXPECT_GE(responses.size(), 1);
+        const auto & create_response = dynamic_cast<ZooKeeperCreateResponse &>(*responses[0].response);
+        return create_response.path_created;
+    };
+
+    static constexpr size_t persistent_num = 5;
+    std::unordered_set<std::string> expected_persistent_children;
+    for (size_t i = 0; i < persistent_num; ++i)
+    {
+        expected_persistent_children.insert(getBaseName(create_path(false)).toString());
+    }
+    ASSERT_EQ(expected_persistent_children.size(), persistent_num);
+
+    static constexpr size_t ephemeral_num = 5;
+    std::unordered_set<std::string> expected_ephemeral_children;
+    for (size_t i = 0; i < ephemeral_num; ++i)
+    {
+        expected_ephemeral_children.insert(getBaseName(create_path(true)).toString());
+    }
+    ASSERT_EQ(expected_ephemeral_children.size(), ephemeral_num);
+
+    const auto get_children = [&](const auto list_request_type)
+    {
+        const auto list_request = std::make_shared<ZooKeeperFilteredListRequest>();
+        int new_zxid = ++zxid;
+        list_request->path = parentPath(StringRef{path}).toString();
+        list_request->list_request_type = list_request_type;
+        storage.preprocessRequest(list_request, 1, 0, new_zxid);
+        auto responses = storage.processRequest(list_request, 1, new_zxid);
+
+        EXPECT_GE(responses.size(), 1);
+        const auto & list_response = dynamic_cast<ZooKeeperListResponse &>(*responses[0].response);
+        return list_response.names;
+    };
+
+    const auto persistent_children = get_children(ListRequestType::PERSISTENT_ONLY);
+    EXPECT_EQ(persistent_children.size(), persistent_num);
+    for (const auto & child : persistent_children)
+    {
+        EXPECT_TRUE(expected_persistent_children.contains(child)) << "Missing persistent child " << child;
+    }
+
+    const auto ephemeral_children = get_children(ListRequestType::EPHEMERAL_ONLY);
+    EXPECT_EQ(ephemeral_children.size(), ephemeral_num);
+    for (const auto & child : ephemeral_children)
+    {
+        EXPECT_TRUE(expected_ephemeral_children.contains(child)) << "Missing ephemeral child " << child;
+    }
+
+    const auto all_children = get_children(ListRequestType::ALL);
+    EXPECT_EQ(all_children.size(), ephemeral_num + persistent_num);
+    for (const auto & child : all_children)
+    {
+        EXPECT_TRUE(expected_ephemeral_children.contains(child) || expected_persistent_children.contains(child)) << "Missing child " << child;
+    }
+}
+
+TEST_P(CoordinationTest, TestDurableState)
+{
+    ChangelogDirTest logs("./logs");
+
+    auto state = nuraft::cs_new<nuraft::srv_state>();
+    std::optional<DB::KeeperStateManager> state_manager;
+
+    const auto reload_state_manager = [&]
+    {
+        state_manager.emplace(1, "localhost", 9181, "./logs", "./state");
+    };
+
+    reload_state_manager();
+    ASSERT_EQ(state_manager->read_state(), nullptr);
+
+    state->set_term(1);
+    state->set_voted_for(2);
+    state->allow_election_timer(true);
+    state_manager->save_state(*state);
+
+    const auto assert_read_state = [&]
+    {
+        auto read_state = state_manager->read_state();
+        ASSERT_NE(read_state, nullptr);
+        ASSERT_EQ(read_state->get_term(), state->get_term());
+        ASSERT_EQ(read_state->get_voted_for(), state->get_voted_for());
+        ASSERT_EQ(read_state->is_election_timer_allowed(), state->is_election_timer_allowed());
+    };
+
+    assert_read_state();
+
+    reload_state_manager();
+    assert_read_state();
+
+    {
+        SCOPED_TRACE("Read from corrupted file");
+        state_manager.reset();
+        DB::WriteBufferFromFile write_buf("./state", DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY);
+        write_buf.seek(20, SEEK_SET);
+        DB::writeIntBinary(31, write_buf);
+        write_buf.sync();
+        write_buf.close();
+        reload_state_manager();
+#ifdef NDEBUG
+        ASSERT_EQ(state_manager->read_state(), nullptr);
+#else
+        ASSERT_THROW(state_manager->read_state(), DB::Exception);
+#endif
+    }
+
+    {
+        SCOPED_TRACE("Read from file with invalid size");
+        state_manager.reset();
+
+        DB::WriteBufferFromFile write_buf("./state", DBMS_DEFAULT_BUFFER_SIZE, O_TRUNC | O_CREAT | O_WRONLY);
+        DB::writeIntBinary(20, write_buf);
+        write_buf.sync();
+        write_buf.close();
+        reload_state_manager();
+        ASSERT_EQ(state_manager->read_state(), nullptr);
+    }
+
+    {
+        SCOPED_TRACE("State file is missing");
+        state_manager.reset();
+        std::filesystem::remove("./state");
+        reload_state_manager();
+        ASSERT_EQ(state_manager->read_state(), nullptr);
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(CoordinationTestSuite,

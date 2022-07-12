@@ -53,6 +53,7 @@ public:
         int server_id_,
         const std::string & config_prefix_,
         const std::string & log_storage_path,
+        const std::string & state_file_path,
         const Poco::Util::AbstractConfiguration & config,
         const CoordinationSettingsPtr & coordination_settings);
 
@@ -61,7 +62,8 @@ public:
         int server_id_,
         const std::string & host,
         int port,
-        const std::string & logs_path);
+        const std::string & logs_path,
+        const std::string & state_file_path);
 
     void loadLogStore(uint64_t last_commited_index, uint64_t logs_to_keep);
 
@@ -79,7 +81,7 @@ public:
 
     void save_state(const nuraft::srv_state & state) override;
 
-    nuraft::ptr<nuraft::srv_state> read_state() override { return server_state; }
+    nuraft::ptr<nuraft::srv_state> read_state() override;
 
     nuraft::ptr<nuraft::log_store> load_log_store() override { return log_store; }
 
@@ -121,6 +123,8 @@ public:
     ConfigUpdateActions getConfigurationDiff(const Poco::Util::AbstractConfiguration & config) const;
 
 private:
+    const std::filesystem::path & getOldServerStatePath();
+
     /// Wrapper struct for Keeper cluster config. We parse this
     /// info from XML files.
     struct KeeperConfigurationWrapper
@@ -143,7 +147,10 @@ private:
     KeeperConfigurationWrapper configuration_wrapper;
 
     nuraft::ptr<KeeperLogStore> log_store;
-    nuraft::ptr<nuraft::srv_state> server_state;
+
+    const std::filesystem::path server_state_path;
+
+    Poco::Logger * logger;
 
     /// Parse configuration from xml config.
     KeeperConfigurationWrapper parseServersConfiguration(const Poco::Util::AbstractConfiguration & config, bool allow_without_us) const;
