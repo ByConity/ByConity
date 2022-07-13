@@ -311,11 +311,9 @@ protected:
 private:
     /// For:
     /// - elapsed_us
-    friend class ExecutionThreadContext;
-    /// For
     /// - input_wait_elapsed_us
     /// - output_wait_elapsed_us
-    friend class ExecutingGraph;
+    friend class PipelineExecutor;
     std::atomic<bool> is_cancelled{false};
 
     std::string processor_description;

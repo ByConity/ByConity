@@ -239,7 +239,7 @@ bool PipelineExecutor::prepareProcessor(UInt64 pid, size_t thread_number, Queue 
             IProcessor::Status status = processor.prepare(node.updated_input_ports, node.updated_output_ports);
             node.last_processor_status = status;
 
-            if (profile_processors)
+            if (need_expand_pipeline)
             {
                 /// NeedData
                 if (last_status != IProcessor::Status::NeedData && status == IProcessor::Status::NeedData)
