@@ -13,6 +13,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/MutationLog.h>
 #include <Interpreters/KafkaLog.h>
+#include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/ZooKeeperLog.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
@@ -114,6 +115,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         "opentelemetry_span_log");
     mutation_log = createSystemLog<MutationLog>(global_context, "system", "mutation_log", config, "mutation_log");
     kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log");
+    processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log");
     zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log");
 
     if (query_log)
@@ -145,6 +147,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(mutation_log.get());
     if (kafka_log)
         logs.emplace_back(kafka_log.get());
+    if (processors_profile_log)
+        logs.emplace_back(processors_profile_log.get());
     if (zookeeper_log)
         logs.emplace_back(zookeeper_log.get());
 

@@ -2196,6 +2196,18 @@ void Context::updateKeeperConfiguration(const Poco::Util::AbstractConfiguration 
 }
 
 
+void Context::updateKeeperConfiguration(const Poco::Util::AbstractConfiguration & config)
+{
+#if USE_NURAFT
+    std::lock_guard lock(shared->keeper_dispatcher_mutex);
+    if (!shared->keeper_dispatcher)
+        return;
+
+    shared->keeper_dispatcher->updateConfiguration(config);
+#endif
+}
+
+
 zkutil::ZooKeeperPtr Context::getAuxiliaryZooKeeper(const String & name) const
 {
     std::lock_guard lock(shared->auxiliary_zookeepers_mutex);
@@ -2674,6 +2686,17 @@ std::shared_ptr<MutationLog> Context::getMutationLog() const
         return {};
 
     return shared->system_logs->mutation_log;
+}
+
+
+std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->processors_profile_log;
 }
 
 
