@@ -31,13 +31,8 @@ public:
         off_t data_file_offset_, size_t data_file_size_,
         off_t mark_file_offset_, size_t mark_file_size_);
 
-    virtual void seekToMark(size_t index) override;
-
-    void seekToStart();
-
-    size_t getCurrentBlockCompressedSize() const;
-
     virtual void seekToStart() override;
+    virtual void seekToMark(size_t index) override;
 
 private:
     DiskPtr disk;
@@ -56,9 +51,6 @@ private:
 
     std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
     std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
-
-public:
-    ReadBuffer * data_buffer;
 
     MergeTreeMarksLoader marks_loader;
 };

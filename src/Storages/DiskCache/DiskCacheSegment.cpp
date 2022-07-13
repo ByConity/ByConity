@@ -1,4 +1,5 @@
 #include "DiskCacheSegment.h"
+#include <memory>
 
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -17,6 +18,12 @@ DiskCacheSegment::DiskCacheSegment(
     const String & stream_name_,
     const String & extension_)
     : IDiskCacheSegment(segment_number_, segment_size_), data_part(data_part_), stream_name(stream_name_), extension(extension_)
+    , marks_loader(data_part->volume->getDisk(), nullptr,
+        data_part->index_granularity_info.getMarksFilePath(stream_name),
+        stream_name, data_part->getMarksCount(), data_part->index_granularity_info,
+        false, data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)),
+        data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)))
+    , source_buffer(nullptr)
 {
 }
 
@@ -33,35 +40,9 @@ String DiskCacheSegment::getSegmentName() const
         UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->name, stream_name, segment_number, extension);
 }
 
-MergeTreeReaderStream & DiskCacheSegment::getStream()
-{
-    if (!reader_stream)
-    {
-        reader_stream = std::make_unique<MergeTreeReaderStream>(
-            data_part->volume->getDisk(),
-            data_part->getFullRelativePath() + "data",
-            stream_name,
-            extension,
-            data_part->getMarksCount(),
-            MarkRanges{},
-            MergeTreeReaderSettings{},
-            nullptr, // mark cache
-            nullptr, // uncompressed_cache
-            &data_part->index_granularity_info,
-            ReadBufferFromFileBase::ProfileCallback{},
-            CLOCK_MONOTONIC_COARSE,
-            data_part->getFileOffsetOrZero(stream_name + extension),
-            data_part->getFileSizeOrZero(stream_name + extension),
-            data_part->getFileOffsetOrZero(stream_name + MARKS_FILE_EXTENSION),
-            data_part->getFileSizeOrZero(stream_name + MARKS_FILE_EXTENSION));
-    }
-    return *reader_stream;
-}
-
 size_t DiskCacheSegment::getSegmentStartOffset()
 {
-    auto & stream = getStream();
-    const auto & start_mark = stream.marks_loader.getMark(segment_size * segment_number);
+    const auto & start_mark = marks_loader.getMark(segment_size * segment_number);
     return start_mark.offset_in_compressed_file;
 }
 
@@ -73,14 +54,15 @@ size_t DiskCacheSegment::getSegmentEndOffset()
         return data_part->getFileSizeOrZero(stream_name + extension);
     }
 
-    auto & stream = getStream();
     size_t end_mrk_idx = segment_size * (segment_number + 1);
-    auto end_mark = stream.marks_loader.getMark(end_mrk_idx);
+    auto end_mark = marks_loader.getMark(end_mrk_idx);
     off_t end_offset = end_mark.offset_in_compressed_file;
     if (end_mark.offset_in_decompressed_block)
     {
-        stream.seekToMark(end_mrk_idx);
-        end_offset += stream.getCurrentBlockCompressedSize();
+        initSourceBufferIfNecessary();
+        size_t base_offset = data_part->getFileOffsetOrZero(stream_name + extension);
+        source_buffer->seek(base_offset + end_mark.offset_in_compressed_file, 0);
+        end_offset += source_buffer->getSizeCompressed();
     }
 
     return end_offset;
@@ -136,6 +118,22 @@ void DiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
         LOG_ERROR(log, "Failed to cache segment to local disk.");
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
+}
+
+void DiskCacheSegment::initSourceBufferIfNecessary()
+{
+    if (source_buffer != nullptr)
+    {
+        return;
+    }
+
+    source_buffer = std::make_unique<CompressedReadBufferFromFile>(
+        data_part->getFullRelativePath() + "data",
+        0, 0, 0, nullptr, DBMS_DEFAULT_BUFFER_SIZE, false,
+        data_part->getFileOffsetOrZero(stream_name + extension),
+        data_part->getFileSizeOrZero(stream_name + extension),
+        true
+    );
 }
 
 }

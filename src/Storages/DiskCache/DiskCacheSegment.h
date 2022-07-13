@@ -1,12 +1,13 @@
 #pragma once
 
 #include <IO/UncompressedCache.h>
+#include <Compression/CompressedReadBufferFromFile.h>
+#include <Interpreters/StorageID.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
-#include "common/types.h"
-#include "Interpreters/StorageID.h"
+#include <Storages/MergeTree/MergeTreeMarksLoader.h>
 
 namespace DB
 {
@@ -31,14 +32,17 @@ public:
     void cacheToDisk(IDiskCache & cache) override;
 
 private:
-    MergeTreeReaderStream & getStream();
     size_t getSegmentStartOffset();
     size_t getSegmentEndOffset();
+
+    void initSourceBufferIfNecessary();
 
     IMergeTreeDataPartPtr data_part;
     String stream_name;
     String extension;
-    std::unique_ptr<MergeTreeReaderStream> reader_stream;
+
+    MergeTreeMarksLoader marks_loader;
+    std::unique_ptr<CompressedReadBufferFromFile> source_buffer;
 };
 
 }
