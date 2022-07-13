@@ -925,7 +925,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         {
                             return reinterpret_cast<std::uintptr_t>(&proc);
                         };
-                        for (const auto & processor : query_pipeline.getProcessors())
+                        for (const auto & processor : query_pipeline->getProcessors())
                         {
                             std::vector<UInt64> parents;
                             for (const auto & port : processor->getOutputs())
