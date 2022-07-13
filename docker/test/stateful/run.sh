@@ -22,6 +22,8 @@ cp -r /clickhouse/share/clickhouse-test /usr/share/
 mkdir -p test_output
 mkdir -p sanitizer_log_output
 
+bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
+
 function start()
 {
     if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
@@ -70,6 +72,8 @@ function start()
 }
 
 start
+ps -aux
+
 # shellcheck disable=SC2086 # No quotes because I want to split it into words.
 if [ ! -d "/ClickHouse-ci-dataset" ]; then
   git clone --depth 1 https://gitlab+deploy-token-3553:pcgsySXCwK8md2BHebPw@code.byted.org/dp/ClickHouse-ci-dataset.git # download dataset from ClickHouse-ci-dataset repo
