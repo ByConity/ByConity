@@ -16,12 +16,9 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size = 0)
+static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE)
 {
-    if (file_size == 0)
-        file_size = std::min(size_t(DBMS_DEFAULT_BUFFER_SIZE), disk->getFileSize(path));
-
-    return disk->readFile(path, file_size);
+    return disk->readFile(path, {.buffer_size = buffer_size});
 }
 
 static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offset, size_t file_size)
