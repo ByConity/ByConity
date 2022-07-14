@@ -673,6 +673,8 @@
     M(DropMaskingPoliciesFailed, "") \
     M(IsHostServerSuccess, "") \
     M(IsHostServerFailed, "") \
+    M(CnchReadSizeFromDiskCache, "") \
+    M(CnchReadSizeFromRemote, "") \
 
 namespace ProfileEvents
 {

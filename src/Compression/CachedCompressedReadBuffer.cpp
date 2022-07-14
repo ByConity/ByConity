@@ -104,6 +104,9 @@ void CachedCompressedReadBuffer::seek(size_t offset_in_compressed_file, size_t o
         file_pos = offset_in_compressed_file;
 
         bytes += offset();
+
+        resetWorkingBuffer();
+
         nextImpl();
 
         if (offset_in_decompressed_block > working_buffer.size())

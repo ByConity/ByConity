@@ -69,6 +69,11 @@ public:
     }
 
     size_t getSizeCompressed() const { return owned_cell->compressed_size; }
+
+    size_t compressedOffset() const
+    {
+        return file_pos;
+    }
 };
 
 }
