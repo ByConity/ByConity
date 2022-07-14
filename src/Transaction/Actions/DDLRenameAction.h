@@ -58,8 +58,8 @@ private:
 private:
     RenameActionParams params;
 
-    /* bool is_cnch_merge_tree{false} ; */
-    /* bool is_cnch_kafka{false}; */
+    bool is_cnch_merge_tree{false};
+    // bool is_cnch_kafka{false};
 };
 
 using DDLRenameActionPtr = std::shared_ptr<DDLRenameAction>;

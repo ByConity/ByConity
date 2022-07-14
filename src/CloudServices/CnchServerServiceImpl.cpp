@@ -2,20 +2,16 @@
 
 #include <Protos/RPCHelpers.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Interpreters/Context.h>
 #include <Protos/RPCHelpers.h>
-#include <Protos/DataModelHelpers.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
-#include <Common/serverLocality.h>
-#include <Catalog/Catalog.h>
-#include <Catalog/CatalogFactory.h>
-#include <Storages/PartCacheManager.h>
+#include <CloudServices/commitCnchParts.h>
+#include <WorkerTasks/ManipulationType.h>
 
 namespace DB
 {
@@ -40,35 +36,85 @@ void CnchServerServiceImpl::commitParts(
     [[maybe_unused]] Protos::CommitPartsResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
+    ContextPtr context_ptr = context.lock();
+    if (!context_ptr)
+        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
 
-    try
-    {
-        // we need to set the response before any exception is thrown.
-        response->set_commit_timestamp(0);
-        /// Resolve request parameters
-        if (request->parts_size() != request->paths_size())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Incorrect arguments");
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [c = cntl, req = request, rsp = response, done = done, &gc = context_ptr, log = log] {
+            brpc::ClosureGuard done_guard(done);
 
-        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+            try
+            {
+                // we need to set the response before any exception is thrown.
+                rsp->set_commit_timestamp(0);
+                /// Resolve request parameters
+                if (req->parts_size() != req->paths_size())
+                    throw Exception("Incorrect arguments", ErrorCodes::BAD_ARGUMENTS);
 
-        TransactionCnchPtr cnch_txn = rpc_context->getCnchTransactionCoordinator().getTransaction(request->txn_id());
+                TransactionCnchPtr cnch_txn;
+                cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
 
-        /// TODO: find table by uuid ?
-        /// The table schema in catalog has not been updated, use storage in query_cache
-        // auto storage = rpc_context->getTable(request->database(), request->table());
+                /// Create new rpc context and bind the previous created txn to this rpc context.
+                auto rpc_context = RPCHelpers::createSessionContext(gc, *c);
+                rpc_context->setCurrentTransaction(cnch_txn, false);
 
-        // auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
-        // if (!cnch)
-        //     throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table is not of MergeTree class");
+                /// TODO: find table by uuid ?
+                /// The table schema in catalog has not been updated, use storage in query_cache
+                auto storage = rpc_context->tryGetCnchTable(req->database(), req->table());
 
-        /// TODO:
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+                auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+                if (!cnch)
+                    throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+
+                auto parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch, req->parts(), &req->paths());
+                auto staged_parts = createPartVectorFromModels<MutableMergeTreeDataPartCNCHPtr>(*cnch, req->staged_parts(), &req->staged_parts_paths());
+
+                DeleteBitmapMetaPtrVector delete_bitmaps;
+                delete_bitmaps.reserve(req->delete_bitmaps_size());
+                for (const auto & bitmap_model : req->delete_bitmaps())
+                    delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
+
+                String from_buffer_uuid;
+                if (req->has_from_buffer_uuid())
+                    from_buffer_uuid = req->from_buffer_uuid();
+
+                TxnTimestamp commit_time;
+                /// check and parse offsets
+                String consumer_group;
+                cppkafka::TopicPartitionList tpl;
+                if (req->has_consumer_group())
+                {
+                    consumer_group = req->consumer_group();
+                    tpl.reserve(req->tpl_size());
+                    for (const auto & tp : req->tpl())
+                        tpl.emplace_back(cppkafka::TopicPartition(tp.topic(), tp.partition(), tp.offset()));
+
+                    LOG_TRACE(&Poco::Logger::get("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
+                }
+                PreparedCnchParts params
+                {
+                    .type = ManipulationType(req->type()),
+                    .task_id = req->task_id(),
+                    .consumer_group = std::move(consumer_group),
+                    .from_buffer_uuid = std::move(from_buffer_uuid),
+                    .prepared_parts = {parts.begin(), parts.end()},
+                    .prepared_staged_parts = {staged_parts.begin(), staged_parts.end()},
+                    .delete_bitmaps = std::move(delete_bitmaps)
+                };
+
+                commitPreparedCnchParts(storage, *rpc_context, params, commit_time);
+                rsp->set_commit_timestamp(commit_time);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(rsp->mutable_exception());
+            }
+        }
+    );
 }
 
 void CnchServerServiceImpl::getMinActiveTimestamp(
@@ -323,163 +369,7 @@ void CnchServerServiceImpl::createTransactionForKafka(
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
             RPCHelpers::handleException(response->mutable_exception());
         }
+        
     });
 }
-
-void CnchServerServiceImpl::fetchDataParts(
-    [[maybe_unused]] ::google::protobuf::RpcController* controller,
-    [[maybe_unused]] const ::DB::Protos::FetchDataPartsReq* request,
-    [[maybe_unused]] ::DB::Protos::FetchDataPartsResp* response,
-    [[maybe_unused]] ::google::protobuf::Closure* done)
-{
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
-        brpc::ClosureGuard done_guard(done);
-        try
-        {
-            StoragePtr storage = global_context.getCnchCatalog()->getTable(
-                global_context, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
-
-            auto calculated_host = global_context.getCnchTopologyMaster()
-                                       ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true)
-                                       .getRPCAddress();
-            if (request->remote_host() != calculated_host)
-                throw Exception(
-                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
-                        + ", calculated_host: " + calculated_host,
-                    ErrorCodes::LOGICAL_ERROR);
-
-            if (!isLocalServer(calculated_host, std::to_string(global_context.getRPCPort())))
-                throw Exception(
-                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
-                    ErrorCodes::LOGICAL_ERROR);
-
-            Strings partition_list;
-            for (const auto & partition : request->partitions())
-                partition_list.emplace_back(partition);
-
-            auto parts
-                = global_context.getCnchCatalog()->getServerDataPartsInPartitions(storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
-            auto & mutable_parts = *response->mutable_parts();
-            for (const auto & part : parts)
-                *mutable_parts.Add() = part->part_model();
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RPCHelpers::handleException(response->mutable_exception());
-        }
-    });
-}
-
-void CnchServerServiceImpl::handleRedirectCommitRequest(
-    [[maybe_unused]] google::protobuf::RpcController* controller,
-    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
-    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
-    [[maybe_unused]] google::protobuf::Closure * done,
-    bool final_commit)
-{
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
-    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, final_commit=final_commit, &global_context = *context_ptr, log = log] {
-        brpc::ClosureGuard done_guard(done);
-        try
-        {
-            String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
-            StoragePtr storage = global_context.getCnchCatalog()->tryGetTableByUUID(
-                global_context, table_uuid, TxnTimestamp::maxTS());
-            
-            if (!storage)
-                throw Exception("Table with uuid " + table_uuid + " not found.", ErrorCodes::UNKNOWN_TABLE);
-
-            auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
-            if (!cnch)
-                throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
-
-            auto parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->parts(), nullptr);
-            auto staged_parts = createPartVectorFromModels<MergeTreeDataPartCNCHPtr>(*cnch, request->staged_parts(), nullptr);
-            DeleteBitmapMetaPtrVector delete_bitmaps;
-            delete_bitmaps.reserve(request->delete_bitmaps_size());
-            for (auto & bitmap_model : request->delete_bitmaps())
-                delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
-
-
-            if (!final_commit)
-            {
-                TxnTimestamp txnID{request->txn_id()};
-                global_context.getCnchCatalog()->writeParts(storage, txnID, 
-                    Catalog::CommitItems{parts, delete_bitmaps, staged_parts}, request->from_merge_task(), request->preallocate_mode());
-            }
-            else
-            {
-                TxnTimestamp commitTs {request->commit_ts()};
-                global_context.getCnchCatalog()->setCommitTime(storage, Catalog::CommitItems{parts, delete_bitmaps, staged_parts},
-                    commitTs, request->txn_id());
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            RPCHelpers::handleException(response->mutable_exception());
-        }
-    });
-}
-
-void CnchServerServiceImpl::redirectCommitParts(
-    [[maybe_unused]] google::protobuf::RpcController* controller,
-    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
-    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
-    [[maybe_unused]] google::protobuf::Closure * done)
-{
-    handleRedirectCommitRequest(controller, request, response, done, false);
-}
-
-void CnchServerServiceImpl::redirectSetCommitTime(
-    [[maybe_unused]] google::protobuf::RpcController* controller,
-    [[maybe_unused]] const Protos::RedirectCommitPartsReq * request,
-    [[maybe_unused]] Protos::RedirectCommitPartsResp * response,
-    [[maybe_unused]] google::protobuf::Closure * done)
-{
-    handleRedirectCommitRequest(controller, request, response, done, true);
-}
-
-void CnchServerServiceImpl::getTableInfo(
-    [[maybe_unused]] google::protobuf::RpcController* controller,
-    [[maybe_unused]] const Protos::GetTableInfoReq* request,
-    [[maybe_unused]] Protos::GetTableInfoResp* response,
-    [[maybe_unused]] google::protobuf::Closure* done)
-{
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
-    RPCHelpers::serviceHandler(
-        done,
-        response,
-        [ req = request, rsp = response, d = done, &global_context = *context_ptr, logger=log] {
-            brpc::ClosureGuard inner_guard(d);
-            try
-            {
-                auto part_cache_manager = global_context.getPartCacheManager();
-                for (auto & table_id : req->table_ids())
-                {
-                    UUID uuid(stringToUUID(table_id.uuid()));
-                    Protos::DataModelTableInfo * table_info = rsp->add_table_infos();
-                    table_info->set_database(table_id.database());
-                    table_info->set_table(table_id.name());
-                    table_info->set_last_modification_time(part_cache_manager->getTableLastUpdateTime(uuid));
-                    table_info->set_cluster_status(part_cache_manager->getTableClusterStatus(uuid));
-                }
-            }
-            catch (...)
-            {
-                tryLogCurrentException(logger, __PRETTY_FUNCTION__);
-                RPCHelpers::handleException(rsp->mutable_exception());
-            }
-        }
-    );
-}
-
 }

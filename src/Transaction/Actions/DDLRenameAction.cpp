@@ -7,30 +7,31 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 // #include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
 
-void DDLRenameAction::renameTablePrefix(TxnTimestamp  /*commit_time*/)
+void DDLRenameAction::renameTablePrefix(TxnTimestamp commit_time)
 {
-    // Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
     // auto daemon_manager = context.getDaemonManagerClient();
     // if (!daemon_manager)
     //     throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
 
-    // auto storage = cnch_catalog->tryGetTable(context, params.table_params.from_database, params.table_params.from_table, commit_time);
+    auto storage = cnch_catalog->tryGetTable(context, params.table_params.from_database, params.table_params.from_table, commit_time);
 
-    // if (auto cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get()))
-    // {
-    //     is_cnch_merge_tree = true;
-    //     if (cnch_table->settings.cnch_enable_memory_buffer)
-    //     {
-    //         LOG_DEBUG(&Logger::get("DDLRenameAction"),
-    //                 "Destroying memory buffer before renaming table: " << cnch_table->getStorageID().getFullTableName());
+    if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get()))
+    {
+        is_cnch_merge_tree = true;
+        // if (cnch_table->settings.cnch_enable_memory_buffer)
+        // {
+        //     LOG_DEBUG(&Logger::get("DDLRenameAction"),
+        //             "Destroying memory buffer before renaming table: " << cnch_table->getStorageID().getFullTableName());
 
-    //         daemon_manager->controlDaemonJob(cnch_table->getStorageID(), CnchBGThreadType::MemoryBuffer, Protos::ControlDaemonJobReq::Drop);
-    //     }
-    // }
+        //     daemon_manager->controlDaemonJob(cnch_table->getStorageID(), CnchBGThreadType::MemoryBuffer, Protos::ControlDaemonJobReq::Drop);
+        // }
+    }
     // else if (auto kafka_table = dynamic_cast<const StorageCnchKafka *>(storage.get()))
     // {
     //     is_cnch_kafka = true;
@@ -42,8 +43,8 @@ void DDLRenameAction::renameTablePrefix(TxnTimestamp  /*commit_time*/)
     //                                          Protos::ControlDaemonJobReq::Stop);
     //     }
     // }
-    // else
-    //     throw Exception("Only CnchMergeTree and CnchKafka are supported to rename now", ErrorCodes::LOGICAL_ERROR);
+    else
+        throw Exception("Only CnchMergeTree are supported to rename now", ErrorCodes::LOGICAL_ERROR);
 }
 
 void DDLRenameAction::executeV1(TxnTimestamp commit_time)
@@ -69,28 +70,28 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
     }
 }
 
-void DDLRenameAction::renameTableSuffix(TxnTimestamp /*commit_time*/)
+void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
 {
-    // Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
     // auto daemon_manager = context.getDaemonManagerClient();
     // if (!daemon_manager)
     //     throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
 
-    // auto storage = cnch_catalog->tryGetTable(context, params.table_params.to_database, params.table_params.to_table, commit_time);
-    // if (is_cnch_merge_tree)
-    // {
-    //     auto cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
-    //     if (!cnch_table)
-    //         throw Exception("Can not get cnch table after renaming", ErrorCodes::LOGICAL_ERROR);
+    auto storage = cnch_catalog->tryGetTable(context, params.table_params.to_database, params.table_params.to_table, commit_time);
+    if (is_cnch_merge_tree)
+    {
+        const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+        if (!cnch_table)
+            throw Exception("Can not get cnch table after renaming", ErrorCodes::LOGICAL_ERROR);
 
-    //     if (cnch_table->settings.cnch_enable_memory_buffer)
-    //     {
-    //         LOG_DEBUG(&Logger::get("DDLRenameAction"),
-    //                 "Starting memory buffer after renaming table: " << cnch_table->getStorageID().getFullTableName());
+        // if (cnch_table->settings.cnch_enable_memory_buffer)
+        // {
+        //     LOG_DEBUG(&Poco::Logger::get("DDLRenameAction"),
+        //             "Starting memory buffer after renaming table: " << cnch_table->getStorageID().getFullTableName());
 
-    //         daemon_manager->controlDaemonJob(cnch_table->getStorageID(), CnchBGThreadType::MemoryBuffer, Protos::ControlDaemonJobReq::Start);
-    //     }
-    // }
+        //     daemon_manager->controlDaemonJob(cnch_table->getStorageID(), CnchBGThreadType::MemoryBuffer, Protos::ControlDaemonJobReq::Start);
+        // }
+    }
     // else if (is_cnch_kafka)
     // {
     //     auto kafka_table = dynamic_cast<const StorageCnchKafka *>(storage.get());
