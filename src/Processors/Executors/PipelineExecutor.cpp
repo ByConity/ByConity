@@ -37,7 +37,7 @@ static bool checkCanAddAdditionalInfoToException(const DB::Exception & exception
            && exception.code() != ErrorCodes::QUERY_WAS_CANCELLED;
 }
 
-PipelineExecutor::PipelineExecutor(Processors & processors_, bool need_processors_profiles_, QueryStatus * elem)
+PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem, bool need_processors_profiles_)
     : processors(processors_)
     , need_processors_profiles(need_processors_profiles_)
     , cancelled(false)
@@ -239,7 +239,7 @@ bool PipelineExecutor::prepareProcessor(UInt64 pid, size_t thread_number, Queue 
             IProcessor::Status status = processor.prepare(node.updated_input_ports, node.updated_output_ports);
             node.last_processor_status = status;
 
-            if (need_expand_pipeline)
+            if (need_processors_profiles)
             {
                 /// NeedData
                 if (last_status != IProcessor::Status::NeedData && status == IProcessor::Status::NeedData)
@@ -658,7 +658,6 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
                 if (need_processors_profiles)
                     execution_time_watch.emplace();
 #endif  
-
                 node->job();
 
                 if (need_processors_profiles)
