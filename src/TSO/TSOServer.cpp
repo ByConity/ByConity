@@ -144,16 +144,19 @@ void TSOServer::updateTSO(Poco::Timer &)
         UInt64 Tnow = ms.count();
         TSOClock cur_ts = tso_service->getClock();
 
-        if (Tnow > Tlast + 1)
+        if (Tnow > Tnext + 1)  /// machine time is larger than physical time, keep physical time close to machine time
         {
             Tnext = Tnow;
-            tso_service->setPhysicalTime(Tnext);
         }
-        else if (cur_ts.logical > MAX_LOGICAL / 2)
+        else if (cur_ts.logical > MAX_LOGICAL / 2)  /// logical time buffer has been used more than half, increase physical time and clear logical time
         {
             Tnext = cur_ts.physical + 1;
-            tso_service->setPhysicalTime(Tnext);
-            LOG_INFO(log, "Tnext updated to: {}", Tnext); // TODO: replace with metrics couting how many times Tnext is updated
+            LOG_INFO(log, "logical time buffer has been used more than half, Tnext updated to: {}", Tnext); // TODO: replace with metrics couting how many times Tnext is updated
+        }
+        else
+        {
+            /// No update for physical time
+            return;
         }
 
         if (Tlast <= Tnext + 1)  /// current timestamp already out of TSO window, update the window
@@ -162,6 +165,7 @@ void TSOServer::updateTSO(Poco::Timer &)
             /// save to KV
             proxy_ptr->setTimestamp(Tlast);
         }
+        tso_service->setPhysicalTime(Tnext);
     }
     catch(Exception & e)
     {
