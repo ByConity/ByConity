@@ -72,6 +72,9 @@ int mainEntryClickHouseRestart(int argc, char ** argv);
 #if ENABLE_CLICKHOUSE_DAEMON_MANAGER
 int mainEntryClickHouseDaemonManager(int argc, char ** argv);
 #endif
+#if ENABLE_CLICKHOUSE_TSO_SERVER
+int mainEntryClickHouseTSOServer(int argc, char ** argv);
+#endif
 
 int mainEntryClickHouseHashBinary(int, char **)
 {
@@ -138,6 +141,9 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"hash-binary", mainEntryClickHouseHashBinary},
 #if ENABLE_CLICKHOUSE_DAEMON_MANAGER
     {"daemon-manager", mainEntryClickHouseDaemonManager},
+#endif
+#if ENABLE_CLICKHOUSE_TSO_SERVER
+    {"tso-server", mainEntryClickHouseTSOServer},
 #endif
 };
 

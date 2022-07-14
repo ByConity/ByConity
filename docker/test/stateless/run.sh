@@ -20,6 +20,8 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 mkdir -p test_output
 mkdir -p sanitizer_log_output
 
+bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
+
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_CPU_TIME_PERIOD_US=1000
@@ -101,6 +103,7 @@ function run_tests()
         fi
     fi
 
+    ps -aux
     clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
            --use-skip-list --run stateless --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \

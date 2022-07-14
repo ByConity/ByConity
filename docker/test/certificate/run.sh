@@ -21,6 +21,8 @@ mkdir -p test_output
 
 echo "certificate test"
 
+bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
+
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_CPU_TIME_PERIOD_US=1000
@@ -46,6 +48,8 @@ if [ "$NUM_TRIES" -gt "1" ]; then
 else
     sudo clickhouse start
 fi
+
+ps -aux
 
 if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
 
