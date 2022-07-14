@@ -1,0 +1,163 @@
+#include <MergeTreeCommon/assignCnchParts.h>
+#include <Catalog/DataModelPartWrapper.h>
+#include <common/logger_useful.h>
+
+#include <sstream>
+
+namespace DB
+{
+
+template<typename M>
+inline void reportStats(const M & map, const String & name, size_t num_workers)
+{
+    std::stringstream ss;
+    double sum = 0;
+    double max_load = 0;
+    for (const auto & it : map)
+    {
+        sum += it.second.size();
+        max_load = std::max(max_load, static_cast<double>(it.second.size()));
+        ss << it.first << " -> " << it.second.size() << "; ";
+    }
+    /// calculate coefficient of variance of the distribution
+    double mean = sum / num_workers;
+    double sum_of_squares = 0;
+    for (const auto & it : map)
+    {
+        double diff = it.second.size() - mean;
+        sum_of_squares += diff * diff;
+    }
+    /// coefficient of variance, lower is better
+    double co_var = std::sqrt(sum_of_squares / num_workers) / mean;
+    /// peak over average ratio, lower is better and must not exceed the load factor if use bounded load balancing
+    double peak_over_avg = max_load / mean;
+    ss << "stats: " << co_var << " " << peak_over_avg << std::endl;
+    LOG_DEBUG(&Poco::Logger::get(name), ss.str());
+}
+
+/// Server data parts
+
+ServerAssignmentMap assignCnchPartsWithJump(WorkerList workers, const ServerDataPartsVector & parts)
+{
+    ServerAssignmentMap ret;
+    /// we don't know the order of workers returned from consul so sort then explicitly now
+    sort(workers.begin(), workers.end());
+    auto num_workers = workers.size();
+    for (const auto & part : parts)
+    {
+        /// use crc64 as original implementation, may change to other hash later
+        auto part_name = part->info().getBasicPartName();
+        auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
+        auto index = JumpConsistentHash(hash_val, num_workers);
+        ret[workers[index]].emplace_back(part);
+    }
+    return ret;
+}
+
+/// 2 round apporach
+ServerAssignmentMap assignCnchPartsWithRingAndBalance(const ConsistentHashRing & ring, const ServerDataPartsVector & parts)
+{
+    LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate part with bounded ring based hash policy.");
+    ServerAssignmentMap ret;
+    size_t num_parts = parts.size();
+    auto cap_limit = ring.getCapLimit(num_parts);
+    ServerDataPartsVector exceed_parts;
+    std::unordered_map<String,UInt64> stats;
+
+    // first round, try respect original hash mapping as much as possible
+    for (auto & part : parts)
+    {
+        if (auto hostname = ring.tryFind(part->info().getBasicPartName(), cap_limit, stats); !hostname.empty())
+            ret[hostname].emplace_back(part);
+        else
+            exceed_parts.emplace_back(part);
+    }
+
+    // second round to assign the overloaded parts, reuse the one round apporach `findAndRebalance`.
+    for (auto & part: exceed_parts)
+    {
+        auto hostname = ring.findAndRebalance(part->info().getBasicPartName(), cap_limit, stats);
+        ret[hostname].emplace_back(std::move(part));
+    }
+
+    LOG_INFO(&Poco::Logger::get("Consistent Hash"),
+             "Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
+    return ret;
+}
+
+template <typename DataPartsCnchVector>
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerList workers, const DataPartsCnchVector & parts)
+{
+    std::unordered_map<String, DataPartsCnchVector> ret;
+    /// we don't know the order of workers returned from consul so sort then explicitly now
+    sort(workers.begin(), workers.end());
+    auto num_workers = workers.size();
+    for (const auto & part : parts)
+    {
+        /// use crc64 as original implementation, may change to other hash later
+        auto part_name = part->info.getBasicPartName();
+        auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
+        auto index = JumpConsistentHash(hash_val, num_workers);
+        ret[workers[index]].emplace_back(part);
+    }
+    return ret;
+}
+
+/// 2 round apporach
+template <typename DataPartsCnchVector>
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
+{
+    LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate part with bounded ring based hash policy.");
+    std::unordered_map<String, DataPartsCnchVector> ret;
+    size_t num_parts = parts.size();
+    auto cap_limit = ring.getCapLimit(num_parts);
+    DataPartsCnchVector exceed_parts;
+    std::unordered_map<String, UInt64> stats;
+
+    // first round, try respect original hash mapping as much as possible
+    for (auto & part : parts)
+    {
+        if (auto hostname = ring.tryFind(part->info.getBasicPartName(), cap_limit, stats); !hostname.empty())
+            ret[hostname].emplace_back(part);
+        else
+            exceed_parts.emplace_back(part);
+    }
+
+    // second round to assign the overloaded parts, reuse the one round apporach `findAndRebalance`.
+    for (auto & part: exceed_parts)
+    {
+        auto hostname = ring.findAndRebalance(part->info.getBasicPartName(), cap_limit, stats);
+        ret[hostname].emplace_back(part);
+    }
+
+
+    LOG_INFO(&Poco::Logger::get("Consistent Hash"),
+             "Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
+    return ret;
+}
+
+ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts)
+{
+    switch (worker_group->getContext()->getPartAllocationAlgo())
+    {
+        case Context::PartAllocator::JUMP_CONSISTENT_HASH:
+        {
+            auto ret = assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+            reportStats(ret, "Jump Consistent Hash", worker_group->getWorkerIDVec().size());
+            return ret;
+        }
+        case Context::PartAllocator::RING_CONSISTENT_HASH:
+        {
+            if (!worker_group->hasRing())
+            {
+                LOG_WARNING(&Poco::Logger::get("Consistent Hash"), "Attemp to use ring-base consistent hash, but ring is empty; fall back to jump");
+                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+            }
+            auto ret = assignCnchPartsWithRingAndBalance(worker_group->getRing(), parts);
+            reportStats(ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
+            return ret;
+        }
+    }
+}
+
+}

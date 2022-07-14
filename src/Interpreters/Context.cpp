@@ -3894,6 +3894,30 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster()
     // as CNCH server might be out-of-service for unknown reason, it is ok to skip it
     const_cast<Settings&>(settings).skip_unavailable_shards = true;  //FIXME
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
+
+}
+
+Context::PartAllocator Context::getPartAllocationAlgo() const
+{
+    /// we prefer the config setting first
+    if (getConfigRef().has("part_allocation_algorithm"))
+    {
+        LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Using part allocation algorithm from config: {}.", getConfigRef().getInt("part_allocation_algorithm"));
+        switch(getConfigRef().getInt("part_allocation_algorithm"))
+        {
+            case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
+            case 1: return PartAllocator::RING_CONSISTENT_HASH;
+            default: return PartAllocator::JUMP_CONSISTENT_HASH;
+        }
+    }
+
+    /// if not set, we use the query settings
+    switch (settings.cnch_part_allocation_algorithm)
+    {
+        case 0: return PartAllocator::JUMP_CONSISTENT_HASH;
+        case 1: return PartAllocator::RING_CONSISTENT_HASH;
+        default: return PartAllocator::JUMP_CONSISTENT_HASH;
+    }
 }
 
 }

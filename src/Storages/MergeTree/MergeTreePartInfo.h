@@ -97,6 +97,7 @@ struct MergeTreePartInfo
     }
 
     String getPartName(bool with_hint_mutation = false) const;
+    String getBasicPartName() const;
     String getPartNameV0(DayNum left_date, DayNum right_date) const;
     UInt64 getBlocksCount() const
     {

@@ -196,6 +196,20 @@ String MergeTreePartInfo::getPartName(bool) const
     return wb.str();
 }
 
+/// partititon_id + min_block + max_block
+String MergeTreePartInfo::getBasicPartName() const
+{
+    WriteBufferFromOwnString wb;
+
+    writeString(partition_id, wb);
+    writeChar('_', wb);
+    writeIntText(min_block, wb);
+    writeChar('_', wb);
+    writeIntText(max_block, wb);
+    writeChar('_', wb);
+
+    return wb.str();
+}
 
 String MergeTreePartInfo::getPartNameV0(DayNum left_date, DayNum right_date) const
 {

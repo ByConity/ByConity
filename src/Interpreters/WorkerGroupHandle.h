@@ -44,7 +44,7 @@ constexpr auto toString(WorkerGroupHandleSource s)
  *
  */
 
-class WorkerGroupHandleImpl : private boost::noncopyable, protected WithContext
+class WorkerGroupHandleImpl : private boost::noncopyable, public WithContext
 {
 
 public:

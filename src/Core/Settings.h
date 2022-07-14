@@ -563,6 +563,7 @@ class IColumn;
     M(UInt64, cnch_sync_parts_timeout, 10, "Wait for actions to sync the parts in workers within the specified number of seconds. 0 - wait unlimited time.", 0) \
     M(UInt64, part_cache_manager_thread_pool_size, 16, "Number of thread performing background parts info collection in PartCacheManager.", 0) \
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
+    M(UInt64, cnch_part_allocation_algorithm, 0, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing.", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     \
