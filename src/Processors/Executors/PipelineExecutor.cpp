@@ -648,8 +648,6 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
             if (finished)
                 break;
 
-            
-
             addJob(node);
 
             {
@@ -660,6 +658,7 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
                 if (need_processors_profiles)
                     execution_time_watch.emplace();
 #endif  
+
                 node->job();
 
                 if (need_processors_profiles)
