@@ -4,7 +4,8 @@
 #include <Protos/cnch_server_rpc.pb.h>
 #include <Storages/IStorage_fwd.h>
 #include <Transaction/TxnTimestamp.h>
-#include "Transaction/ICnchTransaction.h"
+#include <Transaction/ICnchTransaction.h>
+#include <WorkerTasks/ManipulationType.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Catalog/CatalogUtils.h>
@@ -38,6 +39,7 @@ public:
     void finishTransaction(const TxnTimestamp & txn_id);
 
     ServerDataPartsVector fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+
     void redirectCommitParts(
         const StoragePtr & table,
         const Catalog::CommitItems & commit_data,
@@ -50,6 +52,33 @@ public:
         const Catalog::CommitItems & commit_data,
         const TxnTimestamp & commitTs,
         const UInt64 txn_id);
+
+    TxnTimestamp commitParts(
+        const TxnTimestamp & txn_id,
+        ManipulationType type,
+        MergeTreeMetaBase & storage,
+        const MutableMergeTreeDataPartsCNCHVector & parts,
+        const DeleteBitmapMetaPtrVector & delete_bitmaps,
+        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const String & task_id = {},
+        const bool from_server = false,
+        const String & consumer_group = {},
+        const cppkafka::TopicPartitionList & tpl = {},
+        const String & from_buffer_uuid = {});
+
+    TxnTimestamp precommitParts(
+        const Context & context,
+        const TxnTimestamp & txn_id,
+        ManipulationType type,
+        MergeTreeMetaBase & storage,
+        const MutableMergeTreeDataPartsCNCHVector & parts,
+        const DeleteBitmapMetaPtrVector & delete_bitmaps,
+        const MutableMergeTreeDataPartsCNCHVector & staged_parts,
+        const String & task_id = {},
+        const bool from_server = false,
+        const String & consumer_group = {},
+        const cppkafka::TopicPartitionList & tpl = {},
+        const String & from_buffer_uuid = {});
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);

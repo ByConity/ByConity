@@ -4,6 +4,8 @@
 // #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 // #include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -38,28 +40,28 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     auto catalog = context.getCnchCatalog();
     try
     {
-        // if (!mutation_commands.empty())
-        // {
-        //     /// TODO: write undo buffer before rename
-        //     // updatePartData(part, commit_time);
-        //     // part->renameTo(part->info.getPartName(true));
+        if (!mutation_commands.empty())
+        {
+            /// TODO: write undo buffer before rename
+            // updatePartData(part, commit_time);
+            // part->renameTo(part->info.getPartName(true));
 
-        //     CnchMergeTreeMutationEntry mutation_entry;
-        //     mutation_entry.txn_id = txn_id;
-        //     mutation_entry.commit_time = commit_time;
-        //     mutation_entry.commands = mutation_commands;
-        //     mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
-        //     catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
-        //     if (table->isBucketTable() && mutation_entry.isReclusteringMutation())
-        //         catalog->setTableClusterStatus(table->getStorageUUID(), false);
-        //     LOG_DEBUG(log, "Successfully create mutation for alter query.");
-        // }
+            CnchMergeTreeMutationEntry mutation_entry;
+            mutation_entry.txn_id = txn_id;
+            mutation_entry.commit_time = commit_time;
+            mutation_entry.commands = mutation_commands;
+            mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
+            catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
+            if (table->isBucketTable() && mutation_entry.isReclusteringMutation())
+                catalog->setTableClusterStatus(table->getStorageUUID(), false);
+            LOG_DEBUG(log, "Successfully create mutation for alter query.");
+        }
 
         // auto cache = context.getMaskingPolicyCache();
         // table->checkMaskingPolicy(*cache);
 
         updateTsCache(table->getStorageUUID(), commit_time);
-        // catalog->alterTable(table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
+        catalog->alterTable(table, new_schema, static_cast<StorageCnchMergeTree &>(*table).commit_time, txn_id, commit_time);
         LOG_DEBUG(log, "Successfully change schema in Catalog.");
     }
     catch (...)
