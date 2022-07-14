@@ -663,6 +663,14 @@ Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_cloc
     return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
 }
 
+void Context::initCnchServerResource()
+{
+    if (server_resource)
+        return;
+
+    server_resource = std::make_shared<CnchServerResource>(TxnTimestamp(getTimestamp()));
+}
+
 CnchServerResourcePtr Context::getCnchServerResource()
 {
     /// TODO: replace getTimestamp with txn_id
