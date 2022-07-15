@@ -29,12 +29,6 @@ enum class StatisticsTag : UInt64
 class StatisticsBase
 {
 public:
-    // get the timestamp when stats is collected
-    TxnTimestamp getTxnTimestamp() { return txn_timestamp_; }
-
-    // set the timestamp when stats is collected
-    void setTxnTimestamp(TxnTimestamp ts) { txn_timestamp_ = ts; }
-
     // get type of statistics
     virtual StatisticsTag getTag() const = 0;
 
@@ -54,9 +48,6 @@ public:
 
     virtual ~StatisticsBase() = default;
 
-private:
-    // timestamp when stats is collected
-    TxnTimestamp txn_timestamp_;
 };
 
 using StatisticsBasePtr = std::shared_ptr<StatisticsBase>;
@@ -69,5 +60,5 @@ struct StatsData
 };
 
 // helper function to create statistics object from binary blob
-StatisticsBasePtr createStatisticsBase(StatisticsTag tag, TxnTimestamp ts, std::string_view blob);
+StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob);
 }

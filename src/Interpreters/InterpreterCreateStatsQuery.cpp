@@ -89,14 +89,14 @@ namespace ErrorCodes
 }
 
 // @return: row_count, elapsed_time
-std::tuple<Int64, double> collectStatsOnTable(ContextPtr context, const StatsTableIdentifier & table_info, TxnTimestamp ts)
+std::tuple<Int64, double> collectStatsOnTable(ContextPtr context, const StatsTableIdentifier & table_info)
 {
     auto & logger = Poco::Logger::get("CreateStats");
     Stopwatch watch;
     try
     {
         auto catalog = createCatalogAdaptor(context);
-        StatisticsCollector impl(context, catalog, table_info, ts);
+        StatisticsCollector impl(context, catalog, table_info, 0);
         impl.collectFull();
 
         impl.writeToCatalog();
@@ -145,7 +145,7 @@ namespace
             }
             auto table_identifier = tables.at(counter);
 
-            auto [row_count, elapsed_time] = collectStatsOnTable(context, table_identifier, timestamp);
+            auto [row_count, elapsed_time] = collectStatsOnTable(context, table_identifier);
             ++counter;
             return constructInfoBlock(context, table_identifier.getTableName(), row_count, elapsed_time);
         }

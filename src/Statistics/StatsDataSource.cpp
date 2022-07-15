@@ -113,7 +113,6 @@ StatsCollection StatsDataSource::getSingle(const StatsTableIdentifier & table_id
         initialize();
     }
 
-    auto timestamp = getUpdateTime();
     auto sql_key = toString(table_identifier.getUUID());
     String sql = fmt::format(
         FMT_STRING("select column_name, tag, value "
@@ -140,7 +139,7 @@ StatsCollection StatsDataSource::getSingle(const StatsTableIdentifier & table_id
         {
             auto tag = static_cast<StatisticsTag>(cols[1]->get64(row_id));
             auto value_blob_b64 = cols[2]->getDataAt(row_id);
-            auto value_ptr = createStatisticsBase(tag, timestamp, base64Decode(static_cast<std::string_view>(value_blob_b64)));
+            auto value_ptr = createStatisticsBase(tag, base64Decode(static_cast<std::string_view>(value_blob_b64)));
             // no need to check duplicate
             // if conflicts, just consider both are ok
             stats_collection[tag] = std::move(value_ptr);
@@ -156,7 +155,6 @@ StatsData StatsDataSource::get(const StatsTableIdentifier & table_identifier) co
         initialize();
     }
 
-    auto timestamp = getUpdateTime();
     auto sql_key = toString(table_identifier.getUUID());
     String sql = fmt::format(
         FMT_STRING("select column_name, tag, value "
@@ -195,7 +193,7 @@ StatsData StatsDataSource::get(const StatsTableIdentifier & table_identifier) co
                     return stats_data.column_stats[column_name];
                 }
             }();
-            auto value_ptr = createStatisticsBase(tag, timestamp, base64Decode(static_cast<std::string_view>(value_blob_b64)));
+            auto value_ptr = createStatisticsBase(tag, base64Decode(static_cast<std::string_view>(value_blob_b64)));
             // no need to check duplicate
             // if conflicts, just consider both are ok
             stats_collection[tag] = std::move(value_ptr);

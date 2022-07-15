@@ -91,7 +91,7 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 {
     auto settings = getContext()->getSettingsRef();
     String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName()) + " ENGINE = Cnch";
-    ParserCreateQuery parser(settings.dialect_type);
+    ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     return ast;
 }

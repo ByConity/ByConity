@@ -70,7 +70,7 @@ std::shared_ptr<StatsType> createStatisticsTyped(StatisticsTag tag, std::string_
     }
 }
 
-StatisticsBasePtr createStatisticsBase(StatisticsTag tag, TxnTimestamp ts, std::string_view blob)
+StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
 {
     auto ptr = [&]() -> StatisticsBasePtr {
         switch (tag)
@@ -96,7 +96,6 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, TxnTimestamp ts, std::
             }
         }
     }();
-    ptr->setTxnTimestamp(ts);
 
     return ptr;
 }

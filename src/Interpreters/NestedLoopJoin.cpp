@@ -13,7 +13,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/NestedLoopJoin.h>
 #include <Interpreters/join_common.h>
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <QueryPlan/PlanSerDerHelper.h>

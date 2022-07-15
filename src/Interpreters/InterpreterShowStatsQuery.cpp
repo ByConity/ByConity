@@ -157,7 +157,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             for (auto & [k, v] : table_pb.blobs())
             {
                 auto tag = static_cast<StatisticsTag>(k);
-                auto obj = createStatisticsBase(tag, ts, v);
+                auto obj = createStatisticsBase(tag, v);
                 collection[tag] = std::move(obj);
             }
             StatisticsCollector::TableStats table_stats;
@@ -172,7 +172,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             for (auto & [k, v] : column_pb.blobs())
             {
                 auto tag = static_cast<StatisticsTag>(k);
-                auto obj = createStatisticsBase(tag, ts, v);
+                auto obj = createStatisticsBase(tag, v);
                 collection[tag] = std::move(obj);
             }
             StatisticsCollector::ColumnStats column_stats;
