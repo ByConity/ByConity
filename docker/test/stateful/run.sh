@@ -131,10 +131,6 @@ function run_tests()
         ADDITIONAL_OPTIONS+=('--replicated-database')
     fi
 
-    # enable optimizer
-    clickhouse-test --testname --shard --zookeeper --hung-check --use-skip-list --run stateful --client-option enable_optimizer=1 --print-time "${ADDITIONAL_OPTIONS[@]}" \
-        "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt || true
-
     clickhouse-test --testname --shard --zookeeper --hung-check --use-skip-list --run stateful --print-time "${ADDITIONAL_OPTIONS[@]}" \
         "$SKIP_TESTS_OPTION" 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee test_output/test_result.txt || true
 }

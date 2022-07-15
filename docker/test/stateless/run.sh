@@ -20,6 +20,8 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 mkdir -p test_output
 mkdir -p sanitizer_log_output
 
+bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
+
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_CPU_TIME_PERIOD_US=1000
@@ -76,30 +78,36 @@ function run_tests()
     # more idiologically correct.
     read -ra ADDITIONAL_OPTIONS <<< "${ADDITIONAL_OPTIONS:-}"
 
-#    # Skip these tests, because they fail when we rerun them multiple times
-#    if [ "$NUM_TRIES" -gt "1" ]; then
-#        ADDITIONAL_OPTIONS+=('--order=random')
-#        ADDITIONAL_OPTIONS+=('--skip')
-#        ADDITIONAL_OPTIONS+=('00000_no_tests_to_skip')
-#        # Note that flaky check must be ran in parallel, but for now we run
-#        # everything in parallel except DatabaseReplicated. See below.
-#    fi
-#
-#    if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
-#        ADDITIONAL_OPTIONS+=('--replicated-database')
-#        ADDITIONAL_OPTIONS+=('--jobs')
-#        ADDITIONAL_OPTIONS+=('2')
-#    else
-#        # Too many tests fail for DatabaseReplicated in parallel. All other
-#        # configurations are OK.
-#        ADDITIONAL_OPTIONS+=('--jobs')
-#        ADDITIONAL_OPTIONS+=('16')
-#    fi
-    echo 'Running stateless with locate asan error'
+    # Skip these tests, because they fail when we rerun them multiple times
+    if [ "$NUM_TRIES" -gt "1" ]; then
+        ADDITIONAL_OPTIONS+=('--order=random')
+        ADDITIONAL_OPTIONS+=('--skip')
+        ADDITIONAL_OPTIONS+=('00000_no_tests_to_skip')
+        # Note that flaky check must be ran in parallel, but for now we run
+        # everything in parallel except DatabaseReplicated. See below.
+    fi
+
+    if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
+        ADDITIONAL_OPTIONS+=('--replicated-database')
+        ADDITIONAL_OPTIONS+=('--jobs')
+        ADDITIONAL_OPTIONS+=('2')
+    else
+        # Too many tests fail for DatabaseReplicated in parallel. All other
+        # configurations are OK.
+
+        # set --jobs 16 if no --jobs in ADDITIONAL_OPTIONS
+        NUMBER_OF_LOG=$( echo "${ADDITIONAL_OPTIONS[@]}" | grep -c 'jobs' )
+        if [[ $NUMBER_OF_LOG -eq 0 ]]; then
+          ADDITIONAL_OPTIONS+=('--jobs')
+          ADDITIONAL_OPTIONS+=('16')
+        fi
+    fi
+
+    ps -aux
     clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
-           --use-skip-list --run stateless --client-option enable_optimizer=1 --test-runs 1 --locate-asan-error-to-case  "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
+           --use-skip-list --run stateless --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
-        | tee -a test_output/test_result.txt
+        | tee -a test_output/test_result.txt || true
 }
 
 export -f run_tests
@@ -158,9 +166,6 @@ then
     echo 'Uploading asan log to Artifacts'
     mv /var/log/clickhouse-server/asan.log* /test_output/asan_log/
     cp -r /test_output/asan_log/ /sanitizer_log_output/
-    cp -r /var/log/clickhouse-server/tmp/individual_sanitizer_log/  /test_output/asan_log/individual_sanitizer_log/
-    cp -r /var/log/clickhouse-server/tmp/individual_sanitizer_log/ /sanitizer_log_output/individual_sanitizer_log/
-
 else
     echo "No ASAN logs exists"
 fi
