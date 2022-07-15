@@ -1,17 +1,19 @@
 #pragma once
 
+#include <Disks/IDisk.h>
 #include <IO/HashingWriteBuffer.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
-#include <Disks/IDisk.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Common/config.h>
 // #include <Encryption/AesEncrypt.h>
 
 namespace DB
 {
+class MergeTreeMetaBase;
 
 /** Dump local part to cloud storage
   */
@@ -29,14 +31,8 @@ public:
     MergeTreeCNCHDataDumper(
         MergeTreeMetaBase & data_,
         const CNCHStorageType & type_ = CNCHStorageType::Hdfs,
-        const String magic_code_ = "CNCH",
-        const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION)
-        : data(data_)
-        , log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)"))
-        , type(type_)
-        , magic_code(magic_code_)
-        , version(version_)
-    {}
+        const String & magic_code_ = "CNCH",
+        const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);
 
     /** Dump local part,
       * Returns cnch part with unique name starting with 'tmp_',
@@ -84,7 +80,7 @@ public:
       * metainfo key (32 bytes)
       * --------------------------------
       */
-    MutableMergeTreeDataPartCNCHPtr dumpTempPart(std::shared_ptr<const MergeTreeDataPartCNCH> local_part, const HDFSConnectionParams & connectionParams = HDFSConnectionParams::emptyHost() ,bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr);
+    MutableMergeTreeDataPartCNCHPtr dumpTempPart(const IMutableMergeTreeDataPartPtr & local_part, const HDFSConnectionParams & connectionParams = HDFSConnectionParams::emptyHost() ,bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr);
 
 private:
     struct CNCHDataMeta
@@ -114,7 +110,7 @@ private:
     std::unique_ptr<ReadBufferFromFileBase> createReadBuffer(const String & file_name, const CNCHStorageType & type);
     void writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part);
     void writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta);
-    size_t check(MergeTreeDataPartCNCHPtr remote_part, const MergeTreeDataPartCNCH::ChecksumsPtr & checksums, const CNCHDataMeta & meta);
+    size_t check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta);
 
     NamesAndTypesList getKeyColumns();
 

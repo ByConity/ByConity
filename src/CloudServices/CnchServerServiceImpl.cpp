@@ -81,7 +81,6 @@ void CnchServerServiceImpl::commitParts(
                 if (req->has_from_buffer_uuid())
                     from_buffer_uuid = req->from_buffer_uuid();
 
-                TxnTimestamp commit_time;
                 /// check and parse offsets
                 String consumer_group;
                 cppkafka::TopicPartitionList tpl;
@@ -94,18 +93,18 @@ void CnchServerServiceImpl::commitParts(
 
                     LOG_TRACE(&Poco::Logger::get("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
                 }
-                PreparedCnchParts params
-                {
-                    .type = ManipulationType(req->type()),
-                    .task_id = req->task_id(),
-                    .consumer_group = std::move(consumer_group),
-                    .from_buffer_uuid = std::move(from_buffer_uuid),
-                    .prepared_parts = {parts.begin(), parts.end()},
-                    .prepared_staged_parts = {staged_parts.begin(), staged_parts.end()},
-                    .delete_bitmaps = std::move(delete_bitmaps)
-                };
 
-                commitPreparedCnchParts(storage, *rpc_context, params, commit_time);
+                CnchDataWriter cnch_writer(
+                    *cnch,
+                    *rpc_context,
+                    ManipulationType(req->type()),
+                    req->task_id(),
+                    std::move(from_buffer_uuid),
+                    std::move(consumer_group),
+                    tpl);
+
+                TxnTimestamp commit_time
+                    = cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
                 rsp->set_commit_timestamp(commit_time);
             }
             catch (...)
