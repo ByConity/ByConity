@@ -12,6 +12,7 @@
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+#include <IO/ReadBufferFromString.h>
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>

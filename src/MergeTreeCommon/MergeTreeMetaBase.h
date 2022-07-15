@@ -49,8 +49,8 @@ public:
 
     using DataPartsLock = std::unique_lock<std::shared_mutex>;
     using DataPartsReadLock = std::shared_lock<std::shared_mutex>;
-    virtual DataPartsLock lockParts() const { return {}; }
-    virtual DataPartsReadLock lockPartsRead() const { return {}; }
+    DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
+    DataPartsReadLock lockPartsRead() const { return DataPartsReadLock(data_parts_mutex); }
 
     using DeleteBitmapGetter = std::function<DeleteBitmapPtr(const DataPartPtr &)>;
     using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
@@ -163,12 +163,18 @@ public:
     String getStorageUniqueID() const;
 
     //// Data parts
+    /// Returns a copy of the list so that the caller shouldn't worry about locks.
+    DataParts getDataParts(const DataPartStates & affordable_states) const;
+    /// Returns sorted list of the parts with specified states
+    ///  out_states will contain snapshot of each part state
+    DataPartsVector getDataPartsVector(
+        const DataPartStates & affordable_states, DataPartStateVector * out_states = nullptr, bool require_projection_parts = false) const;
+    /// Returns all parts in specified partition
+    DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) const;
 
     /// Returns Committed parts
-    virtual DataParts getDataParts() const { return {}; }
-    virtual DataPartsVector getDataPartsVector() const { return {}; }
-    /// Returns all parts in specified partition
-    virtual DataPartsVector getDataPartsVectorInPartition(DataPartState /*state*/, const String & /*partition_id*/) { return {}; }
+    DataParts getDataParts() const;
+    DataPartsVector getDataPartsVector() const;
 
     /// Returns the part with the given name and state or nullptr if no such part.
     DataPartPtr getPartIfExists(const String & part_name, const DataPartStates & valid_states);
@@ -178,6 +184,7 @@ public:
     bool hasPart(const String & part_name, const DataPartStates & valid_states);
     bool hasPart(const MergeTreePartInfo & part_info, const DataPartStates & valid_states);
 
+    /// TODO:
     /// Total size of active parts in bytes.
     virtual size_t getTotalActiveSizeInBytes() const { return 1.0; }
 
@@ -207,6 +214,13 @@ public:
         auto lock = lockPartsRead();
         return column_sizes;
     }
+
+    /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
+    void calculateColumnSizesImpl();
+
+    /// Adds or subtracts the contribution of the part to compressed column sizes.
+    void addPartContributionToColumnSizes(const DataPartPtr & part);
+    void removePartContributionToColumnSizes(const DataPartPtr & part);
 
     /// For ATTACH/DETACH/DROP PARTITION.
     String getPartitionIDFromQuery(const ASTPtr & ast, ContextPtr context) const;
@@ -414,6 +428,47 @@ protected:
 
     using DataPartIteratorByInfo = DataPartsIndexes::index<TagByInfo>::type::iterator;
     using DataPartIteratorByStateAndInfo = DataPartsIndexes::index<TagByStateAndInfo>::type::iterator;
+
+    boost::iterator_range<DataPartIteratorByStateAndInfo> getDataPartsStateRange(DataPartState state) const
+    {
+        auto begin = data_parts_by_state_and_info.lower_bound(state, LessStateDataPart());
+        auto end = data_parts_by_state_and_info.upper_bound(state, LessStateDataPart());
+        return {begin, end};
+    }
+
+    boost::iterator_range<DataPartIteratorByInfo> getDataPartsPartitionRange(const String & partition_id) const
+    {
+        auto begin = data_parts_by_info.lower_bound(PartitionID(partition_id), LessDataPart());
+        auto end = data_parts_by_info.upper_bound(PartitionID(partition_id), LessDataPart());
+        return {begin, end};
+    }
+
+    static decltype(auto) getStateModifier(DataPartState state)
+    {
+        return [state] (const DataPartPtr & part) { part->setState(state); };
+    }
+
+    void modifyPartState(DataPartIteratorByStateAndInfo it, DataPartState state)
+    {
+        if (!data_parts_by_state_and_info.modify(it, getStateModifier(state)))
+            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    void modifyPartState(DataPartIteratorByInfo it, DataPartState state)
+    {
+        if (!data_parts_by_state_and_info.modify(data_parts_indexes.project<TagByStateAndInfo>(it), getStateModifier(state)))
+            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
+    }
+
+    void modifyPartState(const DataPartPtr & part, DataPartState state)
+    {
+        auto it = data_parts_by_info.find(part->info);
+        if (it == data_parts_by_info.end() || (*it).get() != part.get())
+            throw Exception("Part " + part->name + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
+
+        if (!data_parts_by_state_and_info.modify(data_parts_indexes.project<TagByStateAndInfo>(it), getStateModifier(state)))
+            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
+    }
 
     /// FIXME: add after supporting primary index cache
     // PrimaryIndexCachePtr primary_index_cache;
