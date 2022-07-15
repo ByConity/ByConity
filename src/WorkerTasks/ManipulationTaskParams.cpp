@@ -100,4 +100,5 @@ void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
     assignSourcePartsImpl(parts);
     source_data_parts = std::move(parts);
 }
+
 }

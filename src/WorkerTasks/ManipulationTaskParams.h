@@ -27,9 +27,9 @@ struct ManipulationTaskParams
     StoragePtr storage; /// On which storage this manipulate task should run
     bool is_bucket_table{false}; /// mark if the table is treated as bucket table when create this manipulation task
 
-    ServerDataPartsVector source_parts; /// Used by server
-    MergeTreeDataPartsVector source_data_parts; // Used by worker
-    MergeTreeDataPartsVector all_parts; /// Used by callee
+    ServerDataPartsVector source_parts;         /// Used by server
+    MergeTreeDataPartsVector source_data_parts; /// Used by worker
+    MergeTreeDataPartsVector all_parts;         /// Used by callee
     Strings new_part_names;
 
     TxnTimestamp columns_commit_time;
@@ -37,7 +37,7 @@ struct ManipulationTaskParams
 
     std::shared_ptr<MutationCommands> mutation_commands;
 
-    ManipulationTaskParams(StoragePtr s) : storage(std::move(s)) { }
+    explicit ManipulationTaskParams(StoragePtr s) : storage(std::move(s)) {}
     ManipulationTaskParams(const ManipulationTaskParams &) = default;
     ManipulationTaskParams & operator=(const ManipulationTaskParams &) = default;
     ManipulationTaskParams(ManipulationTaskParams &&) = default;

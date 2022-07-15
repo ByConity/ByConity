@@ -94,7 +94,7 @@ class MergeTreeDataMergerMutator
 {
 public:
     using AllowedMergingPredicate = std::function<bool (const MergeTreeMetaBase::DataPartPtr &, const MergeTreeMetaBase::DataPartPtr &, String *)>;
-    
+
     /// The i-th row in the merged part is from part PartIdMapping[i]
     using PartIdMapping = PODArray<UInt32, /*INITIAL_SIZE*/1024>;
 
@@ -207,36 +207,36 @@ private:
     /*
      * Performance test result: https://bytedance.feishu.cn/docs/doccnilaBbofUvfnQ3zBuLQKjFe#o66usm
      * Based on the performance test result of writing row store, serialize value step is the most time-consuming, so it's necessary to use the serialized value in row store of old parts.
-     * 
+     *
      * Due to add/drop columns command, merge row store should handle three cases:
      * Case1: Exact Match
-     * 
+     *
      * Origin, there has 3 columns a,b,c and 2 part:
      * [Part 1]row store columns:{a   b   c}, removed column: {}
      * [Part 2]row store columns:{a   b   c}, removed column: {}
      * In this case, we can directly use origin serialized value of each row for two parts and contruct new row store.
-     * 
+     *
      * Case 2: Prefix Match
-     * 
+     *
      * Origin, there has 3 columns a,b,c and 1 part:
      * [Part 1]row store columns:{a   b   c}, removed column: {}
      * Then add columns d after c, and write a new part:
      * [Part 1]row store columns:{a   b   c}, removed column: {}
      * [Part 2]row store columns:{a   b   c   d}, removed column: {}
-     * In this case, we can directly use origin serialized value of each row for part 2. 
+     * In this case, we can directly use origin serialized value of each row for part 2.
      * But for part 1, we need to append value using defaule value of column d for each row.
-     * 
+     *
      * Case 3: Mismatch
      * Origin, there has 3 columns a,b,c and 1 part:
      * [Part 1]row store columns:{a   b   c}, removed column: {}
      * Then add columns d before c, and write a new part:
      * [Part 1]row store columns:{a   b   c}, removed column: {}
      * [Part 2]row store columns:{a   b   d   c}, removed column: {}
-     * In this case, we can directly use origin serialized value of each row for part 2. 
+     * In this case, we can directly use origin serialized value of each row for part 2.
      * But for part 1, we need to rewrite each row.
-     * 
+     *
      * In the fact that rewrite case need to take twice time to write row store, thus (Condition 1)if Mismatch row number is more than half of the total row number, it is better to generating row store from storage.
-     * 
+     *
      * We divide the process into several phases:
      * Phase 1: Get row store meta and row count of old parts. If any part doesn't have row store, return false to generate row store from storage.
      * Phase 2: Check metadata of columns. If it match Condition 1, return false to generate row store from storage.
@@ -381,7 +381,7 @@ public :
         MergeTreeMetaBase::MutableDataPartPtr new_data_part,
         bool need_remove_expired_values,
         const CompressionCodecPtr & codec);
-    
+
     /** Is used to cancel all merges and mutations. On cancel() call all currently running actions will throw exception soon.
       * All new attempts to start a merge or mutation will throw an exception until all 'LockHolder' objects will be destroyed.
       */
@@ -400,8 +400,6 @@ private:
 
     bool checkOperationIsNotCanceled(const MergeListEntry & merge_entry) const;
 
-
-private:
     MergeTreeMetaBase & data;
     const size_t background_pool_size;
 

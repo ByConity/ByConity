@@ -160,11 +160,11 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     index_granularity.setInitialized();
 }
 
-void MergeTreeDataPartWide::loadIndexGranularity(const size_t marks_count, const std::vector<size_t> & index_granularities)
+void MergeTreeDataPartWide::loadIndexGranularity(size_t marks_count, const std::vector<size_t> & index_granularities)
 {
     /// The empty marks means using fixed index granularity
     if (index_granularities.empty())
-        index_granularity_info.setNonAdaptive(); 
+        index_granularity_info.setNonAdaptive();
 
     if (!index_granularity_info.is_adaptive)
     {
@@ -172,7 +172,7 @@ void MergeTreeDataPartWide::loadIndexGranularity(const size_t marks_count, const
     }
     else
     {
-        for (auto & granularity : index_granularities)
+        for (const auto & granularity : index_granularities)
             index_granularity.appendMark(granularity);
     }
     index_granularity.setInitialized();
@@ -197,7 +197,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
                 //@ByteMap
                 if (name_type.type->isMap() && !name_type.type->isMapKVStore())
                     continue;
-            
+
                 auto serialization = getSerializationForColumn(name_type);
                 serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
                 {
@@ -224,7 +224,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
             //@ByteMap
             if (name_type.type->isMap() && !name_type.type->isMapKVStore())
                 continue;
-            
+
             auto serialization = IDataType::getSerialization(name_type,
                 [&](const String & stream_name)
                 {

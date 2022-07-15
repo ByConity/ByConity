@@ -1,4 +1,4 @@
-#include "IMergeTreeDataPart.h"
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
 
 #include <optional>
 #include <Core/Defines.h>
@@ -2175,7 +2175,7 @@ String IMergeTreeDataPart::getDeleteFilePath() const
     return getFullPath() + delete_file_prefix + ".del";
 }
 
-void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync)
+void IMergeTreeDataPart::writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync) const
 {
     WriteBufferFromFile file_out(getDeleteFilePath(), 4096);
     HashingWriteBuffer out(file_out);
@@ -2672,4 +2672,3 @@ void IMergeTreeDataPart::deserializePartitionAndMinMaxIndex(ReadBuffer & buffer)
 
 /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 }
-

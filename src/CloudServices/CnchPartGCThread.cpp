@@ -5,7 +5,8 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -177,14 +178,14 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
     if (!metadata_snapshot->hasPartitionLevelTTL())
         return;
 
-    auto & partition_key_description = metadata_snapshot->partition_key;
-    auto & rows_ttl = metadata_snapshot->table_ttl.rows_ttl;
+    const auto & partition_key_description = metadata_snapshot->partition_key;
+    const auto & rows_ttl = metadata_snapshot->table_ttl.rows_ttl;
 
     time_t now = time(nullptr);
     NameOrderedSet partitions_to_clean;
 
     const String * curr_partition = nullptr;
-    for (auto & part : visible_parts)
+    for (const auto & part : visible_parts)
     {
         if (curr_partition && *curr_partition == part->get_info().partition_id)
             continue;
@@ -237,8 +238,8 @@ void CnchPartGCThread::collectBetweenCheckpoints(
     ServerDataPartsVector stale_parts;
     DeleteBitmapMetaPtrVector stale_bitmaps;
 
-    for (auto & part : visible_parts)
-        collectStaleParts(part, begin, end, false, stale_parts, log);
+    for (const auto & part : visible_parts)
+        collectStaleParts(part, begin, end, false, stale_parts);
     // for (auto & bitmap : visible_bitmaps)
     //     collectStaleBitmaps(bitmap, begin, end, false, stale_bitmaps);
 
@@ -265,10 +266,9 @@ void CnchPartGCThread::collectStaleParts(
     TxnTimestamp begin,
     TxnTimestamp end,
     bool has_visible_ancestor,
-    ServerDataPartsVector & stale_parts,
-    Poco::Logger * log_)
+    ServerDataPartsVector & stale_parts) const
 {
-    if (auto & prev_part = parent_part->tryGetPreviousPart())
+    if (const auto & prev_part = parent_part->tryGetPreviousPart())
     {
         bool child_has_visible_ancestor = has_visible_ancestor /* inherit from parent */
             || (UInt64(parent_part->getCommitTime()) <= UInt64(end) /* parent is visible */
@@ -277,11 +277,11 @@ void CnchPartGCThread::collectStaleParts(
         if (child_has_visible_ancestor && UInt64(prev_part->getCommitTime()) > UInt64(begin))
         {
             LOG_DEBUG(
-                log_, "Will remove part {} covered by {} /partial={}", prev_part->name(), parent_part->name(), parent_part->isPartial());
+                log, "Will remove part {} covered by {} /partial={}", prev_part->name(), parent_part->name(), parent_part->isPartial());
             stale_parts.push_back(prev_part);
         }
 
-        collectStaleParts(prev_part, begin, end, child_has_visible_ancestor, stale_parts, log_);
+        collectStaleParts(prev_part, begin, end, child_has_visible_ancestor, stale_parts);
     }
 }
 
@@ -330,8 +330,10 @@ void CnchPartGCThread::pushToRemovingQueue(
     /// ThreadPool remove_pool(storage_settings->gc_remove_part_thread_pool_size);
     ThreadPool remove_pool(32);
 
-    auto batch_remove = [&](size_t start, size_t end) {
-        remove_pool.scheduleOrThrowOnError([&, start, end] {
+    auto batch_remove = [&](size_t start, size_t end)
+    {
+        remove_pool.scheduleOrThrowOnError([&, start, end]
+        {
             MergeTreeDataPartsCNCHVector remove_parts;
             for (auto it = parts.begin() + start; it != parts.begin() + end; ++it)
             {
@@ -356,7 +358,7 @@ void CnchPartGCThread::pushToRemovingQueue(
             else
                 catalog->clearStagePartsMeta(storage.shared_from_this(), remove_parts);
 
-            if (auto server_part_log = local_context->getServerPartLog()) /// TODO: use SCOPE_EXIT
+            if (auto server_part_log = local_context->getServerPartLog())
             {
                 auto now = time(nullptr);
 
@@ -379,15 +381,14 @@ void CnchPartGCThread::pushToRemovingQueue(
     };
 
     /// size_t batch_size = storage_settings->gc_remove_part_batch_size;
-    size_t batch_size = 100;
-    size_t s = 0;
+    constexpr static size_t batch_size = 1000;
 
-    while (s + batch_size < parts.size())
+    for (size_t start = 0; start < parts.size(); start += batch_size)
     {
-        batch_remove(s, s + batch_size);
-        s += batch_size;
+        auto end = std::min(start + batch_size, parts.size());
+        batch_remove(start, end);
     }
-    batch_remove(s, parts.size());
+
     remove_pool.wait();
 }
 

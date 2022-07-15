@@ -15,6 +15,8 @@ public:
     /// Load the set of data parts from disk. Call once - immediately after the object is created.
     void loadDataParts(const MutableDataPartsVector & data_parts);
 
+    void manipulate(const ManipulationTaskParams & input_params, ContextPtr task_context) override;
+
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
 
 protected:

@@ -1,21 +1,21 @@
 #include <WorkerTasks/ManipulationList.h>
 
-#include <WorkerTasks/ManipulationTaskParams.h>
-#include <Storages/MergeTree/IMergeTreeDataPart.h>
-/// #include <Storages/StorageCloudMergeTree.h>
+#include <Catalog/DataModelPartWrapper.h>
 #include <Common/CurrentThread.h>
-/// #include <CatalogService/DataModelPartWrapper.h>
-
 #include <common/getThreadId.h>
+#include <Storages/IStorage.h>
+#include <Storages/MergeTree/IMergeTreeDataPart.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
+
 
 namespace CurrentMetrics
 {
-extern const Metric MemoryTrackingForMerges;
+    extern const Metric MemoryTrackingForMerges;
 }
-
 
 namespace DB
 {
+
 ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker)
     : type(params.type)
     , task_id(params.task_id)
@@ -45,7 +45,6 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
             total_rows_count += source_part->index_granularity.getTotalRows();
         }
     }
-    /*
     else
     {
         partition_id = params.source_parts.front()->info().partition_id;
@@ -60,7 +59,6 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
             total_rows_count += source_part->part_model().rows_count();
         }
     }
-    */
 
     /// Each merge is executed into separate background processing pool thread
     /// we disable memory_tracker in cnchMergeThread, since it may cause coredump,

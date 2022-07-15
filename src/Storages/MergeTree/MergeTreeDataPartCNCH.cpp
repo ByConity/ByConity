@@ -1,4 +1,4 @@
-#include "MergeTreeDataPartCNCH.h"
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <IO/LimitReadBuffer.h>
@@ -126,7 +126,7 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
 };
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(
-    [[maybe_unused]] const size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
+    [[maybe_unused]] size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
     if (index_granularities.empty())
         throw Exception("MergeTreeDataPartCNCH cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
@@ -283,6 +283,8 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
 }
 
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(
-    [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const {};
+    [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const
+{
+}
 
 }

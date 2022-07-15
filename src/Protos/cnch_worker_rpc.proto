@@ -17,17 +17,14 @@ message SubmitManipulationTaskReq
   required uint32 rpc_port = 5;
   required uint64 columns_commit_time = 6;
 
-  optional string database = 7; // deprecated
-  optional string table = 8;    // deprecated
-  optional string create_table_query = 9;
-  repeated DataModelPart source_parts = 10;
+  optional string create_table_query = 7;
+  repeated DataModelPart source_parts = 8;
 
   /// Mutation task
-  optional uint64 mutation_commit_time = 11;
-  optional string mutate_commands = 12;
+  optional uint64 mutation_commit_time = 9;
+  optional string mutate_commands = 10;
   /// used to mark task of bucket table
-  optional bool is_bucket_table = 13;
-  optional bool is_unique_table = 14; // deprecated
+  optional bool is_bucket_table = 11;
 }
 
 message SubmitManipulationTaskResp
@@ -445,7 +442,8 @@ message SendFinishTaskResp
   optional string exception = 1;
 }
 
-service CnchWorkerService {
+service CnchWorkerService
+{
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
 
   rpc submitManipulationTask(SubmitManipulationTaskReq) returns (SubmitManipulationTaskResp);

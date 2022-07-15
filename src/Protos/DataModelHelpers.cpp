@@ -120,15 +120,15 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
 
 DataPartInfoPtr createPartInfoFromModel(const Protos::DataModelPartInfo & part_info_model)
 {
-    auto partInfo_ptr = std::make_shared<MergeTreePartInfo>();
-    partInfo_ptr->partition_id = part_info_model.partition_id();
-    partInfo_ptr->min_block = part_info_model.min_block();
-    partInfo_ptr->max_block = part_info_model.max_block();
-    partInfo_ptr->level = part_info_model.level();
-    partInfo_ptr->mutation = part_info_model.mutation();
-    partInfo_ptr->hint_mutation = part_info_model.hint_mutation();
-    partInfo_ptr->storage_type = StorageType::HDFS;
-    return partInfo_ptr;
+    auto part_info_ptr = std::make_shared<MergeTreePartInfo>();
+    part_info_ptr->partition_id = part_info_model.partition_id();
+    part_info_ptr->min_block = part_info_model.min_block();
+    part_info_ptr->max_block = part_info_model.max_block();
+    part_info_ptr->level = part_info_model.level();
+    part_info_ptr->mutation = part_info_model.mutation();
+    part_info_ptr->hint_mutation = part_info_model.hint_mutation();
+    part_info_ptr->storage_type = StorageType::HDFS;
+    return part_info_ptr;
 }
 
 MutableMergeTreeDataPartCNCHPtr createPartFromModel(
@@ -159,7 +159,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     return part;
 }
 
-/// MOCK get namenode_id 
+/// MOCK get namenode_id
 UInt32 getNameNodeIdForDisk(const StoragePolicyPtr& , const DiskPtr& )
 {
     return 0;
@@ -237,7 +237,7 @@ void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInf
 void fillPartsModelForSend(const IStorage & storage, const ServerDataPartsVector & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
 {
     std::set<UInt64> sent_columns_commit_time;
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         auto & part_model = *parts_model.Add();
         part_model = part->part_model();

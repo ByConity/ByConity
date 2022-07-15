@@ -1,9 +1,9 @@
 #include <CloudServices/ICnchBGThread.h>
 
-// #include <CatalogService/Catalog.h>
+#include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeData.h>
-// #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 // #include <Storages/Kafka/StorageCnchKafka.h>
 // #include <MergeTreeCommon/CnchServerClientPool.h>
 
@@ -13,7 +13,7 @@ ICnchBGThread::ICnchBGThread(ContextPtr global_context_, CnchBGThreadType thread
     : WithContext(global_context_)
     , thread_type(thread_type_)
     , storage_id(storage_id_)
-    // , catalog(context.getCnchCatalog())
+    , catalog(global_context_->getCnchCatalog())
     , log(&Poco::Logger::get(storage_id.getNameForLogs() + "(" + toString(thread_type) + ")"))
     , scheduled_task(global_context_->getSchedulePool().createTask(log->name(), [this] { run(); }))
     , startup_time(time(nullptr))
@@ -112,15 +112,15 @@ StoragePtr ICnchBGThread::getStorageFromCatalog()
     }
 }
 
-/*
-StorageCnchMergeTree & ICnchBGThread::checkAndGetCnchTable(StoragePtr & storage) const
+StorageCnchMergeTree & ICnchBGThread::checkAndGetCnchTable(StoragePtr & storage)
 {
     if (auto * t = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
         return *t;
     throw Exception("Table " + storage->getStorageID().getNameForLogs() + " is not StorageCnchMergeTree", ErrorCodes::LOGICAL_ERROR);
 }
 
-StorageCnchKafka & ICnchBGThread::checkAndGetCnchKafka(StoragePtr & storage) const
+/*
+StorageCnchKafka & ICnchBGThread::checkAndGetCnchKafka(StoragePtr & storage)
 {
     if (auto * t = dynamic_cast<StorageCnchKafka *>(storage.get()))
         return *t;

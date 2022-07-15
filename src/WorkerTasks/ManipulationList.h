@@ -3,10 +3,11 @@
 #include <Core/Names.h>
 #include <Core/Field.h>
 #include <Core/UUID.h>
-#include <WorkerTasks/ManipulationType.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
+#include <Storages/MergeTree/BackgroundProcessList.h>
+#include <WorkerTasks/ManipulationType.h>
 
 #include <atomic>
 #include <list>
@@ -101,95 +102,26 @@ struct ManipulationListElement : boost::noncopyable
     /// Poco thread number used in logs
     UInt64 thread_id;
 
-    ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker = false);
+    ManipulationListElement(const ManipulationTaskParams & params, bool disable_memory_tracker);
 
     ~ManipulationListElement();
 
     ManipulationInfo getInfo() const;
 };
 
-class ManipulationList;
+using ManipulationListEntry = BackgroundProcessListEntry<ManipulationListElement, ManipulationInfo>;
 
-class ManipulationListEntry
+class ManipulationList final : public BackgroundProcessList<ManipulationListElement, ManipulationInfo>
 {
-    ManipulationList * list;
-    using container_t = std::list<ManipulationListElement>;
-    container_t::iterator it;
-
-    CurrentMetrics::Increment inc{CurrentMetrics::Manipulation};
-
-    ManipulationListEntry(const ManipulationListEntry &) = delete;
-    ManipulationListEntry & operator=(const ManipulationListEntry &) = delete;
-
-public:
-    ManipulationListEntry(ManipulationListEntry && rhs) { *this = std::move(rhs); }
-    ManipulationListEntry & operator=(ManipulationListEntry && rhs)
-    {
-        list = rhs.list;
-        it = rhs.it;
-        rhs.list = nullptr;
-        return *this;
-    }
-
-    ManipulationListEntry(ManipulationList & l, const container_t::iterator i) : list(&l), it(i) { }
-    ~ManipulationListEntry();
-
-    ManipulationListElement * operator->() { return &*it; }
-    const ManipulationListElement * operator->() const { return &*it; }
-
-    ManipulationListElement * get() { return &*it; }
-    const ManipulationListElement * get() const { return &*it; }
-};
-
-class ManipulationList
-{
-    friend class ManipulationListEntry;
-    using container_t = std::list<ManipulationListElement>;
-    using info_container_t = std::vector<ManipulationInfo>;
-
-    mutable std::mutex mutex;
-    container_t container;
+private:
+    using Parent = BackgroundProcessList<ManipulationListElement, ManipulationInfo>;
 
 public:
     using Entry = ManipulationListEntry;
 
-    template <typename... Args>
-    Entry insert(Args &&... args)
-    {
-        std::lock_guard lock{mutex};
-        return Entry(*this, container.emplace(container.end(), std::forward<Args>(args)...));
-    }
-
-    size_t size() const
-    {
-        std::lock_guard lock(mutex);
-        return container.size();
-    }
-
-    info_container_t get() const
-    {
-        std::lock_guard lock{mutex};
-        info_container_t res;
-        for (const auto & elem : container)
-            res.emplace_back(elem.getInfo());
-        return res;
-    }
-
-    template <class F>
-    void apply(F && f)
-    {
-        std::lock_guard lock(mutex);
-        f(container);
-    }
+    ManipulationList()
+        : Parent(CurrentMetrics::Manipulation)
+    {}
 };
-
-inline ManipulationListEntry::~ManipulationListEntry()
-{
-    if (list)
-    {
-        std::lock_guard lock(list->mutex);
-        list->container.erase(it);
-    }
-}
 
 }

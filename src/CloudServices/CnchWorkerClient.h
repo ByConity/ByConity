@@ -14,7 +14,9 @@ namespace Protos
     class CnchWorkerService_Stub;
 }
 
+class MergeTreeMetaBase;
 struct StorageID;
+struct ManipulationTaskParams;
 
 class CnchWorkerClient : public RpcClientBase
 {
@@ -24,6 +26,12 @@ public:
     explicit CnchWorkerClient(String host_port_);
     explicit CnchWorkerClient(HostWithPorts host_ports_);
     ~CnchWorkerClient() override;
+
+    void submitManipulationTask(
+        const MergeTreeMetaBase & storage,
+        const ManipulationTaskParams & params,
+        TxnTimestamp txn_id,
+        TxnTimestamp begin_ts);
 
     /// send resource to worker
     void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries);

@@ -19,8 +19,8 @@ enum LoggingOption
 
 LoggingOption getLoggingOption(const Context & c);
 
-MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flattern, LoggingOption logging = DisableLogging);
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flattern, LoggingOption logging = DisableLogging);
+MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
 
 ServerDataPartsVector calcVisiblePartsForGC(
     ServerDataPartsVector & all_parts,

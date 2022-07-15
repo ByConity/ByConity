@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Common/PODArray.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Processors/Pipe.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
@@ -7,7 +8,6 @@
 #include <Storages/StorageInMemoryMetadata.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationProgress.h>
-#include <Common/PODArray.h>
 
 #include <common/logger_useful.h>
 
@@ -26,7 +26,7 @@ struct MergeTreeWriterSettings;
 class CompressedReadBufferFromFile;
 class CnchMergePrefetcher;
 class MergedBlockOutputStream;
-class MergeTreeData;
+class MergeTreeMetaBase;
 
 class MergeTreeDataMerger
 {
@@ -35,7 +35,7 @@ public:
     using CheckCancelCallback = std::function<bool()>;
 
     MergeTreeDataMerger(
-        MergeTreeData & data_,
+        MergeTreeMetaBase & data_,
         const ManipulationTaskParams & params_,
         ContextPtr context_,
         ManipulationListElement * manipulation_entry_,
@@ -78,7 +78,7 @@ private:
     void finalizePart();
 
 private:
-    MergeTreeData & data;
+    MergeTreeMetaBase & data;
     MergeTreeSettingsPtr data_settings;
     StorageMetadataPtr metadata_snapshot;
 

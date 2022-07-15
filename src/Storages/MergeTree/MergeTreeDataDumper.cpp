@@ -4,16 +4,17 @@
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
 #include <Storages/MergeTree/MergeTreeDataDumper.h>
-#include <Storages/MergeTree/MergeTreeDataPart.h>
 #include <Common/escapeForFileName.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int BAD_HDFS_META_FILE;
-        extern const int BAD_HDFS_DATA_FILE;
-    }
+
+namespace ErrorCodes
+{
+    extern const int BAD_HDFS_META_FILE;
+    extern const int BAD_HDFS_DATA_FILE;
+}
 
 std::unique_ptr<WriteBuffer> MergeTreeDataDumper::createWriteBuffer(const String & file_name, const StorageType & /*type*/)
 {
@@ -132,9 +133,9 @@ void MergeTreeDataDumper::check(MergeTreeMetaBase::DataPartPtr remote_part, uint
 }
 
 MergeTreeMetaBase::MutableDataPartPtr
-MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, const StorageLevel storage_level)
+MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, StorageLevel storage_level)
 {
-    const String TMP_PREFIX = "tmp_dump_";
+    const String tmp_prefix = "tmp_dump_";
     String partition_id = staled_part->info.partition_id;
     Int64 min_block = staled_part->info.min_block;
     Int64 max_block = staled_part->info.max_block;
@@ -150,9 +151,9 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, co
     DiskPtr disk = space_reservation->getDisk();
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part_name, disk, 0);
-    auto new_part = std::make_shared<MergeTreeDataPart>(data, part_name, new_part_info, single_disk_volume, TMP_PREFIX + part_name);
+    auto new_part = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, single_disk_volume, tmp_prefix + part_name);
     new_part->partition.assign(staled_part->partition);
-    new_part->prepared_checksums = std::make_shared<MergeTreeDataPart::Checksums>(*staled_part->getChecksums());
+    new_part->prepared_checksums = std::make_shared<MergeTreeDataPartChecksums>(*staled_part->getChecksums());
     new_part->prepared_checksums->storage_type = StorageType::HDFS;
     new_part->minmax_idx = staled_part->minmax_idx;
     new_part->rows_count = staled_part->rows_count;
@@ -200,7 +201,7 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, co
             copyMetaFile(*in, meta_out_hashing, file_size);
             new_part->prepared_checksums->files.erase(file_name);
         };
-        if (data.primary_key_columns.size())
+        if (!data.primary_key_columns.empty())
             copy_meta_file("primary.idx");
         if (data.format_version >= MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
         {
@@ -235,7 +236,7 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, co
         std::unique_ptr<WriteBuffer> data_out = createWriteBuffer(data_file_name, type);
         writeDataFileHeader(*data_out);
 
-        for (auto file : new_part->prepared_checksums->files)
+        for (const auto & file : new_part->prepared_checksums->files)
         {
             String file_path = staled_part->getFullPath() + "/" + file.first;
             ReadBufferFromFile from(file_path);

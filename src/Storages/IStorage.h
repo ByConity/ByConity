@@ -66,6 +66,8 @@ struct StreamLocalLimits;
 class EnabledQuota;
 struct SelectQueryInfo;
 
+struct ManipulationTaskParams;
+
 using NameDependencies = std::unordered_map<String, std::vector<String>>;
 
 using PartNamesWithDisks = std::vector<std::pair<String, DiskPtr>>;
@@ -345,7 +347,7 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/);
 
-    /// A version of read that creating ReadFromStorageStep for Distributed Stages Mode. 
+    /// A version of read that creating ReadFromStorageStep for Distributed Stages Mode.
     virtual void read(
         QueryPlan & query_plan,
         const Names & /*column_names*/,
@@ -493,6 +495,12 @@ public:
         throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    /// Manipulate the table contents
+    virtual void manipulate(const ManipulationTaskParams &, ContextPtr)
+    {
+        throw Exception("Manipulate are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     /// Cancel a mutation.
     virtual CancellationCode killMutation(const String & /*mutation_id*/)
     {
@@ -628,7 +636,7 @@ public:
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
 
     void serialize(WriteBuffer & buf) const;
-    static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context); 
+    static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context);
 
     bool is_detached{false};
 

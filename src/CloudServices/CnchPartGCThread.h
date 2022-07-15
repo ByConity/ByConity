@@ -38,13 +38,12 @@ private:
         StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & reason, bool is_staged_part = false);
     // void removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason);
 
-    static void collectStaleParts(
-        const ServerDataPartPtr & root_part,
+    void collectStaleParts(
+        const ServerDataPartPtr & parent_part,
         TxnTimestamp begin,
         TxnTimestamp end,
-        bool has_visie_ancestor,
-        ServerDataPartsVector & stale_parts,
-        Poco::Logger * log);
+        bool has_visible_ancestor,
+        ServerDataPartsVector & stale_parts) const;
     // void collectStaleBitmaps(
     //     const DeleteBitmapMetaPtr & parent_bitmap,
     //     const TxnTimestamp & begin,

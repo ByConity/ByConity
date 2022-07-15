@@ -14,8 +14,7 @@ namespace Catalog
     class Catalog;
 }
 
-class MergeTreeData;
-using StorageCnchMergeTree = MergeTreeData;
+class StorageCnchMergeTree;
 class StorageCnchKafka;
 class TxnTimestamp;
 
@@ -42,10 +41,8 @@ public:
      */
     StoragePtr getStorageFromCatalog();
 
-    // StorageCnchMergeTree & checkAndGetCnchTable(StoragePtr & storage) const;
-    MergeTreeData & checkAndGetCnchTable(StoragePtr & storage) const;
-
-    StorageCnchKafka & checkAndGetCnchKafka(StoragePtr & storage) const;
+    static StorageCnchMergeTree & checkAndGetCnchTable(StoragePtr & storage);
+    static StorageCnchKafka & checkAndGetCnchKafka(StoragePtr & storage);
 
     /// TODO: REMOVE ME
     CnchBGThreadStatus getThreadStatus()
