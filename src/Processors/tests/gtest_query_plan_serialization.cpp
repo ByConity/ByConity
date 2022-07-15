@@ -127,6 +127,7 @@ QueryPlanStepPtr createAggregatingStep()
     return make_unique<AggregatingStep>(
         input_stream,
         params,
+        GroupingSetsParamsList{},
         true,
         8,
         9,

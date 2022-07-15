@@ -310,7 +310,7 @@ void InterpreterPerfectShard::addAggregation(QueryPlan & query_plan)
 
     auto aggregating_step = std::make_unique<AggregatingStep>(
             query_plan.getCurrentDataStream(),
-            params, true,
+            params, GroupingSetsParamsList{}, true,
             settings.max_block_size,
             merge_threads,
             temporary_data_merge_threads,
