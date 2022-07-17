@@ -26,7 +26,12 @@ std::string addBracketsIfIpv6(const std::string & host_name)
 
 std::string createHostPortString(const std::string & host, uint16_t port)
 {
-    return addBracketsIfIpv6(host) + ':' + toString(port);
+    return createHostPortString(host, toString(port));
+}
+
+std::string createHostPortString(const std::string & host, const std::string & port)
+{
+    return addBracketsIfIpv6(host) + ':' + port;
 }
 
 std::string_view removeBracketsIfIpv6(const std::string & host_name)

@@ -1,0 +1,28 @@
+#pragma once
+
+#include <Storages/StorageCnchMergeTree.h>
+#include <Poco/Logger.h>
+
+namespace DB
+{
+class Context;
+
+namespace DaemonManager
+{
+    inline bool isCnchTable(const StoragePtr & storage)
+    {
+        auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+        return cnch_table != nullptr;
+    }
+
+    StoragePtr getStoragePtr(ContextPtr context, const String & database, const String & table, const String & definition);
+
+    void printConfig(std::map<std::string, unsigned int> & config, Poco::Logger * log);
+
+    std::map<std::string, unsigned int> updateConfig(
+        std::map<std::string, unsigned int> && default_config,
+        const Poco::Util::AbstractConfiguration & app_config);
+} /// end namespace DaemonManager
+
+} /// end namespace DB
+

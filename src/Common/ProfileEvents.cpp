@@ -681,6 +681,14 @@
     M(CnchAddStreamsParallelElapsedMilliseconds,"") \
     M(CnchAddStreamsSequentialTasks,"") \
     M(CnchAddStreamsSequentialElapsedMilliseconds,"") \
+    M(SetBGJobStatusSuccess, "") \
+    M(SetBGJobStatusFailed, "") \
+    M(GetBGJobStatusSuccess, "") \
+    M(GetBGJobStatusFailed, "") \
+    M(GetBGJobStatusesSuccess, "") \
+    M(GetBGJobStatusesFailed, "") \
+    M(DropBGJobStatusesSuccess, "") \
+    M(DropBGJobStatusesFailed, "") \
 
 namespace ProfileEvents
 {

@@ -18,8 +18,9 @@ namespace CnchBGThread
         Consumer = 3,
         MemoryBuffer = 4,
         DedupWorker = 5,
+        Clustering = 6,
         ServerMinType = PartGC,
-        ServerMaxType = DedupWorker,
+        ServerMaxType = Clustering,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -63,6 +64,8 @@ constexpr auto toString(CnchBGThreadType type)
             return "PartGCThread";
         case CnchBGThreadType::MergeMutate:
             return "MergeMutateThread";
+        case CnchBGThreadType::Clustering:
+            return "ClusteringThread";
         case CnchBGThreadType::Consumer:
             return "ConsumerManager";
         case CnchBGThreadType::MemoryBuffer:
