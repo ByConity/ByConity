@@ -5,7 +5,7 @@
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
-// #include <Transaction/TransactionCommon.h>
+#include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 // #include <MergeTreeCommon/MergeTreeStorageData.h>
 
@@ -65,7 +65,7 @@ public:
     LocalDeleteBitmap(const String & partition_id, Int64 min_block, Int64 max_block,
         DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
 
-    // UndoResource getUndoResource(const TxnTimestamp & txn_id) const;
+    UndoResource getUndoResource(const TxnTimestamp & txn_id) const;
 
     bool canInlineStoreInCatalog() const;
 
@@ -82,7 +82,7 @@ private:
 using LocalDeleteBitmapPtr = std::shared_ptr<LocalDeleteBitmap>;
 using LocalDeleteBitmaps = std::vector<LocalDeleteBitmapPtr>;
 
-//DeleteBitmapMetaPtrVector dumpDeleteBitmaps(const MergeTreeMetaBase & storage, const LocalDeleteBitmaps & temp_bitmaps);
+DeleteBitmapMetaPtrVector dumpDeleteBitmaps(const MergeTreeMetaBase & storage, const LocalDeleteBitmaps & temp_bitmaps);
 
 class DeleteBitmapMeta
 {

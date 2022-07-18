@@ -1,11 +1,14 @@
-#include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
-#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
+#include "Storages/MergeTree/MergeTreeCNCHDataDumper.h"
+
 #include <Disks/HDFS/DiskHDFS.h>
 #include <IO/WriteBufferFromFile.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <IO/WriteHelpers.h>
 #include <IO/copyData.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Common/escapeForFileName.h>
+
 #include <chrono>
 
 namespace DB
@@ -16,6 +19,12 @@ namespace ErrorCodes
     extern const int BAD_CNCH_DATA_FILE;
     extern const int NOT_CONFIG_CLOUD_STORAGE;
     extern const int FILE_DOESNT_EXIST;
+}
+
+MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
+    MergeTreeMetaBase & data_, const CNCHStorageType & type_, const String & magic_code_, const MergeTreeDataFormatVersion version_)
+    : data(data_), log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)")), type(type_), magic_code(magic_code_), version(version_)
+{
 }
 
 std::unique_ptr<WriteBufferFromHDFS> MergeTreeCNCHDataDumper::createWriteBuffer(
@@ -84,7 +93,7 @@ void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDa
 
 /// Check correctness of data file in remote storage,
 /// Now we only check data file length.
-size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const MergeTreeDataPartCNCH::ChecksumsPtr & checksums, const CNCHDataMeta & meta)
+size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta)
 {
     String cnch_data_file_rel_path = remote_part->getFullRelativePath() + "data";
     ///TODO:
@@ -117,7 +126,7 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
 
 /// Dump local part to vfs
 MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
-    std::shared_ptr<const MergeTreeDataPartCNCH> local_part,
+    const IMutableMergeTreeDataPartPtr & local_part,
     const HDFSConnectionParams & hdfs_params,
     bool is_temp_prefix,
     const DiskPtr & remote_disk )
