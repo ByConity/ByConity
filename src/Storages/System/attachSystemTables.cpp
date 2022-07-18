@@ -208,12 +208,5 @@ void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & 
     attach<StorageSystemAsynchronousMetrics>(system_database, "asynchronous_metrics", async_metrics);
 }
 
-// TODO: change it to attach
-void createSystemTablesIfNotExist(IDatabase & system_database, ContextMutablePtr global_context)
-{
-    (void)system_database;
-    // create HaUniqueMergeTree table 'system.optimizer_statistics'
-    Statistics::StatsDataSource(global_context).initialize();
-}
 
 }

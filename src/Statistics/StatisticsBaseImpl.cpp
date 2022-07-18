@@ -154,7 +154,7 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
 
     return ptr;
 }
-StatisticsBasePtr createStatisticsBaseFromJson(StatisticsTag tag, TxnTimestamp ts, std::string_view blob)
+StatisticsBasePtr createStatisticsBaseFromJson(StatisticsTag tag, std::string_view blob)
 {
     auto ptr = [&]() -> StatisticsBasePtr {
         switch (tag)
@@ -170,7 +170,6 @@ StatisticsBasePtr createStatisticsBaseFromJson(StatisticsTag tag, TxnTimestamp t
             }
         }
     }();
-    ptr->setTxnTimestamp(ts);
     return ptr;
 }
 } // namespace DB

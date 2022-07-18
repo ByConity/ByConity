@@ -1251,14 +1251,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         database_catalog.loadDatabases();
         /// After loading validate that default database exists
         database_catalog.assertDatabaseExists(default_database);
-        try
-        {
-            createSystemTablesIfNotExist(*database_catalog.getSystemDatabase(), global_context);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Caught exception while loading metadata");
-        }
     }
     catch (...)
     {

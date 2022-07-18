@@ -284,7 +284,7 @@ void loadStats(ContextPtr context, const String & path)
             StatsCollection collection;
             //            auto tag = static_cast<StatisticsTag>(1);
             auto tag = StatisticsTagFromString("TableBasic");
-            auto obj = createStatisticsBaseFromJson(tag, ts, table_object.get("TableBasic").toString());
+            auto obj = createStatisticsBaseFromJson(tag, table_object.get("TableBasic").toString());
             collection[tag] = std::move(obj);
             StatisticsCollector::TableStats table_stats;
             table_stats.readFromCollection(collection);
@@ -303,7 +303,7 @@ void loadStats(ContextPtr context, const String & path)
                 {
                     String Statistics_Tag = k;
                     auto tag = StatisticsTagFromString(Statistics_Tag);
-                    auto obj = createStatisticsBaseFromJson(tag, ts, v.toString());
+                    auto obj = createStatisticsBaseFromJson(tag, v.toString());
                     collection[tag] = std::move(obj);
                 }
                 StatisticsCollector::ColumnStats column_stats;
