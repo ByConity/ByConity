@@ -184,11 +184,11 @@ void MergeTreeDataMerger::prepareNewParts()
     /// String new_part_tmp_path = TMP_PREFIX + toString(UInt64(context.getCurrentCnchStartTime())) + '-' + new_part_name + "/";
     String new_part_tmp_path = TMP_PREFIX + '-' + new_part_name + "/";
     DiskPtr disk = space_reservation->getDisk();
-    /// String new_part_tmp_rel_path = data.getStorageSelector().tableRelativePathOnDisk(disk) + new_part_tmp_path;
+    String new_part_tmp_rel_path = data.getRelativeDataPath() + new_part_tmp_path;
 
-    if (disk->exists(new_part_tmp_path))
-        throw Exception("Directory " + fullPath(disk, new_part_tmp_path) + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
-    disk->createDirectories(new_part_tmp_path); /// TODO: could we remove it ?
+    if (disk->exists(new_part_tmp_rel_path))
+        throw Exception("Directory " + fullPath(disk, new_part_tmp_rel_path) + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
+    disk->createDirectories(new_part_tmp_rel_path); /// TODO: could we remove it ?
 
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + new_part_name, disk, 0);

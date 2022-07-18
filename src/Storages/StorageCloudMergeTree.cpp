@@ -42,6 +42,9 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     , cnch_database_name(std::move(cnch_database_name_))
     , cnch_table_name(std::move(cnch_table_name_))
 {
+    local_store_volume = getContext()->getStoragePolicy(
+        getSettings()->cnch_local_storage_policy.toString());
+    relative_local_store_path = fs::path("store") / UUIDHelpers::UUIDToString(getStorageID().uuid);
 }
 
 StorageCloudMergeTree::~StorageCloudMergeTree()
@@ -80,7 +83,8 @@ Pipe StorageCloudMergeTree::read(
 
 BlockOutputStreamPtr StorageCloudMergeTree::write(const ASTPtr &, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
 {
-    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context));
+    return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, std::move(local_context),
+        local_store_volume, relative_local_store_path);
 }
 
 ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskParams & input_params, ContextPtr task_context)

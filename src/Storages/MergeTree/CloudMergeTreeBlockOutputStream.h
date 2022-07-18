@@ -17,12 +17,14 @@ class CloudMergeTreeBlockOutputStream : public IBlockOutputStream
 {
 public:
     CloudMergeTreeBlockOutputStream(
-        MergeTreeMetaBase & storage_, StorageMetadataPtr metadata_snapshot_, ContextPtr context_, bool to_staging_area_ = false)
+        MergeTreeMetaBase & storage_, StorageMetadataPtr metadata_snapshot_,
+        ContextPtr context_, const StoragePolicyPtr& local_policy_,
+        const String& local_rel_path_, bool to_staging_area_ = false)
         : storage(storage_)
         , metadata_snapshot(std::move(metadata_snapshot_))
         , context(std::move(context_))
         , to_staging_area(to_staging_area_)
-        , writer(storage)
+        , writer(storage, local_policy_, local_rel_path_)
     {
     }
 

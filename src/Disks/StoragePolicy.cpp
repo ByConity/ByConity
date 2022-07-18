@@ -62,7 +62,7 @@ StoragePolicy::StoragePolicy(
 
     if (volumes.empty() && name == DEFAULT_STORAGE_POLICY_NAME)
     {
-        auto default_volume = std::make_shared<VolumeJBOD>(DEFAULT_VOLUME_NAME, std::vector<DiskPtr>{disks->get(DEFAULT_DISK_NAME)}, 0, false);
+        auto default_volume = std::make_shared<VolumeJBOD>(DEFAULT_VOLUME_NAME, std::vector<DiskPtr>{disks->get(DEFAULT_DISK_NAME)}, DEFAULT_DISK_NAME, 0, false);
         volumes.emplace_back(std::move(default_volume));
     }
 

@@ -46,9 +46,14 @@
 namespace DB
 {
 
+static const ssize_t NULL_ARRAY_SZ = 256;
+
+extern "C" const char null_array[NULL_ARRAY_SZ];
+
 namespace ErrorCodes
 {
     extern const int CANNOT_PRINT_FLOAT_OR_DOUBLE_NUMBER;
+    extern const int LOGICAL_ERROR;
 }
 
 
@@ -1143,5 +1148,21 @@ struct PcgSerializer
 };
 
 void writePointerHex(const void * ptr, WriteBuffer & buf);
+
+inline void writeNull(ssize_t size, WriteBuffer & buf)
+{
+    if (unlikely(size < 0))
+        throw Exception("writeNull: negative size", ErrorCodes::LOGICAL_ERROR);
+
+    while (size) {
+        if (size <= NULL_ARRAY_SZ) {
+            buf.write(null_array, size);
+            break;
+        }
+
+        buf.write(null_array, NULL_ARRAY_SZ);
+        size -= NULL_ARRAY_SZ;
+    }
+}
 
 }

@@ -22,8 +22,8 @@ using VolumesJBOD = std::vector<VolumeJBODPtr>;
 class VolumeJBOD : public IVolume
 {
 public:
-    VolumeJBOD(String name_, Disks disks_, UInt64 max_data_part_size_, bool are_merges_avoided_)
-        : IVolume(name_, disks_, max_data_part_size_)
+    VolumeJBOD(String name_, Disks disks_, const String& default_disk_name_, UInt64 max_data_part_size_, bool are_merges_avoided_)
+        : IVolume(name_, disks_, default_disk_name_, max_data_part_size_)
         , are_merges_avoided(are_merges_avoided_)
     {
     }

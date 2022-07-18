@@ -18,6 +18,7 @@ void registerDiskS3(DiskFactory & factory);
 
 #if USE_HDFS
 void registerDiskHDFS(DiskFactory & factory);
+void registerDiskByteHDFS(DiskFactory & factory);
 #endif
 
 
@@ -34,6 +35,7 @@ void registerDisks()
 
 #if USE_HDFS
     registerDiskHDFS(factory);
+    registerDiskByteHDFS(factory);
 #endif
 }
 

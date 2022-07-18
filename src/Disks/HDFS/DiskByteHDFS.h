@@ -14,8 +14,8 @@ class DiskByteHDFSReservation;
 class DiskByteHDFS final : public IDisk
 {
 public:
-    DiskByteHDFS(const String& disk_name_, const String& nnproxy_,
-        const String& hdfs_base_path_);
+    DiskByteHDFS(const String& disk_name_, const String& hdfs_base_path_,
+        const HDFSConnectionParams& hdfs_params_);
 
     virtual const String& getName() const override;
 
@@ -88,12 +88,12 @@ public:
 private:
     inline String absolutePath(const String& relative_path) const;
 
+    const String disk_name;
+    const String disk_path;
+    
     HDFSConnectionParams hdfs_params;
 
     HDFSFileSystem hdfs_fs;
-
-    const String disk_name;
-    const String disk_path;
 };
 
 class DiskByteHDFSReservation: public IReservation
@@ -113,7 +113,10 @@ public:
         return {disk};
     }
 
-    virtual void update(UInt64 new_size) override;
+    virtual void update(UInt64 new_size) override
+    {
+        size = new_size;
+    }
 
 private:
     DiskPtr disk;

@@ -2661,9 +2661,12 @@ StoragePolicySelectorPtr Context::getStoragePolicySelector(std::lock_guard<std::
 }
 
 
-void Context::updateStorageConfiguration(const Poco::Util::AbstractConfiguration & config)
+void Context::updateStorageConfiguration(Poco::Util::AbstractConfiguration & config)
 {
     std::lock_guard lock(shared->storage_policies_mutex);
+
+    // // Update storage configuration for cnch
+    // updateStorageConfigurationForCNCH(config);
 
     if (shared->merge_tree_disk_selector)
         shared->merge_tree_disk_selector
@@ -2691,6 +2694,92 @@ void Context::updateStorageConfiguration(const Poco::Util::AbstractConfiguration
 #endif
 }
 
+void copyConfigRecursive(const Poco::Util::AbstractConfiguration& src_cfg,
+    const String& src_prefix, Poco::Util::AbstractConfiguration& tgt_cfg,
+    const String& tgt_prefix)
+{
+    Poco::Util::AbstractConfiguration::Keys keys;
+    src_cfg.keys(src_prefix, keys);
+
+    auto append_key = [](const String& base, const String& key) {
+        return key.empty() ? base : base + "." + key;
+    };
+
+    for (const auto& key : keys)
+    {
+        String src_key = append_key(src_prefix, key);
+        String tgt_key = append_key(tgt_prefix, key);
+
+        copyConfigRecursive(src_cfg, src_key, tgt_cfg, tgt_key);
+    }
+
+    std::optional<String> src_cfg_str = std::nullopt;
+    try
+    {
+        src_cfg_str = src_cfg.getString(src_prefix);
+    }
+    catch (Poco::NotFoundException&) {}
+
+    if (src_cfg_str.has_value())
+    {
+        tgt_cfg.setString(tgt_prefix, src_cfg_str.value());
+    }
+}
+
+void removeConfigRecursive(Poco::Util::AbstractConfiguration& cfg,
+    const String& prefix)
+{
+    Poco::Util::AbstractConfiguration::Keys keys;
+    cfg.keys(prefix, keys);
+
+    auto append_key = [](const String& base, const String& key) {
+        return key.empty() ? base : base + "." + key;
+    };
+
+    for (const auto& key : keys)
+    {
+        String key_with_prefix = append_key(prefix, key);
+        removeConfigRecursive(cfg, key_with_prefix);
+    }
+
+    cfg.remove(prefix);
+}
+
+void Context::updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration& config)
+{
+    String default_cnch_policy_name = getDefaultCnchPolicyName();
+    if (config.has("storage_configuration.policies." + default_cnch_policy_name))
+    {
+        return;
+    }
+
+    // Trying to parse from old cnch configuration
+    Poco::Util::AbstractConfiguration::Keys keys;
+    config.keys("storage_configuration.policies", keys);
+    if (keys.size() == 1 && keys[0] == "default")
+    {
+        keys.clear();
+        config.keys("storage_configuration.policies.default.volumes", keys);
+        if (keys.size() == 2
+            && std::find(keys.begin(), keys.end(), "local") != keys.end()
+            && std::find(keys.begin(), keys.end(), "hdfs") != keys.end())
+        {
+            // Old cnch configuration
+            String default_cnch_policy_key = "storage_configuraiton.policies." + default_cnch_policy_name;
+            config.setString(default_cnch_policy_key, "");
+            config.setString(default_cnch_policy_key + ".volumes", "");
+            config.setString(default_cnch_policy_key + ".volumes.hdfs", "");
+            copyConfigRecursive(config, "storage_configuraiton.policies.default.volumes.hdfs",
+                config, default_cnch_policy_key + ".volumes.hdfs");
+
+            removeConfigRecursive(config, "storage_configuraiton.policies.default.volumes.hdfs");
+        }
+    }
+    else
+    {
+        // Multiple policy specificed, not old cnch configuraiton, don't update config
+    }
+}
 
 const MergeTreeSettings & Context::getMergeTreeSettings() const
 {
@@ -3946,6 +4035,11 @@ std::shared_ptr<Statistics::StatisticsMemoryStore> Context::getStatisticsMemoryS
         this->stats_memory_store = std::make_shared<Statistics::StatisticsMemoryStore>();
     }
     return stats_memory_store;
+}
+
+String Context::getDefaultCnchPolicyName() const
+{
+    return getConfigRef().getString("cnch_default_policy", "cnch_default_hdfs");
 }
 
 }

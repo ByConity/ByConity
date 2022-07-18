@@ -766,6 +766,16 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             metadata.column_ttls_by_name[name] = new_ttl_entry;
         }
 
+        // For cnch, if storage_policy is not specificed, modify it to cnch's default
+        if (is_cnch)
+        {
+            if (args.storage_def->settings->changes.tryGet("storage_policy") == nullptr)
+            {
+                args.storage_def->settings->changes.push_back(
+                    SettingChange("storage_policy", args.getContext()->getDefaultCnchPolicyName()));
+            }
+        }
+
         storage_settings->loadFromQuery(*args.storage_def);
 
         // updates the default storage_settings with settings specified via SETTINGS arg in a query

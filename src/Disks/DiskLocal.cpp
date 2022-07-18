@@ -389,8 +389,8 @@ void registerDiskLocal(DiskFactory & factory)
                 throw Exception("Disk path must end with /. Disk " + name, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
         }
 
-        if (!FS::canRead(path) || !FS::canWrite(path))
-            throw Exception("There is no RW access to the disk " + name + " (" + path + ")", ErrorCodes::PATH_ACCESS_DENIED);
+        // if (!FS::canRead(path) || !FS::canWrite(path))
+        //     throw Exception("There is no RW access to the disk " + name + " (" + path + ")", ErrorCodes::PATH_ACCESS_DENIED);
 
         bool has_space_ratio = config.has(config_prefix + ".keep_free_space_ratio");
 

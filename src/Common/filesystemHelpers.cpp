@@ -163,8 +163,7 @@ String joinPaths(const std::vector<String>& components, bool add_post_slash)
     {
         if (components[i].empty())
         {
-            throw Exception("No empty components is allowed in path",
-                ErrorCodes::BAD_ARGUMENTS);
+            continue;
         }
         result.append(components[i]);
         if (result.back() != '/' && (i != components.size() - 1 || add_post_slash))

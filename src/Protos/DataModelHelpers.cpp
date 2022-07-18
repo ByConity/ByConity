@@ -11,6 +11,7 @@
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <Disks/SingleDiskVolume.h>
+#include <Disks/DiskHelpers.h>
 
 namespace DB
 {
@@ -66,12 +67,10 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     /// Create part object
     auto info = createPartInfoFromModel(part_model.part_info());
     String part_name = info->getPartName();
-    UInt32 namenode_id = part_model.has_data_path_id() ? part_model.data_path_id() : 0;
+    UInt32 path_id = part_model.has_data_path_id() ? part_model.data_path_id() : 0;
 
-    /// FIXME: wait StorageSelector @wangsiyuan
-    // DiskPtr hdfs_disk = getDiskForNameNode(storage.getStoragePolicy(), namenode_id);
-    DiskPtr hdfs_disk = storage.getStoragePolicy()->getDiskByName(toString(namenode_id));
-    auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", hdfs_disk, 0);
+    DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(), path_id);
+    auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
     auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info, mock_volume, relative_path);
 
     if (part_model.has_staging_txn_id())

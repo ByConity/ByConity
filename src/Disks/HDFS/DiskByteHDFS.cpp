@@ -1,6 +1,9 @@
 #include <memory>
 #include <Disks/DiskType.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
+#include <Disks/DiskFactory.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 
@@ -23,6 +26,11 @@ DiskPtr DiskByteHDFSReservation::getDisk(size_t i) const
     return disk;
 }
 
+DiskByteHDFS::DiskByteHDFS(const String& disk_name_, const String& hdfs_base_path_,
+    const HDFSConnectionParams& hdfs_params_):
+        disk_name(disk_name_), disk_path(hdfs_base_path_), hdfs_params(hdfs_params_),
+        hdfs_fs(hdfs_params_, 0) {}
+
 const String& DiskByteHDFS::getName() const
 {
     return disk_name;
@@ -32,6 +40,11 @@ ReservationPtr DiskByteHDFS::reserve(UInt64 bytes)
 {
     return std::make_unique<DiskByteHDFSReservation>(
         static_pointer_cast<DiskByteHDFS>(shared_from_this()), bytes);
+}
+
+UInt64 DiskByteHDFS::getID() const
+{
+    return static_cast<UInt64>(std::hash<String>{}(DiskType::toString(getType())) ^ std::hash<String>{}(getPath()));
 }
 
 bool DiskByteHDFS::exists(const String &path) const
@@ -77,6 +90,12 @@ void DiskByteHDFS::clearDirectory(const String &path)
 void DiskByteHDFS::moveDirectory(const String& from_path, const String &to_path)
 {
     hdfs_fs.renameTo(absolutePath(from_path), absolutePath(to_path));
+}
+
+DiskDirectoryIteratorPtr DiskByteHDFS::iterateDirectory([[maybe_unused]]const String& path)
+{
+    throw Exception("iterateDirectory is not supported in DiskByteHDFS",
+        ErrorCodes::NOT_IMPLEMENTED);
 }
 
 void DiskByteHDFS::createFile(const String &path)
@@ -181,6 +200,28 @@ DiskType::Type DiskByteHDFS::getType() const
 inline String DiskByteHDFS::absolutePath(const String& relative_path) const
 {
     return fs::path(disk_path) / relative_path;
+}
+
+void registerDiskByteHDFS(DiskFactory & factory)
+{
+    auto creator = [](const String& name, const Poco::Util::AbstractConfiguration& config,
+            const String& config_prefix, ContextPtr context_) -> DiskPtr {
+        String path = config.getString(config_prefix + ".path");
+        if (!path.ends_with("/"))
+        {
+            path.push_back('/');
+        }
+
+        String hdfs_params_config_prefix = config_prefix + ".hdfs_params";
+        HDFSConnectionParams hdfs_params =
+            config.has(hdfs_params_config_prefix) ?
+                HDFSConnectionParams::parseHdfsFromConfig(config, hdfs_params_config_prefix):
+                context_->getHdfsConnectionParams();
+
+        return std::make_shared<DiskByteHDFS>(name, path, hdfs_params);
+    };
+
+    factory.registerDiskType("bytehdfs", creator);
 }
 
 }

@@ -22,9 +22,35 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <IO/ConnectionTimeoutsContext.h>
 
-
 namespace DB
 {
+
+String toStr(CNCHStorageMediumType tp)
+{
+    switch(tp)
+    {
+        case CNCHStorageMediumType::HDFS:
+            return "HDFS";
+        case CNCHStorageMediumType::S3:
+            return "S3";
+    }
+    throw Exception("Unknown cnch storage medium type " +
+        toString(static_cast<int>(tp)), ErrorCodes::LOGICAL_ERROR);
+}
+
+CNCHStorageMediumType fromStr(const String& type_str)
+{
+    if (type_str == "HDFS")
+    {
+        return CNCHStorageMediumType::HDFS;
+    }
+    if (type_str == "S3")
+    {
+        return CNCHStorageMediumType::S3;
+    }
+    throw Exception("Unknown cnch storage medium type " + type_str,
+        ErrorCodes::LOGICAL_ERROR);
+}
 
 CnchStorageCommonHelper::CnchStorageCommonHelper(const StorageID & table_id_, const String & remote_database_, const String & remote_table_)
     : table_id(table_id_)

@@ -22,45 +22,10 @@ namespace ErrorCodes
 }
 
 MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
-    MergeTreeMetaBase & data_, const CNCHStorageType & type_, const String & magic_code_, const MergeTreeDataFormatVersion version_)
-    : data(data_), log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)")), type(type_), magic_code(magic_code_), version(version_)
+    MergeTreeMetaBase & data_, const String & magic_code_, const MergeTreeDataFormatVersion version_)
+    : data(data_), log(&Poco::Logger::get(data.getLogName() + "(CNCHDumper)"))
+    , magic_code(magic_code_), version(version_)
 {
-}
-
-std::unique_ptr<WriteBufferFromHDFS> MergeTreeCNCHDataDumper::createWriteBuffer(
-    const String & file_name,
-    const CNCHStorageType & /*type*/,
-    const HDFSConnectionParams & hdfs_params)
-{
-    switch(type)
-    {
-#if USE_HDFS
-        case CNCHStorageType::Hdfs:
-        {
-            Poco::URI file_uri = hdfs_params.formatPath(file_name);
-            LOG_TRACE(log, "dump using {} hdfs_params: {}", file_uri.toString(), hdfs_params.toString());
-            return std::make_unique<WriteBufferFromHDFS>(file_uri.toString(), hdfs_params);
-        }
-#endif
-    }
-    return nullptr;
-}
-
-std::unique_ptr<ReadBufferFromFileBase> MergeTreeCNCHDataDumper::createReadBuffer(
-    const String & file_name,
-    const CNCHStorageType & /*type*/)
-{
-    switch (type)
-    {
-#if USE_HDFS
-        case CNCHStorageType::Hdfs:
-        {
-            const HDFSConnectionParams & hdfs_params = data.getContext()->getHdfsConnectionParams();
-            return std::make_unique<ReadBufferFromByteHDFS>(file_name, false, hdfs_params);
-        }
-#endif
-    }
-    return nullptr;
 }
 
 void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part)
@@ -68,8 +33,7 @@ void MergeTreeCNCHDataDumper::writeDataFileHeader(WriteBuffer & to, MutableMerge
     writeString(magic_code, to);
     writeIntBinary(version.toUnderType(), to);
     writeBoolText(part->deleted, to);
-    /// TODO : fix writeNull
-    // writeNull(MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE - to.count(), to);
+    writeNull(MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE - to.count(), to);
 }
 
 void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta)
@@ -88,18 +52,17 @@ void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDa
     writeIntBinary(meta.unique_key_index_checksum, to);
     /// TODO: FIX write related function
     // writePODBinary(meta.key, to);
-    // writeNull(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE - sizeof(meta), to);
+    writeNull(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE - sizeof(meta), to);
 }
 
 /// Check correctness of data file in remote storage,
 /// Now we only check data file length.
 size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta)
 {
-    String cnch_data_file_rel_path = remote_part->getFullRelativePath() + "data";
-    ///TODO:
-    // String cnch_data_file_full_path = remote_part->getDisk()->getPath() + cnch_data_file_rel_path;
-    // size_t cnch_data_file_size = remote_part->getDisk()->getFileSize(cnch_data_file_rel_path);
-    size_t cnch_data_file_size = remote_part->getFileSizeOrZero(cnch_data_file_rel_path);
+    DiskPtr remote_disk = remote_part->volume->getDisk();
+    String part_data_rel_path = remote_part->getFullRelativePath() + "data";
+
+    size_t cnch_data_file_size = remote_disk->getFileSize(part_data_rel_path);
     size_t data_files_size = MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE;
     if(checksums)
     {
@@ -112,14 +75,18 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
     data_files_size += MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE;
 
     if(data_files_size != cnch_data_file_size)
-        throw Exception("Fail to check data in remote part " + remote_part->name, ErrorCodes::BAD_CNCH_DATA_FILE);
+    {
+        throw Exception(fmt::format("Failed to check data in remote, path: {}, size: {}, local_size: {}",
+            fullPath(remote_disk, part_data_rel_path), cnch_data_file_size, data_files_size),
+            ErrorCodes::BAD_CNCH_DATA_FILE);
+    }
 
     if(meta.checksums_size != 0)
     {
-        HDFSConnectionParams  hdfs_params =  data.getContext()->getHdfsConnectionParams();
-        ReadBufferFromByteHDFS cnch_data_file(cnch_data_file_rel_path, true, hdfs_params);
-        cnch_data_file.seek(meta.checksums_offset);
-        assertString("checksums format version: ", cnch_data_file);
+        std::unique_ptr<ReadBufferFromFileBase> reader = remote_disk->readFile(
+            part_data_rel_path);
+        reader->seek(meta.checksums_offset);
+        assertString("checksums format version: ", *reader);
     }
     return data_files_size;
 }
@@ -127,7 +94,7 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
 /// Dump local part to vfs
 MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const IMutableMergeTreeDataPartPtr & local_part,
-    const HDFSConnectionParams & hdfs_params,
+    [[maybe_unused]]const HDFSConnectionParams & hdfs_params,
     bool is_temp_prefix,
     const DiskPtr & remote_disk )
 {
@@ -148,12 +115,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     else
         relative_path = new_part_info.getPartName(true);
 
-    ///TODO: fix StorageSelector
-    // DiskPtr disk = remote_disk ? remote_disk : data.getStorageSelector().getHDFSVolume()->getNextDisk();
-    // MutableMergeTreeDataPartCNCHPtr new_part = std::make_shared<MergeTreeDataPartCNCH>(data, disk, part_name, new_part_info, relative_path);
-
-    DiskPtr disk = remote_disk;
-    MutableMergeTreeDataPartCNCHPtr new_part = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, nullptr, relative_path);
+    DiskPtr disk = remote_disk == nullptr ? data.getStoragePolicy()->getAnyDisk() : remote_disk;
+    VolumeSingleDiskPtr volume = std::make_shared<SingleDiskVolume>("temp_volume", disk);
+    MutableMergeTreeDataPartCNCHPtr new_part = std::make_shared<MergeTreeDataPartCNCH>(
+        data, part_name, new_part_info, volume, relative_path
+    );
 
     new_part->partition.assign(local_part->partition);
     if (local_part->prepared_checksums)
@@ -262,10 +228,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     // off_t index_offset = data_file_offset;
 
     /// Write data file
-    String data_file_full_path = disk->getPath() + new_part_rel_path + "data";
+    String data_file_rel_path = new_part_rel_path + "data";
     CNCHDataMeta meta;
     {
-        std::unique_ptr<WriteBufferFromHDFS> data_out = createWriteBuffer(data_file_full_path, type, hdfs_params);
+        std::unique_ptr<WriteBufferFromFileBase> data_out = disk->writeFile(relative_path + "data");
         writeDataFileHeader(*data_out, new_part);
 
         // const DiskPtr& local_part_disk = local_part->getDisk();
@@ -426,4 +392,5 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns()
     // }
     return merging_columns;
 }
+
 }

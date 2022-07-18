@@ -138,7 +138,8 @@ public:
     Poco::URI formatPath([[maybe_unused]] const String & path) const ;
 
 
-    static HDFSConnectionParams parseHdfsFromConfig([[maybe_unused]]const  Poco::Util::AbstractConfiguration & config);
+    static HDFSConnectionParams parseHdfsFromConfig([[maybe_unused]]const  Poco::Util::AbstractConfiguration & config,
+        const String& config_prefix = "");
 
 
     static const HDFSConnectionParams & defaultNNProxy()
