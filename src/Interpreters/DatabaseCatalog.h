@@ -222,6 +222,7 @@ private:
     void assertDatabaseDoesntExistUnlocked(const String & database_name) const;
 
     DatabasePtr getDatabaseCnch(const String & database_name) const;
+    DatabasePtr tryGetDatabaseCnch(const String & database_name) const;
     DatabasePtr getDatabaseCnch(const UUID & uuid) const;
     Databases getDatabaseCnchs() const;
 
