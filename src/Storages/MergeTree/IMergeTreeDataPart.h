@@ -662,6 +662,7 @@ public:
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;
+    friend class MergeTreeCloudData;
     friend class MergeScheduler;
 
     /// Total size of all columns, calculated once in calcuateColumnSizesOnDisk

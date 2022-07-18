@@ -260,8 +260,8 @@ TxnTimestamp CnchServerClient::commitParts(
     else
     {
         StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
-        // request.set_database(cloud_storage.getCnchDatabase());
-        // request.set_table(cloud_storage.getCnchTable());
+        request.set_database(cloud_storage.getCnchDatabase());
+        request.set_table(cloud_storage.getCnchTable());
         RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
     }
 

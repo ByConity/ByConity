@@ -150,9 +150,6 @@ public:
     using DataParts = std::set<DataPartPtr, LessDataPart>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    DataPartsLock lockParts() const override { return DataPartsLock(data_parts_mutex); }
-    DataPartsReadLock lockPartsRead() const override { return DataPartsReadLock(data_parts_mutex); }
-
     UniqueTableState getUniqueTableState() const { return unique_table_state; }
     void setUniqueTableState(UniqueTableState new_state)
     {
@@ -412,14 +409,6 @@ public:
 
     Int64 getMaxBlockNumber() const;
 
-    /// Returns a copy of the list so that the caller shouldn't worry about locks.
-    DataParts getDataParts(const DataPartStates & affordable_states) const;
-
-    /// Returns sorted list of the parts with specified states
-    ///  out_states will contain snapshot of each part state
-    DataPartsVector getDataPartsVector(
-        const DataPartStates & affordable_states, DataPartStateVector * out_states = nullptr, bool require_projection_parts = false) const;
-
     /// Returns absolutely all parts (and snapshot of their states)
     DataPartsVector getAllDataPartsVector(DataPartStateVector * out_states = nullptr, bool require_projection_parts = false) const;
 
@@ -442,10 +431,6 @@ public:
         throw Exception("Not implemented.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    /// Returns Committed parts
-    DataParts getDataParts() const override;
-    DataPartsVector getDataPartsVector() const override;
-
     /// Returns a committed part with the given name or a part containing it. If there is no such part, returns nullptr.
     DataPartPtr getActiveContainingPart(const String & part_name) const;
     DataPartPtr getActiveContainingPart(const MergeTreePartInfo & part_info) const;
@@ -454,9 +439,6 @@ public:
     /// Swap part with it's identical copy (possible with another path on another disk).
     /// If original part is not active or doesn't exist exception will be thrown.
     void swapActivePart(MergeTreeData::DataPartPtr part_copy);
-
-    /// Returns all parts in specified partition
-    DataPartsVector getDataPartsVectorInPartition(DataPartState state, const String & partition_id) override;
 
     /// For a target part that will be fetched from another replica, find whether the local has an old version part.
     /// When mutating a part, its mutate version will be changed. For example, all_0_0_0 -> all_0_0_0_1, all_0_0_0_1 is the target part, all_0_0_0 is the old version part.
@@ -785,49 +767,8 @@ protected:
 
     MergeTreePartsMover parts_mover;
 
-    boost::iterator_range<DataPartIteratorByStateAndInfo> getDataPartsStateRange(DataPartState state) const
-    {
-        auto begin = data_parts_by_state_and_info.lower_bound(state, LessStateDataPart());
-        auto end = data_parts_by_state_and_info.upper_bound(state, LessStateDataPart());
-        return {begin, end};
-    }
-
-    boost::iterator_range<DataPartIteratorByInfo> getDataPartsPartitionRange(const String & partition_id) const
-    {
-        auto begin = data_parts_by_info.lower_bound(PartitionID(partition_id), LessDataPart());
-        auto end = data_parts_by_info.upper_bound(PartitionID(partition_id), LessDataPart());
-        return {begin, end};
-    }
-
     std::optional<UInt64> totalRowsByPartitionPredicateImpl(
         const SelectQueryInfo & query_info, ContextPtr context, const DataPartsVector & parts) const;
-
-    static decltype(auto) getStateModifier(DataPartState state)
-    {
-        return [state] (const DataPartPtr & part) { part->setState(state); };
-    }
-
-    void modifyPartState(DataPartIteratorByStateAndInfo it, DataPartState state)
-    {
-        if (!data_parts_by_state_and_info.modify(it, getStateModifier(state)))
-            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    void modifyPartState(DataPartIteratorByInfo it, DataPartState state)
-    {
-        if (!data_parts_by_state_and_info.modify(data_parts_indexes.project<TagByStateAndInfo>(it), getStateModifier(state)))
-            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    void modifyPartState(const DataPartPtr & part, DataPartState state)
-    {
-        auto it = data_parts_by_info.find(part->info);
-        if (it == data_parts_by_info.end() || (*it).get() != part.get())
-            throw Exception("Part " + part->name + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
-
-        if (!data_parts_by_state_and_info.modify(data_parts_indexes.project<TagByStateAndInfo>(it), getStateModifier(state)))
-            throw Exception("Can't modify " + (*it)->getNameWithState(), ErrorCodes::LOGICAL_ERROR);
-    }
 
     /// unique table only
     /// -----------------
@@ -856,12 +797,6 @@ protected:
     std::mutex clear_old_temporary_directories_mutex;
 
     void checkStoragePolicy(const StoragePolicyPtr & new_storage_policy) const;
-
-    /// Calculates column sizes in compressed form for the current state of data_parts. Call with data_parts mutex locked.
-    void calculateColumnSizesImpl();
-    /// Adds or subtracts the contribution of the part to compressed column sizes.
-    void addPartContributionToColumnSizes(const DataPartPtr & part);
-    void removePartContributionToColumnSizes(const DataPartPtr & part);
 
     /// Return parts in the Committed set that are covered by the new_part_info or the part that covers it.
     /// Will check that the new part doesn't already exist and that it doesn't intersect existing part.

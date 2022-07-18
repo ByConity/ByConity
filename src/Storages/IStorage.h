@@ -48,6 +48,10 @@ class MutationCommands;
 struct PartitionCommand;
 using PartitionCommands = std::vector<PartitionCommand>;
 
+struct ManipulationTaskParams;
+class ManipulationTask;
+using ManipulationTaskPtr = std::shared_ptr<ManipulationTask>;
+
 class IProcessor;
 using ProcessorPtr = std::shared_ptr<IProcessor>;
 using Processors = std::vector<ProcessorPtr>;
@@ -495,16 +499,15 @@ public:
         throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    /// Manipulate the table contents
-    virtual void manipulate(const ManipulationTaskParams &, ContextPtr)
-    {
-        throw Exception("Manipulate are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
-
     /// Cancel a mutation.
     virtual CancellationCode killMutation(const String & /*mutation_id*/)
     {
         throw Exception("Mutations are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    virtual ManipulationTaskPtr manipulate(const ManipulationTaskParams &, ContextPtr)
+    {
+        throw Exception("Manipulation task are not supported by storage " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
     /** If the table have to do some complicated work on startup,

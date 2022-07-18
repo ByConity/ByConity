@@ -2806,16 +2806,6 @@ MergeTreeData::DataPartPtr MergeTreeData::getActiveContainingPart(const String &
     return getActiveContainingPart(part_info);
 }
 
-MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVectorInPartition(MergeTreeData::DataPartState state, const String & partition_id)
-{
-    DataPartStateAndPartitionID state_with_partition{state, partition_id};
-
-    auto lock = lockPartsRead();
-    return DataPartsVector(
-        data_parts_by_state_and_info.lower_bound(state_with_partition),
-        data_parts_by_state_and_info.upper_bound(state_with_partition));
-}
-
 MergeTreeData::DataPartPtr MergeTreeData::getOldVersionPartIfExists(const String &part_name)
 {
     auto lock = lockParts();
@@ -2920,48 +2910,6 @@ static void loadPartAndFixMetadataImpl(MergeTreeData::MutableDataPartPtr part)
 
     part->loadColumnsChecksumsIndexes(false, true);
     part->modification_time = disk->getLastModified(full_part_path).epochTime();
-}
-
-void MergeTreeData::calculateColumnSizesImpl()
-{
-    column_sizes.clear();
-
-    /// Take into account only committed parts
-    auto committed_parts_range = getDataPartsStateRange(DataPartState::Committed);
-    for (const auto & part : committed_parts_range)
-        addPartContributionToColumnSizes(part);
-}
-
-void MergeTreeData::addPartContributionToColumnSizes(const DataPartPtr & part)
-{
-    for (const auto & column : part->getColumns())
-    {
-        ColumnSize & total_column_size = column_sizes[column.name];
-        ColumnSize part_column_size = part->getColumnSize(column.name, *column.type);
-        total_column_size.add(part_column_size);
-    }
-}
-
-void MergeTreeData::removePartContributionToColumnSizes(const DataPartPtr & part)
-{
-    for (const auto & column : part->getColumns())
-    {
-        ColumnSize & total_column_size = column_sizes[column.name];
-        ColumnSize part_column_size = part->getColumnSize(column.name, *column.type);
-
-        auto log_subtract = [&](size_t & from, size_t value, const char * field)
-        {
-            if (value > from)
-                LOG_ERROR(log, "Possibly incorrect column size subtraction: {} - {} = {}, column: {}, field: {}",
-                    from, value, from - value, column.name, field);
-
-            from -= value;
-        };
-
-        log_subtract(total_column_size.data_compressed, part_column_size.data_compressed, ".data_compressed");
-        log_subtract(total_column_size.data_uncompressed, part_column_size.data_uncompressed, ".data_uncompressed");
-        log_subtract(total_column_size.marks, part_column_size.marks, ".marks");
-    }
 }
 
 void MergeTreeData::checkAlterPartitionIsPossible(
@@ -3329,53 +3277,6 @@ void MergeTreeData::bitengineRecodePartitionWhere(const ASTPtr & , bool , Contex
     throw Exception(" MergeTreeData::bitengineRecodePartitionWhere is not implemented!", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVector(
-    const DataPartStates & affordable_states, DataPartStateVector * out_states, bool require_projection_parts) const
-{
-    DataPartsVector res;
-    DataPartsVector buf;
-    {
-        auto lock = lockPartsRead();
-
-        for (auto state : affordable_states)
-        {
-            auto range = getDataPartsStateRange(state);
-
-            if (require_projection_parts)
-            {
-                for (const auto & part : range)
-                {
-                    for (const auto & [p_name, projection_part] : part->getProjectionParts())
-                        res.push_back(projection_part);
-                }
-            }
-            else
-            {
-                std::swap(buf, res);
-                res.clear();
-                std::merge(range.begin(), range.end(), buf.begin(), buf.end(), std::back_inserter(res), LessDataPart()); //-V783
-            }
-        }
-
-        if (out_states != nullptr)
-        {
-            out_states->resize(res.size());
-            if (require_projection_parts)
-            {
-                for (size_t i = 0; i < res.size(); ++i)
-                    (*out_states)[i] = res[i]->getParentPart()->getState();
-            }
-            else
-            {
-                for (size_t i = 0; i < res.size(); ++i)
-                    (*out_states)[i] = res[i]->getState();
-            }
-        }
-    }
-
-    return res;
-}
-
 MergeTreeData::DataPartsVector
 MergeTreeData::getAllDataPartsVector(MergeTreeData::DataPartStateVector * out_states, bool require_projection_parts) const
 {
@@ -3587,30 +3488,6 @@ MergeTreeData::MutableDataPartsVector MergeTreeData::tryLoadPartsInPathToAttach(
     LOG_DEBUG(log, "Loaded {} parts.", loaded_parts.size());
 
     return loaded_parts;
-}
-
-MergeTreeData::DataParts MergeTreeData::getDataParts(const DataPartStates & affordable_states) const
-{
-    DataParts res;
-    {
-        auto lock = lockPartsRead();
-        for (auto state : affordable_states)
-        {
-            auto range = getDataPartsStateRange(state);
-            res.insert(range.begin(), range.end());
-        }
-    }
-    return res;
-}
-
-MergeTreeData::DataParts MergeTreeData::getDataParts() const
-{
-    return getDataParts({DataPartState::Committed});
-}
-
-MergeTreeData::DataPartsVector MergeTreeData::getDataPartsVector() const
-{
-    return getDataPartsVector({DataPartState::Committed});
 }
 
 void MergeTreeData::Transaction::rollbackPartsToTemporaryState()

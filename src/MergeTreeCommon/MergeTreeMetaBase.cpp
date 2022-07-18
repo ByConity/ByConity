@@ -776,6 +776,87 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::createPart(
     return createPart(name, type, part_info, volume, relative_path, parent_part);
 }
 
+MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts(const DataPartStates & affordable_states) const
+{
+    DataParts res;
+    {
+        auto lock = lockPartsRead();
+        for (auto state : affordable_states)
+        {
+            auto range = getDataPartsStateRange(state);
+            res.insert(range.begin(), range.end());
+        }
+    }
+    return res;
+}
+
+MergeTreeMetaBase::DataPartsVector MergeTreeMetaBase::getDataPartsVector(
+    const DataPartStates & affordable_states, DataPartStateVector * out_states, bool require_projection_parts) const
+{
+    DataPartsVector res;
+    DataPartsVector buf;
+    {
+        auto lock = lockPartsRead();
+
+        for (auto state : affordable_states)
+        {
+            auto range = getDataPartsStateRange(state);
+
+            if (require_projection_parts)
+            {
+                for (const auto & part : range)
+                {
+                    for (const auto & [p_name, projection_part] : part->getProjectionParts())
+                        res.push_back(projection_part);
+                }
+            }
+            else
+            {
+                std::swap(buf, res);
+                res.clear();
+                std::merge(range.begin(), range.end(), buf.begin(), buf.end(), std::back_inserter(res), LessDataPart()); //-V783
+            }
+        }
+
+        if (out_states != nullptr)
+        {
+            out_states->resize(res.size());
+            if (require_projection_parts)
+            {
+                for (size_t i = 0; i < res.size(); ++i)
+                    (*out_states)[i] = res[i]->getParentPart()->getState();
+            }
+            else
+            {
+                for (size_t i = 0; i < res.size(); ++i)
+                    (*out_states)[i] = res[i]->getState();
+            }
+        }
+    }
+
+    return res;
+}
+
+MergeTreeMetaBase::DataPartsVector
+MergeTreeMetaBase::getDataPartsVectorInPartition(MergeTreeMetaBase::DataPartState state, const String & partition_id) const
+{
+    DataPartStateAndPartitionID state_with_partition{state, partition_id};
+
+    auto lock = lockPartsRead();
+    return DataPartsVector(
+        data_parts_by_state_and_info.lower_bound(state_with_partition), data_parts_by_state_and_info.upper_bound(state_with_partition));
+}
+
+MergeTreeMetaBase::DataParts MergeTreeMetaBase::getDataParts() const
+{
+    return getDataParts({DataPartState::Committed});
+}
+
+MergeTreeMetaBase::DataPartsVector MergeTreeMetaBase::getDataPartsVector() const
+{
+    return getDataPartsVector({DataPartState::Committed});
+}
+
 MergeTreeMetaBase::DataPartPtr MergeTreeMetaBase::getPartIfExists(const MergeTreePartInfo & part_info, const MergeTreeMetaBase::DataPartStates & valid_states)
 {
     auto lock = lockPartsRead();
@@ -1241,5 +1322,49 @@ String MergeTreeMetaBase::getStorageUniqueID() const
     else
         return storage_address;
 }
+
+void MergeTreeMetaBase::calculateColumnSizesImpl()
+{
+    column_sizes.clear();
+
+    /// Take into account only committed parts
+    auto committed_parts_range = getDataPartsStateRange(DataPartState::Committed);
+    for (const auto & part : committed_parts_range)
+        addPartContributionToColumnSizes(part);
+}
+
+
+void MergeTreeMetaBase::addPartContributionToColumnSizes(const DataPartPtr & part)
+{
+    for (const auto & column : part->getColumns())
+    {
+        ColumnSize & total_column_size = column_sizes[column.name];
+        ColumnSize part_column_size = part->getColumnSize(column.name, *column.type);
+        total_column_size.add(part_column_size);
+    }
+}
+
+void MergeTreeMetaBase::removePartContributionToColumnSizes(const DataPartPtr & part)
+{
+    for (const auto & column : part->getColumns())
+    {
+        ColumnSize & total_column_size = column_sizes[column.name];
+        ColumnSize part_column_size = part->getColumnSize(column.name, *column.type);
+
+        auto log_subtract = [&](size_t & from, size_t value, const char * field)
+        {
+            if (value > from)
+                LOG_ERROR(log, "Possibly incorrect column size subtraction: {} - {} = {}, column: {}, field: {}",
+                    from, value, from - value, column.name, field);
+
+            from -= value;
+        };
+
+        log_subtract(total_column_size.data_compressed, part_column_size.data_compressed, ".data_compressed");
+        log_subtract(total_column_size.data_uncompressed, part_column_size.data_uncompressed, ".data_uncompressed");
+        log_subtract(total_column_size.marks, part_column_size.marks, ".marks");
+    }
+}
+
 
 }
