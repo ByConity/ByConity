@@ -21,6 +21,7 @@
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <MergeTreeCommon/CnchServerResource.h>
 
 #include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -1131,12 +1132,20 @@ void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPar
 }
 
 void StorageCnchMergeTree::allocateImpl(
-    ContextPtr /*context*/,
-    ServerDataPartsVector & /*parts*/,
-    const String & /*local_table_name*/,
+    ContextPtr local_context,
+    ServerDataPartsVector & parts,
+    const String & local_table_name,
     WorkerGroupHandle & /*worker_group*/)
 {
-    /// TODO
+    auto cnch_resource = local_context->tryGetCnchServerResource();
+    auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
+
+    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query);
+
+    // if (context.getSettingsRef().enable_virtual_part)
+    //     setVirtualPartSize(context, parts, worker_group->getReadWorkers().size());
+
+    cnch_resource->addDataParts(getStorageUUID(), local_table_name, parts);
 }
 
 UInt64 StorageCnchMergeTree::getTimeTravelRetention()

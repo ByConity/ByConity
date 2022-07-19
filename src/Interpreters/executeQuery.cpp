@@ -454,6 +454,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     setQuerySpecificSettings(ast, context);
 
+    context->initCnchServerResource();
+
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);
     BlockIO res;
