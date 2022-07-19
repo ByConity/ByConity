@@ -262,27 +262,33 @@ void CnchPartGCThread::collectBetweenCheckpoints(
 }
 
 void CnchPartGCThread::collectStaleParts(
-    const ServerDataPartPtr & parent_part,
+    ServerDataPartPtr parent_part,
     TxnTimestamp begin,
     TxnTimestamp end,
     bool has_visible_ancestor,
     ServerDataPartsVector & stale_parts) const
 {
-    if (const auto & prev_part = parent_part->tryGetPreviousPart())
+    do
     {
-        bool child_has_visible_ancestor = has_visible_ancestor /* inherit from parent */
-            || (UInt64(parent_part->getCommitTime()) <= UInt64(end) /* parent is visible */
-                && !parent_part->isPartial() /* parent is a base one */);
+        const auto & prev_part = parent_part->tryGetPreviousPart();
 
-        if (child_has_visible_ancestor && UInt64(prev_part->getCommitTime()) > UInt64(begin))
+        if (!prev_part)
+            break;
+
+        has_visible_ancestor = has_visible_ancestor           // inherit from parent
+            || (parent_part->getCommitTime() < end.toUInt64() // parent is visible
+                && !parent_part->isPartial());                // parent is a base one
+
+        if (has_visible_ancestor && prev_part->getCommitTime() > begin.toUInt64())
         {
             LOG_DEBUG(
                 log, "Will remove part {} covered by {} /partial={}", prev_part->name(), parent_part->name(), parent_part->isPartial());
             stale_parts.push_back(prev_part);
         }
 
-        collectStaleParts(prev_part, begin, end, child_has_visible_ancestor, stale_parts);
+        parent_part = prev_part;
     }
+    while (true);
 }
 
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)

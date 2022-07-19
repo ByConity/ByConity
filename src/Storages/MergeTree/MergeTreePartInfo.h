@@ -77,8 +77,10 @@ struct MergeTreePartInfo
 
     bool containsExactly(const MergeTreePartInfo & rhs) const
     {
-        return partition_id == rhs.partition_id && min_block == rhs.min_block && max_block == rhs.max_block && level >= rhs.level
-            && mutation >= rhs.mutation;
+        return partition_id == rhs.partition_id
+            && min_block == rhs.min_block
+            && max_block == rhs.max_block
+            && (level > rhs.level || mutation > rhs.mutation);
     }
 
     /// Return part mutation version, if part wasn't mutated return zero
