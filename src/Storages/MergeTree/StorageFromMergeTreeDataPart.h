@@ -3,9 +3,9 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/QueryPipeline.h>
 #include <Core/Defines.h>
 

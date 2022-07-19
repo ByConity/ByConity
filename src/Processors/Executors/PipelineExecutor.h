@@ -44,6 +44,8 @@ public:
 
     const Processors & getProcessors() const { return processors; }
 
+    const ExecutingGraphPtr & getExecutingGraph() const { return graph; }
+
     /// Cancel execution. May be called from another thread.
     void cancel();
 

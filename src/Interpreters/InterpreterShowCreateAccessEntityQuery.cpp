@@ -186,7 +186,7 @@ namespace
             const auto & condition = policy.conditions[static_cast<size_t>(type)];
             if (!condition.empty())
             {
-                ParserExpression parser(DialectType::CLICKHOUSE);
+                ParserExpression parser(ParserSettings::CLICKHOUSE);
                 ASTPtr expr = parseQuery(parser, condition, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
                 query->conditions.emplace_back(type, std::move(expr));
             }

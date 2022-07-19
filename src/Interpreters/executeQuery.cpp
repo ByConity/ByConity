@@ -40,13 +40,14 @@
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
+#include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/QueryLog.h>
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/executeQuery.h>
-#include <Processors/QueryPlan/QueryCacheStep.h>
+#include <QueryPlan/QueryCacheStep.h>
 #include <Common/ProfileEvents.h>
 
 #include <Common/SensitiveDataMasker.h>
@@ -56,6 +57,7 @@
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
 
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 namespace ProfileEvents
 {
@@ -383,7 +385,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     String query_table;
     try
     {
-        ParserQuery parser(end, settings.dialect_type);
+        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
 
         /// TODO: parser should fail early when max_query_size limit is reached.
         ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
@@ -482,6 +484,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         if (settings.enable_global_with_statement)
         {
             ApplyWithGlobalVisitor().visit(ast);
+        }
+
+        {
+            SelectIntersectExceptQueryVisitor::Data data {context->getSettingsRef()};
+            SelectIntersectExceptQueryVisitor{data}.visit(ast);
         }
 
         /// Normalize SelectWithUnionQuery
@@ -827,6 +834,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
                 SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
                 scheduler->finishPlanSegments(query_id);
+                RuntimeFilterManager::getInstance().removeQuery(query_id);
             };
 
             auto exception_callback = [elem, context, ast,
@@ -886,6 +894,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
                 SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
                 scheduler->finishPlanSegments(query_id);
+                RuntimeFilterManager::getInstance().removeQuery(query_id);
             };
 
             res.finish_callback = std::move(finish_callback);

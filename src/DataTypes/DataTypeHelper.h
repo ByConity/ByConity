@@ -18,4 +18,7 @@ DataTypePtr deserializeDataTypeV1(ReadBuffer & buf);
 void serializeDataType(const DataTypePtr & data_type, WriteBuffer & buf);
 DataTypePtr deserializeDataType(ReadBuffer & buf);
 
+void serializeDataTypes(const DataTypes & data_types, WriteBuffer & buf);
+DataTypes deserializeDataTypes(ReadBuffer & buf);
+
 }

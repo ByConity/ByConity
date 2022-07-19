@@ -18,7 +18,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeHelper.h>
 #include <DataStreams/materializeBlock.h>
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 
 namespace DB

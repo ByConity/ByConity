@@ -56,6 +56,7 @@ public:
     ASTPtr & refPrewhere()  { return getExpression(Expression::PREWHERE); }
     ASTPtr & refWhere()     { return getExpression(Expression::WHERE); }
     ASTPtr & refHaving()    { return getExpression(Expression::HAVING); }
+    ASTPtr & refLimitLength()   { return getExpression(Expression::LIMIT_LENGTH); }
 
     const ASTPtr with()           const { return getExpression(Expression::WITH); }
     const ASTPtr select()         const { return getExpression(Expression::SELECT); }
@@ -72,6 +73,22 @@ public:
     const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
     const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+
+    ASTPtr getWith()            { return getExpression(Expression::WITH, true); }
+    ASTPtr getSelect()          { return getExpression(Expression::SELECT, true); }
+    ASTPtr getTables()          { return getExpression(Expression::TABLES, true); }
+    ASTPtr getPrewhere()        { return getExpression(Expression::PREWHERE, true); }
+    ASTPtr getWhere()           { return getExpression(Expression::WHERE, true); }
+    ASTPtr getGroupBy()         { return getExpression(Expression::GROUP_BY, true); }
+    ASTPtr getHaving()          { return getExpression(Expression::HAVING, true); }
+    ASTPtr getWindow()          { return getExpression(Expression::WINDOW, true); }
+    ASTPtr getOrderBy()         { return getExpression(Expression::ORDER_BY, true); }
+    ASTPtr getLimitByOffset()   { return getExpression(Expression::LIMIT_BY_OFFSET, true); }
+    ASTPtr getLimitByLength()   { return getExpression(Expression::LIMIT_BY_LENGTH, true); }
+    ASTPtr getLimitBy()         { return getExpression(Expression::LIMIT_BY, true); }
+    ASTPtr getLimitOffset()     { return getExpression(Expression::LIMIT_OFFSET, true); }
+    ASTPtr getLimitLength()     { return getExpression(Expression::LIMIT_LENGTH, true); }
+    ASTPtr getSettings()        { return getExpression(Expression::SETTINGS, true); }
 
     /// Set/Reset/Remove expression.
     void setExpression(Expression expr, ASTPtr && ast);
@@ -103,6 +120,7 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
+    std::vector<Expression> getExpressionTypes() const;
 protected:
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 

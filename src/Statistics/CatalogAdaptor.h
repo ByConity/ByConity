@@ -1,0 +1,66 @@
+#pragma once
+#include <memory>
+#include <unordered_map>
+#include <unordered_set>
+#include <Statistics/StatisticsBase.h>
+#include <Statistics/StatsTableIdentifier.h>
+#include <Storages/IStorage.h>
+
+namespace DB::Statistics
+{
+using ColumnDescVector = NamesAndTypes;
+class CatalogAdaptor
+{
+public:
+    virtual bool hasStatsData(const StatsTableIdentifier & table) = 0;
+    virtual StatsData readStatsData(const StatsTableIdentifier & table) = 0;
+    virtual StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) = 0;
+    virtual void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) = 0;
+    virtual void dropStatsData(const StatsTableIdentifier & table) = 0;
+    virtual void dropStatsDataAll(const String & database) = 0;
+    virtual void invalidateClusterStatsCache(const StatsTableIdentifier & table) = 0;
+
+    // const because it should use ConstContext
+    virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) const = 0;
+
+    virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const = 0;
+    virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) const = 0;
+    virtual StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) const = 0;
+    virtual UInt64 getUpdateTime() = 0;
+    virtual std::vector<String> getPartitionColumns(const StatsTableIdentifier & identifier) const = 0;
+    virtual ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const = 0;
+    virtual const Settings & getSettingsRef() const = 0;
+
+    virtual bool isTableCollectable(const StatsTableIdentifier & table) const
+    {
+        (void)table;
+        return true;
+    }
+
+    virtual bool isTableAutoUpdated(const StatsTableIdentifier & table) const
+    {
+        (void)table;
+        return false;
+    }
+
+    virtual void resetAllStats()
+    {
+        // TODO: do nothing
+    }
+
+    virtual ~CatalogAdaptor() = default;
+};
+
+
+using CatalogAdaptorPtr = std::shared_ptr<CatalogAdaptor>;
+using ConstCatalogAdaptorPtr = std::shared_ptr<const CatalogAdaptor>;
+CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context);
+inline ConstCatalogAdaptorPtr createConstCatalogAdaptor(ContextPtr context)
+{
+    // only const function can be used in this adaptor
+    return createCatalogAdaptor(context);
+}
+
+TxnTimestamp fetchTimestamp(ContextPtr context);
+
+}

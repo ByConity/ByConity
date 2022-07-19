@@ -1350,6 +1350,8 @@ if __name__ == '__main__':
         else:
             os.environ['CLICKHOUSE_CLIENT_OPT'] = ''
 
+        os.environ['CLICKHOUSE_ADDITIONAL_CLIENT_OPT'] = get_additional_client_options(args)
+
         os.environ['CLICKHOUSE_CLIENT_OPT'] += get_additional_client_options(args)
 
         # Set options for curl
@@ -1357,6 +1359,9 @@ if __name__ == '__main__':
             os.environ['CLICKHOUSE_URL_PARAMS'] += '&'
         else:
             os.environ['CLICKHOUSE_URL_PARAMS'] = ''
+
+        # this may have to be trimmed in some cases
+        os.environ['CLICKHOUSE_ADDITIONAL_CLIENT_URL_PARAMS'] = get_additional_client_options_url(args)
 
         os.environ['CLICKHOUSE_URL_PARAMS'] += get_additional_client_options_url(args)
 

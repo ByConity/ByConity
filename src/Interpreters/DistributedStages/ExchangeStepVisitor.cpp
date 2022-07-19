@@ -3,16 +3,16 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/IJoin.h>
 #include <Interpreters/TableJoin.h>
-#include <Processors/QueryPlan/ExchangeStep.h>
-#include <Processors/QueryPlan/AggregatingStep.h>
-#include <Processors/QueryPlan/MergingAggregatedStep.h>
+#include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/MergingAggregatedStep.h>
 #include <Processors/Transforms/AggregatingTransform.h>
-#include <Processors/QueryPlan/JoinStep.h>
+#include <QueryPlan/JoinStep.h>
 
 namespace DB
 {
 
-ExchangeStepResult ExchangeStepVisitor::visitPlan(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+ExchangeStepResult ExchangeStepVisitor::visitNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
     for (size_t i = 0; i < node->children.size(); ++i)
     {
@@ -44,9 +44,9 @@ void ExchangeStepVisitor::addExchange(QueryPlan::Node * node, ExchangeMode mode,
     exchange_context.has_gathered = false;
 }
 
-ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
-    visitPlan(node, exchange_context);
+    visitNode(node, exchange_context);
 
     MergingAggregatedStep * step = dynamic_cast<MergingAggregatedStep *>(node->step.get());
 
@@ -70,9 +70,9 @@ ExchangeStepResult ExchangeStepVisitor::visitMergingAggregatedStep(QueryPlan::No
     return nullptr;
 }
 
-ExchangeStepResult ExchangeStepVisitor::visitJoinStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+ExchangeStepResult ExchangeStepVisitor::visitJoinNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
-    visitPlan(node, exchange_context);
+    visitNode(node, exchange_context);
 
     JoinStep * step = dynamic_cast<JoinStep *>(node->step.get());
     auto join = step->getJoin();
@@ -121,9 +121,9 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinStep(QueryPlan::Node * node, Ex
     return nullptr;
 }
 
-ExchangeStepResult ExchangeStepVisitor::visitLimitStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+ExchangeStepResult ExchangeStepVisitor::visitLimitNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
-    visitPlan(node, exchange_context);
+    visitNode(node, exchange_context);
 
     if (!exchange_context.has_gathered)
     {
@@ -134,9 +134,9 @@ ExchangeStepResult ExchangeStepVisitor::visitLimitStep(QueryPlan::Node * node, E
     return nullptr;
 }
 
-ExchangeStepResult ExchangeStepVisitor::visitMergingSortedStep(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
+ExchangeStepResult ExchangeStepVisitor::visitMergingSortedNode(QueryPlan::Node * node, ExchangeStepContext & exchange_context)
 {
-    visitPlan(node, exchange_context);
+    visitNode(node, exchange_context);
 
     if (!exchange_context.has_gathered)
     {

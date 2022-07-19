@@ -1,0 +1,16 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ MergingAggregated est. 1 rows
+                     └─ Repartition Exchange est. 2 rows
+                        │     Partition by: {l_linestatus, l_returnflag}
+                        └─ Aggregating est. 2 rows
+                           │     Group by: {l_linestatus, l_returnflag}
+                           └─ Projection est. 5916531 rows
+                              └─ Filter est. 5916531 rows
+                                 │     l_shipdate <= cast(10471, 'Date')
+                                 └─ TableScan tpch.lineitem est. 6001215 rows

@@ -36,6 +36,9 @@ void NormalizeSelectWithUnionQueryMatcher::visit(ASTSelectWithUnionQuery & ast, 
     ASTs selects;
     const auto & select_list = ast.list_of_selects->children;
 
+    if (ast.is_normalized)
+        return;
+
     if (select_list.empty())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Got empty list of selects for ASTSelectWithUnionQuery");
 

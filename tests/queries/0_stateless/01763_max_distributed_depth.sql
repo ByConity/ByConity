@@ -1,3 +1,4 @@
+set enable_optimizer=0;
 DROP TABLE IF EXISTS tt6;
 
 CREATE TABLE tt6

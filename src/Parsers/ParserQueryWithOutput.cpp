@@ -24,7 +24,9 @@
 #include <Parsers/ParserExplainQuery.h>
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
 #include <Parsers/ParserRefreshQuery.h>
-
+#include <Parsers/ParserStatsQuery.h>
+#include <Parsers/ParserDumpInfoQuery.h>
+#include <Parsers/ParserReproduceQuery.h>
 
 namespace DB
 {
@@ -50,12 +52,19 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end, dt);
+    ParserDumpInfoQuery dump_info_p(end, dt);
+    ParserReproduceQuery reproduce_p(end);
     ParserRefreshQuery refresh_p(dt);
+    ParserCreateStatsQuery create_stats_p;
+    ParserShowStatsQuery show_stats_p;
+    ParserDropStatsQuery drop_stats_p;
 
     ASTPtr query;
 
     bool parsed =
            explain_p.parse(pos, query, expected)
+        || reproduce_p.parse(pos, query, expected)
+        || dump_info_p.parse(pos, query, expected)
         || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
@@ -74,7 +83,10 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || show_access_entities_p.parse(pos, query, expected)
         || show_grants_p.parse(pos, query, expected)
         || show_privileges_p.parse(pos, query, expected)
-        || refresh_p.parse(pos, query, expected);
+        || refresh_p.parse(pos, query, expected)
+        || create_stats_p.parse(pos, query, expected)
+        || show_stats_p.parse(pos, query, expected)
+        || drop_stats_p.parse(pos, query, expected);
 
     if (!parsed)
         return false;

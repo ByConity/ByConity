@@ -1,0 +1,10 @@
+Gather Exchange est. 17 rows, cost 7.106800e+01
+└─ Projection est. 17 rows, cost 6.818800e+01
+   └─ Full Join est. 17 rows, cost 6.693000e+01
+      │     Condition: id == id_1
+      ├─ Repartition Exchange est. 16 rows, cost 1.472000e+01
+      │  │     Partition by: {id}
+      │  └─ TableScan test_dump.people est. 16 rows, cost 1.184000e+01
+      └─ Repartition Exchange est. 16 rows, cost 1.472000e+01
+         │     Partition by: {id_1}
+         └─ TableScan test_dump.max_avg_parition_by est. 16 rows, cost 1.184000e+01

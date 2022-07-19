@@ -79,12 +79,7 @@ private:
 class ParserUnionList : public IParserDialectBase
 {
 public:
-    ParserUnionList(ParserPtr && elem_parser_, ParserPtr && s_union_parser_, ParserPtr && s_all_parser_, ParserPtr && s_distinct_parser_, enum DialectType t)
-        : IParserDialectBase(t)
-        , elem_parser(std::move(elem_parser_))
-        , s_union_parser(std::move(s_union_parser_))
-        , s_all_parser(std::move(s_all_parser_))
-        , s_distinct_parser(std::move(s_distinct_parser_))
+    ParserUnionList(ParserSettingsImpl t) : IParserDialectBase(t)
     {
     }
 
@@ -117,10 +112,6 @@ protected:
     const char * getName() const override { return "list of union elements"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 private:
-    ParserPtr elem_parser;
-    ParserPtr s_union_parser;
-    ParserPtr s_all_parser;
-    ParserPtr s_distinct_parser;
     ASTSelectWithUnionQuery::UnionModes union_modes;
 };
 
@@ -173,7 +164,7 @@ private:
     ParserPtr elem_parser;
 
 public:
-    ParserVariableArityOperatorList(const char * infix_, const char * function_, ParserPtr && elem_parser_, enum DialectType t)
+    ParserVariableArityOperatorList(const char * infix_, const char * function_, ParserPtr && elem_parser_, ParserSettingsImpl t)
         : IParserDialectBase(t),infix(infix_), function_name(function_), elem_parser(std::move(elem_parser_))
     {
     }
@@ -197,7 +188,7 @@ private:
 public:
     /** `operators_` - allowed operators and their corresponding functions
       */
-    ParserPrefixUnaryOperatorExpression(Operators_t operators_, ParserPtr && elem_parser_, enum DialectType t)
+    ParserPrefixUnaryOperatorExpression(Operators_t operators_, ParserPtr && elem_parser_, ParserSettingsImpl t)
         : IParserDialectBase(t),operators(operators_), elem_parser(std::move(elem_parser_))
     {
     }
@@ -330,7 +321,7 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 private:
-    static bool parseArgumentAndIntervalKind(Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, enum DialectType t);
+    static bool parseArgumentAndIntervalKind(Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, ParserSettingsImpl t);
     static bool parseSQLStandardArgumentAndIntervalKind(Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected);
 public:
     using IParserDialectBase::IParserDialectBase;
@@ -522,7 +513,7 @@ using ParserExpression = ParserLambdaExpression;
 class ParserExpressionWithOptionalAlias : public IParserDialectBase
 {
 public:
-    explicit ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, enum DialectType t, bool is_table_function = false);
+    explicit ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function = false);
 protected:
     ParserPtr impl;
 
@@ -539,7 +530,7 @@ protected:
 class ParserExpressionList : public IParserDialectBase
 {
 public:
-    explicit ParserExpressionList(bool allow_alias_without_as_keyword_, enum DialectType t, bool is_table_function_ = false)
+    explicit ParserExpressionList(bool allow_alias_without_as_keyword_, ParserSettingsImpl t, bool is_table_function_ = false)
         : IParserDialectBase(t), allow_alias_without_as_keyword(allow_alias_without_as_keyword_), is_table_function(is_table_function_) {}
 
 protected:
@@ -554,7 +545,7 @@ protected:
 class ParserNotEmptyExpressionList : public IParserDialectBase
 {
 public:
-    explicit ParserNotEmptyExpressionList(bool allow_alias_without_as_keyword, enum DialectType t)
+    explicit ParserNotEmptyExpressionList(bool allow_alias_without_as_keyword, ParserSettingsImpl t)
         : IParserDialectBase(t), nested_parser(allow_alias_without_as_keyword, t) {}
 private:
     ParserExpressionList nested_parser;

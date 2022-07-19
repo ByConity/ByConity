@@ -1,0 +1,45 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ MergingAggregated est. ? rows
+                        └─ Repartition Exchange est. ? rows
+                           │     Partition by: {cc_name, expr#substring(w_warehouse_name, 1, 20), sm_type}
+                           └─ Aggregating est. ? rows
+                              │     Group by: {cc_name, expr#substring(w_warehouse_name, 1, 20), sm_type}
+                              └─ Projection est. ? rows
+                                 └─ Inner Join est. ? rows
+                                    │     Condition: cs_ship_date_sk == d_date_sk
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {cs_ship_date_sk}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: cs_call_center_sk == cc_call_center_sk
+                                    │     ├─ Repartition Exchange est. ? rows
+                                    │     │  │     Partition by: {cs_call_center_sk}
+                                    │     │  └─ Inner Join est. ? rows
+                                    │     │     │     Condition: cs_ship_mode_sk == sm_ship_mode_sk
+                                    │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │  │     Partition by: {cs_ship_mode_sk}
+                                    │     │     │  └─ Inner Join est. ? rows
+                                    │     │     │     │     Condition: cs_warehouse_sk == w_warehouse_sk
+                                    │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │  │     Partition by: {cs_warehouse_sk}
+                                    │     │     │     │  └─ TableScan tpcds.catalog_sales est. ? rows
+                                    │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │        │     Partition by: {w_warehouse_sk}
+                                    │     │     │        └─ TableScan tpcds.warehouse est. ? rows
+                                    │     │     └─ Repartition Exchange est. ? rows
+                                    │     │        │     Partition by: {sm_ship_mode_sk}
+                                    │     │        └─ TableScan tpcds.ship_mode est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {cc_call_center_sk}
+                                    │        └─ TableScan tpcds.call_center est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {d_date_sk}
+                                       └─ Filter est. ? rows
+                                          │     (d_month_seq <= cast(1211, 'UInt32')) AND (d_month_seq >= 1200)
+                                          └─ TableScan tpcds.date_dim est. ? rows

@@ -1,0 +1,49 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ Projection est. ? rows
+                        └─ Inner Join est. ? rows
+                           │     Condition: c_current_cdemo_sk == sr_cdemo_sk
+                           ├─ Repartition Exchange est. ? rows
+                           │  │     Partition by: {c_current_cdemo_sk}
+                           │  └─ Inner Join est. ? rows
+                           │     │     Condition: hd_income_band_sk == ib_income_band_sk
+                           │     ├─ Repartition Exchange est. ? rows
+                           │     │  │     Partition by: {hd_income_band_sk}
+                           │     │  └─ Inner Join est. ? rows
+                           │     │     │     Condition: c_current_hdemo_sk == hd_demo_sk
+                           │     │     ├─ Repartition Exchange est. ? rows
+                           │     │     │  │     Partition by: {c_current_hdemo_sk}
+                           │     │     │  └─ Inner Join est. ? rows
+                           │     │     │     │     Condition: c_current_cdemo_sk == cd_demo_sk
+                           │     │     │     ├─ Repartition Exchange est. ? rows
+                           │     │     │     │  │     Partition by: {c_current_cdemo_sk}
+                           │     │     │     │  └─ Inner Join est. ? rows
+                           │     │     │     │     │     Condition: c_current_addr_sk == ca_address_sk
+                           │     │     │     │     ├─ Repartition Exchange est. ? rows
+                           │     │     │     │     │  │     Partition by: {c_current_addr_sk}
+                           │     │     │     │     │  └─ TableScan tpcds.customer est. ? rows
+                           │     │     │     │     └─ Repartition Exchange est. ? rows
+                           │     │     │     │        │     Partition by: {ca_address_sk}
+                           │     │     │     │        └─ Filter est. ? rows
+                           │     │     │     │           │     ca_city = 'Edgewood'
+                           │     │     │     │           └─ TableScan tpcds.customer_address est. ? rows
+                           │     │     │     └─ Repartition Exchange est. ? rows
+                           │     │     │        │     Partition by: {cd_demo_sk}
+                           │     │     │        └─ TableScan tpcds.customer_demographics est. ? rows
+                           │     │     └─ Repartition Exchange est. ? rows
+                           │     │        │     Partition by: {hd_demo_sk}
+                           │     │        └─ TableScan tpcds.household_demographics est. ? rows
+                           │     └─ Repartition Exchange est. ? rows
+                           │        │     Partition by: {ib_income_band_sk}
+                           │        └─ Filter est. ? rows
+                           │           │     (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                           │           └─ TableScan tpcds.income_band est. ? rows
+                           └─ Repartition Exchange est. ? rows
+                              │     Partition by: {sr_cdemo_sk}
+                              └─ TableScan tpcds.store_returns est. ? rows

@@ -1,6 +1,7 @@
 DROP DATABASE IF EXISTS test_01748;
 CREATE DATABASE test_01748;
 USE test_01748;
+set enable_optimizer=0; -- dict table
 
 DROP TABLE IF EXISTS `test.txt`;
 DROP DICTIONARY IF EXISTS test_dict;

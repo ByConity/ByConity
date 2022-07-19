@@ -374,6 +374,8 @@ private:
 
     void createSources()
     {
+        if (num_threads == 0)
+            throw Exception("num_threads can't be zero when use two-level aggregation", ErrorCodes::LOGICAL_ERROR);
         AggregatedDataVariantsPtr & first = data->at(0);
         shared_data = std::make_shared<ConvertingAggregatedToChunksSource::SharedData>();
 

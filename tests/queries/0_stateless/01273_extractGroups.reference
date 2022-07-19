@@ -1,11 +1,4 @@
 0 groups, zero matches
-1 group, multiple matches, String and FixedString
-['hello','world']
-['hello','world']
-['hello','world']
-['hello','world']
-['hello','world']
-['hello','world']
 multiple matches
 ['abc','111']
 big match
@@ -20,3 +13,10 @@ lots of groups
 0	0	[]
 260	100	[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 520	100	[1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+1 group, multiple matches, String and FixedString
+['hello','world']
+['hello','world']
+['hello','world']
+['hello','world']
+['hello','world']
+['hello','world']

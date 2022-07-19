@@ -15,10 +15,10 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Sources/DelayedSource.h>
 #include <Processors/Transforms/ExpressionTransform.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
 
 namespace ProfileEvents

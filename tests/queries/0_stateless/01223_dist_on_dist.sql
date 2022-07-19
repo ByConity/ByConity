@@ -1,3 +1,5 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
+
 drop table if exists merge_dist_01223;
 drop table if exists dist_01223;
 drop table if exists dist_layer_01223;

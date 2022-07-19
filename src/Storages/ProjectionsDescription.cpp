@@ -210,7 +210,7 @@ ProjectionsDescription ProjectionsDescription::parse(const String & str, const C
     if (str.empty())
         return result;
 
-    ParserProjectionDeclarationList parser(DialectType::CLICKHOUSE);
+    ParserProjectionDeclarationList parser(ParserSettings::CLICKHOUSE);
     ASTPtr list = parseQuery(parser, str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
     for (const auto & projection_ast : list->children)

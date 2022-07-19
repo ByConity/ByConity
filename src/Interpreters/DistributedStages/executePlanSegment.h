@@ -17,4 +17,11 @@ void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr c
 void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr context, bool async);
 
 void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
+
+/**
+ * Extract execute PlanSegmentTree as a common logic.
+ * Used by InterpreterSelectQueryUseOptimizer and InterpreterDistributedStages
+ */
+BlockIO executePlanSegmentTree(PlanSegmentTreePtr & plan_segment_tree, ContextMutablePtr context);
+
 }

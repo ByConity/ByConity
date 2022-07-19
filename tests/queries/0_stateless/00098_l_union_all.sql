@@ -1,4 +1,5 @@
 SET any_join_distinct_right_table_keys = 1;
+SET enable_optimizer = 0; -- TODO: semi/anti join is not supported by optimizer
 
 SELECT a,b,c,d FROM (SELECT 1 AS a,2 AS b, 3 AS c UNION ALL SELECT 2,3,4 ) js1 ANY INNER JOIN (SELECT 1 AS a,2 AS b,4 AS d UNION ALL SELECT 2,3,5) js2 USING (a) ORDER BY a,b,c,d ASC;
 SELECT a,b,c,d FROM (SELECT 1 AS a,2 AS b, 3 AS c UNION ALL SELECT 2,3,4 ) js1 ALL LEFT JOIN (SELECT 1 AS a,2 AS b,4 AS d UNION ALL SELECT 2,3,5) js2 USING (a) ORDER BY a,b,c,d ASC;

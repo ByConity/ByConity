@@ -6,8 +6,8 @@
 #include <Storages/MergeTree/RangesInDataPart.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Parsers/ASTSampleRatio.h>
-#include <Processors/QueryPlan/ReadFromMergeTree.h>
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
+#include <QueryPlan/ReadFromMergeTree.h>
 
 namespace DB
 {

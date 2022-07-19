@@ -1,0 +1,48 @@
+Projection est. 60525 rows
+└─ MergingSorted est. 60525 rows
+   └─ MergeSorting est. 60525 rows
+      └─ PartialSorting est. 60525 rows
+         └─ Gather Exchange est. 60525 rows
+            └─ MergeSorting est. 60525 rows
+               └─ PartialSorting est. 60525 rows
+                  └─ MergingAggregated est. 60525 rows
+                     └─ Repartition Exchange est. 60525 rows
+                        │     Partition by: {expr#toYear(o_orderdate), n_name}
+                        └─ Aggregating est. 60525 rows
+                           │     Group by: {expr#toYear(o_orderdate), n_name}
+                           └─ Projection est. 21531967 rows
+                              └─ Inner Join est. 21554952 rows
+                                 │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
+                                 ├─ Repartition Exchange est. 5993742 rows
+                                 │  │     Partition by: {l_partkey, l_suppkey}
+                                 │  └─ Inner Join est. 5993742 rows
+                                 │     │     Condition: l_orderkey == o_orderkey
+                                 │     ├─ Repartition Exchange est. 6001215 rows
+                                 │     │  │     Partition by: {l_orderkey}
+                                 │     │  └─ TableScan tpch.lineitem est. 6001215 rows
+                                 │     └─ Repartition Exchange est. 1500000 rows
+                                 │        │     Partition by: {o_orderkey}
+                                 │        └─ TableScan tpch.orders est. 1500000 rows
+                                 └─ Repartition Exchange est. 719996 rows
+                                    │     Partition by: {p_partkey, ps_suppkey}
+                                    └─ Inner Join est. 719996 rows
+                                       │     Condition: ps_suppkey == s_suppkey
+                                       ├─ Repartition Exchange est. 719996 rows
+                                       │  │     Partition by: {ps_suppkey}
+                                       │  └─ Inner Join est. 719996 rows
+                                       │     │     Condition: ps_partkey == p_partkey
+                                       │     ├─ Repartition Exchange est. 800000 rows
+                                       │     │  │     Partition by: {ps_partkey}
+                                       │     │  └─ TableScan tpch.partsupp est. 800000 rows
+                                       │     └─ Repartition Exchange est. 180000 rows
+                                       │        │     Partition by: {p_partkey}
+                                       │        └─ Filter est. 180000 rows
+                                       │           │     p_name LIKE '%green%'
+                                       │           └─ TableScan tpch.part est. 200000 rows
+                                       └─ Repartition Exchange est. 10000 rows
+                                          │     Partition by: {s_suppkey}
+                                          └─ Inner Join est. 10000 rows
+                                             │     Condition: s_nationkey == n_nationkey
+                                             ├─ TableScan tpch.supplier est. 10000 rows
+                                             └─ Broadcast Exchange est. 25 rows
+                                                └─ TableScan tpch.nation est. 25 rows

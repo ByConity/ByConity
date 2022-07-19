@@ -1,0 +1,23 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ MergingAggregated est. 1 rows
+                     └─ Repartition Exchange est. 1 rows
+                        │     Partition by: {l_shipmode}
+                        └─ Aggregating est. 1 rows
+                           │     Group by: {l_shipmode}
+                           └─ Projection est. 909603 rows
+                              └─ Inner Join est. 909603 rows
+                                 │     Condition: o_orderkey == l_orderkey
+                                 ├─ Repartition Exchange est. 1500000 rows
+                                 │  │     Partition by: {o_orderkey}
+                                 │  └─ TableScan tpch.orders est. 1500000 rows
+                                 └─ Repartition Exchange est. 909603 rows
+                                    │     Partition by: {l_orderkey}
+                                    └─ Filter est. 909603 rows
+                                       │     (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate) AND (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_receiptdate >= cast(8766, 'Date'))
+                                       └─ TableScan tpch.lineitem est. 6001215 rows

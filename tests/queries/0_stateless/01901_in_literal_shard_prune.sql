@@ -1,3 +1,4 @@
+set enable_optimizer = 0; -- schedule local
 set optimize_skip_unused_shards=1;
 set force_optimize_skip_unused_shards=1;
 

@@ -560,4 +560,14 @@ ASTPtr ASTSelectQuery::deserialize(ReadBuffer & buf)
     return select;
 }
 
+std::vector<ASTSelectQuery::Expression> ASTSelectQuery::getExpressionTypes() const
+{
+    std::vector<Expression> expression_types(positions.size());
+
+    for (const auto & [type, index]: positions)
+        expression_types[index] = type;
+
+    return expression_types;
+}
+
 }

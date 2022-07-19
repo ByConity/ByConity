@@ -8,6 +8,7 @@ unset CLICKHOUSE_LOG_COMMENT
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CURDIR"/../shell_config.sh
+CLICKHOUSE_CLIENT=${CLICKHOUSE_CLIENT//enable_optimizer=1/enable_optimizer=0} # schedule local
 
 ${CLICKHOUSE_CLIENT} -q "drop table if exists m"
 ${CLICKHOUSE_CLIENT} -q "create table m (dummy UInt8) ENGINE = Distributed('test_cluster_two_shards', 'system', 'one')"

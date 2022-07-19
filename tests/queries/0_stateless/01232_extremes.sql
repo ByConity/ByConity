@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- schedule
 set send_logs_level = 'error';
 set extremes = 1;
 

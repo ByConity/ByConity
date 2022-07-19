@@ -23,6 +23,9 @@ struct WindowFunctionDescription
     Names argument_names;
 
     std::string dump() const;
+
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 struct WindowFrame
@@ -107,6 +110,9 @@ struct WindowFrame
         assert(false);
         return "<unknown frame boundary>";
     }
+    
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 struct WindowDescription
@@ -133,6 +139,8 @@ struct WindowDescription
     std::string dump() const;
 
     void checkValid() const;
+    void serialize(WriteBuffer & buffer) const;
+    void deserialize(ReadBuffer & buffer);
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;

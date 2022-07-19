@@ -9,14 +9,6 @@ SELECT extractAllGroupsHorizontal('hello world', materialize('\\w+')); --{server
 SELECT '0 groups, zero matches';
 SELECT extractAllGroupsHorizontal('hello world', '\\w+');  -- { serverError 36 }
 
-SELECT '1 group, multiple matches, String and FixedString';
-SELECT extractAllGroupsHorizontal('hello world', '(\\w+)');
-SELECT extractAllGroupsHorizontal('hello world', CAST('(\\w+)' as FixedString(5)));
-SELECT extractAllGroupsHorizontal(CAST('hello world' AS FixedString(12)), '(\\w+)');
-SELECT extractAllGroupsHorizontal(CAST('hello world' AS FixedString(12)), CAST('(\\w+)' as FixedString(5)));
-SELECT extractAllGroupsHorizontal(materialize(CAST('hello world' AS FixedString(12))), '(\\w+)');
-SELECT extractAllGroupsHorizontal(materialize(CAST('hello world' AS FixedString(12))), CAST('(\\w+)' as FixedString(5)));
-
 SELECT 'mutiple groups, multiple matches';
 SELECT extractAllGroupsHorizontal('abc=111, def=222, ghi=333 "jkl mno"="444 foo bar"', '("[^"]+"|\\w+)=("[^"]+"|\\w+)');
 
@@ -49,3 +41,13 @@ FROM (
         extractAllGroupsHorizontal(haystack, repeat('(\\w)', 100)) AS matches
     FROM numbers(3)
 );
+
+SET enable_optimizer=0;
+
+SELECT '1 group, multiple matches, String and FixedString';
+SELECT extractAllGroupsHorizontal('hello world', '(\\w+)');
+SELECT extractAllGroupsHorizontal('hello world', CAST('(\\w+)' as FixedString(5)));
+SELECT extractAllGroupsHorizontal(CAST('hello world' AS FixedString(12)), '(\\w+)');
+SELECT extractAllGroupsHorizontal(CAST('hello world' AS FixedString(12)), CAST('(\\w+)' as FixedString(5)));
+SELECT extractAllGroupsHorizontal(materialize(CAST('hello world' AS FixedString(12))), '(\\w+)');
+SELECT extractAllGroupsHorizontal(materialize(CAST('hello world' AS FixedString(12))), CAST('(\\w+)' as FixedString(5)));

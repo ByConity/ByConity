@@ -42,12 +42,39 @@ protected:
     virtual bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) = 0;
 };
 
+struct ParserSettingsImpl
+{
+    bool parse_literal_as_decimal;
+};
+
+struct ParserSettings
+{
+    const static inline ParserSettingsImpl CLICKHOUSE {
+        .parse_literal_as_decimal = false,
+    };
+
+    const static inline ParserSettingsImpl ANSI {
+        .parse_literal_as_decimal = false,
+    };
+
+    static ParserSettingsImpl valueOf(enum DialectType dt)
+    {
+        switch (dt)
+        {
+            case DialectType::CLICKHOUSE:
+                return CLICKHOUSE;
+            case DialectType::ANSI:
+                return ANSI;
+        }
+    }
+};
+
 class IParserDialectBase : public IParserBase
 {
 public:
-    explicit IParserDialectBase(enum DialectType t = DialectType::CLICKHOUSE) : dt(t) {}
+    explicit IParserDialectBase(ParserSettingsImpl t = ParserSettings::CLICKHOUSE) : dt(t) {}
 protected:
-    enum DialectType dt;
+    ParserSettingsImpl dt;
 };
 
 }

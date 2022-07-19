@@ -41,34 +41,34 @@
 #include <Interpreters/ProcessList.h>
 
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/AggregatingStep.h>
-#include <Processors/QueryPlan/ArrayJoinStep.h>
-#include <Processors/QueryPlan/CreatingSetsStep.h>
-#include <Processors/QueryPlan/CubeStep.h>
-#include <Processors/QueryPlan/DistinctStep.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/ExtremesStep.h>
-#include <Processors/QueryPlan/FillingStep.h>
-#include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/FinalSampleStep.h>
-#include <Processors/QueryPlan/FinishSortingStep.h>
-#include <Processors/QueryPlan/JoinStep.h>
-#include <Processors/QueryPlan/LimitByStep.h>
-#include <Processors/QueryPlan/LimitStep.h>
-#include <Processors/QueryPlan/MergeSortingStep.h>
-#include <Processors/QueryPlan/MergingAggregatedStep.h>
-#include <Processors/QueryPlan/MergingSortedStep.h>
-#include <Processors/QueryPlan/OffsetStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/PartialSortingStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/ReadNothingStep.h>
-#include <Processors/QueryPlan/RollupStep.h>
-#include <Processors/QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <Processors/QueryPlan/SubstitutionStep.h>
-#include <Processors/QueryPlan/TotalsHavingStep.h>
-#include <Processors/QueryPlan/WindowStep.h>
+#include <QueryPlan/AggregatingStep.h>
+#include <QueryPlan/ArrayJoinStep.h>
+#include <QueryPlan/CreatingSetsStep.h>
+#include <QueryPlan/CubeStep.h>
+#include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/ExtremesStep.h>
+#include <QueryPlan/FillingStep.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/FinalSampleStep.h>
+#include <QueryPlan/FinishSortingStep.h>
+#include <QueryPlan/JoinStep.h>
+#include <QueryPlan/LimitByStep.h>
+#include <QueryPlan/LimitStep.h>
+#include <QueryPlan/MergeSortingStep.h>
+#include <QueryPlan/MergingAggregatedStep.h>
+#include <QueryPlan/MergingSortedStep.h>
+#include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/ReadNothingStep.h>
+#include <QueryPlan/RollupStep.h>
+#include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/SubstitutionStep.h>
+#include <QueryPlan/TotalsHavingStep.h>
+#include <QueryPlan/WindowStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/AggregatingTransform.h>
@@ -129,7 +129,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     /// Keep columns that are required after the filter actions.
     for (const auto & column_str : prerequisite_columns)
     {
-        ParserExpression expr_parser(context->getSettingsRef().dialect_type);
+        ParserExpression expr_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
         expr_list->children.push_back(parseQuery(expr_parser, column_str, 0, context->getSettingsRef().max_parser_depth));
     }
 
@@ -1484,7 +1484,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
         executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
 }
 
-static StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options)
+StreamLocalLimits getLimitsForStorage(const Settings & settings, const SelectQueryOptions & options)
 {
     StreamLocalLimits limits;
     limits.mode = LimitsMode::LIMITS_TOTAL;
@@ -2411,7 +2411,7 @@ void InterpreterSelectQuery::executeWindow(QueryPlan & query_plan)
             query_plan.addStep(std::move(merging_sorted));
         }
 
-        auto window_step = std::make_unique<WindowStep>(query_plan.getCurrentDataStream(), w, w.window_functions);
+        auto window_step = std::make_unique<WindowStep>(query_plan.getCurrentDataStream(), w, w.window_functions, false);
         window_step->setStepDescription("Window step for window '" + w.window_name + "'");
 
         query_plan.addStep(std::move(window_step));

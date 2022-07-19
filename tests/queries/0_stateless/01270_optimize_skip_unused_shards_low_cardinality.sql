@@ -1,3 +1,5 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
+
 set optimize_skip_unused_shards=1;
 set force_optimize_skip_unused_shards=2;
 set allow_suspicious_low_cardinality_types=1;

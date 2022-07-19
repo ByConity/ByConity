@@ -5,6 +5,7 @@
 #include <boost/noncopyable.hpp>
 #include <Core/Names.h>
 #include <Core/Types.h>
+#include <Core/Field.h>
 #include <DataTypes/DataTypeCustom.h>
 #include <DataTypes/Serializations/ISerialization.h>
 
@@ -126,6 +127,18 @@ public:
       * It is the "default" default, regardless the fact that a table could contain different user-specified default.
       */
     virtual Field getDefault() const = 0;
+
+    struct Range
+    {
+        Field min;
+        Field max;
+    };
+
+    /** Get min/max value of data type(Null excluded).
+      * This method is optional to implemented, it is used in query optimization, see also:
+      *   - UnwrapCastInComparison.cpp
+      */
+    virtual std::optional<Range> getRange() const { return std::nullopt; }
 
     /** The data type can be promoted in order to try to avoid overflows.
       * Data types which can be promoted are typically Number or Decimal data types.
@@ -525,7 +538,7 @@ inline bool isNotCreatable(const T & data_type)
 inline bool isNotDecimalButComparableToDecimal(const DataTypePtr & data_type)
 {
     WhichDataType which(data_type);
-    return which.isInt() || which.isUInt();
+    return which.isInt() || which.isUInt() || which.isFloat();
 }
 
 inline bool isCompilableType(const DataTypePtr & data_type)

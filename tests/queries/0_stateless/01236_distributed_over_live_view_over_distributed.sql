@@ -1,4 +1,5 @@
 SET allow_experimental_live_view = 1;
+SET enable_optimizer=0;
 
 DROP TABLE IF EXISTS lv;
 DROP TABLE IF EXISTS visits;

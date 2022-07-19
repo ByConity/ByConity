@@ -1,3 +1,4 @@
+set enable_optimizer=0;
 DROP TABLE IF EXISTS test1;
 
 CREATE TABLE test1(i int, j int) ENGINE Log;

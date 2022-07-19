@@ -1,5 +1,5 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Processors/QueryPlan/QueryPlan.h>
+#include <QueryPlan/QueryPlan.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/ReadBufferFromString.h>
 

@@ -55,7 +55,7 @@ namespace
         });
     }
 
-    bool parseConditionalExpression(IParserBase::Pos & pos, Expected & expected, ASTPtr & expr, enum DialectType dt)
+    bool parseConditionalExpression(IParserBase::Pos & pos, Expected & expected, ASTPtr & expr, ParserSettingsImpl dt)
     {
         return IParserBase::wrapParseImpl(pos, [&]
         {
@@ -121,7 +121,7 @@ namespace
 
 
     bool
-    parseForClauses(IParserBase::Pos & pos, Expected & expected, bool alter, std::vector<std::pair<ConditionType, ASTPtr>> & conditions, enum DialectType dt)
+    parseForClauses(IParserBase::Pos & pos, Expected & expected, bool alter, std::vector<std::pair<ConditionType, ASTPtr>> & conditions, ParserSettingsImpl dt)
     {
         std::vector<std::pair<ConditionType, ASTPtr>> res_conditions;
 

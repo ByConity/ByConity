@@ -216,5 +216,12 @@ struct SettingFieldDialectType
     }
 };
 
+enum class CTEMode
+{
+    INLINED,
+    SHARED,
+    AUTO,
+};
 
+DECLARE_SETTING_ENUM(CTEMode)
 }

@@ -8,10 +8,10 @@ namespace DB
 {
 
 /// Returns single row with explain results
-class InterpreterExplainQuery : public IInterpreter, WithContext
+class InterpreterExplainQuery : public IInterpreter, WithMutableContext
 {
 public:
-    InterpreterExplainQuery(const ASTPtr & query_, ContextPtr context_) : WithContext(context_),
+    InterpreterExplainQuery(const ASTPtr & query_, ContextMutablePtr context_) : WithMutableContext(context_),
         query(query_), log(&Poco::Logger::get("InterpreterExplainQuery")) {}
 
     BlockIO execute() override;
@@ -41,6 +41,8 @@ private:
     void listRowsOfOnePartition(StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer);
 
     std::optional<String> getActivePartCondition(StoragePtr & storage);
+
+    void explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line);
 };
 
 

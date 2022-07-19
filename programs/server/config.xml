@@ -21,7 +21,7 @@
 
             [1]: https://github.com/pocoproject/poco/blob/poco-1.9.4-release/Foundation/include/Poco/Logger.h#L105-L114
         -->
-        <level>trace</level>
+        <level>debug</level>
         <log>/var/log/clickhouse-server/clickhouse-server.log</log>
         <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
         <!-- Rotation policy
@@ -84,6 +84,7 @@
     <!-- port for exchange and its status -->
     <exchange_port>9300</exchange_port>
     <exchange_status_port>9400</exchange_status_port>
+    <ha_tcp_port>9800</ha_tcp_port>
 
     <!-- Compatibility with MySQL protocol.
          ClickHouse will pretend to be MySQL for applications connecting to this port.
@@ -636,12 +637,16 @@
                  <replica>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
              <shard>
                  <replica>
                      <host>localhost</host>
                      <port>9000</port>
+                     <exchange_port>9300</exchange_port>
+                     <exchange_status_port>9400</exchange_status_port>
                  </replica>
              </shard>
         </test_cluster_two_shards_localhost>
@@ -650,12 +655,16 @@
                 <replica>
                     <host>127.0.0.1</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
                 <replica>
                     <host>127.0.0.2</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_cluster_two_shards>
@@ -665,6 +674,8 @@
                 <replica>
                     <host>127.0.0.1</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
@@ -672,6 +683,8 @@
                 <replica>
                     <host>127.0.0.2</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_cluster_two_shards_internal_replication>
@@ -681,6 +694,8 @@
                     <host>localhost</host>
                     <port>9440</port>
                     <secure>1</secure>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_shard_localhost_secure>
@@ -689,12 +704,16 @@
                 <replica>
                     <host>localhost</host>
                     <port>9000</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
             <shard>
                 <replica>
                     <host>localhost</host>
                     <port>1</port>
+                    <exchange_port>9300</exchange_port>
+                    <exchange_status_port>9400</exchange_status_port>
                 </replica>
             </shard>
         </test_unavailable_shard>

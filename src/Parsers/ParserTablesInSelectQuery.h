@@ -23,7 +23,7 @@ public:
 class ParserTablesInSelectQueryElement : public IParserDialectBase
 {
 public:
-    explicit ParserTablesInSelectQueryElement(bool is_first_, enum DialectType t) : IParserDialectBase(t), is_first(is_first_) {}
+    explicit ParserTablesInSelectQueryElement(bool is_first_, ParserSettingsImpl t) : IParserDialectBase(t), is_first(is_first_) {}
 
 protected:
     const char * getName() const override { return "table, table function, subquery or list of joined tables"; }

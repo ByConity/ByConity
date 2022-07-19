@@ -4,6 +4,7 @@
 CUR_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=../shell_config.sh
 . "$CUR_DIR"/../shell_config.sh
+CLICKHOUSE_CLIENT=${CLICKHOUSE_CLIENT//enable_optimizer=1/enable_optimizer=0} # schedule local
 
 # -- NOTE: this test cannot use 'current_database = $CLICKHOUSE_DATABASE',
 # -- because it does not propagated via remote queries,

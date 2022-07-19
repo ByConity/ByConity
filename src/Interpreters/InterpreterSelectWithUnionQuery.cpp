@@ -8,18 +8,18 @@
 #include <Parsers/ASTTEALimit.h>
 #include <Parsers/ASTOrderByElement.h>
 #include <Parsers/ASTSubquery.h>
-#include <Processors/QueryPlan/DistinctStep.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/UnionStep.h>
-#include <Processors/QueryPlan/LimitStep.h>
-#include <Processors/QueryPlan/OffsetStep.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 
 #include <Storages/StorageMemory.h>
 
+#include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/UnionStep.h>
+#include <QueryPlan/LimitStep.h>
+#include <QueryPlan/OffsetStep.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <Common/typeid_cast.h>
 
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -218,8 +218,10 @@ InterpreterSelectWithUnionQuery::buildCurrentChildInterpreter(const ASTPtr & ast
 {
     if (ast_ptr_->as<ASTSelectWithUnionQuery>())
         return std::make_unique<InterpreterSelectWithUnionQuery>(ast_ptr_, context, options, current_required_result_column_names);
-    else
+    else if (ast_ptr_->as<ASTSelectQuery>())
         return std::make_unique<InterpreterSelectQuery>(ast_ptr_, context, options, current_required_result_column_names);
+    else
+        throw Exception("Unrecognized Query kind", ErrorCodes::NOT_IMPLEMENTED);
 }
 
 InterpreterSelectWithUnionQuery::~InterpreterSelectWithUnionQuery() = default;

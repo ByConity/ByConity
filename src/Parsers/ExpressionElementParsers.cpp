@@ -533,7 +533,7 @@ bool ParserWindowReference::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 }
 
 static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & pos,
-    Expected & expected, enum DialectType dt)
+    Expected & expected, ParserSettingsImpl dt)
 {
     ParserKeyword keyword_rows("ROWS");
     ParserKeyword keyword_groups("GROUPS");
@@ -666,7 +666,7 @@ static bool tryParseFrameDefinition(ASTWindowDefinition * node, IParser::Pos & p
 
 // All except parent window name.
 static bool parseWindowDefinitionParts(IParser::Pos & pos,
-    ASTWindowDefinition & node, Expected & expected, enum DialectType dt)
+    ASTWindowDefinition & node, Expected & expected, ParserSettingsImpl dt)
 {
     ParserKeyword keyword_partition_by("PARTITION BY");
     ParserNotEmptyExpressionList columns_partition_by(
@@ -798,7 +798,7 @@ bool ParserWindowList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserCodecDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserIdentifierWithOptionalParameters>(DialectType::CLICKHOUSE),
+    return ParserList(std::make_unique<ParserIdentifierWithOptionalParameters>(ParserSettings::CLICKHOUSE),
         std::make_unique<ParserToken>(TokenType::Comma), false).parse(pos, node, expected);
 }
 
@@ -1511,7 +1511,7 @@ bool ParserNumber::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     memcpy(buf, pos->begin, sz);
     buf[sz] = 0;
 
-    if (dt == DialectType::ANSI && !!(dot = strchr(buf, '.')))
+    if (dt.parse_literal_as_decimal && !!(dot = strchr(buf, '.')))
     {
         /* parse as decimal */
         UInt32 integral = dot - buf;
@@ -1767,6 +1767,8 @@ const char * ParserAlias::restricted_keywords[] =
     "WHERE",
     "WINDOW",
     "WITH",
+    "INTERSECT",
+    "EXCEPT",
     nullptr
 };
 
@@ -2167,6 +2169,7 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         || ParserFunction(dt).parse(pos, node, expected)
         || ParserQualifiedAsterisk(dt).parse(pos, node, expected)
         || ParserAsterisk(dt).parse(pos, node, expected)
+        || ParserExistsExpression(dt).parse(pos, node, expected)
         || ParserCompoundIdentifier(false, true).parse(pos, node, expected)
         || ParserSubstitution(dt).parse(pos, node, expected)
         || ParserMySQLGlobalVariable().parse(pos, node, expected);
@@ -2221,6 +2224,15 @@ bool ParserWithOptionalAlias::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     return true;
 }
 
+bool ParserExistsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    if (ParserKeyword("EXISTS").ignore(pos, expected) && ParserSubquery().parse(pos, node, expected))
+    {
+        node = makeASTFunction("exists", node);
+        return true;
+    }
+    return false;
+}
 
 bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {

@@ -3,7 +3,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTTEALimit.h>
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 #include <Common/typeid_cast.h>
 #include <IO/Operators.h>
 #include <IO/ReadBuffer.h>
@@ -44,18 +44,29 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
 
     auto mode_to_str = [&](auto mode)
     {
-        if (mode == Mode::Unspecified)
-            return "";
-        else if (mode == Mode::ALL)
-            return " ALL";
-        else
-            return " DISTINCT";
+        if (mode == Mode::ALL)
+            return "UNION ALL";
+        else if (mode == Mode::DISTINCT)
+            return "UNION DISTINCT";
+        else if (mode == Mode::INTERSECT_UNSPECIFIED)
+            return "INTERSECT";
+        else if (mode == Mode::INTERSECT_ALL)
+            return "INTERSECT ALL";
+        else if (mode == Mode::INTERSECT_DISTINCT)
+            return "INTERSECT DISTINCT";
+        else if (mode == Mode::EXCEPT_UNSPECIFIED)
+            return "EXCEPT";
+        else if (mode == Mode::EXCEPT_ALL)
+            return "EXCEPT ALL";
+        else if (mode == Mode::EXCEPT_DISTINCT)
+            return "EXCEPT DISTINCT";
+        return "";
     };
 
     for (ASTs::const_iterator it = list_of_selects->children.begin(); it != list_of_selects->children.end(); ++it)
     {
         if (it != list_of_selects->children.begin())
-            settings.ostr << settings.nl_or_ws << indent_str << (settings.hilite ? hilite_keyword : "") << "UNION"
+            settings.ostr << settings.nl_or_ws << indent_str << (settings.hilite ? hilite_keyword : "")
                           << mode_to_str((is_normalized) ? union_mode : list_of_modes[it - list_of_selects->children.begin() - 1])
                           << (settings.hilite ? hilite_none : "");
 

@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- join table
 DROP TABLE IF EXISTS test_joinGet;
 
 CREATE TABLE test_joinGet(user_id Nullable(Int32), name String) Engine = Join(ANY, LEFT, user_id);

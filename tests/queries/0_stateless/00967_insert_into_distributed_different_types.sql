@@ -1,4 +1,5 @@
 set insert_distributed_sync=1;
+set enable_optimizer=0; -- caused by subcolumn?
 
 DROP TABLE IF EXISTS dist_00967;
 DROP TABLE IF EXISTS underlying_00967;

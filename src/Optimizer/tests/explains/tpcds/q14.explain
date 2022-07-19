@@ -1,0 +1,836 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Aggregating est. ? rows
+               │     Group by: {expr#'store'_1, i_brand_id_21, i_category_id_21, i_class_id_21}
+               └─ Gather Exchange est. ? rows
+                  └─ Union est. ? rows
+                     ├─ Projection est. ? rows
+                     │  └─ Inner Join est. ? rows
+                     │     │     Condition: 
+                     │     │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))` > `expr#avg(multiply(quantity, list_price))`
+                     │     ├─ MergingAggregated est. 152480 rows
+                     │     │  └─ Repartition Exchange est. 152480 rows
+                     │     │     │     Partition by: {i_brand_id, i_category_id, i_class_id}
+                     │     │     └─ Aggregating est. 152480 rows
+                     │     │        │     Group by: {i_brand_id, i_category_id, i_class_id}
+                     │     │        └─ Projection est. 45121367 rows
+                     │     │           └─ Inner Join est. 45121367 rows
+                     │     │              │     Condition: ss_item_sk == i_item_sk
+                     │     │              ├─ Repartition Exchange est. 45121367 rows
+                     │     │              │  │     Partition by: {ss_item_sk}
+                     │     │              │  └─ Inner Join est. 45121367 rows
+                     │     │              │     │     Condition: ss_sold_date_sk == d_date_sk
+                     │     │              │     ├─ Local Exchange est. 2879987999 rows
+                     │     │              │     │  └─ Filter est. 2879987999 rows
+                     │     │              │     │     │     isNotNull(ss_item_sk)
+                     │     │              │     │     │     Dynamic Filters: {ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range}
+                     │     │              │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                     │     │              │     └─ Broadcast Exchange est. 29 rows
+                     │     │              │        └─ Projection est. 29 rows
+                     │     │              │           │     Dynamic Filters Builder: {d_date_sk}
+                     │     │              │           └─ Filter est. 29 rows
+                     │     │              │              │     (d_moy = 11) AND (d_year = cast(2001, 'UInt32'))
+                     │     │              │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │              └─ Inner Join est. 300000 rows
+                     │     │                 │     Condition: i_item_sk == i_item_sk_1
+                     │     │                 ├─ Repartition Exchange est. 300000 rows
+                     │     │                 │  │     Partition by: {i_item_sk}
+                     │     │                 │  └─ Filter est. 300000 rows
+                     │     │                 │     │     isNotNull(i_item_sk)
+                     │     │                 │     └─ TableScan tpcds.item est. 300000 rows
+                     │     │                 └─ MergingAggregated est. 299593 rows
+                     │     │                    └─ Repartition Exchange est. 299593 rows
+                     │     │                       │     Partition by: {i_item_sk_1}
+                     │     │                       └─ Aggregating est. 299593 rows
+                     │     │                          │     Group by: {i_item_sk_1}
+                     │     │                          └─ Inner Join est. 432016789 rows
+                     │     │                             │     Condition: i_brand_id_6 == i_brand_id_1, i_category_id_6 == i_category_id_1, i_class_id_6 == i_class_id_1
+                     │     │                             ├─ Repartition Exchange est. 3705264 rows
+                     │     │                             │  │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
+                     │     │                             │  └─ Filter est. 3705264 rows
+                     │     │                             │     │     (sum_2 >= 1) AND (sum_1 >= 1) AND (sum >= 1)
+                     │     │                             │     └─ MergingAggregated est. 4116960 rows
+                     │     │                             │        └─ Repartition Exchange est. 4116960 rows
+                     │     │                             │           │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
+                     │     │                             │           └─ Aggregating est. 4116960 rows
+                     │     │                             │              │     Group by: {i_brand_id_6, i_category_id_6, i_class_id_6}
+                     │     │                             │              └─ Union est. 2978735891 rows
+                     │     │                             │                 ├─ Projection est. 1705276524 rows
+                     │     │                             │                 │  └─ Inner Join est. 1705276524 rows
+                     │     │                             │                 │     │     Condition: ss_item_sk_1 == i_item_sk_2
+                     │     │                             │                 │     ├─ Repartition Exchange est. 1705276524 rows
+                     │     │                             │                 │     │  │     Partition by: {ss_item_sk_1}
+                     │     │                             │                 │     │  └─ Inner Join est. 1705276524 rows
+                     │     │                             │                 │     │     │     Condition: ss_sold_date_sk_1 == d_date_sk_1
+                     │     │                             │                 │     │     ├─ Local Exchange est. 2879987999 rows
+                     │     │                             │                 │     │     │  └─ Filter est. 2879987999 rows
+                     │     │                             │                 │     │     │     │     Dynamic Filters: {ss_sold_date_sk_1:bloomfilter,ss_sold_date_sk_1:range}
+                     │     │                             │                 │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                     │     │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                 │     │        └─ Projection est. 1096 rows
+                     │     │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_1}
+                     │     │                             │                 │     │           └─ Filter est. 1096 rows
+                     │     │                             │                 │     │              │     (d_year_1 <= cast(2001, 'UInt32')) AND (d_year_1 >= 1999)
+                     │     │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                 │        │     Partition by: {i_item_sk_2}
+                     │     │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             │                 ├─ Projection est. 847138237 rows
+                     │     │                             │                 │  └─ Inner Join est. 847138237 rows
+                     │     │                             │                 │     │     Condition: cs_item_sk == i_item_sk_3
+                     │     │                             │                 │     ├─ Repartition Exchange est. 847138237 rows
+                     │     │                             │                 │     │  │     Partition by: {cs_item_sk}
+                     │     │                             │                 │     │  └─ Inner Join est. 847138237 rows
+                     │     │                             │                 │     │     │     Condition: cs_sold_date_sk == d_date_sk_2
+                     │     │                             │                 │     │     ├─ Local Exchange est. 1439980416 rows
+                     │     │                             │                 │     │     │  └─ Filter est. 1439980416 rows
+                     │     │                             │                 │     │     │     │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                     │     │                             │                 │     │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │     │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                 │     │        └─ Projection est. 1096 rows
+                     │     │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_2}
+                     │     │                             │                 │     │           └─ Filter est. 1096 rows
+                     │     │                             │                 │     │              │     (d_year_2 >= 1999) AND (d_year_2 <= cast(2001, 'UInt32'))
+                     │     │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                 │        │     Partition by: {i_item_sk_3}
+                     │     │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             │                 └─ Projection est. 426321130 rows
+                     │     │                             │                    └─ Inner Join est. 426321130 rows
+                     │     │                             │                       │     Condition: ws_item_sk == i_item_sk_4
+                     │     │                             │                       ├─ Repartition Exchange est. 426321130 rows
+                     │     │                             │                       │  │     Partition by: {ws_item_sk}
+                     │     │                             │                       │  └─ Inner Join est. 426321130 rows
+                     │     │                             │                       │     │     Condition: ws_sold_date_sk == d_date_sk_3
+                     │     │                             │                       │     ├─ Local Exchange est. 720000376 rows
+                     │     │                             │                       │     │  └─ Filter est. 720000376 rows
+                     │     │                             │                       │     │     │     Dynamic Filters: {ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
+                     │     │                             │                       │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                     │     │                             │                       │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                       │        └─ Projection est. 1096 rows
+                     │     │                             │                       │           │     Dynamic Filters Builder: {d_date_sk_3}
+                     │     │                             │                       │           └─ Filter est. 1096 rows
+                     │     │                             │                       │              │     (d_year_3 >= 1999) AND (d_year_3 <= cast(2001, 'UInt32'))
+                     │     │                             │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                       └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                          │     Partition by: {i_item_sk_4}
+                     │     │                             │                          └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             └─ Repartition Exchange est. 300000 rows
+                     │     │                                │     Partition by: {i_brand_id_1, i_category_id_1, i_class_id_1}
+                     │     │                                └─ Filter est. 300000 rows
+                     │     │                                   │     isNotNull(i_item_sk_1)
+                     │     │                                   └─ TableScan tpcds.item est. 300000 rows
+                     │     └─ Broadcast Exchange est. 1 rows
+                     │        └─ MergingAggregated est. 1 rows
+                     │           └─ Gather Exchange est. 1 rows
+                     │              └─ Aggregating est. 1 rows
+                     │                 │     Group by: {}
+                     │                 └─ Projection est. 2978735891 rows
+                     │                    └─ Union est. 2978735891 rows
+                     │                       ├─ Inner Join est. 1705276524 rows
+                     │                       │  │     Condition: ss_sold_date_sk_2 == d_date_sk_4
+                     │                       │  ├─ Local Exchange est. 2879987999 rows
+                     │                       │  │  └─ Filter est. 2879987999 rows
+                     │                       │  │     │     Dynamic Filters: {ss_sold_date_sk_2:bloomfilter,ss_sold_date_sk_2:range}
+                     │                       │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                     │                       │  └─ Broadcast Exchange est. 1096 rows
+                     │                       │     └─ Projection est. 1096 rows
+                     │                       │        │     Dynamic Filters Builder: {d_date_sk_4}
+                     │                       │        └─ Filter est. 1096 rows
+                     │                       │           │     (d_year_4 >= 1999) AND (d_year_4 <= cast(2001, 'UInt32'))
+                     │                       │           └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                       ├─ Inner Join est. 847138237 rows
+                     │                       │  │     Condition: cs_sold_date_sk_1 == d_date_sk_5
+                     │                       │  ├─ Local Exchange est. 1439980416 rows
+                     │                       │  │  └─ Filter est. 1439980416 rows
+                     │                       │  │     │     Dynamic Filters: {cs_sold_date_sk_1:bloomfilter,cs_sold_date_sk_1:range}
+                     │                       │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │                       │  └─ Broadcast Exchange est. 1096 rows
+                     │                       │     └─ Projection est. 1096 rows
+                     │                       │        │     Dynamic Filters Builder: {d_date_sk_5}
+                     │                       │        └─ Filter est. 1096 rows
+                     │                       │           │     (d_year_5 <= cast(2001, 'UInt32')) AND (d_year_5 >= 1999)
+                     │                       │           └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                       └─ Inner Join est. 426321130 rows
+                     │                          │     Condition: ws_sold_date_sk_1 == d_date_sk_6
+                     │                          ├─ Local Exchange est. 720000376 rows
+                     │                          │  └─ Filter est. 720000376 rows
+                     │                          │     │     Dynamic Filters: {ws_sold_date_sk_1:bloomfilter,ws_sold_date_sk_1:range}
+                     │                          │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                     │                          └─ Broadcast Exchange est. 1096 rows
+                     │                             └─ Projection est. 1096 rows
+                     │                                │     Dynamic Filters Builder: {d_date_sk_6}
+                     │                                └─ Filter est. 1096 rows
+                     │                                   │     (d_year_6 <= cast(2001, 'UInt32')) AND (d_year_6 >= 1999)
+                     │                                   └─ TableScan tpcds.date_dim est. 73049 rows
+                     ├─ Projection est. ? rows
+                     │  └─ Inner Join est. ? rows
+                     │     │     Condition: 
+                     │     │     Filter: `expr#sum(multiply(cs_quantity, cs_list_price))` > `expr#avg(multiply(quantity, list_price))_1`
+                     │     ├─ MergingAggregated est. 152480 rows
+                     │     │  └─ Repartition Exchange est. 152480 rows
+                     │     │     │     Partition by: {i_brand_id_7, i_category_id_7, i_class_id_7}
+                     │     │     └─ Aggregating est. 152480 rows
+                     │     │        │     Group by: {i_brand_id_7, i_category_id_7, i_class_id_7}
+                     │     │        └─ Projection est. 22415154 rows
+                     │     │           └─ Inner Join est. 22415154 rows
+                     │     │              │     Condition: cs_item_sk_2 == i_item_sk_5
+                     │     │              ├─ Repartition Exchange est. 22415154 rows
+                     │     │              │  │     Partition by: {cs_item_sk_2}
+                     │     │              │  └─ Inner Join est. 22415154 rows
+                     │     │              │     │     Condition: cs_sold_date_sk_2 == d_date_sk_7
+                     │     │              │     ├─ Local Exchange est. 1439980416 rows
+                     │     │              │     │  └─ Filter est. 1439980416 rows
+                     │     │              │     │     │     isNotNull(cs_item_sk_2)
+                     │     │              │     │     │     Dynamic Filters: {cs_sold_date_sk_2:bloomfilter,cs_sold_date_sk_2:range}
+                     │     │              │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │     │              │     └─ Broadcast Exchange est. 29 rows
+                     │     │              │        └─ Projection est. 29 rows
+                     │     │              │           │     Dynamic Filters Builder: {d_date_sk_7}
+                     │     │              │           └─ Filter est. 29 rows
+                     │     │              │              │     (d_moy_7 = 11) AND (d_year_7 = cast(2001, 'UInt32'))
+                     │     │              │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │              └─ Inner Join est. 300000 rows
+                     │     │                 │     Condition: i_item_sk_5 == i_item_sk_6
+                     │     │                 ├─ Repartition Exchange est. 300000 rows
+                     │     │                 │  │     Partition by: {i_item_sk_5}
+                     │     │                 │  └─ Filter est. 300000 rows
+                     │     │                 │     │     isNotNull(i_item_sk_5)
+                     │     │                 │     └─ TableScan tpcds.item est. 300000 rows
+                     │     │                 └─ MergingAggregated est. 299593 rows
+                     │     │                    └─ Repartition Exchange est. 299593 rows
+                     │     │                       │     Partition by: {i_item_sk_6}
+                     │     │                       └─ Aggregating est. 299593 rows
+                     │     │                          │     Group by: {i_item_sk_6}
+                     │     │                          └─ Inner Join est. 432016789 rows
+                     │     │                             │     Condition: i_brand_id_13 == i_brand_id_8, i_category_id_13 == i_category_id_8, i_class_id_13 == i_class_id_8
+                     │     │                             ├─ Repartition Exchange est. 3705264 rows
+                     │     │                             │  │     Partition by: {i_brand_id_13, i_category_id_13, i_class_id_13}
+                     │     │                             │  └─ Filter est. 3705264 rows
+                     │     │                             │     │     (sum_4 >= 1) AND (sum_3 >= 1) AND (sum_5 >= 1)
+                     │     │                             │     └─ MergingAggregated est. 4116960 rows
+                     │     │                             │        └─ Repartition Exchange est. 4116960 rows
+                     │     │                             │           │     Partition by: {i_brand_id_13, i_category_id_13, i_class_id_13}
+                     │     │                             │           └─ Aggregating est. 4116960 rows
+                     │     │                             │              │     Group by: {i_brand_id_13, i_category_id_13, i_class_id_13}
+                     │     │                             │              └─ Union est. 2978735891 rows
+                     │     │                             │                 ├─ Projection est. 1705276524 rows
+                     │     │                             │                 │  └─ Inner Join est. 1705276524 rows
+                     │     │                             │                 │     │     Condition: ss_item_sk_3 == i_item_sk_7
+                     │     │                             │                 │     ├─ Repartition Exchange est. 1705276524 rows
+                     │     │                             │                 │     │  │     Partition by: {ss_item_sk_3}
+                     │     │                             │                 │     │  └─ Inner Join est. 1705276524 rows
+                     │     │                             │                 │     │     │     Condition: ss_sold_date_sk_3 == d_date_sk_8
+                     │     │                             │                 │     │     ├─ Local Exchange est. 2879987999 rows
+                     │     │                             │                 │     │     │  └─ Filter est. 2879987999 rows
+                     │     │                             │                 │     │     │     │     Dynamic Filters: {ss_sold_date_sk_3:bloomfilter,ss_sold_date_sk_3:range}
+                     │     │                             │                 │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                     │     │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                 │     │        └─ Projection est. 1096 rows
+                     │     │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_8}
+                     │     │                             │                 │     │           └─ Filter est. 1096 rows
+                     │     │                             │                 │     │              │     (d_year_8 <= cast(2001, 'UInt32')) AND (d_year_8 >= 1999)
+                     │     │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                 │        │     Partition by: {i_item_sk_7}
+                     │     │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             │                 ├─ Projection est. 847138237 rows
+                     │     │                             │                 │  └─ Inner Join est. 847138237 rows
+                     │     │                             │                 │     │     Condition: cs_item_sk_3 == i_item_sk_8
+                     │     │                             │                 │     ├─ Repartition Exchange est. 847138237 rows
+                     │     │                             │                 │     │  │     Partition by: {cs_item_sk_3}
+                     │     │                             │                 │     │  └─ Inner Join est. 847138237 rows
+                     │     │                             │                 │     │     │     Condition: cs_sold_date_sk_3 == d_date_sk_9
+                     │     │                             │                 │     │     ├─ Local Exchange est. 1439980416 rows
+                     │     │                             │                 │     │     │  └─ Filter est. 1439980416 rows
+                     │     │                             │                 │     │     │     │     Dynamic Filters: {cs_sold_date_sk_3:bloomfilter,cs_sold_date_sk_3:range}
+                     │     │                             │                 │     │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │     │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                 │     │        └─ Projection est. 1096 rows
+                     │     │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_9}
+                     │     │                             │                 │     │           └─ Filter est. 1096 rows
+                     │     │                             │                 │     │              │     (d_year_9 >= 1999) AND (d_year_9 <= cast(2001, 'UInt32'))
+                     │     │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                 │        │     Partition by: {i_item_sk_8}
+                     │     │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             │                 └─ Projection est. 426321130 rows
+                     │     │                             │                    └─ Inner Join est. 426321130 rows
+                     │     │                             │                       │     Condition: ws_item_sk_2 == i_item_sk_9
+                     │     │                             │                       ├─ Repartition Exchange est. 426321130 rows
+                     │     │                             │                       │  │     Partition by: {ws_item_sk_2}
+                     │     │                             │                       │  └─ Inner Join est. 426321130 rows
+                     │     │                             │                       │     │     Condition: ws_sold_date_sk_2 == d_date_sk_10
+                     │     │                             │                       │     ├─ Local Exchange est. 720000376 rows
+                     │     │                             │                       │     │  └─ Filter est. 720000376 rows
+                     │     │                             │                       │     │     │     Dynamic Filters: {ws_sold_date_sk_2:bloomfilter,ws_sold_date_sk_2:range}
+                     │     │                             │                       │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                     │     │                             │                       │     └─ Broadcast Exchange est. 1096 rows
+                     │     │                             │                       │        └─ Projection est. 1096 rows
+                     │     │                             │                       │           │     Dynamic Filters Builder: {d_date_sk_10}
+                     │     │                             │                       │           └─ Filter est. 1096 rows
+                     │     │                             │                       │              │     (d_year_10 <= cast(2001, 'UInt32')) AND (d_year_10 >= 1999)
+                     │     │                             │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │     │                             │                       └─ Repartition Exchange est. 300000 rows
+                     │     │                             │                          │     Partition by: {i_item_sk_9}
+                     │     │                             │                          └─ TableScan tpcds.item est. 300000 rows
+                     │     │                             └─ Repartition Exchange est. 300000 rows
+                     │     │                                │     Partition by: {i_brand_id_8, i_category_id_8, i_class_id_8}
+                     │     │                                └─ Filter est. 300000 rows
+                     │     │                                   │     isNotNull(i_item_sk_6)
+                     │     │                                   └─ TableScan tpcds.item est. 300000 rows
+                     │     └─ Broadcast Exchange est. 1 rows
+                     │        └─ MergingAggregated est. 1 rows
+                     │           └─ Gather Exchange est. 1 rows
+                     │              └─ Aggregating est. 1 rows
+                     │                 │     Group by: {}
+                     │                 └─ Projection est. 2978735891 rows
+                     │                    └─ Union est. 2978735891 rows
+                     │                       ├─ Inner Join est. 1705276524 rows
+                     │                       │  │     Condition: ss_sold_date_sk_4 == d_date_sk_11
+                     │                       │  ├─ Local Exchange est. 2879987999 rows
+                     │                       │  │  └─ Filter est. 2879987999 rows
+                     │                       │  │     │     Dynamic Filters: {ss_sold_date_sk_4:bloomfilter,ss_sold_date_sk_4:range}
+                     │                       │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                     │                       │  └─ Broadcast Exchange est. 1096 rows
+                     │                       │     └─ Projection est. 1096 rows
+                     │                       │        │     Dynamic Filters Builder: {d_date_sk_11}
+                     │                       │        └─ Filter est. 1096 rows
+                     │                       │           │     (d_year_11 >= 1999) AND (d_year_11 <= cast(2001, 'UInt32'))
+                     │                       │           └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                       ├─ Inner Join est. 847138237 rows
+                     │                       │  │     Condition: cs_sold_date_sk_4 == d_date_sk_12
+                     │                       │  ├─ Local Exchange est. 1439980416 rows
+                     │                       │  │  └─ Filter est. 1439980416 rows
+                     │                       │  │     │     Dynamic Filters: {cs_sold_date_sk_4:bloomfilter,cs_sold_date_sk_4:range}
+                     │                       │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │                       │  └─ Broadcast Exchange est. 1096 rows
+                     │                       │     └─ Projection est. 1096 rows
+                     │                       │        │     Dynamic Filters Builder: {d_date_sk_12}
+                     │                       │        └─ Filter est. 1096 rows
+                     │                       │           │     (d_year_12 <= cast(2001, 'UInt32')) AND (d_year_12 >= 1999)
+                     │                       │           └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                       └─ Inner Join est. 426321130 rows
+                     │                          │     Condition: ws_sold_date_sk_3 == d_date_sk_13
+                     │                          ├─ Local Exchange est. 720000376 rows
+                     │                          │  └─ Filter est. 720000376 rows
+                     │                          │     │     Dynamic Filters: {ws_sold_date_sk_3:bloomfilter,ws_sold_date_sk_3:range}
+                     │                          │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                     │                          └─ Broadcast Exchange est. 1096 rows
+                     │                             └─ Projection est. 1096 rows
+                     │                                │     Dynamic Filters Builder: {d_date_sk_13}
+                     │                                └─ Filter est. 1096 rows
+                     │                                   │     (d_year_13 >= 1999) AND (d_year_13 <= cast(2001, 'UInt32'))
+                     │                                   └─ TableScan tpcds.date_dim est. 73049 rows
+                     └─ Projection est. ? rows
+                        └─ Inner Join est. ? rows
+                           │     Condition: 
+                           │     Filter: `expr#sum(multiply(ws_quantity, ws_list_price))` > `expr#avg(multiply(quantity, list_price))_2`
+                           ├─ MergingAggregated est. 152480 rows
+                           │  └─ Repartition Exchange est. 152480 rows
+                           │     │     Partition by: {i_brand_id_14, i_category_id_14, i_class_id_14}
+                           │     └─ Aggregating est. 152480 rows
+                           │        │     Group by: {i_brand_id_14, i_category_id_14, i_class_id_14}
+                           │        └─ Projection est. 11280394 rows
+                           │           └─ Inner Join est. 11280394 rows
+                           │              │     Condition: ws_item_sk_4 == i_item_sk_10
+                           │              ├─ Repartition Exchange est. 11280394 rows
+                           │              │  │     Partition by: {ws_item_sk_4}
+                           │              │  └─ Inner Join est. 11280394 rows
+                           │              │     │     Condition: ws_sold_date_sk_4 == d_date_sk_14
+                           │              │     ├─ Local Exchange est. 720000376 rows
+                           │              │     │  └─ Filter est. 720000376 rows
+                           │              │     │     │     isNotNull(ws_item_sk_4)
+                           │              │     │     │     Dynamic Filters: {ws_sold_date_sk_4:bloomfilter,ws_sold_date_sk_4:range}
+                           │              │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                           │              │     └─ Broadcast Exchange est. 29 rows
+                           │              │        └─ Projection est. 29 rows
+                           │              │           │     Dynamic Filters Builder: {d_date_sk_14}
+                           │              │           └─ Filter est. 29 rows
+                           │              │              │     (d_moy_14 = 11) AND (d_year_14 = cast(2001, 'UInt32'))
+                           │              │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │              └─ Inner Join est. 300000 rows
+                           │                 │     Condition: i_item_sk_10 == i_item_sk_11
+                           │                 ├─ Repartition Exchange est. 300000 rows
+                           │                 │  │     Partition by: {i_item_sk_10}
+                           │                 │  └─ Filter est. 300000 rows
+                           │                 │     │     isNotNull(i_item_sk_10)
+                           │                 │     └─ TableScan tpcds.item est. 300000 rows
+                           │                 └─ MergingAggregated est. 299593 rows
+                           │                    └─ Repartition Exchange est. 299593 rows
+                           │                       │     Partition by: {i_item_sk_11}
+                           │                       └─ Aggregating est. 299593 rows
+                           │                          │     Group by: {i_item_sk_11}
+                           │                          └─ Inner Join est. 432016789 rows
+                           │                             │     Condition: i_brand_id_20 == i_brand_id_15, i_category_id_20 == i_category_id_15, i_class_id_20 == i_class_id_15
+                           │                             ├─ Repartition Exchange est. 3705264 rows
+                           │                             │  │     Partition by: {i_brand_id_20, i_category_id_20, i_class_id_20}
+                           │                             │  └─ Filter est. 3705264 rows
+                           │                             │     │     (sum_7 >= 1) AND (sum_8 >= 1) AND (sum_6 >= 1)
+                           │                             │     └─ MergingAggregated est. 4116960 rows
+                           │                             │        └─ Repartition Exchange est. 4116960 rows
+                           │                             │           │     Partition by: {i_brand_id_20, i_category_id_20, i_class_id_20}
+                           │                             │           └─ Aggregating est. 4116960 rows
+                           │                             │              │     Group by: {i_brand_id_20, i_category_id_20, i_class_id_20}
+                           │                             │              └─ Union est. 2978735891 rows
+                           │                             │                 ├─ Projection est. 1705276524 rows
+                           │                             │                 │  └─ Inner Join est. 1705276524 rows
+                           │                             │                 │     │     Condition: ss_item_sk_5 == i_item_sk_12
+                           │                             │                 │     ├─ Repartition Exchange est. 1705276524 rows
+                           │                             │                 │     │  │     Partition by: {ss_item_sk_5}
+                           │                             │                 │     │  └─ Inner Join est. 1705276524 rows
+                           │                             │                 │     │     │     Condition: ss_sold_date_sk_5 == d_date_sk_15
+                           │                             │                 │     │     ├─ Local Exchange est. 2879987999 rows
+                           │                             │                 │     │     │  └─ Filter est. 2879987999 rows
+                           │                             │                 │     │     │     │     Dynamic Filters: {ss_sold_date_sk_5:bloomfilter,ss_sold_date_sk_5:range}
+                           │                             │                 │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                           │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                           │                             │                 │     │        └─ Projection est. 1096 rows
+                           │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_15}
+                           │                             │                 │     │           └─ Filter est. 1096 rows
+                           │                             │                 │     │              │     (d_year_15 >= 1999) AND (d_year_15 <= cast(2001, 'UInt32'))
+                           │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                           │                             │                 │        │     Partition by: {i_item_sk_12}
+                           │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                           │                             │                 ├─ Projection est. 847138237 rows
+                           │                             │                 │  └─ Inner Join est. 847138237 rows
+                           │                             │                 │     │     Condition: cs_item_sk_5 == i_item_sk_13
+                           │                             │                 │     ├─ Repartition Exchange est. 847138237 rows
+                           │                             │                 │     │  │     Partition by: {cs_item_sk_5}
+                           │                             │                 │     │  └─ Inner Join est. 847138237 rows
+                           │                             │                 │     │     │     Condition: cs_sold_date_sk_5 == d_date_sk_16
+                           │                             │                 │     │     ├─ Local Exchange est. 1439980416 rows
+                           │                             │                 │     │     │  └─ Filter est. 1439980416 rows
+                           │                             │                 │     │     │     │     Dynamic Filters: {cs_sold_date_sk_5:bloomfilter,cs_sold_date_sk_5:range}
+                           │                             │                 │     │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                           │                             │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                           │                             │                 │     │        └─ Projection est. 1096 rows
+                           │                             │                 │     │           │     Dynamic Filters Builder: {d_date_sk_16}
+                           │                             │                 │     │           └─ Filter est. 1096 rows
+                           │                             │                 │     │              │     (d_year_16 >= 1999) AND (d_year_16 <= cast(2001, 'UInt32'))
+                           │                             │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                             │                 │     └─ Repartition Exchange est. 300000 rows
+                           │                             │                 │        │     Partition by: {i_item_sk_13}
+                           │                             │                 │        └─ TableScan tpcds.item est. 300000 rows
+                           │                             │                 └─ Projection est. 426321130 rows
+                           │                             │                    └─ Inner Join est. 426321130 rows
+                           │                             │                       │     Condition: ws_item_sk_5 == i_item_sk_14
+                           │                             │                       ├─ Repartition Exchange est. 426321130 rows
+                           │                             │                       │  │     Partition by: {ws_item_sk_5}
+                           │                             │                       │  └─ Inner Join est. 426321130 rows
+                           │                             │                       │     │     Condition: ws_sold_date_sk_5 == d_date_sk_17
+                           │                             │                       │     ├─ Local Exchange est. 720000376 rows
+                           │                             │                       │     │  └─ Filter est. 720000376 rows
+                           │                             │                       │     │     │     Dynamic Filters: {ws_sold_date_sk_5:bloomfilter,ws_sold_date_sk_5:range}
+                           │                             │                       │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                           │                             │                       │     └─ Broadcast Exchange est. 1096 rows
+                           │                             │                       │        └─ Projection est. 1096 rows
+                           │                             │                       │           │     Dynamic Filters Builder: {d_date_sk_17}
+                           │                             │                       │           └─ Filter est. 1096 rows
+                           │                             │                       │              │     (d_year_17 >= 1999) AND (d_year_17 <= cast(2001, 'UInt32'))
+                           │                             │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                             │                       └─ Repartition Exchange est. 300000 rows
+                           │                             │                          │     Partition by: {i_item_sk_14}
+                           │                             │                          └─ TableScan tpcds.item est. 300000 rows
+                           │                             └─ Repartition Exchange est. 300000 rows
+                           │                                │     Partition by: {i_brand_id_15, i_category_id_15, i_class_id_15}
+                           │                                └─ Filter est. 300000 rows
+                           │                                   │     isNotNull(i_item_sk_11)
+                           │                                   └─ TableScan tpcds.item est. 300000 rows
+                           └─ Broadcast Exchange est. 1 rows
+                              └─ MergingAggregated est. 1 rows
+                                 └─ Gather Exchange est. 1 rows
+                                    └─ Aggregating est. 1 rows
+                                       │     Group by: {}
+                                       └─ Projection est. 2978735891 rows
+                                          └─ Union est. 2978735891 rows
+                                             ├─ Inner Join est. 1705276524 rows
+                                             │  │     Condition: ss_sold_date_sk_6 == d_date_sk_18
+                                             │  ├─ Local Exchange est. 2879987999 rows
+                                             │  │  └─ Filter est. 2879987999 rows
+                                             │  │     │     Dynamic Filters: {ss_sold_date_sk_6:bloomfilter,ss_sold_date_sk_6:range}
+                                             │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                                             │  └─ Broadcast Exchange est. 1096 rows
+                                             │     └─ Projection est. 1096 rows
+                                             │        │     Dynamic Filters Builder: {d_date_sk_18}
+                                             │        └─ Filter est. 1096 rows
+                                             │           │     (d_year_18 >= 1999) AND (d_year_18 <= cast(2001, 'UInt32'))
+                                             │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                             ├─ Inner Join est. 847138237 rows
+                                             │  │     Condition: cs_sold_date_sk_6 == d_date_sk_19
+                                             │  ├─ Local Exchange est. 1439980416 rows
+                                             │  │  └─ Filter est. 1439980416 rows
+                                             │  │     │     Dynamic Filters: {cs_sold_date_sk_6:bloomfilter,cs_sold_date_sk_6:range}
+                                             │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                             │  └─ Broadcast Exchange est. 1096 rows
+                                             │     └─ Projection est. 1096 rows
+                                             │        │     Dynamic Filters Builder: {d_date_sk_19}
+                                             │        └─ Filter est. 1096 rows
+                                             │           │     (d_year_19 >= 1999) AND (d_year_19 <= cast(2001, 'UInt32'))
+                                             │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                             └─ Inner Join est. 426321130 rows
+                                                │     Condition: ws_sold_date_sk_6 == d_date_sk_20
+                                                ├─ Local Exchange est. 720000376 rows
+                                                │  └─ Filter est. 720000376 rows
+                                                │     │     Dynamic Filters: {ws_sold_date_sk_6:bloomfilter,ws_sold_date_sk_6:range}
+                                                │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                                                └─ Broadcast Exchange est. 1096 rows
+                                                   └─ Projection est. 1096 rows
+                                                      │     Dynamic Filters Builder: {d_date_sk_20}
+                                                      └─ Filter est. 1096 rows
+                                                         │     (d_year_20 >= 1999) AND (d_year_20 <= cast(2001, 'UInt32'))
+                                                         └─ TableScan tpcds.date_dim est. 73049 rows
+note: Dynamic Filter is applied for 42 times.
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ Inner Join est. ? rows
+                        │     Condition: 
+                        │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_3` > `expr#avg(multiply(quantity, list_price))_4`
+                        ├─ Inner Join est. ? rows
+                        │  │     Condition: 
+                        │  │     Filter: `expr#sum(multiply(ss_quantity, ss_list_price))_2` > `expr#avg(multiply(quantity, list_price))_3`
+                        │  ├─ Inner Join est. 24396800 rows
+                        │  │  │     Condition: i_brand_id_22 == i_brand_id_29, i_category_id_22 == i_category_id_29, i_class_id_22 == i_class_id_29
+                        │  │  ├─ Repartition Exchange est. 152480 rows
+                        │  │  │  │     Partition by: {i_brand_id_22, i_category_id_22, i_class_id_22}
+                        │  │  │  └─ Projection est. 152480 rows
+                        │  │  │     └─ MergingAggregated est. 152480 rows
+                        │  │  │        └─ Repartition Exchange est. 152480 rows
+                        │  │  │           │     Partition by: {i_brand_id_22, i_category_id_22, i_class_id_22}
+                        │  │  │           └─ Aggregating est. 152480 rows
+                        │  │  │              │     Group by: {i_brand_id_22, i_category_id_22, i_class_id_22}
+                        │  │  │              └─ Projection est. 276682 rows
+                        │  │  │                 └─ Inner Join est. 277057 rows
+                        │  │  │                    │     Condition: i_item_sk_16 == i_item_sk_15
+                        │  │  │                    ├─ MergingAggregated est. 299593 rows
+                        │  │  │                    │  └─ Repartition Exchange est. 299593 rows
+                        │  │  │                    │     │     Partition by: {i_item_sk_16}
+                        │  │  │                    │     └─ Aggregating est. 299593 rows
+                        │  │  │                    │        │     Group by: {i_item_sk_16}
+                        │  │  │                    │        └─ Inner Join est. 432016789 rows
+                        │  │  │                    │           │     Condition: i_brand_id_28 == i_brand_id_23, i_category_id_28 == i_category_id_23, i_class_id_28 == i_class_id_23
+                        │  │  │                    │           ├─ Repartition Exchange est. 3705264 rows
+                        │  │  │                    │           │  │     Partition by: {i_brand_id_28, i_category_id_28, i_class_id_28}
+                        │  │  │                    │           │  └─ Filter est. 3705264 rows
+                        │  │  │                    │           │     │     (sum_9 >= 1) AND (sum_11 >= 1) AND (sum_10 >= 1)
+                        │  │  │                    │           │     └─ MergingAggregated est. 4116960 rows
+                        │  │  │                    │           │        └─ Repartition Exchange est. 4116960 rows
+                        │  │  │                    │           │           │     Partition by: {i_brand_id_28, i_category_id_28, i_class_id_28}
+                        │  │  │                    │           │           └─ Aggregating est. 4116960 rows
+                        │  │  │                    │           │              │     Group by: {i_brand_id_28, i_category_id_28, i_class_id_28}
+                        │  │  │                    │           │              └─ Union est. 2978735891 rows
+                        │  │  │                    │           │                 ├─ Projection est. 1705276524 rows
+                        │  │  │                    │           │                 │  └─ Inner Join est. 1705276524 rows
+                        │  │  │                    │           │                 │     │     Condition: ss_item_sk_8 == i_item_sk_17
+                        │  │  │                    │           │                 │     ├─ Repartition Exchange est. 1705276524 rows
+                        │  │  │                    │           │                 │     │  │     Partition by: {ss_item_sk_8}
+                        │  │  │                    │           │                 │     │  └─ Inner Join est. 1705276524 rows
+                        │  │  │                    │           │                 │     │     │     Condition: ss_sold_date_sk_8 == d_date_sk_23
+                        │  │  │                    │           │                 │     │     ├─ Local Exchange est. 2879987999 rows
+                        │  │  │                    │           │                 │     │     │  └─ Filter est. 2879987999 rows
+                        │  │  │                    │           │                 │     │     │     │     Dynamic Filters: {ss_sold_date_sk_8:bloomfilter,ss_sold_date_sk_8:range}
+                        │  │  │                    │           │                 │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │  │  │                    │           │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                        │  │  │                    │           │                 │     │        └─ Projection est. 1096 rows
+                        │  │  │                    │           │                 │     │           │     Dynamic Filters Builder: {d_date_sk_23}
+                        │  │  │                    │           │                 │     │           └─ Filter est. 1096 rows
+                        │  │  │                    │           │                 │     │              │     (d_year_23 <= cast(2001, 'UInt32')) AND (d_year_23 >= 1999)
+                        │  │  │                    │           │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │  │                    │           │                 │     └─ Repartition Exchange est. 300000 rows
+                        │  │  │                    │           │                 │        │     Partition by: {i_item_sk_17}
+                        │  │  │                    │           │                 │        └─ TableScan tpcds.item est. 300000 rows
+                        │  │  │                    │           │                 ├─ Projection est. 847138237 rows
+                        │  │  │                    │           │                 │  └─ Inner Join est. 847138237 rows
+                        │  │  │                    │           │                 │     │     Condition: cs_item_sk_7 == i_item_sk_18
+                        │  │  │                    │           │                 │     ├─ Repartition Exchange est. 847138237 rows
+                        │  │  │                    │           │                 │     │  │     Partition by: {cs_item_sk_7}
+                        │  │  │                    │           │                 │     │  └─ Inner Join est. 847138237 rows
+                        │  │  │                    │           │                 │     │     │     Condition: cs_sold_date_sk_7 == d_date_sk_24
+                        │  │  │                    │           │                 │     │     ├─ Local Exchange est. 1439980416 rows
+                        │  │  │                    │           │                 │     │     │  └─ Filter est. 1439980416 rows
+                        │  │  │                    │           │                 │     │     │     │     Dynamic Filters: {cs_sold_date_sk_7:bloomfilter,cs_sold_date_sk_7:range}
+                        │  │  │                    │           │                 │     │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                        │  │  │                    │           │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                        │  │  │                    │           │                 │     │        └─ Projection est. 1096 rows
+                        │  │  │                    │           │                 │     │           │     Dynamic Filters Builder: {d_date_sk_24}
+                        │  │  │                    │           │                 │     │           └─ Filter est. 1096 rows
+                        │  │  │                    │           │                 │     │              │     (d_year_24 <= cast(2001, 'UInt32')) AND (d_year_24 >= 1999)
+                        │  │  │                    │           │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │  │                    │           │                 │     └─ Repartition Exchange est. 300000 rows
+                        │  │  │                    │           │                 │        │     Partition by: {i_item_sk_18}
+                        │  │  │                    │           │                 │        └─ TableScan tpcds.item est. 300000 rows
+                        │  │  │                    │           │                 └─ Projection est. 426321130 rows
+                        │  │  │                    │           │                    └─ Inner Join est. 426321130 rows
+                        │  │  │                    │           │                       │     Condition: ws_item_sk_7 == i_item_sk_19
+                        │  │  │                    │           │                       ├─ Repartition Exchange est. 426321130 rows
+                        │  │  │                    │           │                       │  │     Partition by: {ws_item_sk_7}
+                        │  │  │                    │           │                       │  └─ Inner Join est. 426321130 rows
+                        │  │  │                    │           │                       │     │     Condition: ws_sold_date_sk_7 == d_date_sk_25
+                        │  │  │                    │           │                       │     ├─ Local Exchange est. 720000376 rows
+                        │  │  │                    │           │                       │     │  └─ Filter est. 720000376 rows
+                        │  │  │                    │           │                       │     │     │     Dynamic Filters: {ws_sold_date_sk_7:bloomfilter,ws_sold_date_sk_7:range}
+                        │  │  │                    │           │                       │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                        │  │  │                    │           │                       │     └─ Broadcast Exchange est. 1096 rows
+                        │  │  │                    │           │                       │        └─ Projection est. 1096 rows
+                        │  │  │                    │           │                       │           │     Dynamic Filters Builder: {d_date_sk_25}
+                        │  │  │                    │           │                       │           └─ Filter est. 1096 rows
+                        │  │  │                    │           │                       │              │     (d_year_25 >= 1999) AND (d_year_25 <= cast(2001, 'UInt32'))
+                        │  │  │                    │           │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │  │                    │           │                       └─ Repartition Exchange est. 300000 rows
+                        │  │  │                    │           │                          │     Partition by: {i_item_sk_19}
+                        │  │  │                    │           │                          └─ TableScan tpcds.item est. 300000 rows
+                        │  │  │                    │           └─ Repartition Exchange est. 300000 rows
+                        │  │  │                    │              │     Partition by: {i_brand_id_23, i_category_id_23, i_class_id_23}
+                        │  │  │                    │              └─ Filter est. 300000 rows
+                        │  │  │                    │                 │     isNotNull(i_item_sk_16)
+                        │  │  │                    │                 └─ TableScan tpcds.item est. 300000 rows
+                        │  │  │                    └─ Inner Join est. 277057 rows
+                        │  │  │                       │     Condition: i_item_sk_15 == ss_item_sk_7
+                        │  │  │                       ├─ Repartition Exchange est. 300000 rows
+                        │  │  │                       │  │     Partition by: {i_item_sk_15}
+                        │  │  │                       │  └─ Filter est. 300000 rows
+                        │  │  │                       │     │     isNotNull(i_item_sk_15)
+                        │  │  │                       │     └─ TableScan tpcds.item est. 300000 rows
+                        │  │  │                       └─ Repartition Exchange est. 276682 rows
+                        │  │  │                          │     Partition by: {ss_item_sk_7}
+                        │  │  │                          └─ Inner Join est. 10891364 rows
+                        │  │  │                             │     Condition: ss_sold_date_sk_7 == d_date_sk_21
+                        │  │  │                             ├─ Local Exchange est. 2879987999 rows
+                        │  │  │                             │  └─ Filter est. 2879987999 rows
+                        │  │  │                             │     │     isNotNull(ss_item_sk_7)
+                        │  │  │                             │     │     Dynamic Filters: {ss_sold_date_sk_7:bloomfilter,ss_sold_date_sk_7:range}
+                        │  │  │                             │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │  │  │                             └─ Broadcast Exchange est. 7 rows
+                        │  │  │                                └─ Projection est. 7 rows
+                        │  │  │                                   │     Dynamic Filters Builder: {d_date_sk_21}
+                        │  │  │                                   └─ Inner Join est. 7 rows
+                        │  │  │                                      │     Condition: d_week_seq_21 == d_week_seq_22
+                        │  │  │                                      ├─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │  │                                      └─ Broadcast Exchange est. 1 rows
+                        │  │  │                                         └─ EnforceSingleRow est. 1 rows
+                        │  │  │                                            └─ Union est. 1 rows
+                        │  │  │                                               └─ Gather Exchange est. 1 rows
+                        │  │  │                                                  └─ Projection est. 1 rows
+                        │  │  │                                                     └─ Filter est. 1 rows
+                        │  │  │                                                        │     (d_year_22 = cast(2000, 'UInt32')) AND (d_moy_22 = 12) AND (d_dom_22 = 11)
+                        │  │  │                                                        └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │  └─ Repartition Exchange est. 152480 rows
+                        │  │     │     Partition by: {i_brand_id_29, i_category_id_29, i_class_id_29}
+                        │  │     └─ Projection est. 152480 rows
+                        │  │        └─ MergingAggregated est. 152480 rows
+                        │  │           └─ Repartition Exchange est. 152480 rows
+                        │  │              │     Partition by: {i_brand_id_29, i_category_id_29, i_class_id_29}
+                        │  │              └─ Aggregating est. 152480 rows
+                        │  │                 │     Group by: {i_brand_id_29, i_category_id_29, i_class_id_29}
+                        │  │                 └─ Projection est. 276682 rows
+                        │  │                    └─ Inner Join est. 277057 rows
+                        │  │                       │     Condition: i_item_sk_21 == i_item_sk_20
+                        │  │                       ├─ MergingAggregated est. 299593 rows
+                        │  │                       │  └─ Repartition Exchange est. 299593 rows
+                        │  │                       │     │     Partition by: {i_item_sk_21}
+                        │  │                       │     └─ Aggregating est. 299593 rows
+                        │  │                       │        │     Group by: {i_item_sk_21}
+                        │  │                       │        └─ Inner Join est. 432016789 rows
+                        │  │                       │           │     Condition: i_brand_id_35 == i_brand_id_30, i_category_id_35 == i_category_id_30, i_class_id_35 == i_class_id_30
+                        │  │                       │           ├─ Repartition Exchange est. 3705264 rows
+                        │  │                       │           │  │     Partition by: {i_brand_id_35, i_category_id_35, i_class_id_35}
+                        │  │                       │           │  └─ Filter est. 3705264 rows
+                        │  │                       │           │     │     (sum_13 >= 1) AND (sum_14 >= 1) AND (sum_12 >= 1)
+                        │  │                       │           │     └─ MergingAggregated est. 4116960 rows
+                        │  │                       │           │        └─ Repartition Exchange est. 4116960 rows
+                        │  │                       │           │           │     Partition by: {i_brand_id_35, i_category_id_35, i_class_id_35}
+                        │  │                       │           │           └─ Aggregating est. 4116960 rows
+                        │  │                       │           │              │     Group by: {i_brand_id_35, i_category_id_35, i_class_id_35}
+                        │  │                       │           │              └─ Union est. 2978735891 rows
+                        │  │                       │           │                 ├─ Projection est. 1705276524 rows
+                        │  │                       │           │                 │  └─ Inner Join est. 1705276524 rows
+                        │  │                       │           │                 │     │     Condition: ss_item_sk_11 == i_item_sk_22
+                        │  │                       │           │                 │     ├─ Repartition Exchange est. 1705276524 rows
+                        │  │                       │           │                 │     │  │     Partition by: {ss_item_sk_11}
+                        │  │                       │           │                 │     │  └─ Inner Join est. 1705276524 rows
+                        │  │                       │           │                 │     │     │     Condition: ss_sold_date_sk_11 == d_date_sk_31
+                        │  │                       │           │                 │     │     ├─ Local Exchange est. 2879987999 rows
+                        │  │                       │           │                 │     │     │  └─ Filter est. 2879987999 rows
+                        │  │                       │           │                 │     │     │     │     Dynamic Filters: {ss_sold_date_sk_11:bloomfilter,ss_sold_date_sk_11:range}
+                        │  │                       │           │                 │     │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │  │                       │           │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                        │  │                       │           │                 │     │        └─ Projection est. 1096 rows
+                        │  │                       │           │                 │     │           │     Dynamic Filters Builder: {d_date_sk_31}
+                        │  │                       │           │                 │     │           └─ Filter est. 1096 rows
+                        │  │                       │           │                 │     │              │     (d_year_31 >= 1999) AND (d_year_31 <= cast(2001, 'UInt32'))
+                        │  │                       │           │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │                       │           │                 │     └─ Repartition Exchange est. 300000 rows
+                        │  │                       │           │                 │        │     Partition by: {i_item_sk_22}
+                        │  │                       │           │                 │        └─ TableScan tpcds.item est. 300000 rows
+                        │  │                       │           │                 ├─ Projection est. 847138237 rows
+                        │  │                       │           │                 │  └─ Inner Join est. 847138237 rows
+                        │  │                       │           │                 │     │     Condition: cs_item_sk_9 == i_item_sk_23
+                        │  │                       │           │                 │     ├─ Repartition Exchange est. 847138237 rows
+                        │  │                       │           │                 │     │  │     Partition by: {cs_item_sk_9}
+                        │  │                       │           │                 │     │  └─ Inner Join est. 847138237 rows
+                        │  │                       │           │                 │     │     │     Condition: cs_sold_date_sk_9 == d_date_sk_32
+                        │  │                       │           │                 │     │     ├─ Local Exchange est. 1439980416 rows
+                        │  │                       │           │                 │     │     │  └─ Filter est. 1439980416 rows
+                        │  │                       │           │                 │     │     │     │     Dynamic Filters: {cs_sold_date_sk_9:bloomfilter,cs_sold_date_sk_9:range}
+                        │  │                       │           │                 │     │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                        │  │                       │           │                 │     │     └─ Broadcast Exchange est. 1096 rows
+                        │  │                       │           │                 │     │        └─ Projection est. 1096 rows
+                        │  │                       │           │                 │     │           │     Dynamic Filters Builder: {d_date_sk_32}
+                        │  │                       │           │                 │     │           └─ Filter est. 1096 rows
+                        │  │                       │           │                 │     │              │     (d_year_32 >= 1999) AND (d_year_32 <= cast(2001, 'UInt32'))
+                        │  │                       │           │                 │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │                       │           │                 │     └─ Repartition Exchange est. 300000 rows
+                        │  │                       │           │                 │        │     Partition by: {i_item_sk_23}
+                        │  │                       │           │                 │        └─ TableScan tpcds.item est. 300000 rows
+                        │  │                       │           │                 └─ Projection est. 426321130 rows
+                        │  │                       │           │                    └─ Inner Join est. 426321130 rows
+                        │  │                       │           │                       │     Condition: ws_item_sk_9 == i_item_sk_24
+                        │  │                       │           │                       ├─ Repartition Exchange est. 426321130 rows
+                        │  │                       │           │                       │  │     Partition by: {ws_item_sk_9}
+                        │  │                       │           │                       │  └─ Inner Join est. 426321130 rows
+                        │  │                       │           │                       │     │     Condition: ws_sold_date_sk_9 == d_date_sk_33
+                        │  │                       │           │                       │     ├─ Local Exchange est. 720000376 rows
+                        │  │                       │           │                       │     │  └─ Filter est. 720000376 rows
+                        │  │                       │           │                       │     │     │     Dynamic Filters: {ws_sold_date_sk_9:bloomfilter,ws_sold_date_sk_9:range}
+                        │  │                       │           │                       │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                        │  │                       │           │                       │     └─ Broadcast Exchange est. 1096 rows
+                        │  │                       │           │                       │        └─ Projection est. 1096 rows
+                        │  │                       │           │                       │           │     Dynamic Filters Builder: {d_date_sk_33}
+                        │  │                       │           │                       │           └─ Filter est. 1096 rows
+                        │  │                       │           │                       │              │     (d_year_33 <= cast(2001, 'UInt32')) AND (d_year_33 >= 1999)
+                        │  │                       │           │                       │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │                       │           │                       └─ Repartition Exchange est. 300000 rows
+                        │  │                       │           │                          │     Partition by: {i_item_sk_24}
+                        │  │                       │           │                          └─ TableScan tpcds.item est. 300000 rows
+                        │  │                       │           └─ Repartition Exchange est. 300000 rows
+                        │  │                       │              │     Partition by: {i_brand_id_30, i_category_id_30, i_class_id_30}
+                        │  │                       │              └─ Filter est. 300000 rows
+                        │  │                       │                 │     isNotNull(i_item_sk_21)
+                        │  │                       │                 └─ TableScan tpcds.item est. 300000 rows
+                        │  │                       └─ Inner Join est. 277057 rows
+                        │  │                          │     Condition: i_item_sk_20 == ss_item_sk_10
+                        │  │                          ├─ Repartition Exchange est. 300000 rows
+                        │  │                          │  │     Partition by: {i_item_sk_20}
+                        │  │                          │  └─ Filter est. 300000 rows
+                        │  │                          │     │     isNotNull(i_item_sk_20)
+                        │  │                          │     └─ TableScan tpcds.item est. 300000 rows
+                        │  │                          └─ Repartition Exchange est. 276682 rows
+                        │  │                             │     Partition by: {ss_item_sk_10}
+                        │  │                             └─ Inner Join est. 10891364 rows
+                        │  │                                │     Condition: ss_sold_date_sk_10 == d_date_sk_29
+                        │  │                                ├─ Local Exchange est. 2879987999 rows
+                        │  │                                │  └─ Filter est. 2879987999 rows
+                        │  │                                │     │     isNotNull(ss_item_sk_10)
+                        │  │                                │     │     Dynamic Filters: {ss_sold_date_sk_10:bloomfilter,ss_sold_date_sk_10:range}
+                        │  │                                │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │  │                                └─ Broadcast Exchange est. 7 rows
+                        │  │                                   └─ Projection est. 7 rows
+                        │  │                                      │     Dynamic Filters Builder: {d_date_sk_29}
+                        │  │                                      └─ Inner Join est. 7 rows
+                        │  │                                         │     Condition: d_week_seq_29 == d_week_seq_30
+                        │  │                                         ├─ TableScan tpcds.date_dim est. 73049 rows
+                        │  │                                         └─ Broadcast Exchange est. 1 rows
+                        │  │                                            └─ EnforceSingleRow est. 1 rows
+                        │  │                                               └─ Union est. 1 rows
+                        │  │                                                  └─ Gather Exchange est. 1 rows
+                        │  │                                                     └─ Projection est. 1 rows
+                        │  │                                                        └─ Filter est. 1 rows
+                        │  │                                                           │     (d_dom_30 = 11) AND (d_moy_30 = 12) AND (d_year_30 = 1999)
+                        │  │                                                           └─ TableScan tpcds.date_dim est. 73049 rows
+                        │  └─ Broadcast Exchange est. 1 rows
+                        │     └─ MergingAggregated est. 1 rows
+                        │        └─ Gather Exchange est. 1 rows
+                        │           └─ Aggregating est. 1 rows
+                        │              │     Group by: {}
+                        │              └─ Projection est. 2978735891 rows
+                        │                 └─ Union est. 2978735891 rows
+                        │                    ├─ Inner Join est. 1705276524 rows
+                        │                    │  │     Condition: ss_sold_date_sk_9 == d_date_sk_26
+                        │                    │  ├─ Local Exchange est. 2879987999 rows
+                        │                    │  │  └─ Filter est. 2879987999 rows
+                        │                    │  │     │     Dynamic Filters: {ss_sold_date_sk_9:bloomfilter,ss_sold_date_sk_9:range}
+                        │                    │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                        │                    │  └─ Broadcast Exchange est. 1096 rows
+                        │                    │     └─ Projection est. 1096 rows
+                        │                    │        │     Dynamic Filters Builder: {d_date_sk_26}
+                        │                    │        └─ Filter est. 1096 rows
+                        │                    │           │     (d_year_26 <= cast(2001, 'UInt32')) AND (d_year_26 >= 1999)
+                        │                    │           └─ TableScan tpcds.date_dim est. 73049 rows
+                        │                    ├─ Inner Join est. 847138237 rows
+                        │                    │  │     Condition: cs_sold_date_sk_8 == d_date_sk_27
+                        │                    │  ├─ Local Exchange est. 1439980416 rows
+                        │                    │  │  └─ Filter est. 1439980416 rows
+                        │                    │  │     │     Dynamic Filters: {cs_sold_date_sk_8:bloomfilter,cs_sold_date_sk_8:range}
+                        │                    │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                        │                    │  └─ Broadcast Exchange est. 1096 rows
+                        │                    │     └─ Projection est. 1096 rows
+                        │                    │        │     Dynamic Filters Builder: {d_date_sk_27}
+                        │                    │        └─ Filter est. 1096 rows
+                        │                    │           │     (d_year_27 >= 1999) AND (d_year_27 <= cast(2001, 'UInt32'))
+                        │                    │           └─ TableScan tpcds.date_dim est. 73049 rows
+                        │                    └─ Inner Join est. 426321130 rows
+                        │                       │     Condition: ws_sold_date_sk_8 == d_date_sk_28
+                        │                       ├─ Local Exchange est. 720000376 rows
+                        │                       │  └─ Filter est. 720000376 rows
+                        │                       │     │     Dynamic Filters: {ws_sold_date_sk_8:bloomfilter,ws_sold_date_sk_8:range}
+                        │                       │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                        │                       └─ Broadcast Exchange est. 1096 rows
+                        │                          └─ Projection est. 1096 rows
+                        │                             │     Dynamic Filters Builder: {d_date_sk_28}
+                        │                             └─ Filter est. 1096 rows
+                        │                                │     (d_year_28 <= cast(2001, 'UInt32')) AND (d_year_28 >= 1999)
+                        │                                └─ TableScan tpcds.date_dim est. 73049 rows
+                        └─ Broadcast Exchange est. 1 rows
+                           └─ MergingAggregated est. 1 rows
+                              └─ Gather Exchange est. 1 rows
+                                 └─ Aggregating est. 1 rows
+                                    │     Group by: {}
+                                    └─ Projection est. 2978735891 rows
+                                       └─ Union est. 2978735891 rows
+                                          ├─ Inner Join est. 1705276524 rows
+                                          │  │     Condition: ss_sold_date_sk_12 == d_date_sk_34
+                                          │  ├─ Local Exchange est. 2879987999 rows
+                                          │  │  └─ Filter est. 2879987999 rows
+                                          │  │     │     Dynamic Filters: {ss_sold_date_sk_12:bloomfilter,ss_sold_date_sk_12:range}
+                                          │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                                          │  └─ Broadcast Exchange est. 1096 rows
+                                          │     └─ Projection est. 1096 rows
+                                          │        │     Dynamic Filters Builder: {d_date_sk_34}
+                                          │        └─ Filter est. 1096 rows
+                                          │           │     (d_year_34 >= 1999) AND (d_year_34 <= cast(2001, 'UInt32'))
+                                          │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                          ├─ Inner Join est. 847138237 rows
+                                          │  │     Condition: cs_sold_date_sk_10 == d_date_sk_35
+                                          │  ├─ Local Exchange est. 1439980416 rows
+                                          │  │  └─ Filter est. 1439980416 rows
+                                          │  │     │     Dynamic Filters: {cs_sold_date_sk_10:bloomfilter,cs_sold_date_sk_10:range}
+                                          │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                          │  └─ Broadcast Exchange est. 1096 rows
+                                          │     └─ Projection est. 1096 rows
+                                          │        │     Dynamic Filters Builder: {d_date_sk_35}
+                                          │        └─ Filter est. 1096 rows
+                                          │           │     (d_year_35 >= 1999) AND (d_year_35 <= cast(2001, 'UInt32'))
+                                          │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                          └─ Inner Join est. 426321130 rows
+                                             │     Condition: ws_sold_date_sk_10 == d_date_sk_36
+                                             ├─ Local Exchange est. 720000376 rows
+                                             │  └─ Filter est. 720000376 rows
+                                             │     │     Dynamic Filters: {ws_sold_date_sk_10:bloomfilter,ws_sold_date_sk_10:range}
+                                             │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                                             └─ Broadcast Exchange est. 1096 rows
+                                                └─ Projection est. 1096 rows
+                                                   │     Dynamic Filters Builder: {d_date_sk_36}
+                                                   └─ Filter est. 1096 rows
+                                                      │     (d_year_36 <= cast(2001, 'UInt32')) AND (d_year_36 >= 1999)
+                                                      └─ TableScan tpcds.date_dim est. 73049 rows
+note: Dynamic Filter is applied for 28 times.

@@ -1,3 +1,5 @@
+SET enable_optimizer=0; -- can't find local replica in cluster settings
+
 set optimize_skip_unused_shards=1;
 
 drop table if exists data_02000;

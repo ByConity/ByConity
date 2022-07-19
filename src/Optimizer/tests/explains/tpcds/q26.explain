@@ -1,0 +1,47 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 146835 rows
+      └─ MergeSorting est. 146835 rows
+         └─ PartialSorting est. 146835 rows
+            └─ Gather Exchange est. 146835 rows
+               └─ MergeSorting est. 146835 rows
+                  └─ PartialSorting est. 146835 rows
+                     └─ MergingAggregated est. 146835 rows
+                        └─ Repartition Exchange est. 146835 rows
+                           │     Partition by: {i_item_id}
+                           └─ Aggregating est. 146835 rows
+                              │     Group by: {i_item_id}
+                              └─ Inner Join est. 4041255 rows
+                                 │     Condition: cs_promo_sk == p_promo_sk
+                                 ├─ Inner Join est. 4041255 rows
+                                 │  │     Condition: cs_item_sk == i_item_sk
+                                 │  ├─ Repartition Exchange est. 4041255 rows
+                                 │  │  │     Partition by: {cs_item_sk}
+                                 │  │  └─ Inner Join est. 4041255 rows
+                                 │  │     │     Condition: cs_sold_date_sk == d_date_sk
+                                 │  │     ├─ Inner Join est. 20570654 rows
+                                 │  │     │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
+                                 │  │     │  ├─ Local Exchange est. 1439980416 rows
+                                 │  │     │  │  └─ Filter est. 1439980416 rows
+                                 │  │     │  │     │     Dynamic Filters: {cs_bill_cdemo_sk:bloomfilter,cs_bill_cdemo_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                                 │  │     │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                 │  │     │  └─ Broadcast Exchange est. 27440 rows
+                                 │  │     │     └─ Projection est. 27440 rows
+                                 │  │     │        │     Dynamic Filters Builder: {cd_demo_sk}
+                                 │  │     │        └─ Filter est. 27440 rows
+                                 │  │     │           │     (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                                 │  │     │           └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                                 │  │     └─ Broadcast Exchange est. 366 rows
+                                 │  │        └─ Projection est. 366 rows
+                                 │  │           │     Dynamic Filters Builder: {d_date_sk}
+                                 │  │           └─ Filter est. 366 rows
+                                 │  │              │     d_year = 2000
+                                 │  │              └─ TableScan tpcds.date_dim est. 73049 rows
+                                 │  └─ Repartition Exchange est. 300000 rows
+                                 │     │     Partition by: {i_item_sk}
+                                 │     └─ TableScan tpcds.item est. 300000 rows
+                                 └─ Broadcast Exchange est. 1500 rows
+                                    └─ Filter est. 1500 rows
+                                       │     (p_channel_event = 'N') OR (p_channel_email = 'N')
+                                       └─ TableScan tpcds.promotion est. 1500 rows
+note: Dynamic Filter is applied for 4 times.

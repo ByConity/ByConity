@@ -1,0 +1,42 @@
+Projection est. 10 rows
+└─ Limit est. 10 rows
+   └─ MergingSorted est. 1761954 rows
+      └─ MergeSorting est. 1761954 rows
+         └─ PartialSorting est. 1761954 rows
+            └─ Gather Exchange est. 1761954 rows
+               └─ MergeSorting est. 1761954 rows
+                  └─ PartialSorting est. 1761954 rows
+                     └─ MergingAggregated est. 1761954 rows
+                        └─ Repartition Exchange est. 1761954 rows
+                           │     Partition by: {l_orderkey, o_orderdate, o_shippriority}
+                           └─ Aggregating est. 1761954 rows
+                              │     Group by: {l_orderkey, o_orderdate, o_shippriority}
+                              └─ Projection est. 1761954 rows
+                                 └─ Inner Join est. 1761954 rows
+                                    │     Condition: l_orderkey == o_orderkey
+                                    ├─ Repartition Exchange est. 3244320 rows
+                                    │  │     Partition by: {l_orderkey}
+                                    │  └─ Filter est. 3244320 rows
+                                    │     │     l_shipdate > cast(9204, 'Date')
+                                    │     │     Dynamic Filters: {l_orderkey:bloomfilter,l_orderkey:range}
+                                    │     └─ TableScan tpch.lineitem est. 6001215 rows
+                                    └─ Repartition Exchange est. 440948 rows
+                                       │     Partition by: {o_orderkey}
+                                       └─ Projection est. 440948 rows
+                                          │     Dynamic Filters Builder: {o_orderkey}
+                                          └─ Inner Join est. 440948 rows
+                                             │     Condition: o_custkey == c_custkey
+                                             ├─ Repartition Exchange est. 727297 rows
+                                             │  │     Partition by: {o_custkey}
+                                             │  └─ Filter est. 727297 rows
+                                             │     │     o_orderdate < cast(9204, 'Date')
+                                             │     │     Dynamic Filters: {o_custkey:bloomfilter,o_custkey:range}
+                                             │     └─ TableScan tpch.orders est. 1500000 rows
+                                             └─ Repartition Exchange est. 30142 rows
+                                                │     Partition by: {c_custkey}
+                                                └─ Projection est. 30142 rows
+                                                   │     Dynamic Filters Builder: {c_custkey}
+                                                   └─ Filter est. 30142 rows
+                                                      │     c_mktsegment = 'BUILDING'
+                                                      └─ TableScan tpch.customer est. 150000 rows
+note: Dynamic Filter is applied for 4 times.

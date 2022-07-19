@@ -9,14 +9,6 @@ SELECT extractAllGroupsVertical('hello world', materialize('\\w+')); --{serverEr
 SELECT '0 groups, zero matches';
 SELECT extractAllGroupsVertical('hello world', '\\w+'); -- { serverError 36 }
 
-SELECT '1 group, multiple matches, String and FixedString';
-SELECT extractAllGroupsVertical('hello world', '(\\w+)');
-SELECT extractAllGroupsVertical('hello world', CAST('(\\w+)' as FixedString(5)));
-SELECT extractAllGroupsVertical(CAST('hello world' AS FixedString(12)), '(\\w+)');
-SELECT extractAllGroupsVertical(CAST('hello world' AS FixedString(12)), CAST('(\\w+)' as FixedString(5)));
-SELECT extractAllGroupsVertical(materialize(CAST('hello world' AS FixedString(12))), '(\\w+)');
-SELECT extractAllGroupsVertical(materialize(CAST('hello world' AS FixedString(12))), CAST('(\\w+)' as FixedString(5)));
-
 SELECT 'mutiple groups, multiple matches';
 SELECT extractAllGroupsVertical('abc=111, def=222, ghi=333 "jkl mno"="444 foo bar"', '("[^"]+"|\\w+)=("[^"]+"|\\w+)');
 
@@ -49,3 +41,13 @@ FROM (
         extractAllGroupsVertical(haystack, repeat('(\\w)', 100)) AS matches
     FROM numbers(3)
 );
+
+SET enable_optimizer=0;
+
+SELECT '1 group, multiple matches, String and FixedString';
+SELECT extractAllGroupsVertical('hello world', '(\\w+)');
+SELECT extractAllGroupsVertical('hello world', CAST('(\\w+)' as FixedString(5)));
+SELECT extractAllGroupsVertical(CAST('hello world' AS FixedString(12)), '(\\w+)');
+SELECT extractAllGroupsVertical(CAST('hello world' AS FixedString(12)), CAST('(\\w+)' as FixedString(5)));
+SELECT extractAllGroupsVertical(materialize(CAST('hello world' AS FixedString(12))), '(\\w+)');
+SELECT extractAllGroupsVertical(materialize(CAST('hello world' AS FixedString(12))), CAST('(\\w+)' as FixedString(5)));

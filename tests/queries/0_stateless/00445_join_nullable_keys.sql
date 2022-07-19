@@ -1,4 +1,5 @@
 SET join_use_nulls = 0;
+SET enable_optimizer = 0; -- TODO: semi/anti join is not supported by optimizer
 SET any_join_distinct_right_table_keys = 1;
 
 SELECT k, a, b

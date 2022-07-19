@@ -1,4 +1,5 @@
 -- make the order static
+set enable_optimizer=0; --shard num
 SET max_threads = 1;
 
 -- remote(system.one)

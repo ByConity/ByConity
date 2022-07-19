@@ -6,10 +6,14 @@
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/predicateExpressionsUtils.h>
 #include <Formats/FormatFactory.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
+#include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
+#include <Optimizer/CostModel/CostCalculator.h>
 #include <Parsers/DumpASTNode.h>
 #include <Parsers/queryToString.h>
 #include <Parsers/ASTExplainQuery.h>
@@ -17,9 +21,10 @@
 #include <Parsers/ParserQuery.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/PlanPrinter.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <Processors/printPipeline.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Common/JSONBuilder.h>
@@ -313,7 +318,13 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
     WriteBufferFromOwnString buf;
     bool single_line = false;
 
-    if (ast.getKind() == ASTExplainQuery::ParsedAST)
+    // if settings.enable_optimizer = true && query is supported by optimizer, print plan with optimizer.
+    // if query is not supported by optimizer, settings `settings.enable_optimizer` in context will be disabled.
+    if (QueryUseOptimizerChecker::check(query, getContext()))
+    {
+        explainUsingOptimizer(query, buf, single_line);
+    }
+    else if (ast.getKind() == ASTExplainQuery::ParsedAST)
     {
         if (ast.getSettings())
             throw Exception("Settings are not supported for EXPLAIN AST query.", ErrorCodes::UNKNOWN_SETTING);
@@ -579,7 +590,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
-            ParserQuery parser(end, getContext()->getSettingsRef().dialect_type);
+            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
@@ -630,7 +641,7 @@ void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const
             const char * begin = query_str.data();
             const char * end = query_str.data() + query_str.size();
 
-            ParserQuery parser(end, getContext()->getSettingsRef().dialect_type);
+            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
             auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
 
             InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
@@ -773,6 +784,26 @@ void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffe
         }
     }
     buffer << "]";
+}
+
+void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line)
+{
+    const auto & explain = ast->as<ASTExplainQuery &>();
+    auto settings = checkAndGetSettings<QueryPlanSettings>(explain.getSettings());
+
+    auto context = Context::createCopy(getContext());
+    InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
+    auto query_plan = interpreter.buildQueryPlan();
+
+    CardinalityEstimator::estimate(*query_plan, context);
+    PlanCostMap costs = CostCalculator::calculate(*query_plan, *context);
+    if (settings.json)
+    {
+        buffer << PlanPrinter::jsonLogicalPlan(*query_plan, true, true);
+        single_line = true;
+    }
+    else
+        buffer << PlanPrinter::textLogicalPlan(*query_plan, true, true, costs);
 }
 
 }

@@ -1,0 +1,16 @@
+Projection est. 1 rows
+└─ MergingSorted est. 1 rows
+   └─ MergeSorting est. 1 rows
+      └─ PartialSorting est. 1 rows
+         └─ Gather Exchange est. 1 rows
+            └─ MergeSorting est. 1 rows
+               └─ PartialSorting est. 1 rows
+                  └─ MergingAggregated est. 1 rows
+                     └─ Repartition Exchange est. 96800 rows
+                        │     Partition by: {P_BRAND, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 96800 rows
+                           │     Group by: {P_BRAND, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 1200136939 rows
+                              └─ Filter est. 1200136939 rows
+                                 │     (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA')
+                                 └─ TableScan ssb.lineorder_flat est. 5999989813 rows

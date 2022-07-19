@@ -6,6 +6,7 @@
 #include <Interpreters/SubqueryForSet.h>
 #include <Interpreters/BitMapIndexHelper.h>
 #include <Parsers/IAST.h>
+#include <Parsers/ASTExpressionList.h>
 
 
 namespace DB

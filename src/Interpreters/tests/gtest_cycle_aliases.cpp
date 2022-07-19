@@ -13,7 +13,7 @@ using namespace DB;
 TEST(QueryNormalizer, SimpleLoopAlias)
 {
     String query = "a as a";
-    ParserExpressionList parser(false, DialectType::CLICKHOUSE);
+    ParserExpressionList parser(false, ParserSettings::CLICKHOUSE);
     ASTPtr ast = parseQuery(parser, query, 0, 0);
 
     Aliases aliases;
@@ -27,7 +27,7 @@ TEST(QueryNormalizer, SimpleLoopAlias)
 TEST(QueryNormalizer, SimpleCycleAlias)
 {
     String query = "a as b, b as a";
-    ParserExpressionList parser(false, DialectType::CLICKHOUSE);
+    ParserExpressionList parser(false, ParserSettings::CLICKHOUSE);
     ASTPtr ast = parseQuery(parser, query, 0, 0);
 
     Aliases aliases;

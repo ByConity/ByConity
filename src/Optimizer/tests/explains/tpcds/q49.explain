@@ -1,0 +1,120 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 276359 rows
+      └─ MergeSorting est. 276359 rows
+         └─ PartialSorting est. 276359 rows
+            └─ Distinct est. 276359 rows
+               └─ Union est. 276359 rows
+                  └─ Union est. 276359 rows
+                     ├─ Projection est. 103708 rows
+                     │  └─ Filter est. 103708 rows
+                     │     │     (`expr#rank() OVER (ORDER BY currency_ratio ASC)` <= 10) OR (`expr#rank() OVER (ORDER BY return_ratio ASC)` <= 10)
+                     │     └─ Window est. 115232 rows
+                     │        └─ Window est. 115232 rows
+                     │           └─ Gather Exchange est. 115232 rows
+                     │              └─ Projection est. 115232 rows
+                     │                 └─ MergingAggregated est. 115232 rows
+                     │                    └─ Repartition Exchange est. 115232 rows
+                     │                       │     Partition by: {ws_item_sk}
+                     │                       └─ Aggregating est. 115232 rows
+                     │                          │     Group by: {ws_item_sk}
+                     │                          └─ Projection est. 320737 rows
+                     │                             └─ Inner Join est. 633592 rows
+                     │                                │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                     │                                ├─ Repartition Exchange est. 11684952 rows
+                     │                                │  │     Partition by: {ws_item_sk, ws_order_number}
+                     │                                │  └─ Inner Join est. 11684952 rows
+                     │                                │     │     Condition: ws_sold_date_sk == d_date_sk
+                     │                                │     ├─ Local Exchange est. 276933386 rows
+                     │                                │     │  └─ Filter est. 276933386 rows
+                     │                                │     │     │     (ws_net_profit > 1) AND (ws_net_paid > 0) AND (ws_quantity > 0)
+                     │                                │     │     │     Dynamic Filters: {ws_item_sk:bloomfilter,ws_item_sk:range,ws_order_number:bloomfilter,ws_order_number:range,ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range}
+                     │                                │     │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                     │                                │     └─ Broadcast Exchange est. 30 rows
+                     │                                │        └─ Projection est. 30 rows
+                     │                                │           │     Dynamic Filters Builder: {d_date_sk}
+                     │                                │           └─ Filter est. 30 rows
+                     │                                │              │     (d_year = 2001) AND (d_moy = 12)
+                     │                                │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                                └─ Repartition Exchange est. 633592 rows
+                     │                                   │     Partition by: {wr_item_sk, wr_order_number}
+                     │                                   └─ Projection est. 633592 rows
+                     │                                      │     Dynamic Filters Builder: {wr_item_sk,wr_order_number}
+                     │                                      └─ Filter est. 633592 rows
+                     │                                         │     wr_return_amt > 10000
+                     │                                         └─ TableScan tpcds.web_returns est. 71997522 rows
+                     ├─ Projection est. 103715 rows
+                     │  └─ Filter est. 103715 rows
+                     │     │     (`expr#rank() OVER (ORDER BY return_ratio ASC)_1` <= 10) OR (`expr#rank() OVER (ORDER BY currency_ratio ASC)_1` <= 10)
+                     │     └─ Window est. 115239 rows
+                     │        └─ Window est. 115239 rows
+                     │           └─ Gather Exchange est. 115239 rows
+                     │              └─ Projection est. 115239 rows
+                     │                 └─ MergingAggregated est. 115239 rows
+                     │                    └─ Repartition Exchange est. 115239 rows
+                     │                       │     Partition by: {cs_item_sk}
+                     │                       └─ Aggregating est. 115239 rows
+                     │                          │     Group by: {cs_item_sk}
+                     │                          └─ Projection est. 479808 rows
+                     │                             └─ Inner Join est. 1272788 rows
+                     │                                │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                     │                                ├─ Repartition Exchange est. 23207765 rows
+                     │                                │  │     Partition by: {cs_item_sk, cs_order_number}
+                     │                                │  └─ Inner Join est. 23207765 rows
+                     │                                │     │     Condition: cs_sold_date_sk == d_date_sk_1
+                     │                                │     ├─ Local Exchange est. 553892004 rows
+                     │                                │     │  └─ Filter est. 553892004 rows
+                     │                                │     │     │     (cs_net_paid > 0) AND (cs_quantity > 0) AND (cs_net_profit > 1)
+                     │                                │     │     │     Dynamic Filters: {cs_item_sk:bloomfilter,cs_item_sk:range,cs_order_number:bloomfilter,cs_order_number:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                     │                                │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                     │                                │     └─ Broadcast Exchange est. 30 rows
+                     │                                │        └─ Projection est. 30 rows
+                     │                                │           │     Dynamic Filters Builder: {d_date_sk_1}
+                     │                                │           └─ Filter est. 30 rows
+                     │                                │              │     (d_moy_1 = 12) AND (d_year_1 = 2001)
+                     │                                │              └─ TableScan tpcds.date_dim est. 73049 rows
+                     │                                └─ Repartition Exchange est. 1272788 rows
+                     │                                   │     Partition by: {cr_item_sk, cr_order_number}
+                     │                                   └─ Projection est. 1272788 rows
+                     │                                      │     Dynamic Filters Builder: {cr_item_sk,cr_order_number}
+                     │                                      └─ Filter est. 1272788 rows
+                     │                                         │     cr_return_amount > 10000
+                     │                                         └─ TableScan tpcds.catalog_returns est. 143996756 rows
+                     └─ Projection est. 68936 rows
+                        └─ Filter est. 68936 rows
+                           │     (`expr#rank() OVER (ORDER BY return_ratio ASC)_2` <= 10) OR (`expr#rank() OVER (ORDER BY currency_ratio ASC)_2` <= 10)
+                           └─ Window est. 76596 rows
+                              └─ Window est. 76596 rows
+                                 └─ Gather Exchange est. 76596 rows
+                                    └─ Projection est. 76596 rows
+                                       └─ MergingAggregated est. 76596 rows
+                                          └─ Repartition Exchange est. 76596 rows
+                                             │     Partition by: {ss_item_sk}
+                                             └─ Aggregating est. 76596 rows
+                                                │     Group by: {ss_item_sk}
+                                                └─ Projection est. 557253 rows
+                                                   └─ Inner Join est. 732503 rows
+                                                      │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                                      ├─ Repartition Exchange est. 46701324 rows
+                                                      │  │     Partition by: {ss_item_sk, ss_ticket_number}
+                                                      │  └─ Inner Join est. 46701324 rows
+                                                      │     │     Condition: ss_sold_date_sk == d_date_sk_2
+                                                      │     ├─ Local Exchange est. 736324221 rows
+                                                      │     │  └─ Filter est. 736324221 rows
+                                                      │     │     │     (ss_net_paid > 0) AND (ss_net_profit > 1) AND (ss_quantity > 0)
+                                                      │     │     │     Dynamic Filters: {ss_item_sk:bloomfilter,ss_item_sk:range,ss_sold_date_sk:bloomfilter,ss_sold_date_sk:range,ss_ticket_number:bloomfilter,ss_ticket_number:range}
+                                                      │     │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                                                      │     └─ Broadcast Exchange est. 30 rows
+                                                      │        └─ Projection est. 30 rows
+                                                      │           │     Dynamic Filters Builder: {d_date_sk_2}
+                                                      │           └─ Filter est. 30 rows
+                                                      │              │     (d_year_2 = 2001) AND (d_moy_2 = 12)
+                                                      │              └─ TableScan tpcds.date_dim est. 73049 rows
+                                                      └─ Repartition Exchange est. 732503 rows
+                                                         │     Partition by: {sr_item_sk, sr_ticket_number}
+                                                         └─ Projection est. 732503 rows
+                                                            │     Dynamic Filters Builder: {sr_item_sk,sr_ticket_number}
+                                                            └─ Filter est. 732503 rows
+                                                               │     sr_return_amt > 10000
+                                                               └─ TableScan tpcds.store_returns est. 287999764 rows
+note: Dynamic Filter is applied for 18 times.

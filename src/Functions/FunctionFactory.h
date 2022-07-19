@@ -9,7 +9,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
-
+#include <optional>
 
 namespace DB
 {
@@ -48,6 +48,11 @@ public:
 
     /// Returns nullptr if not found.
     FunctionOverloadResolverPtr tryGet(const std::string & name, ContextPtr context) const;
+
+    // Return the canonical name (the name used in registration) whatever the input is a name
+    // or an alias and whether the canonical name is case-sensitive. Return the lowercase names
+    // for case-insensitive names.
+    std::optional<String> getCanonicalName(const String & name_or_alias) const;
 
     /// The same methods to get developer interface implementation.
     FunctionOverloadResolverPtr getImpl(const std::string & name, ContextPtr context) const;

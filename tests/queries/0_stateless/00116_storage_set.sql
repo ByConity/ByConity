@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- set
 DROP TABLE IF EXISTS set;
 DROP TABLE IF EXISTS set2;
 

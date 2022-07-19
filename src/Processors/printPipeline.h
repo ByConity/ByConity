@@ -12,11 +12,11 @@ namespace DB
   */
 
 template <typename Processors, typename Statuses>
-void printPipeline(const Processors & processors, const Statuses & statuses, WriteBuffer & out)
+void printPipeline(const Processors & processors, const Statuses & statuses, WriteBuffer & out, const String & direction = "LR")
 {
     out << "digraph\n{\n";
-    out << "  rankdir=\"LR\";\n";
-    out << "  { node [shape = rect]\n";
+    out << "  rankdir=\"" << direction << "\";\n";
+    out << "  { node [shape = record]\n";
 
     auto get_proc_id = [](const IProcessor & proc) -> UInt64
     {
@@ -28,7 +28,7 @@ void printPipeline(const Processors & processors, const Statuses & statuses, Wri
     /// Nodes // TODO quoting and escaping
     for (const auto & processor : processors)
     {
-        out << "    n" << get_proc_id(*processor) << "[label=\"" << processor->getName() << processor->getDescription();
+        out << "    n" << get_proc_id(*processor) << "[label=\"{" << processor->getName() << processor->getDescription();
 
         if (statuses_iter != statuses.end())
         {
@@ -36,7 +36,7 @@ void printPipeline(const Processors & processors, const Statuses & statuses, Wri
             ++statuses_iter;
         }
 
-        out << "\"];\n";
+        out << "}\"];\n";
     }
 
     out << "  }\n";

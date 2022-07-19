@@ -1,0 +1,70 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ Projection est. ? rows
+                        └─ MergingAggregated est. ? rows
+                           └─ Repartition Exchange est. ? rows
+                              │     Partition by: {i_item_desc, i_item_id, s_state}
+                              └─ Aggregating est. ? rows
+                                 │     Group by: {i_item_desc, i_item_id, s_state}
+                                 └─ Inner Join est. ? rows
+                                    │     Condition: cs_item_sk == i_item_sk
+                                    ├─ Repartition Exchange est. ? rows
+                                    │  │     Partition by: {cs_item_sk}
+                                    │  └─ Inner Join est. ? rows
+                                    │     │     Condition: ss_store_sk == s_store_sk
+                                    │     ├─ Repartition Exchange est. ? rows
+                                    │     │  │     Partition by: {ss_store_sk}
+                                    │     │  └─ Inner Join est. ? rows
+                                    │     │     │     Condition: cs_sold_date_sk == d_date_sk_2
+                                    │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │  │     Partition by: {cs_sold_date_sk}
+                                    │     │     │  └─ Inner Join est. ? rows
+                                    │     │     │     │     Condition: sr_returned_date_sk == d_date_sk_1
+                                    │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │  │     Partition by: {sr_returned_date_sk}
+                                    │     │     │     │  └─ Inner Join est. ? rows
+                                    │     │     │     │     │     Condition: ss_sold_date_sk == d_date_sk
+                                    │     │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │     │  │     Partition by: {ss_sold_date_sk}
+                                    │     │     │     │     │  └─ Inner Join est. ? rows
+                                    │     │     │     │     │     │     Condition: sr_customer_sk == cs_bill_customer_sk, sr_item_sk == cs_item_sk
+                                    │     │     │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │     │     │  │     Partition by: {sr_customer_sk, sr_item_sk}
+                                    │     │     │     │     │     │  └─ Inner Join est. ? rows
+                                    │     │     │     │     │     │     │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                    │     │     │     │     │     │     ├─ Repartition Exchange est. ? rows
+                                    │     │     │     │     │     │     │  │     Partition by: {ss_customer_sk, ss_item_sk, ss_ticket_number}
+                                    │     │     │     │     │     │     │  └─ TableScan tpcds.store_sales est. ? rows
+                                    │     │     │     │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │     │     │     │        │     Partition by: {sr_customer_sk, sr_item_sk, sr_ticket_number}
+                                    │     │     │     │     │     │        └─ TableScan tpcds.store_returns est. ? rows
+                                    │     │     │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │     │     │        │     Partition by: {cs_bill_customer_sk, cs_item_sk}
+                                    │     │     │     │     │        └─ TableScan tpcds.catalog_sales est. ? rows
+                                    │     │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │     │        │     Partition by: {d_date_sk}
+                                    │     │     │     │        └─ Filter est. ? rows
+                                    │     │     │     │           │     d_quarter_name = '2001Q1'
+                                    │     │     │     │           └─ TableScan tpcds.date_dim est. ? rows
+                                    │     │     │     └─ Repartition Exchange est. ? rows
+                                    │     │     │        │     Partition by: {d_date_sk_1}
+                                    │     │     │        └─ Filter est. ? rows
+                                    │     │     │           │     d_quarter_name_1 IN ('2001Q1', '2001Q2', '2001Q3')
+                                    │     │     │           └─ TableScan tpcds.date_dim est. ? rows
+                                    │     │     └─ Repartition Exchange est. ? rows
+                                    │     │        │     Partition by: {d_date_sk_2}
+                                    │     │        └─ Filter est. ? rows
+                                    │     │           │     d_quarter_name_2 IN ('2001Q1', '2001Q2', '2001Q3')
+                                    │     │           └─ TableScan tpcds.date_dim est. ? rows
+                                    │     └─ Repartition Exchange est. ? rows
+                                    │        │     Partition by: {s_store_sk}
+                                    │        └─ TableScan tpcds.store est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {i_item_sk}
+                                       └─ TableScan tpcds.item est. ? rows

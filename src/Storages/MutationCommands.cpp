@@ -216,7 +216,7 @@ void MutationCommands::readText(ReadBuffer & in)
     String commands_str;
     readEscapedString(commands_str, in);
 
-    ParserAlterCommandList p_alter_commands(DialectType::CLICKHOUSE);
+    ParserAlterCommandList p_alter_commands(ParserSettings::CLICKHOUSE);
     auto commands_ast = parseQuery(
         p_alter_commands, commands_str.data(), commands_str.data() + commands_str.length(), "mutation commands list", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
     for (const auto & child : commands_ast->children)

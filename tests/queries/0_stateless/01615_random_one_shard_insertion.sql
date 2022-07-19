@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- partition shard pruning is not supported in optimizer
 drop table if exists shard;
 drop table if exists distr;
 

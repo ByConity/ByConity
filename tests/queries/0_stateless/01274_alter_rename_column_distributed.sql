@@ -1,4 +1,5 @@
 set insert_distributed_sync = 1;
+SET enable_optimizer = 0; -- TODO: Can't set set real sender twice for ExchangeDataKey
 
 DROP TABLE IF EXISTS visits;
 DROP TABLE IF EXISTS visits_dist;

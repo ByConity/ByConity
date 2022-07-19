@@ -16,7 +16,7 @@
 #include <boost/rational.hpp>
 #include <Parsers/ASTSampleRatio.h>
 #include <Common/SettingsChanges.h>
-#include <Processors/QueryPlan/QueryPlan.h>
+#include <QueryPlan/QueryPlan.h>
 #include <Common/JSONBuilder.h>
 
 #include <map>

@@ -16,9 +16,9 @@
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
-#include <Processors/QueryPlan/IQueryPlanStep.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>

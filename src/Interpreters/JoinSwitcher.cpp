@@ -3,7 +3,7 @@
 #include <Interpreters/HashJoin.h>
 #include <Interpreters/MergeJoin.h>
 #include <Interpreters/join_common.h>
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {

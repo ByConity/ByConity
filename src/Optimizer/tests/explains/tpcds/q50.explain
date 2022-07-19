@@ -1,0 +1,46 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 51379537 rows
+      └─ MergeSorting est. 51379537 rows
+         └─ PartialSorting est. 51379537 rows
+            └─ Gather Exchange est. 51379537 rows
+               └─ MergeSorting est. 51379537 rows
+                  └─ PartialSorting est. 51379537 rows
+                     └─ MergingAggregated est. 51379537 rows
+                        └─ Repartition Exchange est. 51379537 rows
+                           │     Partition by: {s_city, s_company_id, s_county, s_state, s_store_name, s_street_name, s_street_number, s_street_type, s_suite_number, s_zip}
+                           └─ Aggregating est. 51379537 rows
+                              │     Group by: {s_city, s_company_id, s_county, s_state, s_store_name, s_street_name, s_street_number, s_street_type, s_suite_number, s_zip}
+                              └─ Projection est. 51379537 rows
+                                 └─ Inner Join est. 50243984 rows
+                                    │     Condition: ss_sold_date_sk == d_date_sk
+                                    ├─ Inner Join est. 50243984 rows
+                                    │  │     Condition: ss_store_sk == s_store_sk
+                                    │  ├─ Inner Join est. 50243984 rows
+                                    │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                    │  │  ├─ Repartition Exchange est. 2879987999 rows
+                                    │  │  │  │     Partition by: {ss_customer_sk, ss_item_sk, ss_ticket_number}
+                                    │  │  │  └─ Filter est. 2879987999 rows
+                                    │  │  │     │     Dynamic Filters: {ss_customer_sk:bloomfilter,ss_customer_sk:range,ss_ticket_number:bloomfilter,ss_ticket_number:range}
+                                    │  │  │     └─ TableScan tpcds.store_sales est. 2879987999 rows
+                                    │  │  └─ Repartition Exchange est. 4283585 rows
+                                    │  │     │     Partition by: {sr_customer_sk, sr_item_sk, sr_ticket_number}
+                                    │  │     └─ Projection est. 4283585 rows
+                                    │  │        │     Dynamic Filters Builder: {sr_customer_sk,sr_ticket_number}
+                                    │  │        └─ Inner Join est. 4283585 rows
+                                    │  │           │     Condition: sr_returned_date_sk == d_date_sk_1
+                                    │  │           ├─ Local Exchange est. 287999764 rows
+                                    │  │           │  └─ Filter est. 287999764 rows
+                                    │  │           │     │     Dynamic Filters: {sr_returned_date_sk:bloomfilter,sr_returned_date_sk:range}
+                                    │  │           │     └─ TableScan tpcds.store_returns est. 287999764 rows
+                                    │  │           └─ Broadcast Exchange est. 30 rows
+                                    │  │              └─ Projection est. 30 rows
+                                    │  │                 │     Dynamic Filters Builder: {d_date_sk_1}
+                                    │  │                 └─ Filter est. 30 rows
+                                    │  │                    │     (d_moy_1 = 8) AND (d_year_1 = 2001)
+                                    │  │                    └─ TableScan tpcds.date_dim est. 73049 rows
+                                    │  └─ Broadcast Exchange est. 1002 rows
+                                    │     └─ TableScan tpcds.store est. 1002 rows
+                                    └─ Broadcast Exchange est. 73049 rows
+                                       └─ TableScan tpcds.date_dim est. 73049 rows
+note: Dynamic Filter is applied for 6 times.

@@ -1385,7 +1385,7 @@ TaskStatus ClusterCopier::processPartitionPieceTaskImpl(
         auto connection = task_table.cluster_push->getAnyShardInfo().pool->get(timeouts, &settings_push, true);
         String create_query = getRemoteCreateTable(task_shard.task_table.table_push, *connection, settings_push);
 
-        ParserCreateQuery parser_create_query(DialectType::CLICKHOUSE);
+        ParserCreateQuery parser_create_query(ParserSettings::CLICKHOUSE);
         auto create_query_ast = parseQuery(parser_create_query, create_query, settings_push.max_query_size, settings_push.max_parser_depth);
         /// Define helping table database and name for current partition piece
         DatabaseAndTableName database_and_table_for_current_piece
@@ -1724,7 +1724,7 @@ ASTPtr ClusterCopier::getCreateTableForPullShard(const ConnectionTimeouts & time
             *connection_entry,
             task_cluster->settings_pull);
 
-    ParserCreateQuery parser_create_query(DialectType::CLICKHOUSE);
+    ParserCreateQuery parser_create_query(ParserSettings::CLICKHOUSE);
     const auto & settings = getContext()->getSettingsRef();
     return parseQuery(parser_create_query, create_query_pull_str, settings.max_query_size, settings.max_parser_depth);
 }

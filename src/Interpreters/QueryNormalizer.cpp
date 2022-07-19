@@ -348,7 +348,18 @@ void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
             }
         }
         else
-            ast = alias_node;
+        {
+            if (data.context->getSettingsRef().enable_optimizer)
+            {
+                ast = alias_node->clone(); // For ExprAnalyzer, an aliased expression may have different analyze result with
+                                           // the origin expression, thus we clone the expression so that both analyze results
+                                           // can reside in the Analysis object. see also 00057_join_aliases.sql
+            }
+            else
+            {
+                ast = alias_node;
+            }
+        }
     }
 }
 

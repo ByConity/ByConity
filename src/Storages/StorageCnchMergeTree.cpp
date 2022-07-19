@@ -23,9 +23,9 @@
 #include <Databases/DatabaseOnDisk.h>
 #include <MergeTreeCommon/CnchServerResource.h>
 
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
 
 

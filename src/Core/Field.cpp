@@ -36,9 +36,27 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
             DB::readBinary(value, buf);
             return value;
         }
+        case Field::Types::UInt256:
+        {
+            UInt256 value;
+            readBinary(value, buf);
+            return value;
+        }
         case Field::Types::Int64: {
             Int64 value;
             DB::readVarInt(value, buf);
+            return value;
+        }
+        case Field::Types::Int128:
+        {
+            Int128 value;
+            readBinary(value, buf);
+            return value;
+        }
+        case Field::Types::Int256:
+        {
+            Int256 value;
+            readBinary(value, buf);
             return value;
         }
         case Field::Types::Float64: {
@@ -82,25 +100,27 @@ inline Field getBinaryValue(UInt8 type, ReadBuffer & buf)
 void readBinary(Array & x, ReadBuffer & buf)
 {
     size_t size;
-    UInt8 type;
-    DB::readBinary(type, buf);
     DB::readBinary(size, buf);
 
     for (size_t index = 0; index < size; ++index)
+    {
+        UInt8 type;
+        DB::readBinary(type, buf);
         x.push_back(getBinaryValue(type, buf));
+    }
 }
 
 void writeBinary(const Array & x, WriteBuffer & buf)
 {
-    UInt8 type = Field::Types::Null;
-    size_t size = x.size();
-    if (size)
-        type = x.front().getType();
-    DB::writeBinary(type, buf);
+    const size_t size = x.size();
     DB::writeBinary(size, buf);
 
     for (const auto & elem : x)
+    {
+        const UInt8 type = elem.getType();
+        DB::writeBinary(type, buf);
         Field::dispatch([&buf] (const auto & value) { FieldVisitorWriteBinary()(value, buf); }, elem);
+    }
 }
 
 void writeText(const Array & x, WriteBuffer & buf)
@@ -304,6 +324,18 @@ void writeFieldBinary(const Field & field, WriteBuffer & buf)
             writeBinary(field.get<Int128>(), buf);
             return;
         }
+        case Field::Types::UInt256:
+        {
+            writeBinary(UInt8(type), buf);
+            writeBinary(field.get<UInt256>(), buf);
+            return;
+        }
+        case Field::Types::Int256:
+        {
+            writeBinary(UInt8(type), buf);
+            writeBinary(field.get<Int256>(), buf);
+            return;
+        }
         case Field::Types::String:
         {
             writeBinary(UInt8(type), buf);
@@ -403,6 +435,20 @@ void readFieldBinary(Field & field, ReadBuffer & buf)
         case Field::Types::Int128:
         {
             Int128 value;
+            readBinary(value, buf);
+            field = value;
+            return;
+        }
+        case Field::Types::UInt256:
+        {
+            UInt256 value;
+            readBinary(value, buf);
+            field = value;
+            return;
+        }
+        case Field::Types::Int256:
+        {
+            Int256 value;
             readBinary(value, buf);
             field = value;
             return;

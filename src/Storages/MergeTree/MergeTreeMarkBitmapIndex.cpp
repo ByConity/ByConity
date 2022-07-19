@@ -423,8 +423,7 @@ bool MergeTreeMarkBitmapIndex::onlyBuildBitmap(const NamesAndTypesList & old_col
 {
     bool only_build_bitmap = false;
 
-    using NameToType = std::map<String, const IDataType *>;
-    NameToType new_types;
+    std::map<String, const IDataType *> new_types;
     for (const NameAndTypePair & column : new_columns)
         new_types.emplace(column.name, column.type.get());
 

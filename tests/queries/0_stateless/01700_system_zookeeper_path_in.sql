@@ -17,6 +17,6 @@ SELECT name FROM system.zookeeper WHERE path IN ('/clickhouse/01700_system_zooke
                                                  '/clickhouse/01700_system_zookeeper_path_in/s1/replicas') AND name LIKE 'block%' ORDER BY name;
 SELECT '========';
 SELECT name FROM system.zookeeper WHERE path IN (SELECT concat('/clickhouse/01700_system_zookeeper_path_in/s1/', name)
-    FROM system.zookeeper WHERE (name != 'replicas' AND name NOT LIKE 'leader_election%' AND path = '/clickhouse/01700_system_zookeeper_path_in/s1')) ORDER BY name;
+    FROM system.zookeeper WHERE (name != 'replicas' AND name NOT LIKE 'leader_election%' AND path = '/clickhouse/01700_system_zookeeper_path_in/s1')) ORDER BY name settings enable_optimizer=0;
 
 DROP TABLE IF EXISTS sample_table;

@@ -2,6 +2,7 @@ SET optimize_move_functions_out_of_any = 1;
 SET optimize_injective_functions_inside_uniq = 1;
 SET optimize_arithmetic_operations_in_aggregate_functions = 1;
 SET optimize_if_transform_strings_to_enum = 1;
+SET enable_optimizer = 0; -- TODO: Can't set set real sender twice for ExchangeDataKey
 
 SELECT any(number + 1) FROM numbers(1);
 SELECT uniq(bitNot(number)) FROM numbers(1);

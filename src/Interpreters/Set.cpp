@@ -16,7 +16,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 #include <Interpreters/Set.h>
 #include <Interpreters/convertFieldToType.h>

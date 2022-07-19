@@ -1,0 +1,90 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 1576848 rows
+      └─ MergeSorting est. 1576848 rows
+         └─ PartialSorting est. 1576848 rows
+            └─ Gather Exchange est. 1576848 rows
+               └─ MergeSorting est. 1576848 rows
+                  └─ PartialSorting est. 1576848 rows
+                     └─ MergingAggregated est. 1576848 rows
+                        └─ Repartition Exchange est. 1576848 rows
+                           │     Partition by: {d_year_2, expr#concat('DHL', ',', 'BARIAN')_2, w_city_2, w_country_2, w_county_2, w_state_2, w_warehouse_name_2, w_warehouse_sq_ft_2}
+                           └─ Aggregating est. 1576848 rows
+                              │     Group by: {d_year_2, expr#concat('DHL', ',', 'BARIAN')_2, w_city_2, w_country_2, w_county_2, w_state_2, w_warehouse_name_2, w_warehouse_sq_ft_2}
+                              └─ Projection est. 1576848 rows
+                                 └─ Union est. 1576848 rows
+                                    ├─ Projection est. 788424 rows
+                                    │  └─ MergingAggregated est. 788424 rows
+                                    │     └─ Repartition Exchange est. 788424 rows
+                                    │        │     Partition by: {d_year, w_city, w_country, w_county, w_state, w_warehouse_name, w_warehouse_sq_ft}
+                                    │        └─ Aggregating est. 788424 rows
+                                    │           │     Group by: {d_year, w_city, w_country, w_county, w_state, w_warehouse_name, w_warehouse_sq_ft}
+                                    │           └─ Projection est. 46925487 rows
+                                    │              └─ Inner Join est. 46925487 rows
+                                    │                 │     Condition: ws_ship_mode_sk == sm_ship_mode_sk
+                                    │                 ├─ Inner Join est. 46925487 rows
+                                    │                 │  │     Condition: ws_warehouse_sk == w_warehouse_sk
+                                    │                 │  ├─ Inner Join est. 46925487 rows
+                                    │                 │  │  │     Condition: ws_sold_time_sk == t_time_sk
+                                    │                 │  │  ├─ Inner Join est. 141977383 rows
+                                    │                 │  │  │  │     Condition: ws_sold_date_sk == d_date_sk
+                                    │                 │  │  │  ├─ Local Exchange est. 720000376 rows
+                                    │                 │  │  │  │  └─ Filter est. 720000376 rows
+                                    │                 │  │  │  │     │     Dynamic Filters: {ws_sold_date_sk:bloomfilter,ws_sold_date_sk:range,ws_sold_time_sk:bloomfilter,ws_sold_time_sk:range}
+                                    │                 │  │  │  │     └─ TableScan tpcds.web_sales est. 720000376 rows
+                                    │                 │  │  │  └─ Broadcast Exchange est. 365 rows
+                                    │                 │  │  │     └─ Projection est. 365 rows
+                                    │                 │  │  │        │     Dynamic Filters Builder: {d_date_sk}
+                                    │                 │  │  │        └─ Filter est. 365 rows
+                                    │                 │  │  │           │     d_year = 2001
+                                    │                 │  │  │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                    │                 │  │  └─ Broadcast Exchange est. 28798 rows
+                                    │                 │  │     └─ Projection est. 28798 rows
+                                    │                 │  │        │     Dynamic Filters Builder: {t_time_sk}
+                                    │                 │  │        └─ Filter est. 28798 rows
+                                    │                 │  │           │     (t_time <= cast(59638, 'UInt32')) AND (t_time >= 30838)
+                                    │                 │  │           └─ TableScan tpcds.time_dim est. 86400 rows
+                                    │                 │  └─ Broadcast Exchange est. 20 rows
+                                    │                 │     └─ TableScan tpcds.warehouse est. 20 rows
+                                    │                 └─ Broadcast Exchange est. 20 rows
+                                    │                    └─ Filter est. 20 rows
+                                    │                       │     sm_carrier IN ('DHL', 'BARIAN')
+                                    │                       └─ TableScan tpcds.ship_mode est. 20 rows
+                                    └─ Projection est. 788424 rows
+                                       └─ MergingAggregated est. 788424 rows
+                                          └─ Repartition Exchange est. 788424 rows
+                                             │     Partition by: {d_year_1, w_city_1, w_country_1, w_county_1, w_state_1, w_warehouse_name_1, w_warehouse_sq_ft_1}
+                                             └─ Aggregating est. 788424 rows
+                                                │     Group by: {d_year_1, w_city_1, w_country_1, w_county_1, w_state_1, w_warehouse_name_1, w_warehouse_sq_ft_1}
+                                                └─ Projection est. 93248381 rows
+                                                   └─ Inner Join est. 93248381 rows
+                                                      │     Condition: cs_ship_mode_sk == sm_ship_mode_sk_1
+                                                      ├─ Inner Join est. 93248381 rows
+                                                      │  │     Condition: cs_warehouse_sk == w_warehouse_sk_1
+                                                      │  ├─ Inner Join est. 93248381 rows
+                                                      │  │  │     Condition: cs_sold_time_sk == t_time_sk_1
+                                                      │  │  ├─ Inner Join est. 282121766 rows
+                                                      │  │  │  │     Condition: cs_sold_date_sk == d_date_sk_1
+                                                      │  │  │  ├─ Local Exchange est. 1439980416 rows
+                                                      │  │  │  │  └─ Filter est. 1439980416 rows
+                                                      │  │  │  │     │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range,cs_sold_time_sk:bloomfilter,cs_sold_time_sk:range}
+                                                      │  │  │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                                      │  │  │  └─ Broadcast Exchange est. 365 rows
+                                                      │  │  │     └─ Projection est. 365 rows
+                                                      │  │  │        │     Dynamic Filters Builder: {d_date_sk_1}
+                                                      │  │  │        └─ Filter est. 365 rows
+                                                      │  │  │           │     d_year_1 = 2001
+                                                      │  │  │           └─ TableScan tpcds.date_dim est. 73049 rows
+                                                      │  │  └─ Broadcast Exchange est. 28799 rows
+                                                      │  │     └─ Projection est. 28799 rows
+                                                      │  │        │     Dynamic Filters Builder: {t_time_sk_1}
+                                                      │  │        └─ Filter est. 28799 rows
+                                                      │  │           │     (t_time_1 >= 30838) AND (t_time_1 <= cast(59638, 'UInt32'))
+                                                      │  │           └─ TableScan tpcds.time_dim est. 86400 rows
+                                                      │  └─ Broadcast Exchange est. 20 rows
+                                                      │     └─ TableScan tpcds.warehouse est. 20 rows
+                                                      └─ Broadcast Exchange est. 20 rows
+                                                         └─ Filter est. 20 rows
+                                                            │     sm_carrier_1 IN ('DHL', 'BARIAN')
+                                                            └─ TableScan tpcds.ship_mode est. 20 rows
+note: Dynamic Filter is applied for 8 times.

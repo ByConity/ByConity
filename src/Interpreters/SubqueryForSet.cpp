@@ -1,5 +1,5 @@
 #include <Interpreters/SubqueryForSet.h>
-#include <Processors/QueryPlan/QueryPlan.h>
+#include <QueryPlan/QueryPlan.h>
 #include <Interpreters/PreparedSets.h>
 
 namespace DB

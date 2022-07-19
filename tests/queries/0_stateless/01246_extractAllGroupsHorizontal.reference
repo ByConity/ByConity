@@ -1,11 +1,4 @@
 0 groups, zero matches
-1 group, multiple matches, String and FixedString
-[['hello','world']]
-[['hello','world']]
-[['hello','world']]
-[['hello','world']]
-[['hello','world']]
-[['hello','world']]
 mutiple groups, multiple matches
 [['abc','def','ghi','"jkl mno"'],['111','222','333','"444 foo bar"']]
 big match
@@ -20,3 +13,10 @@ lots of groups
 0	100	0	[]
 260	100	2	[1,1]
 520	100	5	[1,1,1,1,1]
+1 group, multiple matches, String and FixedString
+[['hello','world']]
+[['hello','world']]
+[['hello','world']]
+[['hello','world']]
+[['hello','world']]
+[['hello','world']]

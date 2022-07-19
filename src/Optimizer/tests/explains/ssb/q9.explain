@@ -1,0 +1,38 @@
+Projection est. 9684 rows
+└─ MergingSorted est. 9684 rows
+   └─ MergeSorting est. 9684 rows
+      └─ PartialSorting est. 9684 rows
+         └─ Gather Exchange est. 9684 rows
+            └─ MergeSorting est. 9684 rows
+               └─ PartialSorting est. 9684 rows
+                  └─ MergingAggregated est. 9684 rows
+                     └─ Repartition Exchange est. 9684 rows
+                        │     Partition by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
+                        └─ Aggregating est. 9684 rows
+                           │     Group by: {C_CITY, S_CITY, expr#toYear(LO_ORDERDATE)}
+                           └─ Projection est. 569673 rows
+                              └─ Inner Join est. 569673 rows
+                                 │     Condition: LO_CUSTKEY == C_CUSTKEY
+                                 ├─ Repartition Exchange est. 48581645 rows
+                                 │  │     Partition by: {LO_CUSTKEY}
+                                 │  └─ Inner Join est. 48581645 rows
+                                 │     │     Condition: LO_SUPPKEY == S_SUPPKEY
+                                 │     ├─ Local Exchange est. 5999989813 rows
+                                 │     │  └─ Filter est. 5999989813 rows
+                                 │     │     │     (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
+                                 │     │     │     Dynamic Filters: {LO_CUSTKEY:bloomfilter,LO_CUSTKEY:range,LO_SUPPKEY:bloomfilter,LO_SUPPKEY:range}
+                                 │     │     └─ TableScan ssb.lineorder est. 5999989813 rows
+                                 │     └─ Broadcast Exchange est. 16194 rows
+                                 │        └─ Projection est. 16194 rows
+                                 │           │     Dynamic Filters Builder: {S_SUPPKEY}
+                                 │           └─ Filter est. 16194 rows
+                                 │              │     (S_CITY = 'UNITED KI5') OR (S_CITY = 'UNITED KI1')
+                                 │              └─ TableScan ssb.supplier est. 2000000 rows
+                                 └─ Repartition Exchange est. 240175 rows
+                                    │     Partition by: {C_CUSTKEY}
+                                    └─ Projection est. 240175 rows
+                                       │     Dynamic Filters Builder: {C_CUSTKEY}
+                                       └─ Filter est. 240175 rows
+                                          │     (C_CITY = 'UNITED KI5') OR (C_CITY = 'UNITED KI1')
+                                          └─ TableScan ssb.customer est. 30000000 rows
+note: Dynamic Filter is applied for 4 times.

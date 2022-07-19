@@ -1,0 +1,62 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 19875962 rows
+      └─ MergeSorting est. 19875962 rows
+         └─ PartialSorting est. 19875962 rows
+            └─ Aggregating est. 19875962 rows
+               │     Group by: {ca_country, ca_county, ca_state, i_item_id}
+               └─ Gather Exchange est. 19875962 rows
+                  └─ Projection est. 19875962 rows
+                     └─ Inner Join est. 19875962 rows
+                        │     Condition: cs_item_sk == i_item_sk
+                        ├─ Repartition Exchange est. 19875962 rows
+                        │  │     Partition by: {cs_item_sk}
+                        │  └─ Inner Join est. 19875961 rows
+                        │     │     Condition: cs_bill_customer_sk == c_customer_sk
+                        │     ├─ Repartition Exchange est. 20151512 rows
+                        │     │  │     Partition by: {cs_bill_customer_sk}
+                        │     │  └─ Inner Join est. 20151512 rows
+                        │     │     │     Condition: cs_sold_date_sk == d_date_sk
+                        │     │     ├─ Inner Join est. 102855529 rows
+                        │     │     │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
+                        │     │     │  ├─ Local Exchange est. 1439980416 rows
+                        │     │     │  │  └─ Filter est. 1439980416 rows
+                        │     │     │  │     │     Dynamic Filters: {cs_bill_cdemo_sk:bloomfilter,cs_bill_cdemo_sk:range,cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                        │     │     │  │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                        │     │     │  └─ Broadcast Exchange est. 137200 rows
+                        │     │     │     └─ Projection est. 137200 rows
+                        │     │     │        │     Dynamic Filters Builder: {cd_demo_sk}
+                        │     │     │        └─ Filter est. 137200 rows
+                        │     │     │           │     (cd_education_status = 'Unknown') AND (cd_gender = 'F')
+                        │     │     │           └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                        │     │     └─ Broadcast Exchange est. 365 rows
+                        │     │        └─ Projection est. 365 rows
+                        │     │           │     Dynamic Filters Builder: {d_date_sk}
+                        │     │           └─ Filter est. 365 rows
+                        │     │              │     d_year = 1998
+                        │     │              └─ TableScan tpcds.date_dim est. 73049 rows
+                        │     └─ Repartition Exchange est. 12000000 rows
+                        │        │     Partition by: {c_customer_sk}
+                        │        └─ Inner Join est. 12000000 rows
+                        │           │     Condition: c_current_cdemo_sk == cd_demo_sk_1
+                        │           ├─ Repartition Exchange est. 12000000 rows
+                        │           │  │     Partition by: {c_current_cdemo_sk}
+                        │           │  └─ Inner Join est. 12000000 rows
+                        │           │     │     Condition: c_current_addr_sk == ca_address_sk
+                        │           │     ├─ Repartition Exchange est. 12000000 rows
+                        │           │     │  │     Partition by: {c_current_addr_sk}
+                        │           │     │  └─ Filter est. 12000000 rows
+                        │           │     │     │     c_birth_month IN (1, 6, 8, 9, 12, 2)
+                        │           │     │     └─ TableScan tpcds.customer est. 12000000 rows
+                        │           │     └─ Repartition Exchange est. 6000000 rows
+                        │           │        │     Partition by: {ca_address_sk}
+                        │           │        └─ Filter est. 6000000 rows
+                        │           │           │     ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA', 'MS')
+                        │           │           └─ TableScan tpcds.customer_address est. 6000000 rows
+                        │           └─ Repartition Exchange est. 1920800 rows
+                        │              │     Partition by: {cd_demo_sk_1}
+                        │              └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                        └─ Repartition Exchange est. 300000 rows
+                           │     Partition by: {i_item_sk}
+                           └─ TableScan tpcds.item est. 300000 rows
+note: Dynamic Filter is applied for 4 times.

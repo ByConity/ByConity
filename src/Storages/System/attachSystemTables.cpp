@@ -2,6 +2,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachSystemTablesImpl.h>
 
+#include <Statistics/StatsDataSource.h>
 #include <Storages/System/StorageSystemAggregateFunctionCombinators.h>
 #include <Storages/System/StorageSystemAsynchronousMetrics.h>
 #include <Storages/System/StorageSystemBuildOptions.h>
@@ -206,5 +207,6 @@ void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & 
 {
     attach<StorageSystemAsynchronousMetrics>(system_database, "asynchronous_metrics", async_metrics);
 }
+
 
 }

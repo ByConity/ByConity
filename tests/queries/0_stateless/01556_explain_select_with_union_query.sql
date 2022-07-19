@@ -1,4 +1,5 @@
 SET union_default_mode = 'DISTINCT';
+set enable_optimizer = 0;
 
 set enable_global_with_statement = 1;
 

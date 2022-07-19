@@ -29,7 +29,7 @@
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {

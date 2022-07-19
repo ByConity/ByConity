@@ -27,7 +27,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeUUID.h>
 
-#include <Processors/QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
@@ -367,6 +367,26 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
     String type_name;
     readBinary(type_name, buf);
     return data_type_factory.get(type_name);
+}
+
+void serializeDataTypes(const DataTypes & data_types, WriteBuffer & buf)
+{
+    writeBinary(data_types.size(), buf);
+    for (const auto & item : data_types)
+        serializeDataType(item, buf);
+}
+
+DataTypes deserializeDataTypes(ReadBuffer & buf)
+{
+    size_t size;
+    readBinary(size, buf);
+    DataTypes types;
+    for (size_t index = 0; index < size; ++index)
+    {
+        index++;
+        types.emplace_back(deserializeDataType(buf));
+    }
+    return types;
 }
 
 }

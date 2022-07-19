@@ -53,6 +53,7 @@ private:
       */
 
     friend class TreeRewriter;
+    friend class JoinStep;
 
     const SizeLimits size_limits;
     const size_t default_max_bytes = 0;
@@ -201,6 +202,7 @@ public:
     const Names & keyNamesLeft() const { return key_names_left; }
     const Names & keyNamesRight() const { return key_names_right; }
     const NamesAndTypesList & columnsFromJoinedTable() const { return columns_from_joined_table; }
+    void setColumnsFromJoinedTable(const NamesAndTypesList & columns) { columns_from_joined_table = columns; }
     Names columnsAddedByJoin() const
     {
         Names res;

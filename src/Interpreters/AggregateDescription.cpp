@@ -164,6 +164,7 @@ void AggregateDescription::serialize(WriteBuffer & buf) const
     writeBinary(arguments, buf);
     writeBinary(argument_names, buf);
     writeBinary(column_name, buf);
+    writeBinary(mask_column, buf);
 }
 
 void AggregateDescription::deserialize(ReadBuffer & buf)
@@ -182,6 +183,7 @@ void AggregateDescription::deserialize(ReadBuffer & buf)
     readBinary(arguments, buf);
     readBinary(argument_names, buf);
     readBinary(column_name, buf);
+    readBinary(mask_column, buf);
 
     AggregateFunctionProperties properties;
     function = AggregateFunctionFactory::instance().get(func_name, data_types, parameters, properties);

@@ -1,4 +1,3 @@
-#include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTAsterisk.h>
@@ -17,10 +16,13 @@
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>
 #include <Parsers/ASTDropQuery.h>
+#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTExternalDDLQuery.h>
+#include <Parsers/ASTFieldReference.h>
 #include <Parsers/ASTFunction.h>
+#include <Parsers/ASTTEALimit.h>
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTIdentifier.h>
@@ -42,9 +44,12 @@
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Parsers/ASTRowPolicyName.h>
+#include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTSampleRatio.h>
+#include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTSettingsProfileElement.h>
@@ -53,10 +58,11 @@
 #include <Parsers/ASTShowCreateAccessEntityQuery.h>
 #include <Parsers/ASTShowGrantsQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
+#include <Parsers/ASTStatsQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSystemQuery.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTTTLElement.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTUseQuery.h>
 #include <Parsers/ASTUserNameWithHost.h>
 #include <Parsers/ASTWatchQuery.h>
@@ -64,8 +70,8 @@
 #include <Parsers/ASTWithElement.h>
 
 #include <Core/Types.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 
 #include <memory>
 

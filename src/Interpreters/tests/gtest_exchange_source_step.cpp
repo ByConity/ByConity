@@ -14,8 +14,8 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/RemoteExchangeSourceStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>

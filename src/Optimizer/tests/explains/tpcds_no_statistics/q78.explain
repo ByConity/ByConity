@@ -1,0 +1,96 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. ? rows
+      └─ MergeSorting est. ? rows
+         └─ PartialSorting est. ? rows
+            └─ Gather Exchange est. ? rows
+               └─ MergeSorting est. ? rows
+                  └─ PartialSorting est. ? rows
+                     └─ Projection est. ? rows
+                        └─ Filter est. ? rows
+                           │     (coalesce(`expr#sum(cs_quantity)`, 0) > 0) OR (coalesce(`expr#sum(ws_quantity)`, 0) > 0)
+                           └─ Left Join est. ? rows
+                              │     Condition: d_year == d_year_2, ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
+                              ├─ Left Join est. ? rows
+                              │  │     Condition: d_year == d_year_1, ss_customer_sk == ws_bill_customer_sk, ss_item_sk == ws_item_sk
+                              │  ├─ Repartition Exchange est. ? rows
+                              │  │  │     Partition by: {d_year, ss_customer_sk, ss_item_sk}
+                              │  │  └─ MergingAggregated est. ? rows
+                              │  │     └─ Repartition Exchange est. ? rows
+                              │  │        │     Partition by: {d_year, ss_customer_sk, ss_item_sk}
+                              │  │        └─ Aggregating est. ? rows
+                              │  │           │     Group by: {d_year, ss_customer_sk, ss_item_sk}
+                              │  │           └─ Inner Join est. ? rows
+                              │  │              │     Condition: ss_sold_date_sk == d_date_sk
+                              │  │              ├─ Repartition Exchange est. ? rows
+                              │  │              │  │     Partition by: {ss_sold_date_sk}
+                              │  │              │  └─ Projection est. ? rows
+                              │  │              │     └─ Filter est. ? rows
+                              │  │              │        │     isNull(sr_ticket_number)
+                              │  │              │        └─ Left Join est. ? rows
+                              │  │              │           │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                              │  │              │           ├─ Repartition Exchange est. ? rows
+                              │  │              │           │  │     Partition by: {ss_item_sk, ss_ticket_number}
+                              │  │              │           │  └─ TableScan tpcds.store_sales est. ? rows
+                              │  │              │           └─ Repartition Exchange est. ? rows
+                              │  │              │              │     Partition by: {sr_item_sk, sr_ticket_number}
+                              │  │              │              └─ TableScan tpcds.store_returns est. ? rows
+                              │  │              └─ Repartition Exchange est. ? rows
+                              │  │                 │     Partition by: {d_date_sk}
+                              │  │                 └─ Filter est. ? rows
+                              │  │                    │     d_year = 2000
+                              │  │                    └─ TableScan tpcds.date_dim est. ? rows
+                              │  └─ Repartition Exchange est. ? rows
+                              │     │     Partition by: {d_year_1, ws_bill_customer_sk, ws_item_sk}
+                              │     └─ MergingAggregated est. ? rows
+                              │        └─ Repartition Exchange est. ? rows
+                              │           │     Partition by: {d_year_1, ws_bill_customer_sk, ws_item_sk}
+                              │           └─ Aggregating est. ? rows
+                              │              │     Group by: {d_year_1, ws_bill_customer_sk, ws_item_sk}
+                              │              └─ Inner Join est. ? rows
+                              │                 │     Condition: ws_sold_date_sk == d_date_sk_1
+                              │                 ├─ Repartition Exchange est. ? rows
+                              │                 │  │     Partition by: {ws_sold_date_sk}
+                              │                 │  └─ Projection est. ? rows
+                              │                 │     └─ Filter est. ? rows
+                              │                 │        │     isNull(wr_order_number)
+                              │                 │        └─ Left Join est. ? rows
+                              │                 │           │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                              │                 │           ├─ Repartition Exchange est. ? rows
+                              │                 │           │  │     Partition by: {ws_item_sk, ws_order_number}
+                              │                 │           │  └─ TableScan tpcds.web_sales est. ? rows
+                              │                 │           └─ Repartition Exchange est. ? rows
+                              │                 │              │     Partition by: {wr_item_sk, wr_order_number}
+                              │                 │              └─ TableScan tpcds.web_returns est. ? rows
+                              │                 └─ Repartition Exchange est. ? rows
+                              │                    │     Partition by: {d_date_sk_1}
+                              │                    └─ Filter est. ? rows
+                              │                       │     d_year_1 = 2000
+                              │                       └─ TableScan tpcds.date_dim est. ? rows
+                              └─ Repartition Exchange est. ? rows
+                                 │     Partition by: {cs_bill_customer_sk, cs_item_sk, d_year_2}
+                                 └─ MergingAggregated est. ? rows
+                                    └─ Repartition Exchange est. ? rows
+                                       │     Partition by: {cs_bill_customer_sk, cs_item_sk, d_year_2}
+                                       └─ Aggregating est. ? rows
+                                          │     Group by: {cs_bill_customer_sk, cs_item_sk, d_year_2}
+                                          └─ Inner Join est. ? rows
+                                             │     Condition: cs_sold_date_sk == d_date_sk_2
+                                             ├─ Repartition Exchange est. ? rows
+                                             │  │     Partition by: {cs_sold_date_sk}
+                                             │  └─ Projection est. ? rows
+                                             │     └─ Filter est. ? rows
+                                             │        │     isNull(cr_order_number)
+                                             │        └─ Left Join est. ? rows
+                                             │           │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+                                             │           ├─ Repartition Exchange est. ? rows
+                                             │           │  │     Partition by: {cs_item_sk, cs_order_number}
+                                             │           │  └─ TableScan tpcds.catalog_sales est. ? rows
+                                             │           └─ Repartition Exchange est. ? rows
+                                             │              │     Partition by: {cr_item_sk, cr_order_number}
+                                             │              └─ TableScan tpcds.catalog_returns est. ? rows
+                                             └─ Repartition Exchange est. ? rows
+                                                │     Partition by: {d_date_sk_2}
+                                                └─ Filter est. ? rows
+                                                   │     d_year_2 = 2000
+                                                   └─ TableScan tpcds.date_dim est. ? rows

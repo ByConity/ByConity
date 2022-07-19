@@ -5,6 +5,7 @@
 #include <Parsers/ASTFunctionWithKeyValueArguments.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseIntervalKind.h>
+#include <Parsers/ParserUnionQueryElement.h>
 #include <Common/StringUtils/StringUtils.h>
 
 
@@ -113,12 +114,18 @@ bool ParserList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 bool ParserUnionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
+    ParserUnionQueryElement elem_parser(dt);
+    ParserKeyword s_union_parser("UNION");
+    ParserKeyword s_all_parser("ALL");
+    ParserKeyword s_distinct_parser("DISTINCT");
+    ParserKeyword s_except_parser("EXCEPT");
+    ParserKeyword s_intersect_parser("INTERSECT");
     ASTs elements;
 
     auto parse_element = [&]
     {
         ASTPtr element;
-        if (!elem_parser->parse(pos, element, expected))
+        if (!elem_parser.parse(pos, element, expected))
             return false;
 
         elements.push_back(element);
@@ -128,21 +135,55 @@ bool ParserUnionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// Parse UNION type
     auto parse_separator = [&]
     {
-        if (s_union_parser->ignore(pos, expected))
+        if (s_union_parser.ignore(pos, expected))
         {
             // SELECT ... UNION ALL SELECT ...
-            if (s_all_parser->check(pos, expected))
+            if (s_all_parser.check(pos, expected))
             {
                 union_modes.push_back(ASTSelectWithUnionQuery::Mode::ALL);
             }
             // SELECT ... UNION DISTINCT SELECT ...
-            else if (s_distinct_parser->check(pos, expected))
+            else if (s_distinct_parser.check(pos, expected))
             {
                 union_modes.push_back(ASTSelectWithUnionQuery::Mode::DISTINCT);
             }
             // SELECT ... UNION SELECT ...
             else
                 union_modes.push_back(ASTSelectWithUnionQuery::Mode::Unspecified);
+            return true;
+        }
+        else if (s_except_parser.check(pos, expected))
+        {
+            // SELECT ... EXCEPT ALL SELECT ...
+            if (s_all_parser.check(pos, expected))
+            {
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_ALL);
+            }
+            // SELECT ... EXCEPT DISTINCT SELECT ...
+            else if (s_distinct_parser.check(pos, expected))
+            {
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_DISTINCT);
+            }
+            // SELECT ... EXCEPT SELECT ...
+            else
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::EXCEPT_UNSPECIFIED);
+            return true;
+        }
+        else if (s_intersect_parser.check(pos, expected))
+        {
+            // SELECT ... INTERSECT ALL SELECT ...
+            if (s_all_parser.check(pos, expected))
+            {
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_ALL);
+            }
+            // SELECT ... INTERSECT DISTINCT SELECT ...
+            else if (s_distinct_parser.check(pos, expected))
+            {
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_DISTINCT);
+            }
+            // SELECT ... INTERSECT SELECT ...
+            else
+                union_modes.push_back(ASTSelectWithUnionQuery::Mode::INTERSECT_UNSPECIFIED);
             return true;
         }
         return false;
@@ -624,7 +665,7 @@ bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 }
 
 
-ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, enum DialectType t, bool is_table_function)
+ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function)
     : IParserDialectBase(t), impl(std::make_unique<ParserWithOptionalAlias>(
         is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt)),
         allow_alias_without_as_keyword, dt))
@@ -761,7 +802,7 @@ bool ParserTimestampOperatorExpression::parseImpl(Pos & pos, ASTPtr & node, Expe
 }
 
 bool ParserIntervalOperatorExpression::parseArgumentAndIntervalKind(
-    Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, enum DialectType t)
+    Pos & pos, ASTPtr & expr, IntervalKind & interval_kind, Expected & expected, ParserSettingsImpl t)
 {
     auto begin = pos;
     auto init_expected = expected;

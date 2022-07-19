@@ -56,7 +56,7 @@ bool ParserWatchQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// LIMIT length
     if (s_limit.ignore(pos, expected))
     {
-        ParserNumber num(DialectType::CLICKHOUSE);
+        ParserNumber num(ParserSettings::CLICKHOUSE);
 
         if (!num.parse(pos, query->limit_length, expected))
             return false;

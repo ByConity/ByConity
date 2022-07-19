@@ -13,10 +13,10 @@
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Processors/Sources/NullSource.h>
 #include <Processors/QueryPipeline.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ExpressionStep.h>
-#include <Processors/QueryPlan/FilterStep.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ExpressionStep.h>
+#include <QueryPlan/FilterStep.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
 #include <DataStreams/CheckSortedBlockInputStream.h>
 #include <Parsers/ASTIdentifier.h>
@@ -26,7 +26,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <IO/WriteHelpers.h>
-#include <Processors/QueryPlan/CreatingSetsStep.h>
+#include <QueryPlan/CreatingSetsStep.h>
 #include <DataTypes/NestedUtils.h>
 
 

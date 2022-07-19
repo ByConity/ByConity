@@ -30,6 +30,8 @@ struct ExpressionActionsSettings;
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
+using RuntimeFilterId = UInt64;
+
 class QueryPipeline
 {
 public:
@@ -121,6 +123,7 @@ public:
     void addTableLock(TableLockHolder lock) { pipe.addTableLock(std::move(lock)); }
     void addInterpreterContext(std::shared_ptr<const Context> context) { pipe.addInterpreterContext(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { pipe.addStorageHolder(std::move(storage)); }
+    void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { pipe.addRuntimeFilterHolder(std::move(rf_holder)); }
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { pipe.addQueryPlan(std::move(plan)); }
     void setLimits(const StreamLocalLimits & limits) { pipe.setLimits(limits); }
     void setLeafLimits(const SizeLimits & limits) { pipe.setLeafLimits(limits); }

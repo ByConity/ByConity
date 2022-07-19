@@ -1,8 +1,9 @@
 #pragma once
 
+#include <optional>
 #include <Core/Types.h>
 #include <Core/Block.h>
-#include <Processors/QueryPlan/QueryPlan.h>
+#include <QueryPlan/QueryPlan.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
@@ -10,6 +11,7 @@
 
 namespace DB
 {
+using DynamicFilterId = UInt32;
 
 /**
  * SOURCE means the plan is the leaf of a plan segment tree, i.g. TableScan Node.
@@ -125,7 +127,7 @@ public:
 
     String toString(size_t indent = 0) const override;
 
-    StorageID getStorageID() const { return storage_id; }
+    std::optional<StorageID> getStorageID() const { return storage_id; }
 
     void setStorageID(const StorageID & storage_id_) { storage_id = storage_id_;}
 
@@ -133,7 +135,7 @@ private:
     size_t parallel_index = 0;
     bool keep_order = false;
     AddressInfos source_addresses;
-    StorageID storage_id = StorageID::createEmpty();
+    std::optional<StorageID> storage_id;
 };
 
 using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
@@ -258,6 +260,10 @@ public:
 
     void update();
 
+    void addRuntimeFilter(DynamicFilterId id) { runtime_filters.emplace_back(id); }
+
+    std::vector<DynamicFilterId> & getRuntimeFilters() { return runtime_filters; }
+
 private:
     size_t segment_id;
     String query_id;
@@ -271,6 +277,8 @@ private:
     String cluster_name;
     size_t parallel;
     size_t exchange_parallel_size;
+
+    std::vector<DynamicFilterId> runtime_filters;
 
     ContextMutablePtr context;
 };
@@ -315,6 +323,8 @@ public:
     Node * getLastNode() { return &nodes.back(); }
 
     Nodes & getNodes() { return nodes; }
+
+    std::unordered_map<size_t, PlanSegmentPtr &> getPlanSegmentsMap();
 
     String toString() const;
 

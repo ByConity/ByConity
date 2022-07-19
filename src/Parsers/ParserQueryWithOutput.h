@@ -15,7 +15,7 @@ protected:
     const char * getName() const override { return "Query with output"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
-    explicit ParserQueryWithOutput(const char * end_, enum DialectType t = DialectType::CLICKHOUSE) : IParserDialectBase(t), end(end_) {}
+    explicit ParserQueryWithOutput(const char * end_, ParserSettingsImpl t = ParserSettings::CLICKHOUSE) : IParserDialectBase(t), end(end_) {}
 };
 
 }

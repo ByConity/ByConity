@@ -36,7 +36,7 @@ namespace
 
 /// @note we use `--` prefix for unique short names and `--.` for subqueries.
 /// It expects that user do not use names starting with `--` and column names starting with dot.
-ASTPtr makeSubqueryTemplate(enum DialectType dt)
+ASTPtr makeSubqueryTemplate(ParserSettingsImpl dt)
 {
     ParserTablesInSelectQueryElement parser(true, dt);
     ASTPtr subquery_template = parseQuery(parser, "(select * from _t) as `--.s`", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
@@ -706,7 +706,7 @@ void JoinToSubqueryTransformMatcher::visit(ASTSelectQuery & select, ASTPtr & ast
 
     ASTPtr left_table = src_tables[0];
 
-    static ASTPtr subquery_template = makeSubqueryTemplate(data.dialect_type);
+    static ASTPtr subquery_template = makeSubqueryTemplate(ParserSettings::valueOf(data.dialect_type));
 
     for (size_t i = 1; i < src_tables.size() - 1; ++i)
     {

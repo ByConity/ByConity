@@ -1,0 +1,53 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 4650089 rows
+      └─ MergeSorting est. 4650089 rows
+         └─ PartialSorting est. 4650089 rows
+            └─ Gather Exchange est. 4650089 rows
+               └─ MergeSorting est. 4650089 rows
+                  └─ PartialSorting est. 4650089 rows
+                     └─ Projection est. 4650089 rows
+                        └─ Inner Join est. 4650089 rows
+                           │     Condition: sr_cdemo_sk == c_current_cdemo_sk
+                           ├─ Local Exchange est. 287999764 rows
+                           │  └─ Filter est. 287999764 rows
+                           │     │     Dynamic Filters: {sr_cdemo_sk:range}
+                           │     └─ TableScan tpcds.store_returns est. 287999764 rows
+                           └─ Broadcast Exchange est. 31013 rows
+                              └─ Inner Join est. 31013 rows
+                                 │     Condition: cd_demo_sk == c_current_cdemo_sk
+                                 ├─ Repartition Exchange est. 1920800 rows
+                                 │  │     Partition by: {cd_demo_sk}
+                                 │  └─ TableScan tpcds.customer_demographics est. 1920800 rows
+                                 └─ Repartition Exchange est. 30899 rows
+                                    │     Partition by: {c_current_cdemo_sk}
+                                    └─ Projection est. 30899 rows
+                                       │     Dynamic Filters Builder: {c_current_cdemo_sk}
+                                       └─ Inner Join est. 30899 rows
+                                          │     Condition: c_current_hdemo_sk == hd_demo_sk
+                                          ├─ Repartition Exchange est. 123958 rows
+                                          │  │     Partition by: {c_current_hdemo_sk}
+                                          │  └─ Inner Join est. 123958 rows
+                                          │     │     Condition: c_current_addr_sk == ca_address_sk
+                                          │     ├─ Local Exchange est. 12000000 rows
+                                          │     │  └─ Filter est. 12000000 rows
+                                          │     │     │     Dynamic Filters: {c_current_addr_sk:bloomfilter,c_current_addr_sk:range,c_current_hdemo_sk:bloomfilter,c_current_hdemo_sk:range}
+                                          │     │     └─ TableScan tpcds.customer est. 12000000 rows
+                                          │     └─ Broadcast Exchange est. 54438 rows
+                                          │        └─ Projection est. 54438 rows
+                                          │           │     Dynamic Filters Builder: {ca_address_sk}
+                                          │           └─ Filter est. 54438 rows
+                                          │              │     ca_city = 'Edgewood'
+                                          │              └─ TableScan tpcds.customer_address est. 6000000 rows
+                                          └─ Repartition Exchange est. 1800 rows
+                                             │     Partition by: {hd_demo_sk}
+                                             └─ Projection est. 1800 rows
+                                                │     Dynamic Filters Builder: {hd_demo_sk}
+                                                └─ Inner Join est. 1800 rows
+                                                   │     Condition: hd_income_band_sk == ib_income_band_sk
+                                                   ├─ TableScan tpcds.household_demographics est. 7200 rows
+                                                   └─ Broadcast Exchange est. 5 rows
+                                                      └─ Filter est. 5 rows
+                                                         │     (ib_lower_bound >= 38128) AND (ib_upper_bound <= 88128)
+                                                         └─ TableScan tpcds.income_band est. 20 rows
+note: Dynamic Filter is applied for 5 times.

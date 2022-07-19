@@ -1,0 +1,120 @@
+Projection est. 100 rows
+└─ Limit est. 100 rows
+   └─ MergingSorted est. 1299844324800 rows
+      └─ MergeSorting est. 1299844324800 rows
+         └─ PartialSorting est. 1299844324800 rows
+            └─ Gather Exchange est. 1299844324800 rows
+               └─ MergeSorting est. 1299844324800 rows
+                  └─ PartialSorting est. 1299844324800 rows
+                     └─ Projection est. 1299844324800 rows
+                        └─ Inner Join est. 1299844324800 rows
+                           │     Condition: CAST(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC), 'Int64') == minus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_2, 1), cc_name == cc_name_2, i_brand == i_brand_2, i_category == i_category_2
+                           ├─ Projection est. 1031622480 rows
+                           │  └─ Inner Join est. 1031622480 rows
+                           │     │     Condition: cc_name_1 == cc_name, i_brand_1 == i_brand, i_category_1 == i_category, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 1) == expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)
+                           │     ├─ Repartition Exchange est. 909720 rows
+                           │     │  │     Partition by: {cc_name_1, i_brand_1, i_category_1, plus(expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC)_1, 1)}
+                           │     │  └─ Projection est. 909720 rows
+                           │     │     └─ Window est. 909720 rows
+                           │     │        └─ Repartition Exchange est. 909720 rows
+                           │     │           │     Partition by: {cc_name_1, i_brand_1, i_category_1}
+                           │     │           └─ MergingAggregated est. 909720 rows
+                           │     │              └─ Repartition Exchange est. 909720 rows
+                           │     │                 │     Partition by: {cc_name_1, d_moy_1, d_year_1, i_brand_1, i_category_1}
+                           │     │                 └─ Aggregating est. 909720 rows
+                           │     │                    │     Group by: {cc_name_1, d_moy_1, d_year_1, i_brand_1, i_category_1}
+                           │     │                    └─ Inner Join est. 330043820 rows
+                           │     │                       │     Condition: cs_call_center_sk_1 == cc_call_center_sk_1
+                           │     │                       ├─ Inner Join est. 330043820 rows
+                           │     │                       │  │     Condition: cs_item_sk_1 == i_item_sk_1
+                           │     │                       │  ├─ Repartition Exchange est. 330043820 rows
+                           │     │                       │  │  │     Partition by: {cs_item_sk_1}
+                           │     │                       │  │  └─ Inner Join est. 330043820 rows
+                           │     │                       │  │     │     Condition: cs_sold_date_sk_1 == d_date_sk_1
+                           │     │                       │  │     ├─ Local Exchange est. 1439980416 rows
+                           │     │                       │  │     │  └─ Filter est. 1439980416 rows
+                           │     │                       │  │     │     │     Dynamic Filters: {cs_sold_date_sk_1:bloomfilter,cs_sold_date_sk_1:range}
+                           │     │                       │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                           │     │                       │  │     └─ Broadcast Exchange est. 427 rows
+                           │     │                       │  │        └─ Projection est. 427 rows
+                           │     │                       │  │           │     Dynamic Filters Builder: {d_date_sk_1}
+                           │     │                       │  │           └─ Filter est. 427 rows
+                           │     │                       │  │              │     ((d_moy_1 = 12) AND (d_year_1 = cast(1998, 'Int32'))) OR (d_year_1 = 1999) OR ((d_year_1 = cast(2000, 'UInt32')) AND (d_moy_1 = 1))
+                           │     │                       │  │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │     │                       │  └─ Repartition Exchange est. 300000 rows
+                           │     │                       │     │     Partition by: {i_item_sk_1}
+                           │     │                       │     └─ TableScan tpcds.item est. 300000 rows
+                           │     │                       └─ Broadcast Exchange est. 42 rows
+                           │     │                          └─ TableScan tpcds.call_center est. 42 rows
+                           │     └─ Repartition Exchange est. 818748 rows
+                           │        │     Partition by: {cc_name, expr#rank() OVER (PARTITION BY i_category, i_brand, cc_name ORDER BY d_year ASC, d_moy ASC), i_brand, i_category}
+                           │        └─ Filter est. 818748 rows
+                           │           │     (multiIf(`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0, abs(`expr#sum(cs_sales_price)` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`) / `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)`, NULL) > 0.1) AND (`expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)` > 0) AND (d_year = 1999)
+                           │           └─ Window est. 909720 rows
+                           │              └─ Repartition Exchange est. 909720 rows
+                           │                 │     Partition by: {cc_name, d_year, i_brand, i_category}
+                           │                 └─ Window est. 909720 rows
+                           │                    └─ Repartition Exchange est. 909720 rows
+                           │                       │     Partition by: {cc_name, i_brand, i_category}
+                           │                       └─ MergingAggregated est. 909720 rows
+                           │                          └─ Repartition Exchange est. 909720 rows
+                           │                             │     Partition by: {cc_name, d_moy, d_year, i_brand, i_category}
+                           │                             └─ Aggregating est. 909720 rows
+                           │                                │     Group by: {cc_name, d_moy, d_year, i_brand, i_category}
+                           │                                └─ Inner Join est. 330043820 rows
+                           │                                   │     Condition: cs_call_center_sk == cc_call_center_sk
+                           │                                   ├─ Inner Join est. 330043820 rows
+                           │                                   │  │     Condition: cs_item_sk == i_item_sk
+                           │                                   │  ├─ Repartition Exchange est. 330043820 rows
+                           │                                   │  │  │     Partition by: {cs_item_sk}
+                           │                                   │  │  └─ Inner Join est. 330043820 rows
+                           │                                   │  │     │     Condition: cs_sold_date_sk == d_date_sk
+                           │                                   │  │     ├─ Local Exchange est. 1439980416 rows
+                           │                                   │  │     │  └─ Filter est. 1439980416 rows
+                           │                                   │  │     │     │     Dynamic Filters: {cs_sold_date_sk:bloomfilter,cs_sold_date_sk:range}
+                           │                                   │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                           │                                   │  │     └─ Broadcast Exchange est. 427 rows
+                           │                                   │  │        └─ Projection est. 427 rows
+                           │                                   │  │           │     Dynamic Filters Builder: {d_date_sk}
+                           │                                   │  │           └─ Filter est. 427 rows
+                           │                                   │  │              │     ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1)) OR (d_year = 1999)
+                           │                                   │  │              └─ TableScan tpcds.date_dim est. 73049 rows
+                           │                                   │  └─ Repartition Exchange est. 300000 rows
+                           │                                   │     │     Partition by: {i_item_sk}
+                           │                                   │     └─ TableScan tpcds.item est. 300000 rows
+                           │                                   └─ Broadcast Exchange est. 42 rows
+                           │                                      └─ TableScan tpcds.call_center est. 42 rows
+                           └─ Broadcast Exchange est. 909720 rows
+                              └─ Projection est. 909720 rows
+                                 └─ Window est. 909720 rows
+                                    └─ Repartition Exchange est. 909720 rows
+                                       │     Partition by: {cc_name_2, i_brand_2, i_category_2}
+                                       └─ MergingAggregated est. 909720 rows
+                                          └─ Repartition Exchange est. 909720 rows
+                                             │     Partition by: {cc_name_2, d_moy_2, d_year_2, i_brand_2, i_category_2}
+                                             └─ Aggregating est. 909720 rows
+                                                │     Group by: {cc_name_2, d_moy_2, d_year_2, i_brand_2, i_category_2}
+                                                └─ Inner Join est. 330043820 rows
+                                                   │     Condition: cs_call_center_sk_2 == cc_call_center_sk_2
+                                                   ├─ Inner Join est. 330043820 rows
+                                                   │  │     Condition: cs_item_sk_2 == i_item_sk_2
+                                                   │  ├─ Repartition Exchange est. 330043820 rows
+                                                   │  │  │     Partition by: {cs_item_sk_2}
+                                                   │  │  └─ Inner Join est. 330043820 rows
+                                                   │  │     │     Condition: cs_sold_date_sk_2 == d_date_sk_2
+                                                   │  │     ├─ Local Exchange est. 1439980416 rows
+                                                   │  │     │  └─ Filter est. 1439980416 rows
+                                                   │  │     │     │     Dynamic Filters: {cs_sold_date_sk_2:bloomfilter,cs_sold_date_sk_2:range}
+                                                   │  │     │     └─ TableScan tpcds.catalog_sales est. 1439980416 rows
+                                                   │  │     └─ Broadcast Exchange est. 427 rows
+                                                   │  │        └─ Projection est. 427 rows
+                                                   │  │           │     Dynamic Filters Builder: {d_date_sk_2}
+                                                   │  │           └─ Filter est. 427 rows
+                                                   │  │              │     (d_year_2 = 1999) OR ((d_year_2 = cast(1998, 'Int32')) AND (d_moy_2 = 12)) OR ((d_moy_2 = 1) AND (d_year_2 = cast(2000, 'UInt32')))
+                                                   │  │              └─ TableScan tpcds.date_dim est. 73049 rows
+                                                   │  └─ Repartition Exchange est. 300000 rows
+                                                   │     │     Partition by: {i_item_sk_2}
+                                                   │     └─ TableScan tpcds.item est. 300000 rows
+                                                   └─ Broadcast Exchange est. 42 rows
+                                                      └─ TableScan tpcds.call_center est. 42 rows
+note: Dynamic Filter is applied for 6 times.

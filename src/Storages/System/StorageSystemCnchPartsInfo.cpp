@@ -9,8 +9,8 @@
 #include <Parsers/parseQuery.h>
 #include <DataStreams/materializeBlock.h>
 #include <boost/algorithm/string/join.hpp>
-#include <Processors/QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <Processors/QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
 
 namespace DB
 {

@@ -299,7 +299,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
-    DatabasePtr database = getDatabaseCnch(table_id.getDatabaseName());
+    DatabasePtr database = tryGetDatabaseCnch(table_id.getDatabaseName());
     if (!database)
     {
         std::lock_guard lock{databases_mutex};
@@ -1093,6 +1093,16 @@ DatabasePtr DatabaseCatalog::getDatabaseCnch(const String & database_name) const
 {
     DatabasePtr cnch_database = getContext()->getCnchCatalog()->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
     return cnch_database;
+}
+
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name) const
+{
+    auto catalog = getContext()->tryGetCnchCatalog();
+    if (catalog)
+    {
+        return catalog->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
+    }
+    return nullptr;
 }
 
 DatabasePtr DatabaseCatalog::getDatabaseCnch(const UUID & uuid) const

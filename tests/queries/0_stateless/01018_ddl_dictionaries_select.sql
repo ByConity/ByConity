@@ -1,3 +1,4 @@
+set enable_optimizer=0; -- dict
 SET send_logs_level = 'fatal';
 
 DROP DATABASE IF EXISTS database_for_dict;

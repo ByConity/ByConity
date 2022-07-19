@@ -10,9 +10,9 @@
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Processors/Pipe.h>
-#include <Processors/QueryPlan/QueryPlan.h>
-#include <Processors/QueryPlan/ReadFromPreparedSource.h>
-#include <Processors/QueryPlan/UnionStep.h>
+#include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/UnionStep.h>
 #include <Storages/SelectQueryInfo.h>
 
 

@@ -7,7 +7,9 @@ protobuf_generate_cpp(dbms_proto_srcs dbms_proto_headers
     plan_segment_manager.proto
     registry.proto
     resource_manager_rpc.proto
-    tso.proto)
+    tso.proto
+    optimizer_statistics.proto
+    runtime_filter.proto)
 
 # Disable clang-tidy for protobuf-generated *.pb.h and *.pb.cpp files.
 set (CMAKE_CXX_CLANG_TIDY "")

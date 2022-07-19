@@ -11,7 +11,7 @@ namespace ErrorCodes
 {
     extern const int INVALID_JOIN_ON_EXPRESSION;
     extern const int AMBIGUOUS_COLUMN_NAME;
-    extern const int SYNTAX_ERROR;
+    extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
 }
@@ -69,7 +69,7 @@ void CollectJoinOnKeysMatcher::visit(const ASTFunction & func, const ASTPtr & as
     {
         if (func.arguments->children.size() != 2)
             throw Exception("Function " + func.name + " takes two arguments, got '" + func.formatForErrorMessage() + "' instead",
-                            ErrorCodes::SYNTAX_ERROR);
+                            ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
     else
         throw Exception("Expected equality or inequality, got '" + queryToString(ast) + "'", ErrorCodes::INVALID_JOIN_ON_EXPRESSION);

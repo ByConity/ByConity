@@ -1,0 +1,9 @@
+Projection est. 1 rows
+└─ MergingAggregated est. 1 rows
+   └─ Gather Exchange est. 1 rows
+      └─ Aggregating est. 1 rows
+         │     Group by: {}
+         └─ Projection est. 818180238 rows
+            └─ Filter est. 818180238 rows
+               │     (toYear(LO_ORDERDATE) = 1993) AND (LO_QUANTITY < 25) AND (LO_DISCOUNT >= 1) AND (LO_DISCOUNT <= 3)
+               └─ TableScan ssb.lineorder est. 5999989813 rows

@@ -32,7 +32,7 @@ ConstraintsDescription ConstraintsDescription::parse(const String & str)
         return {};
 
     ConstraintsDescription res;
-    ParserConstraintDeclarationList parser(DialectType::CLICKHOUSE);
+    ParserConstraintDeclarationList parser(ParserSettings::CLICKHOUSE);
     ASTPtr list = parseQuery(parser, str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
     for (const auto & constraint : list->children)
