@@ -84,6 +84,7 @@
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
 #include <Storages/System/StorageSystemWorkerGroups.h>
 #include <Storages/System/StorageSystemWorkers.h>
+#include <Storages/System/StorageSystemManipulations.h>
 
 #ifdef OS_LINUX
 #include <Storages/System/StorageSystemStackTrace.h>
@@ -97,6 +98,7 @@
 #include <Storages/System/StorageSystemCnchDatabases.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchDatabasesHistory.h>
+#include <Storages/System/StorageSystemCnchManipulations.h>
 
 namespace DB
 {
@@ -143,6 +145,7 @@ void attachSystemTablesLocal(IDatabase & system_database)
     attach<StorageSystemDataSkippingIndices>(system_database, "data_skipping_indices");
     attach<StorageSystemBitEngine>(system_database, "bitengine");
     attach<StorageSystemBitEngineDict>(system_database, "bitengine_dict");
+    attach<StorageSystemManipulations>(system_database, "manipulations");
 #if !defined(ARCADIA_BUILD)
     attach<StorageSystemLicenses>(system_database, "licenses");
     attach<StorageSystemTimeZones>(system_database, "time_zones");
@@ -201,6 +204,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
     attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
     attach<StorageSystemCnchTables>(system_database, "cnch_tables");
+    attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

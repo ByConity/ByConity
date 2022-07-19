@@ -10,10 +10,10 @@
 namespace DB
 {
 
-class CnchWorkerServiceImpl : protected WithContext, public DB::Protos::CnchWorkerService
+class CnchWorkerServiceImpl : protected WithMutableContext, public DB::Protos::CnchWorkerService
 {
 public:
-    CnchWorkerServiceImpl(ContextPtr context_);
+    explicit CnchWorkerServiceImpl(ContextPtr context_);
     ~CnchWorkerServiceImpl() override;
 
     void executeSimpleQuery(
@@ -26,6 +26,24 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::SubmitManipulationTaskReq * request,
         Protos::SubmitManipulationTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void shutdownManipulationTasks(
+        google::protobuf::RpcController * cntl,
+        const Protos::ShutdownManipulationTasksReq * request,
+        Protos::ShutdownManipulationTasksResp * response,
+        google::protobuf::Closure * done) override;
+
+    void touchManipulationTasks(
+        google::protobuf::RpcController * cntl,
+        const Protos::TouchManipulationTasksReq * request,
+        Protos::TouchManipulationTasksResp * response,
+        google::protobuf::Closure * done) override;
+
+    void getManipulationTasksStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::GetManipulationTasksStatusReq * request,
+        Protos::GetManipulationTasksStatusResp * response,
         google::protobuf::Closure * done) override;
 
     void GetPreallocatedStatus(
@@ -106,12 +124,6 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::PreloadChecksumsAndPrimaryIndexReq * request,
         Protos::PreloadChecksumsAndPrimaryIndexResp * response,
-        google::protobuf::Closure * done) override;
-
-    void getManipulationTasks(
-        google::protobuf::RpcController * cntl,
-        const Protos::GetManipulationTasksReq * request,
-        Protos::GetManipulationTasksResp * response,
         google::protobuf::Closure * done) override;
 
     void createCloudMemoryBuffer(

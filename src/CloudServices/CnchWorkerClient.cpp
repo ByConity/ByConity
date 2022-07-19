@@ -6,6 +6,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+#include <WorkerTasks/ManipulationList.h>
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -60,6 +61,78 @@ void CnchWorkerClient::submitManipulationTask(
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid)
+{
+    brpc::Controller cntl;
+    Protos::ShutdownManipulationTasksReq request;
+    Protos::ShutdownManipulationTasksResp response;
+
+    RPCHelpers::fillUUID(table_uuid, *request.mutable_table_uuid());
+    stub->shutdownManipulationTasks(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+std::unordered_set<std::string> CnchWorkerClient::touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id)
+{
+    brpc::Controller cntl;
+    Protos::TouchManipulationTasksReq request;
+    Protos::TouchManipulationTasksResp response;
+
+    RPCHelpers::fillUUID(table_uuid, *request.mutable_table_uuid());
+
+    for (const auto & t : tasks_id)
+        request.add_tasks_id(t);
+
+    stub->touchManipulationTasks(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return {response.tasks_id().begin(), response.tasks_id().end()};
+}
+
+std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
+{
+    brpc::Controller cntl;
+    Protos::GetManipulationTasksStatusReq request;
+    Protos::GetManipulationTasksStatusResp response;
+
+    stub->getManipulationTasksStatus(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    std::vector<ManipulationInfo> res;
+    for (const auto & task: response.tasks())
+    {
+        ManipulationInfo info(RPCHelpers::createStorageID(task.storage_id()));
+        info.type = ManipulationType(task.type());
+        info.related_node = this->getRPCAddress();
+        info.elapsed = task.elapsed();
+        info.num_parts = task.num_parts();
+        for (const auto & source_part_name : task.source_part_names())
+            info.source_part_names.emplace_back(source_part_name);
+        for (const auto & result_part_name : task.result_part_names())
+            info.result_part_names.emplace_back(result_part_name);
+        info.partition_id = task.partition_id();
+        info.total_size_bytes_compressed = task.total_size_bytes_compressed();
+        info.total_size_marks = task.total_size_marks();
+        info.progress = task.progress();
+        info.bytes_read_uncompressed = task.bytes_read_uncompressed();
+        info.bytes_written_uncompressed = task.bytes_written_uncompressed();
+        info.rows_read = task.rows_read();
+        info.rows_written = task.rows_written();
+        info.columns_written = task.columns_written();
+        info.memory_usage = task.memory_usage();
+        info.thread_id = task.thread_id();
+        res.emplace_back(info);
+    }
+
+    return res;
 }
 
 void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries)

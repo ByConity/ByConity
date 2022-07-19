@@ -19,7 +19,7 @@ void DDLAlterAction::setNewSchema(String schema_)
     new_schema = schema_;
 }
 
-void DDLAlterAction::setMutationCommmands(MutationCommands commands)
+void DDLAlterAction::setMutationCommands(MutationCommands commands)
 {
     /// Sanity check. Avoid mixing other commands with recluster command.
     // if (commands.size() > 1)
@@ -52,7 +52,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
             mutation_entry.commands = mutation_commands;
             mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
             catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
-            if (table->isBucketTable() && mutation_entry.isReclusteringMutation())
+            if (table->isBucketTable() && mutation_entry.isReclusterMutation())
                 catalog->setTableClusterStatus(table->getStorageUUID(), false);
             LOG_DEBUG(log, "Successfully create mutation for alter query.");
         }

@@ -1,0 +1,79 @@
+#include <Storages/System/StorageSystemCnchManipulations.h>
+
+#include <CloudServices/CnchWorkerClient.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeUUID.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/WorkerGroupHandle.h>
+#include <Storages/System/StorageSystemManipulations.h>
+#include <WorkerTasks/ManipulationList.h>
+
+namespace DB
+{
+
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+
+NamesAndTypesList StorageSystemCnchManipulations::getNamesAndTypes()
+{
+    return StorageSystemManipulations::getNamesAndTypes();
+}
+
+void StorageSystemCnchManipulations::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
+{
+    if (context->getServerType() != ServerType::cnch_worker)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Table system.cnch_manipulations only supported in cnch-server");
+
+    // TODO: find pool name.
+    std::vector<ManipulationInfo> manipulations;
+    auto worker_group = context->getCurrentWorkerGroup();
+
+    for (const auto & worker: worker_group->getWorkerClients())
+    {
+        try
+        {
+            auto status = worker->getManipulationTasksStatus();
+            manipulations.insert(manipulations.end(), status.begin(), status.end());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__);
+        }
+    }
+
+    for (const auto & elem : manipulations)
+    {
+        // if (!context.hasDatabaseAccessRights(elem.database))
+        //     continue;
+
+        size_t i = 0;
+        res_columns[i++]->insert(typeToString(elem.type));
+        res_columns[i++]->insert(elem.task_id);
+        res_columns[i++]->insert(elem.related_node);
+        res_columns[i++]->insert(elem.storage_id.database_name);
+        res_columns[i++]->insert(elem.storage_id.table_name);
+        res_columns[i++]->insert(elem.storage_id.uuid);
+        res_columns[i++]->insert(elem.elapsed);
+        res_columns[i++]->insert(elem.progress);
+        res_columns[i++]->insert(elem.num_parts);
+        res_columns[i++]->insert(elem.source_part_names);
+        res_columns[i++]->insert(elem.result_part_names);
+        res_columns[i++]->insert(elem.partition_id);
+        res_columns[i++]->insert(elem.total_size_bytes_compressed);
+        res_columns[i++]->insert(elem.total_size_marks);
+        res_columns[i++]->insert(elem.total_rows_count);
+        res_columns[i++]->insert(elem.bytes_read_uncompressed);
+        res_columns[i++]->insert(elem.bytes_written_uncompressed);
+        res_columns[i++]->insert(elem.rows_read);
+        res_columns[i++]->insert(elem.rows_written);
+        res_columns[i++]->insert(elem.columns_written);
+        res_columns[i++]->insert(elem.memory_usage);
+        res_columns[i++]->insert(elem.thread_id);
+    }
+}
+
+}
