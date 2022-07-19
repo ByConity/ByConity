@@ -39,11 +39,12 @@ private:
     // void removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason);
 
     void collectStaleParts(
-        const ServerDataPartPtr & parent_part,
+        ServerDataPartPtr parent_part,
         TxnTimestamp begin,
         TxnTimestamp end,
         bool has_visible_ancestor,
         ServerDataPartsVector & stale_parts) const;
+
     // void collectStaleBitmaps(
     //     const DeleteBitmapMetaPtr & parent_bitmap,
     //     const TxnTimestamp & begin,

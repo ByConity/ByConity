@@ -39,11 +39,12 @@ bool ServerDataPart::containsExactly(const ServerDataPart & other) const
 {
     const auto & this_info = *part_model_wrapper->info;
     const auto & other_info = *other.part_model_wrapper->info;
+    /// Note: For parts with same p_id, block_id, the higher the level, the greater the commit_time.
+    /// We only compare level or commit_time here for fault tolerance.
     return this_info.partition_id == other_info.partition_id
         && this_info.min_block == other_info.min_block
         && this_info.max_block == other_info.max_block
-        && this_info.level >= other_info.level
-        && getCommitTime() >= other.getCommitTime();
+        && (this_info.level > other_info.level || getCommitTime() > other.getCommitTime());
 }
 
 void ServerDataPart::setPreviousPart(const ServerDataPartPtr & part) const { prev_part = part; }
