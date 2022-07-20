@@ -48,6 +48,7 @@
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/executeQuery.h>
 #include <QueryPlan/QueryCacheStep.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <Common/ProfileEvents.h>
 
 #include <Common/SensitiveDataMasker.h>
@@ -436,6 +437,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         else
         {
             query_end = end;
+        }
+
+        if (context->getServerType() == ServerType::cnch_server)
+        {
+            trySetVirtualWarehouseAndWorkerGroup(ast, *context);
         }
     }
     catch (...)

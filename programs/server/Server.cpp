@@ -41,6 +41,7 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
 #include <TableFunctions/registerTableFunctions.h>
+#include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <brpc/server.h>
 #include <google/protobuf/service.h>
 #include <sys/resource.h>
@@ -491,6 +492,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerDictionaries();
     registerDisks();
     registerFormats();
+    registerServiceDiscovery();
 
     CurrentMetrics::set(CurrentMetrics::Revision, ClickHouseRevision::getVersionRevision());
     CurrentMetrics::set(CurrentMetrics::VersionInteger, ClickHouseRevision::getVersionInteger());
@@ -514,6 +516,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->initRootConfig(config());
 
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
@@ -1230,6 +1233,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
+        global_context->initVirtualWarehousePool();
+        global_context->initServiceDiscoveryClient();
         global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
         global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
 
@@ -1601,6 +1606,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
             int level = level_str.empty() ? INT_MAX : Poco::Logger::parseLevel(level_str);
             setTextLog(global_context->getTextLog(), level);
         }
+
+        bool enable_ssl = config().getBool("enable_ssl", false);
+        // Sanity check if ssl is setup correctly
+        if (enable_ssl)
+        {
+            if (!config().has("tcp_port_secure") || !config().has("https_port"))
+            {
+                throw Exception("enable_ssl is set but no tcp_port_secure or https_port", ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+            }
+        }
+
+        global_context->setEnableSSL(enable_ssl);
 
         buildLoggers(config(), logger());
 

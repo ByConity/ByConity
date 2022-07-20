@@ -17,6 +17,7 @@
 #include <Storages/PartitionCommands.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
+#include <CloudServices/CnchWorkerClient.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
@@ -831,23 +832,22 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
 
         LOG_DEBUG(log, "Target write worker found: {}", write_shard_ptr->worker_id);
 
-        /// FIXME: add after rpc and session resource is supported
-        // LOG_DEBUG(log, "Prepare execute create query: {}", create_local_tb_query);
-        // auto worker_client = worker_group->getWorkerClients().at(index);
-        // worker_client->sendCreateQueries(local_context, {create_local_tb_query});
+        LOG_DEBUG(log, "Prepare execute create query: {}", create_local_tb_query);
+        auto worker_client = worker_group->getWorkerClients().at(index);
+        worker_client->sendCreateQueries(local_context, {create_local_tb_query});
 
-        // auto table_suffix = extractTableSuffix(generated_tb_name);
-        // Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
-        // for (const auto & query : dependency_create_queries)
-        //     LOG_DEBUG(log, query);
-        // worker_client->sendCreateQueries(local_context, dependency_create_queries);
+        auto table_suffix = extractTableSuffix(generated_tb_name);
+        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
+        for (const auto & dependency_create_querie : dependency_create_queries)
+            LOG_DEBUG(log, "{}", dependency_create_querie);
+        worker_client->sendCreateQueries(local_context, dependency_create_queries);
 
-        // /// Ensure worker session context rsource could be released
-        // if (auto session_resource = local_context->getCnchSessionResource())
-        // {
-        //     std::vector<size_t> index_values{index};
-        //     session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
-        // }
+        /// Ensure worker session context rsource could be released
+        if (auto session_resource = local_context->tryGetCnchServerResource())
+        {
+            std::vector<size_t> index_values{index};
+            session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
+        }
 
         LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
         /// TODO: send insert query by rpc.

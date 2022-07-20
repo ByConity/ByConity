@@ -743,6 +743,8 @@ public:
     void updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config);
     InterserverCredentialsPtr getInterserverCredentials();
 
+    std::pair<String, String> getCnchInterserverCredentials() const;
+
     /// Interserver requests scheme (http or https)
     void setInterserverScheme(const String & scheme);
     String getInterserverScheme() const;
@@ -864,6 +866,10 @@ public:
     void resetZooKeeper() const;
     // Reload Zookeeper
     void reloadZooKeeperIfChanged(const ConfigurationPtr & config) const;
+
+    // TODO: check if this knob is redundant
+    void setEnableSSL(bool v);
+    bool isEnableSSL() const;
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);

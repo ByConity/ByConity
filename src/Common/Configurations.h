@@ -51,7 +51,7 @@ struct BJConfiguration final : public BJConfigurationData
 #define SD_CONFIG_FIELDS_LIST(M) \
     M(String, mode, "", "local", ConfigFlag::Recommended, "") \
     M(String, server_psm, "server.psm", "data.cnch.server", ConfigFlag::Recommended, "") \
-    M(String, vw_psm, "vw.psm", "data.cncn.vw", ConfigFlag::Recommended, "") \
+    M(String, vw_psm, "vw.psm", "data.cnch.vw", ConfigFlag::Recommended, "") \
     M(String, catalog_psm, "catalog.psm", "data.cnch.catalog", ConfigFlag::Recommended, "") \
     M(String, tso_psm, "tso.psm", "data.cnch.tso", ConfigFlag::Recommended, "") \
     M(String, daemon_manager_psm, "daemon_manager.psm", "data.cnch.daemon_manager", ConfigFlag::Recommended, "") \

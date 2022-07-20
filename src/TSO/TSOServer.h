@@ -26,7 +26,7 @@ public:
     using TSOProxyPtr = std::shared_ptr<TSOProxy>;
     using TSOServicePtr = std::shared_ptr<TSOImpl>;
 
-    TSOServer () {}
+    TSOServer () : timer(0, TSO_UPDATE_INTERVAL), callback(*this, &TSOServer::updateTSO) {} // declare updateTSO thread
 
     ~TSOServer() override = default;
 
@@ -58,6 +58,9 @@ private:
 
     UInt64 Tnext;  /// TSO physical time
     UInt64 Tlast;  /// TSO physical time upper bound (persist in KV)
+
+    Poco::Timer timer;
+    Poco::TimerCallback<TSOServer> callback;
 
     using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
     mutable ServiceDiscoveryClientPtr service_disovery;

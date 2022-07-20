@@ -189,7 +189,7 @@ MergeTreeData::MergeTreeData(
         settings->sanityCheck(getContext()->getSettingsRef());
 
     MergeTreeDataFormatVersion min_format_version(0);
-    if (date_column_name.empty())
+    if (!date_column_name.empty())
         min_format_version = MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING;
 
     /// format_file always contained on any data path

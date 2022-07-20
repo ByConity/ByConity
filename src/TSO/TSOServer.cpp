@@ -49,7 +49,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     log = &logger();
 
-     DB::registerServiceDiscovery();
+    DB::registerServiceDiscovery();
 
     const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
@@ -92,6 +92,11 @@ void TSOServer::initialize(Poco::Util::Application & self)
 
     proxy_ptr = std::make_shared<TSOProxy>(tso_config);
     tso_service = std::make_shared<TSOImpl>();
+
+    /// Sync time with KV
+    syncTSO();
+    /// Launch thread to update tso
+    timer.start(callback);
 }
 
 void TSOServer::syncTSO()
