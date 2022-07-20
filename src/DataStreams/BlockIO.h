@@ -33,7 +33,7 @@ struct BlockIO
     QueryPipeline pipeline;
 
     /// Callbacks for query logging could be set here.
-    std::function<void(IBlockInputStream *, IBlockOutputStream *, QueryPipeline *)>    finish_callback;
+    std::function<void(IBlockInputStream *, IBlockOutputStream *, QueryPipeline &)>    finish_callback;
     std::function<void()>                                                              exception_callback;
 
     /// When it is true, don't bother sending any non-empty blocks to the out stream
@@ -44,18 +44,16 @@ struct BlockIO
     {
         if (finish_callback)
         {
-            QueryPipeline * pipeline_ptr = nullptr;
-            if (pipeline.initialized())
-                pipeline_ptr = &pipeline;
-
-            finish_callback(in.get(), out.get(), pipeline_ptr);
+            finish_callback(in.get(), out.get(), pipeline);
         }
+        pipeline.reset();
     }
 
-    void onException() const
+    void onException()
     {
         if (exception_callback)
             exception_callback();
+        pipeline.reset();
     }
 
     /// Returns in or converts pipeline to stream. Throws if out is not empty.
