@@ -32,6 +32,11 @@ template <> inline constexpr size_t max_precision<DateTime64> = 18;
 template <> inline constexpr size_t max_precision<Decimal128> = 38;
 template <> inline constexpr size_t max_precision<Decimal256> = 76;
 
+template <typename T0> struct NextDecimal { using Result = void; };
+template <> struct NextDecimal<Decimal32> { using Result = Decimal64; };
+template <> struct NextDecimal<Decimal64> { using Result = void; }; // not promote for Decimal64, due to the performance penalty of Int64 -> Int128
+template <> struct NextDecimal<Decimal128> { using Result = Decimal256; };
+
 template <typename T>
 inline auto scaleMultiplier(UInt32 scale)
 {
@@ -286,33 +291,73 @@ bool tryConvertTo(const DecimalType & decimal, size_t scale, To & result)
     return convertToImpl<To, DecimalType, bool>(decimal, scale, result);
 }
 
-template <bool is_multiply, bool is_division, typename T, typename U, template <typename> typename DecimalType>
-inline auto binaryOpResult(const DecimalType<T> & tx, const DecimalType<U> & ty)
+constexpr UInt32 DECIMAL_DIVISION_EXTENDED_SCALE = 6;
+
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto binaryOpResult(const DecimalType<T> & tx, const DecimalType<U> & ty, bool use_extended_scale)
 {
     UInt32 scale{};
     if constexpr (is_multiply)
         scale = tx.getScale() + ty.getScale();
     else if constexpr (is_division)
-        scale = tx.getScale();
+    {
+        if (use_extended_scale)
+            scale = std::max(tx.getScale(), DECIMAL_DIVISION_EXTENDED_SCALE);
+        else
+            scale = tx.getScale();
+    }
     else
         scale = (tx.getScale() > ty.getScale() ? tx.getScale() : ty.getScale());
 
-    if constexpr (sizeof(T) < sizeof(U))
+    if constexpr ((is_multiply || is_division) && allow_promote_storage && sizeof(T) == sizeof(U) && !std::is_same_v<typename NextDecimal<T>::Result, void>)
+    {
+        using ResultType = typename NextDecimal<T>::Result;
+        return DataTypeDecimalTrait<ResultType>(DecimalUtils::max_precision<ResultType>, scale);
+    }
+    else if constexpr (sizeof(T) < sizeof(U))
         return DataTypeDecimalTrait<U>(DecimalUtils::max_precision<U>, scale);
     else
         return DataTypeDecimalTrait<T>(DecimalUtils::max_precision<T>, scale);
 }
 
-template <bool, bool, typename T, typename U, template <typename> typename DecimalType>
-inline const DataTypeDecimalTrait<T> binaryOpResult(const DecimalType<T> & tx, const DataTypeNumber<U> &)
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto binaryOpResult(const DecimalType<T> & tx, const DataTypeNumber<U> &, bool use_extended_scale)
 {
-    return DataTypeDecimalTrait<T>(DecimalUtils::max_precision<T>, tx.getScale());
+    UInt32 scale = tx.getScale();
+
+    if constexpr (is_division)
+    {
+        if (use_extended_scale)
+            scale = std::max(scale, DECIMAL_DIVISION_EXTENDED_SCALE);
+    }
+
+    if constexpr (is_division && allow_promote_storage && !std::is_same_v<typename NextDecimal<T>::Result, void>)
+    {
+        using ResultType = typename NextDecimal<T>::Result;
+        return DataTypeDecimalTrait<ResultType>(DecimalUtils::max_precision<ResultType>, scale);
+    }
+    else
+        return DataTypeDecimalTrait<T>(DecimalUtils::max_precision<T>, scale);
 }
 
-template <bool, bool, typename T, typename U, template <typename> typename DecimalType>
-inline const DataTypeDecimalTrait<U> binaryOpResult(const DataTypeNumber<T> &, const DecimalType<U> & ty)
+template <bool is_multiply, bool is_division, bool allow_promote_storage, typename T, typename U, template <typename> typename DecimalType>
+inline auto binaryOpResult(const DataTypeNumber<T> &, const DecimalType<U> & ty, bool use_extended_scale)
 {
-    return DataTypeDecimalTrait<U>(DecimalUtils::max_precision<U>, ty.getScale());
+    UInt32 scale = ty.getScale();
+
+    if constexpr (is_division)
+    {
+        if (use_extended_scale)
+            scale = std::max(scale, DECIMAL_DIVISION_EXTENDED_SCALE);
+    }
+
+    if constexpr (is_division && allow_promote_storage && !std::is_same_v<typename NextDecimal<U>::Result, void>)
+    {
+        using ResultType = typename NextDecimal<U>::Result;
+        return DataTypeDecimalTrait<ResultType>(DecimalUtils::max_precision<ResultType>, scale);
+    }
+    else
+        return DataTypeDecimalTrait<U>(DecimalUtils::max_precision<U>, scale);
 }
 
 }

@@ -1,0 +1,97 @@
+-- { echo }
+
+-- Decimal op Decimal, storage promotion happens
+SELECT 1.2::Decimal32(2) * 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) * 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.720	Decimal(9, 3)
+SELECT 1.2::Decimal32(2) * 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) * 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.720	Decimal(18, 3)
+SELECT 1.2::Decimal32(5) * 0.6::Decimal32(6) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0; -- { serverError 69 }
+SELECT 1.2::Decimal32(5) * 0.6::Decimal32(6) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+0.72000000000
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+2.00	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) / 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+2.00	Decimal(18, 2)
+SELECT 1.2::Decimal32(7) / 0.6::Decimal32(3) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0; -- { serverError 407 }
+SELECT 1.2::Decimal32(7) / 0.6::Decimal32(3) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+2.0000000
+SELECT 1.2::Decimal128(2) * 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) * 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.720	Decimal(38, 3)
+SELECT 1.2::Decimal128(2) * 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) * 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.720	Decimal(76, 3)
+SELECT 1.2::Decimal128(20) * 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { serverError 69 }
+SELECT 1.2::Decimal128(20) * 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+0.720000000000000000000000000000000000000
+SELECT 1.2::Decimal128(2) / 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) / 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+2.00	Decimal(38, 2)
+SELECT 1.2::Decimal128(2) / 0.6::Decimal128(1), toTypeName(1.2::Decimal128(2) / 0.6::Decimal128(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+2.00	Decimal(76, 2)
+SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { wrong answer }
+-0.26854911280625642308
+SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+2.00000000000000000000
+-- Decimal op Decimal, storage promotion doesn't happens
+SELECT 1.2::Decimal64(2) * 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) * 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.720	Decimal(18, 3)
+SELECT 1.2::Decimal64(2) * 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) * 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.720	Decimal(18, 3)
+SELECT 1.2::Decimal64(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+2.00	Decimal(18, 2)
+SELECT 1.2::Decimal64(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+2.00	Decimal(18, 2)
+SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+1.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+1.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) - 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.60	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) - 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.60	Decimal(9, 2)
+-- Decimal op Integral, storage promotion happens
+SELECT 1.2::Decimal32(2) / 6::Int32, toTypeName(1.2::Decimal32(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) / 6::Int32, toTypeName(1.2::Decimal32(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.20	Decimal(18, 2)
+SELECT 1200000.0::Decimal32(1) / 6::Int32 SETTINGS decimal_division_use_extended_scale = 1, decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { serverError 407 }
+SELECT 1200000.0::Decimal32(1) / 6::Int32 SETTINGS decimal_division_use_extended_scale = 1, decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+200000.000000
+SELECT 12::Int32 / 0.6::Decimal32(1), toTypeName(12::Int32 / 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+20.0	Decimal(9, 1)
+SELECT 12::Int32 / 0.6::Decimal32(1), toTypeName(12::Int32 / 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+20.0	Decimal(18, 1)
+SELECT 12::Int32 / 0.6::Decimal32(5) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 0;  -- { serverError 407 }
+SELECT 12::Int32 / 0.6::Decimal32(5) SETTINGS decimal_check_overflow = 1, decimal_arithmetic_promote_storage = 1;
+20.00000
+-- Decimal op Integral, storage promotion doesn't happens
+SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
+0.20	Decimal(18, 2)
+SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
+0.20	Decimal(18, 2)
+SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+20.0	Decimal(18, 1)
+SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+20.0	Decimal(18, 1)
+SELECT 1.2::Decimal32(2) + 6::Int32, toTypeName(1.2::Decimal32(2) + 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
+7.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) + 6::Int32, toTypeName(1.2::Decimal32(2) + 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
+7.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 6::Int32, toTypeName(1.2::Decimal32(2) - 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
+-4.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) - 6::Int32, toTypeName(1.2::Decimal32(2) - 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
+-4.80	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) * 6::Int32, toTypeName(1.2::Decimal32(2) * 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
+7.20	Decimal(9, 2)
+SELECT 1.2::Decimal32(2) * 6::Int32, toTypeName(1.2::Decimal32(2) * 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
+7.20	Decimal(9, 2)
+SELECT 12::Int32 + 0.6::Decimal32(1), toTypeName(12::Int32 + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+12.6	Decimal(9, 1)
+SELECT 12::Int32 + 0.6::Decimal32(1), toTypeName(12::Int32 + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+12.6	Decimal(9, 1)
+SELECT 12::Int32 - 0.6::Decimal32(1), toTypeName(12::Int32 - 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+11.4	Decimal(9, 1)
+SELECT 12::Int32 - 0.6::Decimal32(1), toTypeName(12::Int32 - 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+11.4	Decimal(9, 1)
+SELECT 12::Int32 * 0.6::Decimal32(1), toTypeName(12::Int32 * 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
+7.2	Decimal(9, 1)
+SELECT 12::Int32 * 0.6::Decimal32(1), toTypeName(12::Int32 * 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
+7.2	Decimal(9, 1)

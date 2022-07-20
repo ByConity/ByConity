@@ -125,7 +125,7 @@ private:
         Shift shift;
         if (decimal0 && decimal1)
         {
-            auto result_type = DecimalUtils::binaryOpResult<false, false>(*decimal0, *decimal1);
+            auto result_type = DecimalUtils::binaryOpResult<false, false, false>(*decimal0, *decimal1, false);
             shift.a = static_cast<CompareInt>(result_type.scaleFactorFor(decimal0->getTrait(), false).value);
             shift.b = static_cast<CompareInt>(result_type.scaleFactorFor(decimal1->getTrait(), false).value);
         }

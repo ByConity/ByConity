@@ -27,6 +27,14 @@ bool decimalCheckArithmeticOverflow(ContextPtr context)
 {
     return context->getSettingsRef().decimal_check_overflow;
 }
+bool decimalArithmeticPromoteStorage(ContextPtr context)
+{
+    return context->getSettingsRef().decimal_arithmetic_promote_storage;
+}
+bool decimalDivisionUseExtendedScale(ContextPtr context)
+{
+    return context->getSettingsRef().decimal_division_use_extended_scale;
+}
 
 template <typename T>
 Field DataTypeDecimalBase<T>::getDefault() const
