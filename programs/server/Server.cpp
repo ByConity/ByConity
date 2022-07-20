@@ -511,11 +511,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
       */
     auto shared_context = Context::createShared();
     global_context = Context::createGlobal(shared_context.get());
-
+    global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
-    global_context->setServerType(config().getString("cnch_type", "standalone"));
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
@@ -1231,7 +1230,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
+        global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
         global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+
     }
 
     LOG_INFO(log, "Loading metadata from {}", path);
