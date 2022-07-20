@@ -1,5 +1,6 @@
 #include <Storages/System/StorageSystemManipulations.h>
 
+#include <Access/ContextAccess.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeUUID.h>
@@ -42,10 +43,14 @@ void StorageSystemManipulations::fillData(MutableColumns & res_columns, ContextP
 {
     auto manipulation_list = context->getManipulationList().get();
 
+    const auto access = context->getAccess();
+    bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
+
     for (const auto & elem : manipulation_list)
     {
-        // if (!context->hasDatabaseAccessRights(elem.database))
-        //     continue;
+        if (check_access_for_tables &&
+            !access->isGranted(AccessType::SHOW_TABLES, elem.storage_id.database_name, elem.storage_id.table_name))
+            continue;
 
         size_t i = 0;
         res_columns[i++]->insert(typeToString(elem.type));

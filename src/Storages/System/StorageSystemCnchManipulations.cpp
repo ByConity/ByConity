@@ -1,5 +1,6 @@
 #include <Storages/System/StorageSystemCnchManipulations.h>
 
+#include <Access/ContextAccess.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeString.h>
@@ -28,7 +29,6 @@ void StorageSystemCnchManipulations::fillData(MutableColumns & res_columns, Cont
     if (context->getServerType() != ServerType::cnch_worker)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Table system.cnch_manipulations only supported in cnch-server");
 
-    // TODO: find pool name.
     std::vector<ManipulationInfo> manipulations;
     auto worker_group = context->getCurrentWorkerGroup();
 
@@ -45,10 +45,14 @@ void StorageSystemCnchManipulations::fillData(MutableColumns & res_columns, Cont
         }
     }
 
+    const auto access = context->getAccess();
+    bool check_access_for_tables = !access->isGranted(AccessType::SHOW_TABLES);
+
     for (const auto & elem : manipulations)
     {
-        // if (!context.hasDatabaseAccessRights(elem.database))
-        //     continue;
+        if (check_access_for_tables &&
+            !access->isGranted(AccessType::SHOW_TABLES, elem.storage_id.database_name, elem.storage_id.table_name))
+            continue;
 
         size_t i = 0;
         res_columns[i++]->insert(typeToString(elem.type));
