@@ -67,6 +67,7 @@ StoragePtr StorageFactory::get(
 {
     String name, comment;
     ASTStorage * storage_def = query.storage;
+    fmt::print("Storage def is: {}\n", storage_def->formatForErrorMessage());
 
     bool has_engine_args = false;
 

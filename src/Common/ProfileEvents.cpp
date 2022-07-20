@@ -675,6 +675,12 @@
     M(IsHostServerFailed, "") \
     M(CnchReadSizeFromDiskCache, "") \
     M(CnchReadSizeFromRemote, "") \
+    M(CnchReadDataMicroSeconds,"") \
+    M(CnchAddStreamsElapsedMilliseconds,"") \
+    M(CnchAddStreamsParallelTasks,"") \
+    M(CnchAddStreamsParallelElapsedMilliseconds,"") \
+    M(CnchAddStreamsSequentialTasks,"") \
+    M(CnchAddStreamsSequentialElapsedMilliseconds,"") \
 
 namespace ProfileEvents
 {

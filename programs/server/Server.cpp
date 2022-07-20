@@ -78,6 +78,7 @@
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/remapExecutable.h>
+#include <Common/Configurations.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
 #include <common/defines.h>
@@ -93,6 +94,15 @@
 
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/Catalog.h>
+
+
+#include <CloudServices/CnchServerClientPool.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+
+#include <ServiceDiscovery/registerServiceDiscovery.h>
+#include <ServiceDiscovery/ServiceDiscoveryLocal.h>
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
@@ -517,13 +527,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setServerType(config().getString("cnch_type", "standalone"));
     global_context->makeGlobalContext();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+
     global_context->initRootConfig(config());
+    auto & root_config = global_context->getRootConfig();
 
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
+
+    // Init bRPC
+    BrpcApplication::getInstance().initialize(config());
 
     if (config().has("exchange_port") && config().has("exchange_status_port"))
     {
@@ -541,6 +556,43 @@ int Server::main(const std::vector<std::string> & /*args*/)
             catalog_conf.byteKV.name_space = config().getString("catalog_service.bytekv.name_space");
             catalog_conf.byteKV.table_name = config().getString("catalog_service.bytekv.table_name");
         }
+    }
+
+
+    std::string current_raw_sd_config = "";
+    if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
+    {
+        current_raw_sd_config = config().getRawString("service_discovery");
+    }
+    /// Initialize components in server or worker.
+    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
+    {
+        global_context->initVirtualWarehousePool();
+        global_context->initServiceDiscoveryClient();
+        // global_context->initByteJournalClient();
+        global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
+        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+        // global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
+        // global_context->initBytepondClientPool(root_config.service_discovery.bytepond_psm);
+        global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
+
+        if (root_config.service_discovery.resource_manager_psm.existed)
+            global_context->initResourceManagerClient();
+        else
+            LOG_DEBUG(log, "Not initialising Resource Manager Client");
+
+        global_context->initCnchWorkerClientPools();
+        auto & worker_pools = global_context->getCnchWorkerClientPools();
+
+        auto sd_client = global_context->getServiceDiscoveryClient();
+        auto vw_psm = global_context->getVirtualWarehousePSM();
+        worker_pools.setDefaultPSM(vw_psm);
+        worker_pools.addVirtualWarehouse("vw_read", vw_psm, {ResourceManagement::VirtualWarehouseType::Read});
+        worker_pools.addVirtualWarehouse("vw_write", vw_psm, {ResourceManagement::VirtualWarehouseType::Write});
+        worker_pools.addVirtualWarehouse("vw_task", vw_psm, {ResourceManagement::VirtualWarehouseType::Task});
+        worker_pools.addVirtualWarehouse("vw_default", vw_psm, {ResourceManagement::VirtualWarehouseType::Default});
+
+        // global_context->initTestLog();
     }
 
     bool has_zookeeper = config().has("zookeeper");
@@ -1025,6 +1077,27 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     global_context->setDiskUniqueRowStoreCache(disk_urs_meta_cache_size, disk_urs_file_cache_size);
     global_context->setDiskUniqueRowStoreBlockCache(disk_urs_data_cache_size);
+
+    if (global_context->getServerType() == ServerType::cnch_server)
+    {
+        /// Only server need txn coordinator and rely on schedule pool config.
+        global_context->initCnchTransactionCoordinator();
+
+        /// Initialize table and part cache, only server need part cache manager and storage cache.
+        // global_context->setPartCacheManager();
+        // if (config().getBool("enable_cnch_storage_cache", true))
+        // {
+        //     LOG_INFO(log, "Init cnch storage cache.");
+        //     global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
+        // }
+
+        /// only server need start up server manager
+        global_context->setCnchServerManager();
+
+        // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
+        // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
+        // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
+    }
 
 #if USE_HDFS
     /// Init hdfs user
@@ -1666,6 +1739,50 @@ int Server::main(const std::vector<std::string> & /*args*/)
             server.start();
         if (ha_server)
             ha_server->start();
+
+   
+    /// Server and worker rpc services
+    std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
+    std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;
+
+    if (global_context->getServerType() == ServerType::cnch_server)
+        cnch_server_endpoint = std::make_unique<CnchServerServiceImpl>(global_context);
+    if (global_context->getServerType() == ServerType::cnch_worker)
+        cnch_worker_endpoint = std::make_unique<CnchWorkerServiceImpl>(global_context);
+
+    if (cnch_server_endpoint || cnch_worker_endpoint)
+    {
+        UInt64 rpc_port = config().getInt("rpc_port");
+
+        for (const auto & listen : listen_hosts)
+        {
+            rpc_servers.push_back(std::make_unique<brpc::Server>());
+            auto & rpc_server = rpc_servers.back();
+
+            if (cnch_server_endpoint && 0 != rpc_server->AddService(cnch_server_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                throw Exception("Failed to add cnch server rpc service.", ErrorCodes::BRPC_EXCEPTION);
+            if (cnch_worker_endpoint && 0 != rpc_server->AddService(cnch_worker_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                throw Exception("Failed to add cnch worker rpc service.", ErrorCodes::BRPC_EXCEPTION);
+
+            std::string host_port = createHostPortString(listen, rpc_port);
+            brpc::ServerOptions options;
+            if (0 != rpc_server->Start(host_port.c_str(), &options))
+            {
+                if (listen_try)
+                {
+                    LOG_ERROR(log, "Failed to start rpc server on {}\n", host_port);
+                }
+                else
+                {
+                    throw Exception("Failed to start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
+                }
+            }
+
+            LOG_INFO(log, "Listening rpc: " + host_port);
+        }
+    }
+
+
         LOG_INFO(log, "Ready for connections.");
 
         SCOPE_EXIT({
@@ -1717,40 +1834,40 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         });
 
-        if (global_context->getComplexQueryActive())
-        {
-            Statistics::CacheManager::initialize(global_context);
-            /// Brpc data trans registry service
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
-            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
-            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
+        // if (global_context->getComplexQueryActive())
+        // {
+        //     Statistics::CacheManager::initialize(global_context);
+        //     /// Brpc data trans registry service
+        //     rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+        //     rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+        //     rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
+        //     rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
+        //     rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
 
-            if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
-            }
-            if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
-            }
-            // RuntimeFilterService reuse PlanSegmentManagerRpcService port
-            if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-                throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
-            }
-            brpc::ServerOptions stream_options;
-            stream_options.idle_timeout_sec = -1;
-            if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
-                throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
-            }
-            if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &stream_options) != 0) {
-                throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
-            }
-            LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
-            LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
+        //     if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+        //         throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
+        //     }
+        //     if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+        //         throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
+        //     }
+        //     // RuntimeFilterService reuse PlanSegmentManagerRpcService port
+        //     if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+        //         throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
+        //     }
+        //     brpc::ServerOptions stream_options;
+        //     stream_options.idle_timeout_sec = -1;
+        //     if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
+        //         throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+        //     }
+        //     if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &stream_options) != 0) {
+        //         throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+        //     }
+        //     LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
+        //     LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
 
-            /// TODO status service
+        //     /// TODO status service
 
-        }
+        // }
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
         for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))

@@ -58,7 +58,7 @@ void CnchServerServiceImpl::commitParts(
                 cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
 
                 /// Create new rpc context and bind the previous created txn to this rpc context.
-                auto rpc_context = RPCHelpers::createSessionContext(gc, *c);
+                auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
                 rpc_context->setCurrentTransaction(cnch_txn, false);
 
                 /// TODO: find table by uuid ?
@@ -93,7 +93,6 @@ void CnchServerServiceImpl::commitParts(
 
                     LOG_TRACE(&Poco::Logger::get("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
                 }
-
                 CnchDataWriter cnch_writer(
                     *cnch,
                     *rpc_context,
@@ -105,6 +104,7 @@ void CnchServerServiceImpl::commitParts(
 
                 TxnTimestamp commit_time
                     = cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
+
                 rsp->set_commit_timestamp(commit_time);
             }
             catch (...)
@@ -371,4 +371,212 @@ void CnchServerServiceImpl::createTransactionForKafka(
         
     });
 }
+
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-parameter"
+#else
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
+void CnchServerServiceImpl::checkConsumerValidity(
+    google::protobuf::RpcController * cntl,
+    const Protos::CheckConsumerValidityReq * request,
+    Protos::CheckConsumerValidityResp * response,
+    google::protobuf::Closure * done)
+{
+
+}
+void CnchServerServiceImpl::reportTaskHeartbeat(
+    google::protobuf::RpcController * cntl,
+    const Protos::ReportTaskHeartbeatReq * request,
+    Protos::ReportTaskHeartbeatResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::reportBufferHeartbeat(
+    google::protobuf::RpcController * cntl,
+    const Protos::ReportBufferHeartbeatReq * request,
+    Protos::ReportBufferHeartbeatResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::reportDeduperHeartbeat(
+    google::protobuf::RpcController * cntl,
+    const Protos::ReportDeduperHeartbeatReq * request,
+    Protos::ReportDeduperHeartbeatResp * response,
+    google::protobuf::Closure * done)
+{
+}
+
+void CnchServerServiceImpl::fetchDataParts(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::FetchDataPartsReq * request,
+    ::DB::Protos::FetchDataPartsResp * response,
+    ::google::protobuf::Closure * done)
+{
+}
+
+void CnchServerServiceImpl::fetchUniqueTableMeta(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::FetchUniqueTableMetaReq * request,
+    ::DB::Protos::FetchUniqueTableMetaResp * response,
+    ::google::protobuf::Closure * done)
+{
+}
+
+void CnchServerServiceImpl::getWorkerListWithBuffer(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetWorkerListWithBufferReq * request,
+    Protos::GetWorkerListWithBufferResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getBackgroundThreadStatus(
+    google::protobuf::RpcController * cntl,
+    const Protos::BackgroundThreadStatusReq * request,
+    Protos::BackgroundThreadStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getNumBackgroundThreads(
+    google::protobuf::RpcController * cntl,
+    const Protos::BackgroundThreadNumReq * request,
+    Protos::BackgroundThreadNumResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::controlCnchBGThread(
+    google::protobuf::RpcController * cntl,
+    const Protos::ControlCnchBGThreadReq * request,
+    Protos::ControlCnchBGThreadResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getTablePartitionInfo(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetTablePartitionInfoReq * request,
+    Protos::GetTablePartitionInfoResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getTableInfo(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetTableInfoReq * request,
+    Protos::GetTableInfoResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::invalidateBytepond(
+    google::protobuf::RpcController * cntl,
+    const Protos::InvalidateBytepondReq * request,
+    Protos::InvalidateBytepondResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getTransactionStatus(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::GetTransactionStatusReq * request,
+    ::DB::Protos::GetTransactionStatusResp * response,
+    ::google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::commitWorkerRPCByKey(
+    google::protobuf::RpcController * cntl,
+    const Protos::CommitWorkerRPCByKeyReq * request,
+    Protos::CommitWorkerRPCByKeyResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::cleanTransaction(
+    google::protobuf::RpcController * cntl,
+    const Protos::CleanTransactionReq * request,
+    Protos::CleanTransactionResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::acquireLock(
+    google::protobuf::RpcController * cntl,
+    const Protos::AcquireLockReq * request,
+    Protos::AcquireLockResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::releaseLock(
+    google::protobuf::RpcController * cntl,
+    const Protos::ReleaseLockReq * request,
+    Protos::ReleaseLockResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::reportCnchLockHeartBeat(
+    google::protobuf::RpcController * cntl,
+    const Protos::ReportCnchLockHeartBeatReq * request,
+    Protos::ReportCnchLockHeartBeatResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getServerStartTime(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetServerStartTimeReq * request,
+    Protos::GetServerStartTimeResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::scheduleGlobalGC(
+    google::protobuf::RpcController * cntl,
+    const Protos::ScheduleGlobalGCReq * request,
+    Protos::ScheduleGlobalGCResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getNumOfTablesCanSendForGlobalGC(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetNumOfTablesCanSendForGlobalGCReq * request,
+    Protos::GetNumOfTablesCanSendForGlobalGCResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetDeletingTablesInGlobalGCReq * request,
+    Protos::GetDeletingTablesInGlobalGCResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::redirectCommitParts(
+    google::protobuf::RpcController * controller,
+    const Protos::RedirectCommitPartsReq * request,
+    Protos::RedirectCommitPartsResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::redirectSetCommitTime(
+    google::protobuf::RpcController * controller,
+    const Protos::RedirectCommitPartsReq * request,
+    Protos::RedirectCommitPartsResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
+    google::protobuf::RpcController * cntl,
+    const Protos::RemoveMergeMutateTasksOnPartitionReq * request,
+    Protos::RemoveMergeMutateTasksOnPartitionResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchServerServiceImpl::submitQueryWorkerMetrics(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitQueryWorkerMetricsReq * request,
+    Protos::SubmitQueryWorkerMetricsResp * response,
+    google::protobuf::Closure * done)
+{
+}
+
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#else
+    #pragma GCC diagnostic pop
+#endif
+
 }

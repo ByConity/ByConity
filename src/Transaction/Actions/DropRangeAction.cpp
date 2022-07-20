@@ -39,7 +39,7 @@ void DropRangeAction::executeV1(TxnTimestamp commit_time)
     auto catalog = context.getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
 
-    ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
 }
 
 void DropRangeAction::executeV2()
@@ -58,7 +58,7 @@ void DropRangeAction::postCommit(TxnTimestamp commit_time)
     /// set commit time for part
     context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
 
-    ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
 }
 
 void DropRangeAction::abort()
@@ -66,7 +66,7 @@ void DropRangeAction::abort()
     // clear parts in kv
     context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}}, true);
 
-    ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
+    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
 }
 
 }

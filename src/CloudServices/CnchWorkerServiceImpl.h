@@ -82,7 +82,7 @@ public:
         Protos::GetDedupWorkerStatusResp * response,
         google::protobuf::Closure * done) override;
 
-// #if USE_RDKAFKA
+    // #if USE_RDKAFKA
     void submitKafkaConsumeTask(
         google::protobuf::RpcController * cntl,
         const Protos::SubmitKafkaConsumeTaskReq * request,
@@ -100,7 +100,7 @@ public:
         const Protos::GetOffsetsFromMemoryBufferReq * request,
         Protos::GetOffsetsFromMemoryBufferResp * response,
         google::protobuf::Closure * done) override;
-/// #endif
+    /// #endif
 
     void preloadChecksumsAndPrimaryIndex(
         google::protobuf::RpcController * cntl,
@@ -161,7 +161,7 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::SendVirtualDataPartsReq * request,
         Protos::SendVirtualDataPartsResp * response,
-        google::protobuf::Closure * done) override;
+        google::protobuf::Closure * done) override {}
         */
 
     void sendCnchHiveDataParts(

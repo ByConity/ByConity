@@ -64,8 +64,8 @@ public:
         return res;
     }
 
-    MergeTreeDataPartType choosePartType(size_t bytes_uncompressed, size_t rows_count) const;
-    MergeTreeDataPartType choosePartTypeOnDisk(size_t bytes_uncompressed, size_t rows_count) const;
+    virtual MergeTreeDataPartType choosePartType(size_t bytes_uncompressed, size_t rows_count) const;
+    virtual MergeTreeDataPartType choosePartTypeOnDisk(size_t bytes_uncompressed, size_t rows_count) const;
 
     /// After this method setColumns must be called
     MutableDataPartPtr createPart(const String & name,

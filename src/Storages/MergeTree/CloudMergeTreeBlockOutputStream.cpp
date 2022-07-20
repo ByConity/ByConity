@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <WorkerTasks/ManipulationType.h>
+#include <CloudServices/commitCnchParts.h>
 
 namespace DB
 {
@@ -44,8 +45,8 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
 
         temp_parts.push_back(std::move(temp_part));
     }
-
-    // auto dumped = dumpAndCommitCnchParts(storage, ManipulationType::Insert, temp_parts, context);
+    CnchDataWriter cnch_writer(storage, *context, ManipulationType::Insert);
+    auto dumped = cnch_writer.dumpAndCommitCnchParts(temp_parts);
 
     // batch all part to preload_parts for batch preloading in writeSuffix
     /// LOG_DEBUG(storage.getLogger(), "Pushing {} parts to preload vector.", temp_parts.size());
@@ -71,7 +72,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffix()
 
 void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
-    if (preload_parts.size())
+    if (!preload_parts.empty())
     {
         /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
         /// TEST_START(testlog);

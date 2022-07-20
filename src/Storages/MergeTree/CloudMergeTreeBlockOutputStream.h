@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <common/logger_useful.h>
+#include "WorkerTasks/ManipulationType.h"
 // #include <MergeTreeCommon/CnchDedupHelper.h>
 
 namespace DB

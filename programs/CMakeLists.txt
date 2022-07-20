@@ -8,6 +8,7 @@ endif ()
 option (ENABLE_CLICKHOUSE_ALL "Enable all ClickHouse modes by default" ON)
 
 option (ENABLE_CLICKHOUSE_SERVER "Server mode (main mode)" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_WORKER "Worker mode (main mode)" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_CLIENT "Client mode (interactive tui/shell that connects to the server)"
     ${ENABLE_CLICKHOUSE_ALL})
 
@@ -409,6 +410,13 @@ else ()
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-server" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-server)
     endif ()
+
+    if (ENABLE_CLICKHOUSE_WORKER)
+        add_custom_target (clickhouse-worker ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-worker DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-worker" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-worker)
+    endif () 
+
     if (ENABLE_CLICKHOUSE_CLIENT)
         add_custom_target (clickhouse-client ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-client DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-client" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

@@ -112,7 +112,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
     {
         LOG_TRACE(log, "Receiving create queries for Session: ", request->txn_id());
         /// set client_info.
-        auto rpc_context = RPCHelpers::createSessionContext(getContext(), *cntl);
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         auto timeout = std::chrono::seconds(request->timeout());
         auto & query_context = rpc_context->acquireNamedCnchSession(request->txn_id(), timeout, false)->context;
@@ -210,7 +210,7 @@ void CnchWorkerServiceImpl::checkDataParts(
     try
     {
         /// set client_info
-        auto rpc_context = RPCHelpers::createSessionContext(getContext(), *cntl);
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
         auto session = rpc_context->acquireNamedCnchSession(request->txn_id(), {}, false);
         auto & query_context = session->context;
@@ -306,5 +306,168 @@ void CnchWorkerServiceImpl::sendFinishTask(
         RPCHelpers::handleException(response->mutable_exception());
     }
 }
+
+#if defined(__clang__)
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-parameter"
+#else
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
+
+void CnchWorkerServiceImpl::executeSimpleQuery(
+    google::protobuf::RpcController * cntl,
+    const Protos::ExecuteSimpleQueryReq * request,
+    Protos::ExecuteSimpleQueryResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::GetPreallocatedStatus(
+    google::protobuf::RpcController *,
+    const Protos::GetPreallocatedStatusReq * request,
+    Protos::GetPreallocatedStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::SetQueryIntent(
+    google::protobuf::RpcController *,
+    const Protos::SetQueryIntentReq * request,
+    Protos::SetQueryIntentResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::SubmitSyncTask(
+    google::protobuf::RpcController *,
+    const Protos::SubmitSyncTaskReq * request,
+    Protos::SubmitSyncTaskResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::ResetQueryIntent(
+    google::protobuf::RpcController *,
+    const Protos::ResetQueryIntentReq * request,
+    Protos::ResetQueryIntentResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::SubmitScaleTask(
+    google::protobuf::RpcController *,
+    const Protos::SubmitScaleTaskReq * request,
+    Protos::SubmitScaleTaskResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::ClearPreallocatedDataParts(
+    google::protobuf::RpcController *,
+    const Protos::ClearPreallocatedDataPartsReq * request,
+    Protos::ClearPreallocatedDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::createDedupWorker(
+    google::protobuf::RpcController *,
+    const Protos::CreateDedupWorkerReq * request,
+    Protos::CreateDedupWorkerResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::dropDedupWorker(
+    google::protobuf::RpcController *,
+    const Protos::DropDedupWorkerReq * request,
+    Protos::DropDedupWorkerResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getDedupWorkerStatus(
+    google::protobuf::RpcController *,
+    const Protos::GetDedupWorkerStatusReq * request,
+    Protos::GetDedupWorkerStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::submitKafkaConsumeTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitKafkaConsumeTaskReq * request,
+    Protos::SubmitKafkaConsumeTaskResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getConsumerStatus(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetConsumerStatusReq * request,
+    Protos::GetConsumerStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getOffsetsFromMemoryBuffer(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetOffsetsFromMemoryBufferReq * request,
+    Protos::GetOffsetsFromMemoryBufferResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::preloadChecksumsAndPrimaryIndex(
+    google::protobuf::RpcController * cntl,
+    const Protos::PreloadChecksumsAndPrimaryIndexReq * request,
+    Protos::PreloadChecksumsAndPrimaryIndexResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getManipulationTasks(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetManipulationTasksReq * request,
+    Protos::GetManipulationTasksResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::createCloudMemoryBuffer(
+    google::protobuf::RpcController * cntl,
+    const Protos::CreateCloudMemoryBufferReq * request,
+    Protos::CreateCloudMemoryBufferResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::dropCloudMemoryBuffer(
+    google::protobuf::RpcController * cntl,
+    const Protos::DropCloudMemoryBufferReq * request,
+    Protos::DropCloudMemoryBufferResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::flushCloudMemoryBuffer(
+    google::protobuf::RpcController * cntl,
+    const Protos::FlushCloudMemoryBufferReq * request,
+    Protos::FlushCloudMemoryBufferResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getCloudMemoryBufferStatus(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetCloudMemoryBufferStatusReq * request,
+    Protos::GetCloudMemoryBufferStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+void CnchWorkerServiceImpl::getCloudMergeTreeStatus(
+    google::protobuf::RpcController * cntl,
+    const Protos::GetCloudMergeTreeStatusReq * request,
+    Protos::GetCloudMergeTreeStatusResp * response,
+    google::protobuf::Closure * done)
+{
+}
+
+void CnchWorkerServiceImpl::submitIngestPartitionTask(
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitIngestPartitionTaskReq * request,
+    Protos::SubmitIngestPartitionTaskResp * response,
+    google::protobuf::Closure * done)
+{
+}
+
+#if defined(__clang__)
+    #pragma clang diagnostic pop
+#else
+    #pragma GCC diagnostic pop
+#endif
 
 }

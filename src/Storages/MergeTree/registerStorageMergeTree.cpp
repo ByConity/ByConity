@@ -293,9 +293,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         *  - Sampling expression in the SAMPLE BY clause;
         *  - Additional MergeTreeSettings in the SETTINGS clause;
         */
-    fmt::print("Trying to create storage {}, pk {}, partition key {}\n", args.engine_name,
-        args.storage_def->primary_key == nullptr ? "" : args.storage_def->primary_key->formatForErrorMessage(),
-        args.storage_def->partition_by == nullptr ? "" : args.storage_def->partition_by->formatForErrorMessage());
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
         || args.storage_def->unique_key || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
         || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;

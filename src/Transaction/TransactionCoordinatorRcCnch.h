@@ -124,8 +124,8 @@ public:
     /// commit is the old API which performs data write and txn commit in one api calls.
     /// commitV2 is the new API which separate data write and txn commit with 2 api calls.
     /// Currently, still keep both of them as ddl is still executed with old api because the db/table metadata still does not support intermediate state.
-    TxnTimestamp commitV1(TransactionCnchPtr & txn);
-    TxnTimestamp commitV2(TransactionCnchPtr & txn);
+    TxnTimestamp commitV1(TransactionCnchPtr & txn) const;
+    TxnTimestamp commitV2(TransactionCnchPtr & txn) const;
 
     // clear related api used by background scan task
     bool clearZombieParts(const std::vector<String> & parts);

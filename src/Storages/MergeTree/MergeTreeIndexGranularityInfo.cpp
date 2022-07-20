@@ -38,8 +38,8 @@ MergeTreeIndexGranularityInfo::MergeTreeIndexGranularityInfo(const MergeTreeMeta
     /// Granularity is fixed
     if (!storage.canUseAdaptiveGranularity())
     {
-        if (type != MergeTreeDataPartType::WIDE)
-            throw Exception("Only Wide parts can be used with non-adaptive granularity.", ErrorCodes::NOT_IMPLEMENTED);
+        if (type != MergeTreeDataPartType::WIDE && type != MergeTreeDataPartType::CNCH)
+            throw Exception("Only WIDE or CNCH parts can be used with non-adaptive granularity, current type: " + type.toString(), ErrorCodes::NOT_IMPLEMENTED);
         setNonAdaptive();
     }
     else

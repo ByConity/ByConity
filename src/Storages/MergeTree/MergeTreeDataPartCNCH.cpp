@@ -2,6 +2,8 @@
 
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <IO/LimitReadBuffer.h>
+#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
+#include "Storages/MergeTree/MergeTreeReaderCNCH.h"
 
 namespace ProfileEvents
 {
@@ -75,7 +77,14 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
     [[maybe_unused]] const ValueSizeMap & avg_value_size_hints,
     [[maybe_unused]] const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {
-    return {};
+    auto new_settings = reader_settings_;
+    new_settings.convert_nested_to_subcolumns = true;
+
+    auto ptr = std::static_pointer_cast<const MergeTreeDataPartCNCH>(shared_from_this());
+    return std::make_unique<MergeTreeReaderCNCH>(
+        ptr, columns_to_read, metadata_snapshot, uncompressed_cache,
+        mark_cache, mark_ranges, new_settings, bitmap_index_reader,
+        avg_value_size_hints, profile_callback);
 }
 
 IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCNCH::getWriter(
@@ -86,7 +95,10 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCNCH::getWriter(
     [[maybe_unused]] const MergeTreeWriterSettings & writer_settings,
     [[maybe_unused]] const MergeTreeIndexGranularity & computed_index_granularity) const
 {
-    return {};
+    return std::make_unique<MergeTreeDataPartWriterWide>(
+        shared_from_this(), columns_list, metadata_snapshot, indices_to_recalc,
+        index_granularity_info.marks_file_extension,
+        default_codec_, writer_settings, computed_index_granularity);
 }
 
 bool MergeTreeDataPartCNCH::operator < (const MergeTreeDataPartCNCH & r) const

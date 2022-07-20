@@ -7,6 +7,7 @@
 #include <Poco/UUID.h>
 #include <Poco/Net/IPAddress.h>
 #include <Poco/Util/Application.h>
+#include "common/types.h"
 #include <Common/DNSResolver.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
@@ -671,6 +672,14 @@ void Context::initCnchServerResource()
         return;
 
     server_resource = std::make_shared<CnchServerResource>(TxnTimestamp(getTimestamp()));
+}
+
+void Context::initCnchServerResource(const TxnTimestamp & txn_id)
+{
+    if (server_resource)
+        return;
+
+    server_resource = std::make_shared<CnchServerResource>(txn_id);
 }
 
 CnchServerResourcePtr Context::getCnchServerResource()
@@ -3564,6 +3573,7 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
 
 void Context::initTSOClientPool(const String & service_name)
 {
+    fmt::print(stderr, "Init tso with {}\n", service_name);
     shared->tso_client_pool
         = std::make_unique<TSOClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
 }
@@ -3578,6 +3588,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
 
 UInt64 Context::getTimestamp() const
 {
+    /// Uncomment to get local ts in ns
+    // auto current_time = std::chrono::high_resolution_clock::now();
+    // UInt64 ts = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time.time_since_epoch()).count();
+    // return ts;
     return getCnchTSOClient()->getTimestamp().timestamp();
 }
 
