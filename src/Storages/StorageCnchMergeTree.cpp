@@ -863,7 +863,7 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
     {
         /// FIXME: add after cloud output stream is supported
         fmt::print(stderr, "Creating cloud merge tree...\n");
-        return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, enable_staging_area);
+        return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
     }
 }
 

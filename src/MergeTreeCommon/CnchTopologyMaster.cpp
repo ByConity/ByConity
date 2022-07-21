@@ -2,6 +2,7 @@
 #include <Catalog/Catalog.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
+#include <common/logger_useful.h>
 #include <Common/ConsistentHashUtils/Hash.h>
 
 namespace DB
@@ -50,7 +51,8 @@ CnchTopologyMaster::CnchTopologyMaster(Context & context_)
             }
             else
             {
-                LOG_ERROR(log, "Cannot fetch topology from remote.");
+                /// needed for the 1st time write to kv..
+                LOG_WARNING(log, "Cannot fetch topology from remote.");
             }
         }
         catch (...)

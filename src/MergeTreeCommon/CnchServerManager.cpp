@@ -17,10 +17,10 @@ CnchServerManager::CnchServerManager(Context & context_)
 {
     #if BYTEJOURNAL_AVAILABLE
     bj_client = context.getByteJournalClient();
-    #endif
     election_ns = context.getConfigRef().getString("bytejournal.namespace", "server_namespace_default");
     election_point = context.getConfigRef().getString("bytejournal.cnch_prefix", "default_cnch_ci_random_")
         + "server_election_point";
+    #endif
 
     topology_refresh_task = context.getTopologySchedulePool().createTask("TopologyRefresher", [this](){
             try
@@ -273,8 +273,8 @@ void CnchServerManager::shutDown()
     {
         topology_refresh_task->deactivate();
         lease_renew_task->deactivate();
-        leader_info_checker->deactivate();
         #if BYTEJOURNAL_AVAILABLE
+        leader_info_checker->deactivate();
         leader_runner->Stop();
         #endif
     }

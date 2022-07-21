@@ -570,8 +570,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initVirtualWarehousePool();
         global_context->initServiceDiscoveryClient();
         // global_context->initByteJournalClient();
-        global_context->initTSOClientPool(root_config.service_discovery.tso_psm);
         global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
+        global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
         // global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
         // global_context->initBytepondClientPool(root_config.service_discovery.bytepond_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
@@ -1093,12 +1093,20 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// only server need start up server manager
         global_context->setCnchServerManager();
-        global_context->setCnchTopologyMaster();
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
         // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
     }
+
+    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
+    {
+        /// Rely on schedule pool config
+        global_context->initCnchBGThreads();
+    }
+
+    global_context->setCnchTopologyMaster();
+
 
 #if USE_HDFS
     /// Init hdfs user
@@ -1305,15 +1313,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// system logs may copy global context.
     global_context->setCurrentDatabaseNameInGlobalContext(default_database);
 
-    /// Initialize components in server or worker.
-    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
-    {
-        global_context->initVirtualWarehousePool();
-        global_context->initServiceDiscoveryClient();
-        global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
-        global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
-
-    }
 
     LOG_INFO(log, "Loading metadata from {}", path);
 
@@ -1742,46 +1741,46 @@ int Server::main(const std::vector<std::string> & /*args*/)
             ha_server->start();
 
    
-    /// Server and worker rpc services
-    std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
-    std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;
+        /// Server and worker rpc services
+        std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
+        std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;
 
-    if (global_context->getServerType() == ServerType::cnch_server)
-        cnch_server_endpoint = std::make_unique<CnchServerServiceImpl>(global_context);
-    if (global_context->getServerType() == ServerType::cnch_worker)
-        cnch_worker_endpoint = std::make_unique<CnchWorkerServiceImpl>(global_context);
+        if (global_context->getServerType() == ServerType::cnch_server)
+            cnch_server_endpoint = std::make_unique<CnchServerServiceImpl>(global_context);
+        if (global_context->getServerType() == ServerType::cnch_worker)
+            cnch_worker_endpoint = std::make_unique<CnchWorkerServiceImpl>(global_context);
 
-    if (cnch_server_endpoint || cnch_worker_endpoint)
-    {
-        UInt64 rpc_port = config().getInt("rpc_port");
-
-        for (const auto & listen : listen_hosts)
+        if (cnch_server_endpoint || cnch_worker_endpoint)
         {
-            rpc_servers.push_back(std::make_unique<brpc::Server>());
-            auto & rpc_server = rpc_servers.back();
+            UInt64 rpc_port = config().getInt("rpc_port");
 
-            if (cnch_server_endpoint && 0 != rpc_server->AddService(cnch_server_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
-                throw Exception("Failed to add cnch server rpc service.", ErrorCodes::BRPC_EXCEPTION);
-            if (cnch_worker_endpoint && 0 != rpc_server->AddService(cnch_worker_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
-                throw Exception("Failed to add cnch worker rpc service.", ErrorCodes::BRPC_EXCEPTION);
-
-            std::string host_port = createHostPortString(listen, rpc_port);
-            brpc::ServerOptions options;
-            if (0 != rpc_server->Start(host_port.c_str(), &options))
+            for (const auto & listen : listen_hosts)
             {
-                if (listen_try)
-                {
-                    LOG_ERROR(log, "Failed to start rpc server on {}\n", host_port);
-                }
-                else
-                {
-                    throw Exception("Failed to start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
-                }
-            }
+                rpc_servers.push_back(std::make_unique<brpc::Server>());
+                auto & rpc_server = rpc_servers.back();
 
-            LOG_INFO(log, "Listening rpc: " + host_port);
+                if (cnch_server_endpoint && 0 != rpc_server->AddService(cnch_server_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                    throw Exception("Failed to add cnch server rpc service.", ErrorCodes::BRPC_EXCEPTION);
+                if (cnch_worker_endpoint && 0 != rpc_server->AddService(cnch_worker_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                    throw Exception("Failed to add cnch worker rpc service.", ErrorCodes::BRPC_EXCEPTION);
+
+                std::string host_port = createHostPortString(listen, rpc_port);
+                brpc::ServerOptions options;
+                if (0 != rpc_server->Start(host_port.c_str(), &options))
+                {
+                    if (listen_try)
+                    {
+                        LOG_ERROR(log, "Failed to start rpc server on {}\n", host_port);
+                    }
+                    else
+                    {
+                        throw Exception("Failed to start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
+                    }
+                }
+
+                LOG_INFO(log, "Listening rpc: " + host_port);
+            }
         }
-    }
 
 
         LOG_INFO(log, "Ready for connections.");
