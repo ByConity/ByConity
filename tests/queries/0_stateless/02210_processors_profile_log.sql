@@ -1,6 +1,7 @@
 -- { echo }
 EXPLAIN PIPELINE SELECT sleep(1);
 
+DROP TABLE IF EXISTS system.query_log;
 DROP TABLE IF EXISTS system.processors_profile_log;
 
 SELECT sleep(1) SETTINGS log_processors_profiles=true, log_queries=1, log_queries_min_type='QUERY_FINISH';
