@@ -45,21 +45,6 @@ message ClientInfo
   /// Add more info like Interpreters/ClientInfo.h
 }
 
-message ExecuteSimpleQueryReq
-{
-  required string query = 1;
-  optional string query_id = 2;
-  optional string settings = 3;
-  optional ClientInfo client_info = 4;
-}
-
-message ExecuteSimpleQueryResp
-{
-  optional string exception = 1;
-  required uint32 server_revision = 2;
-  optional string block = 3;
-}
-
 /// vw queue
 message ResourceUsageEntry
 {
@@ -69,7 +54,7 @@ message ResourceUsageEntry
   required uint64 last_used = 4;
 }
 
-message BpQueryKey 
+message BpQueryKey
 {
   required string query = 1;
   required string settings_string = 2;
@@ -79,7 +64,7 @@ message BpQueryKey
   optional float duration = 6;
 }
 
-message BpObjIdentifier 
+message BpObjIdentifier
 {
   required string path = 1;
   required int64 estimated_size = 2;

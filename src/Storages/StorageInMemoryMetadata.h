@@ -56,7 +56,7 @@ struct StorageInMemoryMetadata
     static constexpr UInt8 flag_explicit_version = 1 << 0;
     static constexpr UInt8 flag_partition_as_version = 1 << 1;
     static constexpr UInt8 flag_is_offline = 1 << 2;
-    String extra_column_name = "";
+    String extra_column_name;
     size_t extra_column_size = 0;
 
     StorageInMemoryMetadata() = default;

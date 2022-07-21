@@ -20,16 +20,14 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
     : type(params.type)
     , task_id(params.task_id)
     , last_touch_time(time(nullptr))
+    , storage_id({}, {})  /// Will update later.
     , result_part_names(params.new_part_names)
     , thread_id{getThreadId()}
 {
     if (!params.storage)
         throw Exception("storage in manipulation params can't be nullptr", ErrorCodes::LOGICAL_ERROR);
 
-    auto storage_id = params.storage->getStorageID();
-    database = storage_id.database_name;
-    table = storage_id.table_name;
-    uuid = storage_id.uuid;
+    storage_id = params.storage->getStorageID();
 
     if (!params.source_data_parts.empty())
     {
@@ -92,13 +90,10 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
 
 ManipulationInfo ManipulationListElement::getInfo() const
 {
-    ManipulationInfo res;
+    ManipulationInfo res(storage_id);
     res.type = type;
     res.task_id = task_id;
     res.related_node = related_node;
-    res.database = database;
-    res.table = table;
-    res.uuid = uuid;
     res.partition_id = partition_id;
     res.elapsed = watch.elapsedSeconds();
     res.progress = progress.load(std::memory_order_relaxed);
@@ -120,6 +115,10 @@ ManipulationInfo ManipulationListElement::getInfo() const
         res.result_part_names.emplace_back(result_part_name);
 
     return res;
+}
+
+ManipulationInfo::ManipulationInfo(StorageID storage_id_): storage_id(std::move(storage_id_))
+{
 }
 
 void ManipulationInfo::update(const ManipulationInfo & info)

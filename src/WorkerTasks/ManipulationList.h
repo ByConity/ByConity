@@ -6,6 +6,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
+#include <Interpreters/StorageID.h>
 #include <Storages/MergeTree/BackgroundProcessList.h>
 #include <WorkerTasks/ManipulationType.h>
 
@@ -33,9 +34,7 @@ struct ManipulationInfo
     std::string task_id;
     std::string related_node;
 
-    std::string database;
-    std::string table;
-    UUID uuid;
+    StorageID storage_id;
     Float64 elapsed;
     Float64 progress;
     UInt64 num_parts;
@@ -53,6 +52,7 @@ struct ManipulationInfo
     UInt64 memory_usage;
     UInt64 thread_id;
 
+    explicit ManipulationInfo(StorageID storage_id_);
     void update(const ManipulationInfo & info);
 };
 
@@ -66,9 +66,7 @@ struct ManipulationListElement : boost::noncopyable
     std::string related_node;
     std::atomic<time_t> last_touch_time;
 
-    std::string database;
-    std::string table;
-    UUID uuid;
+    StorageID storage_id;
     std::string partition_id;
 
     Names result_part_names;

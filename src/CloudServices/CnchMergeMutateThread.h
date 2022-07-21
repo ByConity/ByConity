@@ -122,9 +122,9 @@ private:
     void submitFutureManipulationTask(FutureManipulationTask & future_task);
 
     // Mutate
+    bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     void parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &);
     void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
-    bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
 
     void removeTaskImpl(const String & task_id, TaskRecordPtr * out_task_record, std::lock_guard<std::mutex> & lock);
 

@@ -6,6 +6,21 @@ import "cnch_common.proto";
 
 option cc_generic_services = true;
 
+message ExecuteSimpleQueryReq
+{
+  required string query = 1;
+  optional string query_id = 2;
+  optional string settings = 3;
+  optional ClientInfo client_info = 4;
+}
+
+message ExecuteSimpleQueryResp
+{
+  optional string exception = 1;
+  required uint32 server_revision = 2;
+  optional string block = 3;
+}
+
 message SubmitManipulationTaskReq
 {
   required uint64 txn_id = 1;
@@ -88,42 +103,58 @@ message PreloadChecksumsAndPrimaryIndexResp
   optional string exception = 1;
 }
 
-message GetManipulationTasksReq
+message ShutdownManipulationTasksReq
 {
-  optional UUID table_uuid = 1;
-  optional int32 detail = 2;
-  optional int32 shutdown = 3;
-  repeated string tasks = 4;
+  required UUID table_uuid = 1;
+}
+
+message ShutdownManipulationTasksResp
+{
+  optional string exception = 1;
+}
+
+message TouchManipulationTasksReq
+{
+  required UUID table_uuid = 1;
+  repeated string tasks_id = 2;
+}
+
+message TouchManipulationTasksResp
+{
+  optional string exception = 1;
+  repeated string tasks_id = 2;
 }
 
 message ManipulationTask
 {
   required string task_id = 1;
   optional uint32 type = 2;
-  optional string database = 3;
-  optional string table = 4;
-  optional UUID table_uuid = 5;
-  optional float elapsed = 6;
-  optional int64 num_parts = 7;
-  repeated string source_part_names = 8;
-  repeated string result_part_names = 9;
-  optional string partition_id = 10;
-  optional int64 total_size_bytes_compressed = 11;
-  optional int64 total_size_marks = 12;
-  optional float progress = 13;
-  optional int64 bytes_read_uncompressed = 14;
-  optional int64 bytes_written_uncompressed = 15;
-  optional int64 rows_read = 16;
-  optional int64 rows_written = 17;
-  optional int64 columns_written = 18;
-  optional int64 memory_usage = 19;
-  optional int64 thread_number = 20;
+  optional StorageID storage_id = 3;
+  optional float elapsed = 4;
+  optional int64 num_parts = 5;
+  repeated string source_part_names = 6;
+  repeated string result_part_names = 7;
+  optional string partition_id = 8;
+  optional int64 total_size_bytes_compressed = 9;
+  optional int64 total_size_marks = 10;
+  optional float progress = 11;
+  optional int64 bytes_read_uncompressed = 12;
+  optional int64 bytes_written_uncompressed = 13;
+  optional int64 rows_read = 14;
+  optional int64 rows_written = 15;
+  optional int64 columns_written = 16;
+  optional int64 memory_usage = 17;
+  optional int64 thread_id = 18;
 }
 
-message GetManipulationTasksResp
+message GetManipulationTasksStatusReq
 {
-  repeated ManipulationTask tasks = 1;
-  optional string exception = 2;
+}
+
+message GetManipulationTasksStatusResp
+{
+  optional string exception = 1;
+  repeated ManipulationTask tasks = 2;
 }
 
 message GetPreallocatedStatusReq
@@ -446,13 +477,17 @@ service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
 
+  // ManipulationTasks
   rpc submitManipulationTask(SubmitManipulationTaskReq) returns (SubmitManipulationTaskResp);
+  rpc touchManipulationTasks(TouchManipulationTasksReq) returns (TouchManipulationTasksResp);
+  rpc shutdownManipulationTasks(ShutdownManipulationTasksReq) returns (ShutdownManipulationTasksResp);
+  rpc getManipulationTasksStatus(GetManipulationTasksStatusReq) returns (GetManipulationTasksStatusResp);
+
   rpc submitKafkaConsumeTask(SubmitKafkaConsumeTaskReq) returns (SubmitKafkaConsumeTaskResp);
   rpc getConsumerStatus(GetConsumerStatusReq) returns (GetConsumerStatusResp);
   rpc getOffsetsFromMemoryBuffer(GetOffsetsFromMemoryBufferReq) returns (GetOffsetsFromMemoryBufferResp);
 
   rpc preloadChecksumsAndPrimaryIndex(PreloadChecksumsAndPrimaryIndexReq) returns (PreloadChecksumsAndPrimaryIndexResp);
-  rpc getManipulationTasks(GetManipulationTasksReq) returns (GetManipulationTasksResp);
 
   rpc GetPreallocatedStatus(GetPreallocatedStatusReq) returns (GetPreallocatedStatusResp);
   rpc SetQueryIntent(SetQueryIntentReq) returns (SetQueryIntentResp);

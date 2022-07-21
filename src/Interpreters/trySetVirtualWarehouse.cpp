@@ -153,10 +153,7 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, Context & context)
     }
     else
     {
-        if (trySetVirtualWarehouseFromAST(ast, context))
-            return true;
-
-        return false;
+        return trySetVirtualWarehouseFromAST(ast, context);
     }
 }
 

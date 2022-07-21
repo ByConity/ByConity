@@ -51,9 +51,9 @@ CnchMergeTreeMutationEntry CnchMergeTreeMutationEntry::parse(const String & str)
     return res;
 }
 
-bool CnchMergeTreeMutationEntry::isReclusteringMutation() const
+bool CnchMergeTreeMutationEntry::isReclusterMutation() const
 {
-    // if (commands.size()==1 && commands[0].type==MutationCommand::Type::RECLUSTER)
+    // if (commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER)
     //     return true;
     // else
     return false;

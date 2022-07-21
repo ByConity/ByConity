@@ -10,10 +10,10 @@ namespace DB
 class DDLAlterAction : public Action
 {
 public:
-    DDLAlterAction(const Context & context_, const TxnTimestamp & txn_id_, const StoragePtr table_)
-    : Action(context_, txn_id_),
-    table(table_),
-    log(&Poco::Logger::get("AlterAction"))
+    DDLAlterAction(const Context & context_, const TxnTimestamp & txn_id_, StoragePtr table_)
+        : Action(context_, txn_id_),
+        log(&Poco::Logger::get("AlterAction")),
+        table(std::move(table_))
     {
     }
 
@@ -23,18 +23,17 @@ public:
     void setNewSchema(String schema_);
     String getNewSchema() const { return new_schema; }
 
-    void setMutationCommmands(MutationCommands commands);
+    void setMutationCommands(MutationCommands commands);
 
     void executeV1(TxnTimestamp commit_time) override;
 
 private:
     void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
     void appendPart(MutableMergeTreeDataPartCNCHPtr part);
-    void updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time);
+    static void updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time);
 
-private:
-    const StoragePtr table;
     Poco::Logger * log;
+    const StoragePtr table;
 
     String new_schema;
     MutationCommands mutation_commands;
@@ -43,4 +42,3 @@ private:
 using DDLAlterActionPtr = std::shared_ptr<DDLAlterAction>;
 
 }
-

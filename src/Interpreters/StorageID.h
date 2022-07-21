@@ -89,8 +89,7 @@ struct StorageID
 
     QualifiedTableName getQualifiedName() const { return {database_name, getTableName()}; }
 
-    static StorageID fromDictionaryConfig(const Poco::Util::AbstractConfiguration & config,
-                                          const String & config_prefix);
+    static StorageID fromDictionaryConfig(const Poco::Util::AbstractConfiguration & config, const String & config_prefix);
 
     /// If dictionary has UUID, then use it as dictionary name in ExternalLoader to allow dictionary renaming.
     /// ExternalDictnariesLoader::resolveDictionaryName(...) should be used to access such dictionaries by name.

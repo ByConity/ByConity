@@ -33,7 +33,7 @@ namespace ErrorCodes
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextPtr context_)
-    : WithContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
+    : WithMutableContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
 {
 }
 
@@ -41,10 +41,10 @@ CnchWorkerServiceImpl::~CnchWorkerServiceImpl() = default;
 
 
 void CnchWorkerServiceImpl::submitManipulationTask(
-    [[maybe_unused]] google::protobuf::RpcController * cntl,
-    [[maybe_unused]] const Protos::SubmitManipulationTaskReq * request,
-    [[maybe_unused]] Protos::SubmitManipulationTaskResp * response,
-    [[maybe_unused]] google::protobuf::Closure * done)
+    google::protobuf::RpcController * cntl,
+    const Protos::SubmitManipulationTaskReq * request,
+    Protos::SubmitManipulationTaskResp * response,
+    google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
 
@@ -93,6 +93,123 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             /// CurrentThread::attachQueryContext(c);
             executeManipulationTask(p, c);
         }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::shutdownManipulationTasks(
+    google::protobuf::RpcController *,
+    const Protos::ShutdownManipulationTasksReq * request,
+    Protos::ShutdownManipulationTasksResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto uuid = RPCHelpers::createUUID(request->table_uuid());
+
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
+        {
+            for (auto & e : container)
+            {
+                if (uuid != e.storage_id.uuid)
+                    continue;
+
+                e.is_cancelled.store(true, std::memory_order_relaxed);
+            }
+        });
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::touchManipulationTasks(
+    google::protobuf::RpcController *,
+    const Protos::TouchManipulationTasksReq * request,
+    Protos::TouchManipulationTasksResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto uuid = RPCHelpers::createUUID(request->table_uuid());
+        std::unordered_set<String> request_tasks(request->tasks_id().begin(), request->tasks_id().end());
+
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
+        {
+            auto now = time(nullptr);
+            for (auto & e : container)
+            {
+                if (uuid != e.storage_id.uuid)
+                    continue;
+
+                if (request_tasks.count(e.task_id))
+                {
+                    e.last_touch_time.store(now, std::memory_order_relaxed);
+                }
+                else
+                {
+                    /// TBD: cancel tasks?
+                }
+
+                response->add_tasks_id(e.task_id);
+            }
+        });
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::getManipulationTasksStatus(
+    google::protobuf::RpcController *,
+    const Protos::GetManipulationTasksStatusReq *,
+    Protos::GetManipulationTasksStatusResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
+        {
+            for (auto & e : container)
+            {
+                auto * task_info = response->add_tasks();
+
+                task_info->set_task_id(e.task_id);
+                task_info->set_type(UInt32(e.type));
+                RPCHelpers::fillStorageID(e.storage_id, *task_info->mutable_storage_id());
+                task_info->set_elapsed(e.watch.elapsedSeconds());
+                task_info->set_num_parts(e.num_parts);
+                for (auto & source_part_name : e.source_part_names)
+                    task_info->add_source_part_names(source_part_name);
+                for (auto & result_part_name : e.result_part_names)
+                    task_info->add_result_part_names(result_part_name);
+                task_info->set_partition_id(e.partition_id);
+                task_info->set_total_size_bytes_compressed(e.total_size_bytes_compressed);
+                task_info->set_total_size_marks(e.total_size_marks);
+                task_info->set_progress(e.progress.load(std::memory_order_relaxed));
+                task_info->set_bytes_read_uncompressed(e.bytes_read_uncompressed.load(std::memory_order_relaxed));
+                task_info->set_bytes_written_uncompressed(e.bytes_written_uncompressed.load(std::memory_order_relaxed));
+                task_info->set_rows_read(e.rows_read.load(std::memory_order_relaxed));
+                task_info->set_rows_written(e.rows_written.load(std::memory_order_relaxed));
+                task_info->set_columns_written(e.columns_written.load(std::memory_order_relaxed));
+                task_info->set_memory_usage(e.memory_tracker.get());
+                task_info->set_thread_id(e.thread_id);
+            }
+        });
     }
     catch (...)
     {
