@@ -72,7 +72,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeMetaBase(
         table_id_,
-        relative_data_path_,
+        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
         metadata_,
         context_,
         date_column_name,

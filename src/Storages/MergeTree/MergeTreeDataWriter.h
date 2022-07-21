@@ -10,6 +10,7 @@
 #include <Interpreters/sortBlock.h>
 
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include "common/types.h"
 
 
 namespace DB
@@ -51,7 +52,7 @@ public:
     MergeTreeMetaBase::MutableDataPartPtr writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, bool optimize_on_insert);
 
     MergeTreeMetaBase::MutableDataPartPtr
-    writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
+    writeTempPart(BlockWithPartition & block, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, UInt64 block_id = 0, Int64 mutation = 0, Int64 hint_mutation = 0);
 
     MergeTreeMetaBase::MutableDataPartPtr writeProjectionPart(
         Block block, const ProjectionDescription & projection, const IMergeTreeDataPart * parent_part);

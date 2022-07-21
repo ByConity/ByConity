@@ -1093,6 +1093,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         /// only server need start up server manager
         global_context->setCnchServerManager();
+        global_context->setCnchTopologyMaster();
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);

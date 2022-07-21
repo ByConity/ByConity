@@ -32,12 +32,13 @@ void CloudMergeTreeBlockOutputStream::write(const Block & block)
     /// const auto & txn = context->getCurrentTransaction();
     auto part_log = context->getGlobalContext()->getPartLog(storage.getDatabaseName());
     MergeTreeMutableDataPartsVector temp_parts;
-
+    auto txn_id = context->getCurrentTransactionID();
+    auto block_id = context->getTimestamp();
     for (auto & block_with_partition : part_blocks)
     {
         Stopwatch watch;
 
-        MergeTreeMutableDataPartPtr temp_part = writer.writeTempPart(block_with_partition, metadata_snapshot, context);
+        MergeTreeMutableDataPartPtr temp_part = writer.writeTempPart(block_with_partition, metadata_snapshot, context, block_id, txn_id);
 
         if (part_log)
             part_log->addNewPart(context, temp_part, watch.elapsed());
@@ -72,6 +73,15 @@ void CloudMergeTreeBlockOutputStream::writeSuffix()
 
 void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
 {
+    auto txn = context->getCurrentTransaction(); 
+    if (dynamic_pointer_cast<CnchServerTransaction>(txn) && !disable_transaction_commit)
+    {
+        txn->setMainTableUUID(storage.getStorageUUID());
+        txn->commitV2();
+        LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
+    }
+    /// TODO: handling commit for worker side
+
     if (!preload_parts.empty())
     {
         /// auto testlog = std::make_shared<TestLog>(const_cast<Context &>(context));
