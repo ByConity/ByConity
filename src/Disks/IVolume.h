@@ -36,9 +36,11 @@ using Volumes = std::vector<VolumePtr>;
 class IVolume : public Space
 {
 public:
-    IVolume(String name_, Disks disks_, size_t max_data_part_size_ = 0, bool perform_ttl_move_on_insert_ = true)
-        : disks(std::move(disks_))
-        , name(name_)
+    IVolume(String name_, Disks disks_, const String& default_disk_name_,
+        size_t max_data_part_size_ = 0, bool perform_ttl_move_on_insert_ = true)
+        : name(name_)
+        , disks(std::move(disks_))
+        , default_disk_name(default_disk_name_)
         , max_data_part_size(max_data_part_size_)
         , perform_ttl_move_on_insert(perform_ttl_move_on_insert_)
     {
@@ -64,6 +66,8 @@ public:
     virtual DiskPtr getDisk(size_t i) const { return disks[i]; }
     const Disks & getDisks() const { return disks; }
 
+    DiskPtr getDefaultDisk() const;
+
     /// Returns effective value of whether merges are allowed on this volume (true) or not (false).
     virtual bool areMergesAvoided() const { return false; }
 
@@ -71,8 +75,10 @@ public:
     virtual void setAvoidMergesUserOverride(bool /*avoid*/) {}
 
 protected:
-    Disks disks;
     const String name;
+
+    Disks disks;
+    String default_disk_name;
 
 public:
     /// Max size of reservation, zero means unlimited size

@@ -71,6 +71,10 @@ protected:
     const String cnch_database_name;
     const String cnch_table_name;
 
+private:
+    // To store some temporary data for cnch
+    StoragePolicyPtr local_store_volume;
+    String relative_local_store_path;
 };
 
 }

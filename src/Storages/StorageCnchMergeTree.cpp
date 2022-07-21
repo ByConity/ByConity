@@ -81,6 +81,9 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
+    local_store_volume = getContext()->getStoragePolicy(
+        getSettings()->cnch_local_storage_policy.toString());
+    relative_local_store_path = fs::path("store") / UUIDHelpers::UUIDToString(getStorageID().uuid);
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(

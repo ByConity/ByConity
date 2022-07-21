@@ -36,6 +36,15 @@ class VirtualWarehouseHandleImpl;
 class CnchTopologyMaster;
 class ProcessListEntry;
 
+enum class CNCHStorageMediumType
+{
+    HDFS,
+    S3
+};
+
+String toStr(CNCHStorageMediumType tp);
+CNCHStorageMediumType fromStr(const String& type_str);
+
 class CnchStorageCommonHelper
 {
 public:

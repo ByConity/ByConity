@@ -6,6 +6,7 @@
 #include <Common/Exception.h>
 // #include <Transaction/CnchExplicitTransaction.h>
 #include "Disks/IDisk.h"
+#include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Interpreters/Context.h>
 #include <cppkafka/cppkafka.h>
@@ -96,11 +97,15 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     if (metadataOnly())
         return;
     DiskPtr disk;
-    ///FIXME: if storage selector is available @guanzhe.andy
-    // if (diskName().empty())
-    //     disk = storage->getStorageSelector().getDefaultHDFSDisk();
-    // else 
-    //     disk = storage->getStorageSelector().getStoragePolicy()->getDiskByName(diskName()); 
+    if (diskName().empty())
+    {
+        // For cnch, this storage policy should only contains one disk
+        disk = storage->getStoragePolicy()->getAnyDisk();
+    }
+    else
+    {
+        disk = storage->getStoragePolicy()->getDiskByName(diskName());
+    }
 
     /// This can happen in testing environment when disk name may change time to time
     if (!disk)
@@ -110,10 +115,8 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     
     if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart)
     {
-        ///FIXME: if storage selector is available @guanzhe.andy
-        // const auto & relative_path = placeholders(1);
-        // String rel_path = storage->getStorageSelector().tableRelativePathOnDisk(disk) + relative_path;
-        String rel_path;
+        const auto & resource_relative_path = placeholders(1);
+        String rel_path = storage->getRelativeDataPath() + resource_relative_path;
         if (disk->exists(rel_path)) 
         {
             LOG_DEBUG(log, "Will remove undo path {}", disk->getPath() + rel_path);

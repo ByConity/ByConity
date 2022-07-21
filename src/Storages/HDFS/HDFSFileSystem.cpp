@@ -573,38 +573,43 @@ HDFSConnectionParams::HDFSConnectionParams(HDFSConnectionType t, const String & 
     lookupOnNeed();
 }
 
-HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(const Poco::Util::AbstractConfiguration & config)
+HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
+    const Poco::Util::AbstractConfiguration & config, const String& config_prefix)
 {
-    static String HDFS_USER = "hdfs_user";
-    static String CFS_ADDR = "cfs_addr";
-    static String HDFS_ADDR = "hdfs_addr";
-    static String HDFS_HA = "hdfs_ha_nameservice";
-    static String HDFS_NNPROXY = "hdfs_nnproxy";
+    auto config_key = [&config_prefix](const String& key) {
+        return config_prefix.empty() ? key : config_prefix + "." + key;
+    };
 
-    String hdfs_user = config.getString(HDFS_USER, "clickhouse");
+    const String hdfs_user_key = config_key("hdfs_user");
+    const String cfs_addr_key = config_key("cfs_addr");
+    const String hdfs_addr_key = config_key("hdfs_addr");
+    const String hdfs_ha_key = config_key("hdfs_ha_nameservice");
+    const String hdfs_nnproxy_key = config_key("hdfs_nnproxy");
 
-    if (config.has(CFS_ADDR))
+    String hdfs_user = config.getString(hdfs_user_key, "clickhouse");
+
+    if (config.has(cfs_addr_key))
     {
         // for ip:port, poco cannot parse it correctly. the ip will be parsed as scheme.
-        Poco::URI cfs_uri(addSchemeOnNeed( config.getString(CFS_ADDR), "cfs://"));
+        Poco::URI cfs_uri(addSchemeOnNeed(cfs_addr_key, "cfs://"));
         String host = cfs_uri.getHost();
         int port = cfs_uri.getPort() == 0 ? 65212 : cfs_uri.getPort();
         return HDFSConnectionParams(CONN_CFS, hdfs_user, {{host, port}});
     }
-    else if (config.has(HDFS_ADDR))
+    else if (config.has(hdfs_addr_key))
     {
-        Poco::URI hdfs_uri(addSchemeOnNeed(config.getString(HDFS_ADDR), "hdfs://"));
+        Poco::URI hdfs_uri(addSchemeOnNeed(config.getString(hdfs_addr_key), "hdfs://"));
         String host = hdfs_uri.getHost();
         int port = hdfs_uri.getPort() == 0 ? 65212 : hdfs_uri.getPort();
         return HDFSConnectionParams(CONN_HDFS, hdfs_user, {{host, port}});
     }
-    else if (config.has(HDFS_HA))
+    else if (config.has(hdfs_ha_key))
     {
-        return HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(HDFS_HA));
+        return HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(hdfs_ha_key));
     }
 
     // hdfs_nnproxy could refer to both cfs and nnproxy.
-    String hdfs_nnproxy = config.getString("hdfs_nnproxy", "nnproxy");
+    String hdfs_nnproxy = config.getString(hdfs_nnproxy_key, "nnproxy");
     if (hdfs_nnproxy.find("://") != String::npos)
     {
         // this could be a cfs or hdfs uri like cfs://preonline.com:65212/

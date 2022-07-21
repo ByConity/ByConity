@@ -26,7 +26,9 @@ VolumePtr createVolumeFromReservation(const ReservationPtr & reservation, Volume
     if (other_volume->getType() == VolumeType::RAID1)
     {
         auto volume = std::dynamic_pointer_cast<VolumeRAID1>(other_volume);
-        return std::make_shared<VolumeRAID1>(volume->getName(), reservation->getDisks(), volume->max_data_part_size, volume->are_merges_avoided);
+        Disks disks = reservation->getDisks();
+        String default_disk_name = disks.empty() ? "" : disks[0]->getName();
+        return std::make_shared<VolumeRAID1>(volume->getName(), disks, default_disk_name, volume->max_data_part_size, volume->are_merges_avoided);
     }
     return nullptr;
 }

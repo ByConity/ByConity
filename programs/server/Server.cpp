@@ -264,6 +264,7 @@ namespace ErrorCodes
     extern const int MISMATCHING_USERS_FOR_PROCESS_AND_DATA;
     extern const int NETWORK_ERROR;
     extern const int CORRUPTED_DATA;
+    extern const int UNKNOWN_POLICY;
 }
 
 
@@ -1763,4 +1764,5 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     return Application::EXIT_OK;
 }
+
 }

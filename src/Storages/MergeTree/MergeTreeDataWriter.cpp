@@ -12,6 +12,7 @@
 #include <DataTypes/DataTypeDate.h>
 #include <IO/WriteHelpers.h>
 #include <Common/typeid_cast.h>
+#include <Common/filesystemHelpers.h>
 #include <DataStreams/ITTLAlgorithm.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
@@ -27,6 +28,11 @@
 #include <Processors/Merges/Algorithms/VersionedCollapsingAlgorithm.h>
 #include <Processors/Merges/Algorithms/GraphiteRollupSortedAlgorithm.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+
+namespace
+{
+    constexpr UInt64 RESERVATION_MIN_ESTIMATION_SIZE = 1u * 1024u * 1024u; /// 1MB
+}
 
 namespace ProfileEvents
 {
@@ -357,8 +363,11 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         updateTTL(ttl_entry, move_ttl_infos, move_ttl_infos.moves_ttl[ttl_entry.result_column], block, false);
 
     NamesAndTypesList columns = metadata_snapshot->getColumns().getAllPhysical().filter(block.getNames());
-    ReservationPtr reservation = data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true);
-    VolumePtr volume = data.getStoragePolicy()->getVolume(0);
+    ReservationPtr reservation =
+        destination_policy == nullptr ?
+            data.reserveSpacePreferringTTLRules(metadata_snapshot, expected_size, move_ttl_infos, time(nullptr), 0, true) :
+            destination_policy->reserveAndCheck(std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size));
+    VolumePtr volume = destination_policy == nullptr ? data.getStoragePolicy()->getVolume(0) : destination_policy->getVolume(0);
     auto part_type = data.choosePartType(expected_size, block.rows());
 
     auto all_columns = metadata_snapshot->getColumns().getAllPhysical();
@@ -376,7 +385,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
        part_type,
        new_part_info,
        createVolumeFromReservation(reservation, volume),
-       TMP_PREFIX + part_name);
+       joinPaths({base_rel_path, TMP_PREFIX + part_name}, false));
 
     if (data.storage_settings.get()->assign_part_uuids)
         new_data_part->uuid = UUIDHelpers::generateV4();
@@ -579,12 +588,17 @@ MergeTreeDataWriter::writeProjectionPart(Block block, const ProjectionDescriptio
     size_t expected_size = block.bytes();
 
     // just check if there is enough space on parent volume
-    data.reserveSpace(expected_size, parent_part->volume);
+    ReservationPtr reservation =
+        destination_policy == nullptr ?
+            data.reserveSpace(expected_size, parent_part->volume) :
+            destination_policy->reserveAndCheck(std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size));
 
     String part_name = projection.name;
     MergeTreePartInfo new_part_info("all", 0, 0, 0);
     auto new_data_part = data.createPart(
-        part_name, data.choosePartType(expected_size, block.rows()), new_part_info, parent_part->volume, part_name + ".proj", parent_part);
+        part_name, data.choosePartType(expected_size, block.rows()), new_part_info,
+        parent_part->volume, joinPaths({base_rel_path, part_name + ".proj"}, false),
+        parent_part);
     new_data_part->is_temp = false; // clean up will be done on parent part
 
     return writeProjectionPartImpl(data, log, block, projection.metadata, std::move(new_data_part));
@@ -596,13 +610,18 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempProjectionPa
     Block block,
     const ProjectionDescription & projection,
     const IMergeTreeDataPart * parent_part,
-    size_t block_num)
+    size_t block_num,
+    const StoragePolicyPtr& dest_policy,
+    const String& base_rel_path)
 {
     /// Size of part would not be greater than block.bytes() + epsilon
     size_t expected_size = block.bytes();
 
     // just check if there is enough space on parent volume
-    data.reserveSpace(expected_size, parent_part->volume);
+    ReservationPtr reservation =
+        dest_policy == nullptr ?
+            data.reserveSpace(expected_size, parent_part->volume) :
+            dest_policy->reserveAndCheck(std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size));
 
     String part_name = fmt::format("{}_{}", projection.name, block_num);
     MergeTreePartInfo new_part_info("all", 0, 0, 0);
@@ -611,7 +630,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempProjectionPa
         data.choosePartType(expected_size, block.rows()),
         new_part_info,
         parent_part->volume,
-        "tmp_insert_" + part_name + ".proj",
+        joinPaths({base_rel_path, "tmp_insert_" + part_name + ".proj"}, false),
         parent_part);
     new_data_part->is_temp = true; // It's part for merge
 

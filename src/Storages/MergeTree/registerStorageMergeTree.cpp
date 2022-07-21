@@ -293,7 +293,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         *  - Sampling expression in the SAMPLE BY clause;
         *  - Additional MergeTreeSettings in the SETTINGS clause;
         */
-
+    fmt::print("Trying to create storage {}, pk {}, partition key {}\n", args.engine_name,
+        args.storage_def->primary_key == nullptr ? "" : args.storage_def->primary_key->formatForErrorMessage(),
+        args.storage_def->partition_by == nullptr ? "" : args.storage_def->partition_by->formatForErrorMessage());
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
         || args.storage_def->unique_key || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
         || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;
@@ -764,6 +766,21 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         {
             auto new_ttl_entry = TTLDescription::getTTLFromAST(ast, args.columns, args.getContext(), metadata.primary_key);
             metadata.column_ttls_by_name[name] = new_ttl_entry;
+        }
+
+        // For cnch, if storage_policy is not specificed, modify it to cnch's default
+        if (is_cnch)
+        {
+            if (args.storage_def->settings == nullptr)
+            {
+                auto settings_ast = std::make_shared<ASTSetQuery>();
+                args.storage_def->set(args.storage_def->settings, settings_ast);
+            }
+            if (args.storage_def->settings->changes.tryGet("storage_policy") == nullptr)
+            {
+                args.storage_def->settings->changes.push_back(
+                    SettingChange("storage_policy", args.getContext()->getDefaultCnchPolicyName()));
+            }
         }
 
         storage_settings->loadFromQuery(*args.storage_def);

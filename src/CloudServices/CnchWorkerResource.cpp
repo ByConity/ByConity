@@ -92,7 +92,6 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
             throw Exception("Column " + backQuoteIfNeed(column.name) + " already exists", ErrorCodes::DUPLICATE_COLUMN);
     }
 
-    // StorageSelector storage_selector(StorageSelector::Type::CNCH);
     /// Table constructing
     StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, false);
     res->startup();
