@@ -134,15 +134,15 @@ void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_nam
 std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(
     const String & path, const ReadSettings& settings) const
 {
-    return std::make_unique<ReadBufferFromByteHDFS>(
-        path, true, hdfs_params, settings.buffer_size);
+    return std::make_unique<ReadBufferFromByteHDFS>(absolutePath(path),
+        true, hdfs_params, settings.buffer_size);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(
     const String & path, const WriteSettings& settings)
 {
     int write_mode = settings.mode == WriteMode::Append ? O_APPEND : O_WRONLY;
-    return std::make_unique<WriteBufferFromHDFS>(path,
+    return std::make_unique<WriteBufferFromHDFS>(absolutePath(path),
         hdfs_params, settings.buffer_size, write_mode);
 }
 

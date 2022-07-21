@@ -1963,7 +1963,7 @@ BackgroundSchedulePool & Context::getMemoryTableSchedulePool() const
     auto lock = getLock();
     if (!shared->extra_schedule_pools[SchedulePool::MemoryTable])
         shared->extra_schedule_pools[SchedulePool::MemoryTable].emplace(
-            settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemoryTablePool");
+            settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemTblPol");
     return *shared->extra_schedule_pools[SchedulePool::MemoryTable];
 }
 
@@ -1972,7 +1972,7 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
     auto lock = getLock();
     if (!shared->extra_schedule_pools[SchedulePool::CNCHTopology])
         shared->extra_schedule_pools[SchedulePool::CNCHTopology].emplace(
-            settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopologyPool");
+            settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopoPol");
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
