@@ -84,7 +84,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , unique_key_index_cache(context_->getDiskUniqueKeyIndexCache())
     , unique_row_store_cache(context_->getDiskUniqueRowStoreCache())
 {
-    if (date_column_name.empty())
+    if (!date_column_name.empty())
     {
         try
         {

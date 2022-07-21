@@ -355,6 +355,8 @@ struct ContextSharedPart
     mutable ResourceManagerClientPtr rm_client;
     mutable std::unique_ptr<VirtualWarehousePool> vw_pool;
 
+    bool enable_ssl = false;
+
     ServerType server_type{ServerType::standalone};
     mutable std::unique_ptr<TransactionCoordinatorRcCnch> cnch_txn_coordinator;
 
@@ -2191,9 +2193,28 @@ bool Context::hasAuxiliaryZooKeeper(const String & name) const
     return getConfigRef().has("auxiliary_zookeepers." + name);
 }
 
+void Context::setEnableSSL(bool v)
+{
+    shared->enable_ssl = v;
+}
+
+bool Context::isEnableSSL() const
+{
+    return shared->enable_ssl;
+}
+
 InterserverCredentialsPtr Context::getInterserverCredentials()
 {
     return shared->interserver_io_credentials.get();
+}
+
+std::pair<String, String> Context::getCnchInterserverCredentials() const
+{
+    auto lock = getLock();
+    String user_name = getSettingsRef().username_for_internal_communication.toString();
+    auto password = shared->users_config->getString("users." + user_name + ".password", "");
+
+    return { user_name, password };
 }
 
 void Context::updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config)
