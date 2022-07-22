@@ -62,7 +62,8 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     {
         auto & host = hosts[i];
         Address address(
-            host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, host.exchange_port, host.exchange_status_port, enable_ssl);
+            host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, enable_ssl,
+            /*priority*/ 1, /*shard_index*/ i, /*replica_index*/ 0, host.exchange_port, host.exchange_status_port);
 
         ShardInfo info;
         info.worker_id = host.id;

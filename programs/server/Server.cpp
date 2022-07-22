@@ -91,7 +91,9 @@
 #include "MetricsTransmitter.h"
 #include <DataTypes/MapHelpers.h>
 #include <Statistics/CacheManager.h>
-
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+#include <CloudServices/CnchWorkerClientPools.h>
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/Catalog.h>
 
@@ -1695,6 +1697,46 @@ int Server::main(const std::vector<std::string> & /*args*/)
             String level_str = config().getString("text_log.level", "");
             int level = level_str.empty() ? INT_MAX : Poco::Logger::parseLevel(level_str);
             setTextLog(global_context->getTextLog(), level);
+        }
+
+        std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
+        std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;
+
+        if (global_context->getServerType() == ServerType::cnch_server)
+            cnch_server_endpoint = std::make_unique<CnchServerServiceImpl>(*global_context);
+        if (global_context->getServerType() == ServerType::cnch_worker)
+            cnch_worker_endpoint = std::make_unique<CnchWorkerServiceImpl>(*global_context);
+
+        if (cnch_server_endpoint || cnch_worker_endpoint)
+        {
+            UInt64 rpc_port = config().getString("rpc_port");
+
+            for (const auto & listen : listen_hosts)
+            {
+                rpc_servers.push_back(std::make_unique<brpc::Server>());
+                auto & rpc_server = rpc_servers.back();
+
+                if (cnch_server_endpoint && 0 != rpc_server->AddService(cnch_server_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                    throw Exception("Failed to add cnch server rpc service.", ErrorCodes::BRPC_EXCEPTION);
+                if (cnch_worker_endpoint && 0 != rpc_server->AddService(cnch_worker_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
+                    throw Exception("Failed to add cnch worker rpc service.", ErrorCodes::BRPC_EXCEPTION);
+
+                std::string host_port = createHostPortString(listen, rpc_port);
+                brpc::ServerOptions options;
+                if (0 != rpc_server->Start(host_port.c_str(), &options))
+                {
+                    if (listen_try)
+                    {
+                        LOG_ERROR(log, "Failed to start rpc server on {}", host_port);
+                    }
+                    else
+                    {
+                        throw Exception("Failed to start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
+                    }
+                }
+
+                LOG_INFO(log, "Listening rpc: {}", host_port);
+            }
         }
 
         bool enable_ssl = config().getBool("enable_ssl", false);

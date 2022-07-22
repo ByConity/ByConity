@@ -66,36 +66,73 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
     std::vector<AssignedResource> resource_to_send;
 
+    /// FIXME: mocked logic for sending create table query to all workersf
     {
         auto lock = getLock();
-        auto it = assigned_worker_resource.find(worker);
-        if (it == assigned_worker_resource.end())
-            return;
-
-        resource_to_send = std::move(it->second);
-        assigned_worker_resource.erase(it);
-    }
-
-    auto worker_client = worker_group->getWorkerClient(worker);
-
-    {
-        /// send create queries.
-        std::vector<String> create_queries;
-
-        for (auto & resource: resource_to_send)
+        std::vector<AssignedResource> resource_to_allocate;
+        for (auto & [table_id, resource]: assigned_table_source)
         {
-            if (!resource.sent_create_query)
-                create_queries.emplace_back(resource.create_table_query);
+            if (resource.sent_create_query)
+                continue;
+            resource_to_allocate.emplace_back(resource);
+            // assigned_resource.hive_parts.clear();
+            resource.server_parts.clear();
+            resource.sent_create_query = true;
         }
-        worker_client->sendCreateQueries(context, create_queries);
+
+        const auto & worker_clients = context->getCurrentWorkerGroup()->getWorkerClients();
+        std::vector<String> create_table_queries;
+        for (auto & resource: resource_to_allocate)
+        {
+            LOG_DEBUG(log, "Prepare send create query: {} to {}", resource.create_table_query, worker_group->getQualifiedName());
+            create_table_queries.emplace_back(resource.create_table_query);
+        }
+
+        for (const auto & worker_client: worker_clients)
+        {
+            /// FIXME: use isSameEndpoint()
+            bool is_local = context->getServerType() == ServerType::cnch_worker
+                && worker_client->getHostWithPorts().getRPCAddress() == context->getHostWithPorts().getRPCAddress();
+
+            /// we already create table in local shard, skip it.
+            if (is_local)
+                continue;
+
+            worker_client->sendCreateQueries(context, create_table_queries);
+        }
     }
 
+    /// FIXME: add below part after allocation logic is finished
+    // {
+    //     auto lock = getLock();
+    //     auto it = assigned_worker_resource.find(worker);
+    //     if (it == assigned_worker_resource.end())
+    //         return;
 
-    for (auto & resource: resource_to_send)
-    {
-        worker_client->sendQueryDataParts(
-            context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
-    }
+    //     resource_to_send = std::move(it->second);
+    //     assigned_worker_resource.erase(it);
+    // }
+
+    // auto worker_client = worker_group->getWorkerClient(worker);
+
+    // {
+    //     /// send create queries.
+    //     std::vector<String> create_queries;
+
+    //     for (auto & resource: resource_to_send)
+    //     {
+    //         if (!resource.sent_create_query)
+    //             create_queries.emplace_back(resource.create_table_query);
+    //     }
+    //     worker_client->sendCreateQueries(context, create_queries);
+    // }
+
+
+    // for (auto & resource: resource_to_send)
+    // {
+    //     worker_client->sendQueryDataParts(
+    //         context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
+    // }
 
     /// TODO: send offloading info.
 }

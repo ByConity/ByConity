@@ -70,6 +70,7 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 #include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 
 namespace ProfileEvents
 {
