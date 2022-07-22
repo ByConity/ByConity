@@ -580,6 +580,27 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             allow_renaming = false;
     }
 
+    String cnch_database_name;
+    String cnch_table_name;
+    if (is_cloud)
+    {
+        if (const auto * ast = engine_args[0]->as<ASTIdentifier>())
+            cnch_database_name = ast->name;
+        else
+            throw Exception(
+                "Cnch database name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                ErrorCodes::BAD_ARGUMENTS);
+
+        if (const auto * ast = engine_args[1]->as<ASTIdentifier>())
+            cnch_table_name = ast->name;
+        else
+            throw Exception(
+                "Cnch table name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                ErrorCodes::BAD_ARGUMENTS);
+
+        engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
+    }
+
     /// This merging param maybe used as part of sorting key
     std::optional<String> merging_param_key_arg;
 
