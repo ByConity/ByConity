@@ -585,14 +585,14 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (is_cloud)
     {
         if (const auto * ast = engine_args[0]->as<ASTIdentifier>())
-            cnch_database_name = ast->name;
+            cnch_database_name = ast->name();
         else
             throw Exception(
                 "Cnch database name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
                 ErrorCodes::BAD_ARGUMENTS);
 
         if (const auto * ast = engine_args[1]->as<ASTIdentifier>())
-            cnch_table_name = ast->name;
+            cnch_table_name = ast->name();
         else
             throw Exception(
                 "Cnch table name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
