@@ -318,6 +318,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (is_cnch)
         name_part = name_part.substr(strlen("Cnch"));
 
+    bool is_cloud = startsWith(name_part, "Cloud");
+    if (is_cloud)
+        name_part = name_part.substr(strlen("Cloud"));
+
     MergeTreeMetaBase::MergingParams merging_params;
     merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
 
@@ -908,6 +912,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.relative_data_path,
             metadata,
             args.attach,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings));
+    }
+    else if (is_cloud)
+    {
+        return StorageCloudMergeTree::create(
+            args.table_id,
+            std::move(cnch_database_name),
+            std::move(cnch_table_name),
+            args.relative_data_path,
+            metadata,
             args.getContext(),
             date_column_name,
             merging_params,
