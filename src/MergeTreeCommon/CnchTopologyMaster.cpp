@@ -52,7 +52,7 @@ CnchTopologyMaster::CnchTopologyMaster(Context & context_)
             else
             {
                 /// needed for the 1st time write to kv..
-                LOG_WARNING(log, "Cannot fetch topology from remote.");
+                LOG_TRACE(log, "Cannot fetch topology from remote.");
             }
         }
         catch (...)

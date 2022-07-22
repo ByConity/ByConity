@@ -540,10 +540,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
 
-    if (config().has("exchange_port") && config().has("exchange_status_port"))
-    {
-        global_context->setComplexQueryActive(true);
-    }
+    // if (config().has("exchange_port") && config().has("exchange_status_port"))
+    // {
+    //     global_context->setComplexQueryActive(true);
+    // }
 
     Catalog::CatalogConfig catalog_conf;
     if (config().has("catalog_service"))
@@ -971,6 +971,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize map separator, once change the default value, it's necessary to adapt the corresponding tests.
     checkAndSetMapSeparator(config().getString("map_separator", "__"));
 
+    /// Still need `users_config` for server-worker communication
+    ConfigurationPtr users_config;
+    if (config().has("users_config") || config().has("config-file") || fs::exists("config.xml"))
+    {
+        // String config_dir = std::filesystem::path{config_path}.remove_filename().string()
+        const auto users_config_path = config().getString("users_config", config().getString("config-file", "config.xml"));
+        ConfigProcessor config_processor(users_config_path);
+        const auto loaded_config = config_processor.loadConfig();
+        users_config = loaded_config.configuration;
+    }
+
+    if (users_config)
+        global_context->setUsersConfig(users_config);
+    else
+        LOG_ERROR(log, "Can't load config for users");
+
     /// Initialize access storages.
     access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
 
@@ -1288,12 +1304,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->shutdownKeeperStorageDispatcher();
         }
 
-        if (global_context->getComplexQueryActive())
-        {
-            for (auto & rpc_server : rpc_servers)
-                rpc_server->Stop(0);
-            LOG_INFO(log, "disconnect with rpc server");
-        }
+        // if (global_context->getComplexQueryActive())
+        // {
+        //     for (auto & rpc_server : rpc_servers)
+        //         rpc_server->Stop(0);
+        //     LOG_INFO(log, "disconnect with rpc server");
+        // }
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
         server_pool.joinAll();
@@ -1729,11 +1745,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
                                                                      "distributed_ddl", "DDLWorker", &CurrentMetrics::MaxDDLEntryID));
         }
 
-        if (global_context->getComplexQueryActive())
-        {
-            global_context->setExchangePort(config().getInt("exchange_port"));
-            global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
-        }
+        // if (global_context->getComplexQueryActive())
+        // {
+        //     global_context->setExchangePort(config().getInt("exchange_port"));
+        //     global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
+        // }
 
         for (auto & server : *servers)
             server.start();
@@ -1799,6 +1815,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
             if (ha_server)
                 ha_server->stop();
+
+            for (auto & rpc_server : rpc_servers)
+                rpc_server->Stop(0);
 
             if (current_connections)
                 LOG_INFO(log, "Closed all listening sockets. Waiting for {} outstanding connections.", current_connections);

@@ -1827,7 +1827,9 @@ namespace Catalog
                 {
                     Protos::PartitionMeta partition_meta;
                     partition_meta.ParseFromString(it->value());
+                    LOG_DEBUG(log, "Create partition from {}\n", partition_meta.ShortDebugString());
                     auto partition_ptr = createParitionFromMetaModel(table, partition_meta);
+                    LOG_DEBUG(log, "Get partition {}\n", fmt::join(partition_ptr->value, ", "));
                     partition_list.emplace(partition_meta.id(), std::make_shared<CnchPartitionInfo>(partition_ptr));
                 }
             },

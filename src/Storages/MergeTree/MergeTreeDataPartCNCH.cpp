@@ -95,10 +95,7 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCNCH::getWriter(
     [[maybe_unused]] const MergeTreeWriterSettings & writer_settings,
     [[maybe_unused]] const MergeTreeIndexGranularity & computed_index_granularity) const
 {
-    return std::make_unique<MergeTreeDataPartWriterWide>(
-        shared_from_this(), columns_list, metadata_snapshot, indices_to_recalc,
-        index_granularity_info.marks_file_extension,
-        default_codec_, writer_settings, computed_index_granularity);
+    return {};
 }
 
 bool MergeTreeDataPartCNCH::operator < (const MergeTreeDataPartCNCH & r) const
