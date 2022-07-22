@@ -1,14 +1,17 @@
 -- { echo }
 EXPLAIN PIPELINE SELECT sleep(1);
 
-SELECT sleep(1) SETTINGS log_processors_profiles=true, log_queries=1, log_queries_min_type='QUERY_FINISH';
+SELECT sleep(1) SETTINGS log_processors_profiles=true, log_queries=1, log_queries_min_type='QUERY_FINISH', enable_optimizer=0;
 SYSTEM FLUSH LOGS;
 
-WITH
+WITH 
     (
         SELECT query_id
         FROM system.query_log
-        WHERE current_database = currentDatabase() AND Settings['log_processors_profiles']='1'
+        WHERE current_database = currentDatabase() 
+        AND Settings['log_processors_profiles']='1'
+        AND Settings['enable_optimizer']='0'
+        ORDER BY event_time desc LIMIT 1
     ) AS query_id_
 SELECT
     name,

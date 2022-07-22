@@ -1,0 +1,12 @@
+(Expression)
+ExpressionTransform
+  (SettingQuotaAndLimits)
+    (ReadFromStorage)
+    SourceFromSingleChunk 0 → 1
+0
+ExpressionTransform	1
+LazyOutputFormat	1
+LimitsCheckingTransform	1
+NullSource	1
+NullSource	1
+SourceFromSingleChunk	1
