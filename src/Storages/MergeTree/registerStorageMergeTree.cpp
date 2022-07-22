@@ -1015,6 +1015,8 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("CnchSummingMergeTree", create, features);
     factory.registerStorage("CnchGraphiteMergeTree", create, features);
     factory.registerStorage("CnchVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("CloudMergeTree", create, features);
 }
 
 }
