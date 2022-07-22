@@ -1709,7 +1709,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         if (cnch_server_endpoint || cnch_worker_endpoint)
         {
-            UInt64 rpc_port = config().getString("rpc_port");
+            UInt64 rpc_port = config().getUInt("rpc_port");
 
             for (const auto & listen : listen_hosts)
             {
