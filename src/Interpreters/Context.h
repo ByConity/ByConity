@@ -772,7 +772,7 @@ public:
     std::shared_ptr<NamedSession> acquireNamedSession(const String & session_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
     std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
 
-    void initCnchSessionResource(const TxnTimestamp & txn_id);
+    void initCnchServerResource(const TxnTimestamp & txn_id);
     void initCnchServerResource();
     CnchServerResourcePtr getCnchServerResource();
     CnchServerResourcePtr tryGetCnchServerResource() const;

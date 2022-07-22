@@ -50,8 +50,17 @@
 #include <QueryPlan/QueryCacheStep.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Common/ProfileEvents.h>
+#include <Common/RpcClientPool.h>
 
 #include <Common/SensitiveDataMasker.h>
+#include "MergeTreeCommon/CnchTopologyMaster.h"
+#include "Interpreters/trySetVirtualWarehouse.h"
+#include "MergeTreeCommon/CnchTopologyMaster.h"
+#include "Parsers/ASTSystemQuery.h"
+#include "Transaction/CnchWorkerTransaction.h"
+#include "Storages/StorageCloudMergeTree.h"
+#include "Transaction/TransactionCoordinatorRcCnch.h"
+
 
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
@@ -59,6 +68,8 @@
 #include <Processors/Sources/SinkToOutputStream.h>
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+
+#include <Transaction/ICnchTransaction.h>
 
 namespace ProfileEvents
 {
@@ -344,6 +355,70 @@ static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
     }
 }
 
+static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[maybe_unused]] ASTPtr & ast)
+{
+    auto server_type = context->getServerType();
+
+    if (server_type != ServerType::cnch_server && server_type != ServerType::cnch_worker)
+        return {};
+    if (auto txn = context->getCurrentTransaction(); txn)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Cnch query is already in a transaction " + txn->getTransactionRecord().toString());
+        return txn;
+    }
+
+    if (server_type == ServerType::cnch_server)
+    {
+        bool read_only = isReadOnlyTransaction(ast.get());
+        // auto session_txn = isQueryInInteractiveSession(context,ast) ? context.getSessionContext().getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
+        // TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
+        auto txn = context->getCnchTransactionCoordinator().createTransaction(CreateTransactionOption().setReadOnly(read_only));
+        context->setCurrentTransaction(txn);
+        // if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
+        return txn;
+    }
+    else if (server_type == ServerType::cnch_worker)
+    {
+        /// TODO: test it
+        bool is_initial_query = (context->getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY);
+
+        String database;
+        String table;
+        if (auto * insert = ast->as<ASTInsertQuery>())
+        {
+            database = insert->table_id.database_name;
+            table = insert->table_id.table_name;
+        }
+        // else if (auto * system = ast->as<ASTSystemQuery>(); system && system->type == ASTSystemQuery::Type::DEDUP)
+        // {
+        //     database = system->database;
+        //     table = system->table;
+        // }
+
+        if (is_initial_query && !table.empty())
+        {
+            if (database.empty())
+                database = context->getCurrentDatabase();
+
+            /// XXX:
+            if (auto local_storage = context->getCnchCatalog()->tryGetTable(*context, database, table);
+                local_storage && !dynamic_cast<StorageCloudMergeTree *>(local_storage.get()))
+                return {};
+
+            auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
+            auto host_ports = context->getCnchTopologyMaster()->getTargetServer(
+                UUIDHelpers::UUIDToString(storage->getStorageUUID()), true);
+            auto server_client
+                = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
+            auto txn = std::make_shared<CnchWorkerTransaction>(*(context->getGlobalContext()), server_client);
+            context->setCurrentTransaction(txn);
+            return txn;
+        }
+    }
+
+    return {};
+}
+
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     const char * begin,
     const char * end,
@@ -382,6 +457,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     size_t max_query_size = 0;
     if (!internal) max_query_size = settings.max_query_size;
 
+    auto finish_current_transaction = [ast](const ContextPtr & query_context) {
+        if (auto cur_txn = query_context->getCurrentTransaction(); cur_txn)
+        {
+            if (query_context->getServerType() == ServerType::cnch_server)
+            {
+                query_context->getCnchTransactionCoordinator().finishTransaction(cur_txn);
+            }
+        }
+    };
     String query_database;
     String query_table;
     try
@@ -441,11 +525,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         if (context->getServerType() == ServerType::cnch_server)
         {
-            trySetVirtualWarehouseAndWorkerGroup(ast, *context);
+            trySetVirtualWarehouseAndWorkerGroup(ast, context);
         }
     }
     catch (...)
     {
+        finish_current_transaction(context);
         /// Anyway log the query.
         String query = String(begin, begin + std::min(end - begin, static_cast<ptrdiff_t>(max_query_size)));
 
@@ -461,8 +546,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     }
 
     setQuerySpecificSettings(ast, context);
-
-    context->initCnchServerResource();
+    auto txn = prepareCnchTransaction(context, ast);
+    if (txn)
+        context->initCnchServerResource(txn->getTransactionID());
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);
@@ -721,10 +807,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
                  status_info_to_query_log,
-                 query_id
+                 query_id,
+                 finish_current_transaction
             ]
                 (IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline * query_pipeline) mutable
             {
+                finish_current_transaction(context);
                 QueryStatus * process_list_elem = context->getProcessListElement();
 
                 if (!process_list_elem)
@@ -847,8 +935,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                  log_queries,
                  log_queries_min_type = settings.log_queries_min_type,
                  log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                 quota(quota), status_info_to_query_log, query_id] () mutable
+                 quota(quota), status_info_to_query_log, query_id,
+                 finish_current_transaction] () mutable
             {
+                finish_current_transaction(context);
                 if (quota)
                     quota->used(Quota::ERRORS, 1, /* check_exceeded = */ false);
 

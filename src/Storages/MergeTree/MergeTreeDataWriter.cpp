@@ -1,6 +1,8 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Columns/ColumnConst.h>
+#include "common/logger_useful.h"
+#include "common/types.h"
 #include <Common/HashTable/HashMap.h>
 #include <Common/Exception.h>
 #include <Disks/createVolume.h>
@@ -277,21 +279,21 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
 }
 
 MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
-    BlockWithPartition & block_with_partition, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
+    BlockWithPartition & block_with_partition, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, UInt64 block_id, Int64 mutation, Int64 hint_mutation)
 {
     Block & block = block_with_partition.block;
 
     static const String TMP_PREFIX = "tmp_insert_";
 
     /// This will generate unique name in scope of current server process.
-    Int64 temp_index = data.insert_increment.get();
+    Int64 temp_index = block_id ? block_id : data.insert_increment.get();
 
     IMergeTreeDataPart::MinMaxIndex minmax_idx;
     minmax_idx.update(block, data.getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()));
 
     MergeTreePartition partition(std::move(block_with_partition.partition));
 
-    MergeTreePartInfo new_part_info(partition.getID(metadata_snapshot->getPartitionKey().sample_block), temp_index, temp_index, 0);
+    MergeTreePartInfo new_part_info(partition.getID(metadata_snapshot->getPartitionKey().sample_block), temp_index, temp_index, 0, mutation, hint_mutation);
     String part_name;
     if (data.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING)
     {
@@ -386,6 +388,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
        new_part_info,
        createVolumeFromReservation(reservation, volume),
        joinPaths({base_rel_path, TMP_PREFIX + part_name}, false));
+
+    LOG_DEBUG(log, "Writing temp part to {}...\n", new_data_part->getFullRelativePath());
 
     if (data.storage_settings.get()->assign_part_uuids)
         new_data_part->uuid = UUIDHelpers::generateV4();

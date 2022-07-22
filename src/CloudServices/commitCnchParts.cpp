@@ -108,27 +108,27 @@ DumpedData CnchDataWriter::dumpCnchParts(
         }
     }
 
-    auto xid = curr_txn->getTransactionID();
+    auto txn_id = curr_txn->getTransactionID();
     // write undo buffer first before dump to vfs
     UndoResources undo_resources;
-    for (auto & part : temp_parts)
+    for (const auto & part : temp_parts)
     {
         String part_name = part->info.getPartName(true);
-        undo_resources.emplace_back(xid, UndoResourceType::Part, part_name, part_name + "/");
+        undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + "/");
     }
-    for (auto & bitmap : temp_bitmaps)
-    {
-        undo_resources.push_back(bitmap->getUndoResource(xid));
-    }
-    for (auto & staged_part : temp_staged_parts)
+    // for (const auto & bitmap : temp_bitmaps)
+    // {
+    //     undo_resources.push_back(bitmap->getUndoResource(txn_id));
+    // }
+    for (const auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartName(true);
-        undo_resources.emplace_back(xid, UndoResourceType::StagedPart, part_name, part_name + "/");
+        undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + "/");
     }
 
     try
     {
-        context.getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), xid, undo_resources);
+        context.getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -142,7 +142,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     MergeTreeCNCHDataDumper dumper(storage);
 
     watch.restart();
-    for (auto & temp_part : temp_parts)
+    for (const auto & temp_part : temp_parts)
     {
         auto dumped_part = dumper.dumpTempPart(temp_part, context.getHdfsConnectionParams());
         LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
@@ -150,7 +150,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     }
     // TODO dump all bitmaps to one file to avoid creating too many small files on vfs
     // result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
-    for (auto & temp_staged_part : temp_staged_parts)
+    for (const auto & temp_staged_part : temp_staged_parts)
     {
         auto staged_part = dumper.dumpTempPart(temp_staged_part, context.getHdfsConnectionParams());
         LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
@@ -174,7 +174,7 @@ void CnchDataWriter::commitDumpedParts(
         // Nothing to commit, returns
         return;
 
-    TxnTimestamp xid = context.getCurrentTransactionID();
+    TxnTimestamp txn_id = context.getCurrentTransactionID();
 
     TxnTimestamp commit_time;
 
@@ -186,7 +186,7 @@ void CnchDataWriter::commitDumpedParts(
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context.getCnchServerClient("0.0.0.0", context.getRPCPort());
-                commit_time = server_client->commitParts(xid, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, from_buffer_uuid);
+                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, from_buffer_uuid);
             }
             else
             {
@@ -209,11 +209,11 @@ void CnchDataWriter::commitDumpedParts(
             }
             else
             {
-                throw Exception("Server with transaction " + xid.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
+                throw Exception("Server with transaction " + txn_id.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
             }
 
             commit_time = server_client->precommitParts(
-                context, xid, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, from_buffer_uuid);
+                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, from_buffer_uuid);
         }
     }
     catch (const Exception & e)
@@ -230,7 +230,7 @@ void CnchDataWriter::commitDumpedParts(
 
     if (type == ManipulationType::Merge)
     {
-        for (auto & part : dumped_parts)
+        for (const auto & part : dumped_parts)
         {
             MergeMutateAction::updatePartData(part, commit_time);
             part->relative_path = part->info.getPartName(true);
@@ -240,7 +240,7 @@ void CnchDataWriter::commitDumpedParts(
     if (auto part_log = context.getPartLog(storage.getDatabaseName()))
     {
         // for (auto & dumped_part : dumped_parts)
-        //     part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
+            // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
     }
 
     LOG_DEBUG(
@@ -249,7 +249,7 @@ void CnchDataWriter::commitDumpedParts(
         dumped_parts.size(),
         delete_bitmaps.size(),
         dumped_staged_parts.size(),
-        toString(UInt64(xid)),
+        toString(UInt64(txn_id)),
         watch.elapsedMilliseconds());
 }
 
@@ -260,10 +260,9 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     if (context.getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context.getServerType());
 
-    auto log = storage.getLogger();
-    auto & txn_coordinator = context.getCnchTransactionCoordinator();
-    TransactionCnchPtr txn; /// TODO:
-    // auto txn = context.getCurrentTransaction();
+    const auto & txn_coordinator = context.getCnchTransactionCoordinator();
+    auto * log = storage.getLogger();
+    auto txn = context.getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     TxnTimestamp commit_time;
     /// set main table uuid in server side
@@ -316,11 +315,10 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             // }
 
             // Precommit stage. Write intermediate parts to KV
-            // auto action
-            //     = txn->createAction<InsertAction>(storage, params.prepared_parts, params.delete_bitmaps, params.prepared_staged_parts);
-            // auto action = txn->createAction<InsertAction>(context, );
-            // txn->appendAction(action);
-            // action->executeV2();
+            auto action
+                = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+            txn->appendAction(action);
+            action->executeV2();
         }
         else if (type == ManipulationType::Drop)
         {
@@ -331,9 +329,9 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             }
 
             auto action = txn->createAction<DropRangeAction>(txn->getTransactionRecord(), storage_ptr);
-            // for (auto & part : params.prepared_parts)
-            //     action->appendPart(part);
-            for (auto & bitmap : dumped_data.bitmaps)
+            for (const auto & part : dumped_data.parts)
+                action->appendPart(part);
+            for (const auto & bitmap : dumped_data.bitmaps)
                 action->appendDeleteBitmap(bitmap);
 
             txn->appendAction(std::move(action));
@@ -350,34 +348,34 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             type == ManipulationType::Merge || type == ManipulationType::Clustering
             || type == ManipulationType::Mutate)
         {
-            auto bg_thread = context.getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
-            auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+            // auto bg_thread = context.getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
+            // auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
 
-            if (dumped_data.parts.empty())
-            {
-                LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
-                merge_mutate_thread->tryRemoveTask(task_id);
-            }
-            else
-            {
-                // merge_mutate_thread->finishTask(params.task_id, params.prepared_parts.front(), [&] {
-                //     auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage);
+            // if (dumped_data.parts.empty())
+            // {
+            //     LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
+            //     merge_mutate_thread->tryRemoveTask(task_id);
+            // }
+            // else
+            // {
+            //     merge_mutate_thread->finishTask(params.task_id, params.prepared_parts.front(), [&] {
+            //         auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage);
 
-                //     // for (auto & part : params.prepared_parts)
-                //     //     action->appendPart(part);
+            //         // for (auto & part : params.prepared_parts)
+            //         //     action->appendPart(part);
 
-                //     action->setDeleteBitmaps(params.delete_bitmaps);
-                //     txn->appendAction(std::move(action));
-                //     commit_time = txn_coordinator.commitV2(txn);
+            //         action->setDeleteBitmaps(params.delete_bitmaps);
+            //         txn->appendAction(std::move(action));
+            //         commit_time = txn_coordinator.commitV2(txn);
 
-                //     LOG_TRACE(
-                //         log,
-                //         "Committed {} parts in transaction {}, elapsed {} ms",
-                //         params.prepared_parts.size(),
-                //         txn_id.toUInt64(),
-                //         watch.elapsedMilliseconds());
-                // });
-            }
+            //         LOG_TRACE(
+            //             log,
+            //             "Committed {} parts in transaction {}, elapsed {} ms",
+            //             params.prepared_parts.size(),
+            //             txn_id.toUInt64(),
+            //             watch.elapsedMilliseconds());
+            //     });
+            // }
         }
         else
         {

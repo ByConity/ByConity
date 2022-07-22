@@ -11,6 +11,7 @@
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Storages/MergeTree/PartitionPruner.h>
+#include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/AlterCommands.h>
@@ -71,7 +72,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeMetaBase(
         table_id_,
-        relative_data_path_,
+        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
         metadata_,
         context_,
         date_column_name,
@@ -852,17 +853,17 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
             session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
         }
 
-        LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
-        /// TODO: send insert query by rpc.
-        sendQueryPerShard(local_context, query_statement, *write_shard_ptr);
+        // LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+        // /// TODO: send insert query by rpc.
+        // sendQueryPerShard(local_context, query_statement, *write_shard_ptr);
 
         return nullptr;
     }
     else
     {
-        return nullptr;
         /// FIXME: add after cloud output stream is supported
-        // return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, local_context, enable_staging_area);
+        fmt::print(stderr, "Creating cloud merge tree...\n");
+        return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
     }
 }
 
@@ -943,7 +944,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     if (parts.empty())
         return {};
 
-    auto worker_group = getWorkerGroupForTable(*this, *local_context);
+    auto worker_group = getWorkerGroupForTable(*this, local_context);
     auto worker_clients = worker_group->getWorkerClients();
     const auto & shards_info = worker_group->getShardsInfo();
 
@@ -1247,7 +1248,5 @@ void StorageCnchMergeTree::truncate(
     //if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
     //    return;
 }
-
-
 
 } // end namespace DB

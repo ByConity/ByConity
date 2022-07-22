@@ -770,6 +770,9 @@ public:
     void deserializeMetaInfo(const String & metadata);
     void deserializeColumns(ReadBuffer & buffer);
     void deserializePartitionAndMinMaxIndex(ReadBuffer & buffer);
+    
+    /// serialize part into binary format
+    void serializePartitionAndMinMaxIndex(WriteBuffer & buf) const;
 
     /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 };
@@ -783,4 +786,5 @@ bool isWidePart(const MergeTreeDataPartPtr & data_part);
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
 bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
+void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
 }

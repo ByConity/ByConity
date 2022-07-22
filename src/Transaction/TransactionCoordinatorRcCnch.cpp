@@ -164,12 +164,12 @@ void TransactionCoordinatorRcCnch::finishTransaction(const TxnTimestamp & txn_id
     }
 }
 
-TxnTimestamp TransactionCoordinatorRcCnch::commitV1(TransactionCnchPtr & txn)
+TxnTimestamp TransactionCoordinatorRcCnch::commitV1(TransactionCnchPtr & txn) const
 {
     return txn->commitV1();
 }
 
-TxnTimestamp TransactionCoordinatorRcCnch::commitV2(TransactionCnchPtr & txn)
+TxnTimestamp TransactionCoordinatorRcCnch::commitV2(TransactionCnchPtr & txn) const
 {
     return txn->commitV2();
 }

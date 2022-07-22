@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/MergeTreeCloudData.h>
 #include <common/shared_ptr_helper.h>
+#include "Storages/MergeTree/MergeTreeDataPartType.h"
 
 namespace DB
 {

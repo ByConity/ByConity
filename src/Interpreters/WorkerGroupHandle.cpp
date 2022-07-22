@@ -44,55 +44,59 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     , hosts(std::move(hosts_))
     , metrics(metrics_)
 {
-    // const auto & settings = context.getSettingsRef();
-    // const auto & config = context.getConfigRef();
-    // bool enable_ssl = context.isEnableSSL();
+    auto current_context = context.lock();
+    if (!current_context)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Context expired!");
 
-    // UInt16 clickhouse_port = enable_ssl ? static_cast<UInt16>(config.getInt("tcp_port_secure", 0))
-    //                                     : static_cast<UInt16>(config.getInt("tcp_port", 0));
+    const auto & settings = current_context->getSettingsRef();
+    const auto & config = current_context->getConfigRef();
+    bool enable_ssl = current_context->isEnableSSL();
 
-    // auto user_password = context.getCnchInterserverCredentials();
-    // auto default_database = config.getRawString("default_database", "default");
+    UInt16 clickhouse_port = enable_ssl ? static_cast<UInt16>(config.getInt("tcp_port_secure", 0))
+                                        : static_cast<UInt16>(config.getInt("tcp_port", 0));
 
-    // for (size_t i = 0; i < hosts.size(); ++i)
-    // {
-    //     auto & host = hosts[i];
-    //     Address address(
-    //         host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, host.exchange_port, host.exchange_status_port, enable_ssl);
+    auto user_password = current_context->getCnchInterserverCredentials();
+    auto default_database = config.getRawString("default_database", "default");
 
-    //     ShardInfo info;
-    //     info.worker_id = host.id;
-    //     info.shard_num = i + 1; /// shard_num begin from 1
-    //     info.weight = 1;
-    //     info.rpc_port = host.rpc_port;
+    for (size_t i = 0; i < hosts.size(); ++i)
+    {
+        auto & host = hosts[i];
+        Address address(
+            host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, host.exchange_port, host.exchange_status_port, enable_ssl);
 
-    //     if (address.is_local)
-    //         info.local_addresses.push_back(address);
+        ShardInfo info;
+        info.worker_id = host.id;
+        info.shard_num = i + 1; /// shard_num begin from 1
+        info.weight = 1;
+        info.rpc_port = host.rpc_port;
 
-    //     LOG_TRACE(&Poco::Logger::get("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
+        if (address.is_local)
+            info.local_addresses.push_back(address);
 
-    //     ConnectionPoolPtr pool = std::make_shared<ConnectionPool>(
-    //         settings.distributed_connections_pool_size,
-    //         address.host_name, address.port,
-    //         default_database, user_password.first, user_password.second,
-    //         ConnectionTimeouts::getTCPTimeoutsWithoutFailover(settings).getSaturated(settings.max_execution_time),
-    //         address.exchange_port, address.exchange_status_port,
-    //         "server", address.compression, address.secure);
+        LOG_TRACE(&Poco::Logger::get("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
 
-    //     info.pool = std::make_shared<ConnectionPoolWithFailover>(
-    //         ConnectionPoolPtrs{pool}, settings.load_balancing, settings.connections_with_failover_max_tries);
-    //     info.per_replica_pools = {std::move(pool)};
+        ConnectionPoolPtr pool = std::make_shared<ConnectionPool>(
+            settings.distributed_connections_pool_size,
+            address.host_name, address.port,
+            default_database, user_password.first, user_password.second,
+            /*cluster_*/"",/*cluster_secret_*/"",
+            "server", address.compression, address.secure, 1,
+            address.exchange_port, address.exchange_status_port);
 
-    //     shards_info.emplace_back(std::move(info));
+        info.pool = std::make_shared<ConnectionPoolWithFailover>(
+            ConnectionPoolPtrs{pool}, settings.load_balancing, settings.connections_with_failover_max_tries);
+        info.per_replica_pools = {std::move(pool)};
 
-    //     worker_clients.emplace_back(context.getCnchWorkerClientPools().getWorker(host));
-    // }
+        shards_info.emplace_back(std::move(info));
 
-    // /// if not jump consistent hash, build ring
-    // if (context.getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    // {
-    //     ring = buildRing(this->shards_info, context);
-    // }
+        worker_clients.emplace_back(current_context->getCnchWorkerClientPools().getWorker(host));
+    }
+
+    /// if not jump consistent hash, build ring
+    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
+    {
+        ring = buildRing(this->shards_info, current_context);
+    }
 }
 
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const ContextPtr & context_)
@@ -104,19 +108,23 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupData & data, const
 WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from, [[maybe_unused]] const std::vector<size_t> & indices)
     : WithContext(from.getContext()), id(from.getID()), vw_name(from.getVWName())
 {
+    auto current_context = context.lock();
+    if (!current_context)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Context expired!");
+
     // TODO(zuochuang.zema) MERGE worker client pool
-    // for (size_t index : indices)
-    // {
-    //     hosts.emplace_back(from.getHostWithPortsVec().at(index));
-    //     shards_info.emplace_back(from.getShardsInfo().at(index));
-    //     worker_clients.emplace_back(global_context.getCnchWorkerClientPools().getWorker(hosts.back()));
-    // }
+    for (size_t index : indices)
+    {
+        hosts.emplace_back(from.getHostWithPortsVec().at(index));
+        shards_info.emplace_back(from.getShardsInfo().at(index));
+        worker_clients.emplace_back(current_context->getCnchWorkerClientPools().getWorker(hosts.back()));
+    }
 
     // TODO(zuochuang.zema) MERGE hash
-    // if (global_context.getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
-    // {
-    //     ring = buildRing(this->shards_info, global_context);
-    // }
+    if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
+    {
+        ring = buildRing(this->shards_info, current_context);
+    }
 }
 
 CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(const HostWithPorts & host_ports) const

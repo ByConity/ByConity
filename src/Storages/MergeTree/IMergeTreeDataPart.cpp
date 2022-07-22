@@ -66,6 +66,7 @@ namespace ErrorCodes
     extern const int BAD_TTL_FILE;
     extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_FORMAT_VERSION;
+    extern const int FORMAT_VERSION_TOO_OLD;
 }
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
@@ -2670,5 +2671,47 @@ void IMergeTreeDataPart::deserializePartitionAndMinMaxIndex(ReadBuffer & buffer)
             ErrorCodes::CORRUPTED_DATA);
 }
 
-/*  -----------------------  COMPATIBLE CODE END -------------------------- */
+
+void IMergeTreeDataPart::serializePartitionAndMinMaxIndex(WriteBuffer & buf) const
+{
+    if (unlikely(storage.format_version < MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING))
+        throw Exception("MergeTree data format is too old", ErrorCodes::FORMAT_VERSION_TOO_OLD);
+
+    partition.store(storage, buf);
+    if (!isEmpty())
+    {
+        if (!minmax_idx.initialized)
+            throw Exception("Attempt to write uninitialized MinMax index", ErrorCodes::LOGICAL_ERROR);
+        minmax_idx.store(storage, getFullPath(), buf);
+    }
+
+    /// Skip partition_id check if this is a deleted part
+    if (!deleted)
+    {
+        String calculated_partition_id = partition.getID(storage);
+        if (calculated_partition_id != info.partition_id)
+            throw Exception(
+                "While loading part " + getFullPath() + ": calculated partition ID: " + calculated_partition_id
+                    + " differs from partition ID in part name: " + info.partition_id,
+                ErrorCodes::CORRUPTED_DATA);
+    }
+}
+
+void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
+{
+    writeString("CHPT", buf); /// magic code: ClickHouse ParT
+    writeIntBinary(static_cast<UInt8>(1), buf); /// version
+
+    writeIntBinary(static_cast<UInt8>(part.deleted), buf);
+
+    writeVarUInt(part.bytes_on_disk, buf);
+    writeVarUInt(part.rows_count, buf);
+    // writeVarUInt(part.marks_count, buf);
+    writeVarUInt(part.info.hint_mutation, buf);
+
+    part.columns_ptr->writeText(buf);
+    part.serializePartitionAndMinMaxIndex(buf);
+    writeIntBinary(part.bucket_number, buf);
+    writeIntBinary(part.table_definition_hash, buf);
+}
 }

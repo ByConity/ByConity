@@ -47,14 +47,15 @@ StoragePtr CatalogFactory::getTableByDataModel(
     const auto & create_query = table_model->definition();
     auto storage_ptr = getTableByDefinition(context, db, table, create_query);
     storage_ptr->commit_time = TxnTimestamp{table_model->commit_time()};
-    if (dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get()))
+    if (auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage_ptr.get()))
     {
-        storage_ptr->part_columns = std::make_shared<NamesAndTypesList>(storage_ptr->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
+        merge_tree->part_columns = std::make_shared<NamesAndTypesList>(merge_tree->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
         for (const auto & version : table_model->definitions())
         {
             auto s = getTableByDefinition(context, db, table, version.definition());
-            storage_ptr->previous_versions_part_columns[version.commit_time()] = std::make_shared<NamesAndTypesList>(s->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
+            merge_tree->previous_versions_part_columns[version.commit_time()] = std::make_shared<NamesAndTypesList>(s->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
         }
+        
     }
     storage_ptr->is_dropped = DB::Status::isDeleted(table_model->status());
     storage_ptr->is_detached = DB::Status::isDetached(table_model->status());

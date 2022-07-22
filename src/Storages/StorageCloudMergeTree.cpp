@@ -112,5 +112,4 @@ MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(con
 {
     return {};
 }
-
 }

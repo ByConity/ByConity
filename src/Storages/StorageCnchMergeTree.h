@@ -4,6 +4,7 @@
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
 #include "IStorage.h"
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
 {
@@ -18,9 +19,10 @@ public:
 
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
-    bool supportsPrewhere() const override { return true; }
+    bool supportsPrewhere() const override { return false; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool canUseAdaptiveGranularity() const override { return false; }
 
     bool isRemote() const override { return true; }
 

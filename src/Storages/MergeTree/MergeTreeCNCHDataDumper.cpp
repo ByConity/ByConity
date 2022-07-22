@@ -7,9 +7,15 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Poco/Logger.h>
+#include "Common/Exception.h"
+#include "Common/filesystemHelpers.h"
+#include "common/logger_useful.h"
 #include <Common/escapeForFileName.h>
 
 #include <chrono>
+#include <filesystem>
+#include <memory>
 
 namespace DB
 {
@@ -20,6 +26,7 @@ namespace ErrorCodes
     extern const int NOT_CONFIG_CLOUD_STORAGE;
     extern const int FILE_DOESNT_EXIST;
 }
+
 
 MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
     MergeTreeMetaBase & data_, const String & magic_code_, const MergeTreeDataFormatVersion version_)
@@ -61,6 +68,7 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
 {
     DiskPtr remote_disk = remote_part->volume->getDisk();
     String part_data_rel_path = remote_part->getFullRelativePath() + "data";
+    LOG_DEBUG(&Poco::Logger::get("MergeTreeCNCHDataDumper::check"), "Checking part {} from {}\n", remote_part->name, part_data_rel_path);
 
     size_t cnch_data_file_size = remote_disk->getFileSize(part_data_rel_path);
     size_t data_files_size = MERGE_TREE_STORAGE_CNCH_DATA_HEADER_SIZE;
@@ -96,7 +104,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const IMutableMergeTreeDataPartPtr & local_part,
     [[maybe_unused]]const HDFSConnectionParams & hdfs_params,
     bool is_temp_prefix,
-    const DiskPtr & remote_disk )
+    const DiskPtr & remote_disk)
 {
     const String TMP_PREFIX = "tmp_dump_";
     String partition_id = local_part->info.partition_id;
@@ -197,20 +205,23 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         ///TODO: fix IDataType::SubstreamPath
         std::unordered_set<String> key_streams;
-        // for (auto & [column_name, column_type] : getKeyColumns())
-        // {
-        //     column_type->enumerateStreams([&](const IDataType::SubstreamPath & substream_path) {
-        //         String stream_name = IDataType::getFileNameForStream(column_name, substream_path);
-        //         for (auto & extension : {".bin", ".mrk"})
-        //         {
-        //             if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
-        //             {
-        //                 reordered_checksums.push_back(&*it);
-        //                 key_streams.emplace(stream_name + extension);
-        //             }
-        //         }
-        //     });
-        // }
+        ISerialization::SubstreamPath path;
+        for (const auto & k_it : getKeyColumns())
+        {
+            const auto & column_name = k_it.name;
+            const auto & column_type = k_it.type;
+            column_type->enumerateStreams(IDataType::getSerialization(k_it),[&](const ISerialization::SubstreamPath & substream_path, const IDataType & ) {
+                String stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
+                for (const auto & extension : {".bin", ".mrk"})
+                {
+                    if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
+                    {
+                        reordered_checksums.push_back(&*it);
+                        key_streams.emplace(stream_name + extension);
+                    }
+                }
+            });
+        }
 
         for (auto & file : checksums_files)
         {
@@ -225,12 +236,18 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             data_file_offset += file->second.file_size;
         }
     }
-    // off_t index_offset = data_file_offset;
+    off_t index_offset = data_file_offset;
 
     /// Write data file
+    String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
     CNCHDataMeta meta;
     {
-        std::unique_ptr<WriteBufferFromFileBase> data_out = disk->writeFile(fs::path(relative_path) / "data");
+        LOG_DEBUG(log, "Writing part {} to {}\n",new_part->name, new_part_rel_path);
+        auto out = disk->writeFile(data_file_rel_path);
+        auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
+        if (!data_out)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing partr to hdfs but write buffer is not hdfs");
+
         writeDataFileHeader(*data_out, new_part);
 
         // const DiskPtr& local_part_disk = local_part->getDisk();
@@ -240,7 +257,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         if (new_part->prepared_checksums)
         {
-            for (auto file_ptr : reordered_checksums)
+            for (auto * file_ptr : reordered_checksums)
             {
                 auto & file = *file_ptr;
 
@@ -252,13 +269,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
                 data_out->next();
-                ///TODO: fix getPositionInFile
-                // if (file.second.file_offset + file.second.file_size != (UInt64)(data_out->getPositionInFile()))
-                // {
-                //     throw Exception(file.first + " in data part "  + part_name + " check error, checksum offset: " +
-                //         std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
-                //         "disk size: " + std::to_string(local_part_disk->getFileSize(file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
-                // }
+                /// TODO: fix getPositionInFile
+                if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(data_out->getPositionInFile()))
+                {
+                    throw Exception(file.first + " in data part "  + part_name + " check error, checksum offset: " +
+                        std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
+                        "disk size: " + std::to_string(local_part_disk->getFileSize(file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                }
             }
         }
 
@@ -275,17 +292,17 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             index_hash = index_checksum.file_hash;
             data_out->next();
             ///TODO: fix getPositionInFile
-            // if (index_offset + index_size != (UInt64)(data_out->getPositionInFile()))
-            // {
-            //      throw Exception("primary.idx in data part "  + part_name + " check error, checksum offset: " +
-            //             std::to_string(index_offset) + " checksums size: " + std::to_string(index_size) +
-            //             "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
-            // }
+            if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                 throw Exception("primary.idx in data part "  + part_name + " check error, checksum offset: " +
+                        std::to_string(index_offset) + " checksums size: " + std::to_string(index_size) +
+                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+            }
         }
 
         /// Checksums
-        // off_t checksums_offset = index_offset + index_size;
-        // size_t checksums_size = 0;
+        off_t checksums_offset = index_offset + index_size;
+        size_t checksums_size = 0;
         uint128 checksums_hash;
         if (new_part->prepared_checksums)
         {
@@ -293,21 +310,21 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             new_part->prepared_checksums->write(checksums_hashing);
             checksums_hashing.next();
             ///TODO: fix getPositionInFile
-            // checksums_size = data_out->getPositionInFile() - checksums_offset;
+            checksums_size = data_out->getPositionInFile() - checksums_offset;
             checksums_hash = checksums_hashing.getHash();
         }
 
         /// MetaInfo
-        // off_t meta_info_offset = checksums_offset + checksums_size;
-        // size_t meta_info_size = 0;
+        off_t meta_info_offset = checksums_offset + checksums_size;
+        size_t meta_info_size = 0;
         uint128 meta_info_hash;
         {
             HashingWriteBuffer meta_info_hashing(*data_out);
             /// TODO fix writePartBinary
-            // writePartBinary(*new_part, meta_info_hashing);
+            writePartBinary(*new_part, meta_info_hashing);
             meta_info_hashing.next();
             ///TODO: fix getPositionInFile
-            // meta_info_size = data_out->getPositionInFile() - meta_info_offset;
+            meta_info_size = data_out->getPositionInFile() - meta_info_offset;
             meta_info_hash = meta_info_hashing.getHash();
         }
 
@@ -336,12 +353,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         // }
 
         /// Data footer
-        // meta = CNCHDataMeta{index_offset, index_size, index_hash,
-        //                     checksums_offset, checksums_size, checksums_hash,
-        //                     meta_info_offset, meta_info_size, meta_info_hash,
-        //                     static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash,
-        //                     key};
-        // writeDataFileFooter(*data_out, meta);
+        meta = CNCHDataMeta{index_offset, index_size, index_hash,
+                            checksums_offset, checksums_size, checksums_hash,
+                            meta_info_offset, meta_info_size, meta_info_hash,
+                            static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
+        writeDataFileFooter(*data_out, meta);
         data_out->next();
         data_out->sync();
     }
@@ -383,12 +399,12 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns()
 
     NamesAndTypesList merging_columns;
     /// TODO: fix getColumns
-    // auto all_columns = data.getColumns().getAllPhysical();
-    // for (const auto & column : all_columns)
-    // {
-    //     if (key_columns.count(column.name))
-    //         merging_columns.emplace_back(column);
-    // }
+    auto all_columns = data.getInMemoryMetadata().getColumns().getAllPhysical();
+    for (const auto & column : all_columns)
+    {
+        if (key_columns.count(column.name))
+            merging_columns.emplace_back(column);
+    }
     return merging_columns;
 }
 
