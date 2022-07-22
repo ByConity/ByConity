@@ -4,6 +4,7 @@
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context.h>
+#include "MergeTreeCommon/assignCnchParts.h"
 
 namespace DB
 {
@@ -64,9 +65,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
     allocateResource(context);
 
-    std::vector<AssignedResource> resource_to_send;
 
-    /// FIXME: mocked logic for sending create table query to all workersf
     {
         auto lock = getLock();
         std::vector<AssignedResource> resource_to_allocate;
@@ -98,76 +97,53 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
             if (is_local)
                 continue;
 
+            std::vector<AssignedResource> resource_to_send = assigned_worker_resource[worker_client->getHostWithPorts()];
             worker_client->sendCreateQueries(context, create_table_queries);
+            for (auto & resource: resource_to_send)
+            {
+                worker_client->sendQueryDataParts(
+                    context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
+            }
         }
     }
 
-    /// FIXME: add below part after allocation logic is finished
-    // {
-    //     auto lock = getLock();
-    //     auto it = assigned_worker_resource.find(worker);
-    //     if (it == assigned_worker_resource.end())
-    //         return;
-
-    //     resource_to_send = std::move(it->second);
-    //     assigned_worker_resource.erase(it);
-    // }
-
-    // auto worker_client = worker_group->getWorkerClient(worker);
-
-    // {
-    //     /// send create queries.
-    //     std::vector<String> create_queries;
-
-    //     for (auto & resource: resource_to_send)
-    //     {
-    //         if (!resource.sent_create_query)
-    //             create_queries.emplace_back(resource.create_table_query);
-    //     }
-    //     worker_client->sendCreateQueries(context, create_queries);
-    // }
-
-
-    // for (auto & resource: resource_to_send)
-    // {
-    //     worker_client->sendQueryDataParts(
-    //         context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
-    // }
+ 
 
     /// TODO: send offloading info.
 }
 
-void CnchServerResource::allocateResource(const ContextPtr & /*context*/)
+void CnchServerResource::allocateResource(const ContextPtr &  /*context*/)
 {
     std::vector<AssignedResource> resource_to_allocate;
     {
         auto lock = getLock();
         for (auto & [table_id, resource]: assigned_table_source)
         {
-            if (resource.server_parts.empty() && resource.sent_create_query)
-                continue;
+            // if (resource.server_parts.empty() && resource.sent_create_query)
+            //     continue;
             resource_to_allocate.emplace_back(resource);
             // assigned_resource.hive_parts.clear();
-            resource.server_parts.clear();
-            resource.sent_create_query = true;
+            // resource.server_parts.clear();
+            // resource.sent_create_query = true;
         }
     }
 
     if (resource_to_allocate.empty())
         return;
 
-    [[maybe_unused]] const auto & host_ports_vec = worker_group->getHostWithPortsVec();
-    [[maybe_unused]] const auto & worker_clients = worker_group->getWorkerClients();
+    const auto & host_ports_vec = worker_group->getHostWithPortsVec();
+    // const auto & worker_clients = worker_group->getWorkerClients();
+    const auto & worker_ids = worker_group->getWorkerIDVec();
     /// TODO: assigned data_parts.
 
-    for ([[maybe_unused]]auto & resource: resource_to_allocate)
+    for (auto & resource: resource_to_allocate)
     {
-        // const auto & storage = resource.storage;
-        // auto & server_parts = resource.server_parts;
+        const auto & storage = resource.storage;
+        auto & server_parts = resource.server_parts;
         // const auto & bucket_numbers = resource.bucket_numbers;
         // const auto & worker_table_name = resource.worker_table_name;
 
-        // ServerAssignmentMap assigned_map;
+        ServerAssignmentMap assigned_map = assignCnchParts(worker_group, server_parts); 
         // BucketNumberAndServerPartsAssignment assigned_bucket_parts;
 
         // bool is_bucket_table = isCnchBucketTable(context, *storage, server_parts);
@@ -177,40 +153,50 @@ void CnchServerResource::allocateResource(const ContextPtr & /*context*/)
         // }
         // else
         // {
-        //     // part sorting is only needed by normal table for bounded consistent hash.
-        //     sort_server_parts(context, server_parts);
-        //     assigned_map = assignCnchParts(worker_group, server_parts);
+            // part sorting is only needed by normal table for bounded consistent hash.
+            // sort_server_parts(context, server_parts);
+            // assigned_map = assignCnchParts(worker_group, server_parts);
         // }
 
-        // for (size_t i = 0; i < host_ports_vec.size(); ++i)
-        // {
-        //     Stopwatch schedule_watch;
+        for (size_t i = 0; i < host_ports_vec.size(); ++i)
+        {
+            Stopwatch schedule_watch;
 
-        //     ServerDataPartsVector assigned_parts;
+            ServerDataPartsVector assigned_parts;
 
-        //     if (is_bucket_table)
-        //     {
-        //         assigned_parts = std::move(assigned_bucket_parts.parts_assignment_vec[i]);
-        //     }
-        //     else if (context.getSettingsRef().enable_virtual_part)
-        //     {
-        //         assigned_parts = server_parts;
-        //     }
-        //     else if (auto it = assigned_map.find(worker_ids[i]); it != assigned_map.end())
-        //     {
-        //         assigned_parts = std::move(it->second);
-        //         /// Expand partial chain
-        //     }
+            // if (is_bucket_table)
+            // {
+            //     assigned_parts = std::move(assigned_bucket_parts.parts_assignment_vec[i]);
+            // }
+            // else if (context.getSettingsRef().enable_virtual_part)
+            // {
+            //     assigned_parts = server_parts;
+            // }
+            // else if (auto it = assigned_map.find(worker_ids[i]); it != assigned_map.end())
+            // {
+            //     assigned_parts = std::move(it->second);
+            //     /// Expand partial chain
+            // }
 
-        //     auto it = assigned_worker_resource.find(host_ports_vec[i]);
-        //     if (it == assigned_worker_resource.end())
-        //     {
-        //         it = assigned_worker_resource.emplace(host_ports_vec[i], std::vector<AssignedResource>{}).first;
-        //     }
+            if (auto it = assigned_map.find(worker_ids[i]); it != assigned_map.end())
+            {
+                assigned_parts = std::move(it->second);
+            }
 
-        //     it->second.emplace(AssignedResource{storage, std::move(assigned_parts), resource.sent_create_query});
-        // }
+            auto it = assigned_worker_resource.find(host_ports_vec[i]);
+            if (it == assigned_worker_resource.end())
+            {
+                it = assigned_worker_resource.emplace(host_ports_vec[i], std::vector<AssignedResource>{}).first;
+            }
+
+            it->second.emplace_back(AssignedResource{storage, std::move(assigned_parts), resource.sent_create_query});
+        }
     }
 }
 
+AssignedResource::AssignedResource(const StoragePtr & storage_, DB::ServerDataPartsVector parts_, bool sent_create_query_)
+    : storage(storage_), sent_create_query(sent_create_query_)
+{
+    addDataParts(parts_);
+}
 }

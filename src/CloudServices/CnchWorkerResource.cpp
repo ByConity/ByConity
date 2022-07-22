@@ -26,6 +26,7 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
 {
     const char * begin = create_query.data();
     const char * end = create_query.data() + create_query.size();
+    fmt::print(stderr, "Creating table: {}\n", create_query);
     ParserCreateQuery parser;
     const auto & settings = context->getSettingsRef();
     ASTPtr ast_query = parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);

@@ -530,13 +530,7 @@ void CnchWorkerServiceImpl::preloadChecksumsAndPrimaryIndex(
     google::protobuf::Closure * done)
 {
 }
-void CnchWorkerServiceImpl::getManipulationTasks(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetManipulationTasksReq * request,
-    Protos::GetManipulationTasksResp * response,
-    google::protobuf::Closure * done)
-{
-}
+
 void CnchWorkerServiceImpl::createCloudMemoryBuffer(
     google::protobuf::RpcController * cntl,
     const Protos::CreateCloudMemoryBufferReq * request,

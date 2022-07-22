@@ -10,6 +10,7 @@
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+#include <Transaction/ICnchTransaction.h>
 
 namespace DB
 {
@@ -144,9 +145,8 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
     const auto & settings = context->getSettingsRef();
     auto timeout = settings.max_execution_time.value.seconds();
 
-    /// TODO:
-    request.set_txn_id(0);
-    request.set_primary_txn_id(0);
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID()); /// Why?
     request.set_timeout(timeout ? timeout : 3600);  // clean session resource if there exists Exception after 3600s
 
     for (const auto & create_query: create_queries)
@@ -167,7 +167,7 @@ void CnchWorkerClient::sendQueryDataParts(
     brpc::Controller cntl;
     Protos::SendDataPartsReq request;
     Protos::SendDataPartsResp response;
-    request.set_txn_id(0);
+    request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
 

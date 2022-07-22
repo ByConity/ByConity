@@ -105,17 +105,8 @@ String CnchStorageCommonHelper::getCloudTableName(ContextPtr context) const
 {
     String table_suffix;
     /// FIXME: replace with getCurrentCnchXID()
-    auto txn_id = TxnTimestamp()/*context->getCurrentCnchXID()*/;
-    if (txn_id != TxnTimestamp::maxTS())
-    {
-        table_suffix = txn_id.toString();
-    }
-    else
-    {
-        table_suffix = context->getCurrentQueryId();
-        /// remove all the '-' chars in the uuid
-        table_suffix.erase(std::remove(table_suffix.begin(), table_suffix.end(), '-'), table_suffix.end());
-    }
+    auto txn_id = context->getCurrentTransactionID();
+    table_suffix = txn_id.toString();
 
     // add suffix for subquery
     /// FIXME: Add this when merging Session Resource
@@ -309,7 +300,7 @@ void CnchStorageCommonHelper::filterCondition(
 String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     const String & query,
     const String & local_table_name,
-    const std::optional<ContextPtr> & context,
+    const std::optional<ContextPtr> & /*context*/,
     bool enable_staging_area,
     const std::optional<StorageID> & cnch_storage_id) const
 {
@@ -341,30 +332,29 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
 
         /// XXX: local table created by server should be all disabled to use buffer for both reading and writing
         modifyOrAddSetting(create_query, "cnch_enable_memory_buffer", Field(UInt64(0)));
-        modifyOrAddSetting(create_query, "cloud_enable_memory_buffer", Field(UInt64(0)));
     }
 
     /// query settings
-    auto query_settings = std::make_shared<ASTSetQuery>();
-    query_settings->is_standalone = false;
+    // auto query_settings = std::make_shared<ASTSetQuery>();
+    // query_settings->is_standalone = false;
 
-    if (context)
-        query_settings->changes = (*context)->getSettingsRef().getChangedSettings();
+    // if (context)
+    //     query_settings->changes = (*context)->getSettingsRef().getChangedSettings();
 
-    if (create_query.settings_ast)
-    {
-        auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
-        if (!query_settings->changes.empty())
-        {
-            for (const auto & change: settings_ast.changes)
-                modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
-        }
-        else
-            query_settings->changes = std::move(settings_ast.changes);
-    }
+    // if (create_query.settings_ast)
+    // {
+    //     auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
+    //     if (!query_settings->changes.empty())
+    //     {
+    //         for (const auto & change: settings_ast.changes)
+    //             modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
+    //     }
+    //     else
+    //         query_settings->changes = std::move(settings_ast.changes);
+    // }
 
-    if (!query_settings->changes.empty())
-        create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
+    // if (!query_settings->changes.empty())
+    //     create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
 
     return getObjectDefinitionFromCreateQuery(ast, false);
 }

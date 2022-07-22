@@ -17,6 +17,7 @@ namespace DB
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
+    AssignedResource(const StoragePtr & storage_, DB::ServerDataPartsVector parts_, bool sent_create_query_);
 
     StoragePtr storage;
     String worker_table_name;

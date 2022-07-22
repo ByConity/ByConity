@@ -430,6 +430,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     ReadBuffer * istr)
 {
     const auto current_time = std::chrono::system_clock::now();
+    context->setQueryContext(context);
 
     auto & client_info = context->getClientInfo();
 

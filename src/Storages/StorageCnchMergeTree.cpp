@@ -270,7 +270,7 @@ void StorageCnchMergeTree::read(
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
             header,
             processed_stage,
-            StorageID{remote_database, remote_table},
+            StorageID::createEmpty(),
             scalars,
             false,
             local_context->getExternalTables());
@@ -1142,6 +1142,7 @@ void StorageCnchMergeTree::allocateImpl(
     WorkerGroupHandle & /*worker_group*/)
 {
     auto cnch_resource = local_context->tryGetCnchServerResource();
+    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query);
