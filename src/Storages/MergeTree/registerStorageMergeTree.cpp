@@ -4,6 +4,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
