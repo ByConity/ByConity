@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/MergeTreeCloudData.h>
 #include <common/shared_ptr_helper.h>
+#include "Disks/IDisk.h"
 #include "Storages/MergeTree/MergeTreeDataPartType.h"
 
 namespace DB
@@ -24,6 +25,7 @@ public:
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
     bool canUseAdaptiveGranularity() const override { return false; }
+    StoragePolicyPtr getLocalStoragePolicy() const override;
 
     void startup() override {}
     void shutdown() override {}

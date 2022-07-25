@@ -23,6 +23,7 @@ public:
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
     bool canUseAdaptiveGranularity() const override { return false; }
+    StoragePolicyPtr getLocalStoragePolicy() const override;
 
     bool isRemote() const override { return true; }
 

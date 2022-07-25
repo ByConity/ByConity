@@ -2,6 +2,7 @@
 
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -60,6 +61,10 @@ public:
     void loadIndexGranularity(size_t marks_count, const std::vector<size_t> & index_granularities) override;
 
     void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency) override;
+
+    /// Mark counts, need for metastore
+    /// TODO @canh: may remove later
+    UInt64 marks_count;
 
 private:
 

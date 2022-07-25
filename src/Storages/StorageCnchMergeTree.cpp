@@ -84,7 +84,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
 {
     local_store_volume = getContext()->getStoragePolicy(
         getSettings()->cnch_local_storage_policy.toString());
-    relative_local_store_path = fs::path("store") / UUIDHelpers::UUIDToString(getStorageID().uuid);
+    relative_local_store_path = fs::path("store");
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
@@ -1252,4 +1252,8 @@ void StorageCnchMergeTree::truncate(
     //    return;
 }
 
+StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
+{
+    return local_store_volume;
+}
 } // end namespace DB

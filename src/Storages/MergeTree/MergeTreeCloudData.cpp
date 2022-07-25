@@ -171,7 +171,7 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
             throw Exception("Part " + part->name + " already exists", ErrorCodes::DUPLICATE_DATA_PART);
     }
 
-   deactivateOutdatedParts();
+    deactivateOutdatedParts();
 
     LOG_TRACE(log, "Loading {} parts, prepared part multi-index, elapsed {} ms", parts.size(), stopwatch.elapsedMicroseconds() / 1000.0);
 
@@ -237,12 +237,15 @@ void MergeTreeCloudData::prefetchChecksums(MutableDataPartsVector & parts)
         parts_without_cache.push_back(part);
     }
 
-    if (parts_without_cache.size() < 4)
+    if (parts_without_cache.empty())
         return;
 
     size_t pool_size = std::min(parts_without_cache.size(), UInt64(cnch_parallel_prefetching));
-    /// load checksums in parallel
-    runOverPartsInParallel(parts_without_cache, pool_size, [](auto & part) { part->getChecksums(); });
+    /// load checksums and index_granularity in parallel
+    runOverPartsInParallel(parts_without_cache, pool_size, [](auto & part) {
+        part->loadIndexGranularity(0,{});
+        part->getChecksums();
+    });
 }
 
 void MergeTreeCloudData::runOverPartsInParallel(

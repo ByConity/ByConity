@@ -29,7 +29,7 @@ static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offs
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of file is zero");
 
     in.seek(file_offset);
-    return LimitReadBuffer(in, file_size, true);
+    return LimitReadBuffer(in, file_size, false);
 }
 
 static std::pair<off_t, size_t> getFileOffsetAndSize(const IMergeTreeDataPart & data_part, const String & file_name)
@@ -135,7 +135,7 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
 };
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(
-    [[maybe_unused]] size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
+    [[maybe_unused]] size_t /*marks_count*/, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
     // if (index_granularities.empty())
     //     throw Exception("MergeTreeDataPartCNCH cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
@@ -168,6 +168,7 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
         readIntBinary(file_checksum.file_offset, buf);
         readIntBinary(file_checksum.file_size, buf);
         readIntBinary(file_checksum.file_hash, buf);
+        fmt::print(stderr, "{} infomation: file offset {}, file size {}, file hash {}-{}\n", file_name, file_checksum.file_offset, file_checksum.file_size, file_checksum.file_hash.first, file_checksum.file_hash.second);
         file_checksums[file_name] = std::move(file_checksum);
     };
 
@@ -290,8 +291,8 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
 void MergeTreeDataPartCNCH::loadIndexGranularity()
 {
-    // index_granularity.resizeWithFixedGranularity(1, 8192);
-    // index_granularity.setInitialized();
+    index_granularity.resizeWithFixedGranularity(marks_count, storage.getSettings()->index_granularity);
+    index_granularity.setInitialized();
 }
 
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(

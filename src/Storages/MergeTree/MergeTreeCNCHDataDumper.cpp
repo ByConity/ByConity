@@ -12,6 +12,7 @@
 #include "Common/filesystemHelpers.h"
 #include "common/logger_useful.h"
 #include <Common/escapeForFileName.h>
+#include "Core/UUID.h"
 
 #include <chrono>
 #include <filesystem>
@@ -106,6 +107,10 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     bool is_temp_prefix,
     const DiskPtr & remote_disk)
 {
+    /// Load the local part checksum
+    local_part->loadColumnsChecksumsIndexes(false, true);
+    local_part->prepared_checksums = local_part->getChecksums();
+    local_part->prepared_index = local_part->getIndex();
     const String TMP_PREFIX = "tmp_dump_";
     String partition_id = local_part->info.partition_id;
     Int64 min_block = local_part->info.min_block;
@@ -128,7 +133,6 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     MutableMergeTreeDataPartCNCHPtr new_part = std::make_shared<MergeTreeDataPartCNCH>(
         data, part_name, new_part_info, volume, relative_path
     );
-
     new_part->partition.assign(local_part->partition);
     if (local_part->prepared_checksums)
     {
@@ -138,7 +142,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     new_part->minmax_idx = local_part->minmax_idx;
     new_part->rows_count = local_part->rows_count;
     /// TODO:
-    // new_part->marks_count = local_part->marks_count;
+    new_part->marks_count = local_part->getMarksCount();
     new_part->columns_ptr = std::make_shared<NamesAndTypesList>(*(local_part->columns_ptr));
     new_part->setPreparedIndex(local_part->getPreparedIndex());
     new_part->has_bitmap = local_part->has_bitmap.load();
@@ -246,14 +250,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         auto out = disk->writeFile(data_file_rel_path);
         auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
         if (!data_out)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing partr to hdfs but write buffer is not hdfs");
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing part to hdfs but write buffer is not hdfs");
 
         writeDataFileHeader(*data_out, new_part);
 
         // const DiskPtr& local_part_disk = local_part->getDisk();
-
-        auto space_reservation = data.reserveSpace(local_part->getBytesOnDisk());
-        const DiskPtr & local_part_disk = space_reservation->getDisk();
+        DiskPtr local_part_disk = data.getLocalStoragePolicy()->getAnyDisk();
+        LOG_DEBUG(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
 
         if (new_part->prepared_checksums)
         {
@@ -264,7 +267,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 String file_rel_path = local_part->getFullRelativePath() + file.first;
                 String file_full_path = local_part->getFullPath() + file.first;
                 if (!local_part_disk->exists(file_rel_path))
-                    throw Exception("Fail to dump local file: " + file_full_path, ErrorCodes::FILE_DOESNT_EXIST);
+                    throw Exception("Fail to dump local file: " + file_rel_path + " be cause file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
+
+                LOG_DEBUG(log, "Dumping file {}...\n", file_rel_path);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
@@ -291,14 +296,16 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             index_size = index_checksum.file_size;
             index_hash = index_checksum.file_hash;
             data_out->next();
+            LOG_DEBUG(log, "Index offset {}, size {}, hash {}-{}\n", index_offset, index_size, index_hash.first, index_hash.second);
             ///TODO: fix getPositionInFile
             if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
-                 throw Exception("primary.idx in data part "  + part_name + " check error, checksum offset: " +
-                        std::to_string(index_offset) + " checksums size: " + std::to_string(index_size) +
+                 throw Exception("primary.idx in data part "  + part_name + " check error, index offset: " +
+                        std::to_string(index_offset) + " index size: " + std::to_string(index_size) +
                         "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
             }
         }
+
 
         /// Checksums
         off_t checksums_offset = index_offset + index_size;
@@ -312,6 +319,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             ///TODO: fix getPositionInFile
             checksums_size = data_out->getPositionInFile() - checksums_offset;
             checksums_hash = checksums_hashing.getHash();
+            LOG_DEBUG(log, "Checksum offset {}, size {}, hash {}-{}\n", checksums_offset, checksums_size, checksums_hash.first, checksums_hash.second);
+            if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                 throw Exception("checksums.txt in data part "  + part_name + " check error, checksum offset: " +
+                        std::to_string(index_offset) + " checksums size: " + std::to_string(index_size) +
+                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+            }
         }
 
         /// MetaInfo
@@ -326,6 +340,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             ///TODO: fix getPositionInFile
             meta_info_size = data_out->getPositionInFile() - meta_info_offset;
             meta_info_hash = meta_info_hashing.getHash();
+            LOG_DEBUG(log, "Meta info offset {}, size {}, hash {}-{}\n", meta_info_offset, meta_info_size, meta_info_hash.first, meta_info_hash.second);
+            if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            {
+                 throw Exception("meta info in data part "  + part_name + " check error, meta offset: " +
+                        std::to_string(index_offset) + " meta size: " + std::to_string(index_size) +
+                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+            }
         }
 
         /// Unique Key Index
@@ -374,7 +395,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
 NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns()
 {
-    Names sort_key_columns_vec = data.sorting_key_expr->getRequiredColumns();
+    Names sort_key_columns_vec = data.getInMemoryMetadata().getSortingKeyColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
     /// TODO : fix skip_indices
     // for (const auto & index : data.skip_indices)

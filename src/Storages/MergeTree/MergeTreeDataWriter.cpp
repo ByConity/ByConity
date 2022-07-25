@@ -399,7 +399,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
     new_data_part->checksums_ptr = std::make_shared<MergeTreeMetaBase::DataPart::Checksums>();
-    new_data_part->is_temp = true;
+    // new_data_part->is_temp = true;
 
     SyncGuardPtr sync_guard;
     if (new_data_part->isStoredOnDisk())

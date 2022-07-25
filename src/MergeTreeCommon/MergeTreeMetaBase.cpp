@@ -1367,4 +1367,8 @@ void MergeTreeMetaBase::removePartContributionToColumnSizes(const DataPartPtr & 
 }
 
 
+StoragePolicyPtr MergeTreeMetaBase::getLocalStoragePolicy() const
+{
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for MergeTreeMetaBase");
+}
 }
