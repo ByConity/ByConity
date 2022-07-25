@@ -228,6 +228,7 @@ void StorageCnchMergeTree::read(
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     String local_table_name = getCloudTableName(local_context);
+    
 
     healthCheckForWorkerGroup(local_context, worker_group);
 
@@ -257,13 +258,13 @@ void StorageCnchMergeTree::read(
     LOG_INFO(log, "Number of parts after pruning: {}", parts.size());
 
     /// TODO: when parts is empty or very few parts, process locally.
-
+    fmt::print(stderr, "Cloud table name: {}\n", local_table_name);
     allocateImpl(local_context, parts, local_table_name, worker_group);
 
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name);
+    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name, local_context->getCurrentTransactionID());
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
@@ -1132,6 +1133,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
 void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group)
 {
     String table_name = getCloudTableName(local_context);
+    fmt::print(stderr, "Cloud table name: {}\n", table_name);
     allocateImpl(local_context, parts, table_name, worker_group);
 }
 

@@ -23,6 +23,7 @@ public:
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
+    bool canUseAdaptiveGranularity() const override { return false; }
 
     void startup() override {}
     void shutdown() override {}

@@ -119,9 +119,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     String part_name = new_part_info.getPartName();
     String relative_path;
     if(is_temp_prefix)
-        relative_path = fs::path(data.getRelativeDataPath()) / (TMP_PREFIX + new_part_info.getPartName(true));
+        relative_path = TMP_PREFIX + new_part_info.getPartName(true);
     else
-        relative_path = fs::path(data.getRelativeDataPath()) / new_part_info.getPartName(true);
+        relative_path = new_part_info.getPartName(true);
 
     DiskPtr disk = remote_disk == nullptr ? data.getStoragePolicy()->getAnyDisk() : remote_disk;
     VolumeSingleDiskPtr volume = std::make_shared<SingleDiskVolume>("temp_volume", disk);

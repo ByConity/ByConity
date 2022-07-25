@@ -1,3 +1,4 @@
+#include "common/logger_useful.h"
 #include <Common/formatReadable.h>
 #include <Common/PODArray.h>
 #include <Common/typeid_cast.h>
@@ -54,6 +55,7 @@
 
 #include <Common/SensitiveDataMasker.h>
 #include "MergeTreeCommon/CnchTopologyMaster.h"
+#include <Interpreters/NamedSession.h>
 #include "Interpreters/trySetVirtualWarehouse.h"
 #include "MergeTreeCommon/CnchTopologyMaster.h"
 #include "Parsers/ASTSystemQuery.h"
@@ -415,6 +417,12 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             context->setCurrentTransaction(txn);
             return txn;
         }
+        else if (context->getSettingsRef().prepared_transaction_id > 0)
+        {
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Creating temporary transaction {}\n", context->getSettingsRef().prepared_transaction_id);
+            context->setTemporaryTransaction(TxnTimestamp{context->getSettingsRef().prepared_transaction_id}, TxnTimestamp{context->getSettingsRef().prepared_transaction_id});
+            return context->getCurrentTransaction();
+        }
     }
 
     return {};
@@ -549,8 +557,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     setQuerySpecificSettings(ast, context);
     auto txn = prepareCnchTransaction(context, ast);
-    if (txn)
+    if (txn && context->getServerType() == ServerType::cnch_server)
         context->initCnchServerResource(txn->getTransactionID());
+    else if (txn && context->getServerType() == ServerType::cnch_worker)
+        context = context->acquireNamedCnchSession(txn->getTransactionID(), {}, false)->context; 
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);

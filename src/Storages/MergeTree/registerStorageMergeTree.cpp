@@ -382,6 +382,12 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_optional_param("version");
     }
 
+    if (is_cloud)
+    {
+        add_mandatory_param("cnch database");
+        add_mandatory_param("cnch table");
+    }
+
     if (!is_extended_storage_def)
     {
         add_mandatory_param("name of column with date");
@@ -590,14 +596,14 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             throw Exception(
                 "Cnch database name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
                 ErrorCodes::BAD_ARGUMENTS);
-
+        ++arg_num;
         if (const auto * ast = engine_args[1]->as<ASTIdentifier>())
             cnch_table_name = ast->name();
         else
             throw Exception(
                 "Cnch table name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
                 ErrorCodes::BAD_ARGUMENTS);
-
+        ++arg_num;
         engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
     }
 
@@ -1008,6 +1014,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("CnchMergeTree", create, features);
+    factory.registerStorage("CloudMergeTree", create, features);
     factory.registerStorage("CnchUniqueMergeTree", create, features);
     factory.registerStorage("CnchCollapsingMergeTree", create, features);
     factory.registerStorage("CnchReplacingMergeTree", create, features);

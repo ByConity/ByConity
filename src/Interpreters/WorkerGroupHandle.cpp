@@ -74,7 +74,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
         if (address.is_local)
             info.local_addresses.push_back(address);
 
-        LOG_TRACE(&Poco::Logger::get("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
+        LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Add address {}. is_local: {} id: {}", host.toDebugString(), address.is_local, host.id);
 
         ConnectionPoolPtr pool = std::make_shared<ConnectionPool>(
             settings.distributed_connections_pool_size,
@@ -97,6 +97,8 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
     {
         ring = buildRing(this->shards_info, current_context);
+        LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
+ 
     }
 }
 

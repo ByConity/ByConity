@@ -4,6 +4,7 @@
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context.h>
+#include "Core/UUID.h"
 #include "MergeTreeCommon/assignCnchParts.h"
 
 namespace DB
@@ -17,7 +18,8 @@ void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
 {
     for (const auto & part: parts)
     {
-        if (!part_names.count(part->name()))
+        fmt::print(stderr, "Adding parts {} to {}\n", part->name(), UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+        if (!part_names.contains(part->name()))
         {
             part_names.emplace(part->name());
             server_parts.emplace_back(part);
@@ -66,65 +68,64 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     allocateResource(context);
 
 
-    {
-        auto lock = getLock();
-        std::vector<AssignedResource> resource_to_allocate;
-        for (auto & [table_id, resource]: assigned_table_source)
-        {
-            if (resource.sent_create_query)
-                continue;
-            resource_to_allocate.emplace_back(resource);
-            // assigned_resource.hive_parts.clear();
-            resource.server_parts.clear();
-            resource.sent_create_query = true;
-        }
+    // {
+    //     auto lock = getLock();
+    //     std::vector<AssignedResource> resource_to_allocate;
+    //     for (auto & [table_id, resource]: assigned_table_source)
+    //     {
+    //         if (resource.sent_create_query)
+    //             continue;
+    //         resource_to_allocate.emplace_back(resource);
+    //         // assigned_resource.hive_parts.clear();
+    //         // resource.server_parts.clear();
+    //         resource.sent_create_query = true;
+    //     }
 
-        const auto & worker_clients = context->getCurrentWorkerGroup()->getWorkerClients();
-        std::vector<String> create_table_queries;
-        for (auto & resource: resource_to_allocate)
-        {
-            LOG_DEBUG(log, "Prepare send create query: {} to {}", resource.create_table_query, worker_group->getQualifiedName());
-            create_table_queries.emplace_back(resource.create_table_query);
-        }
+    //     const auto & worker_client = worker_group->getWorkerClient(worker);
+    //     std::vector<String> create_table_queries;
+    //     for (auto & resource: resource_to_allocate)
+    //     {
+    //         LOG_DEBUG(log, "Prepare send create query: {} to {}", resource.create_table_query, worker_group->getQualifiedName());
+    //         create_table_queries.emplace_back(resource.create_table_query);
+    //     }
 
-        for (const auto & worker_client: worker_clients)
-        {
-            /// FIXME: use isSameEndpoint()
-            bool is_local = context->getServerType() == ServerType::cnch_worker
-                && worker_client->getHostWithPorts().getRPCAddress() == context->getHostWithPorts().getRPCAddress();
+    //     /// FIXME: use isSameEndpoint()
+    //     bool is_local = context->getServerType() == ServerType::cnch_worker
+    //         && worker.getRPCAddress() == context->getHostWithPorts().getRPCAddress();
 
-            /// we already create table in local shard, skip it.
-            if (is_local)
-                continue;
+    //     /// we already create table in local shard, skip it.
+    //     if (is_local)
+    //         return;
 
-            std::vector<AssignedResource> resource_to_send = assigned_worker_resource[worker_client->getHostWithPorts()];
-            worker_client->sendCreateQueries(context, create_table_queries);
-            for (auto & resource: resource_to_send)
-            {
-                worker_client->sendQueryDataParts(
-                    context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
-            }
-        }
-    }
+    //     const std::vector<AssignedResource> & resource_to_send = assigned_worker_resource[worker];
+    //     worker_client->sendCreateQueries(context, create_table_queries);
+    //     for (const auto & resource: resource_to_send)
+    //     {
+    //         worker_client->sendQueryDataParts(
+    //             context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
+    //     }
+
+    // }
 
  
 
     /// TODO: send offloading info.
 }
 
-void CnchServerResource::allocateResource(const ContextPtr &  /*context*/)
+void CnchServerResource::allocateResource(const ContextPtr & context)
 {
     std::vector<AssignedResource> resource_to_allocate;
     {
         auto lock = getLock();
         for (auto & [table_id, resource]: assigned_table_source)
         {
+            fmt::print(stderr, "{} -> [{}]\n", UUIDHelpers::UUIDToString(table_id), fmt::join(resource.part_names, ", "));
             // if (resource.server_parts.empty() && resource.sent_create_query)
             //     continue;
             resource_to_allocate.emplace_back(resource);
             // assigned_resource.hive_parts.clear();
             // resource.server_parts.clear();
-            // resource.sent_create_query = true;
+            resource.sent_create_query = true;
         }
     }
 
@@ -138,7 +139,7 @@ void CnchServerResource::allocateResource(const ContextPtr &  /*context*/)
 
     for (auto & resource: resource_to_allocate)
     {
-        const auto & storage = resource.storage;
+        // const auto & storage = resource.storage;
         auto & server_parts = resource.server_parts;
         // const auto & bucket_numbers = resource.bucket_numbers;
         // const auto & worker_table_name = resource.worker_table_name;
@@ -157,6 +158,15 @@ void CnchServerResource::allocateResource(const ContextPtr &  /*context*/)
             // sort_server_parts(context, server_parts);
             // assigned_map = assignCnchParts(worker_group, server_parts);
         // }
+        for (const auto & [k, v] : assigned_map)
+        {
+            fmt::print(stderr, "{} {} parts\n", k, v.size());
+        }
+
+        for (const auto & v : worker_ids)
+        {
+            fmt::print(stderr, "Expect {} {} parts\n", v, assigned_map[v].size());
+        }
 
         for (size_t i = 0; i < host_ports_vec.size(); ++i)
         {
@@ -182,14 +192,19 @@ void CnchServerResource::allocateResource(const ContextPtr &  /*context*/)
             {
                 assigned_parts = std::move(it->second);
             }
+            const auto & worker_client = worker_group->getWorkerClient(host_ports_vec[i]);
 
-            auto it = assigned_worker_resource.find(host_ports_vec[i]);
-            if (it == assigned_worker_resource.end())
-            {
-                it = assigned_worker_resource.emplace(host_ports_vec[i], std::vector<AssignedResource>{}).first;
-            }
+            worker_client->sendCreateQueries(context, {resource.create_table_query});
+            worker_client->sendQueryDataParts(
+                context, resource.storage, resource.worker_table_name, assigned_parts, resource.bucket_numbers);
 
-            it->second.emplace_back(AssignedResource{storage, std::move(assigned_parts), resource.sent_create_query});
+            // auto it = assigned_worker_resource.find(host_ports_vec[i]);
+            // if (it == assigned_worker_resource.end())
+            // {
+            //     it = assigned_worker_resource.emplace(host_ports_vec[i], std::vector<AssignedResource>{}).first;
+            // }
+
+            // it->second.emplace_back(AssignedResource{storage, std::move(assigned_parts), resource.sent_create_query});
         }
     }
 }

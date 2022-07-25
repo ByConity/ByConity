@@ -57,15 +57,16 @@ ServerAssignmentMap assignCnchPartsWithJump(WorkerList workers, const ServerData
 /// 2 round apporach
 ServerAssignmentMap assignCnchPartsWithRingAndBalance(const ConsistentHashRing & ring, const ServerDataPartsVector & parts)
 {
-    LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate part with bounded ring based hash policy.");
     ServerAssignmentMap ret;
     size_t num_parts = parts.size();
+    LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate {} parts with bounded ring based hash policy.", num_parts);
     auto cap_limit = ring.getCapLimit(num_parts);
+    fmt::print(stderr, "Cap limit is: {}\n", cap_limit);
     ServerDataPartsVector exceed_parts;
     std::unordered_map<String,UInt64> stats;
 
     // first round, try respect original hash mapping as much as possible
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         if (auto hostname = ring.tryFind(part->info().getBasicPartName(), cap_limit, stats); !hostname.empty())
             ret[hostname].emplace_back(part);
