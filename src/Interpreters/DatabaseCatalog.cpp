@@ -652,7 +652,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
-    , use_cnch_catalog{global_context_->getServerType() != ServerType::standalone}
+    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
