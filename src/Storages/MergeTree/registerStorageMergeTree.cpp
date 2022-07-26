@@ -803,6 +803,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             if (args.storage_def->settings == nullptr)
             {
                 auto settings_ast = std::make_shared<ASTSetQuery>();
+                settings_ast->is_standalone = false;
                 args.storage_def->set(args.storage_def->settings, settings_ast);
             }
             if (args.storage_def->settings->changes.tryGet("storage_policy") == nullptr)

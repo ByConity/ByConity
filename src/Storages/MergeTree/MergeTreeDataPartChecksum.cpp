@@ -266,7 +266,7 @@ bool MergeTreeDataPartChecksums::readV5(ReadBuffer & from)
         Checksum sum;
 
         readBinary(name, in);
-        if (storage_type == StorageType::HDFS)
+        if (storage_type == StorageType::ByteHDFS)
             readVarUInt(sum.file_offset, in);
         readVarUInt(sum.file_size, in);
         readPODBinary(sum.file_hash, in);
@@ -303,8 +303,7 @@ bool MergeTreeDataPartChecksums::readV6(ReadBuffer & from)
         Checksum sum;
 
         readBinary(name, in);
-        fmt::print(stderr, "Reading checksum for {}\n", name);
-        if (storage_type == StorageType::HDFS)
+        if (storage_type == StorageType::ByteHDFS)
         {
             readVarUInt(sum.file_offset, in);
             /// v6 for checksums preloading.
@@ -346,7 +345,7 @@ bool MergeTreeDataPartChecksums::readV7(ReadBuffer & from)
         Checksum sum;
 
         readBinary(name, in);
-        if (storage_type == StorageType::HDFS)
+        if (storage_type == StorageType::ByteHDFS)
         {
             readVarUInt(sum.file_offset, in);
             /// v6 for checksums preloading.
@@ -389,9 +388,9 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         const Checksum & sum = it.second;
 
         writeBinary(name, out);
-        if (versions->enable_compact_map_data || storage_type == StorageType::HDFS)
+        if (storage_type == StorageType::ByteHDFS || versions->enable_compact_map_data)
             writeVarUInt(sum.file_offset, out);
-        if (storage_type == StorageType::HDFS)
+        if (storage_type == StorageType::ByteHDFS)
             writeVarUInt(sum.mutation, out);
         writeVarUInt(sum.file_size, out);
         writePODBinary(sum.file_hash, out);

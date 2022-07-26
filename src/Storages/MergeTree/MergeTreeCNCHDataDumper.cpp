@@ -119,7 +119,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     Int64 mutation = local_part->info.mutation;
     Int64 hint_mutation = local_part->info.hint_mutation;
     MergeTreePartInfo new_part_info(partition_id, min_block, max_block, merge_tree_level, mutation, hint_mutation);
-    new_part_info.storage_type = StorageType::HDFS;
+    new_part_info.storage_type = StorageType::ByteHDFS;
 
     String part_name = new_part_info.getPartName();
     String relative_path;
@@ -137,7 +137,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     if (local_part->prepared_checksums)
     {
         new_part->prepared_checksums = std::make_shared<MergeTreeDataPartChecksums>(*local_part->prepared_checksums);
-        new_part->prepared_checksums->storage_type = StorageType::HDFS;
+        new_part->prepared_checksums->storage_type = StorageType::ByteHDFS;
     }
     new_part->minmax_idx = local_part->minmax_idx;
     new_part->rows_count = local_part->rows_count;
@@ -254,8 +254,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
         writeDataFileHeader(*data_out, new_part);
 
-        // const DiskPtr& local_part_disk = local_part->getDisk();
-        DiskPtr local_part_disk = data.getLocalStoragePolicy()->getAnyDisk();
+        const DiskPtr& local_part_disk = local_part->volume->getDisk();
         LOG_DEBUG(log, "Getting local disk {} at {}\n", local_part_disk->getName(), local_part_disk->getPath());
 
         if (new_part->prepared_checksums)
