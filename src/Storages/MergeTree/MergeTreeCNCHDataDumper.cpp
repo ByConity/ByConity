@@ -108,7 +108,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const DiskPtr & remote_disk)
 {
     /// Load the local part checksum
-    local_part->loadColumnsChecksumsIndexes(false, true);
+    local_part->loadColumnsChecksumsIndexes(true, true);
     local_part->prepared_checksums = local_part->getChecksums();
     local_part->prepared_index = local_part->getIndex();
     const String TMP_PREFIX = "tmp_dump_";

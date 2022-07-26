@@ -141,6 +141,7 @@ Strings MergeTreeDataPartChecksums::collectFilesForMapColumnNotKV(const String &
 
 bool MergeTreeDataPartChecksums::read(ReadBuffer & in, size_t format_version)
 {
+    // fmt::print(stderr, "Read checksum version {}\n", format_version);
     switch (format_version)
     {
         case 1:
@@ -302,6 +303,7 @@ bool MergeTreeDataPartChecksums::readV6(ReadBuffer & from)
         Checksum sum;
 
         readBinary(name, in);
+        fmt::print(stderr, "Reading checksum for {}\n", name);
         if (storage_type == StorageType::HDFS)
         {
             readVarUInt(sum.file_offset, in);
@@ -387,8 +389,10 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
         const Checksum & sum = it.second;
 
         writeBinary(name, out);
-        if (versions->enable_compact_map_data)
-             writeVarUInt(sum.file_offset, out);
+        if (versions->enable_compact_map_data || storage_type == StorageType::HDFS)
+            writeVarUInt(sum.file_offset, out);
+        if (storage_type == StorageType::HDFS)
+            writeVarUInt(sum.mutation, out);
         writeVarUInt(sum.file_size, out);
         writePODBinary(sum.file_hash, out);
         writeBinary(sum.is_compressed, out);

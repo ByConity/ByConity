@@ -17,10 +17,11 @@
 #include <bits/types/clockid_t.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
-#include "Core/NamesAndTypes.h"
-#include "DataTypes/Serializations/ISerialization.h"
-#include "IO/ReadBufferFromFileBase.h"
-#include "Storages/DiskCache/DiskCache_fwd.h"
+#include <Core/NamesAndTypes.h>
+#include <DataTypes/Serializations/ISerialization.h>
+#include <IO/ReadBufferFromFileBase.h>
+#include <Interpreters/InDepthNodeVisitor.h>
+#include <Storages/DiskCache/DiskCache_fwd.h>
 #include <utility>
 
 namespace ProfileEvents
@@ -68,6 +69,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
 {
     if (!continue_reading)
         next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
+    fmt::print("Start reading from mark {}, row {}\n", from_mark, next_row_number_to_read);
 
     size_t read_rows = 0;
     try
@@ -128,6 +130,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
                 ///  if offsets are not empty and were already read, but elements are empty.
                 if (!column->empty())
                     read_rows = std::max(read_rows, column->size() - column_size_before_reading);
+                fmt::print(stderr, "Read {} rows for column {} - {}\n", read_rows, name, type->getName());
             }
             catch (Exception & e)
             {

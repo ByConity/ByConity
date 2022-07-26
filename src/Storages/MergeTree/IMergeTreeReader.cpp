@@ -423,6 +423,7 @@ void IMergeTreeReader::readData(
     size_t from_mark, bool continue_reading, size_t max_rows_to_read,
     ISerialization::SubstreamsCache & cache)
 {
+    fmt::print(stderr, "Actual read data for {}-{}\n", name_and_type.name, name_and_type.type->getName());
     auto get_stream_getter = [&](bool stream_for_prefix) -> ISerialization::InputStreamGetter
     {
         return [&, stream_for_prefix](const ISerialization::SubstreamPath & substream_path) -> ReadBuffer * //-V1047
@@ -432,6 +433,7 @@ void IMergeTreeReader::readData(
                 return nullptr;
 
             String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+            // fmt::print("Trying to get stream {}\n", stream_name);
             
             auto it = streams.find(stream_name);
             if (it == streams.end())
@@ -441,11 +443,15 @@ void IMergeTreeReader::readData(
 
             if (stream_for_prefix)
             {
+                // fmt::print("Seek stream {} to start\n", stream_name);
                 stream.seekToStart();
                 continue_reading = false;
             }
             else if (!continue_reading)
+            {
+                // fmt::print("Seek stream {} to mark {}\n", stream_name, from_mark);
                 stream.seekToMark(from_mark);
+            }
 
             return stream.data_buffer;
         };
@@ -458,7 +464,7 @@ void IMergeTreeReader::readData(
     const auto & name = name_and_type.name;
     auto serialization = serializations[name];
     
-    if (deserialize_binary_bulk_state_map.count(name) == 0)
+    if (!deserialize_binary_bulk_state_map.contains(name))
     {
         deserialize_settings.getter = get_stream_getter(true);
         serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);

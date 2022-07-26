@@ -229,7 +229,7 @@ void MergeTreeDataPartCNCH::loadIndex()
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)
 {
     ChecksumsPtr checksums = std::make_shared<Checksums>();
-    checksums->storage_type = StorageType::ByteHDFS;
+    checksums->storage_type = StorageType::HDFS;
     if (deleted)
         return checksums;
 
