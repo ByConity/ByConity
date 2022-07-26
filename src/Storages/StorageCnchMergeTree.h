@@ -58,8 +58,6 @@ public:
 
     CheckResults checkData(const ASTPtr & query, ContextPtr context) override;
 
-    String genCreateTableQueryForWorker(const String & suffix);
-
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
     ServerDataPartsVector getPrunedServerParts(

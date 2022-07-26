@@ -240,8 +240,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         for (const auto & create_query: request->create_queries())
         {
             /// create a copy of session_context to avoid modify in SessionResource
-            auto temp_context = Context::createCopy(query_context);
-            worker_resource->executeCreateQuery(query_context, create_query);
+            worker_resource->executeCreateQuery(rpc_context, create_query);
         }
 
         // query_context.worker_type = WorkerType::normal_worker;
@@ -268,9 +267,10 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
         auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
 
-        LOG_DEBUG(log, "Receiving parts for table {}(txn_id: {})", cloud_merge_tree.getStorageID().getNameForLogs(), request->txn_id());
+        LOG_DEBUG(log,
+            "Receiving {} parts for table {}(txn_id: {})",
+            request->parts_size(), cloud_merge_tree.getStorageID().getNameForLogs(), request->txn_id());
 
-        // TODO:
         MergeTreeMutableDataPartsVector data_parts;
         if (cloud_merge_tree.getInMemoryMetadata().hasUniqueKey())
             data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts(), request->bitmaps());
@@ -280,6 +280,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
 
         LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
 
+        // TODO:
         // std::unordered_set<Int64> required_bucket_numbers;
         // for (const auto & bucket_number: request->bucket_numbers())
         //     required_bucket_numbers.insert(bucket_number);
@@ -439,6 +440,7 @@ void CnchWorkerServiceImpl::executeSimpleQuery(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::GetPreallocatedStatus(
     google::protobuf::RpcController *,
     const Protos::GetPreallocatedStatusReq * request,

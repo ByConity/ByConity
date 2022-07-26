@@ -472,7 +472,8 @@ Cluster::Cluster(const Poco::Util::AbstractConfiguration & config,
                 std::move(shard_local_addresses),
                 std::move(shard_pool),
                 std::move(all_replicas_pools),
-                internal_replication
+                internal_replication,
+                {}
             });
         }
         else
@@ -531,7 +532,8 @@ Cluster::Cluster(const Settings & settings, const std::vector<std::vector<String
             std::move(shard_local_addresses),
             std::move(shard_pool),
             std::move(all_replicas),
-            false // has_internal_replication
+            false, // has_internal_replication
+            {}
         });
         ++current_shard_num;
     }
@@ -570,7 +572,7 @@ Cluster::Cluster(const Settings & settings, const std::vector<Addresses> & shard
 
         slot_to_shard.insert(std::end(slot_to_shard), default_weight, shards_info.size());
         shards_info.push_back({{}, current_shard_num, default_weight, std::move(shard_local_addresses), std::move(shard_pool),
-                std::move(all_replicas), false});
+                std::move(all_replicas), false, {}});
         ++current_shard_num;
     }
 

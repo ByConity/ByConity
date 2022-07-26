@@ -54,7 +54,7 @@ ServerAssignmentMap assignCnchPartsWithJump(WorkerList workers, const ServerData
     return ret;
 }
 
-/// 2 round apporach
+/// 2 round approach
 ServerAssignmentMap assignCnchPartsWithRingAndBalance(const ConsistentHashRing & ring, const ServerDataPartsVector & parts)
 {
     ServerAssignmentMap ret;
@@ -63,7 +63,7 @@ ServerAssignmentMap assignCnchPartsWithRingAndBalance(const ConsistentHashRing &
     auto cap_limit = ring.getCapLimit(num_parts);
     fmt::print(stderr, "Cap limit is: {}\n", cap_limit);
     ServerDataPartsVector exceed_parts;
-    std::unordered_map<String,UInt64> stats;
+    std::unordered_map<String, UInt64> stats;
 
     // first round, try respect original hash mapping as much as possible
     for (const auto & part : parts)
@@ -74,7 +74,7 @@ ServerAssignmentMap assignCnchPartsWithRingAndBalance(const ConsistentHashRing &
             exceed_parts.emplace_back(part);
     }
 
-    // second round to assign the overloaded parts, reuse the one round apporach `findAndRebalance`.
+    // second round to assign the overloaded parts, reuse the one round approach `findAndRebalance`.
     for (auto & part: exceed_parts)
     {
         auto hostname = ring.findAndRebalance(part->info().getBasicPartName(), cap_limit, stats);
@@ -151,7 +151,7 @@ ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, cons
         {
             if (!worker_group->hasRing())
             {
-                LOG_WARNING(&Poco::Logger::get("Consistent Hash"), "Attemp to use ring-base consistent hash, but ring is empty; fall back to jump");
+                LOG_WARNING(&Poco::Logger::get("Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
                 return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
             }
             auto ret = assignCnchPartsWithRingAndBalance(worker_group->getRing(), parts);

@@ -530,6 +530,111 @@ void Connection::sendQuery(
     }
 }
 
+void Connection::sendCnchQuery(
+    UInt64 txn_id,
+    const ConnectionTimeouts & timeouts,
+    const String & query,
+    const String & query_id_,
+    UInt64 stage,
+    const Settings * settings,
+    const ClientInfo * client_info,
+    bool with_pending_data,
+    UInt16)
+{
+
+    if (!connected)
+        connect(timeouts);
+
+    TimeoutSetter timeout_setter(*socket, timeouts.send_timeout, timeouts.receive_timeout, true);
+
+    if (settings)
+    {
+        std::optional<int> level;
+        std::string method = Poco::toUpper(settings->network_compression_method.toString());
+
+        /// Bad custom logic
+        if (method == "ZSTD")
+            level = settings->network_zstd_compression_level;
+
+        CompressionCodecFactory::instance().validateCodec(method, level, !settings->allow_suspicious_codecs, settings->allow_experimental_codecs);
+        compression_codec = CompressionCodecFactory::instance().get(method, level);
+    }
+    else
+        compression_codec = CompressionCodecFactory::instance().getDefaultCodec();
+
+    query_id = query_id_;
+
+    writeVarUInt(Protocol::Client::CnchQuery, *out);
+    writeIntBinary(txn_id, *out);
+    writeStringBinary(query_id, *out);
+
+    /// Client info.
+    if (client_info && !client_info->empty())
+    {
+        // TODO:
+        // client_info->rpc_port = server_rpc_port;
+        client_info->write(*out, server_revision);
+    }
+    else
+        ClientInfo().write(*out, server_revision);
+
+    /// Per query settings.
+    if (settings)
+    {
+        settings->write(*out, SettingsWriteFormat::STRINGS_WITH_FLAGS);
+    }
+    else
+        writeStringBinary("" /* empty string is a marker of the end of settings */, *out);
+
+    /// Interserver secret
+    {
+        /// Hash
+        ///
+        /// Send correct hash only for !INITIAL_QUERY, due to:
+        /// - this will avoid extra protocol complexity for simplest cases
+        /// - there is no need in hash for the INITIAL_QUERY anyway
+        ///   (since there is no secure/unsecure changes)
+        if (client_info && !cluster_secret.empty() && client_info->query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+        {
+#if USE_SSL
+            std::string data(salt);
+            data += cluster_secret;
+            data += query;
+            data += query_id;
+            data += client_info->initial_user;
+            /// TODO: add source/target host/ip-address
+
+            std::string hash = encodeSHA256(data);
+            writeStringBinary(hash, *out);
+#else
+        throw Exception(
+            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
+            ErrorCodes::SUPPORT_IS_DISABLED);
+#endif
+        }
+        else
+            writeStringBinary("", *out);
+    }
+
+    writeVarUInt(stage, *out);
+    writeVarUInt(static_cast<bool>(compression), *out);
+
+    writeStringBinary(query, *out);
+
+    maybe_compressed_in.reset();
+    maybe_compressed_out.reset();
+    block_in.reset();
+    block_logs_in.reset();
+    block_out.reset();
+
+    /// Send empty block which means end of data.
+    if (!with_pending_data)
+    {
+        sendData(Block());
+        out->next();
+    }
+}
+
 void Connection::sendPlanSegment(
     const ConnectionTimeouts & timeouts,
     const PlanSegment * plan_segment,

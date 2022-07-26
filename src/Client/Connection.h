@@ -97,12 +97,14 @@ public:
         Protocol::Secure secure_,
         Poco::Timespan sync_request_timeout_ = Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
         UInt16 exchange_port_ = 0,
-        UInt16 exchange_status_port_ =0)
+        UInt16 exchange_status_port_ = 0,
+        UInt16 rpc_port_ = 0)
         :
         host(host_), port(port_), default_database(default_database_),
         user(user_), password(password_),
         exchange_port(exchange_port_),
         exchange_status_port(exchange_status_port_),
+        rpc_port(rpc_port_),
         cluster(cluster_),
         cluster_secret(cluster_secret_),
         client_name(client_name_),
@@ -152,8 +154,7 @@ public:
     UInt16 getExchangePort() const;
     UInt16 getExchangeStatusPort() const;
 
-    /// TODO:
-    HostWithPorts getHostWithPorts() const { return {"virtual_id", host, 0, port}; }
+    HostWithPorts getHostWithPorts() const { return {"virtual_id", host, rpc_port, port}; }
 
     Protocol::Compression getCompression() const { return compression; }
 
@@ -166,6 +167,18 @@ public:
         const Settings * settings = nullptr,
         const ClientInfo * client_info = nullptr,
         bool with_pending_data = false);
+
+    /// send cnch query
+    void sendCnchQuery(
+        UInt64 txn_id,
+        const ConnectionTimeouts & timeouts,
+        const String & query,
+        const String & query_id_ = "",
+        UInt64 stage = QueryProcessingStage::Complete,
+        const Settings * settings = nullptr,
+        const ClientInfo * client_info = nullptr,
+        bool with_pending_data = false,
+        UInt16 server_rpc_port = 0);
 
     void sendPlanSegment(
         const ConnectionTimeouts & timeouts,
@@ -241,6 +254,7 @@ private:
     String password;
     UInt16 exchange_port;
     UInt16 exchange_status_port;
+    UInt16 rpc_port;
 
     /// For inter-server authorization
     String cluster;

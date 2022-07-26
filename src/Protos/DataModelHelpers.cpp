@@ -44,7 +44,7 @@ DataModelPartWrapperPtr createPartWrapperFromModel(const MergeTreeMetaBase & sto
         inside_part_model.set_commit_time(part_model_wrapper->info->mutation);
 
     if (inside_part_model.has_min_unique_key() && inside_part_model.min_unique_key().empty() && inside_part_model.rows_count() > 0)
-        throw Exception("min unqiue key of non empty part must be non empty", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("min unique key of non empty part must be non empty", ErrorCodes::LOGICAL_ERROR);
     if (inside_part_model.has_max_unique_key() && inside_part_model.max_unique_key().empty() && inside_part_model.rows_count() > 0)
         throw Exception("max unique key of non empty part must be non empty", ErrorCodes::LOGICAL_ERROR);
 
@@ -256,7 +256,7 @@ void fillPartsModelForSend(const IStorage & storage, const ServerDataPartsVector
     }
 }
 
-std::shared_ptr<MergeTreePartition> createParitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta)
+std::shared_ptr<MergeTreePartition> createPartitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta)
 {
     std::shared_ptr<MergeTreePartition> partition_ptr = std::make_shared<MergeTreePartition>();
     ReadBufferFromString partition_minmax_buf(meta.partition_minmax());

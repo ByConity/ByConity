@@ -4,12 +4,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
-#include <Parsers/ParserCreateQuery.h>
-#include <Parsers/parseQuery.h>
+#include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Poco/Logger.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
-#include <Poco/Logger.h>
 
 
 namespace DB
@@ -26,8 +26,7 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
 {
     const char * begin = create_query.data();
     const char * end = create_query.data() + create_query.size();
-    LOG_DEBUG(&Poco::Logger::get("WorkerResource"), "Creating table: {}\n", create_query);
-    ParserCreateQuery parser;
+    ParserQueryWithOutput parser{end};
     const auto & settings = context->getSettingsRef();
     ASTPtr ast_query = parseQuery(parser, begin, end, "CreateCloudTable", settings.max_query_size, settings.max_parser_depth);
 

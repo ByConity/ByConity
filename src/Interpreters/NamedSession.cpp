@@ -43,13 +43,6 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
 {
     std::unique_lock lock(mutex);
 
-    // auto & user_name = context->client_info.current_user;
-
-    // if (user_name.empty())
-    //     throw Exception("Empty user name.", ErrorCodes::LOGICAL_ERROR);
-
-    // Key key(user_name, session_id);
-
     auto it = sessions.find(session_id);
     if (it == sessions.end())
     {

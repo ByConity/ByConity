@@ -5,7 +5,6 @@
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Storages/IStorage_fwd.h>
-#include <Storages/CheckResults.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
@@ -17,7 +16,6 @@ namespace DB
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
-    AssignedResource(const StoragePtr & storage_, DB::ServerDataPartsVector parts_, bool sent_create_query_);
 
     StoragePtr storage;
     String worker_table_name;
@@ -36,6 +34,8 @@ struct AssignedResource
 
     void addDataParts(const ServerDataPartsVector & parts);
     // void addDataParts(const HiveDataPartsCNCHVector & parts);
+
+    bool empty() const { return sent_create_query && server_parts.empty(); }
 };
 
 /// server and aggregate_worker and insert_worker
@@ -48,7 +48,7 @@ public:
         log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
     {}
 
-    void addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query);
+    void addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name);
     void setAggregateWorker(HostWithPorts aggregate_worker_)
     {
         aggregate_worker = std::move(aggregate_worker_);
@@ -61,19 +61,17 @@ public:
     }
 
     template <typename T>
-    void addDataParts(const UUID & storage_id, const String & worker_table_name, std::vector<T> data_parts, const std::set<Int64> & bucket_numbers = {})
+    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & bucket_numbers = {})
     {
         std::lock_guard lock(mutex);
-        auto & assigned_resource = assigned_table_source.at(storage_id);
+        auto & assigned_resource = assigned_table_resource.at(storage_id);
 
         assigned_resource.addDataParts(data_parts);
-        assigned_resource.worker_table_name = worker_table_name;
-
         if (assigned_resource.bucket_numbers.empty() && !bucket_numbers.empty())
             assigned_resource.bucket_numbers = bucket_numbers;
     }
 
-    void addBufferWorkers(const UUID & storage_id, const String & worker_table_name, const HostWithPortsVec & buffer_workers);
+    void addBufferWorkers(const UUID & storage_id, const HostWithPortsVec & buffer_workers);
 
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
@@ -85,8 +83,8 @@ private:
     auto getLock() const { return std::lock_guard(mutex); }
     void cleanTaskInWorker(bool clean_resource = false) const;
 
-    /// assigned_table_source => assigned_worker_resource
-    void allocateResource(const ContextPtr & context);
+    /// move resource from assigned_table_resource to assigned_worker_resource
+    void allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &);
 
     void sendCreateQueries(const ContextPtr & context);
     void sendDataParts(const ContextPtr & context);
@@ -99,7 +97,7 @@ private:
     HostWithPorts aggregate_worker;
 
     /// storage_uuid, assigned_resource
-    std::unordered_map<UUID, AssignedResource> assigned_table_source;
+    std::unordered_map<UUID, AssignedResource> assigned_table_resource;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
     Poco::Logger * log;

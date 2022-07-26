@@ -531,7 +531,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     global_context->initRootConfig(config());
-    auto & root_config = global_context->getRootConfig();
+    const auto & root_config = global_context->getRootConfig();
 
 
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
@@ -561,7 +561,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
 
-    std::string current_raw_sd_config = "";
+    std::string current_raw_sd_config;
     if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
     {
         current_raw_sd_config = config().getRawString("service_discovery");
@@ -1164,7 +1164,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
 #endif
 
-    DiskCacheFactory::instance().init(*global_context);
+    try
+    {
+        DiskCacheFactory::instance().init(*global_context);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
 
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;
@@ -1758,7 +1766,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (ha_server)
             ha_server->start();
 
-   
         /// Server and worker rpc services
         std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
         std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;

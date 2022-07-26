@@ -414,9 +414,4 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
     }
 }
 
-void ASTCreateQuery::replaceTable(const String & table_name)
-{
-    table = table_name;
-}
-
 }

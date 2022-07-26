@@ -82,7 +82,7 @@ public:
     String getCreateQueryForCloudTable(
         const String & query,
         const String & local_table_name,
-        const std::optional<ContextPtr> & context = std::nullopt,
+        const ContextPtr & context = nullptr,
         bool enable_staging_area = false,
         const std::optional<StorageID> & cnch_storage_id = std::nullopt) const;
 

@@ -2,6 +2,8 @@
 #include <IO/ConnectionTimeouts.h>
 #include <IO/Operators.h>
 #include <Common/thread_local_rng.h>
+#include <Interpreters/Context.h>
+#include <CloudServices/CnchServerResource.h>
 
 
 namespace DB
@@ -17,8 +19,8 @@ namespace ErrorCodes
 }
 
 
-MultiplexedConnections::MultiplexedConnections(Connection & connection, const Settings & settings_, const ThrottlerPtr & throttler)
-    : settings(settings_)
+MultiplexedConnections::MultiplexedConnections(Connection & connection, ContextPtr context_, const Settings & settings_, const ThrottlerPtr & throttler)
+    : WithContext(context_), settings(settings_)
 {
     connection.setThrottler(throttler);
 
@@ -30,9 +32,9 @@ MultiplexedConnections::MultiplexedConnections(Connection & connection, const Se
 }
 
 MultiplexedConnections::MultiplexedConnections(
-        std::vector<IConnectionPool::Entry> && connections,
+        std::vector<IConnectionPool::Entry> && connections, ContextPtr context_,
         const Settings & settings_, const ThrottlerPtr & throttler)
-    : settings(settings_)
+    : WithContext(context_), settings(settings_)
 {
     /// If we didn't get any connections from pool and getMany() did not throw exceptions, this means that
     /// `skip_unavailable_shards` was set. Then just return.
@@ -91,6 +93,23 @@ void MultiplexedConnections::sendExternalTablesData(std::vector<ExternalTablesDa
     }
 }
 
+void MultiplexedConnections::sendResource()
+{
+    auto server_resource = getContext()->tryGetCnchServerResource();
+
+    if (!server_resource)
+        return;
+
+    std::lock_guard lock(cancel_mutex);
+
+    if (replica_states.size() > 1)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel query processing is not supported in CNCH");
+
+    auto host_ports = replica_states[0].connection->getHostWithPorts();
+
+    server_resource->sendResource(getContext(), host_ports);
+}
+
 void MultiplexedConnections::sendQuery(
     const ConnectionTimeouts & timeouts,
     const String & query,
@@ -119,9 +138,15 @@ void MultiplexedConnections::sendQuery(
         }
     }
 
+    auto current_context = getContext();
     size_t num_replicas = replica_states.size();
+    bool is_cnch_query = current_context->getServerType() == ServerType::cnch_server || current_context->getServerType() == ServerType::cnch_worker;
+
     if (num_replicas > 1)
     {
+        if (is_cnch_query)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Parallel query processing is not supported in CNCH");
+
         /// Use multiple replicas for parallel query processing.
         modified_settings.parallel_replicas_count = num_replicas;
         for (size_t i = 0; i < num_replicas; ++i)
@@ -133,9 +158,22 @@ void MultiplexedConnections::sendQuery(
     }
     else
     {
-        /// Use single replica.
-        replica_states[0].connection->sendQuery(timeouts, query, query_id,
-                stage, &modified_settings, &client_info, with_pending_data);
+        if (is_cnch_query)
+        {
+            auto txn_id = current_context->getCurrentTransactionID();
+            auto rpc_port = (current_context->getServerType() == ServerType::cnch_worker)
+                ? current_context->getClientInfo().rpc_port
+                : current_context->getRPCPort();
+
+            replica_states[0].connection->sendCnchQuery(
+                txn_id, timeouts, query, query_id, stage, &modified_settings, & client_info, with_pending_data, rpc_port);
+        }
+        else
+        {
+            /// Use single replica.
+            replica_states[0].connection->sendQuery(
+                timeouts, query, query_id, stage, &modified_settings, &client_info, with_pending_data);
+        }
     }
 
     sent_query = true;

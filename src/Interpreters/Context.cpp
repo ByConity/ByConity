@@ -153,12 +153,11 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchBGThreadsMap.h>
 #include <CloudServices/CnchWorkerResource.h>
-#include <WorkerTasks/ManipulationList.h>
+#include <CloudServices/CnchServerResource.h>
 #include <Catalog/Catalog.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <MergeTreeCommon/CnchServerResource.h>
 #include <TSO/TSOClient.h>
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
@@ -497,6 +496,8 @@ struct ContextSharedPart
             dictionaries_xmls.reset();
 
             cnch_bg_threads_array.reset();
+            cnch_txn_coordinator.reset();
+
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
@@ -664,14 +665,6 @@ Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_cloc
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
 
     return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
-}
-
-void Context::initCnchServerResource()
-{
-    if (server_resource)
-        return;
-
-    server_resource = std::make_shared<CnchServerResource>(TxnTimestamp(getTimestamp()));
 }
 
 void Context::initCnchServerResource(const TxnTimestamp & txn_id)
@@ -2775,7 +2768,7 @@ void removeConfigRecursive(Poco::Util::AbstractConfiguration& cfg,
     cfg.remove(prefix);
 }
 
-void Context::updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration& config)
+void Context::updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration& config) const
 {
     String default_cnch_policy_name = getDefaultCnchPolicyName();
     if (config.has("storage_configuration.policies." + default_cnch_policy_name))
@@ -2795,19 +2788,19 @@ void Context::updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguratio
             && std::find(keys.begin(), keys.end(), "hdfs") != keys.end())
         {
             // Old cnch configuration
-            String default_cnch_policy_key = "storage_configuraiton.policies." + default_cnch_policy_name;
+            String default_cnch_policy_key = "storage_configuration.policies." + default_cnch_policy_name;
             config.setString(default_cnch_policy_key, "");
             config.setString(default_cnch_policy_key + ".volumes", "");
             config.setString(default_cnch_policy_key + ".volumes.hdfs", "");
-            copyConfigRecursive(config, "storage_configuraiton.policies.default.volumes.hdfs",
+            copyConfigRecursive(config, "storage_configuration.policies.default.volumes.hdfs",
                 config, default_cnch_policy_key + ".volumes.hdfs");
 
-            removeConfigRecursive(config, "storage_configuraiton.policies.default.volumes.hdfs");
+            removeConfigRecursive(config, "storage_configuration.policies.default.volumes.hdfs");
         }
     }
     else
     {
-        // Multiple policy specificed, not old cnch configuraiton, don't update config
+        // Multiple policy specified, not old cnch configuration, don't update config
     }
 }
 

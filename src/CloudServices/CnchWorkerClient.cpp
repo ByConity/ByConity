@@ -167,6 +167,7 @@ void CnchWorkerClient::sendQueryDataParts(
     brpc::Controller cntl;
     Protos::SendDataPartsReq request;
     Protos::SendDataPartsResp response;
+
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
