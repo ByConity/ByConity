@@ -21,7 +21,7 @@ public:
 
     MergeTreeDataDumper(
         MergeTreeMetaBase & data_,
-        const StorageType & type_ = StorageType::HDFS,
+        const StorageType & type_ = StorageType::ByteHDFS,
         const String magic_code_ = "CHHF",
         const MergeTreeDataFormatVersion version_ = MERGE_TREE_DATA_STORAGTE_LEVEL_1_VERSION)
         : data(data_)
@@ -85,7 +85,7 @@ private:
 private:
     MergeTreeMetaBase & data;
     Poco::Logger * log;
-    StorageType type{StorageType::HDFS};
+    StorageType type{StorageType::ByteHDFS};
     String magic_code{"CHHF"};
     MergeTreeDataFormatVersion version{MERGE_TREE_DATA_STORAGTE_LEVEL_1_VERSION};
 };

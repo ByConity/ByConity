@@ -21,7 +21,7 @@ std::unique_ptr<WriteBuffer> MergeTreeDataDumper::createWriteBuffer(const String
     switch (type)
     {
 #if USE_HDFS
-        case StorageType::HDFS:
+        case StorageType::ByteHDFS:
         {
             return std::make_unique<WriteBufferFromHDFS>(file_name, data.getContext()->getHdfsConnectionParams());
         }
@@ -36,7 +36,7 @@ std::unique_ptr<ReadBuffer> MergeTreeDataDumper::createReadBuffer(const String &
     switch (type)
     {
 #if USE_HDFS
-        case StorageType::HDFS:
+        case StorageType::ByteHDFS:
         {
             return std::make_unique<ReadBufferFromByteHDFS>(file_name, false, data.getContext()->getHdfsConnectionParams());
         }
@@ -141,7 +141,7 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, St
     Int64 max_block = staled_part->info.max_block;
     UInt32 merge_tree_level = staled_part->info.level;
     MergeTreePartInfo new_part_info(partition_id, min_block, max_block, merge_tree_level, 0, storage_level);
-    new_part_info.storage_type = StorageType::HDFS;
+    new_part_info.storage_type = StorageType::ByteHDFS;
 
     String part_name = staled_part->name;
     /// TODO: FIX
@@ -154,7 +154,7 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, St
     auto new_part = std::make_shared<MergeTreeDataPartCNCH>(data, part_name, new_part_info, single_disk_volume, tmp_prefix + part_name);
     new_part->partition.assign(staled_part->partition);
     new_part->prepared_checksums = std::make_shared<MergeTreeDataPartChecksums>(*staled_part->getChecksums());
-    new_part->prepared_checksums->storage_type = StorageType::HDFS;
+    new_part->prepared_checksums->storage_type = StorageType::ByteHDFS;
     new_part->minmax_idx = staled_part->minmax_idx;
     new_part->rows_count = staled_part->rows_count;
     /// TODO: FIX marks_count

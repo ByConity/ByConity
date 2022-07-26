@@ -54,7 +54,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
         buffer_size, settings_, total_segment_count, marks_loader, uncompressed_cache_,
         profile_callback_, clock_type_
     );
-    data_buffer = read_buffer_holder.get(); 
+    data_buffer = read_buffer_holder.get();
 }
 
 void MergeTreeReaderStreamWithSegmentCache::seekToStart()

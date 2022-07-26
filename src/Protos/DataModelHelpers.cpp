@@ -130,7 +130,7 @@ DataPartInfoPtr createPartInfoFromModel(const Protos::DataModelPartInfo & part_i
     part_info_ptr->level = part_info_model.level();
     part_info_ptr->mutation = part_info_model.mutation();
     part_info_ptr->hint_mutation = part_info_model.hint_mutation();
-    part_info_ptr->storage_type = StorageType::HDFS;
+    part_info_ptr->storage_type = StorageType::ByteHDFS;
     return part_info_ptr;
 }
 

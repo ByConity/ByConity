@@ -257,7 +257,7 @@ struct Settings;
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
     \
-    M(String, cnch_local_storage_policy, "default_cnch_local", "Storage policy used to store local temp data", 0) \
+    M(String, cnch_local_storage_policy, "default", "Storage policy used to store local temp data", 0) \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
