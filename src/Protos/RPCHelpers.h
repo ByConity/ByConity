@@ -106,8 +106,6 @@ namespace DB::RPCHelpers
     void handleException(std::string * exception_str);
     [[noreturn]] void checkException(const std::string & exception_str);
 
-    ContextMutablePtr createSessionContext(ContextPtr global_context, google::protobuf::RpcController & cntl_base);
-
     template <class R>
     inline void checkResponse(const R & r)
     {

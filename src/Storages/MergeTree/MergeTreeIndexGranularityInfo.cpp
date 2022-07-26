@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include "Storages/MergeTree/MergeTreeDataPartType.h"
 
 
 namespace fs = std::filesystem;
@@ -69,7 +70,7 @@ void MergeTreeIndexGranularityInfo::setNonAdaptive()
 
 size_t MergeTreeIndexGranularityInfo::getMarkSizeInBytes(size_t columns_num) const
 {
-    if (type == MergeTreeDataPartType::WIDE)
+    if (type == MergeTreeDataPartType::WIDE || type == MergeTreeDataPartType::CNCH)
         return is_adaptive ? getAdaptiveMrkSizeWide() : getNonAdaptiveMrkSizeWide();
     else if (type == MergeTreeDataPartType::COMPACT)
         return getAdaptiveMrkSizeCompact(columns_num);

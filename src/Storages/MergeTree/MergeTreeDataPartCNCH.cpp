@@ -29,7 +29,7 @@ static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offs
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of file is zero");
 
     in.seek(file_offset);
-    return LimitReadBuffer(in, file_size, true);
+    return LimitReadBuffer(in, file_size, false);
 }
 
 static std::pair<off_t, size_t> getFileOffsetAndSize(const IMergeTreeDataPart & data_part, const String & file_name)
@@ -135,15 +135,16 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
 };
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(
-    [[maybe_unused]] size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
+    [[maybe_unused]] size_t /*marks_count*/, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
-    if (index_granularities.empty())
-        throw Exception("MergeTreeDataPartCNCH cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
+    // if (index_granularities.empty())
+    //     throw Exception("MergeTreeDataPartCNCH cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
 
-    for (size_t granularity : index_granularities)
-        index_granularity.appendMark(granularity);
+    // for (size_t granularity : index_granularities)
+    //     index_granularity.appendMark(granularity);
 
-    index_granularity.setInitialized();
+    // index_granularity.setInitialized();
+    loadIndexGranularity();
 };
 
 void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
@@ -167,6 +168,7 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
         readIntBinary(file_checksum.file_offset, buf);
         readIntBinary(file_checksum.file_size, buf);
         readIntBinary(file_checksum.file_hash, buf);
+        LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "{} infomation: file offset {}, file size {}, file hash {}-{}\n", file_name, file_checksum.file_offset, file_checksum.file_size, file_checksum.file_hash.first, file_checksum.file_hash.second);
         file_checksums[file_name] = std::move(file_checksum);
     };
 
@@ -185,12 +187,12 @@ bool MergeTreeDataPartCNCH::isDeleted() const
 
 String MergeTreeDataPartCNCH::getFullDataPath() const
 {
-    return fs::path(getFullPath()) / DATA_FILE_EXTENSION;
+    return fs::path(getFullPath()) / "data";
 }
 
 String MergeTreeDataPartCNCH::getFullRelativeDataPath() const
 {
-    return fs::path(getFullPath()) / DATA_FILE_EXTENSION;
+    return fs::path(getFullPath()) / "data";
 }
 
 void MergeTreeDataPartCNCH::checkConsistency([[maybe_unused]] bool require_part_metadata) const
@@ -289,6 +291,8 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
 void MergeTreeDataPartCNCH::loadIndexGranularity()
 {
+    index_granularity.resizeWithFixedGranularity(marks_count, storage.getSettings()->index_granularity);
+    index_granularity.setInitialized();
 }
 
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(

@@ -108,9 +108,7 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
     if (update_mode == NoUpdate)
         return;
 
-    // TODO(zuochuang.zema) MERGE StopWatchDetail
-    // UInt64 current_ns = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC_COARSE);
-    UInt64 current_ns = 0;
+    UInt64 current_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
     if (update_mode == ForceUpdate)
     {
         last_update_time_ns.store(current_ns);

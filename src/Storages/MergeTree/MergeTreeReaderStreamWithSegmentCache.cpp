@@ -4,16 +4,17 @@
 #include <Storages/DiskCache/DiskCacheSegment.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <fmt/core.h>
-#include "Common/Exception.h"
-#include "Compression/CachedCompressedReadBuffer.h"
-#include "Compression/CompressedReadBuffer.h"
-#include "Compression/CompressedReadBufferFromFile.h"
-#include "Disks/IDisk.h"
-#include "IO/ReadBufferFromFileBase.h"
-#include "IO/createReadBufferFromFileBase.h"
-#include "Storages/DiskCache/DiskCacheSegment.h"
-#include "Storages/MergeTree/MergeTreeReaderStream.h"
-#include "Storages/MergeTree/MergeTreeSuffix.h"
+#include <Common/Exception.h>
+#include <Compression/CachedCompressedReadBuffer.h>
+#include <Compression/CompressedReadBuffer.h>
+#include <Compression/CompressedReadBufferFromFile.h>
+#include <Disks/IDisk.h>
+#include <IO/ReadBuffer.h>
+#include <IO/ReadBufferFromFileBase.h>
+#include <IO/createReadBufferFromFileBase.h>
+#include <Storages/DiskCache/DiskCacheSegment.h>
+#include <Storages/MergeTree/MergeTreeReaderStream.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 namespace DB
 {
@@ -53,6 +54,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
         buffer_size, settings_, total_segment_count, marks_loader, uncompressed_cache_,
         profile_callback_, clock_type_
     );
+    data_buffer = read_buffer_holder.get();
 }
 
 void MergeTreeReaderStreamWithSegmentCache::seekToStart()

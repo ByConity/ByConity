@@ -1,6 +1,8 @@
 #include <Storages/StorageCloudMergeTree.h>
 
 #include <Common/Exception.h>
+#include "Core/UUID.h"
+#include "Storages/IStorage.h"
 #include <Processors/Pipe.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -33,7 +35,7 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeCloudData( // NOLINT
         table_id_,
-        relative_data_path_,
+        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -44,7 +46,7 @@ StorageCloudMergeTree::StorageCloudMergeTree(
 {
     local_store_volume = getContext()->getStoragePolicy(
         getSettings()->cnch_local_storage_policy.toString());
-    relative_local_store_path = fs::path("store") / UUIDHelpers::UUIDToString(getStorageID().uuid);
+    relative_local_store_path = fs::path("store");
 }
 
 StorageCloudMergeTree::~StorageCloudMergeTree()
@@ -112,4 +114,10 @@ MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(con
 {
     return {};
 }
+
+StoragePolicyPtr StorageCloudMergeTree::getLocalStoragePolicy() const
+{
+    return local_store_volume;
+}
+
 }

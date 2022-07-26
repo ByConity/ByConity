@@ -25,7 +25,7 @@ class MergeTreeCNCHDataDumper
 public:
     using uint128 = CityHash_v1_0_2::uint128;
 
-    MergeTreeCNCHDataDumper(
+    explicit MergeTreeCNCHDataDumper(
         MergeTreeMetaBase & data_,
         const String& magic_code_ = "CNCH",
         const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);

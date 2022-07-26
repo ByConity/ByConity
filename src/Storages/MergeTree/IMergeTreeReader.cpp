@@ -1,6 +1,7 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/MapHelpers.h>
+#include "common/logger_useful.h"
 #include <Common/escapeForFileName.h>
 #include <Compression/CachedCompressedReadBuffer.h>
 #include <Columns/ColumnArray.h>
@@ -445,7 +446,9 @@ void IMergeTreeReader::readData(
                 continue_reading = false;
             }
             else if (!continue_reading)
+            {
                 stream.seekToMark(from_mark);
+            }
 
             return stream.data_buffer;
         };
@@ -458,7 +461,7 @@ void IMergeTreeReader::readData(
     const auto & name = name_and_type.name;
     auto serialization = serializations[name];
     
-    if (deserialize_binary_bulk_state_map.count(name) == 0)
+    if (!deserialize_binary_bulk_state_map.contains(name))
     {
         deserialize_settings.getter = get_stream_getter(true);
         serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);

@@ -91,7 +91,9 @@
 #include "MetricsTransmitter.h"
 #include <DataTypes/MapHelpers.h>
 #include <Statistics/CacheManager.h>
-
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+#include <CloudServices/CnchWorkerClientPools.h>
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/Catalog.h>
 

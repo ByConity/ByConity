@@ -17,6 +17,7 @@ namespace DB
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
+    AssignedResource(const StoragePtr & storage_, DB::ServerDataPartsVector parts_, bool sent_create_query_);
 
     StoragePtr storage;
     String worker_table_name;
@@ -63,7 +64,7 @@ public:
     void addDataParts(const UUID & storage_id, const String & worker_table_name, std::vector<T> data_parts, const std::set<Int64> & bucket_numbers = {})
     {
         std::lock_guard lock(mutex);
-        auto assigned_resource = assigned_table_source.at(storage_id);
+        auto & assigned_resource = assigned_table_source.at(storage_id);
 
         assigned_resource.addDataParts(data_parts);
         assigned_resource.worker_table_name = worker_table_name;

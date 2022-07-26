@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 
+#include <memory>
 #include <optional>
 #include <Core/Defines.h>
 #include <IO/HashingWriteBuffer.h>
@@ -29,6 +30,7 @@
 #include <Storages/DiskUniqueIndexFileCache.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <Processors/Executors/PipelineExecutingBlockInputStream.h>
@@ -676,6 +678,7 @@ size_t IMergeTreeDataPart::getFileSizeOrZero(const String & file_name) const
     auto checksum = checksums->files.find(file_name);
     if (checksum == checksums->files.end())
         return 0;
+    LOG_DEBUG(storage.log, "File {} size is {}\n", file_name, checksum->second.file_size);
     return checksum->second.file_size;
 }
 
@@ -685,6 +688,7 @@ off_t IMergeTreeDataPart::getFileOffsetOrZero(const String & file_name) const
     auto checksum = checksums->files.find(file_name);
     if (checksum == checksums->files.end())
         return 0;
+    LOG_DEBUG(storage.log, "File {} offset is {}\n", file_name, checksum->second.file_offset);
     return checksum->second.file_offset;
 }
 
@@ -2706,7 +2710,8 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
 
     writeVarUInt(part.bytes_on_disk, buf);
     writeVarUInt(part.rows_count, buf);
-    // writeVarUInt(part.marks_count, buf);
+    if (auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this()))
+        writeVarUInt(cnch_part->marks_count, buf);
     writeVarUInt(part.info.hint_mutation, buf);
 
     part.columns_ptr->writeText(buf);

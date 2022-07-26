@@ -1,9 +1,11 @@
+#include <memory>
 #include <Protos/DataModelHelpers.h>
 
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include "Common/Exception.h"
 #include <common/JSON.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper.h>
@@ -84,7 +86,9 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
 
     part->bytes_on_disk = part_model.size();
     part->rows_count = part_model.rows_count();
-    // part->marks_count = part_model.marks_count();
+    if (!part_model.has_marks_count())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
+    part->marks_count = part_model.marks_count();
     part->deleted = part_model.has_deleted() && part_model.deleted();
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();
@@ -126,7 +130,7 @@ DataPartInfoPtr createPartInfoFromModel(const Protos::DataModelPartInfo & part_i
     part_info_ptr->level = part_info_model.level();
     part_info_ptr->mutation = part_info_model.mutation();
     part_info_ptr->hint_mutation = part_info_model.hint_mutation();
-    part_info_ptr->storage_type = StorageType::HDFS;
+    part_info_ptr->storage_type = StorageType::ByteHDFS;
     return part_info_ptr;
 }
 
@@ -173,7 +177,9 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
     ///TODO: if we need marks_count in ce?
-    // part_model.set_marks_count(part.marks_count);
+    const auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this());
+    if (cnch_part)
+        part_model.set_marks_count(cnch_part->marks_count);
     part_model.set_txnid(part.info.mutation);
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);

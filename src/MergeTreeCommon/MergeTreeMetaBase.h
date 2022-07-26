@@ -139,6 +139,7 @@ public:
     std::string getName() const override { return "MergeTreeMetaBase"; }
 
     StoragePolicyPtr getStoragePolicy() const override;
+    virtual StoragePolicyPtr getLocalStoragePolicy() const;
 
     bool supportsPrewhere() const override { return true; }
 

@@ -4,6 +4,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -318,6 +319,10 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (is_cnch)
         name_part = name_part.substr(strlen("Cnch"));
 
+    bool is_cloud = startsWith(name_part, "Cloud");
+    if (is_cloud)
+        name_part = name_part.substr(strlen("Cloud"));
+
     MergeTreeMetaBase::MergingParams merging_params;
     merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
 
@@ -375,6 +380,12 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
         if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
             add_optional_param("version");
+    }
+
+    if (is_cloud)
+    {
+        add_mandatory_param("cnch database");
+        add_mandatory_param("cnch table");
     }
 
     if (!is_extended_storage_def)
@@ -575,6 +586,27 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             allow_renaming = false;
     }
 
+    String cnch_database_name;
+    String cnch_table_name;
+    if (is_cloud)
+    {
+        if (const auto * ast = engine_args[0]->as<ASTIdentifier>())
+            cnch_database_name = ast->name();
+        else
+            throw Exception(
+                "Cnch database name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                ErrorCodes::BAD_ARGUMENTS);
+        ++arg_num;
+        if (const auto * ast = engine_args[1]->as<ASTIdentifier>())
+            cnch_table_name = ast->name();
+        else
+            throw Exception(
+                "Cnch table name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                ErrorCodes::BAD_ARGUMENTS);
+        ++arg_num;
+        engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
+    }
+
     /// This merging param maybe used as part of sorting key
     std::optional<String> merging_param_key_arg;
 
@@ -771,6 +803,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             if (args.storage_def->settings == nullptr)
             {
                 auto settings_ast = std::make_shared<ASTSetQuery>();
+                settings_ast->is_standalone = false;
                 args.storage_def->set(args.storage_def->settings, settings_ast);
             }
             if (args.storage_def->settings->changes.tryGet("storage_policy") == nullptr)
@@ -913,6 +946,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             merging_params,
             std::move(storage_settings));
     }
+    else if (is_cloud)
+    {
+        return StorageCloudMergeTree::create(
+            args.table_id,
+            std::move(cnch_database_name),
+            std::move(cnch_table_name),
+            args.relative_data_path,
+            metadata,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings));
+    }
     else
     {
         return StorageMergeTree::create(
@@ -969,6 +1015,7 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("CnchMergeTree", create, features);
+    factory.registerStorage("CloudMergeTree", create, features);
     factory.registerStorage("CnchUniqueMergeTree", create, features);
     factory.registerStorage("CnchCollapsingMergeTree", create, features);
     factory.registerStorage("CnchReplacingMergeTree", create, features);

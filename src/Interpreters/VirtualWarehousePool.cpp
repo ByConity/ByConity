@@ -44,8 +44,7 @@ VirtualWarehouseHandle VirtualWarehousePool::creatorImpl(const String & vw_name)
 
 VirtualWarehouseHandle VirtualWarehousePool::get(const String & vw_name)
 {
-    // UInt64 current_ns = StopWatchDetail::nanoseconds(CLOCK_MONOTONIC_COARSE);
-    UInt64 current_ns = 0;
+    UInt64 current_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
     constexpr UInt64 update_interval_ns = 10ULL * 1000 * 1000 * 1000; // 10s TODO: make it configurable
     UInt64 the_last_update_time_ns = last_update_time_ns.load();
     if (current_ns >= the_last_update_time_ns + update_interval_ns

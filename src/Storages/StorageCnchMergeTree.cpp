@@ -84,7 +84,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
 {
     local_store_volume = getContext()->getStoragePolicy(
         getSettings()->cnch_local_storage_policy.toString());
-    relative_local_store_path = fs::path("store") / UUIDHelpers::UUIDToString(getStorageID().uuid);
+    relative_local_store_path = fs::path("store");
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
@@ -228,6 +228,7 @@ void StorageCnchMergeTree::read(
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     String local_table_name = getCloudTableName(local_context);
+    
 
     healthCheckForWorkerGroup(local_context, worker_group);
 
@@ -257,20 +258,19 @@ void StorageCnchMergeTree::read(
     LOG_INFO(log, "Number of parts after pruning: {}", parts.size());
 
     /// TODO: when parts is empty or very few parts, process locally.
-
     allocateImpl(local_context, parts, local_table_name, worker_group);
 
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name);
+    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name, local_context->getCurrentTransactionID());
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
             header,
             processed_stage,
-            StorageID{remote_database, remote_table},
+            StorageID::createEmpty(),
             scalars,
             false,
             local_context->getExternalTables());
@@ -862,7 +862,6 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
     else
     {
         /// FIXME: add after cloud output stream is supported
-        fmt::print(stderr, "Creating cloud merge tree...\n");
         return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
     }
 }
@@ -1142,6 +1141,7 @@ void StorageCnchMergeTree::allocateImpl(
     WorkerGroupHandle & /*worker_group*/)
 {
     auto cnch_resource = local_context->tryGetCnchServerResource();
+    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query);
@@ -1249,4 +1249,8 @@ void StorageCnchMergeTree::truncate(
     //    return;
 }
 
+StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
+{
+    return local_store_volume;
+}
 } // end namespace DB
