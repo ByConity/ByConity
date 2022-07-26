@@ -678,7 +678,7 @@ size_t IMergeTreeDataPart::getFileSizeOrZero(const String & file_name) const
     auto checksum = checksums->files.find(file_name);
     if (checksum == checksums->files.end())
         return 0;
-    // fmt::print(stderr, "File {} size is {}\n", file_name, checksum->second.file_size);
+    LOG_DEBUG(storage.log, "File {} size is {}\n", file_name, checksum->second.file_size);
     return checksum->second.file_size;
 }
 
@@ -688,7 +688,7 @@ off_t IMergeTreeDataPart::getFileOffsetOrZero(const String & file_name) const
     auto checksum = checksums->files.find(file_name);
     if (checksum == checksums->files.end())
         return 0;
-    // fmt::print(stderr, "File {} offset is {}\n", file_name, checksum->second.file_offset);
+    LOG_DEBUG(storage.log, "File {} offset is {}\n", file_name, checksum->second.file_offset);
     return checksum->second.file_offset;
 }
 

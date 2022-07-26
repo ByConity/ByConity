@@ -103,7 +103,6 @@ void ISerialization::deserializeBinaryBulkWithMultipleStreams(
     }
     else if (ReadBuffer * stream = settings.getter(settings.path))
     {
-        // fmt::print(stderr, "Getting {} rows from stream...\n", limit);
         auto mutable_column = column->assumeMutable();
         deserializeBinaryBulk(*mutable_column, *stream, limit, settings.avg_value_size_hint);
         column = std::move(mutable_column);

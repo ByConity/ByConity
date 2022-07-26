@@ -258,7 +258,6 @@ void StorageCnchMergeTree::read(
     LOG_INFO(log, "Number of parts after pruning: {}", parts.size());
 
     /// TODO: when parts is empty or very few parts, process locally.
-    fmt::print(stderr, "Cloud table name: {}\n", local_table_name);
     allocateImpl(local_context, parts, local_table_name, worker_group);
 
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
@@ -863,7 +862,6 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
     else
     {
         /// FIXME: add after cloud output stream is supported
-        fmt::print(stderr, "Creating cloud merge tree...\n");
         return std::make_shared<CloudMergeTreeBlockOutputStream>(*this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
     }
 }
@@ -1133,7 +1131,6 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
 void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group)
 {
     String table_name = getCloudTableName(local_context);
-    fmt::print(stderr, "Cloud table name: {}\n", table_name);
     allocateImpl(local_context, parts, table_name, worker_group);
 }
 
