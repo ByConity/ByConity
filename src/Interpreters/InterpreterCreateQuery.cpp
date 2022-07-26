@@ -1053,7 +1053,6 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
     String data_path;
     DatabasePtr database;
 
-    LOG_DEBUG(log, "Trying to create table with: {}\n", create.formatForErrorMessage());
 
     bool need_add_to_database = !create.temporary;
     if (need_add_to_database)

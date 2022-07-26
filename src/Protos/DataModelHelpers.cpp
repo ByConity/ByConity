@@ -69,7 +69,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     /// Create part object
     auto info = createPartInfoFromModel(part_model.part_info());
     String part_name = info->getPartName();
-    UInt32 path_id = part_model.has_data_path_id() ? part_model.data_path_id() : 1;
+    UInt32 path_id = part_model.has_data_path_id() ? part_model.data_path_id() : 0;
 
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);

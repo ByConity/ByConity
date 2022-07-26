@@ -176,7 +176,6 @@ inline std::vector<T> createPartVectorFromModelsForSend(
         {
             part->columns_ptr = columns_versions[part_model.columns_commit_time()];
         }
-        part->loadIndexGranularity(0, {});
         res.emplace_back(std::move(part));
     }
     return res;
