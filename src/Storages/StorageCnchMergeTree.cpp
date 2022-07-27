@@ -258,7 +258,7 @@ void StorageCnchMergeTree::read(
     LOG_INFO(log, "Number of parts after pruning: {}", parts.size());
 
     /// TODO: when parts is empty or very few parts, process locally.
-    allocateImpl(local_context, parts, local_table_name, worker_group);
+    collectResource(local_context, parts, local_table_name);
 
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
@@ -1054,7 +1054,7 @@ StorageCnchMergeTree::getPrunedServerParts(const Names & column_names_to_return,
     return pruneParts(column_names_to_return, data_parts, local_context, query_info);
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & /*ts*/, const NameSet * /*partitions*/)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & /*ts*/, const NameSet * /*partitions*/) // NOLINT
 {
     return {};
     /// FIXME:
@@ -1079,7 +1079,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
     Stopwatch watch;
     auto all_bitmaps = local_context->getCnchCatalog()->getDeleteBitmapsInPartitions(shared_from_this(), { request_partitions.begin(), request_partitions.end() }, start_time);
     ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
-    LOG_DEBUG(log, "Get delete bitmap meta for total {} parts took: {} ms read {} number of bitmap metas", parts.size(),
+    LOG_DEBUG(log, "Get delete bitmap meta for total {} parts took: {} ms read {} number of bitmap meta", parts.size(),
                 watch.elapsedMilliseconds(), all_bitmaps.size());
 
     DeleteBitmapMetaPtrVector bitmaps;
@@ -1116,22 +1116,12 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
     }
 }
 
-void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group)
+void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name)
 {
-    String table_name = getCloudTableName(local_context);
-    allocateImpl(local_context, parts, table_name, worker_group);
-}
-
-void StorageCnchMergeTree::allocateImpl(
-    ContextPtr local_context,
-    ServerDataPartsVector & parts,
-    const String & local_table_name,
-    WorkerGroupHandle & /*worker_group*/)
-{
-    auto cnch_resource = local_context->tryGetCnchServerResource();
-    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
+    auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
+    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
 
     // if (context.getSettingsRef().enable_virtual_part)
