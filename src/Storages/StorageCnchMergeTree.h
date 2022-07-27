@@ -1,9 +1,11 @@
 #pragma once
 
+#include <optional>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
 #include "IStorage.h"
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
@@ -142,7 +144,7 @@ private:
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
 
-    // To store some temporary data for cnch
+    /// To store some temporary data for cnch
     StoragePolicyPtr local_store_volume;
     String relative_local_store_path;
 };

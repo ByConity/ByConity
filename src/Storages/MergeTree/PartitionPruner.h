@@ -5,6 +5,7 @@
 #include <Storages/KeyDescription.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/KeyCondition.h>
+#include "Catalog/DataModelPartWrapper.h"
 
 namespace DB
 {
@@ -33,6 +34,8 @@ public:
     }
 
     bool canBePruned(const DataPart & part);
+
+    bool canBePruned(const ServerDataPart & part);
 
     bool isUseless() const { return useless; }
 
