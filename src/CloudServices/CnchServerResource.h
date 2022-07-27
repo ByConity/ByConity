@@ -38,8 +38,6 @@ struct AssignedResource
     bool empty() const { return sent_create_query && server_parts.empty(); }
 };
 
-/// server and aggregate_worker and insert_worker
-/// Get it from Context
 class CnchServerResource
 {
 public:
@@ -47,6 +45,8 @@ public:
         txn_id(curr_txn_id),
         log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
     {}
+
+    ~CnchServerResource();
 
     void addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name);
     void setAggregateWorker(HostWithPorts aggregate_worker_)

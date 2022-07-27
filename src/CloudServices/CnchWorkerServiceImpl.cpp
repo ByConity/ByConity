@@ -396,27 +396,18 @@ void CnchWorkerServiceImpl::sendOffloading(
     }
 }
 
-void CnchWorkerServiceImpl::sendFinishTask(
+void CnchWorkerServiceImpl::removeWorkerResource(
     google::protobuf::RpcController *,
-    const Protos::SendFinishTaskReq * request,
-    Protos::SendFinishTaskResp * response,
+    const Protos::RemoveWorkerResourceReq * request,
+    Protos::RemoveWorkerResourceResp * response,
     google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
     try
     {
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
-
-        if (request->only_clean())
-        {
-            if (auto worker_resource = session->context->tryGetCnchWorkerResource())
-                worker_resource->removeResource();
-        }
-        else
-        {
-            /// remove resource in worker
-            session->release();
-        }
+        /// remove resource in worker
+        session->release();
     }
     catch (...)
     {

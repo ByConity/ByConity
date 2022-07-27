@@ -462,13 +462,12 @@ message SendOffloadingResp
   optional string exception = 1;
 }
 
-message SendFinishTaskReq
+message RemoveWorkerResourceReq
 {
   required uint64 txn_id = 1;
-  required bool only_clean = 2;
 }
 
-message SendFinishTaskResp
+message RemoveWorkerResourceResp
 {
   optional string exception = 1;
 }
@@ -514,5 +513,5 @@ service CnchWorkerService
   rpc sendCnchHiveDataParts(SendCnchHiveDataPartsReq) returns (SendCnchHiveDataPartsResp);
   rpc checkDataParts(CheckDataPartsReq) returns (CheckDataPartsResp);
   rpc sendOffloading(SendOffloadingReq) returns (SendOffloadingResp);
-  rpc sendFinishTask(SendFinishTaskReq) returns (SendFinishTaskResp);
+  rpc removeWorkerResource(RemoveWorkerResourceReq) returns (RemoveWorkerResourceResp);
 }

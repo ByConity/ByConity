@@ -675,11 +675,10 @@ void Context::initCnchServerResource(const TxnTimestamp & txn_id)
     server_resource = std::make_shared<CnchServerResource>(txn_id);
 }
 
-CnchServerResourcePtr Context::getCnchServerResource()
+CnchServerResourcePtr Context::getCnchServerResource() const
 {
-    /// TODO: replace getTimestamp with txn_id
     if (!server_resource)
-        server_resource = std::make_shared<CnchServerResource>(TxnTimestamp(getTimestamp()));
+        throw Exception("Can't get CnchServerResource", ErrorCodes::SESSION_NOT_FOUND);
 
     return server_resource;
 }

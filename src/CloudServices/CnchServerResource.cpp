@@ -26,6 +26,28 @@ void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
     }
 }
 
+CnchServerResource::~CnchServerResource()
+{
+    if (!worker_group)
+        return;
+
+    auto worker_clients = worker_group->getWorkerClients();
+
+    for (auto & worker_client: worker_clients)
+    {
+        try
+        {
+            worker_client->removeWorkerResource(txn_id);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(
+                __PRETTY_FUNCTION__,
+                "Error occurs when remove WorkerResource{" + txn_id.toString() + "} in worker " + worker_client->getRPCAddress());
+        }
+    }
+}
+
 void CnchServerResource::addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name)
 {
     /// table should exists in SelectStreamFactory::createForShard
@@ -75,18 +97,19 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
     auto worker_client = worker_group->getWorkerClient(worker);
 
-    /// send create queries.
-    std::vector<String> create_queries;
     bool is_local = context->getServerType() == ServerType::cnch_worker && worker.getRPCAddress() == context->getHostWithPorts().getRPCAddress();
 
-    for (auto & resource: resource_to_send)
-    {
-        if (!resource.sent_create_query)
-            create_queries.emplace_back(resource.create_table_query);
-    }
-
     if (!is_local)
+    {
+        /// skip send create query to local shard in offloading mode
+        std::vector<String> create_queries;
+        for (auto & resource: resource_to_send)
+        {
+            if (!resource.sent_create_query)
+                create_queries.emplace_back(resource.create_table_query);
+        }
         worker_client->sendCreateQueries(context, create_queries);
+    }
 
     /// send data parts.
     for (auto & resource: resource_to_send)

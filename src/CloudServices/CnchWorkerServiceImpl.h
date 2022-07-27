@@ -168,6 +168,12 @@ public:
         Protos::SendDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void removeWorkerResource(
+        google::protobuf::RpcController * cntl,
+        const Protos::RemoveWorkerResourceReq * request,
+        Protos::RemoveWorkerResourceResp * response,
+        google::protobuf::Closure * done) override;
+
     /*
     void sendQueryVirtualDataParts(
         google::protobuf::RpcController * cntl,
@@ -192,12 +198,6 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::SendOffloadingReq * request,
         Protos::SendOffloadingResp * response,
-        google::protobuf::Closure * done) override;
-
-    void sendFinishTask(
-        google::protobuf::RpcController * cntl,
-        const Protos::SendFinishTaskReq * request,
-        Protos::SendFinishTaskResp * response,
         google::protobuf::Closure * done) override;
 
     void submitIngestPartitionTask(

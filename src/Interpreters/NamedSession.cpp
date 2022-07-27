@@ -157,6 +157,7 @@ NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, st
 void NamedCnchSession::release()
 {
     parent.releaseSession(*this);
+    LOG_TRACE(&Poco::Logger::get("NamedCnchSession"), "release CnchWorkerResource({})", key);
 }
 
 template class NamedSessionsImpl<NamedSession>;

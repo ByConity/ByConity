@@ -56,7 +56,7 @@ public:
         const std::vector<std::pair<StorageID, String>> & worker_table_names,
         const std::vector<HostWithPortsVec> & buffer_workers_vec);
 
-    void sendFinishTask(TxnTimestamp txn_id, bool only_clean);
+    void removeWorkerResource(TxnTimestamp txn_id);
 
 private:
     std::unique_ptr<Protos::CnchWorkerService_Stub> stub;

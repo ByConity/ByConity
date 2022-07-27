@@ -121,7 +121,7 @@ bool CnchWorkerResource::isCnchTableInWorker(const StorageID & table_id) const
     return cnch_tables.find({table_id.getDatabaseName(), table_id.getTableName()}) != cnch_tables.end();
 }
 
-void CnchWorkerResource::removeResource()
+void CnchWorkerResource::clearResource()
 {
     auto lock = getLock();
     cloud_tables.clear();
