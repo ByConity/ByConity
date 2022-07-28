@@ -1,7 +1,7 @@
 #include <Coordination/pathUtils.h>
 #include <iostream>
 
-namespace DB
+namespace DB::PathUtils
 {
 
 static size_t findLastSlash(StringRef path)
@@ -21,6 +21,7 @@ static size_t findLastSlash(StringRef path)
     return std::string::npos;
 }
 
+/// Note: Different from parentPath in IDisks.h
 StringRef parentPath(StringRef path)
 {
     auto rslash_pos = findLastSlash(path);

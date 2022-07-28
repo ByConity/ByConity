@@ -5,6 +5,7 @@
 #include <common/logger_useful.h>
 #include <Coordination/CoordinationSettings.h>
 #include <Coordination/KeeperSnapshotManager.h>
+#include <Coordination/KeeperContext.h>
 #include <Common/ConcurrentBoundedQueue.h>
 
 namespace DB
@@ -23,8 +24,8 @@ public:
         SnapshotsQueue & snapshots_queue_,
         const std::string & snapshots_path_,
         const CoordinationSettingsPtr & coordination_settings_,
-        const std::string & superdigest_ = "",
-        bool digest_enabled_ = true);
+        const KeeperContextPtr & keeper_context_,
+        const std::string & superdigest_ = "");
 
     /// Read state from the latest snapshot
     void init();
@@ -141,7 +142,7 @@ private:
     /// Special part of ACL system -- superdigest specified in server config.
     const std::string superdigest;
 
-    const bool digest_enabled;
+    KeeperContextPtr keeper_context;
 };
 
 }

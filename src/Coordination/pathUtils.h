@@ -3,7 +3,7 @@
 #include <string>
 #include <common/StringRef.h>
 
-namespace DB
+namespace DB::PathUtils
 {
 
 StringRef parentPath(StringRef path);

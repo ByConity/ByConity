@@ -86,6 +86,11 @@ public:
 
     void finalize() override;
 
+    DB::KeeperApiVersion getApiVersion() override
+    {
+        return KeeperApiVersion::ZOOKEEPER_COMPATIBLE;
+    }
+
     struct Node
     {
         String data;

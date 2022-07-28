@@ -283,17 +283,17 @@ Coordination::Error ZooKeeper::getChildrenImpl(const std::string & path, Strings
     }
 }
 
-Strings ZooKeeper::getChildren(const std::string & path, Coordination::Stat * stat, const EventPtr & watch)
+Strings ZooKeeper::getChildren(const std::string & path, Coordination::Stat * stat, const EventPtr & watch, Coordination::ListRequestType list_request_type)
 {
     Strings res;
-    check(tryGetChildren(path, res, stat, watch), path);
+    check(tryGetChildren(path, res, stat, watch, list_request_type), path);
     return res;
 }
 
-Strings ZooKeeper::getChildrenWatch(const std::string & path, Coordination::Stat * stat, Coordination::WatchCallback watch_callback)
+Strings ZooKeeper::getChildrenWatch(const std::string & path, Coordination::Stat * stat, Coordination::WatchCallback watch_callback, Coordination::ListRequestType list_request_type)
 {
     Strings res;
-    check(tryGetChildrenWatch(path, res, stat, watch_callback), path);
+    check(tryGetChildrenWatch(path, res, stat, watch_callback, list_request_type), path);
     return res;
 }
 
@@ -485,7 +485,6 @@ Coordination::Error ZooKeeper::getImpl(const std::string & path, std::string & r
         return code;
     }
 }
-
 
 std::string ZooKeeper::get(const std::string & path, Coordination::Stat * stat, const EventPtr & watch)
 {
@@ -762,6 +761,11 @@ ZooKeeperPtr ZooKeeper::startNewSession() const
 bool ZooKeeper::expired()
 {
     return impl->isExpired();
+}
+
+DB::KeeperApiVersion ZooKeeper::getApiVersion()
+{
+    return impl->getApiVersion();
 }
 
 Int64 ZooKeeper::getClientID()

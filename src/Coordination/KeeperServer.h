@@ -5,6 +5,8 @@
 #include <Coordination/KeeperStateMachine.h>
 #include <Coordination/KeeperStateManager.h>
 #include <Coordination/KeeperStorage.h>
+#include <Coordination/Keeper4LWInfo.h>
+#include <Coordination/KeeperContext.h>
 #include <common/logger_useful.h>
 #include <Poco/Util/AbstractConfiguration.h>
 
@@ -64,6 +66,8 @@ private:
     void enterRecoveryMode(nuraft::raft_params & params);
 
     std::atomic_bool is_recovering = false;
+
+    std::shared_ptr<KeeperContext> keeper_context;
 
 public:
     KeeperServer(
