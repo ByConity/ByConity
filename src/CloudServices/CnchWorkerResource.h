@@ -12,6 +12,7 @@ namespace DB
 {
 
 class CnchWorkerServiceImpl;
+
 class CnchWorkerResource
 {
 public:
@@ -19,7 +20,7 @@ public:
     StoragePtr getTable(const StorageID & table_id) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;
 
-    void removeResource();
+    void clearResource();
 
     friend class CnchWorkerServiceImpl;
 

@@ -21,6 +21,7 @@
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/TablesStatus.h>
+#include <Interpreters/NamedSession.h>
 #include <Interpreters/InternalTextLogsQueue.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -1022,7 +1023,11 @@ bool TCPHandler::receivePacket()
                 receiveUnexpectedQuery();
             receiveQuery();
             return true;
-
+        case Protocol::Client::CnchQuery:
+            if (!state.empty())
+                receiveUnexpectedQuery();
+            receiveCnchQuery();
+            return true;
         case Protocol::Client::Data:
         case Protocol::Client::Scalar:
             if (state.empty())
@@ -1260,6 +1265,126 @@ void TCPHandler::receiveQuery()
     state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
 }
 
+void TCPHandler::receiveCnchQuery()
+{
+    UInt64 stage = 0;
+    UInt64 compression = 0;
+
+    state.is_empty = false;
+    UInt64 txn_id;
+    readIntBinary(txn_id, *in);
+    readStringBinary(state.query_id, *in);
+
+    /// Client info
+    ClientInfo & client_info = query_context->getClientInfo();
+    client_info.read(*in, client_tcp_protocol_version);
+
+    /// For better support of old clients, that does not send ClientInfo.
+    if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
+    {
+        client_info.query_kind = ClientInfo::QueryKind::INITIAL_QUERY;
+        client_info.client_name = client_name;
+        client_info.client_version_major = client_version_major;
+        client_info.client_version_minor = client_version_minor;
+        client_info.client_version_patch = client_version_patch;
+        client_info.client_tcp_protocol_version = client_tcp_protocol_version;
+    }
+
+    /// Set fields, that are known apriori.
+    client_info.interface = ClientInfo::Interface::TCP;
+
+    /// Per query settings are also passed via TCP.
+    /// We need to check them before applying due to they can violate the settings constraints.
+    Settings passed_settings;
+    passed_settings.read(*in, SettingsWriteFormat::STRINGS_WITH_FLAGS);
+
+    /// Interserver secret.
+    std::string received_hash;
+    readStringBinary(received_hash, *in, 32);
+
+    readVarUInt(stage, *in);
+    state.stage = QueryProcessingStage::Enum(stage);
+
+    readVarUInt(compression, *in);
+    state.compression = static_cast<Protocol::Compression>(compression);
+
+    readStringBinary(state.query, *in);
+
+    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
+    query_context = named_session->context;
+
+    /// It is OK to check only when query != INITIAL_QUERY,
+    /// since only in that case the actions will be done.
+    if (!cluster.empty() && client_info.query_kind != ClientInfo::QueryKind::INITIAL_QUERY)
+    {
+#if USE_SSL
+        std::string data(salt);
+        data += cluster_secret;
+        data += state.query;
+        data += state.query_id;
+        data += client_info.initial_user;
+
+        if (received_hash.size() != 32)
+            throw NetException("Unexpected hash received from client", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+
+        std::string calculated_hash = encodeSHA256(data);
+
+        if (calculated_hash != received_hash)
+            throw NetException("Hash mismatch", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+        /// TODO: change error code?
+
+        /// initial_user can be empty in case of Distributed INSERT via Buffer/Kafka,
+        /// i.e. when the INSERT is done with the global context (w/o user).
+        if (!client_info.initial_user.empty())
+        {
+            query_context->setUserWithoutCheckingPassword(client_info.initial_user, client_info.initial_address);
+            LOG_DEBUG(log, "User (initial): {}", query_context->getUserName());
+        }
+        /// No need to update connection_context, since it does not requires user (it will not be used for query execution)
+#else
+        throw Exception(
+            "Inter-server secret support is disabled, because ClickHouse was built without SSL library",
+            ErrorCodes::SUPPORT_IS_DISABLED);
+#endif
+    }
+    else
+    {
+        query_context->setInitialRowPolicy();
+    }
+
+    /// Settings
+    auto settings_changes = passed_settings.changes();
+
+    /// Quietly clamp to the constraints if it's not an initial query.
+    query_context->clampToSettingsConstraints(settings_changes);
+    query_context->applySettingsChanges(settings_changes);
+
+    /// Disable function name normalization when it's a secondary query, because queries are either
+    /// already normalized on initiator node, or not normalized and should remain denormalized for compatibility.
+    if (client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+    {
+        query_context->setSetting("normalize_function_names", Field(0));
+    }
+
+    // Use the received query id, or generate a random default. It is convenient
+    // to also generate the default OpenTelemetry trace id at the same time, and
+    // set the trace parent.
+    // Why is this done here and not earlier:
+    // 1) ClientInfo might contain upstream trace id, so we decide whether to use
+    // the default ids after we have received the ClientInfo.
+    // 2) There is the opentelemetry_start_trace_probability setting that
+    // controls when we start a new trace. It can be changed via Native protocol,
+    // so we have to apply the changes first.
+    query_context->setCurrentQueryId(state.query_id);
+
+    /// Sync timeouts on client and server during current query to avoid dangling queries on server
+    /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
+    ///  because settings.send_timeout is client-side setting which has opposite meaning on the server side.
+    /// NOTE: these settings are applied only for current connection (not for distributed tables' connections)
+    const Settings & settings = query_context->getSettingsRef();
+    state.timeout_setter = std::make_unique<TimeoutSetter>(socket(), settings.receive_timeout, settings.send_timeout);
+}
+
 void TCPHandler::receiveUnexpectedQuery()
 {
     UInt64 skip_uint_64;
@@ -1272,8 +1397,9 @@ void TCPHandler::receiveUnexpectedQuery()
         skip_client_info.read(*in, client_tcp_protocol_version);
 
     Settings skip_settings;
-    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS) ? SettingsWriteFormat::STRINGS_WITH_FLAGS
-                                                                                                      : SettingsWriteFormat::BINARY;
+    auto settings_format = (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS)
+        ? SettingsWriteFormat::STRINGS_WITH_FLAGS
+        : SettingsWriteFormat::BINARY;
     skip_settings.read(*in, settings_format);
 
     std::string skip_hash;
@@ -1332,7 +1458,7 @@ void TCPHandler::receivePlanSegment()
     if (!query_context->hasQueryContext())
         query_context->makeQueryContext();
 
-    auto plan_segment = PlanSegment::deserializePlanSegment(*in, query_context); 
+    auto plan_segment = PlanSegment::deserializePlanSegment(*in, query_context);
 
     const String & query_id = plan_segment->getQueryId();
     const String & segment_id = std::to_string(plan_segment->getPlanSegmentId());

@@ -143,7 +143,7 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
     Protos::SendCreateQueryResp response;
 
     const auto & settings = context->getSettingsRef();
-    auto timeout = settings.max_execution_time.value.seconds();
+    auto timeout = settings.max_execution_time.value.totalSeconds();
 
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID()); /// Why?
@@ -167,6 +167,7 @@ void CnchWorkerClient::sendQueryDataParts(
     brpc::Controller cntl;
     Protos::SendDataPartsReq request;
     Protos::SendDataPartsResp response;
+
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
@@ -204,15 +205,15 @@ void CnchWorkerClient::sendOffloadingInfo(
     /// TODO:
 }
 
-void CnchWorkerClient::sendFinishTask(TxnTimestamp txn_id, bool only_clean)
+void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
 {
     brpc::Controller cntl;
-    Protos::SendFinishTaskReq request;
-    Protos::SendFinishTaskResp response;
+    Protos::RemoveWorkerResourceReq request;
+    Protos::RemoveWorkerResourceResp response;
 
     request.set_txn_id(txn_id);
-    request.set_only_clean(only_clean);
-    stub->sendFinishTask(&cntl, &request, &response, nullptr);
+    stub->removeWorkerResource(&cntl, &request, &response, nullptr);
+
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }

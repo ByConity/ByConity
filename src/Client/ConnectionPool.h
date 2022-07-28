@@ -25,7 +25,6 @@ class IConnectionPool : private boost::noncopyable
 public:
     using Entry = PoolBase<Connection>::Entry;
 
-public:
     virtual ~IConnectionPool() = default;
 
     /// Selects the connection to work.
@@ -51,7 +50,6 @@ public:
     ConnectionPool(unsigned max_connections_,
             const String & host_,
             UInt16 port_,
-            
             const String & default_database_,
             const String & user_,
             const String & password_,
@@ -62,8 +60,9 @@ public:
             Protocol::Secure secure_,
             Int64 priority_ = 1,
             UInt16 exchange_port_ = 0,
-            UInt16 exchange_status_port_ = 0)
-       : Base(max_connections_,
+            UInt16 exchange_status_port_ = 0,
+            UInt16 rpc_port_ = 0)
+        : Base(max_connections_,
         &Poco::Logger::get("ConnectionPool (" + host_ + ":" + toString(port_) + ")")),
         host(host_),
         port(port_),
@@ -77,7 +76,8 @@ public:
         secure(secure_),
         priority(priority_),
         exchange_port(exchange_port_),
-        exchange_status_port(exchange_status_port_)
+        exchange_status_port(exchange_status_port_),
+        rpc_port(rpc_port_)
     {
     }
 
@@ -121,7 +121,7 @@ protected:
             cluster, cluster_secret,
             client_name, compression, secure,
             Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
-            exchange_port, exchange_status_port);
+            exchange_port, exchange_status_port, rpc_port);
     }
 
 private:
@@ -141,7 +141,7 @@ private:
     Int64 priority;                    /// priority from <remote_servers>
     UInt16 exchange_port;
     UInt16 exchange_status_port;
-
+    UInt16 rpc_port;
 };
 
 }

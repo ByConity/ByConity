@@ -19,11 +19,11 @@
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchServerResource.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Databases/DatabaseOnDisk.h>
-#include <MergeTreeCommon/CnchServerResource.h>
 
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -228,7 +228,7 @@ void StorageCnchMergeTree::read(
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     String local_table_name = getCloudTableName(local_context);
-    
+
 
     healthCheckForWorkerGroup(local_context, worker_group);
 
@@ -258,7 +258,7 @@ void StorageCnchMergeTree::read(
     LOG_INFO(log, "Number of parts after pruning: {}", parts.size());
 
     /// TODO: when parts is empty or very few parts, process locally.
-    allocateImpl(local_context, parts, local_table_name, worker_group);
+    collectResource(local_context, parts, local_table_name);
 
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
@@ -270,7 +270,7 @@ void StorageCnchMergeTree::read(
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
             header,
             processed_stage,
-            StorageID::createEmpty(),
+            StorageID::createEmpty(), /// Don't check whether table exists in cnch-worker
             scalars,
             false,
             local_context->getExternalTables());
@@ -676,7 +676,7 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
     }
 }
 
-static String replaceMatierializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
+static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
 {
     auto query = mv->getCreateTableSql();
 
@@ -684,7 +684,7 @@ static String replaceMatierializedViewQuery(StorageMaterializedView * mv, const 
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
     auto & create_query = ast->as<ASTCreateQuery &>();
-    create_query.replaceTable(create_query.table + "_" + table_suffix);
+    create_query.table += "_" + table_suffix;
     create_query.to_table_id.table_name += "_" + table_suffix;
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
@@ -693,7 +693,7 @@ static String replaceMatierializedViewQuery(StorageMaterializedView * mv, const 
 
     auto & select_query = inner_query->as<ASTSelectQuery &>();
     select_query.replaceDatabaseAndTable(mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
-        mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_"+ table_suffix);
+        mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
 
     return getObjectDefinitionFromCreateQuery(ast, false);
 }
@@ -721,7 +721,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
     for (auto & view : all_views_from_catalog)
         view_dependencies.emplace(view->getStorageID());
 
-    for (auto & dependence : view_dependencies)
+    for (const auto & dependence : view_dependencies)
     {
         auto table = DatabaseCatalog::instance().getTable(dependence, local_context);
         if (!table)
@@ -751,7 +751,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             auto create_local_target_query = getCreateQueryForCloudTable(create_target_query, cnch_merge->getTableName() + "_" + table_suffix,
             local_context, enable_staging_area, cnch_merge->getStorageID());
             create_view_sqls.emplace_back(create_local_target_query);
-            create_view_sqls.emplace_back(replaceMatierializedViewQuery(mv, table_suffix));
+            create_view_sqls.emplace_back(replaceMaterializedViewQuery(mv, table_suffix));
         }
 
         /// TODO: Check cascade view dependency
@@ -990,18 +990,6 @@ CheckResults StorageCnchMergeTree::checkData(const ASTPtr & query, ContextPtr lo
     return checkDataCommon(query, local_context, parts);
 }
 
-String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
-{
-    String worker_table_name = getTableName() + '_';
-    for (auto & c : suffix)
-    {
-        if (c != '-')
-            worker_table_name += c;
-    }
-
-    return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
-}
-
 ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context)
 {
     // TEST_START(testlog);
@@ -1066,7 +1054,7 @@ StorageCnchMergeTree::getPrunedServerParts(const Names & column_names_to_return,
     return pruneParts(column_names_to_return, data_parts, local_context, query_info);
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & /*ts*/, const NameSet * /*partitions*/)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & /*ts*/, const NameSet * /*partitions*/) // NOLINT
 {
     return {};
     /// FIXME:
@@ -1091,7 +1079,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
     Stopwatch watch;
     auto all_bitmaps = local_context->getCnchCatalog()->getDeleteBitmapsInPartitions(shared_from_this(), { request_partitions.begin(), request_partitions.end() }, start_time);
     ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
-    LOG_DEBUG(log, "Get delete bitmap meta for total {} parts took: {} ms read {} number of bitmap metas", parts.size(),
+    LOG_DEBUG(log, "Get delete bitmap meta for total {} parts took: {} ms read {} number of bitmap meta", parts.size(),
                 watch.elapsedMilliseconds(), all_bitmaps.size());
 
     DeleteBitmapMetaPtrVector bitmaps;
@@ -1128,28 +1116,18 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVect
     }
 }
 
-void StorageCnchMergeTree::allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group)
+void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name)
 {
-    String table_name = getCloudTableName(local_context);
-    allocateImpl(local_context, parts, table_name, worker_group);
-}
-
-void StorageCnchMergeTree::allocateImpl(
-    ContextPtr local_context,
-    ServerDataPartsVector & parts,
-    const String & local_table_name,
-    WorkerGroupHandle & /*worker_group*/)
-{
-    auto cnch_resource = local_context->tryGetCnchServerResource();
-    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
+    auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
-    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query);
+    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
+    cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
 
     // if (context.getSettingsRef().enable_virtual_part)
     //     setVirtualPartSize(context, parts, worker_group->getReadWorkers().size());
 
-    cnch_resource->addDataParts(getStorageUUID(), local_table_name, parts);
+    cnch_resource->addDataParts(getStorageUUID(), parts);
 }
 
 UInt64 StorageCnchMergeTree::getTimeTravelRetention()

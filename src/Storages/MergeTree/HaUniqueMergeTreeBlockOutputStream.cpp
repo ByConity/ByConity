@@ -640,7 +640,7 @@ size_t HaUniqueMergeTreeBlockOutputStream::removeDupKeysInPartialUpdateMode(
                 std::swap(old_pos, new_pos);
             else
             {
-                // Only when the version of this row is larger than previous row and the row is not delete row, it will apply partial update action. 
+                // Only when the version of this row is larger than previous row and the row is not delete row, it will apply partial update action.
                 if (!is_delete_row(new_pos) && !is_delete_row(old_pos))
                 {
                     replace_dst_indexes.push_back(UInt32(new_pos));
@@ -661,7 +661,7 @@ size_t HaUniqueMergeTreeBlockOutputStream::removeDupKeysInPartialUpdateMode(
      * For example, block has six rows and the first column is unique key:
      * row id       data
      *    0     (1, 'a', [1, 2])
-     *    1     (2, 'b', [3, 4]) 
+     *    1     (2, 'b', [3, 4])
      *    2     (1, 'c', [1, 2, 3])
      *    3     (1, 'd', [4, 5])
      *    4     (2, 'e', [4, 5])

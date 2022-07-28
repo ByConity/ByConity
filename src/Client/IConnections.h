@@ -15,6 +15,9 @@ public:
     /// Send all content of external tables to replicas.
     virtual void sendExternalTablesData(std::vector<ExternalTablesData> & data) = 0;
 
+    /// send resource for cnch query
+    virtual void sendResource() {}
+
     /// Send request to replicas.
     virtual void sendQuery(
         const ConnectionTimeouts & timeouts,

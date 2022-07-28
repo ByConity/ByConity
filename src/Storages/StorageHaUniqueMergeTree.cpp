@@ -3517,4 +3517,3 @@ bool StorageHaUniqueMergeTree::waitForLogSynced(UInt64 max_wait_milliseconds)
 }
 
 }
-

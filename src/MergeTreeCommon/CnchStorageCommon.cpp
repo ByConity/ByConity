@@ -1,29 +1,23 @@
 #include <memory>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 
-#include <Interpreters/TranslateQualifiedNamesVisitor.h>
-#include <Interpreters/VirtualWarehouseHandle.h>
-#include <Interpreters/InterpreterSelectQuery.h>
-#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
-#include <Interpreters/ClusterProxy/executeQuery.h>
-#include <Interpreters/getTableExpressions.h>
-#include <Parsers/ASTSetQuery.h>
-#include <DataStreams/RemoteBlockInputStream.h>
-#include <DataStreams/copyData.h>
-#include <DataTypes/FieldToDataType.h>
+#include <Core/UUID.h>
 #include <Columns/ColumnSet.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
+#include <DataStreams/RemoteBlockInputStream.h>
+#include <DataTypes/FieldToDataType.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Functions/FunctionFactory.h>
+#include <Interpreters/TranslateQualifiedNamesVisitor.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Interpreters/convertFieldToType.h>
+#include <IO/ConnectionTimeoutsContext.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/parseQuery.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Functions/FunctionFactory.h>
 #include <Parsers/ParserCreateQuery.h>
-#include <CloudServices/CnchCreateQueryHelper.h>
-#include <Storages/MergeTree/MergeTreeSettings.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <IO/ConnectionTimeoutsContext.h>
-#include "common/types.h"
-#include "Parsers/ASTSelectQuery.h"
+#include <Parsers/formatAST.h>
 
 namespace DB
 {
@@ -37,8 +31,7 @@ String toStr(CNCHStorageMediumType tp)
         case CNCHStorageMediumType::S3:
             return "S3";
     }
-    throw Exception("Unknown cnch storage medium type " +
-        toString(static_cast<int>(tp)), ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Unknown cnch storage medium type " + toString(static_cast<int>(tp)), ErrorCodes::LOGICAL_ERROR);
 }
 
 CNCHStorageMediumType fromStr(const String& type_str)
@@ -51,8 +44,7 @@ CNCHStorageMediumType fromStr(const String& type_str)
     {
         return CNCHStorageMediumType::S3;
     }
-    throw Exception("Unknown cnch storage medium type " + type_str,
-        ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Unknown cnch storage medium type " + type_str, ErrorCodes::LOGICAL_ERROR);
 }
 
 CnchStorageCommonHelper::CnchStorageCommonHelper(const StorageID & table_id_, const String & remote_database_, const String & remote_table_)
@@ -71,7 +63,7 @@ bool CnchStorageCommonHelper::healthCheckForWorkerGroup(ContextPtr context, Work
     const auto & shards = worker_group->getShardsInfo();
     size_t num_of_workers = shards.size();
     std::vector<uint64_t> remove_marks(num_of_workers, 0);
-    ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(context->getSettingsRef());
+    ConnectionTimeouts connection_timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(settings);
 
     ThreadPool conn_check_pool(std::min(settings.connection_check_pool_size.value, num_of_workers));
     for (size_t i = 0; i < num_of_workers; ++i)
@@ -106,18 +98,8 @@ bool CnchStorageCommonHelper::healthCheckForWorkerGroup(ContextPtr context, Work
 
 String CnchStorageCommonHelper::getCloudTableName(ContextPtr context) const
 {
-    String table_suffix;
     auto txn_id = context->getCurrentTransactionID();
-    table_suffix = txn_id.toString();
-
-    // add suffix for subquery
-    /// FIXME: Add this when merging Session Resource
-    // if (context.session_resource_for_subquery)
-    // {
-    //     table_suffix += "_subquery" + std::to_string(index_for_subquery++);
-    // }
-
-    return table_id.table_name + '_' + table_suffix;
+    return table_id.table_name + '_' + txn_id.toString();
 }
 
 /// select query has database, table and table function names as AST pointers
@@ -317,24 +299,24 @@ void CnchStorageCommonHelper::filterCondition(
 String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     const String & query,
     const String & local_table_name,
-    const std::optional<ContextPtr> &  /*context*/,
+    const ContextPtr & context,
     bool enable_staging_area,
     const std::optional<StorageID> & cnch_storage_id) const
 {
     ParserCreateQuery parser;
-
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
     auto & create_query = ast->as<ASTCreateQuery &>();
-    create_query.replaceTable(local_table_name);
+    create_query.table = local_table_name;
 
     auto * storage = create_query.storage;
 
     auto engine = std::make_shared<ASTFunction>();
-    engine->name = String(storage->engine->name).replace(0, strlen("Cnch"), "Cloud");
+    engine->name = storage->engine->name.replace(0, strlen("Cnch"), "Cloud");
     engine->arguments = std::make_shared<ASTExpressionList>();
     engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getDatabaseName()));
     engine->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(cnch_storage_id.value_or(table_id).getTableName()));
+
     /// NOTE: Used to pass the version column for unique table here.
     if (storage->unique_key && storage->engine->arguments && !storage->engine->arguments->children.empty())
         engine->arguments->children.push_back(storage->engine->arguments->children[0]);
@@ -352,32 +334,31 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     }
 
     /// query settings
-    // auto query_settings = std::make_shared<ASTSetQuery>();
-    // query_settings->is_standalone = false;
+    auto query_settings = std::make_shared<ASTSetQuery>();
+    query_settings->is_standalone = false;
 
-    // if (context)
-    //     query_settings->changes = (*context)->getSettingsRef().getChangedSettings();
+    if (context)
+        query_settings->changes = context->getSettingsRef().getChangedSettings();
 
-    // if (create_query.settings_ast)
-    // {
-    //     auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
-    //     if (!query_settings->changes.empty())
-    //     {
-    //         for (const auto & change: settings_ast.changes)
-    //             modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
-    //     }
-    //     else
-    //         query_settings->changes = std::move(settings_ast.changes);
-    // }
+    if (create_query.settings_ast)
+    {
+        auto & settings_ast = create_query.settings_ast->as<ASTSetQuery &>();
+        if (!query_settings->changes.empty())
+        {
+            for (const auto & change: settings_ast.changes)
+                modifyOrAddSetting(*query_settings, change.name, std::move(change.value));
+        }
+        else
+            query_settings->changes = std::move(settings_ast.changes);
+    }
 
-    // if (!query_settings->changes.empty())
-    //     create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
+    if (!query_settings->changes.empty())
+        create_query.setOrReplaceAST(create_query.settings_ast, query_settings);
 
     WriteBufferFromOwnString statement_buf;
     formatAST(create_query, statement_buf, false);
     writeChar('\n', statement_buf);
     return statement_buf.str();
-    // return getObjectDefinitionFromCreateQuery(ast, false);
 }
 
 }

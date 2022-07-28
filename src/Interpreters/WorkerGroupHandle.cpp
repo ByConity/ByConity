@@ -44,9 +44,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     , hosts(std::move(hosts_))
     , metrics(metrics_)
 {
-    auto current_context = context.lock();
-    if (!current_context)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Context expired!");
+    auto current_context = getContext();
 
     const auto & settings = current_context->getSettingsRef();
     const auto & config = current_context->getConfigRef();
@@ -61,15 +59,12 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     for (size_t i = 0; i < hosts.size(); ++i)
     {
         auto & host = hosts[i];
-        Address address(
-            host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, enable_ssl,
-            /*priority*/ 1, /*shard_index*/ i, /*replica_index*/ 0, host.exchange_port, host.exchange_status_port);
+        Address address(host.getTCPAddress(), user_password.first, user_password.second, clickhouse_port, enable_ssl);
 
         ShardInfo info;
         info.worker_id = host.id;
         info.shard_num = i + 1; /// shard_num begin from 1
         info.weight = 1;
-        info.rpc_port = host.rpc_port;
 
         if (address.is_local)
             info.local_addresses.push_back(address);
@@ -82,7 +77,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
             default_database, user_password.first, user_password.second,
             /*cluster_*/"",/*cluster_secret_*/"",
             "server", address.compression, address.secure, 1,
-            address.exchange_port, address.exchange_status_port);
+            host.exchange_port, host.exchange_status_port, host.rpc_port);
 
         info.pool = std::make_shared<ConnectionPoolWithFailover>(
             ConnectionPoolPtrs{pool}, settings.load_balancing, settings.connections_with_failover_max_tries);
@@ -98,7 +93,7 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
     {
         ring = buildRing(this->shards_info, current_context);
         LOG_DEBUG(&Poco::Logger::get("WorkerGroupHandleImpl"), "Success built ring with {} nodes\n", ring->size());
- 
+
     }
 }
 

@@ -559,8 +559,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     auto txn = prepareCnchTransaction(context, ast);
     if (txn && context->getServerType() == ServerType::cnch_server)
         context->initCnchServerResource(txn->getTransactionID());
-    else if (txn && context->getServerType() == ServerType::cnch_worker)
-        context = context->acquireNamedCnchSession(txn->getTransactionID(), {}, false)->context; 
 
     /// Copy query into string. It will be written to log and presented in processlist. If an INSERT query, string will not include data to insertion.
     String query(begin, query_end);

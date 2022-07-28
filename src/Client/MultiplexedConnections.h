@@ -17,15 +17,15 @@ namespace DB
   *
   * The interface is almost the same as Connection.
   */
-class MultiplexedConnections final : public IConnections
+class MultiplexedConnections final : public IConnections, public WithContext
 {
 public:
     /// Accepts ready connection.
-    MultiplexedConnections(Connection & connection, const Settings & settings_, const ThrottlerPtr & throttler_);
+    MultiplexedConnections(Connection & connection, ContextPtr context_, const Settings & settings_, const ThrottlerPtr & throttler_);
 
     /// Accepts a vector of connections to replicas of one shard already taken from pool.
     MultiplexedConnections(
-        std::vector<IConnectionPool::Entry> && connections,
+        std::vector<IConnectionPool::Entry> && connections, ContextPtr context_,
         const Settings & settings_, const ThrottlerPtr & throttler_);
 
     void sendScalarsData(Scalars & data) override;
@@ -38,6 +38,8 @@ public:
         UInt64 stage,
         const ClientInfo & client_info,
         bool with_pending_data) override;
+
+    void sendResource() override;
 
     void sendReadTaskResponse(const String &) override;
 
