@@ -412,7 +412,7 @@ private:
     PlanNodeIdAllocatorPtr id_allocator = nullptr;
     std::shared_ptr<SymbolAllocator> symbol_allocator = nullptr;
     std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
-    
+
     std::unordered_map<std::string, bool> function_deterministic;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
@@ -773,8 +773,7 @@ public:
     std::shared_ptr<NamedCnchSession> acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_clock::duration timeout, bool session_check) const;
 
     void initCnchServerResource(const TxnTimestamp & txn_id);
-    void initCnchServerResource();
-    CnchServerResourcePtr getCnchServerResource();
+    CnchServerResourcePtr getCnchServerResource() const;
     CnchServerResourcePtr tryGetCnchServerResource() const;
     CnchWorkerResourcePtr getCnchWorkerResource() const;
     CnchWorkerResourcePtr tryGetCnchWorkerResource() const;
@@ -993,7 +992,7 @@ public:
     StoragePoliciesMap getPoliciesMap() const;
     DisksMap getDisksMap() const;
     void updateStorageConfiguration(Poco::Util::AbstractConfiguration & config);
-    void updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration & config);
+    void updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration & config) const;
 
     /// Provides storage politics schemes
     StoragePolicyPtr getStoragePolicy(const String & name) const;
@@ -1082,12 +1081,12 @@ public:
 
     void createSymbolAllocator();
     std::shared_ptr<Statistics::StatisticsMemoryStore> getStatisticsMemoryStore();
- 
+
     void setFunctionDeterministic(const std::string & fun_name, bool deterministic)
     {
         function_deterministic[fun_name] = deterministic;
     }
-    
+
     bool isFunctionDeterministic(const std::string & fun_name) const
     {
         if (function_deterministic.contains(fun_name))

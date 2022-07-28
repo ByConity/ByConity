@@ -26,7 +26,7 @@ NamesAndTypesList StorageSystemCnchManipulations::getNamesAndTypes()
 
 void StorageSystemCnchManipulations::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
 {
-    if (context->getServerType() != ServerType::cnch_worker)
+    if (context->getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Table system.cnch_manipulations only supported in cnch-server");
 
     std::vector<ManipulationInfo> manipulations;

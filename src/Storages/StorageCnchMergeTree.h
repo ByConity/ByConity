@@ -60,8 +60,6 @@ public:
 
     CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
-    String genCreateTableQueryForWorker(const String & suffix);
-
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
     ServerDataPartsVector getPrunedServerParts(
@@ -123,11 +121,8 @@ private:
         ContextPtr local_context,
         const SelectQueryInfo & query_info) const;
 
-    void allocateImpl(
-        ContextPtr local_context,
-        ServerDataPartsVector & parts,
-        const String & local_table_name,
-        WorkerGroupHandle & group);
+
+    void collectResource(ContextPtr context, ServerDataPartsVector & parts, const String & local_table_name);
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 

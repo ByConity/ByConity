@@ -3,8 +3,8 @@
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -315,13 +315,13 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (is_ha)
         name_part = name_part.substr(strlen("Ha"));
 
-    bool is_cnch = startsWith(name_part, "Cnch");
-    if (is_cnch)
-        name_part = name_part.substr(strlen("Cnch"));
-
     bool is_cloud = startsWith(name_part, "Cloud");
     if (is_cloud)
         name_part = name_part.substr(strlen("Cloud"));
+
+    bool is_cnch = startsWith(name_part, "Cnch");
+    if (is_cnch)
+        name_part = name_part.substr(strlen("Cnch"));
 
     MergeTreeMetaBase::MergingParams merging_params;
     merging_params.mode = MergeTreeMetaBase::MergingParams::Ordinary;
@@ -384,8 +384,13 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     if (is_cloud)
     {
-        add_mandatory_param("cnch database");
-        add_mandatory_param("cnch table");
+        add_mandatory_param("database name of Cnch");
+        add_mandatory_param("table name of Cnch");
+    }
+
+    if (is_cnch || is_cloud)
+    {
+        add_optional_param("version column for unique key");
     }
 
     if (!is_extended_storage_def)
@@ -588,22 +593,18 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     String cnch_database_name;
     String cnch_table_name;
+
     if (is_cloud)
     {
-        if (const auto * ast = engine_args[0]->as<ASTIdentifier>())
-            cnch_database_name = ast->name();
-        else
+        if (arg_num + 2 > arg_cnt || !engine_args[arg_num]->as<ASTIdentifier>() || !engine_args[arg_num + 1]->as<ASTIdentifier>())
             throw Exception(
-                "Cnch database name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
-                ErrorCodes::BAD_ARGUMENTS);
-        ++arg_num;
-        if (const auto * ast = engine_args[1]->as<ASTIdentifier>())
-            cnch_table_name = ast->name();
-        else
-            throw Exception(
-                "Cnch table name must be an identifier" + getMergeTreeVerboseHelp(is_extended_storage_def),
-                ErrorCodes::BAD_ARGUMENTS);
-        ++arg_num;
+                ErrorCodes::BAD_ARGUMENTS,
+                "Expected two string literal arguments for CloudMergeTree: cnch_database_name and cnch_table_name");
+
+        cnch_database_name = engine_args[arg_num]->as<ASTIdentifier &>().name();
+        cnch_table_name = engine_args[arg_num + 1]->as<ASTIdentifier &>().name();
+
+        arg_num += 2;
         engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
     }
 
@@ -797,16 +798,17 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             metadata.column_ttls_by_name[name] = new_ttl_entry;
         }
 
-        // For cnch, if storage_policy is not specificed, modify it to cnch's default
+        // For cnch, if storage_policy is not specified, modify it to cnch's default
         if (is_cnch)
         {
-            if (args.storage_def->settings == nullptr)
+            if (!args.storage_def->settings)
             {
                 auto settings_ast = std::make_shared<ASTSetQuery>();
                 settings_ast->is_standalone = false;
                 args.storage_def->set(args.storage_def->settings, settings_ast);
             }
-            if (args.storage_def->settings->changes.tryGet("storage_policy") == nullptr)
+
+            if (!args.storage_def->settings->changes.tryGet("storage_policy"))
             {
                 args.storage_def->settings->changes.push_back(
                     SettingChange("storage_policy", args.getContext()->getDefaultCnchPolicyName()));
@@ -934,6 +936,19 @@ static StoragePtr create(const StorageFactory::Arguments & args)
                 allow_renaming);
         }
     }
+    else if (is_cloud)
+    {
+        return StorageCloudMergeTree::create(
+            args.table_id,
+            cnch_database_name,
+            cnch_table_name,
+            args.relative_data_path,
+            metadata,
+            args.getContext(),
+            date_column_name,
+            merging_params,
+            std::move(storage_settings));
+    }
     else if (is_cnch)
     {
         return StorageCnchMergeTree::create(
@@ -941,19 +956,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.relative_data_path,
             metadata,
             args.attach,
-            args.getContext(),
-            date_column_name,
-            merging_params,
-            std::move(storage_settings));
-    }
-    else if (is_cloud)
-    {
-        return StorageCloudMergeTree::create(
-            args.table_id,
-            std::move(cnch_database_name),
-            std::move(cnch_table_name),
-            args.relative_data_path,
-            metadata,
             args.getContext(),
             date_column_name,
             merging_params,
@@ -1014,8 +1016,16 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("HaGraphiteMergeTree", create, features);
     factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
 
-    factory.registerStorage("CnchMergeTree", create, features);
     factory.registerStorage("CloudMergeTree", create, features);
+    factory.registerStorage("CloudUniqueMergeTree", create, features);
+    factory.registerStorage("CloudCollapsingMergeTree", create, features);
+    factory.registerStorage("CloudReplacingMergeTree", create, features);
+    factory.registerStorage("CloudAggregatingMergeTree", create, features);
+    factory.registerStorage("CloudSummingMergeTree", create, features);
+    factory.registerStorage("CloudGraphiteMergeTree", create, features);
+    factory.registerStorage("CloudVersionedCollapsingMergeTree", create, features);
+
+    factory.registerStorage("CnchMergeTree", create, features);
     factory.registerStorage("CnchUniqueMergeTree", create, features);
     factory.registerStorage("CnchCollapsingMergeTree", create, features);
     factory.registerStorage("CnchReplacingMergeTree", create, features);

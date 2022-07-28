@@ -15,8 +15,8 @@
 #include <Common/FiberStack.h>
 #include <Client/MultiplexedConnections.h>
 #include <Client/HedgedConnections.h>
+#include <CloudServices/CnchServerResource.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
-#include <MergeTreeCommon/CnchServerResource.h>
 
 namespace DB
 {
@@ -38,7 +38,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
 {
     create_connections = [this, &connection, throttler]()
     {
-        return std::make_unique<MultiplexedConnections>(connection, context->getSettingsRef(), throttler);
+        return std::make_unique<MultiplexedConnections>(connection, context, context->getSettingsRef(), throttler);
     };
 }
 
@@ -51,7 +51,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
     , scalars(scalars_), external_tables(external_tables_), stage(stage_), task_iterator(task_iterator_)
 {
     create_connections = [this, connections_, throttler]() mutable {
-        return std::make_unique<MultiplexedConnections>(std::move(connections_), context->getSettingsRef(), throttler);
+        return std::make_unique<MultiplexedConnections>(std::move(connections_), context, context->getSettingsRef(), throttler);
     };
 }
 
@@ -90,7 +90,7 @@ RemoteQueryExecutor::RemoteQueryExecutor(
         else
             connection_entries = pool->getMany(timeouts, &current_settings, pool_mode);
 
-        return std::make_unique<MultiplexedConnections>(std::move(connection_entries), current_settings, throttler);
+        return std::make_unique<MultiplexedConnections>(std::move(connection_entries), context, current_settings, throttler);
     };
 }
 
@@ -153,24 +153,10 @@ static Block adaptBlockStructure(const Block & block, const Block & header)
     return res;
 }
 
-void RemoteQueryExecutor::sendResource()
-{
-    auto server_resource = context->tryGetCnchServerResource();
-
-    if (server_resource)
-    {
-        /// TODO: get HostWithPorts
-        server_resource->sendResource(context, {});
-    }
-}
-
 void RemoteQueryExecutor::sendQuery()
 {
     if (sent_query)
         return;
-
-    /// send QueryResource(CreateQueries, DataParts) for cnch if needed before send query
-    sendResource();
 
     connections = create_connections();
 
@@ -206,6 +192,7 @@ void RemoteQueryExecutor::sendQuery()
             connections->sendIgnoredPartUUIDs(duplicated_part_uuids);
     }
 
+    connections->sendResource();
     connections->sendQuery(timeouts, query, query_id, stage, modified_client_info, true);
 
     established = false;

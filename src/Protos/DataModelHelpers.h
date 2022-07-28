@@ -221,7 +221,7 @@ inline DataModelPartPtr createPtrFromModel(Protos::DataModelPart part_model)
     return std::make_shared<Protos::DataModelPart>(std::move(part_model));
 }
 
-std::shared_ptr<MergeTreePartition> createParitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta);
+std::shared_ptr<MergeTreePartition> createPartitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta);
 
 std::shared_ptr<MergeTreePartition> createParitionFromMetaString(const MergeTreeMetaBase & storage, const String & parition_minmax_info);
 

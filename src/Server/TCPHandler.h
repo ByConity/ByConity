@@ -174,6 +174,7 @@ private:
     void receiveHello();
     bool receivePacket();
     void receiveQuery();
+    void receiveCnchQuery();
     void receivePlanSegment();
     void receiveIgnoredPartUUIDs();
     String receiveReadTaskResponseAssumeLocked();

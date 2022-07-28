@@ -141,8 +141,9 @@ namespace Protocol
             IgnoredPartUUIDs = 8,    /// List of unique parts ids to exclude from query processing
             ReadTaskResponse = 9,     /// TODO:
             PlanSegment = 10,
+            CnchQuery = 11,
 
-            MAX = PlanSegment,
+            MAX = CnchQuery,
         };
 
         inline const char * toString(UInt64 packet)
@@ -158,7 +159,8 @@ namespace Protocol
                 "Scalar",
                 "IgnoredPartUUIDs",
                 "ReadTaskResponse",
-                "PlanSegment"
+                "PlanSegment",
+                "CnchQuery"
             };
             return packet <= MAX
                 ? data[packet]
