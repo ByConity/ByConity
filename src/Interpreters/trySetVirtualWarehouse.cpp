@@ -83,7 +83,7 @@ static bool trySetVirtualWarehouseFromAST([[maybe_unused]] const ASTPtr & ast, [
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
-            auto storage = database_catalog.tryGetTable(insert->table_id, context);
+            auto storage = database_catalog.tryGetTable(table_id, context);
             auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
             if (!cnch_table)
                 break;
