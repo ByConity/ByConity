@@ -73,7 +73,7 @@
 
     <mlock_executable>false</mlock_executable>
 
-    <remote_servers incl="clickhouse_remote_servers">
+    <remote_servers incl="clickhouse_remote_servers"></remote_servers>
 
     <zookeeper>
         <node index="1">
@@ -361,7 +361,7 @@
 
     <storage_configuration>
         <disks>
-            <default/>
+            <default></default>
             <server_local_disk1>
                 <path>{your_local_path}</path>
             </server_local_disk1>
