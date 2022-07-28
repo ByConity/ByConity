@@ -494,6 +494,7 @@ struct ContextSharedPart
             /// But they cannot be created before storages since they may required table as a source,
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
+            cnch_txn_coordinator.reset();
 
             cnch_bg_threads_array.reset();
             cnch_txn_coordinator.reset();
@@ -3159,12 +3160,6 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
 {
     if (storage_id.uuid != UUIDHelpers::Nil)
         return storage_id;
-
-    if (auto worker_resource = tryGetCnchWorkerResource())
-    {
-        if (auto storage = worker_resource->getTable(storage_id))
-            return storage->getStorageID();
-    }
 
     StorageID resolved = StorageID::createEmpty();
     std::optional<Exception> exc;
