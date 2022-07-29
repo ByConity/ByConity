@@ -246,16 +246,19 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
-    if (auto worker_resource = context_->tryGetCnchWorkerResource())
+    if (context_->getServerType() == ServerType::cnch_worker)
     {
-        /// try get table from session resource
-        /// Note: the tables in cnch session doesn't belong to any DatabasePtr
+        if (auto worker_resource = context_->tryGetCnchWorkerResource())
+        {
+            /// try get table from session resource
+            /// Note: the tables in cnch session doesn't belong to any DatabasePtr
 
-        // if (worker_resource->isCnchTableInWorker(table_id))
-        //     return getCnchTable()
+            // if (worker_resource->isCnchTableInWorker(table_id))
+            //     return getCnchTable()
 
-        if (auto table = worker_resource->getTable(table_id))
-            return {nullptr, table};
+            if (auto table = worker_resource->getTable(table_id))
+                return {nullptr, table};
+        }
     }
 
     if (table_id.hasUUID())
@@ -652,7 +655,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
-    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
+    , use_cnch_catalog{global_context_->getServerType() != ServerType::standalone}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
