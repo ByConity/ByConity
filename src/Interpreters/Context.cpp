@@ -3161,6 +3161,15 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     if (storage_id.uuid != UUIDHelpers::Nil)
         return storage_id;
 
+    if (getServerType() == ServerType::cnch_worker)
+    {
+        if (auto worker_resource = tryGetCnchWorkerResource())
+        {
+            if (auto storage = worker_resource->getTable(storage_id))
+                return storage->getStorageID();
+        }
+    }
+
     StorageID resolved = StorageID::createEmpty();
     std::optional<Exception> exc;
     {

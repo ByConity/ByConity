@@ -2,6 +2,8 @@
 #include <Common/thread_local_rng.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/WriteHelpers.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
 
 
 namespace DB
@@ -25,6 +27,13 @@ namespace UUIDHelpers
         return uuid_str;
     }
 
+    UUID toUUID(const String & uuid_str)
+    {
+        UUID uuid;
+        ReadBufferFromString buff(uuid_str);
+        readUUIDText(uuid, buff);
+        return uuid;
+    }
 }
 
 }
