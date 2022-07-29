@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Core/Types.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/IntentLock.h>
@@ -24,7 +24,7 @@ public:
     // ctor for server transaction
     // Use TransactionCnchRcCnch::createTransaction() to create server transaction
     // read_only transaction will not write transaction record to kv
-    CnchServerTransaction(Context & context, TransactionRecord record);
+    CnchServerTransaction(const ContextPtr & context_, TransactionRecord txn_record_);
 
     ~CnchServerTransaction() override = default; 
     String getTxnType() const override { return "CnchServerTransaction"; }

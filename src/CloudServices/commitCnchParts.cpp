@@ -316,7 +316,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 
             // Precommit stage. Write intermediate parts to KV
             auto action
-                = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
+                = txn->createAction<InsertAction>(nullptr, storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
             txn->appendAction(action);
             action->executeV2();
         }
@@ -328,7 +328,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 break;
             }
 
-            auto action = txn->createAction<DropRangeAction>(txn->getTransactionRecord(), storage_ptr);
+            auto action = txn->createAction<DropRangeAction>(nullptr, txn->getTransactionRecord(), storage_ptr);
             for (const auto & part : dumped_data.parts)
                 action->appendPart(part);
             for (const auto & bitmap : dumped_data.bitmaps)

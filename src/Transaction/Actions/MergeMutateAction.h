@@ -2,18 +2,18 @@
 
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Transaction/TransactionCommon.h>
 
 namespace DB
 {
 
-class MergeMutateAction : public Action
+class MergeMutateAction : public IAction
 {
 public:
-    MergeMutateAction(const Context & context_, const TxnTimestamp & txn_id_, TransactionRecord record, ManipulationType type_, const StoragePtr table_)
-        : Action(context_, txn_id_), txn_record(std::move(record)), table(table_), type(type_), log(&Poco::Logger::get("MergeMutationAction"))
+    MergeMutateAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, TransactionRecord record, ManipulationType type_, const StoragePtr table_)
+        : IAction(query_context_, txn_id_), txn_record(std::move(record)), table(table_), type(type_), log(&Poco::Logger::get("MergeMutationAction"))
     {
     }
 

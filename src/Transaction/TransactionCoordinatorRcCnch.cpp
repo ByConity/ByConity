@@ -34,12 +34,12 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 {
     TxnTimestamp txn_id = opt.txn_hint;
     if (!txn_id)
-        txn_id = opt.read_only ? context.tryGetTimestamp(__PRETTY_FUNCTION__) : context.getTimestamp();
+        txn_id = opt.read_only ? getContext()->tryGetTimestamp(__PRETTY_FUNCTION__) : getContext()->getTimestamp();
 
     /// fallbackTS is only returned in case of exceptions, thus TSO succeeded if the txn_id is not this value
     bool tso_get_timestamp_succeeded = txn_id != TxnTimestamp::fallbackTS();
 
-    String location = addBracketsIfIpv6(getIPOrFQDNOrHostName()) + ':' + std::to_string(context.getRPCPort());
+    String location = addBracketsIfIpv6(getIPOrFQDNOrHostName()) + ':' + std::to_string(getContext()->getRPCPort());
     TransactionRecord txn_record;
     txn_record.setID(txn_id)
         .setType(opt.type)
@@ -53,9 +53,9 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 
     TransactionCnchPtr txn = nullptr;
     if (opt.type == CnchTransactionType::Implicit)
-        txn = std::make_shared<CnchServerTransaction>(context, txn_record);
+        txn = std::make_shared<CnchServerTransaction>(getContext(), txn_record);
     else if (opt.type == CnchTransactionType::Explicit)
-        txn = std::make_shared<CnchExplicitTransaction>(context, txn_record);
+        txn = std::make_shared<CnchExplicitTransaction>(getContext(), txn_record);
     else
         throw Exception("Unknown transaction type", ErrorCodes::LOGICAL_ERROR);
 
@@ -86,8 +86,8 @@ ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
     TxnTimestamp /*primary_txn_id*/)
     {
         /// Get the rpc client of target server
-        // auto server_cli = context.getCnchServerClient(host_ports.host, host_ports.rpc_port);
-        auto txn = std::make_shared<CnchProxyTransaction>(context/*, server_cli, primary_txn_id*/);
+        // auto server_cli = getContext()->getCnchServerClient(host_ports.host, host_ports.rpc_port);
+        auto txn = std::make_shared<CnchProxyTransaction>(getContext()/*, server_cli, primary_txn_id*/);
         auto txn_id = txn->getTransactionID();
         /// add to active txn list
         {
@@ -240,7 +240,7 @@ void TransactionCoordinatorRcCnch::eraseActiveTimestamp(const TransactionCnchPtr
 /// Get the minimum active timestamp for table and clean all outdated timestamps.
 std::optional<TxnTimestamp> TransactionCoordinatorRcCnch::getMinActiveTimestamp(const StorageID & storage_id)
 {
-    const UInt64 expired_interval = context.getRootConfig().cnch_transaction_ts_expire_time; // default 2h
+    const UInt64 expired_interval = getContext()->getRootConfig().cnch_transaction_ts_expire_time; // default 2h
     auto now = UInt64(time(nullptr)) * 1000;
 
     std::lock_guard<std::mutex> lock(min_ts_mutex);
@@ -255,7 +255,7 @@ std::optional<TxnTimestamp> TransactionCoordinatorRcCnch::getMinActiveTimestamp(
     {
         /// Try to clean all outdated Txns.
         last_time_clean_timestamps = now;
-        TxnTimestamp cur_ts = context.getTimestamp();
+        TxnTimestamp cur_ts = getContext()->getTimestamp();
         for (auto it = timestamps_it->second.begin(); it != timestamps_it->second.end();)
         {
             if ((cur_ts.toMillisecond() - it->toMillisecond()) > expired_interval)
@@ -285,8 +285,8 @@ void TransactionCoordinatorRcCnch::scanActiveTransactions()
     try
     {
         LOG_INFO(log, "Background txn scan task starts...");
-        TxnTimestamp cur_ts = context.getTimestamp();
-        const UInt64 expired_interval = context.getConfigRef().getInt("cnch_transaction_expire_time", 24 * 60 * 60 * 1000); // default 24h
+        TxnTimestamp cur_ts = getContext()->getTimestamp();
+        const UInt64 expired_interval = getContext()->getConfigRef().getInt("cnch_transaction_expire_time", 24 * 60 * 60 * 1000); // default 24h
         std::vector<TransactionCnchPtr> deleted_txn_list;
 
         {

@@ -2,24 +2,24 @@
 
 #include <Protos/DataModelHelpers.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 #include <Transaction/TransactionCommon.h>
 #include <cppkafka/cppkafka.h>
 
 namespace DB
 {
 
-class InsertAction : public Action
+class InsertAction : public IAction
 {
 public:
     InsertAction(
-        const Context & context_,
+        const ContextPtr & query_context_,
         const TxnTimestamp & txn_id_,
         StoragePtr table_,
         MutableMergeTreeDataPartsCNCHVector parts_ = {},
         DeleteBitmapMetaPtrVector delete_bitmaps_ = {},
         MutableMergeTreeDataPartsCNCHVector staged_parts_ = {})
-        : Action(context_, txn_id_)
+        : IAction(query_context_, txn_id_)
         , table(std::move(table_))
         , parts(std::move(parts_))
         , delete_bitmaps(std::move(delete_bitmaps_))

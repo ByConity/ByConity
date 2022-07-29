@@ -11,6 +11,7 @@
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchExplicitTransaction.h>
 #include <Common/HostWithPorts.h>
+#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
@@ -42,22 +43,22 @@ struct CreateTransactionOption
 
 /// TransactionCoordinatorRcCNCH implements the read committed isolation level.
 /// Each server includes one transaction to handle the transaction received.
-class TransactionCoordinatorRcCnch
+class TransactionCoordinatorRcCnch : WithContext
 {
 public:
-    explicit TransactionCoordinatorRcCnch(Context & context_)
-        : context(context_)
-        , tsCacheManager(std::make_unique<TimestampCacheManager>(context.getConfigRef().getUInt("max_tscache_size", 1000)))
+    explicit TransactionCoordinatorRcCnch(const ContextPtr & context_)
+        : WithContext(context_)
+        , ts_cache_manager(std::make_unique<TimestampCacheManager>(getContext()->getConfigRef().getUInt("max_tscache_size", 1000)))
         , txn_cleaner(std::make_unique<TransactionCleaner>(
-              context,
-              context.getConfigRef().getUInt("cnch_transaction_cleaner_max_threads", 128),
-              context.getConfigRef().getUInt("cnch_transaction_cleaner_queue_size", 10000),
-              context.getConfigRef().getUInt("cnch_transaction_cleaner_dm_max_threads", 32),
-              context.getConfigRef().getUInt("cnch_transaction_cleaner_dm_queue_size", 10000)))
-        , scan_interval(context.getConfigRef().getInt("cnch_transaction_list_scan_interval", 10 * 60 * 1000)) // default 10 mins
+              getContext(),
+              getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_max_threads", 128),
+              getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_queue_size", 10000),
+              getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_dm_max_threads", 32),
+              getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_dm_queue_size", 10000)))
+        , scan_interval(getContext()->getConfigRef().getInt("cnch_transaction_list_scan_interval", 10 * 60 * 1000)) // default 10 mins
         , log(&Poco::Logger::get("TransactionCoordinator"))
     {
-        scan_active_txns_task = context.getSchedulePool().createTask("ScanActiveTxnsTask", [this]() { scanActiveTransactions(); });
+        scan_active_txns_task = getContext()->getSchedulePool().createTask("ScanActiveTxnsTask", [this]() { scanActiveTransactions(); });
         scan_active_txns_task->activate();
         scan_active_txns_task->scheduleAfter(scan_interval);
     }
@@ -130,7 +131,7 @@ public:
     // clear related api used by background scan task
     bool clearZombieParts(const std::vector<String> & parts);
 
-    TimestampCacheManager & getTsCacheManager() const { return *tsCacheManager; }
+    TimestampCacheManager & getTsCacheManager() const { return *ts_cache_manager; }
     TransactionCleaner & getTxnCleaner() const { return *txn_cleaner; }
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txnID) const;
@@ -157,7 +158,6 @@ private:
     void scanActiveTransactions();
 
 private:
-    Context & context;
 
     mutable std::mutex list_mutex;
     /// transaction related data structure, including txn info, tsCache, mutex.
@@ -168,7 +168,7 @@ private:
     std::map<UUID, std::set<TxnTimestamp>> table_to_timestamps;
     uint64_t last_time_clean_timestamps;
 
-    TimestampCacheManagerPtr tsCacheManager;
+    TimestampCacheManagerPtr ts_cache_manager;
     TransactionCleanerPtr txn_cleaner;
 
     // background tasks

@@ -30,7 +30,7 @@ void MergeMutateAction::executeV1(TxnTimestamp commit_time)
     for (auto & bitmap : delete_bitmaps)
         bitmap->updateCommitTime(commit_time);
 
-    context.getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false);
+    getContext()->getCnchCatalog()->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, true, /*preallocate_mode=*/ false);
 }
 
 void MergeMutateAction::executeV2()
@@ -39,14 +39,14 @@ void MergeMutateAction::executeV2()
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    context.getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false);
+    getContext()->getCnchCatalog()->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true,  /*preallocate_mode=*/ false);
 }
 
 /// Post processing
 void MergeMutateAction::postCommit(TxnTimestamp commit_time)
 {
     /// set commit time for part
-    context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
+    getContext()->getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
     for (auto & part : parts)
         part->commit_time = commit_time;
 }
@@ -55,7 +55,7 @@ void MergeMutateAction::abort()
 {
     // clear parts in kv
     // skip part cache to avoid blocking by write lock of part cache for long time
-    context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true);
+    getContext()->getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true);
 }
 
 void MergeMutateAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, [[maybe_unused]] TxnTimestamp commit_time)

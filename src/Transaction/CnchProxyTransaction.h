@@ -25,7 +25,7 @@ private:
     // CnchServerClientPtr remote_client;
 
 public:
-    explicit CnchProxyTransaction(Context & context_) : Base(context_) {}
+    explicit CnchProxyTransaction(const ContextPtr & context_) : Base(context_) {}
     // explicit CnchProxyTransaction(Context & global_context, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id);
     ~CnchProxyTransaction() override = default; 
     String getTxnType() const override { return "CnchProxyTransaction"; }

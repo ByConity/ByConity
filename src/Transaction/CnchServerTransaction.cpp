@@ -45,13 +45,13 @@ namespace ErrorCodes
     // extern const int BAD_CAST;
 }
 
-CnchServerTransaction::CnchServerTransaction(Context & context_, TransactionRecord txn_record_)
+CnchServerTransaction::CnchServerTransaction(const ContextPtr & context_, TransactionRecord txn_record_)
     : ICnchTransaction(context_, std::move(txn_record_))
     , active_txn_increment{CurrentMetrics::CnchTxnActiveTransactions}
 {
     if (!isReadOnly())
     {
-        context.getCnchCatalog()->createTransactionRecord(getTransactionRecord());
+        getContext()->getCnchCatalog()->createTransactionRecord(getTransactionRecord());
         CurrentMetrics::add(CurrentMetrics::CnchTxnTransactionRecords);
     }
 }
@@ -81,7 +81,7 @@ TxnTimestamp CnchServerTransaction::commitV1()
         ProfileEvents::increment(ProfileEvents::CnchTxnCommitV1ElapsedMilliseconds, watch.elapsedMilliseconds());
     });
 
-    auto commit_ts = context.getTimestamp();
+    auto commit_ts = getContext()->getTimestamp();
 
     try
     {
@@ -124,7 +124,7 @@ TxnTimestamp CnchServerTransaction::commitV2()
     }
     catch (const Exception & e)
     {
-        if (!(context.getSettings().ignore_duplicate_insertion_label && e.code() == ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS))
+        if (!(getContext()->getSettings().ignore_duplicate_insertion_label && e.code() == ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS))
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         rollback();
         throw;
@@ -163,7 +163,7 @@ TxnTimestamp CnchServerTransaction::commit()
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
     auto from_buffer_uuid = getFromBufferUUID();
-    TxnTimestamp commit_ts = context.getTimestamp();
+    TxnTimestamp commit_ts = getContext()->getTimestamp();
     int retry = MAX_RETRY;
     do
     {
@@ -184,7 +184,7 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
                 Stopwatch stop_watch;
-                auto success = context.getCnchCatalog()->setTransactionRecordStatusWithOffsets(txn_record, target_record, consumer_group, tpl);
+                auto success = getContext()->getCnchCatalog()->setTransactionRecordStatusWithOffsets(txn_record, target_record, consumer_group, tpl);
 
                 txn_record = std::move(target_record);
                 if (success)
@@ -215,7 +215,7 @@ TxnTimestamp CnchServerTransaction::commit()
                 {
                     /// Pack the operation creating a new label into CAS operations
                     insertion_label->commit();
-                    label_key = context.getCnchCatalog()->getInsertionLabelKey(insertion_label);
+                    label_key = getContext()->getCnchCatalog()->getInsertionLabelKey(insertion_label);
                     label_value = insertion_label->serializeValue();
                     requests.push_back(Catalog::WriteRequest{label_key, std::nullopt, label_value, true, {}});
                     requests.back().callback = [label = insertion_label](int code, const std::string & msg) {
@@ -234,7 +234,7 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = context.getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, &requests);
+                bool success = getContext()->getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, &requests);
 
                 txn_record = std::move(target_record);
 
@@ -296,9 +296,9 @@ TxnTimestamp CnchServerTransaction::rollback()
     TxnTimestamp ts;
     try
     {
-        ts = context.getTimestamp();
+        ts = getContext()->getTimestamp();
         setCommitTime(ts);
-        context.getCnchCatalog()->rollbackTransaction(txn_record);
+        getContext()->getCnchCatalog()->rollbackTransaction(txn_record);
         LOG_DEBUG(log, "Successfully rollback transaction: {}\n", txn_record.txnID().toUInt64());
     }
     catch (...)
@@ -320,10 +320,10 @@ TxnTimestamp CnchServerTransaction::abort()
 
     TransactionRecord target_record = getTransactionRecord();
     target_record.setStatus(CnchTransactionStatus::Aborted)
-                 .setCommitTs(context.getTimestamp())
+                 .setCommitTs(getContext()->getTimestamp())
                  .setMainTableUUID(getMainTableUUID());
 
-    bool success = context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = getContext()->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
 
     if (success)
@@ -368,7 +368,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
     {
         // operations are done in sequence, if any operation failed, the remaining will not continue. The background scan thread will finish the remaining job.
         auto lock = getLock();
-        auto catalog = context.getCnchCatalog();
+        auto catalog = getContext()->getCnchCatalog();
         auto txn_id = getTransactionID();
         // releaseIntentLocks();
 
@@ -392,8 +392,8 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
 
             catalog->clearUndoBuffer(txn_id);
             /// set clean time in kv, txn_record will be remove by daemon manager
-            UInt64 ttl = context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
-            catalog->setTransactionRecordCleanTime(txn_record, context.getTimestamp(), ttl);
+            UInt64 ttl = getContext()->getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
+            catalog->setTransactionRecordCleanTime(txn_record, getContext()->getTimestamp(), ttl);
             // TODO: move to dm when metrics ready
             CurrentMetrics::sub(CurrentMetrics::CnchTxnTransactionRecords);
             LOG_DEBUG(log, "Successfully clean a finished transaction: {}\n", txn_record.txnID().toUInt64());
@@ -416,7 +416,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
 
             for (const auto & [uuid, resources] : undo_buffer)
             {
-                StoragePtr table = catalog->getTableByUUID(context, uuid, txn_id, true);
+                StoragePtr table = catalog->getTableByUUID(*getContext(), uuid, txn_id, true);
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
                 if (!storage)
                     throw Exception("Table is not of MergeTree class", ErrorCodes::LOGICAL_ERROR);

@@ -3937,7 +3937,7 @@ void Context::initCnchTransactionCoordinator()
 {
     auto lock = getLock();
 
-    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
+    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(shared_from_this());
 }
 
 TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
@@ -3970,10 +3970,10 @@ TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id,
             txn_record->read_only = true;
         }
 
-        current_cnch_txn = std::make_shared<CnchServerTransaction>(*getGlobalContext(), std::move(*txn_record));
+        current_cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
     }
     else
-        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(*this, txn_id, primary_txn_id);
+        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
 
     return current_cnch_txn;
 }

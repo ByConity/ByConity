@@ -36,9 +36,7 @@ void CnchServerServiceImpl::commitParts(
     [[maybe_unused]] Protos::CommitPartsResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done,
@@ -152,9 +150,7 @@ void CnchServerServiceImpl::createTransaction(
     Protos::CreateTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [cntl = cntl, request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -191,9 +187,7 @@ void CnchServerServiceImpl::finishTransaction(
     Protos::FinishTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
         brpc::ClosureGuard done_guard(done);
@@ -219,9 +213,7 @@ void CnchServerServiceImpl::commitTransaction(
     Protos::CommitTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
@@ -277,9 +269,7 @@ void CnchServerServiceImpl::precommitTransaction(
     Protos::PrecommitTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
@@ -308,9 +298,7 @@ void CnchServerServiceImpl::rollbackTransaction(
     Protos::RollbackTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -337,9 +325,7 @@ void CnchServerServiceImpl::createTransactionForKafka(
     Protos::CreateKafkaTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR); 
+    ContextPtr context_ptr = getContext(); 
     RPCHelpers::serviceHandler(
         done, response, [cntl = cntl, request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);

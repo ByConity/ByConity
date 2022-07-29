@@ -17,19 +17,19 @@ class CnchWorkerTransaction : public ICnchTransaction
 public:
     // ctor for worker initiated tranasction
     // Create a server transaction on cnch server using `client`
-    CnchWorkerTransaction(Context & context_, CnchServerClientPtr client);
+    CnchWorkerTransaction(const ContextPtr & context_, CnchServerClientPtr client);
 
     // ctor for kafka initiated transaction
     // Create a server transaction on server, and maintain kafka_table_id in the transaction
-    CnchWorkerTransaction(Context & context_, CnchServerClientPtr client, StorageID kafka_table_id, size_t consumer_index);
+    CnchWorkerTransaction(const ContextPtr & context_, CnchServerClientPtr client, StorageID kafka_table_id, size_t consumer_index);
 
     // ctor for server initiated transaction
     // Server created a transaction and continue to execute on worker
-    CnchWorkerTransaction(Context & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
+    CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
 
     // TODO: remove this
     // create a fake worker transaction to transfer kafka storage-id
-    CnchWorkerTransaction(Context & context_, StorageID kafka_table_id_);
+    CnchWorkerTransaction(const ContextPtr & context_, StorageID kafka_table_id_);
 
     // If it is a worker/kafka initiated transaction, will finish the server
     // transaction when the worker transaction gets destroyed.

@@ -413,7 +413,7 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
                 UUIDHelpers::UUIDToString(storage->getStorageUUID()), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
-            auto txn = std::make_shared<CnchWorkerTransaction>(*(context->getGlobalContext()), server_client);
+            auto txn = std::make_shared<CnchWorkerTransaction>(context->getGlobalContext(), server_client);
             context->setCurrentTransaction(txn);
             return txn;
         }

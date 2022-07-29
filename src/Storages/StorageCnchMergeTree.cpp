@@ -1191,7 +1191,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
     auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    DDLAlterActionPtr alter_act = txn->createAction<DDLAlterAction>(shared_from_this());
+    DDLAlterActionPtr alter_act = txn->createAction<DDLAlterAction>(local_context, shared_from_this());
     alter_act->setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
     commands.apply(table_id, new_metadata, local_context);
