@@ -12,6 +12,8 @@ namespace UUIDHelpers
     UUID generateV4();
 
     String UUIDToString(const UUID & uuid);
+    UUID toUUID(const String & uuid_str);
+
     const UUID Nil{};
 }
 
