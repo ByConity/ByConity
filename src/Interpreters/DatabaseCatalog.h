@@ -204,7 +204,7 @@ public:
 
     static String getPathForUUID(const UUID & uuid);
 
-    DatabaseAndTable tryGetByUUID(const UUID & uuid) const;
+    DatabaseAndTable tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const;
 
     String getPathForDroppedMetadata(const StorageID & table_id) const;
     void enqueueDroppedTableCleanup(StorageID table_id, StoragePtr table, String dropped_metadata_path, bool ignore_delay = false);
