@@ -701,18 +701,22 @@ bool ParserTupleElementExpression::parseImpl(Pos & pos, ASTPtr & node, Expected 
 }
 
 
-ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function)
-    : IParserDialectBase(t), impl(std::make_unique<ParserWithOptionalAlias>(
-        is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt)),
-        allow_alias_without_as_keyword, dt))
+ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function, bool allow_alias)
+    : IParserDialectBase(t)
 {
+    auto expr_parser = is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>(dt)) : ParserPtr(std::make_unique<ParserExpression>(dt));
+    if (dt.parse_nested_alias || allow_alias)
+        impl = std::make_unique<ParserWithOptionalAlias>(std::move(expr_parser), allow_alias_without_as_keyword, dt);
+    else
+        impl = std::move(expr_parser);
+
 }
 
 
 bool ParserExpressionList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserList(
-        std::make_unique<ParserExpressionWithOptionalAlias>(allow_alias_without_as_keyword, dt, is_table_function),
+        std::make_unique<ParserExpressionWithOptionalAlias>(allow_alias_without_as_keyword, dt, is_table_function, allow_alias),
         std::make_unique<ParserToken>(TokenType::Comma))
         .parse(pos, node, expected);
 }

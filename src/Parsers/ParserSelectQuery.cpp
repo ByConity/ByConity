@@ -62,7 +62,7 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserNotEmptyExpressionList exp_list(false, dt);
     ParserNotEmptyExpressionList exp_list_for_with_clause(false, dt);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt);    /// Allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt, true);    /// Allows aliases without AS keyword.
     ParserExpressionWithOptionalAlias exp_elem(false, dt);
     ParserOrderByExpressionList order_list(dt);
     ParserGroupingSetsExpressionList grouping_sets_list(dt);

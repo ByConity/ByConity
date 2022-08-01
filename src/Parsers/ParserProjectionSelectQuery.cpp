@@ -20,8 +20,8 @@ bool ParserProjectionSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
     ParserKeyword s_group_by("GROUP BY");
     ParserKeyword s_order_by("ORDER BY");
 
-    ParserNotEmptyExpressionList exp_list_for_with_clause(false, dt);
-    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt); /// Allows aliases without AS keyword.
+    ParserNotEmptyExpressionList exp_list_for_with_clause(false, dt, true);
+    ParserNotEmptyExpressionList exp_list_for_select_clause(true, dt, true); /// Allows aliases without AS keyword.
     ParserExpression order_expression_p(dt);
 
     ASTPtr with_expression_list;

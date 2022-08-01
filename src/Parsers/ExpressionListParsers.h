@@ -514,7 +514,7 @@ using ParserExpression = ParserLambdaExpression;
 class ParserExpressionWithOptionalAlias : public IParserDialectBase
 {
 public:
-    explicit ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function = false);
+    explicit ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool is_table_function = false, bool allow_alias = false);
 protected:
     ParserPtr impl;
 
@@ -531,12 +531,13 @@ protected:
 class ParserExpressionList : public IParserDialectBase
 {
 public:
-    explicit ParserExpressionList(bool allow_alias_without_as_keyword_, ParserSettingsImpl t, bool is_table_function_ = false)
-        : IParserDialectBase(t), allow_alias_without_as_keyword(allow_alias_without_as_keyword_), is_table_function(is_table_function_) {}
+    explicit ParserExpressionList(bool allow_alias_without_as_keyword_, ParserSettingsImpl t, bool is_table_function_ = false, bool allow_alias_ = false)
+        : IParserDialectBase(t), allow_alias_without_as_keyword(allow_alias_without_as_keyword_), is_table_function(is_table_function_), allow_alias(allow_alias_) {}
 
 protected:
     bool allow_alias_without_as_keyword;
     bool is_table_function; // This expression list is used by a table function
+    bool allow_alias;
 
     const char * getName() const override { return "list of expressions"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
@@ -546,8 +547,8 @@ protected:
 class ParserNotEmptyExpressionList : public IParserDialectBase
 {
 public:
-    explicit ParserNotEmptyExpressionList(bool allow_alias_without_as_keyword, ParserSettingsImpl t)
-        : IParserDialectBase(t), nested_parser(allow_alias_without_as_keyword, t) {}
+    explicit ParserNotEmptyExpressionList(bool allow_alias_without_as_keyword, ParserSettingsImpl t, bool allow_alias = false)
+        : IParserDialectBase(t), nested_parser(allow_alias_without_as_keyword, t, false, allow_alias) {}
 private:
     ParserExpressionList nested_parser;
 protected:
