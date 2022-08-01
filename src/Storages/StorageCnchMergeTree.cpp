@@ -24,6 +24,7 @@
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -278,14 +279,19 @@ void StorageCnchMergeTree::read(
 }
 
 Strings StorageCnchMergeTree::selectPartitionsByPredicate(
-    const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context)
+    const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context)
 {
     /// Coarse grained partition prunner: filter out the partition which will definately not sastify the query predicate. The benefit
     /// is 2-folded: (1) we can prune data parts and (2) we can reduce numbers of calls to catalog to get parts 's metadata.
     /// Note that this step still leaves false-positive parts. For example, the partition key is `toMonth(date)` and the query
     /// condition is `date > '2022-02-22' and date < '2022-03-22'` then this step won't eliminate any partition.
 
-    /// Prune partition by partition level TTL
+    /// The partition pruning rules come from 3 types:
+    /// (1) TTL
+    /// (2) Columns in predicate that exactly match the partition key
+    /// (3) `_partition_id` or `_partition_value` if they're in predicate
+
+    /// (1) Prune partition by partition level TTL
     TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
     if (table_ttl.definition_ast)
     {
@@ -307,6 +313,7 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
 
     if (local_context->getSettingsRef().enable_partition_prune && partition_key_sample.columns() > 0)
     {
+        /// (2) Prune partitions if there's a column in predicate that exactly match the partition key 
         Names partition_key_columns;
         for (const auto & name : partition_key_sample)
         {
@@ -329,7 +336,36 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
             return !res;
         });
         if (partition_list.size() < prev_sz)
-            LOG_DEBUG(log, "Query predicates droped {} partitions", prev_sz - partition_list.size());
+            LOG_DEBUG(log, "Query predicates on physical columns droped {} partitions", prev_sz - partition_list.size());
+
+        /// (3) Prune partitions if there's `_partition_id` or `_partition_value` in query predicate
+        bool has_partition_column = std::find_if(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
+            return name == "_partition_id" || name == "_partition_value";
+        }) != column_names_to_return.end();
+
+        if (has_partition_column && !partition_list.empty())
+        {
+            Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+            ASTPtr expression_ast;
+
+            /// Generate valid expressions for filtering
+            VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+
+            /// Generate list of partition id that fit the query predicate
+            NameSet partition_ids;
+            if (expression_ast)
+            {
+                VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
+                partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
+            }
+            /// Prunning
+            prev_sz = partition_list.size();
+            std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
+                return partition_ids.find(partition->getID(*this)) == partition_ids.end();
+            });
+            if (partition_list.size() < prev_sz)
+                LOG_DEBUG(log, "Query predicates on `_partition_id` and `_partition_value` droped {} partitions", prev_sz - partition_list.size());
+        }
     }
     for (const auto & partition : partition_list)
         res_partitions.emplace_back(partition->getID(*this));
@@ -403,7 +439,7 @@ ServerDataPartsVector StorageCnchMergeTree::pruneParts(
     /// Fine grained parts prunning by:
     /// (1) partition min-max
     /// (2) min-max index
-    /// (3) part name (if _part is in the query)
+    /// (3) part name (if _part is in the query) and uuid (todo)
     /// (4) primary key (TODO)
     /// (5) block id for deduped part (TODO)
 
@@ -865,7 +901,7 @@ StorageCnchMergeTree::getPrunedServerParts(const Names & column_names_to_return,
         Stopwatch watch;
         auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
         // TEST_LOG(testlog, "get partition list.");
-        Strings pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, local_context);
+        Strings pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
         // TEST_LOG(testlog, "select partitions by predicate.");
         if (cur_txn->isSecondary())
         {
@@ -1075,5 +1111,33 @@ void StorageCnchMergeTree::truncate(
 StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
 {
     return local_store_volume;
+}
+
+Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
+{
+    DataTypePtr partition_value_type = getPartitionValueType();
+    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
+    Block block{
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")
+    };
+
+
+    MutableColumns columns = block.mutateColumns();
+
+    auto & partition_id_column = columns[0];
+    auto & partition_value_column = columns[1];
+
+    for (const auto & partition : partition_list)
+    {
+        partition_id_column->insert(partition->getID(*this));
+        Tuple tuple(partition->value.begin(), partition->value.end());
+        if (has_partition_value)
+            partition_value_column->insert(std::move(tuple));
+    }
+    block.setColumns(std::move(columns));
+    if (!has_partition_value)
+        block.erase(block.getPositionByName("_partition_value"));
+    return block;
 }
 } // end namespace DB

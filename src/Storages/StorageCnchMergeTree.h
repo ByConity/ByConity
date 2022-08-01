@@ -96,6 +96,8 @@ public:
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
+    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,
@@ -113,7 +115,7 @@ private:
     ServerDataPartsVector getAllParts(ContextPtr local_context);
 
     Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context);
+        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context);
 
     ServerDataPartsVector pruneParts(
         const Names & column_names_to_return,
