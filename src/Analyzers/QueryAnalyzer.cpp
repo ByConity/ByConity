@@ -70,6 +70,7 @@ public:
         , use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI)
         , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
+        , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
     {}
 
 private:
@@ -79,6 +80,7 @@ private:
     const bool use_ansi_semantic;
     const bool enable_shared_cte;
     const bool enable_implicit_type_conversion;
+    const bool allow_extended_conversion;
 
     void analyzeSetOperation(ASTPtr & node, ASTs & selects);
 
@@ -251,7 +253,7 @@ void QueryAnalyzerVisitor::analyzeSetOperation(ASTPtr & node, ASTs & selects)
                 elem_types.push_back(analysis.getOutputDescription(*select)[column_idx].type);
 
             // promote output type to super type if necessary
-            auto output_type = getLeastSupertype(elem_types);
+            auto output_type = getLeastSupertype(elem_types, allow_extended_conversion);
             output_desc.emplace_back(first_input_desc[column_idx].name, output_type);
         }
     }
@@ -684,7 +686,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             }
             else if (enable_implicit_type_conversion)
             {
-                output_type = getLeastSupertype({left_type, right_type});
+                try
+                {
+                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                }
+                catch (DB::Exception & ex)
+                {
+                    throw Exception(
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                            + "Can't get supertype: " + ex.message(),
+                        ErrorCodes::TYPE_MISMATCH);
+                }
             }
 
             if (!output_type)
@@ -765,7 +777,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
             }
             else if (enable_implicit_type_conversion)
             {
-                output_type = getLeastSupertype({left_type, right_type});
+                try
+                {
+                    output_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                }
+                catch (DB::Exception & ex)
+                {
+                    throw Exception(
+                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                            + "Can't get supertype: " + ex.message(),
+                        ErrorCodes::TYPE_MISMATCH);
+                }
             }
 
             if (!output_type)
@@ -946,7 +968,17 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
 
                             if (enable_implicit_type_conversion)
                             {
-                                super_type = getLeastSupertype({left_type, right_type});
+                                try
+                                {
+                                    super_type = getLeastSupertype({left_type, right_type}, allow_extended_conversion);
+                                }
+                                catch (DB::Exception & ex)
+                                {
+                                    throw Exception(
+                                        "Type mismatch of columns to JOIN by: " + left_type->getName() + " at left, " + right_type->getName() + " at right. "
+                                            + "Can't get supertype: " + ex.message(),
+                                        ErrorCodes::TYPE_MISMATCH);
+                                }
                                 if (!left_type->equals(*super_type))
                                     left_coercion = super_type;
                                 if (!right_type->equals(*super_type))

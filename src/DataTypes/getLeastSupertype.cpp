@@ -51,7 +51,7 @@ namespace
 }
 
 
-DataTypePtr getLeastSupertype(const DataTypes & types)
+DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conversion)
 {
     /// Trivial cases
 
@@ -89,7 +89,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                 non_nothing_types.emplace_back(type);
 
         if (non_nothing_types.size() < types.size())
-            return getLeastSupertype(non_nothing_types);
+            return getLeastSupertype(non_nothing_types, allow_extended_conversion);
     }
 
     /// For Arrays
@@ -116,7 +116,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             if (!all_arrays)
                 throw Exception(getExceptionMessagePrefix(types) + " because some of them are Array and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
-            return std::make_shared<DataTypeArray>(getLeastSupertype(nested_types));
+            return std::make_shared<DataTypeArray>(getLeastSupertype(nested_types, allow_extended_conversion));
         }
     }
 
@@ -158,7 +158,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
 
             DataTypes common_tuple_types(tuple_size);
             for (size_t elem_idx = 0; elem_idx < tuple_size; ++elem_idx)
-                common_tuple_types[elem_idx] = getLeastSupertype(nested_types[elem_idx]);
+                common_tuple_types[elem_idx] = getLeastSupertype(nested_types[elem_idx], allow_extended_conversion);
 
             return std::make_shared<DataTypeTuple>(common_tuple_types);
         }
@@ -190,7 +190,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             if (!all_maps)
                 throw Exception(getExceptionMessagePrefix(types) + " because some of them are Maps and some of them are not", ErrorCodes::NO_COMMON_TYPE);
 
-            return std::make_shared<DataTypeMap>(getLeastSupertype(key_types), getLeastSupertype(value_types));
+            return std::make_shared<DataTypeMap>(getLeastSupertype(key_types, allow_extended_conversion), getLeastSupertype(value_types, allow_extended_conversion));
         }
     }
 
@@ -221,9 +221,9 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
         if (have_low_cardinality)
         {
             if (have_not_low_cardinality)
-                return getLeastSupertype(nested_types);
+                return getLeastSupertype(nested_types, allow_extended_conversion);
             else
-                return std::make_shared<DataTypeLowCardinality>(getLeastSupertype(nested_types));
+                return std::make_shared<DataTypeLowCardinality>(getLeastSupertype(nested_types, allow_extended_conversion));
         }
     }
 
@@ -249,7 +249,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
 
         if (have_nullable)
         {
-            return std::make_shared<DataTypeNullable>(getLeastSupertype(nested_types));
+            return std::make_shared<DataTypeNullable>(getLeastSupertype(nested_types, allow_extended_conversion));
         }
     }
 
@@ -335,9 +335,52 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                     max_int = int_ids[i];
             }
 
-            if (num_supported != type_ids.size())
+            if (!allow_extended_conversion && num_supported != type_ids.size())
                 throw Exception(getExceptionMessagePrefix(types) + " because some of them have no lossless conversion to Decimal",
                                 ErrorCodes::NO_COMMON_TYPE);
+
+            if (allow_extended_conversion)
+            {
+                constexpr std::array<TypeIndex, 2> float_ids = {TypeIndex::Float32, TypeIndex::Float64};
+                bool have_float = false;
+
+                for (const auto & float_id: float_ids)
+                {
+                    UInt32 num = type_ids.count(float_id);
+                    num_supported += num;
+                    have_float |= num;
+                }
+
+                if (num_supported != type_ids.size())
+                    throw Exception(getExceptionMessagePrefix(types) + " because some of them have no conversion to Decimal",
+                                    ErrorCodes::NO_COMMON_TYPE);
+
+                if (have_float)
+                {
+                    DataTypes types_without_decimals;
+                    types_without_decimals.reserve(types.size());
+
+                    for (const auto & type : types)
+                    {
+                        if(!strcmp(type->getFamilyName(), "Decimal"))
+                        {
+                            auto bits_of_integer_part = getDecimalPrecision(*type) - getDecimalScale(*type, 0);
+
+                            if (bits_of_integer_part <= DataTypeDecimal<Decimal32>::maxPrecision())
+                                types_without_decimals.push_back(std::make_shared<DataTypeInt32>());
+                            else if (bits_of_integer_part <= DataTypeDecimal<Decimal64>::maxPrecision())
+                                types_without_decimals.push_back(std::make_shared<DataTypeInt64>());
+                            else if (bits_of_integer_part <= DataTypeDecimal<Decimal128>::maxPrecision())
+                                types_without_decimals.push_back(std::make_shared<DataTypeInt128>());
+                            else
+                                types_without_decimals.push_back(std::make_shared<DataTypeInt256>());
+                        }
+                        else
+                            types_without_decimals.push_back(type);
+                    }
+                    return getLeastSupertype(types_without_decimals, allow_extended_conversion);
+                }
+            }
 
             UInt32 max_scale = 0;
             for (const auto & type : types)
@@ -434,7 +477,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
             {
                 // Because 128 and 256 bit integers are significantly slower, we should not promote to them.
                 // But if we already have wide numbers, promotion is necessary.
-                if (min_bit_width_of_integer != 64)
+                if (min_bit_width_of_integer != 64 || allow_extended_conversion)
                     ++min_bit_width_of_integer;
                 else
                     throw Exception(
@@ -450,7 +493,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types)
                 size_t min_mantissa_bits = std::max(min_bit_width_of_integer, max_mantissa_bits_of_floating);
                 if (min_mantissa_bits <= 24)
                     return std::make_shared<DataTypeFloat32>();
-                else if (min_mantissa_bits <= 53)
+                else if (min_mantissa_bits <= 53 || allow_extended_conversion)
                     return std::make_shared<DataTypeFloat64>();
                 else
                     throw Exception(getExceptionMessagePrefix(types)

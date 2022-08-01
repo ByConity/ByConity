@@ -5,6 +5,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Interpreters/Context.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/IFunction.h>
@@ -79,7 +80,7 @@ public:
         if (new_args.size() == 1)
             return new_args.front();
 
-        auto res = getLeastSupertype(new_args);
+        auto res = getLeastSupertype(new_args, context->getSettingsRef().allow_extended_type_conversion);
 
         /// if last argument is not nullable, result should be also not nullable
         if (!new_args.back()->isNullable() && res->isNullable())

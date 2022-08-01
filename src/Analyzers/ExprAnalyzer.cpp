@@ -63,6 +63,7 @@ public:
         options(std::move(options_)),
         use_ansi_semantic(context->getSettingsRef().dialect_type == DialectType::ANSI),
         enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion),
+        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion),
         scopes({scope_})
     {}
 
@@ -74,6 +75,7 @@ private:
     const ExprAnalyzerOptions options;
     const bool use_ansi_semantic;
     const bool enable_implicit_type_conversion;
+    const bool allow_extended_conversion;
 
     std::vector<ScopePtr> scopes;
     // whether we are in an aggregate function
@@ -520,7 +522,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     {
         DataTypePtr super_type = nullptr;
         if (enable_implicit_type_conversion)
-            super_type = getLeastSupertype({lhs_type, rhs_type});
+            super_type = getLeastSupertype({lhs_type, rhs_type}, allow_extended_conversion);
         if (!super_type)
             throw Exception("Incompatible types for IN prediacte", ErrorCodes::TYPE_MISMATCH);
         if (!lhs_type->equals(*super_type))

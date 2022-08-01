@@ -497,7 +497,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         NameToType left_project_types = left_source_expression_node->getOutputNamesToTypes();
         Assignments right_project_assignments;
         NameToType right_project_types = right_source_expression_node->getOutputNamesToTypes();
-        const bool allow_lossy_implicit_type_conversion = context->getSettingsRef().allow_lossy_implicit_type_conversion;
+        const bool allow_extended_type_conversion = context->getSettingsRef().allow_extended_type_conversion;
 
         auto put_identities = [](Assignments & assignments, const Names & input_symbols)
         {
@@ -514,7 +514,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             String right_key = clause.second;
             auto left_type = left_project_types.at(left_key);
             auto right_type = right_project_types.at(right_key);
-            auto res_type = getLeastSupertype({left_type, right_type}, allow_lossy_implicit_type_conversion);
+            auto res_type = getLeastSupertype({left_type, right_type}, allow_extended_type_conversion);
 
             auto add_join_key = [&](
                                     const auto & name,
