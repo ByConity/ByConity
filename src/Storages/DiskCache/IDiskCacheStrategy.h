@@ -33,7 +33,7 @@ public:
 
         for (auto segment_num : segment_nums)
         {
-            auto segment = std::make_shared<T>(std::forward<Args>(args)..., segment_num, segment_size);
+            auto segment = std::make_shared<T>(segment_num, segment_size, std::forward<Args>(args)...);
             segments.push_back(std::move(segment));
         }
 

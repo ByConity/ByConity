@@ -274,7 +274,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     String segment_key = DiskCacheSegment::getSegmentKey(storage_id, part_name,
         stream_name, segment_idx, DATA_FILE_EXTENSION);
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
-    if (cache_entry.first != nullptr)
+    if (cache_entry.first == nullptr)
     {
         return false;
     }
