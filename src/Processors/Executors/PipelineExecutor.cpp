@@ -70,23 +70,6 @@ PipelineExecutor::PipelineExecutor(Processors & processors_, QueryStatus * elem,
         // as that would leave the executor "linked"
         process_list_element->addPipelineExecutor(this);
     }
-
-    for (const auto & pro : processors)
-    {
-        auto *exp_trans = dynamic_cast<ExpressionTransform*>(pro.get());
-        if (exp_trans)
-        {            
-            auto exp_action = exp_trans->getExpression();
-            LOG_DEBUG(log, "SZM ExpressionTransform action:{}", exp_action->dumpActions());
-            LOG_DEBUG(log, "SZM ExpressionTransform action dag:{}", exp_action->getActionsDAG().dumpDAG());
-        }
-        
-    }
-
-    WriteBufferFromOwnString buf;
-    printPipeline(processors, buf);
-    buf.finalize();
-    LOG_DEBUG(log, "SZM pipeline:{}", buf.str());
 }
 
 PipelineExecutor::~PipelineExecutor()
