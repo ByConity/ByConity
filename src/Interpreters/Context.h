@@ -449,6 +449,7 @@ private:
 
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
+    TxnTimestamp current_cnch_txn_id = {0};  /// Used by CNCH workers
 
     Context();
     Context(const Context &);
@@ -1179,6 +1180,7 @@ public:
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
     TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id);
     TransactionCnchPtr getCurrentTransaction() const;
+    void setCurrentTransactionID(const TxnTimestamp & txn_id);
     TxnTimestamp getCurrentTransactionID() const;
 
     void initCnchBGThreads();

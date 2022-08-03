@@ -539,7 +539,7 @@ void Connection::sendCnchQuery(
     const Settings * settings,
     const ClientInfo * client_info,
     bool with_pending_data,
-    UInt16)
+    UInt16 server_rpc_port)
 {
 
     if (!connected)
@@ -573,10 +573,10 @@ void Connection::sendCnchQuery(
     {
         // TODO:
         // client_info->rpc_port = server_rpc_port;
-        client_info->write(*out, server_revision);
+        client_info->write(*out, server_revision, server_rpc_port);
     }
     else
-        ClientInfo().write(*out, server_revision);
+        ClientInfo().write(*out, server_revision, server_rpc_port);
 
     /// Per query settings.
     if (settings)

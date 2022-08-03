@@ -1277,7 +1277,7 @@ void TCPHandler::receiveCnchQuery()
 
     /// Client info
     ClientInfo & client_info = query_context->getClientInfo();
-    client_info.read(*in, client_tcp_protocol_version);
+    client_info.read(*in, client_tcp_protocol_version, /*cnch_query*/ true);
 
     /// For better support of old clients, that does not send ClientInfo.
     if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
@@ -1376,6 +1376,8 @@ void TCPHandler::receiveCnchQuery()
     // controls when we start a new trace. It can be changed via Native protocol,
     // so we have to apply the changes first.
     query_context->setCurrentQueryId(state.query_id);
+
+    query_context->setCurrentTransactionID(txn_id);
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),

@@ -46,6 +46,7 @@ namespace RPCHelpers
 
         auto rpc_context = Context::createCopy(context);
         rpc_context->makeSessionContext();
+        rpc_context->makeQueryContext();
 
         auto & client_info = rpc_context->getClientInfo();
         client_info.interface = ClientInfo::Interface::BRPC;

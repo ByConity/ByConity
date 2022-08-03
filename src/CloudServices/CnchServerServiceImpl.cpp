@@ -36,12 +36,10 @@ void CnchServerServiceImpl::commitParts(
     [[maybe_unused]] Protos::CommitPartsResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = getContext();
-
     RPCHelpers::serviceHandler(
         done,
         response,
-        [c = cntl, req = request, rsp = response, done = done, &gc = context_ptr, log = log] {
+        [c = cntl, req = request, rsp = response, done = done, gc = getContext(), log = log] {
             brpc::ClosureGuard done_guard(done);
 
             try
@@ -59,9 +57,9 @@ void CnchServerServiceImpl::commitParts(
                 auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
                 rpc_context->setCurrentTransaction(cnch_txn, false);
 
-                /// TODO: find table by uuid ?
-                /// The table schema in catalog has not been updated, use storage in query_cache
-                auto storage = rpc_context->tryGetCnchTable(req->database(), req->table());
+                auto & database_catalog = DatabaseCatalog::instance();
+                StorageID table_id(req->database(), req->table());
+                auto storage = database_catalog.tryGetTable(table_id, rpc_context);
 
                 auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
                 if (!cnch)

@@ -26,6 +26,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include "Common/tests/gtest_global_context.h"
@@ -183,6 +184,29 @@ BlockIO InterpreterInsertQuery::execute()
         {
             res.pipeline = std::move(*maybe_pipeline);
             is_distributed_insert_select = true;
+        }
+    }
+
+    /// Directly forward the query to cnch worker if select or infile
+    if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && table->isRemote())
+    {
+        /// Handle the insert commit for insert select/infile case in cnch server.
+        table->write(query_ptr, metadata_snapshot, getContext());
+
+        bool enable_staging_area_for_write = settings.enable_staging_area_for_write;
+        if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
+            cnch_table && metadata_snapshot->hasUniqueKey() && !enable_staging_area_for_write)
+        {
+            /// for unique table, insert select|infile is committed from worker side
+            return {};
+        }
+        else
+        {
+            TransactionCnchPtr txn = getContext()->getCurrentTransaction();
+            txn->setMainTableUUID(table->getStorageUUID());
+            txn->commitV2();
+            LOG_TRACE(&Logger::get("InterpreterInsertQuery::execute"), "Finish insert infile/select commit in cnch server.");
+            return {};
         }
     }
 
