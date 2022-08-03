@@ -394,8 +394,9 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
             if (segment_cache_strategy != nullptr)
             {
                 // Cache segment if necessary
-                IDiskCacheSegmentsVector segments = segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
-                    all_mark_ranges, data_part, stream_name, DATA_FILE_EXTENSION);
+                IDiskCacheSegmentsVector segments = segment_cache_strategy->getCacheSegments(
+                    segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
+                        all_mark_ranges, data_part, stream_name, DATA_FILE_EXTENSION));
                 segment_cache->cacheSegmentsToLocalDisk(segments);
             }
 
