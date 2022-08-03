@@ -3161,7 +3161,8 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     if (storage_id.uuid != UUIDHelpers::Nil)
         return storage_id;
 
-    if (getServerType() == ServerType::cnch_worker)
+    /// skip session resource check if database is null to make temporary table can be found (e.g., join case _data1)
+    if (getServerType() == ServerType::cnch_worker && !storage_id.database_name.empty())
     {
         if (auto worker_resource = tryGetCnchWorkerResource())
         {
