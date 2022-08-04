@@ -4,6 +4,7 @@
 #   include "config_core.h"
 #endif
 
+#include <Coordination/Defines.h>
 #include <Coordination/LoggerWrapper.h>
 #include <Coordination/KeeperStateMachine.h>
 #include <Coordination/KeeperStateManager.h>
