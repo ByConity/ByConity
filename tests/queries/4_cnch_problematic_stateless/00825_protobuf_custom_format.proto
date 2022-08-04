@@ -1,0 +1,14 @@
+syntax = "proto2";
+
+message StrArr {
+    repeated string vals = 1;
+}
+
+message TestMessage {
+    required int64 id = 1;
+    optional string address = 2;
+    required string name = 3;
+	repeated uint32 nums = 4;
+    map<string, StrArr> string_list = 5;
+	map<int32, int32> params_int = 6;
+}

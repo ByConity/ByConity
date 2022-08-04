@@ -1,0 +1,11 @@
+before insert
+after first insert
+t1.*		10					
+t1.value	Int32	10	0	10	1	10	1
+after second insert, no update
+t1.*		10					
+t1.value	Int32	10	0	10	1	10	1
+disable auto stats
+re-enable auto stats
+t1.*		40					
+t1.value	Int32	40	0	40	1	40	1
