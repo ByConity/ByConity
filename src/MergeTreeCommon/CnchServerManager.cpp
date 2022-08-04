@@ -158,8 +158,10 @@ void CnchServerManager::checkLeaderInfo([[maybe_unused]]const UInt64 & check_int
 
 void CnchServerManager::refreshTopology()
 {
+    #if BYTEJOURNAL_AVAILABLE
     if (!getLeaderElectionResult().is_leader || !leader_initialized)
         return;
+    #endif
 
     auto service_discovery_client = context.getServiceDiscoveryClient();
     String psm = context.getConfigRef().getString("service_discovery.server.psm", "data.cnch.server");
@@ -169,6 +171,13 @@ void CnchServerManager::refreshTopology()
         LOG_ERROR(log, "Failed to get any server from service discovery, psm : " + psm);
         return;
     }
+    /// FIXME: since no leader election available, we now only support one server in cluster, remove this logic later.
+    else if (server_vector.size() > 1)
+    {
+        LOG_ERROR(log, "More than one server in cluster is not supportted now, psm : " + psm);
+        return;
+    }
+
     /// keep the servers sorted by host address to make it comparable
     std::sort(server_vector.begin(), server_vector.end(), [](auto & lhs, auto & rhs) {
         return std::forward_as_tuple(lhs.id, lhs.host, lhs.rpc_port) < std::forward_as_tuple(rhs.id, rhs.host, rhs.rpc_port);
@@ -183,11 +192,13 @@ void CnchServerManager::refreshTopology()
 
 void CnchServerManager::renewLease()
 {
+    #if BYTEJOURNAL_AVAILABLE
     if (!getLeaderElectionResult().is_leader)
         return;
 
     if (!leader_initialized)
         setLeaderStatus();
+    #endif
 
     UInt64 current_time_ms = context.getTimestamp()>>18;
     UInt64 lease_life_ms = context.getSettings().topology_lease_life_ms.totalMilliseconds();
