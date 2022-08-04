@@ -20,6 +20,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/PartialSortingStep.h>
@@ -1351,14 +1352,8 @@ void QueryPlannerVisitor::planOrderBy(PlanBuilder & builder, ASTSelectQuery & se
         limit = limit_length + limit_offset;
     }
 
-    auto partial_sorting = std::make_shared<PartialSortingStep>(builder.getCurrentDataStream(), sort_description, limit);
-    builder.addStep(std::move(partial_sorting));
-
-    auto merge_sorting_step = std::make_shared<MergeSortingStep>(builder.getCurrentDataStream(), sort_description, limit);
-    builder.addStep(std::move(merge_sorting_step));
-
-    auto merging_sorted_step = std::make_shared<MergingSortedStep>(builder.getCurrentDataStream(), sort_description, context->getSettingsRef().max_threads, limit);
-    builder.addStep(std::move(merging_sorted_step));
+    auto sorting_step = std::make_shared<SortingStep>(builder.getCurrentDataStream(), sort_description, limit, false);
+    builder.addStep(std::move(sorting_step));
     PRINT_PLAN(builder.plan, plan_order_by);
 }
 

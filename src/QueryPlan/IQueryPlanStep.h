@@ -107,6 +107,7 @@ public:
         M(LimitBy) \
         M(Limit) \
         M(MergeSorting) \
+        M(Sorting) \
         M(MergingAggregated) \
         M(MergingSorted) \
         M(Offset) \

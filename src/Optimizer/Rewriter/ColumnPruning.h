@@ -26,6 +26,7 @@ private:
     PlanNodePtr visitWindowNode(WindowNode & node, NameSet & context) override;
     PlanNodePtr visitDistinctNode(DistinctNode & node, NameSet & context) override;
     PlanNodePtr visitJoinNode(JoinNode & node, NameSet & context) override;
+    PlanNodePtr visitSortingNode(SortingNode & node, NameSet & require) override;
     PlanNodePtr visitMergeSortingNode(MergeSortingNode & node, NameSet & context) override;
     PlanNodePtr visitMergingSortedNode(MergingSortedNode & node, NameSet & context) override;
     PlanNodePtr visitPartialSortingNode(PartialSortingNode & node, NameSet & context) override;

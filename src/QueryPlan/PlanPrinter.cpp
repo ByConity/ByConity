@@ -204,6 +204,17 @@ std::string PlanPrinter::TextPrinter::printDetail(PlanNodeBase & plan, const Tex
         }
     }
 
+    if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Sorting)
+    {
+        auto sort = dynamic_cast<const SortingStep *>(plan.getStep().get());
+        std::vector<String> sort_columns;
+        for (auto & desc : sort->getSortDescription())
+            sort_columns.emplace_back(
+                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+        out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
+    }
+
+
     if (verbose && plan.getStep()->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(plan.getStep().get());

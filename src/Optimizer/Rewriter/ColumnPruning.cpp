@@ -318,6 +318,18 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     return agg_node;
 }
 
+PlanNodePtr ColumnPruningVisitor::visitSortingNode(SortingNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    for (const auto & item : step->getSortDescription())
+    {
+        require.insert(item.column_name);
+    }
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, require);
+    auto sort_step = std::make_shared<SortingStep>(child->getStep()->getOutputStream(), step->getSortDescription(), step->getLimit(), step->isPartial());
+    return SortingNode::createPlanNode(context->nextNodeId(), std::move(sort_step), PlanNodes{child}, node.getStatistics());
+}
+
 PlanNodePtr ColumnPruningVisitor::visitMergeSortingNode(MergeSortingNode & node, NameSet & require)
 {
     const auto * step = node.getStep().get();

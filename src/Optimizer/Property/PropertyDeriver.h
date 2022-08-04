@@ -45,6 +45,7 @@ public:
     Property visitValuesStep(const ValuesStep &, DeriverContext &) override;
     Property visitLimitStep(const LimitStep &, DeriverContext & context) override;
     Property visitLimitByStep(const LimitByStep &, DeriverContext & context) override;
+    Property visitSortingStep(const SortingStep &, DeriverContext & context) override;
     Property visitMergeSortingStep(const MergeSortingStep &, DeriverContext & context) override;
     Property visitPartialSortingStep(const PartialSortingStep &, DeriverContext & context) override;
     Property visitMergingSortedStep(const MergingSortedStep &, DeriverContext & context) override;

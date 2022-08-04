@@ -17,6 +17,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
@@ -59,6 +60,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
     {IQueryPlanStep::Type::LimitBy, "gray83"},
+    {IQueryPlanStep::Type::Sorting, "aliceblue"},
     {IQueryPlanStep::Type::MergeSorting, "aliceblue"},
     {IQueryPlanStep::Type::PartialSorting, "aliceblue"},
     {IQueryPlanStep::Type::MergingSorted, "aliceblue"},
@@ -244,6 +246,15 @@ Void PlanNodePrinter::visitLimitByNode(LimitByNode & node, PrinterContext & cont
     auto step = *node.getStep();
     String color{NODE_COLORS[step.getType()]};
     printNode(node, label, StepPrinter::printLimitByStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitSortingNode(SortingNode & node, PrinterContext & context)
+{
+    String label{"SortingNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printSortingStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -617,6 +628,16 @@ Void PlanSegmentNodePrinter::visitMergeSortingNode(QueryPlan::Node * node, Print
     auto & step = dynamic_cast<const MergeSortingStep &>(*stepPtr);
     String color{NODE_COLORS[stepPtr->getType()]};
     printNode(node, label, StepPrinter::printMergeSortingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitSortingNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"SortingNode"};
+    auto & step = dynamic_cast<const SortingStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printSortingStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1368,6 +1389,27 @@ String StepPrinter::printLimitByStep(const LimitByStep & step)
 }
 
 String StepPrinter::printMergeSortingStep(const MergeSortingStep & step)
+{
+    std::stringstream details;
+    details << "Order By:\\n";
+    auto & descs = step.getSortDescription();
+    for (auto & desc : descs)
+    {
+        details << desc.column_name << " " << desc.direction << " " << desc.nulls_direction << "\\n";
+    }
+    details << "|";
+    details << "Limit: " << step.getLimit();
+    details << "|";
+    details << "Output |";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printSortingStep(const SortingStep & step)
 {
     std::stringstream details;
     details << "Order By:\\n";

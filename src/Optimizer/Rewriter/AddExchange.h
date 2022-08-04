@@ -64,6 +64,7 @@ public:
     ExchangeResult visitValuesNode(ValuesNode & node, ExchangeContext &) override;
     ExchangeResult visitLimitNode(LimitNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitLimitByNode(LimitByNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitSortingNode(SortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergeSortingNode(MergeSortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitPartialSortingNode(PartialSortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergingSortedNode(MergingSortedNode & node, ExchangeContext & cxt) override;

@@ -122,6 +122,11 @@ PlanNodeCost CostVisitor::visitLimitByStep(const LimitByStep & step, CostContext
     return visitStep(step, context);
 }
 
+PlanNodeCost CostVisitor::visitSortingStep(const SortingStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 PlanNodeCost CostVisitor::visitMergeSortingStep(const MergeSortingStep & step, CostContext & context)
 {
     return visitStep(step, context);

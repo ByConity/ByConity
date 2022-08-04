@@ -55,6 +55,7 @@ public:
     PlanNodeStatisticsPtr visitValuesStep(const ValuesStep & step, CardinalityContext &) override;
     PlanNodeStatisticsPtr visitLimitStep(const LimitStep & step, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitLimitByStep(const LimitByStep & step, CardinalityContext & context) override;
+    PlanNodeStatisticsPtr visitSortingStep(const SortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitMergeSortingStep(const MergeSortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitPartialSortingStep(const PartialSortingStep &, CardinalityContext & context) override;
     PlanNodeStatisticsPtr visitMergingSortedStep(const MergingSortedStep &, CardinalityContext & context) override;

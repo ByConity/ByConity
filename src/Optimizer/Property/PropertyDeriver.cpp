@@ -270,6 +270,11 @@ Property DeriverVisitor::visitLimitByStep(const LimitByStep &, DeriverContext & 
     return context.getInput()[0];
 }
 
+Property DeriverVisitor::visitSortingStep(const SortingStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitMergeSortingStep(const MergeSortingStep &, DeriverContext & context)
 {
     return context.getInput()[0];

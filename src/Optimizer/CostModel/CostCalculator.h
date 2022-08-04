@@ -53,6 +53,7 @@ public:
     PlanNodeCost visitValuesStep(const ValuesStep & step, CostContext & context) override;
     PlanNodeCost visitLimitStep(const LimitStep & step, CostContext & context) override;
     PlanNodeCost visitLimitByStep(const LimitByStep & step, CostContext & context) override;
+    PlanNodeCost visitSortingStep(const SortingStep & step, CostContext & context) override;
     PlanNodeCost visitMergeSortingStep(const MergeSortingStep & step, CostContext & context) override;
     PlanNodeCost visitPartialSortingStep(const PartialSortingStep & step, CostContext & context) override;
     PlanNodeCost visitMergingSortedStep(const MergingSortedStep & step, CostContext & context) override;

@@ -47,6 +47,7 @@ public:
     PropertySets visitValuesStep(const ValuesStep &, DeterminerContext &) override;
     PropertySets visitLimitStep(const LimitStep & step, DeterminerContext & context) override;
     PropertySets visitLimitByStep(const LimitByStep & node, DeterminerContext & context) override;
+    PropertySets visitSortingStep(const SortingStep &, DeterminerContext &) override;
     PropertySets visitMergeSortingStep(const MergeSortingStep &, DeterminerContext &) override;
     PropertySets visitPartialSortingStep(const PartialSortingStep &, DeterminerContext &) override;
     PropertySets visitMergingSortedStep(const MergingSortedStep & node, DeterminerContext & context) override;

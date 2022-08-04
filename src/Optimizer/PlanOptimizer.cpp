@@ -6,6 +6,7 @@
 #include <Optimizer/Rewriter/AddDynamicFilters.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
+#include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
@@ -36,6 +37,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
 
+        std::make_shared<RemoveRedundantSort>(),
         std::make_shared<PredicatePushdown>(),
 
         // normalize plan after predicate push down
@@ -91,6 +93,8 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
+
+        std::make_shared<RemoveRedundantSort>(),
 
         // subquery remove may generate outer join, make sure data type is correct.
         std::make_shared<ColumnPruning>(),
