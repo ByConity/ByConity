@@ -27,6 +27,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include "Common/tests/gtest_global_context.h"
@@ -35,6 +36,8 @@
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/processColumnTransformers.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <CloudServices/CnchServerResource.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnNullable.h>
 
@@ -216,6 +219,21 @@ BlockIO InterpreterInsertQuery::execute()
         size_t out_streams_size = 1;
         if (query.select)
         {
+            auto insert_select_context = Context::createCopy(context);
+            /// Cannot use trySetVirtualWarehouseAndWorkerGroup, because it only works in server node
+            if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(table.get()))
+            {
+                auto worker_group = getWorkerGroupForTable(*cloud_table, insert_select_context);
+                insert_select_context->setCurrentWorkerGroup(worker_group);
+                /// set worker group for select query
+                insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
+                if (auto session_resource = insert_select_context->getCnchServerResource())
+                    session_resource->setWorkerGroup(worker_group);
+                LOG_DEBUG(
+                    &Logger::get("VirtualWarehouse"),
+                    "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());
+            }
+
             bool is_trivial_insert_select = false;
 
             if (settings.optimize_trivial_insert_select)
@@ -252,18 +270,17 @@ BlockIO InterpreterInsertQuery::execute()
                         new_settings.preferred_block_size_bytes = settings.min_insert_block_size_bytes;
                 }
 
-                auto new_context = Context::createCopy(context);
-                new_context->setSettings(new_settings);
+                insert_select_context->setSettings(new_settings);
 
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, new_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
             else
             {
                 /// Passing 1 as subquery_depth will disable limiting size of intermediate result.
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, getContext(), SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
 

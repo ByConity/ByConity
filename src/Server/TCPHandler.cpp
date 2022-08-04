@@ -1312,6 +1312,7 @@ void TCPHandler::receiveCnchQuery()
 
     auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
     query_context = named_session->context;
+    query_context->setSessionContext(named_session->context);
 
     /// It is OK to check only when query != INITIAL_QUERY,
     /// since only in that case the actions will be done.
@@ -1377,7 +1378,8 @@ void TCPHandler::receiveCnchQuery()
     // so we have to apply the changes first.
     query_context->setCurrentQueryId(state.query_id);
 
-    query_context->setCurrentTransactionID(txn_id);
+    // query_context->setCurrentTransactionID(txn_id);
+    query_context->setTemporaryTransaction(txn_id, txn_id);
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
