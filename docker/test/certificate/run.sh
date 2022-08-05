@@ -21,7 +21,6 @@ mkdir -p test_output
 
 echo "certificate test"
 
-bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then

@@ -4,10 +4,10 @@
 --><yandex>
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
-        <level>trace</level>
-        <log>/test_output/daemon-manager/daemon-manager.log</log>
-        <errorlog>/test_output/daemon-manager/daemon-manager.err.log</errorlog>
-        <testlog>/test_output/daemon-manager/daemon-manager.test.log</testlog>
+        <level>debug</level>
+        <log>/artifacts/tso1/tso1.log</log>
+        <errorlog>/artifacts/tso1/tso1.err.log</errorlog>
+        <testlog>/artifacts/tso1/tso1.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -58,67 +58,6 @@
         </client>
     </openSSL>
 
-    <storage_configuration>
-        <disks>
-            <server_local_0>
-                <path>/cnch/cnch_test/server/data/0/</path>
-            </server_local_0>
-            <server_local_1>
-                <path>/cnch/cnch_test/server/data/1/</path>
-            </server_local_1>
-            <server_local_2>
-                <path>/cnch/cnch_test/server/data/2/</path>
-            </server_local_2>
-            <server_local_3>
-                <path>/cnch/cnch_test/server/data/3/</path>
-            </server_local_3>
-            <server_local_4>
-                <path>/cnch/cnch_test/server/data/4/</path>
-            </server_local_4>
-            <server_local_5>
-                <path>/cnch/cnch_test/server/data/5/</path>
-            </server_local_5>
-            <server_local_6>
-                <path>/cnch/cnch_test/server/data/6/</path>
-            </server_local_6>
-            <server_local_7>
-                <path>/cnch/cnch_test/server/data/7/</path>
-            </server_local_7>
-            <server_local_8>
-                <path>/cnch/cnch_test/server/data/8/</path>
-            </server_local_8>
-            <server_local_9>
-                <path>/cnch/cnch_test/server/data/9/</path>
-            </server_local_9>
-            <server_hdfs_disk>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
-                <type>hdfs</type>
-            </server_hdfs_disk>
-        </disks>
-        <policies>
-            <default>
-                <volumes>
-                    <local>
-                        <default>server_local_0</default>
-                        <disk>server_local_0</disk>
-                        <disk>server_local_1</disk>
-                        <disk>server_local_2</disk>
-                        <disk>server_local_3</disk>
-                        <disk>server_local_4</disk>
-                        <disk>server_local_5</disk>
-                        <disk>server_local_6</disk>
-                        <disk>server_local_7</disk>
-                        <disk>server_local_8</disk>
-                        <disk>server_local_9</disk>
-                    </local>
-                    <hdfs>
-                        <default>server_hdfs_disk</default>
-                        <disk>server_hdfs_disk</disk>
-                    </hdfs>
-                </volumes>
-            </default>
-        </policies>
-    </storage_configuration>
 
     <!-- Default root page on http[s] server. For example load UI from https://tabix.io/ when opening http://localhost:8123 -->
     <!--
@@ -138,7 +77,7 @@
 
     <!-- Listen specified host. use :: (wildcard IPv6 address), if you want to accept connections both with IPv4 and IPv6 from everywhere. -->
     <listen_host>::</listen_host>
-    <listen_host>0.0.0.0</listen_host>
+<!--    <listen_host>0.0.0.0</listen_host>-->
     <!-- Default values - try listen localhost on ipv4 and ipv6: -->
     <!--
     <listen_host>::1</listen_host>
@@ -288,12 +227,12 @@
       -->
    <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
 
-<!--   <zookeeper>-->
-<!--        <node index="1">-->
-<!--            <host>10.25.182.208</host>-->
-<!--            <port>2181</port>-->
-<!--        </node>-->
-<!--    </zookeeper>-->
+   <zookeeper>
+        <node index="1">
+            <host>10.25.182.208</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
 
     <!-- Substitutions for parameters of replicated tables.
           Optional. If you don't use replicated tables, you could omit that.
@@ -517,7 +456,7 @@
             <headless_service>cnch-server-headless</headless_service>
             <!-- For local test -->
             <node>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>server0</hostname>
                 <ports>
                     <!-- TCP/Primary -->
@@ -544,7 +483,7 @@
             <headless_service>cnch-tso-headless</headless_service>
             <!-- For local test -->
             <node>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>tso0</hostname>
                 <ports>
                     <!-- RPC/Primary -->
@@ -552,19 +491,19 @@
                 </ports>
             </node>
             <node>
-                <host>::1</host>
-                <hostname>tso0</hostname>
+                <host>ip_address_replace_me</host>
+                <hostname>tso1</hostname>
                 <ports>
                     <!-- RPC/Primary -->
-                    <port><name>PORT0</name><value>8081</value></port>
+                    <port><name>PORT1</name><value>8081</value></port>
                 </ports>
             </node>
             <node>
-                <host>::1</host>
-                <hostname>tso0</hostname>
+                <host>ip_address_replace_me</host>
+                <hostname>tso2</hostname>
                 <ports>
                     <!-- RPC/Primary -->
-                    <port><name>PORT0</name><value>8082</value></port>
+                    <port><name>PORT2</name><value>8082</value></port>
                 </ports>
             </node>
         </tso>
@@ -575,7 +514,7 @@
             <headless_service>cnch-daemonmanager-headless</headless_service>
             <!-- For local test -->
             <node>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>dm0</hostname>
                 <ports>
                     <!-- RPC/Primary -->
@@ -590,19 +529,11 @@
             <headless_service>cnch-resourcemanager-headless</headless_service>
             <!-- For local test -->
             <node>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>rm0</hostname>
                 <ports>
                     <!-- RPC/Primary -->
                     <port><name>PORT0</name><value>8989</value></port>
-                </ports>
-            </node>
-            <node>
-                <host>::1</host>
-                <hostname>rm0</hostname>
-                <ports>
-                    <!-- RPC/Primary -->
-                    <port><name>PORT0</name><value>8990</value></port>
                 </ports>
             </node>
         </resource_manager>
@@ -611,7 +542,7 @@
             <!-- For local test -->
             <node>
                 <vw_name>vw_default</vw_name>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>vw_default0</hostname>
                 <ports>
                     <!-- TCP/Primary -->
@@ -632,7 +563,7 @@
             </node>
             <node>
                 <vw_name>vw_write</vw_name>
-                <host>::1</host>
+                <host>ip_address_replace_me</host>
                 <hostname>vw_write0</hostname>
                 <ports>
                     <!-- TCP/Primary -->
@@ -774,10 +705,7 @@
         <profile_path>/cnch/enable_profile_path</profile_path>
     </bytepond>
     <tso_service>
-        <port>8080</port>
-        <http>
-            <port>8081</port>
-        </http>
+        <port>8081</port>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>
@@ -836,7 +764,7 @@
     </kafka_log>
 
     <bytejournal>
-        <log_dir>/test_output/server/log/logs_bytejournal</log_dir>
+        <log_dir>/shared/server/logs_bytejournal</log_dir>
         <uri>bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&amp;is_consul=false</uri>
         <metrics_prefix>cnch</metrics_prefix>
         <namespace>cnch_test</namespace>
@@ -868,22 +796,4 @@
         <threadpool_max_free_threads>1</threadpool_max_free_threads>
         <threadpool_max_queue_size>60</threadpool_max_queue_size>
     </global_gc>
-
-    <!-- Shared config directory between UDF container and cnch container -->
-    <udf_path>/cnch/cnch_test/server/user_defined</udf_path>
-
-    <udf_manager_server>
-        <timeout_ms>20000</timeout_ms>
-        <max_retry>1</max_retry>
-    </udf_manager_server>
-
-    <udf_processor>
-        <count>3</count>
-        <!-- This config directory is not shared -->
-        <!-- Its used for socket communication between udf manager and udf processors -->
-        <uds_path>/cnch/cnch_test/server/udf_processor</uds_path>
-        <timeout_ms>10000</timeout_ms>
-        <max_retry>1</max_retry>
-    </udf_processor>
-
 </yandex>

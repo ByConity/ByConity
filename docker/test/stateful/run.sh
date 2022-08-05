@@ -22,7 +22,6 @@ cp -r /clickhouse/share/clickhouse-test /usr/share/
 mkdir -p test_output
 mkdir -p sanitizer_log_output
 
-bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
 
 function start()
 {
