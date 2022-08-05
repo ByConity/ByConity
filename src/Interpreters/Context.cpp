@@ -516,6 +516,9 @@ struct ContextSharedPart
             trace_collector.reset();
             /// Stop zookeeper connection
             zookeeper.reset();
+
+            named_sessions.reset();
+            named_cnch_sessions.reset();
         }
 
         /// Can be removed w/o context lock

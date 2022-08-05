@@ -5,6 +5,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <CloudServices/CnchWorkerResource.h>
 
+#include <chrono>
 
 namespace DB
 {
@@ -156,6 +157,7 @@ NamedCnchSession::NamedCnchSession(NamedSessionKey key_, ContextPtr context_, st
 
 void NamedCnchSession::release()
 {
+    timeout = std::chrono::steady_clock::duration{0}; /// release immediately
     parent.releaseSession(*this);
     LOG_TRACE(&Poco::Logger::get("NamedCnchSession"), "release CnchWorkerResource({})", key);
 }
