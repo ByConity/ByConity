@@ -20,6 +20,7 @@ class Context;
 
 struct CreateTransactionOption
 {
+        ContextPtr query_context = nullptr;                                     // query context, optional
         bool read_only = false;                                                 // read only txn
         TxnTimestamp primary_txn_id = {0};                                      // primary txn id if create secondary txn
         CnchTransactionType type = CnchTransactionType::Implicit;               // implicit or explicit   
@@ -30,6 +31,7 @@ struct CreateTransactionOption
 
         CreateTransactionOption() = default;
         ~CreateTransactionOption() = default;
+        CreateTransactionOption & setContext(ContextPtr context) { query_context = std::move(context); return *this; }
         CreateTransactionOption & setReadOnly(bool val) { read_only = val; return *this; }
         CreateTransactionOption & setPrimaryTransactionId(TxnTimestamp id) { this->primary_txn_id = id; return *this; }
         CreateTransactionOption & setType(CnchTransactionType type_) { this->type = type_; return *this; }

@@ -44,7 +44,7 @@ public:
 
     void clean(TxnCleanTask & task) override;
 
-    void cleanWrittenData() override;
+    void removeIntermediateData() override;
 protected:
     static constexpr size_t MAX_RETRY = 3;
     std::vector<ActionPtr> actions;

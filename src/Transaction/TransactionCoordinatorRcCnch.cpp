@@ -51,11 +51,24 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 
     txn_record.read_only = opt.read_only;
 
+    ContextPtr txn_context;
+    if (opt.query_context)
+    { 
+        txn_context = opt.query_context;
+    }
+    else
+    {
+        auto tmp_context = Context::createCopy(getContext());
+        tmp_context->makeSessionContext();
+        tmp_context->makeQueryContext();
+        txn_context = std::move(tmp_context);
+    }
+
     TransactionCnchPtr txn = nullptr;
     if (opt.type == CnchTransactionType::Implicit)
-        txn = std::make_shared<CnchServerTransaction>(getContext(), txn_record);
+        txn = std::make_shared<CnchServerTransaction>(txn_context, txn_record);
     else if (opt.type == CnchTransactionType::Explicit)
-        txn = std::make_shared<CnchExplicitTransaction>(getContext(), txn_record);
+        txn = std::make_shared<CnchExplicitTransaction>(txn_context, txn_record);
     else
         throw Exception("Unknown transaction type", ErrorCodes::LOGICAL_ERROR);
 
@@ -82,12 +95,12 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 }
 
 ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
-    const HostWithPorts & /*host_ports*/,
-    TxnTimestamp /*primary_txn_id*/)
+    const HostWithPorts & host_ports,
+    TxnTimestamp primary_txn_id)
     {
         /// Get the rpc client of target server
-        // auto server_cli = getContext()->getCnchServerClient(host_ports.host, host_ports.rpc_port);
-        auto txn = std::make_shared<CnchProxyTransaction>(getContext()/*, server_cli, primary_txn_id*/);
+        auto server_cli = getContext()->getCnchServerClient(host_ports.host, host_ports.rpc_port);
+        auto txn = std::make_shared<CnchProxyTransaction>(getContext(), server_cli, primary_txn_id);
         auto txn_id = txn->getTransactionID();
         /// add to active txn list
         {

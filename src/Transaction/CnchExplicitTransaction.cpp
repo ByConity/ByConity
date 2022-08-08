@@ -40,7 +40,7 @@ void CnchExplicitTransaction::precommit()
     /// If a transaction fails, make sure that all parts metadata in bytekv of that txn is removed before commit
     std::for_each(secondary_txns.begin(), secondary_txns.end(), [](auto & txn) {
         if (txn->getStatus() == CnchTransactionStatus::Aborted)
-            txn->cleanWrittenData();
+            txn->removeIntermediateData();
     });
     txn_record.prepared = true;
 }

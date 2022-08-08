@@ -22,11 +22,11 @@ class CnchProxyTransaction : public ICnchTransaction
     using Base = ICnchTransaction;
 
 private:
-    // CnchServerClientPtr remote_client;
+    CnchServerClientPtr remote_client;
 
 public:
     explicit CnchProxyTransaction(const ContextPtr & context_) : Base(context_) {}
-    // explicit CnchProxyTransaction(Context & global_context, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id);
+    explicit CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id);
     ~CnchProxyTransaction() override = default; 
     String getTxnType() const override { return "CnchProxyTransaction"; }
     void precommit() override;
@@ -35,7 +35,7 @@ public:
     TxnTimestamp rollback() override;
     TxnTimestamp abort() override;
     void clean(TxnCleanTask & task) override;
-    void cleanWrittenData() override;
+    void removeIntermediateData() override;
     void syncTransactionStatus(bool throw_on_missmatch = false);
     void setTransactionStatus(CnchTransactionStatus status);
 };

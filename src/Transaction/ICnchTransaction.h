@@ -87,10 +87,9 @@ public:
     ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
-    std::shared_ptr<TAction> createAction(const ContextPtr & query_context, Args &&... args) const
+    std::shared_ptr<TAction> createAction( Args &&... args) const
     {
-        const ContextPtr & action_context = query_context ? query_context : getContext();
-        return std::make_shared<TAction>(action_context, txn_record.txnID(), std::forward<Args>(args)...);
+        return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
     }
 
     // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
@@ -183,7 +182,7 @@ public:
     virtual void clean(TxnCleanTask &) { }
 
     // Clean intermediate parts synchronously
-    virtual void cleanWrittenData() { }
+    virtual void removeIntermediateData() { }
 
     bool force_clean_by_dm = false;
     

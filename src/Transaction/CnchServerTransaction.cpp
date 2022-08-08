@@ -288,7 +288,7 @@ TxnTimestamp CnchServerTransaction::rollback()
     if (isReadOnly())
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
-    cleanWrittenData();
+    removeIntermediateData();
 
     // Set in memory transaction status first, if rollback kv failed, the in-memory status will be used to reset the conflict.
     setStatus(CnchTransactionStatus::Aborted);
@@ -444,13 +444,13 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
     }
 }
 
-void CnchServerTransaction::cleanWrittenData()
+void CnchServerTransaction::removeIntermediateData()
 {
     /// for seconday transaction, if commit fails, must clear all written data in kv imediately.
     /// otherwise, next dml within the transaction can see the trash data, or worse, if user try
     /// to commit the transaction again, the junk data will become visible.
     if (isPrimary()) return;
-    LOG_DEBUG(log, "Secondary transaction failed, will clear all written data during rollback");
+    LOG_DEBUG(log, "Secondary transaction failed, will remove all intermediate data during rollback");
     std::for_each(actions.begin(), actions.end(), [](auto & action) { action->abort(); });
     actions.clear();
 }

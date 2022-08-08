@@ -1,6 +1,7 @@
 #include <Transaction/CnchProxyTransaction.h>
 #include <Common/Exception.h>
 #include <Common/PODArray.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
 
@@ -16,21 +17,21 @@ namespace ErrorCodes
     extern const int CNCH_TRANSACTION_ABORT_ERROR;
 }
 
-// CnchProxyTransaction::CnchProxyTransaction(Context & context, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id)
-//     : Base(context), remote_client(std::move(client))
-// {
-//     /// Create remote transaction on target server
-//     /// @note This is a blocking call
-//     const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id);
-//     /// Load the transction record from byte kv, if creating transaction
-//     /// success, should be available at this time
-//     auto record = context.getCnchCatalog()->tryGetTransactionRecord(txn_id);
-//     if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id) 
-//     {
-//         throw Exception("CnchProxyTransaction: create transaction on remote server failed", ErrorCodes::LOGICAL_ERROR);
-//     }
-//     txn_record = std::move(*record);
-// }
+CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id)
+    : Base(context_), remote_client(std::move(client))
+{
+    /// Create remote transaction on target server
+    /// @note This is a blocking call
+    const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id);
+    /// Load the transction record from byte kv, if creating transaction
+    /// success, should be available at this time
+    auto record = getContext()->getCnchCatalog()->tryGetTransactionRecord(txn_id);
+    if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id) 
+    {
+        throw Exception("CnchProxyTransaction: create transaction on remote server failed", ErrorCodes::LOGICAL_ERROR);
+    }
+    txn_record = std::move(*record);
+}
 
 void CnchProxyTransaction::precommit()
 {
@@ -60,7 +61,7 @@ TxnTimestamp CnchProxyTransaction::rollback()
     if (getStatus() != CnchTransactionStatus::Aborted)
     {
         setStatus(CnchTransactionStatus::Aborted);
-        // return remote_client->rollbackTransaction(txn_record.txnID());
+        return remote_client->rollbackTransaction(txn_record.txnID());
     }
     return {};
 }
@@ -68,24 +69,24 @@ TxnTimestamp CnchProxyTransaction::rollback()
 void CnchProxyTransaction::clean(TxnCleanTask &)
 {
     /// Call rpc to force finish the transaction
-    // remote_client->finishTransaction(txn_record.txnID());
+    remote_client->finishTransaction(txn_record.txnID());
 }
 
-void CnchProxyTransaction::cleanWrittenData()
+void CnchProxyTransaction::removeIntermediateData()
 {
     /// call RPC to clean intermediate data
-    // remote_client->cleanWrittenData(txn_record.txnID());
+    remote_client->removeIntermediateData(txn_record.txnID());
 }
 
-void CnchProxyTransaction::syncTransactionStatus(bool /* throw_on_missmatch */)
+void CnchProxyTransaction::syncTransactionStatus(bool throw_on_missmatch)
 {
     /// Call when remote query is done and when precommit the explicit transaction
-    // auto expected_status = remote_client->getTransactionStatus(txn_record.txnID().toUInt64());
-    // if (throw_on_missmatch && expected_status != txn_record.status())
-    // {
-    //     throw Exception("Transaction " + txn_record.txnID().toString() + " status is not consistent with remote server, expected " + String(txnStatusToString(expected_status)) + ", got " + String(txnStatusToString(txn_record.status())), ErrorCodes::LOGICAL_ERROR);
-    // }
-    // setStatus(expected_status);
+    auto expected_status = remote_client->getTransactionStatus(txn_record.txnID().toUInt64());
+    if (throw_on_missmatch && expected_status != txn_record.status())
+    {
+        throw Exception("Transaction " + txn_record.txnID().toString() + " status is not consistent with remote server, expected " + String(txnStatusToString(expected_status)) + ", got " + String(txnStatusToString(txn_record.status())), ErrorCodes::LOGICAL_ERROR);
+    }
+    setStatus(expected_status);
 }
 
 void CnchProxyTransaction::setTransactionStatus(CnchTransactionStatus status)

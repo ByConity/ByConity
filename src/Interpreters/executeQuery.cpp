@@ -375,7 +375,7 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
         bool read_only = isReadOnlyTransaction(ast.get());
         // auto session_txn = isQueryInInteractiveSession(context,ast) ? context.getSessionContext().getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
         // TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
-        auto txn = context->getCnchTransactionCoordinator().createTransaction(CreateTransactionOption().setReadOnly(read_only));
+        auto txn = context->getCnchTransactionCoordinator().createTransaction(CreateTransactionOption().setContext(context).setReadOnly(read_only));
         context->setCurrentTransaction(txn);
         // if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
         return txn;
