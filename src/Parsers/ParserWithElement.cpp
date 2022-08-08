@@ -30,7 +30,7 @@ bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else if (dt.parse_with_alias)
     {
         pos = old_pos;
-        ParserExpressionWithOptionalAlias s_expr(false, dt, false, true);
+        ParserExpressionWithOptionalAlias s_expr(false, dt, false);
         if (s_expr.parse(pos, node, expected))
             return true;
     }

@@ -3,6 +3,7 @@
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
+#include <Analyzers/CheckAliasVisitor.h>
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
@@ -164,6 +165,12 @@ namespace
         ApplyWithSubqueryVisitor::visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
     }
+
+    void checkAlias(ASTPtr & query)
+    {
+        CheckAliasVisitor().visit(query);
+    }
+
 
     void expandView(ASTPtr & query, ContextMutablePtr context)
     {
@@ -504,6 +511,7 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         expandCte(query, context);
         expandView(query, context);
         normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
+        checkAlias(query);
 
         /// Expression rewriting
         markTupleLiteralsAsLegacy(query, context);

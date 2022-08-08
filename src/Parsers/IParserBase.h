@@ -52,8 +52,6 @@ struct ParserSettingsImpl
     /// parse outer join with using
     bool parse_outer_join_with_using;
 
-    ///parse nested alias 'select (1 as a)+1'
-    bool parse_nested_alias;
 };
 
 struct ParserSettings
@@ -62,14 +60,12 @@ struct ParserSettings
         .parse_literal_as_decimal = false,
         .parse_with_alias = true,
         .parse_outer_join_with_using = true,
-        .parse_nested_alias = true
     };
 
     const static inline ParserSettingsImpl ANSI {
         .parse_literal_as_decimal = true,
         .parse_with_alias = false,
         .parse_outer_join_with_using = false,
-        .parse_nested_alias = false
     };
 
     static ParserSettingsImpl valueOf(enum DialectType dt)
