@@ -175,7 +175,8 @@ void KeeperDispatcher::snapshotThread()
     while (!shutdown_called)
     {
         CreateSnapshotTask task;
-        snapshots_queue.pop(task);
+        if (!snapshots_queue.pop(task))
+            break;
 
         if (shutdown_called)
             break;
@@ -247,9 +248,8 @@ bool KeeperDispatcher::putRequest(const Coordination::ZooKeeperRequestPtr & requ
     /// Put close requests without timeouts
     if (request->getOpNum() == Coordination::OpNum::Close)
     {
-        requests_queue->push(std::move(request_info));
-        // if (!requests_queue->push(std::move(request_info)))
-        //     throw Exception("Cannot push request to queue", ErrorCodes::SYSTEM_ERROR);
+        if (!requests_queue->push(std::move(request_info)))
+            throw Exception("Cannot push request to queue", ErrorCodes::SYSTEM_ERROR);
     }
     else if (!requests_queue->tryPush(std::move(request_info), configuration_and_settings->coordination_settings->operation_timeout_ms.totalMilliseconds()))
     {
@@ -312,7 +312,7 @@ void KeeperDispatcher::shutdown()
 
             if (requests_queue)
             {
-                requests_queue->push({});
+                requests_queue->finish();
                 if (request_thread.joinable())
                     request_thread.join();
             }
@@ -321,11 +321,11 @@ void KeeperDispatcher::shutdown()
             if (responses_thread.joinable())
                 responses_thread.join();
 
-            snapshots_queue.push({});
+            snapshots_queue.finish();
             if (snapshot_thread.joinable())
                 snapshot_thread.join();
 
-            update_configuration_queue.push({});
+            update_configuration_queue.finish();
             if (update_configuration_thread.joinable())
                 update_configuration_thread.join();
         }
@@ -400,7 +400,8 @@ void KeeperDispatcher::sessionCleanerTask()
                     request_info.session_id = dead_session;
                     {
                         std::lock_guard lock(push_request_mutex);
-                        requests_queue->push(std::move(request_info));
+                        if (!requests_queue->push(std::move(request_info)))
+                            LOG_INFO(log, "Cannot push close request to queue while cleaning outdated sessions");
                     }
 
                     /// Remove session from registered sessions
@@ -586,7 +587,8 @@ void KeeperDispatcher::updateConfigurationThread()
             server->startup();  /// TODO:
 
             ConfigUpdateAction action;
-            update_configuration_queue.pop(action);
+            if (!update_configuration_queue.pop(action))
+                break;
 
             /// We must wait this update from leader or apply it ourself (if we are leader)
             bool done = false;
@@ -627,11 +629,9 @@ void KeeperDispatcher::updateConfiguration(const Poco::Util::AbstractConfigurati
 
     for (auto & change : diff)
     {
-        /// TODO:
-        update_configuration_queue.push(change);
-        // bool push_result = update_configuration_queue.push(change);
-        // if (!push_result)
-        //     throw Exception(ErrorCodes::SYSTEM_ERROR, "Cannot push configuration update to queue");
+        bool push_result = update_configuration_queue.push(change);
+        if (!push_result)
+            throw Exception(ErrorCodes::SYSTEM_ERROR, "Cannot push configuration update to queue");
     }
 }
 
