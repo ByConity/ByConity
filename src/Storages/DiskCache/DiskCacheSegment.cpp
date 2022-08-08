@@ -19,7 +19,7 @@ DiskCacheSegment::DiskCacheSegment(
     const String & extension_)
     : IDiskCacheSegment(segment_number_, segment_size_), data_part(data_part_), stream_name(stream_name_), extension(extension_)
     , marks_loader(data_part->volume->getDisk(), nullptr,
-        data_part->index_granularity_info.getMarksFilePath(stream_name),
+        data_part->getFullRelativePath() + "data",
         stream_name, data_part->getMarksCount(), data_part->index_granularity_info,
         false, data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)),
         data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(stream_name)))

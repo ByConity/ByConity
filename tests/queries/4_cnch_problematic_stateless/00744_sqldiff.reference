@@ -1,0 +1,7 @@
+ALTER TABLE test.diff_test1 MODIFY COLUMN b UInt64, DROP COLUMN a
+ALTER TABLE test.diff_test2 MODIFY COLUMN b String, ADD COLUMN a Int32
+uid	UInt64					
+b	UInt64					
+uid	UInt64					
+b	String					
+a	Int32					

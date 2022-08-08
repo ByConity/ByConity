@@ -460,6 +460,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     const Settings & settings = context->getSettingsRef();
 
+    /// FIXME: Use global join for cnch join works for sql mode first.
+    /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
+    if (context->getServerType() == ServerType::cnch_server) 
+    {
+        context->setSetting("distributed_product_mode", String{"global"});
+    }
+
     ASTPtr ast;
     const char * query_end;
 

@@ -259,6 +259,8 @@ struct Settings;
     \
     M(String, cnch_local_storage_policy, "default", "Storage policy used to store local temp data", 0) \
     \
+    M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
+    \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

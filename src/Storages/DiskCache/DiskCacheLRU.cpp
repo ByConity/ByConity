@@ -85,7 +85,7 @@ DiskPtr DiskCacheLRU::writeSegment(const String & key, ReadBuffer & value, size_
     try
     {
         if (!disk->exists(dir_path))
-            disk->createDirectory(dir_path);
+            disk->createDirectories(dir_path);
 
         auto tmp_buffer = disk->writeFile(tmp_path, {});
         copyData(value, *tmp_buffer);

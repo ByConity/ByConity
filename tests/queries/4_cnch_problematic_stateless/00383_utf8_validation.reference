@@ -1,0 +1,18 @@
+{
+	"meta":
+	[
+		{
+			"name": "s",
+			"type": "String"
+		}
+	],
+
+	"data":
+	[
+		["� �"]
+	],
+
+	"rows": 1,
+
+	"mv_match": 0
+}

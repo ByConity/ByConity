@@ -210,11 +210,11 @@ void DatabaseCatalog::shutdownImpl()
     view_dependencies.clear();
 }
 
-DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid) const
+DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const
 {
     if (use_cnch_catalog)
     {
-        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*getContext(), UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS() , false);
+        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS() , false);
         if (storage)
         {
             DatabasePtr database_cnch = getDatabaseCnch(storage->getDatabaseName());
@@ -264,7 +264,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     if (table_id.hasUUID())
     {
         /// Shortcut for tables which have persistent UUID
-        auto db_and_table = tryGetByUUID(table_id.uuid);
+        auto db_and_table = tryGetByUUID(table_id.uuid, context_);
         if (!db_and_table.first || !db_and_table.second)
         {
             assert(!db_and_table.first && !db_and_table.second);
@@ -551,7 +551,7 @@ Databases DatabaseCatalog::getNonCnchDatabases() const
 bool DatabaseCatalog::isTableExist(const DB::StorageID & table_id, ContextPtr context_) const
 {
     if (table_id.hasUUID())
-        return tryGetByUUID(table_id.uuid).second != nullptr;
+        return tryGetByUUID(table_id.uuid, context_).second != nullptr;
 
     DatabasePtr db;
     {

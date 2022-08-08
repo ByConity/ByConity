@@ -1,0 +1,53 @@
+import sys
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+# ref: https://arrow.apache.org/docs/python/data.html
+
+def main(output_1, output_2):
+    schema = pa.schema({ "d" : pa.string(),
+                         "k" : pa.uint32(),
+                         "v" : pa.string(),
+                         "e" : pa.list_(pa.uint32()),
+                         "m" : pa.map_(pa.int64(), pa.string())
+                         })
+    p0 = "2022-03-28"
+    p1 = "2022-03-29"
+    data = {
+        "d" : [p0, p0, p0, p0, p1, p1, p1],
+        "k" : [ 0,  1,  1,  2,  0,  1,  4],
+        "v" : [ "a",  "b", "c",  "d", "e", "f",  "g"],
+        "e" : [[0,1], [0,1], [0,1], [0,1], [0,1], [0,1], [0,1]],
+        "m" : [[(0,'0')], [(1,'1')], [(2,'2')], [(3,'3')], [(4,'4')], [(5,'5')], [(6,'6')]]
+    }
+    table = pa.Table.from_pydict({ "d" : data["d"],
+                                   "k" : data["k"],
+                                   "v" : data["v"],
+                                   "e" : data["e"],
+                                   "m" : data["m"] }, schema = schema)
+    pq.write_table(table, output_1)
+    # print(pq.read_table(output_1))
+
+    data = {
+        "d" : [p0, p0, p0, p0, p1, p1, p1],
+        "k" : [ 0,  1,  1,  2,  0,  1,  4],
+        "v" : [ "a",  "b", "c",  "d", "e", "f",  "g"],
+        "e" : [[0,1], [0,1], [0,1], [0,1], [0,1], [0,1], [0,1]],
+        "m" : [[(0,'0')], [(1,'1')], [(2,'2')], [(3,'3')], [(4,'4')], [(5,'5')], [(6,'6')]]
+    }
+    table = pa.Table.from_pydict({ "d" : data["d"],
+                                   "k" : data["k"],
+                                   "v" : data["v"],
+                                   "e" : data["e"],
+                                   "m" : data["m"] }, schema = schema)
+    pq.write_table(table, output_2)
+    # print(pq.read_table(output_2))
+
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("wrong argument")
+        exit(0)
+
+    main(sys.argv[1], sys.argv[2])
