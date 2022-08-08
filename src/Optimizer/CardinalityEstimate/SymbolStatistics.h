@@ -87,6 +87,7 @@ public:
     bool isNumber() const;
     bool isString() const;
     bool isDate() const;
+    bool isDatetime() const;
 
     double toDouble(const Field & literal);
     String toString(const Field & literal);

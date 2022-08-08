@@ -9,6 +9,7 @@
 #include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveApply.h>
+#include <Optimizer/Rewriter/RemoveUnusedCTE.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
@@ -25,6 +26,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int OPTIMIZER_NONSUPPORT;
+    extern const int OPTIMIZER_TIMEOUT;
 }
 
 const Rewriters & PlanOptimizer::getSimpleRewriters()
@@ -184,16 +186,31 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     // Check init plan to satisfy with :
     // 1 Symbol exist check
     PlanCheck::checkInitPlan(plan, context);
+    auto start = std::chrono::high_resolution_clock::now();
 
     auto rewrite = [&](const Rewriters & rewriters) {
-        for (const auto & rewriter : rewriters)
+        for (auto & rewriter : rewriters)
         {
-            auto start = std::chrono::high_resolution_clock::now();
+            auto rewriter_begin = std::chrono::high_resolution_clock::now();
             rewriter->rewrite(plan, context);
-            auto end = std::chrono::high_resolution_clock::now();
-            auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            auto now = std::chrono::high_resolution_clock::now();
+            UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+            UInt64 single_rewriter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(now - rewriter_begin).count();
+
+            if (single_rewriter_duration >= 1000)
+                LOG_WARNING(
+                    &Poco::Logger::get("PlanOptimizer"),
+                    "the execute time of " + rewriter->name() + " rewriter greater than or equal to 1 second");
+
             GraphvizPrinter::printLogicalPlan(
-                plan, context, std::to_string(i++) + "_" + rewriter->name() + "_" + std::to_string(ms_int.count()) + "ms");
+                plan, context, std::to_string(i++) + "_" + rewriter->name() + "_" + std::to_string(single_rewriter_duration) + "ms");
+
+            if (elapsed >= context->getSettingsRef().plan_optimizer_timeout)
+            {
+                throw Exception(
+                    "PlanOptimizer exhausted the time limit of " + std::to_string(context->getSettingsRef().plan_optimizer_timeout) + " ms",
+                    ErrorCodes::OPTIMIZER_TIMEOUT);
+            }
         }
     };
 

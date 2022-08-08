@@ -18,6 +18,7 @@ public:
     static std::vector<RulePtr> removeRedundantRules();
     static std::vector<RulePtr> distinctToAggregateRules();
     static std::vector<RulePtr> pushIntoTableScanRules();
+    static std::vector<RulePtr> swapAdjacentRules();
 };
 
 }

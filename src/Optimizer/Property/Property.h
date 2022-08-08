@@ -77,6 +77,7 @@ public:
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
     Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
     bool satisfy(const Partitioning &) const;
+    bool isPartitionOn(const Partitioning &) const;
 
     size_t hash() const;
     bool operator==(const Partitioning & other) const

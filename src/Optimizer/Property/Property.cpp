@@ -28,11 +28,36 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
     switch (requirement.getPartitioningHandle())
     {
         case Handle::FIXED_HASH:
-            return getPartitioningColumns() == requirement.getPartitioningColumns();
+            return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement);
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
                 && getPartitioningColumns() == requirement.getPartitioningColumns();
     }
+}
+
+bool Partitioning::isPartitionOn(const Partitioning & requirement) const
+{
+    auto actual_columns = getPartitioningColumns();
+    auto required_columns = requirement.getPartitioningColumns();
+    std::unordered_set<std::string> required_columns_set;
+
+    if (actual_columns.empty())
+        return false;
+
+    for (auto & required_column : required_columns)
+    {
+        required_columns_set.insert(required_column);
+    }
+
+    for (auto & actual_column : actual_columns)
+    {
+        if (!required_columns_set.count(actual_column))
+        {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalences) const

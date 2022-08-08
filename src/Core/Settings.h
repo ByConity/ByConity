@@ -677,6 +677,7 @@ class IColumn;
     M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
     M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
+    M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \

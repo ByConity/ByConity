@@ -57,6 +57,12 @@ bool SymbolStatistics::isDate() const
     return tmp_type->getTypeId() == TypeIndex::Date;
 }
 
+bool SymbolStatistics::isDatetime() const
+{
+    auto temp_type = Statistics::decayDataType(type);
+    return temp_type->getTypeId() == TypeIndex::DateTime;
+}
+
 double SymbolStatistics::toDouble(const Field & literal)
 {
     return applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal);

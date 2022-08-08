@@ -12,6 +12,7 @@
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
+#include <Optimizer/Rule/Rewrite/SwapAdjacenRules.h>
 
 namespace DB
 {
@@ -95,6 +96,11 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
 {
     return {std::make_shared<PushLimitIntoTableScan>(), std::make_shared<PushFilterIntoTableScan>()};
+}
+
+std::vector<RulePtr> Rules::swapAdjacentRules()
+{
+    return {std::make_shared<SwapAdjacentWindows>()};
 }
 
 }

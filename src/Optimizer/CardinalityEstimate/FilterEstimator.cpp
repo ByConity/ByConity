@@ -76,6 +76,27 @@ FilterEstimator::estimate(PlanNodeStatisticsPtr & opt_child_stats, const FilterS
     return filter_stats;
 }
 
+std::optional<Field> castStringType(SymbolStatistics & symbol_statistics, Field literal, FilterEstimatorContext & context)
+{
+    DataTypePtr type = applyVisitor(FieldToDataType(), literal);
+    ASTPtr cast;
+    std::optional<Field> eval_res;
+
+    if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+    {
+        cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("date"));
+        eval_res = context.calculateConstantExpression(cast);
+    }
+
+    if (symbol_statistics.isDatetime() && type->getTypeId() == TypeIndex::String)
+    {
+        cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("datetime"));
+        eval_res = context.calculateConstantExpression(cast);
+    }
+
+    return eval_res;
+}
+
 double FilterEstimator::estimateFilterSelectivity(
     PlanNodeStatisticsPtr & child_stats, ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
 {
@@ -351,14 +372,10 @@ FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr 
     {
         try
         {
-            DataTypePtr type = applyVisitor(FieldToDataType(), literal);
-            if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+            auto eval_res = castStringType(symbol_statistics, literal, context);
+            if (eval_res.has_value() && !eval_res->isNull())
             {
-                ASTPtr cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("date"));
-                if (auto eval_res = context.calculateConstantExpression(cast))
-                {
-                    literal = *eval_res;
-                }
+                literal = *eval_res;
             }
 
             double value = symbol_statistics.toDouble(literal);
@@ -427,14 +444,10 @@ FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, ConstASTP
     {
         try
         {
-            DataTypePtr type = applyVisitor(FieldToDataType(), literal);
-            if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+            auto eval_res = castStringType(symbol_statistics, literal, context);
+            if (eval_res.has_value() && !eval_res->isNull())
             {
-                ASTPtr cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("date"));
-                if (auto eval_res = context.calculateConstantExpression(cast))
-                {
-                    literal = *eval_res;
-                }
+                literal = *eval_res;
             }
 
             double value = symbol_statistics.toDouble(literal);
@@ -500,14 +513,10 @@ FilterEstimator::estimateRangeFilter(PlanNodeStatistics & stats, ConstASTPtr & p
     {
         try
         {
-            DataTypePtr type = applyVisitor(FieldToDataType(), literal);
-            if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+            auto eval_res = castStringType(symbol_statistics, literal, context);
+            if(eval_res.has_value() && !eval_res->isNull())
             {
-                ASTPtr cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("date"));
-                if (auto eval_res = context.calculateConstantExpression(cast))
-                {
-                    literal = *eval_res;
-                }
+                literal = *eval_res;
             }
             double value = symbol_statistics.toDouble(literal);
             double min = symbol_statistics.getMin();
@@ -586,12 +595,10 @@ FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
                 {
                     try
                     {
-                        DataTypePtr type = applyVisitor(FieldToDataType(), *eval_res);
-                        if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+                        auto cast_result = castStringType(symbol_statistics,*eval_res,context);
+                        if(cast_result.has_value() && !cast_result->isNull())
                         {
-                            ASTPtr cast
-                                = makeASTFunction("cast", std::make_shared<ASTLiteral>(*eval_res), std::make_shared<ASTLiteral>("date"));
-                            eval_res = context.calculateConstantExpression(cast);
+                            eval_res = cast_result;
                         }
                         if (eval_res)
                         {
@@ -680,12 +687,10 @@ FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & p
                 {
                     try
                     {
-                        DataTypePtr type = applyVisitor(FieldToDataType(), *eval_res);
-                        if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+                        auto cast_result = castStringType(symbol_statistics,*eval_res,context);
+                        if(cast_result.has_value() && !cast_result->isNull())
                         {
-                            ASTPtr cast
-                                = makeASTFunction("cast", std::make_shared<ASTLiteral>(*eval_res), std::make_shared<ASTLiteral>("date"));
-                            eval_res = context.calculateConstantExpression(cast);
+                            eval_res = cast_result;
                         }
                         if (eval_res)
                         {

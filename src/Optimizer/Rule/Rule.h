@@ -101,7 +101,9 @@ enum class RuleType : UInt32
     NUM_RULES,
 
     INITIAL,
-    UNDEFINED
+    UNDEFINED,
+
+    SWAP_WINDOWS
 };
 
 class TransformResult;
