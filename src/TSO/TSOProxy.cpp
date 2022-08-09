@@ -1,30 +1,46 @@
 #include <TSO/TSOProxy.h>
+#include <TSO/TSOMetaByteKVImpl.h>
+#include <TSO/TSOMetaFDBImpl.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int TSO_INTERNAL_ERROR;
+}
 
 namespace TSO
 {
 
 TSOProxy::TSOProxy(TSOConfig & config)
 {
-    kv_ptr = std::make_shared<TSOByteKVImpl>(
-        config.service_name,
-        config.cluster_name,
-        config.name_space,
-        config.table_name,
-        config.key_name);
+    if (config.type == StoreType::BYTEKV)
+    {
+        metastore_ptr = std::make_shared<TSOMetaByteKVImpl>(
+            config.bytekv_conf.service_name,
+            config.bytekv_conf.cluster_name,
+            config.bytekv_conf.name_space,
+            config.bytekv_conf.table_name,
+            config.key_name);
+    }
+    else if (config.type == StoreType::FDB)
+    {
+        metastore_ptr = std::make_shared<TSOMetaFDBImpl>(config.fdb_conf.cluster_conf_path, config.key_name);
+    }
+    else
+        throw Exception("TSO metastore type should be set. Only support foundationdb and bytekv.", ErrorCodes::TSO_INTERNAL_ERROR);
 }
 
 void TSOProxy::setTimestamp(UInt64 timestamp)
 {
-    kv_ptr->put(std::to_string(timestamp));
+    metastore_ptr->put(std::to_string(timestamp));
 }
 
 void TSOProxy::getTimestamp(UInt64 & timestamp)
 {
     String timestamp_str;
-    kv_ptr->get(timestamp_str);
+    metastore_ptr->get(timestamp_str);
     if (timestamp_str.empty())
     {
         timestamp = 0;
@@ -37,7 +53,7 @@ void TSOProxy::getTimestamp(UInt64 & timestamp)
 
 void TSOProxy::clean()
 {
-    kv_ptr->clean();
+    metastore_ptr->clean();
 }
 
 }

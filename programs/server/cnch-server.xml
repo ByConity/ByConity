@@ -322,12 +322,17 @@
     <perQuery>1</perQuery>
 
     <catalog_service>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
         <bytekv>
             <service_name>bytedance.bytekv.bytekv_default</service_name>
             <cluster_name>bytekv_default</cluster_name>
             <name_space>bytekv_cnch_dev</name_space>
             <table_name>cnch_metastore_hz_dev</table_name>
         </bytekv>
+        <fdb>
+            <cluster_file>/path/to/fdb/cluster_config</cluster_file>
+        </fdb>
     </catalog_service>
 
     <daemon_manager>
@@ -338,6 +343,8 @@
 
     <tso_service>
         <port>49963</port>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
         <bytekv>
             <service_name>bytedance.bytekv.bytekv_default</service_name>
             <cluster_name>bytekv_default</cluster_name>
@@ -345,6 +352,9 @@
             <table_name>cnch_metastore_hz_dev</table_name>
             <key_name>{your_tso_name_space}</key_name>
         </bytekv>
+        <fdb>
+            <cluster_file>/path/to/fdb/cluster_config</cluster_file>
+        </fdb>
         <bytejournal>
             <renewal_interval_ms>1000</renewal_interval_ms>
             <polling_interval_ms>1000</polling_interval_ms>

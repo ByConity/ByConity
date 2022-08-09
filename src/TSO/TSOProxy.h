@@ -1,6 +1,7 @@
 #pragma once
 
-#include <TSO/TSOByteKVImpl.h>
+#include <TSO/TSOConfig.h>
+#include <TSO/TSOMetastore.h>
 
 namespace DB
 {
@@ -8,19 +9,9 @@ namespace DB
 namespace TSO
 {
 
-struct TSOConfig
-{
-    String service_name;
-    String cluster_name;
-    String name_space;
-    String table_name;
-    String key_name;
-};
-
 class TSOProxy
 {
 public:
-    using ByteKVPtr = std::shared_ptr<TSOByteKVImpl>;
 
     TSOProxy(TSOConfig & config);
     ~TSOProxy() {}
@@ -30,7 +21,7 @@ public:
     void clean();
 
 private:
-    ByteKVPtr kv_ptr;
+    TSOMetastorePtr metastore_ptr;
 };
 
 }

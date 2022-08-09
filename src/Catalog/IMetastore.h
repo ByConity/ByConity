@@ -1,15 +1,19 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <memory>
 #include <string_view>
 #include <common/StringRef.h>
+#include <Catalog/IMultiWrite.h>
 
 namespace DB
 {
 
 namespace Catalog
 {
+
+#define MAX_BATCH_SIZE 1024
+#define DEFAULT_SCAN_BATCH_COUNT 10000
+
     struct WriteRequest
     {
         std::string_view key;
@@ -58,13 +62,14 @@ namespace Catalog
         /***
          * Save a record into metastore;
          */
-        virtual void put(const String &, const String &, bool) = 0;
+        virtual void put(const String &, const String &, bool if_not_exists = false) = 0;
 
         /***
          * Put with CAS. Return true if CAS succeed, otherwise return false.
          */
         virtual bool putCAS(const String &, const String &, const String &) = 0;
 
+        virtual std::pair<bool, String> putCASWithOldValue(const String & key, const String & value, const String & expected) = 0;
         /***
          * Get a record by name from metastore;
          */
@@ -82,6 +87,8 @@ namespace Catalog
 
         virtual bool multiWriteCAS(const WriteRequests & requests) = 0;
 
+        virtual MultiWritePtr createMultiWrite(bool with_cas = true) = 0;
+
         /***
          * Update a specific record in metastore;
          */
@@ -90,7 +97,7 @@ namespace Catalog
         /***
          * Delete a specific record from metastore;
          */
-        virtual void drop(const String &, const UInt64 &) = 0;
+        virtual void drop(const String &, const UInt64 & expected = 0) = 0;
 
         /***
          * Get all records from metastore;
@@ -100,7 +107,7 @@ namespace Catalog
         /***
          * Range scan by specific prefix; limit the number of result
          */
-        virtual IteratorPtr getByPrefix(const String &, const size_t &, uint32_t scan_batch_size) = 0;
+        virtual IteratorPtr getByPrefix(const String &, const size_t & limit = 0, uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT) = 0;
 
         /***
          * Scan a range of records by start and end key;

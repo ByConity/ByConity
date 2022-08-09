@@ -31,7 +31,8 @@ jobs:
     envs:
       CONSUL_HTTP_HOST: "10.8.156.215"
       CONSUL_HTTP_PORT: "2280"
-      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin"
+      LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
     runs-on:
       spec: m1.4xlarge
       env: online
@@ -97,10 +98,6 @@ jobs:
   CnchFuntionalStatelessTest:
     <<: *default_test
     name: CNCH - FuntionalStatelessTest
-    envs:
-      CONSUL_HTTP_HOST: "10.8.156.215"
-      CONSUL_HTTP_PORT: "2280"
-      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin:/clickhouse/bin"
     steps:
       - *action_checkout
       - *download_scm_binary
@@ -119,10 +116,6 @@ jobs:
   CnchFuntionalStatelessTestProblematic:
     <<: *default_test
     name: CNCH - Problematic - FuntionalStatelessTest
-    envs:
-      CONSUL_HTTP_HOST: "10.8.156.215"
-      CONSUL_HTTP_PORT: "2280"
-      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin:/clickhouse/bin"
     steps:
       - *action_checkout
       - *download_scm_binary
@@ -369,7 +362,7 @@ jobs:
 #      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin"
 #    runs-on:
 #      linux: {}
-###    depends: [scm_build]
+####    depends: [scm_build]
 #    if: ${{ false }}
 #    steps:
 #      - *action_checkout
@@ -394,7 +387,7 @@ jobs:
 #      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin"
 #    runs-on:
 #      linux: {}
-###    depends: [scm_build]
+####    depends: [scm_build]
 #    if: ${{ false }}
 #    steps:
 #      - *action_checkout

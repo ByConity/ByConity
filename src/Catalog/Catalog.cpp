@@ -545,8 +545,8 @@ namespace Catalog
                     db_data.SerializeToString(&db_meta);
 
                     // add a record into trash as well as a new version(mark as deleted) of db meta
-                    multiWrite.addPut(MetastoreProxy::dbTrashKey(name_space, database, ts.toUInt64()), db_meta);
-                    multiWrite.addPut(MetastoreProxy::dbKey(name_space, database, ts.toUInt64()), db_meta);
+                    multiWrite->addPut(MetastoreProxy::dbTrashKey(name_space, database, ts.toUInt64()), db_meta);
+                    multiWrite->addPut(MetastoreProxy::dbKey(name_space, database, ts.toUInt64()), db_meta);
 
                     /// move all tables and dictionaries under this database into trash
                     auto table_id_ptrs = meta_proxy->getAllTablesId(name_space, database);
@@ -566,12 +566,12 @@ namespace Catalog
 
                     for (auto & dic_ptr : dic_ptrs)
                     {
-                        multiWrite.addPut(
+                        multiWrite->addPut(
                             MetastoreProxy::dictionaryTrashKey(name_space, trashBD_name, dic_ptr->name()), dic_ptr->SerializeAsString());
-                        multiWrite.addDelete(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()));
+                        multiWrite->addDelete(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()));
                     }
 
-                    multiWrite.commit();
+                    multiWrite->commit();
                 }
                 else
                 {
@@ -615,15 +615,15 @@ namespace Catalog
                     }
 
                     /// remove old database record;
-                    multiWrite.addDelete(MetastoreProxy::dbKey(name_space, from_database, database->commit_time()));
+                    multiWrite->addDelete(MetastoreProxy::dbKey(name_space, from_database, database->commit_time()));
                     /// create new database record;
                     database->set_name(to_database);
                     database->set_previous_version(0);
                     database->set_txnid(txnID.toUInt64());
                     database->set_commit_time(ts.toUInt64());
-                    multiWrite.addPut(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString());
+                    multiWrite->addPut(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString());
 
-                    multiWrite.commit();
+                    multiWrite->commit();
                 }
                 else
                 {
@@ -727,9 +727,9 @@ namespace Catalog
                     moveTableIntoTrash(*table, identifier, txnID, ts, multiWrite);
                     ///FIXME: if masking policy is ready
                     // for (const auto & mask : storage->getColumns().getAllMaskingPolicy())
-                    //     multiWrite.addDelete(MetastoreProxy::maskingPolicyTableMappingKey(name_space, mask, table_uuid));
+                    //     multiWrite->addDelete(MetastoreProxy::maskingPolicyTableMappingKey(name_space, mask, table_uuid));
 
-                    multiWrite.commit();
+                    multiWrite->commit();
                     if (context.getCnchStorageCache())
                         context.getCnchStorageCache()->remove(db, name);
                     /// TODO: should we keep those metadata until GC ?
@@ -895,7 +895,7 @@ namespace Catalog
                     table->set_txnid(txnID.toUInt64());
                     table->set_commit_time(ts.toUInt64());
                     meta_proxy->renameTable(name_space, *table, from_database, from_table, table_uuid, multiWrite);
-                    multiWrite.commit();
+                    multiWrite->commit();
 
                     /// update table name in table meta entry so that we can get table part metrics correctly.
                     if (context.getPartCacheManager())
@@ -1688,7 +1688,7 @@ namespace Catalog
 
         auto multiWrite = meta_proxy->createMultiWrite(false);
 
-        multiWrite.setCommitTimeout(3000);
+        multiWrite->setCommitTimeout(3000);
 
         if (!parts.empty())
         {
@@ -1707,7 +1707,7 @@ namespace Catalog
         meta_proxy->prepareAddStagedParts(
             name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), staged_parts, multiWrite, expected_staged_parts);
 
-        if (multiWrite.isEmpty())
+        if (multiWrite->isEmpty())
         {
             LOG_DEBUG(
                 log,
@@ -1721,7 +1721,7 @@ namespace Catalog
 
         try
         {
-            multiWrite.commit();
+            multiWrite->commit();
         }
         catch (const Exception & e)
         {
@@ -1756,10 +1756,10 @@ namespace Catalog
                         part_info->set_mutation(ts.toUInt64());
                         part_data.set_deleted(true);
                         part_data.set_txnid(txnID.toUInt64());
-                        multiWrite.addPut(part_prefix + part_name, part_data.SerializeAsString());
+                        multiWrite->addPut(part_prefix + part_name, part_data.SerializeAsString());
                     }
                 }
-                multiWrite.commit();
+                multiWrite->commit();
             },
             ProfileEvents::DropAllPartSuccess,
             ProfileEvents::DropAllPartFailed);
@@ -3794,8 +3794,8 @@ namespace Catalog
 
                 // delete the record from db trash as well as the corresponding version of db meta.
                 auto multiWrite = meta_proxy->createMultiWrite();
-                multiWrite.addDelete(MetastoreProxy::dbTrashKey(name_space, database, ts));
-                multiWrite.addDelete(MetastoreProxy::dbKey(name_space, database, ts));
+                multiWrite->addDelete(MetastoreProxy::dbTrashKey(name_space, database, ts));
+                multiWrite->addDelete(MetastoreProxy::dbKey(name_space, database, ts));
 
                 // restore table and dictionary
                 String trashDBName = database + "_" + toString(ts);
@@ -3805,18 +3805,18 @@ namespace Catalog
                 for (auto & table_id_ptr : table_id_ptrs)
                 {
                     table_id_ptr->set_database(database);
-                    multiWrite.addDelete(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts));
+                    multiWrite->addDelete(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts));
                     restoreTableFromTrash(table_id_ptr, ts, multiWrite);
                 }
 
                 for (auto & dic_ptr : dic_ptrs)
                 {
-                    multiWrite.addDelete(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name()));
-                    multiWrite.addPut(
+                    multiWrite->addDelete(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name()));
+                    multiWrite->addPut(
                         MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()), dic_ptr->SerializeAsString());
                 }
 
-                multiWrite.commit();
+                multiWrite->commit();
             },
             ProfileEvents::UndropDatabaseSuccess,
             ProfileEvents::UndropDatabaseFailed);
@@ -3842,7 +3842,7 @@ namespace Catalog
 
                 auto multiWrite = meta_proxy->createMultiWrite();
                 restoreTableFromTrash(trash_id_ptr, ts, multiWrite);
-                multiWrite.commit();
+                multiWrite->commit();
             },
             ProfileEvents::UndropTableSuccess,
             ProfileEvents::UndropTableFailed);
@@ -4399,7 +4399,7 @@ namespace Catalog
         Protos::TableIdentifier & table_id,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        MetastoreByteKVImpl::MultiWrite & multiWrite)
+        MultiWritePtr & multiWrite)
     {
         if (table.commit_time() >= ts.toUInt64())
             throw Exception("Cannot drop table with an old timestamp.", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
@@ -4414,17 +4414,17 @@ namespace Catalog
 
         /// remove dependency
         for (const String & dependency : dependencies)
-            multiWrite.addDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
+            multiWrite->addDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
 
-        multiWrite.addPut(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString());
+        multiWrite->addPut(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString());
         // use database name and table name in table_id is required because it may different with that in table data model.
-        multiWrite.addPut(
+        multiWrite->addPut(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString());
-        multiWrite.addDelete(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name()));
+        multiWrite->addDelete(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name()));
     }
 
     void Catalog::restoreTableFromTrash(
-        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, MetastoreByteKVImpl::MultiWrite & multiWrite)
+        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, MultiWritePtr & multiWrite)
     {
         auto table_model = tryGetTableFromMetastore(table_id->uuid(), UINT64_MAX, false, true);
 
@@ -4435,9 +4435,9 @@ namespace Catalog
         /// 2.add table->uuid mapping;
         /// 3. remove last version of table meta(which is marked as delete);
         /// 4. try rebuild dependencies if any
-        multiWrite.addDelete(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts));
-        multiWrite.addDelete(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time()));
-        multiWrite.addPut(
+        multiWrite->addDelete(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts));
+        multiWrite->addDelete(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time()));
+        multiWrite->addPut(
             MetastoreProxy::tableUUIDMappingKey(name_space, table_id->database(), table_id->name()),
             table_id->SerializeAsString(),
             "",
@@ -4446,7 +4446,7 @@ namespace Catalog
         if (!dependencies.empty())
         {
             for (const String & dependency : dependencies)
-                multiWrite.addPut(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id->uuid()), table_id->uuid());
+                multiWrite->addPut(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id->uuid()), table_id->uuid());
         }
     }
 

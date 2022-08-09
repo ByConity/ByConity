@@ -573,6 +573,7 @@ include (cmake/find/brpc.cmake)
 include (cmake/find/breakpad.cmake)
 include (cmake/find/infsec.cmake)
 include (cmake/find/bytekv.cmake)
+include (cmake/find/benchmark.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
