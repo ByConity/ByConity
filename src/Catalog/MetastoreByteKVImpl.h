@@ -18,9 +18,6 @@ namespace ErrorCodes
 namespace Catalog
 {
 
-#define MAX_BATCH_SIZE 1024
-#define DEFAULT_SCAN_BATCH_COUNT 10000
-
 using namespace bytekv::sdk;
 
 class MetastoreByteKVImpl : public IMetaStore
@@ -58,31 +55,35 @@ public:
         std::shared_ptr<bytekv::sdk::Iterator> inner_it;
     };
 
-    class MultiWrite
+    class MultiWrite : public IMultiWrite
     {
     public:
         MultiWrite(const String & table_name_, std::shared_ptr<ByteKVClient> client_, bool with_cas_ = true)
             :table_name(table_name_), client(client_), with_cas(with_cas_) {}
-        void addPut(const String & key, const String & value, const String & expected = "", bool if_not_exists = false);
-        void addDelete(const String & key, const UInt64 & expected_version = 0);
-        void setCommitTimeout(const UInt32 & timeout_ms);
-        bool commit(bool allow_cas_fail = false);
-        bool isEmpty() { return wb_req.puts_.empty() && wb_req.deletes_.empty(); }
-        WriteBatchRequest wb_req;
-        WriteBatchResponse wb_resp;
+        void addPut(const String & key, const String & value, const String & expected = "", bool if_not_exists = false) override;
+        void addDelete(const String & key, const UInt64 & expected_version = 0) override;
+        void setCommitTimeout(const UInt32 & timeout_ms) override;
+        bool commit(bool allow_cas_fail = false) override;
+        std::map<int, String> collectConflictInfo() override;
+        inline size_t getPutsSize() override { return wb_req.puts_.size(); }
+        inline size_t getDeleteSize() override{ return  wb_req.deletes_.size(); }
+        inline bool isEmpty() override { return wb_req.puts_.empty() && wb_req.deletes_.empty(); }
+        ~MultiWrite() override {}
     private:
         String table_name;
         std::shared_ptr<ByteKVClient> client;
         bool with_cas;
         std::vector<std::shared_ptr<String>> cache_values;
         std::vector<std::shared_ptr<Slice>> expected_values;
+        WriteBatchRequest wb_req;
+        WriteBatchResponse wb_resp;
     };
 
     MetastoreByteKVImpl(const String & service_name_, const String & cluster_name_,
                         const String & name_space_, const String & table_name_);
 
 
-    MultiWrite createMultiWrite(bool with_cas = true);
+    MultiWritePtr createMultiWrite(bool with_cas = true) override;
 
     void init();
 
@@ -93,7 +94,7 @@ public:
     bool putCAS(const String & key, const String & value, const String & expected) override;
 
     // return old value if cas failed
-    std::pair<bool, String> putCASWithOldValue(const String & key, const String & value, const String & expected);
+    std::pair<bool, String> putCASWithOldValue(const String & key, const String & value, const String & expected) override;
 
     uint64_t get(const String & key, String & value) override;
 
@@ -134,8 +135,8 @@ private:
     String name_space;
     String table_name;
 
-    static String getNextKey(const String & start_key);
-
+    /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
+    static int toCommonErrorCode(const Errorcode & code);
 };
 }
 

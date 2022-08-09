@@ -599,6 +599,8 @@
     <cnch_type>worker</cnch_type>
 
     <catalog_service>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>

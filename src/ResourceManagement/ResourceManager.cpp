@@ -90,14 +90,7 @@ int ResourceManager::main(const std::vector<std::string> &)
     global_context->initServiceDiscoveryClient();
 
     /// Initialize catalog
-    Catalog::CatalogConfig catalog_conf;
-    if (config().has("catalog_service.bytekv"))
-    {
-        catalog_conf.byteKV.service_name = config().getString("catalog_service.bytekv.service_name");
-        catalog_conf.byteKV.cluster_name = config().getString("catalog_service.bytekv.cluster_name");
-        catalog_conf.byteKV.name_space = config().getString("catalog_service.bytekv.name_space");
-        catalog_conf.byteKV.table_name = config().getString("catalog_service.bytekv.table_name");
-    }
+    Catalog::CatalogConfig catalog_conf(config());
     auto name_space = config().getString("catalog.name_space", "default");
     global_context->initCatalog(catalog_conf, name_space);
     // TODO(zuochuang.zema): MERGE bytejournal
