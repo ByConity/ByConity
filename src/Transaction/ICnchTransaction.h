@@ -7,7 +7,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <bthread/mutex.h>
 #include <cppkafka/cppkafka.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 // #include <Transaction/CnchLock.h>
 // #include <Transaction/IntentLock.h>
 #include <Transaction/TransactionCommon.h>
@@ -35,11 +35,11 @@ namespace ErrorCodes
 
 bool isReadOnlyTransaction(const DB::IAST * ast);
 
-class ICnchTransaction : public TypePromotion<ICnchTransaction>
+class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
-    explicit ICnchTransaction(Context & context_) : context(*context_.getGlobalContext()) { }
-    explicit ICnchTransaction(Context & context_, TransactionRecord record) : context(*context_.getGlobalContext()), txn_record(std::move(record))
+    explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_->getGlobalContext()) { }
+    explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record) : WithContext(context_->getGlobalContext()), txn_record(std::move(record))
     {
     }
 
@@ -61,7 +61,7 @@ public:
 
     std::unique_lock<bthread::RecursiveMutex> getLock() const { return std::unique_lock(mutex); }
 
-    const String getInitiator() const { return txn_record.initiator(); }
+    String getInitiator() const { return txn_record.initiator(); }
 
     CnchTransactionStatus getStatus() const;
 
@@ -87,9 +87,9 @@ public:
     ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
-    std::shared_ptr<TAction> createAction(Args &&... args) const
+    std::shared_ptr<TAction> createAction( Args &&... args) const
     {
-        return std::make_shared<TAction>(context, txn_record.txnID(), std::forward<Args>(args)...);
+        return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
     }
 
     // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
@@ -182,7 +182,7 @@ public:
     virtual void clean(TxnCleanTask &) { }
 
     // Clean intermediate parts synchronously
-    virtual void cleanWrittenData() { }
+    virtual void removeIntermediateData() { }
 
     bool force_clean_by_dm = false;
     
@@ -195,7 +195,6 @@ private:
     void reportLockHeartBeatTask();
 
 protected:
-    Context & context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
 

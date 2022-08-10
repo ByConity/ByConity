@@ -375,7 +375,7 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
         bool read_only = isReadOnlyTransaction(ast.get());
         // auto session_txn = isQueryInInteractiveSession(context,ast) ? context.getSessionContext().getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
         // TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
-        auto txn = context->getCnchTransactionCoordinator().createTransaction(CreateTransactionOption().setReadOnly(read_only));
+        auto txn = context->getCnchTransactionCoordinator().createTransaction(CreateTransactionOption().setContext(context).setReadOnly(read_only));
         context->setCurrentTransaction(txn);
         // if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
         return txn;
@@ -413,7 +413,7 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
                 UUIDHelpers::UUIDToString(storage->getStorageUUID()), true);
             auto server_client
                 = host_ports.empty() ? context->getCnchServerClientPool().get() : context->getCnchServerClientPool().get(host_ports);
-            auto txn = std::make_shared<CnchWorkerTransaction>(*(context->getGlobalContext()), server_client);
+            auto txn = std::make_shared<CnchWorkerTransaction>(context->getGlobalContext(), server_client);
             context->setCurrentTransaction(txn);
             return txn;
         }
@@ -459,6 +459,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 #endif
 
     const Settings & settings = context->getSettingsRef();
+
+    /// FIXME: Use global join for cnch join works for sql mode first.
+    /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
+    if (context->getServerType() == ServerType::cnch_server) 
+    {
+        context->setSetting("distributed_product_mode", String{"global"});
+    }
 
     ASTPtr ast;
     const char * query_end;

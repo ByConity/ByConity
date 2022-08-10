@@ -62,10 +62,10 @@ void TransactionCleaner::cleanTransaction(const TransactionRecord & txn_record)
 
 void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
 {
-    scheduleTask([this, txn_record] {
+    scheduleTask([this, txn_record, &global_context = *getContext()] {
         LOG_DEBUG(log, "Start to clean the committed transaction {}\n", txn_record.txnID().toUInt64());
         TxnCleanTask & task = getCleanTask(txn_record.txnID());
-        auto catalog = context.getCnchCatalog();
+        auto catalog = global_context.getCnchCatalog();
         // first clear any filesys lock if hold
         catalog->clearFilesysLock(txn_record.txnID()); 
         catalog->clearZombieIntent(txn_record.txnID());
@@ -77,16 +77,16 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
         for (const auto & [uuid, resources] : undo_buffer)
         {
             LOG_DEBUG(log, "Get undo buffer of the table {}\n", uuid);
-            auto host_port = context.getCnchTopologyMaster()->getTargetServer(uuid, false);
+            auto host_port = global_context.getCnchTopologyMaster()->getTargetServer(uuid, false);
             auto rpc_address = host_port.getRPCAddress();
-            if (!isLocalServer(rpc_address, std::to_string(context.getRPCPort())))
+            if (!isLocalServer(rpc_address, std::to_string(global_context.getRPCPort())))
             {
                 // TODO: need to fix for multi-table txn
                 LOG_DEBUG(log, "Forward clean task for txn {} to server {}", txn_record.txnID().toUInt64(), rpc_address);
-                // context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
+                // global_context.getCnchServerClientPool().get(rpc_address)->cleanTransaction(txn_record);
                 return;
             }
-            StoragePtr table = catalog->tryGetTableByUUID(context, uuid, TxnTimestamp::maxTS(), true);
+            StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
             if (!table)
                 continue;
 
@@ -104,32 +104,32 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
         }
 
         catalog->clearUndoBuffer(txn_record.txnID());
-        UInt64 ttl = context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
-        catalog->setTransactionRecordCleanTime(txn_record, context.getTimestamp(), ttl);
+        UInt64 ttl = global_context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
+        catalog->setTransactionRecordCleanTime(txn_record, global_context.getTimestamp(), ttl);
         LOG_DEBUG(log, "Finish cleaning the committed transaction {}\n", txn_record.txnID().toUInt64());
     }, CleanTaskPriority::LOW, txn_record.txnID(), CnchTransactionStatus::Finished);
 }
 
 void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
 {
-    scheduleTask([this, txn_record]() {
+    scheduleTask([this, txn_record, &global_context = *getContext()]() {
         LOG_DEBUG(log, "Start to clean the aborted transaction {}\n", txn_record.txnID().toUInt64());
 
         // abort transaction if it is running
         if (!txn_record.ended())
         {
             LOG_DEBUG(log, "Abort the running transaction {}\n", txn_record.txnID().toUInt64());
-            if (context.getCnchTransactionCoordinator().isActiveTransaction(txn_record.txnID()))
+            if (global_context.getCnchTransactionCoordinator().isActiveTransaction(txn_record.txnID()))
             {
                 LOG_WARNING(log, "Transaction {} is still running.\n", txn_record.txnID().toUInt64());
                 return;
             }
 
-            auto commit_ts = context.getTimestamp();
+            auto commit_ts = global_context.getTimestamp();
             TransactionRecord target_record = txn_record;
             target_record.setStatus(CnchTransactionStatus::Aborted);
             target_record.commitTs() = commit_ts;
-            bool success = context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+            bool success = global_context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
             if (!success)
             {
                 LOG_WARNING(log, "Transaction has been committed or aborted, current status " + String(txnStatusToString(target_record.status())));
@@ -138,7 +138,7 @@ void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
         }
 
         TxnCleanTask & task = getCleanTask(txn_record.txnID());
-        auto catalog = context.getCnchCatalog();
+        auto catalog = global_context.getCnchCatalog();
         catalog->clearZombieIntent(txn_record.txnID());
         auto undo_buffer = catalog->getUndoBuffer(txn_record.txnID());
 
@@ -147,7 +147,7 @@ void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
         for (const auto & [uuid, resources] : undo_buffer)
         {
             LOG_DEBUG(log, "Get undo buffer of the table ", uuid);
-            StoragePtr table = catalog->tryGetTableByUUID(context, uuid, TxnTimestamp::maxTS(), true);
+            StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
             if (!table)
                 continue;
 

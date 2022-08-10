@@ -1,0 +1,20 @@
+SET allow_alter_with_unfinished_task = 1;
+
+drop table if exists test.tab;
+create table test.tab (a String, b LowCardinality(UInt32)) engine = CnchMergeTree order by a;
+insert into test.tab values ('a', 1);
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b UInt32;
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b LowCardinality(UInt32);
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b StringWithDictionary;
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b LowCardinality(UInt32);
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b String;
+select *, toTypeName(b) from test.tab;
+alter table test.tab modify column b LowCardinality(UInt32);
+select *, toTypeName(b) from test.tab;
+drop table if exists test.tab;
+

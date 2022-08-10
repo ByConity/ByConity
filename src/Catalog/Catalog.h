@@ -538,9 +538,9 @@ private:
         Protos::TableIdentifier & table_id,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        MetastoreByteKVImpl::MultiWrite & multiWrite);
+        MultiWritePtr & multiWrite);
     void restoreTableFromTrash(
-        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, MetastoreByteKVImpl::MultiWrite & multiWrite);
+        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, MultiWritePtr & multiWrite);
 
     void clearDataPartsMetaInternal(
         const StoragePtr & table, const DataPartsVector & parts, const DeleteBitmapMetaPtrVector & delete_bitmaps = {});

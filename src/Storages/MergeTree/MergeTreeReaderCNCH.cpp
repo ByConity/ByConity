@@ -7,8 +7,10 @@
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
 #include <Interpreters/inplaceBlockConversions.h>
+#include <IO/ReadBufferFromFileBase.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/IDiskCacheStrategy.h>
+#include <Storages/DiskCache/DiskCacheSegment.h>
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeDataPartWide.h>
 #include <Storages/MergeTree/MergeTreeBitMapIndexReader.h>
@@ -63,6 +65,14 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(const DataPartCNCHPtr& data_part_,
             bitmap_index_reader_),
         segment_cache_strategy(nullptr), segment_cache(nullptr)
 {
+    if (data_part->storage.getSettings()->enable_local_disk_cache)
+    {
+        auto [cache, cache_strategy] = DiskCacheFactory::instance().getDefault();
+
+        segment_cache_strategy = std::move(cache_strategy);
+        segment_cache = std::move(cache);
+    }
+
     initializeStreams(profile_callback_, clock_type_);
 }
 
@@ -384,6 +394,10 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
             if (segment_cache_strategy != nullptr)
             {
                 // Cache segment if necessary
+                IDiskCacheSegmentsVector segments = segment_cache_strategy->getCacheSegments(
+                    segment_cache_strategy->transferRangesToSegments<DiskCacheSegment>(
+                        all_mark_ranges, data_part, stream_name, DATA_FILE_EXTENSION));
+                segment_cache->cacheSegmentsToLocalDisk(segments);
             }
 
             String source_data_rel_path = data_part->getFullRelativePath() + "data";

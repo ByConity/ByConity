@@ -2,16 +2,16 @@
 
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 
 namespace DB
 {
 
-class DDLAlterAction : public Action
+class DDLAlterAction : public IAction
 {
 public:
-    DDLAlterAction(const Context & context_, const TxnTimestamp & txn_id_, StoragePtr table_)
-        : Action(context_, txn_id_),
+    DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_)
+        : IAction(query_context_, txn_id_),
         log(&Poco::Logger::get("AlterAction")),
         table(std::move(table_))
     {

@@ -237,6 +237,7 @@ void StorageCnchMergeTree::read(
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
+    LOG_TRACE(log, "original query before rewrite: {}", queryToString(query_info.query));
     auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name, local_context->getCurrentTransactionID());
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};

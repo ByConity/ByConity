@@ -22,7 +22,7 @@ namespace ErrorCodes
 
 void DDLDropAction::executeV1(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
 
     if (!params.database.empty() && params.table.empty())
     {
@@ -49,14 +49,14 @@ void DDLDropAction::executeV1(TxnTimestamp commit_time)
             // {
             //     // Drop preallocated tables
             //     if (!storage->isOnDemandMode())
-            //         storage->dropPreallocatedTables(context);
+            //         storage->dropPreallocatedTables(getContext()->;
             //     else if (isQueryMetricsTable(storage->getDatabaseName(), storage->getTableName()))
-            //         storage->sendDropLocalQuery(context);
+            //         storage->sendDropLocalQuery(getContext()->;
 
             //     // Destroy memory buffer if any
             //     if (storage->settings.cnch_enable_memory_buffer)
             //     {
-            //         auto daemon_manager = context.getDaemonManagerClient();
+            //         auto daemon_manager = getContext()->getDaemonManagerClient();
             //         if (!daemon_manager)
             //             throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
 
@@ -90,7 +90,7 @@ void DDLDropAction::executeV1(TxnTimestamp commit_time)
 
 void DDLDropAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
 {
-    auto & ts_cache_manager = context.getCnchTransactionCoordinator().getTsCacheManager();
+    auto & ts_cache_manager = getContext()->getCnchTransactionCoordinator().getTsCacheManager();
     auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
     auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
     ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);

@@ -516,6 +516,9 @@ struct ContextSharedPart
             trace_collector.reset();
             /// Stop zookeeper connection
             zookeeper.reset();
+
+            named_sessions.reset();
+            named_cnch_sessions.reset();
         }
 
         /// Can be removed w/o context lock
@@ -3161,7 +3164,8 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     if (storage_id.uuid != UUIDHelpers::Nil)
         return storage_id;
 
-    if (getServerType() == ServerType::cnch_worker)
+    /// skip session resource check if database is null to make temporary table can be found (e.g., join case _data1)
+    if (getServerType() == ServerType::cnch_worker && !storage_id.database_name.empty())
     {
         if (auto worker_resource = tryGetCnchWorkerResource())
         {
@@ -3937,7 +3941,7 @@ void Context::initCnchTransactionCoordinator()
 {
     auto lock = getLock();
 
-    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(*this);
+    shared->cnch_txn_coordinator = std::make_unique<TransactionCoordinatorRcCnch>(shared_from_this());
 }
 
 TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
@@ -3970,10 +3974,10 @@ TransactionCnchPtr Context::setTemporaryTransaction(const TxnTimestamp & txn_id,
             txn_record->read_only = true;
         }
 
-        current_cnch_txn = std::make_shared<CnchServerTransaction>(*getGlobalContext(), std::move(*txn_record));
+        current_cnch_txn = std::make_shared<CnchServerTransaction>(getGlobalContext(), std::move(*txn_record));
     }
     else
-        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(*this, txn_id, primary_txn_id);
+        current_cnch_txn = std::make_shared<CnchWorkerTransaction>(getGlobalContext(), txn_id, primary_txn_id);
 
     return current_cnch_txn;
 }

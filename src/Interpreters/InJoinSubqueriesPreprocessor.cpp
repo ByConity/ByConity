@@ -3,6 +3,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/InDepthNodeVisitor.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -199,6 +200,18 @@ private:
                 if (!renamed.empty()) //-V547
                     data.renamed_tables.emplace_back(subquery, std::move(renamed));
             }
+
+            /// Need to visit ASTTableExpression in order to let the cnch table join use global join.
+            auto table_expression = node.table_expression;
+            if (auto database_table = table_expression->as<ASTTableExpression>()->database_and_table_name)
+            {
+                std::vector<ASTPtr> renamed;
+                NonGlobalTableVisitor::Data table_data(data.getContext(), data.checker, renamed, nullptr, table_join);
+                NonGlobalTableVisitor(table_data).visit(table_expression);
+                if (!renamed.empty()) //-V547
+                    data.renamed_tables.emplace_back(table_expression, std::move(renamed));
+            }
+            
         }
     }
 };
@@ -249,10 +262,11 @@ void InJoinSubqueriesPreprocessor::visit(ASTPtr & ast) const
 bool InJoinSubqueriesPreprocessor::CheckShardsAndTables::hasAtLeastTwoShards(const IStorage & table) const
 {
     const StorageDistributed * distributed = dynamic_cast<const StorageDistributed *>(&table);
-    if (!distributed)
+    const StorageCnchMergeTree * cnch = dynamic_cast<const StorageCnchMergeTree *>(&table);
+    if (!distributed && !cnch)
         return false;
 
-    return distributed->getShardCount() >= 2;
+    return cnch || distributed->getShardCount() >= 2;
 }
 
 

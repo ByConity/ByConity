@@ -83,12 +83,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
         LOG_WARNING(log, "Hostport is empty. Please set PORT0 and TSO_IP env variables for consul/dns mode. For local mode, check cnch-server.xml");
     LOG_TRACE(log, "hostport : {}", host_port);
 
-    TSOConfig tso_config;
-    tso_config.service_name = config().getString("tso_service.bytekv.service_name", "toutiao.bytekv.proxy.service.lq");
-    tso_config.cluster_name = config().getString("tso_service.bytekv.cluster_name", "user_test");
-    tso_config.name_space = config().getString("tso_service.bytekv.name_space", "olap_cnch_test");
-    tso_config.table_name = config().getString("tso_service.bytekv.table_name", "cnch_tso");
-    tso_config.key_name = config().getString("tso_service.bytekv.key_name", "tso");
+    TSOConfig tso_config(config());
 
     proxy_ptr = std::make_shared<TSOProxy>(tso_config);
     tso_service = std::make_shared<TSOImpl>();

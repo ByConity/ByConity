@@ -1,5 +1,5 @@
 #include <Catalog/MetastoreByteKVImpl.h>
-#include <Common/Exception.h>
+#include <Catalog/CatalogUtils.h>
 #include <iostream>
 #include <common/defines.h>
 
@@ -8,7 +8,8 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int METASTORE_OPERATION_ERROR;
+    extern const int METASTORE_OPERATION_ERROR;
+    extern const int METASTORE_COMMIT_CAS_FAILURE;
 }
 
 namespace Catalog
@@ -159,6 +160,17 @@ void MetastoreByteKVImpl::MultiWrite::setCommitTimeout(const UInt32 & timeout_ms
     wb_req.write_timeout_ms = timeout_ms;
 }
 
+std::map<int, String> MetastoreByteKVImpl::MultiWrite::collectConflictInfo()
+{
+    std::map<int, String> res;
+    for (size_t i=0; i<wb_resp.puts_.size(); i++)
+    {
+        if (wb_resp.puts_[i].first == bytekv::sdk::Errorcode::CAS_FAILED)
+            res.emplace(i, wb_resp.puts_[i].second.current_value);
+    }
+    return res;
+}
+
 bool MetastoreByteKVImpl::MultiWrite::commit(bool allow_cas_fail)
 {
     // do not perform commit if the wb_req is empty. bytekv will throw `bad request` exception
@@ -196,9 +208,9 @@ bool MetastoreByteKVImpl::MultiWrite::commit(bool allow_cas_fail)
     return code == Errorcode::OK;
 }
 
-MetastoreByteKVImpl::MultiWrite MetastoreByteKVImpl::createMultiWrite(bool with_cas)
+MultiWritePtr MetastoreByteKVImpl::createMultiWrite(bool with_cas)
 {
-    return MultiWrite(table_name, client, with_cas);
+    return std::make_shared<MultiWrite>(table_name, client, with_cas);
 }
 
 bool MetastoreByteKVImpl::multiWriteCAS(const WriteRequests & requests)
@@ -447,27 +459,21 @@ void MetastoreByteKVImpl::assertStatus(const OperationType & op, const Errorcode
         if (expected_code == code)
             return;
     }
-    throw Exception("Unexpected result from byteKV. Operation : " + Operation(op) + ", Errormsg : " + ErrorString(code) , code);
+    throw Exception("Unexpected result from byteKV. Operation : " + Operation(op) + ", Errormsg : " + ErrorString(code) , toCommonErrorCode(code));
 }
 
-String MetastoreByteKVImpl::getNextKey(const String & start_key)
+int MetastoreByteKVImpl::toCommonErrorCode(const Errorcode & code)
 {
-    String next_key = start_key;
-    bool success = false;
-    for (auto it = next_key.rbegin(); it != next_key.rend(); ++it)
+    switch (code)
     {
-        if (reinterpret_cast<unsigned char&>(*it) < 0xFF)
-        {
-            (*it)++;
-            success = true;
-            break;
-        }
-        *it = 0;
+    case Errorcode::CAS_FAILED :
+        return ErrorCodes::METASTORE_COMMIT_CAS_FAILURE;
+    
+    default:
+        return code;
     }
-    if (unlikely(!success))
-            throw Exception("Failed to get end key for " + start_key, ErrorCodes::METASTORE_OPERATION_ERROR);
-    return next_key;
 }
+
 
 }
 }

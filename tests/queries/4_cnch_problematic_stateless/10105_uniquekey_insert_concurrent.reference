@@ -1,0 +1,10 @@
+After concurrent insert values
+p0	1	0
+p1	1	0
+After concurrent insert select
+p0	10	10	0
+p1	10	10	0
+After concurrent insert values (table level)
+1	0
+After concurrent insert select (table level)
+10	10	0

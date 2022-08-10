@@ -365,7 +365,12 @@ if(OPENSSL_INCLUDE_DIR)
     target_include_directories(brpc-static BEFORE PRIVATE ${OPENSSL_INCLUDE_DIR})
 endif()
 
+if (ENABLE_BENCHMARK)
+    add_subdirectory(benchmark)
+endif()
+
 add_subdirectory(infsec-cmake)
 add_subdirectory(cppkms-cmake)
 add_subdirectory(numactl-cmake)
 add_subdirectory(bytekv4cpp)
+add_subdirectory(foundationdb)

@@ -1,0 +1,65 @@
+{
+   "config":{
+      "wide_screen_mode":true
+   },
+   "header":{
+      "template":"red",
+      "title":{
+         "content":"  📢 Cordedump detected in your MR",
+         "tag":"plain_text"
+      }
+   },
+   "i18n_elements":{
+      "zh_cn":[
+         {
+            "tag":"div",
+            "text":{
+               "content":"Hi <at email=xinghe.shangguan@bytedance.com></at>, please take action for below ***core.*** files from your MR \n\uD83D\uDCC4 ***corefile***：[core.xxx.1,core.xxx.2,core.xxx.3]  ",
+               "tag":"lark_md"
+            }
+         },
+         {
+            "fields":[
+               {
+                  "is_short":true,
+                  "text":{
+                     "content":"**\uD83D\uDDC2️ Test Name**：Functionla stateless",
+                     "tag":"lark_md"
+                  }
+               },
+               {
+                  "is_short":true,
+                  "text":{
+                     "content":"**\uD83D\uDCC5Datetime**：05-July-2022",
+                     "tag":"lark_md"
+                  }
+               }
+            ],
+            "tag":"div"
+         },
+         {
+            "actions":[
+               {
+                  "tag":"button",
+                  "text":{
+                     "content":"Go To MR",
+                     "tag":"plain_text"
+                  },
+                  "type":"primary",
+                  "url":"https://open.feishu.cn/"
+               },
+               {
+                  "tag":"button",
+                  "text":{
+                     "content":"Report to QA",
+                     "tag":"plain_text"
+                  },
+                  "type":"default",
+                  "url":"https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=158k1651-684b-4ffc-9b62-42a45cec40db"
+               }
+            ],
+            "tag":"action"
+         }
+      ]
+   }
+}

@@ -266,3 +266,6 @@
 [submodule "contrib/bytekv4cpp"]
 	path = contrib/bytekv4cpp
 	url = git@code.byted.org:dp/bytekv4cpp.git
+[submodule "contrib/benchmark"]
+	path = contrib/benchmark
+	url = https://github.com/google/benchmark.git

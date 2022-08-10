@@ -1,19 +1,19 @@
 #pragma once
 
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Transaction/TransactionCommon.h>
 
 namespace DB
 {
 
-class DropRangeAction : public Action
+class DropRangeAction : public IAction
 {
 public:
-    DropRangeAction(const Context & context_, const TxnTimestamp & txn_id_, TransactionRecord record, const StoragePtr table_)
+    DropRangeAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, TransactionRecord record, const StoragePtr table_)
     :
-    Action(context_, txn_id_),
+    IAction(query_context_, txn_id_),
     txn_record(std::move(record)),
     table(table_),
     log(&Poco::Logger::get("DropRangeAction"))

@@ -547,19 +547,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     //     global_context->setComplexQueryActive(true);
     // }
 
-    Catalog::CatalogConfig catalog_conf;
-    if (config().has("catalog_service"))
-    {
-        /// set bytekv properties.
-        if (config().has("catalog_service.bytekv"))
-        {
-            catalog_conf.byteKV.service_name = config().getString("catalog_service.bytekv.service_name");
-            catalog_conf.byteKV.cluster_name = config().getString("catalog_service.bytekv.cluster_name");
-            catalog_conf.byteKV.name_space = config().getString("catalog_service.bytekv.name_space");
-            catalog_conf.byteKV.table_name = config().getString("catalog_service.bytekv.table_name");
-        }
-    }
-
+    Catalog::CatalogConfig catalog_conf(config());
 
     std::string current_raw_sd_config;
     if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)

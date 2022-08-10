@@ -20,8 +20,6 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 mkdir -p test_output
 mkdir -p sanitizer_log_output
 
-bash /home/code/dbms/tests/ci_test_type/1_single_server/run.sh
-
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_CPU_TIME_PERIOD_US=1000
@@ -42,14 +40,14 @@ if [ "$NUM_TRIES" -gt "1" ]; then
     export THREAD_FUZZER_pthread_mutex_unlock_BEFORE_SLEEP_TIME_US=10000
     export THREAD_FUZZER_pthread_mutex_unlock_AFTER_SLEEP_TIME_US=10000
     # simpliest way to forward env variables to server
-    sudo -E -u clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
+    clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
 else
-    sudo -E clickhouse start
+    clickhouse start
 fi
 
 if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]; then
 
-    sudo -E -u clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server1/config.xml --daemon \
+    clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server1/config.xml --daemon \
     -- --path /var/lib/clickhouse1/ --logger.stderr /var/log/clickhouse-server/stderr1.log \
     --logger.log /var/log/clickhouse-server/clickhouse-server1.log --logger.errorlog /var/log/clickhouse-server/clickhouse-server1.err.log \
     --tcp_port 19000 --tcp_port_secure 19440 --http_port 18123 --https_port 18443 --interserver_http_port 19009 --tcp_with_proxy_port 19010 \
@@ -57,7 +55,7 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
     --keeper_server.tcp_port 19181 --keeper_server.server_id 2 \
     --macros.replica r2   # It doesn't work :(
 
-    sudo -E -u clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server2/config.xml --daemon \
+    clickhouse /usr/bin/clickhouse server --config /etc/clickhouse-server2/config.xml --daemon \
     -- --path /var/lib/clickhouse2/ --logger.stderr /var/log/clickhouse-server/stderr2.log \
     --logger.log /var/log/clickhouse-server/clickhouse-server2.log --logger.errorlog /var/log/clickhouse-server/clickhouse-server2.err.log \
     --tcp_port 29000 --tcp_port_secure 29440 --http_port 28123 --https_port 28443 --interserver_http_port 29009 --tcp_with_proxy_port 29010 \
@@ -70,6 +68,8 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
 fi
 
 sleep 5
+
+cp -r /home/code/tests/queries/. /usr/share/clickhouse-test/queries/.
 
 function run_tests()
 {
@@ -105,7 +105,7 @@ function run_tests()
 
     ps -aux
     clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
-           --use-skip-list --run stateless --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
+           --use-skip-list --order asc --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
         | tee -a test_output/test_result.txt || true
 }

@@ -2,6 +2,7 @@
 
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/MetastoreByteKVImpl.h>
+#include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
@@ -72,17 +73,28 @@ namespace Catalog
 class MetastoreProxy
 {
 public:
-    using MetastorePtr = std::shared_ptr<MetastoreByteKVImpl>;
+    using MetastorePtr = std::shared_ptr<IMetaStore>;
     using RepeatedFields = google::protobuf::RepeatedPtrField<std::string>;
 
     MetastoreProxy(CatalogConfig & config)
     {
-        metastore_ptr = std::make_shared<MetastoreByteKVImpl>(
-            config.byteKV.service_name,
-            config.byteKV.cluster_name,
-            config.byteKV.name_space,
-            config.byteKV.table_name
-        );
+        if (config.type == StoreType::FDB)
+        {
+            metastore_ptr = std::make_shared<MetastoreFDBImpl>(config.fdb_conf.cluster_conf_path);
+        }
+        else if (config.type == StoreType::BYTEKV)
+        {
+            metastore_ptr = std::make_shared<MetastoreByteKVImpl>(
+                config.bytekv_conf.service_name,
+                config.bytekv_conf.cluster_name,
+                config.bytekv_conf.name_space,
+                config.bytekv_conf.table_name
+            );
+        }
+        else
+        {
+            throw Exception("Catalog must be correctly configured. Only support foundationdb and bytekv now.", ErrorCodes::METASTORE_EXCEPTION);
+        }
     }
 
     ~MetastoreProxy() {}
@@ -545,7 +557,7 @@ public:
     void updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
-    void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, MetastoreByteKVImpl::MultiWrite & container);
+    void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, MultiWritePtr & container);
     bool alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add);
     Strings getAllTablesInDB(const String & name_space, const String & database);
     IMetaStore::IteratorPtr getAllTablesMeta(const String & name_space);
@@ -567,10 +579,10 @@ public:
     std::vector<std::shared_ptr<DB::Protos::DataModelDictionary>> getDictionariesFromTrash(const String & name_space, const String & database);
 
     void prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
-                             const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, MetastoreByteKVImpl::MultiWrite & container,
+                             const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, MultiWritePtr & container,
                              const std::vector<String> & expected_parts, bool update_sync_list = false);
     void prepareAddStagedParts(const String & name_space, const String & table_uuid, const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
-                               MetastoreByteKVImpl::MultiWrite & container, const std::vector<String> & expected_staged_parts);
+                               MultiWritePtr & container, const std::vector<String> & expected_staged_parts);
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);
@@ -644,14 +656,14 @@ public:
 
     /// delete bitmap/keys related api
     void prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps,
-                                 MetastoreByteKVImpl::MultiWrite & container, const std::vector<String> & expected_bitmaps = {});
+                                 MultiWritePtr & container, const std::vector<String> & expected_bitmaps = {});
     void addDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
     void removeDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
     Strings getDeleteBitmapByKeys(const Strings & key);
 
     IMetaStore::IteratorPtr getMetaInRange(const String & prefix, const String & range_start, const String & range_end, bool include_start, bool include_end);
 
-    MetastoreByteKVImpl::MultiWrite createMultiWrite(bool with_cas = true) { return metastore_ptr->createMultiWrite(with_cas); }
+    MultiWritePtr createMultiWrite(bool with_cas = true) { return metastore_ptr->createMultiWrite(with_cas); }
 
     std::shared_ptr<Protos::BufferManagerMetadata> tryGetBufferManagerMetadata(const String & name_space, const UUID & uuid);
     void setBufferManagerMetadata(const String & name_space, const UUID & uuid, const Protos::BufferManagerMetadata & metadata);

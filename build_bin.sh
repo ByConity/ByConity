@@ -2,6 +2,7 @@
 
 set -e
 set -x
+PROJECT="$( cd "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P  )"
 
 export PATH=`echo $PATH | sed -e 's/:\/opt\/tiger\/typhoon-blade//'`
 
@@ -54,6 +55,9 @@ else
     cmake ../ ${CMAKE_FLAGS} && ninja
     ninja install
 fi
+
+# copy shared libaries
+cp ${PROJECT}/contrib/foundationdb/lib/libfdb_c.so ../output/lib
 
 # create the `usr/bin` directory to keep it same with old version
 mkdir -p ../output/usr
