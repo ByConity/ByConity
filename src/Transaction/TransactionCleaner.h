@@ -5,6 +5,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <mutex>
 
@@ -44,12 +45,12 @@ struct TxnCleanTask
 using TxnCleanTasks = std::vector<TxnCleanTask>;
 
 /// Run transaction clean task in the background
-class TransactionCleaner
+class TransactionCleaner : WithContext
 {
 public:
     TransactionCleaner(
-        const Context & global_context, size_t server_max_threads, size_t server_queue_size, size_t dm_max_threads, size_t dm_queue_size)
-        : context(global_context)
+        const ContextPtr & global_context, size_t server_max_threads, size_t server_queue_size, size_t dm_max_threads, size_t dm_queue_size)
+        : WithContext(global_context)
         , server_thread_pool(std::make_unique<ThreadPool>(server_max_threads, server_max_threads, server_queue_size))
         , dm_thread_pool(std::make_unique<ThreadPool>(dm_max_threads, dm_max_threads, dm_queue_size))
     {
@@ -124,7 +125,6 @@ private:
     }
 
 private:
-    const Context & context;
     std::unique_ptr<ThreadPool> server_thread_pool;
     std::unique_ptr<ThreadPool> dm_thread_pool;
 

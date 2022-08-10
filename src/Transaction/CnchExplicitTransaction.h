@@ -2,7 +2,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/Context.h>
 #include <Common/HostWithPorts.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Common/CurrentMetrics.h>
 
@@ -18,7 +18,7 @@ namespace DB
         std::vector<String> statements;
         static constexpr int MAX_RETRY = 3; 
     public:
-        CnchExplicitTransaction(Context & context, TransactionRecord record);
+        CnchExplicitTransaction(const ContextPtr & context, TransactionRecord record);
         ~CnchExplicitTransaction() override = default;
 
         String getTxnType() const override { return "CnchExplicitTransaction"; }

@@ -38,6 +38,10 @@ public:
     TxnTimestamp rollbackTransaction(const TxnTimestamp & txn_id);
     void finishTransaction(const TxnTimestamp & txn_id);
 
+    CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txn_id, bool need_search_catalog = false);
+
+    void removeIntermediateData(const TxnTimestamp & txn_id);
+
     ServerDataPartsVector fetchDataParts(const String & remote_host, const StoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
 
     void redirectCommitParts(

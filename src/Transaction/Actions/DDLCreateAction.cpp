@@ -8,7 +8,7 @@ namespace DB
 
 void DDLCreateAction::executeV1(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
 
     /// TODO: Before add db or table into kv, we should create a redo buffer can be used to index the added record fast.
     /// need support from Catalog client
@@ -22,13 +22,13 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
     {
         /// create table
         updateTsCache(params.uuid, commit_time);
-        cnch_catalog->createTable(context, params.database, params.table, params.statement, "", txn_id, commit_time);
+        cnch_catalog->createTable(*getContext(), params.database, params.table, params.statement, "", txn_id, commit_time);
     }
 }
 
 void DDLCreateAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
 {
-    auto & ts_cache_manager = context.getCnchTransactionCoordinator().getTsCacheManager();
+    auto & ts_cache_manager = getContext()->getCnchTransactionCoordinator().getTsCacheManager();
     auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
     auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
     ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);

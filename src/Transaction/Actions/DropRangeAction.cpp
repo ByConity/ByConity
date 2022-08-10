@@ -36,10 +36,10 @@ void DropRangeAction::executeV1(TxnTimestamp commit_time)
     if (!cnch_table)
         throw Exception("CNCH table ptr is null in DropRange Action", ErrorCodes::LOGICAL_ERROR);
 
-    auto catalog = context.getCnchCatalog();
+    auto catalog = getContext()->getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
 
-    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
 }
 
 void DropRangeAction::executeV2()
@@ -48,7 +48,7 @@ void DropRangeAction::executeV2()
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    auto catalog = context.getCnchCatalog();
+    auto catalog = getContext()->getCnchCatalog();
     catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, false, /*preallocate_mode=*/ false);
 }
 
@@ -56,17 +56,17 @@ void DropRangeAction::executeV2()
 void DropRangeAction::postCommit(TxnTimestamp commit_time)
 {
     /// set commit time for part
-    context.getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
+    getContext()->getCnchCatalog()->setCommitTime(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, commit_time);
 
-    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
+    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::DROP_RANGE, parts, txn_id, false);
 }
 
 void DropRangeAction::abort()
 {
     // clear parts in kv
-    context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}}, true);
+    getContext()->getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}}, true);
 
-    // ServerPartLog::addNewParts(context, ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
+    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
 }
 
 }

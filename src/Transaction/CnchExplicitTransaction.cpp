@@ -24,10 +24,10 @@ namespace ErrorCodes
     extern const int CNCH_TRANSACTION_INTERNAL_ERROR;
 }
 
-CnchExplicitTransaction::CnchExplicitTransaction(Context & context_, TransactionRecord record) : Base(context_, std::move(record))
+CnchExplicitTransaction::CnchExplicitTransaction(const ContextPtr & context_, TransactionRecord record) : Base(context_, std::move(record))
 {
     /// Create txn record
-    context.getCnchCatalog()->createTransactionRecord(getTransactionRecord());
+    getContext()->getCnchCatalog()->createTransactionRecord(getTransactionRecord());
 }
 
 void CnchExplicitTransaction::precommit()
@@ -40,7 +40,7 @@ void CnchExplicitTransaction::precommit()
     /// If a transaction fails, make sure that all parts metadata in bytekv of that txn is removed before commit
     std::for_each(secondary_txns.begin(), secondary_txns.end(), [](auto & txn) {
         if (txn->getStatus() == CnchTransactionStatus::Aborted)
-            txn->cleanWrittenData();
+            txn->removeIntermediateData();
     });
     txn_record.prepared = true;
 }
@@ -54,7 +54,7 @@ TxnTimestamp CnchExplicitTransaction::commit()
     Stopwatch watch(CLOCK_MONOTONIC_COARSE);
     auto lock = getLock();
 
-    TxnTimestamp commit_ts = context.getTimestamp();
+    TxnTimestamp commit_ts = getContext()->getTimestamp();
     int retry = MAX_RETRY;
     do
     {
@@ -67,7 +67,7 @@ TxnTimestamp CnchExplicitTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-            bool success = context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+            bool success = getContext()->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
 
             txn_record = std::move(target_record);
 
@@ -150,9 +150,9 @@ TxnTimestamp CnchExplicitTransaction::rollback()
     TxnTimestamp ts;
     try
     {
-        ts = context.getTimestamp();
+        ts = getContext()->getTimestamp();
         setCommitTime(ts);
-        context.getCnchCatalog()->rollbackTransaction(txn_record);
+        getContext()->getCnchCatalog()->rollbackTransaction(txn_record);
         LOG_DEBUG(log, "Successfully rollback explicit transaction: {}\n", txn_record.txnID().toUInt64());
     }
     catch (...)
@@ -186,9 +186,9 @@ TxnTimestamp CnchExplicitTransaction::abort()
     /// CAS
     TransactionRecord target_record = getTransactionRecord();
     target_record.setStatus(CnchTransactionStatus::Aborted);
-    target_record.setCommitTs(context.getTimestamp());
+    target_record.setCommitTs(getContext()->getTimestamp());
 
-    bool success = context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+    bool success = getContext()->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
     txn_record = std::move(target_record);
     if (success)
     {
@@ -217,18 +217,18 @@ TxnTimestamp CnchExplicitTransaction::abort()
 
 void CnchExplicitTransaction::clean(TxnCleanTask &)
 {
-    auto & coordinator = context.getCnchTransactionCoordinator();
+    auto & coordinator = getContext()->getCnchTransactionCoordinator();
     /// clean finish secondary transactions
     std::for_each(secondary_txns.begin(), secondary_txns.end(), [&coordinator](auto & txn) { coordinator.finishTransaction(txn, true); });
     /// Explicit transaction do not hold any intermediate data, so only need to clean transaction record
     if (txn_record.status() == CnchTransactionStatus::Finished)
     {
-        UInt64 ttl = context.getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
-        context.getCnchCatalog()->setTransactionRecordCleanTime(txn_record, context.getTimestamp(), ttl);
+        UInt64 ttl = getContext()->getConfigRef().getUInt64("cnch_txn_safe_remove_seconds", 5 * 60);
+        getContext()->getCnchCatalog()->setTransactionRecordCleanTime(txn_record, getContext()->getTimestamp(), ttl);
     }
     else
     {
-        context.getCnchCatalog()->removeTransactionRecord(getTransactionRecord());
+        getContext()->getCnchCatalog()->removeTransactionRecord(getTransactionRecord());
     }
 }
 

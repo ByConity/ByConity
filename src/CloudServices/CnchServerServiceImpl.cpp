@@ -36,9 +36,7 @@ void CnchServerServiceImpl::commitParts(
     [[maybe_unused]] Protos::CommitPartsResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done,
@@ -152,9 +150,7 @@ void CnchServerServiceImpl::createTransaction(
     Protos::CreateTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [cntl = cntl, request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -191,9 +187,7 @@ void CnchServerServiceImpl::finishTransaction(
     Protos::FinishTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
         brpc::ClosureGuard done_guard(done);
@@ -219,9 +213,7 @@ void CnchServerServiceImpl::commitTransaction(
     Protos::CommitTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
@@ -277,9 +269,7 @@ void CnchServerServiceImpl::precommitTransaction(
     Protos::PrecommitTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
 
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
@@ -308,9 +298,7 @@ void CnchServerServiceImpl::rollbackTransaction(
     Protos::RollbackTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR);
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -319,7 +307,7 @@ void CnchServerServiceImpl::rollbackTransaction(
             auto & txn_coordinator = global_context.getCnchTransactionCoordinator();
             auto txn = txn_coordinator.getTransaction(request->txn_id());
             if (request->has_only_clean_data() && request->only_clean_data())
-                txn->cleanWrittenData();
+                txn->removeIntermediateData();
             else
                 response->set_commit_ts(txn->rollback());
         }
@@ -337,9 +325,7 @@ void CnchServerServiceImpl::createTransactionForKafka(
     Protos::CreateKafkaTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = context.lock();
-    if (!context_ptr)
-        throw Exception("Global context expried while running rpc call", ErrorCodes::LOGICAL_ERROR); 
+    ContextPtr context_ptr = getContext(); 
     RPCHelpers::serviceHandler(
         done, response, [cntl = cntl, request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -370,6 +356,60 @@ void CnchServerServiceImpl::createTransactionForKafka(
         }
         
     });
+}
+
+void CnchServerServiceImpl::getTransactionStatus(
+    ::google::protobuf::RpcController * /*cntl*/,
+    const ::DB::Protos::GetTransactionStatusReq * request,
+    ::DB::Protos::GetTransactionStatusResp * response,
+    ::google::protobuf::Closure * done)
+{
+    ContextPtr context_ptr = getContext(); 
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, &global_context = *context_ptr, log = log]
+        {
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                TxnTimestamp txn_id{request->txn_id()};
+                auto & txn_coordinator = global_context.getCnchTransactionCoordinator();
+                CnchTransactionStatus status = txn_coordinator.getTransactionStatus(txn_id);
+
+                if (status == CnchTransactionStatus::Inactive && request->need_search_catalog())
+                {
+                    auto txn_record = global_context.getCnchCatalog()->tryGetTransactionRecord(txn_id);
+                    if (txn_record)
+                        status = txn_record->status();
+                }
+
+                switch (status)
+                {
+                    case CnchTransactionStatus::Running:
+                        response->set_status(Protos::TransactionStatus::Running);
+                        break;
+                    case CnchTransactionStatus::Finished:
+                        response->set_status(Protos::TransactionStatus::Finished);
+                        break;
+                    case CnchTransactionStatus::Aborted:
+                        response->set_status(Protos::TransactionStatus::Aborted);
+                        break;
+                    case CnchTransactionStatus::Inactive:
+                        response->set_status(Protos::TransactionStatus::Inactive);
+                        break;
+
+                    default:
+                        throw Exception("Unknown transaction status", ErrorCodes::NOT_IMPLEMENTED);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 
 #if defined(__clang__)
@@ -472,13 +512,6 @@ void CnchServerServiceImpl::invalidateBytepond(
     const Protos::InvalidateBytepondReq * request,
     Protos::InvalidateBytepondResp * response,
     google::protobuf::Closure * done)
-{
-}
-void CnchServerServiceImpl::getTransactionStatus(
-    ::google::protobuf::RpcController * controller,
-    const ::DB::Protos::GetTransactionStatusReq * request,
-    ::DB::Protos::GetTransactionStatusResp * response,
-    ::google::protobuf::Closure * done)
 {
 }
 void CnchServerServiceImpl::commitWorkerRPCByKey(

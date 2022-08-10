@@ -389,7 +389,7 @@ CnchServerClient::getTableInfo(const std::vector<std::shared_ptr<Protos::TableId
     Protos::GetTableInfoReq request;
     Protos::GetTableInfoResp response;
 
-    for (auto & table : tables)
+    for (const auto & table : tables)
     {
         DB::Protos::TableIdentifier * table_id = request.add_table_ids();
         table_id->CopyFrom(*table);
@@ -403,4 +403,33 @@ CnchServerClient::getTableInfo(const std::vector<std::shared_ptr<Protos::TableId
     return response.table_infos();
 }
 
+CnchTransactionStatus CnchServerClient::getTransactionStatus(const TxnTimestamp & txn_id, const bool need_search_catalog)
+{
+    brpc::Controller cntl;
+    Protos::GetTransactionStatusReq request;
+    Protos::GetTransactionStatusResp response;
+
+    request.set_txn_id(txn_id.toUInt64());
+    request.set_need_search_catalog(need_search_catalog);
+
+    stub->getTransactionStatus(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.status();
+}
+void CnchServerClient::removeIntermediateData(const TxnTimestamp & txn_id)
+{
+    brpc::Controller cntl;
+    Protos::RollbackTransactionReq request;
+    Protos::RollbackTransactionResp response;
+
+    request.set_txn_id(txn_id);
+    request.set_only_clean_data(true);
+    stub->rollbackTransaction(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
 }

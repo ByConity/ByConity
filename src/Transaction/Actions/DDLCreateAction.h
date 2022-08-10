@@ -2,7 +2,7 @@
 
 #include <Core/UUID.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 
 namespace DB
 {
@@ -14,12 +14,12 @@ struct CreateActionParams
     String statement;
 };
 
-class DDLCreateAction : public Action
+class DDLCreateAction : public IAction
 {
 
 public:
-    DDLCreateAction(const Context & context_, const TxnTimestamp & txn_id_, CreateActionParams params_)
-        : Action(context_, txn_id_), params(std::move(params_))
+    DDLCreateAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, CreateActionParams params_)
+        : IAction(query_context_, txn_id_), params(std::move(params_))
     {}
 
     ~DDLCreateAction() override = default;

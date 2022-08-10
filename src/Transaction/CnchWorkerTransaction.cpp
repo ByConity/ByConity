@@ -16,7 +16,7 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
 }
 
-CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, CnchServerClientPtr client)
+CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, CnchServerClientPtr client)
     : ICnchTransaction(context_), server_client(std::move(client))
 {
     checkServerClient();
@@ -28,7 +28,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, CnchServerClien
 }
 
 CnchWorkerTransaction::CnchWorkerTransaction(
-    Context & context_, CnchServerClientPtr client, StorageID kafka_table_id_, size_t consumer_index_)
+    const ContextPtr & context_, CnchServerClientPtr client, StorageID kafka_table_id_, size_t consumer_index_)
     : ICnchTransaction(context_), server_client(std::move(client)),
     kafka_table_id(std::move(kafka_table_id_)), kafka_consumer_index(consumer_index_)
 {
@@ -40,7 +40,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(
     isInitiator = true;
 }
 
-CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
+CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
     : ICnchTransaction(context_)
 {
     String initiator = txnInitiatorToString(CnchTransactionInitiator::Server);
@@ -50,7 +50,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, const TxnTimest
     setTransactionRecord(std::move(record));
 }
 
-CnchWorkerTransaction::CnchWorkerTransaction(Context & context_, StorageID kafka_table_id_)
+CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, StorageID kafka_table_id_)
     : ICnchTransaction(context_), kafka_table_id(std::move(kafka_table_id_)) {}
 
 CnchWorkerTransaction::~CnchWorkerTransaction()
@@ -108,10 +108,10 @@ TxnTimestamp CnchWorkerTransaction::commit()
     auto lock = getLock();
     TxnTimestamp commit_ts;
     /// Check `consumer_index` here as we don't need check validity of consumer for flushing memory buffer
-    // if (kafka_consumer_index == SIZE_MAX)
-    //     commit_ts = server_client->commitTransaction(*this);
-    // else
-    //     commit_ts = server_client->commitTransaction(*this, kafka_table_id, kafka_consumer_index);
+    if (kafka_consumer_index == SIZE_MAX)
+        commit_ts = server_client->commitTransaction(*this);
+    else
+        commit_ts = server_client->commitTransaction(*this, kafka_table_id, kafka_consumer_index);
 
     setCommitTime(commit_ts);
     setStatus(CnchTransactionStatus::Finished);
@@ -132,8 +132,7 @@ TxnTimestamp CnchWorkerTransaction::rollback()
     TxnTimestamp ts;
     try
     {
-        // ts = server_client->rollbackTransaction(getTransactionID());
-        ts = 0;
+        ts = server_client->rollbackTransaction(getTransactionID());
         setCommitTime(ts);
         LOG_DEBUG(log, "Successfully rollback transaction: {}\n", txn_record.txnID().toUInt64());
     }
@@ -172,7 +171,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
         if (e.code() == ErrorCodes::BRPC_TIMEOUT)
         {
             // TODO: check in catalog
-            TxnTimestamp commit_ts = context.getTimestamp();
+            TxnTimestamp commit_ts = getContext()->getTimestamp();
             TransactionRecord prev_record;
             bool success = false;
             try
@@ -180,7 +179,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
                 TransactionRecord target_record = getTransactionRecord();
                 target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(commit_ts).setMainTableUUID(getMainTableUUID());
 
-                success = context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+                success = getContext()->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
                 txn_record = std::move(target_record);
             }
             catch (...)

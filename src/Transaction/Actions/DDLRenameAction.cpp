@@ -14,12 +14,12 @@ namespace DB
 
 void DDLRenameAction::renameTablePrefix(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
-    // auto daemon_manager = context.getDaemonManagerClient();
+    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
+    // auto daemon_manager = getContext()->getDaemonManagerClient();
     // if (!daemon_manager)
     //     throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
 
-    auto storage = cnch_catalog->tryGetTable(context, params.table_params.from_database, params.table_params.from_table, commit_time);
+    auto storage = cnch_catalog->tryGetTable(*getContext(), params.table_params.from_database, params.table_params.from_table, commit_time);
 
     if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get()))
     {
@@ -49,7 +49,7 @@ void DDLRenameAction::renameTablePrefix(TxnTimestamp commit_time)
 
 void DDLRenameAction::executeV1(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
 
     if (params.type == RenameActionParams::Type::RENAME_TABLE)
     {
@@ -72,12 +72,12 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
 
 void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = context.getCnchCatalog();
-    // auto daemon_manager = context.getDaemonManagerClient();
+    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
+    // auto daemon_manager = getContext()->getDaemonManagerClient();
     // if (!daemon_manager)
     //     throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
 
-    auto storage = cnch_catalog->tryGetTable(context, params.table_params.to_database, params.table_params.to_table, commit_time);
+    auto storage = cnch_catalog->tryGetTable(*getContext(), params.table_params.to_database, params.table_params.to_table, commit_time);
     if (is_cnch_merge_tree)
     {
         const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
@@ -110,7 +110,7 @@ void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
 
 void DDLRenameAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
 {
-    auto & ts_cache_manager = context.getCnchTransactionCoordinator().getTsCacheManager();
+    auto & ts_cache_manager = getContext()->getCnchTransactionCoordinator().getTsCacheManager();
     auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
     auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
     ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);

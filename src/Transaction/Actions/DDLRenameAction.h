@@ -3,7 +3,7 @@
 #include <Core/UUID.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Transaction/Actions/Action.h>
+#include <Transaction/Actions/IAction.h>
 
 namespace DB
 {
@@ -38,11 +38,11 @@ struct RenameActionParams
 };
 
 
-class DDLRenameAction : public Action
+class DDLRenameAction : public IAction
 {
 public:
-    DDLRenameAction(const Context & context_, const TxnTimestamp & txn_id_, RenameActionParams params_)
-        : Action(context_, txn_id_), params(std::move(params_))
+    DDLRenameAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, RenameActionParams params_)
+        : IAction(query_context_, txn_id_), params(std::move(params_))
     {}
 
     ~DDLRenameAction() override = default;

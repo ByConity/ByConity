@@ -5,16 +5,17 @@
 #include <Storages/IStorage_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
 class Context;
 
-class Action
+class IAction : public WithContext
 {
 public:
-    Action(const Context & context_, const TxnTimestamp & txn_id_);
-    virtual ~Action() = default; 
+    IAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_);
+    virtual ~IAction() = default; 
 
     /// V1 is the old API which performs data write and txn commit in one api calls.
     /// V2 is the new API which separate data write and txn commit with 2 api calls.
@@ -27,13 +28,12 @@ public:
     virtual UInt32 collectNewParts() const { return 0; }
     virtual UInt32 getSize() const { return 0; }
 protected:
-    const Context & context;
     TxnTimestamp txn_id;
 
 private:
     virtual void updateTsCache(const UUID &, const TxnTimestamp &) {}
 };
 
-using ActionPtr = std::shared_ptr<Action>;
+using ActionPtr = std::shared_ptr<IAction>;
 
 }
