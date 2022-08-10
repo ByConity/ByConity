@@ -124,7 +124,7 @@ private:
         const SelectQueryInfo & query_info) const;
 
 
-    void collectResource(ContextPtr context, ServerDataPartsVector & parts, const String & local_table_name);
+    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name);
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
