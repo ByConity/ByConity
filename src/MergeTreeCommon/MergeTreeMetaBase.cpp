@@ -28,6 +28,7 @@
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Functions/IFunction.h>
+#include <QueryPlan/QueryIdHolder.h>
 
 
 namespace
@@ -1371,4 +1372,68 @@ StoragePolicyPtr MergeTreeMetaBase::getLocalStoragePolicy() const
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented for MergeTreeMetaBase");
 }
+
+bool MergeTreeMetaBase::isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(
+    const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const
+{
+    const String column_name = node->getColumnName();
+
+    for (const auto & name : metadata_snapshot->getPrimaryKeyColumns())
+        if (column_name == name)
+            return true;
+
+    for (const auto & name : getMinMaxColumnsNames(metadata_snapshot->getPartitionKey()))
+        if (column_name == name)
+            return true;
+
+    if (const auto * func = node->as<ASTFunction>())
+        if (func->arguments->children.size() == 1)
+            return isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(func->arguments->children.front(), metadata_snapshot);
+
+    return false;
+}
+
+bool MergeTreeMetaBase::mayBenefitFromIndexForIn(
+    const ASTPtr & left_in_operand, ContextPtr, const StorageMetadataPtr & metadata_snapshot) const
+{
+    /// Make sure that the left side of the IN operator contain part of the key.
+    /// If there is a tuple on the left side of the IN operator, at least one item of the tuple
+    ///  must be part of the key (probably wrapped by a chain of some acceptable functions).
+    const auto * left_in_operand_tuple = left_in_operand->as<ASTFunction>();
+    const auto & index_wrapper_factory = MergeTreeIndexFactory::instance();
+    if (left_in_operand_tuple && left_in_operand_tuple->name == "tuple")
+    {
+        for (const auto & item : left_in_operand_tuple->arguments->children)
+        {
+            if (isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(item, metadata_snapshot))
+                return true;
+            for (const auto & index : metadata_snapshot->getSecondaryIndices())
+                if (index_wrapper_factory.get(index)->mayBenefitFromIndexForIn(item))
+                    return true;
+            if (metadata_snapshot->selected_projection
+                && metadata_snapshot->selected_projection->isPrimaryKeyColumnPossiblyWrappedInFunctions(item))
+                return true;
+        }
+        /// The tuple itself may be part of the primary key, so check that as a last resort.
+        if (isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(left_in_operand, metadata_snapshot))
+            return true;
+        if (metadata_snapshot->selected_projection
+            && metadata_snapshot->selected_projection->isPrimaryKeyColumnPossiblyWrappedInFunctions(left_in_operand))
+            return true;
+        return false;
+    }
+    else
+    {
+        for (const auto & index : metadata_snapshot->getSecondaryIndices())
+            if (index_wrapper_factory.get(index)->mayBenefitFromIndexForIn(left_in_operand))
+                return true;
+
+        if (metadata_snapshot->selected_projection
+            && metadata_snapshot->selected_projection->isPrimaryKeyColumnPossiblyWrappedInFunctions(left_in_operand))
+            return true;
+
+        return isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(left_in_operand, metadata_snapshot);
+    }
+}
+
 }

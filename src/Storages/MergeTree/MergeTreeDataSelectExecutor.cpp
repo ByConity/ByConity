@@ -1554,7 +1554,6 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
     /// NOTE Creating temporary Field objects to pass to KeyCondition.
     std::vector<FieldRef> index_left(used_key_size);
     std::vector<FieldRef> index_right(used_key_size);
-
     auto may_be_true_in_range = [&](MarkRange & range)
     {
         if (range.end == marks_count && !has_final_mark)
@@ -1576,8 +1575,10 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
                 create_field_ref(range.end, i, index_right[i]);
             }
         }
-        return key_condition.mayBeTrueInRange(
+        bool may_true = key_condition.mayBeTrueInRange(
             used_key_size, index_left.data(), index_right.data(), primary_key.data_types);
+        LOG_DEBUG(log, "Key condition {} is {} in [ ({}) - ({}) )", key_condition.toString(), may_true, fmt::join(index_left, " "), fmt::join(index_right, " "));
+        return may_true;
     };
 
     if (!key_condition.matchesExactContinuousRange())
@@ -1593,7 +1594,7 @@ MarkRanges MergeTreeDataSelectExecutor::markRangesFromPKRange(
         /** There will always be disjoint suspicious segments on the stack, the leftmost one at the top (back).
         * At each step, take the left segment and check if it fits.
         * If fits, split it into smaller ones and put them on the stack. If not, discard it.
-        * If the segment is already of one mark length, add it to response and discard it.
+        * If the segment is already of one mark length, add it to may_trueponse and discard it.
         */
         std::vector<MarkRange> ranges_stack = { {0, marks_count} };
 

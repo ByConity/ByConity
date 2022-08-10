@@ -436,3 +436,25 @@ private:
 };
 
 }
+
+template <>
+struct fmt::formatter<DB::FieldRef>
+{
+    constexpr auto parse(format_parse_context & ctx)
+    {
+        const auto * it = ctx.begin();
+        const auto * end = ctx.end();
+
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("Invalid format");
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::FieldRef & x, FormatContext & ctx)
+    {
+        return format_to(ctx.out(), "{}", toString(static_cast<const DB::Field &>(x)));
+    }
+};

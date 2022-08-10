@@ -1,9 +1,11 @@
 #pragma once
 
+#include <optional>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
 #include "IStorage.h"
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
@@ -37,7 +39,7 @@ public:
         const Names & /*column_names*/,
         const StorageMetadataPtr & /*metadata_snapshot*/,
         SelectQueryInfo & /*query_info*/,
-        ContextPtr /*context*/,
+        ContextPtr /*local_context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
@@ -47,32 +49,32 @@ public:
         const Names & /*column_names*/,
         const StorageMetadataPtr & /*metadata_snapshot*/,
         SelectQueryInfo & /*query_info*/,
-        ContextPtr /*context*/,
+        ContextPtr /*local_context*/,
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
 
-    BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr context) override;
+    BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context) override;
 
-    HostWithPortsVec getWriteWorkers(const ASTPtr & query, ContextPtr context) override;
+    HostWithPortsVec getWriteWorkers(const ASTPtr & query, ContextPtr local_context) override;
 
-    CheckResults checkData(const ASTPtr & query, ContextPtr context) override;
+    CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
     ServerDataPartsVector getPrunedServerParts(
         const Names & column_names_to_return,
-        ContextPtr context,
+        ContextPtr local_context,
         const SelectQueryInfo & query_info);
 
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
     MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr);
 
-    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time);
+    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
-    void allocateParts(ContextPtr context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);
+    void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);
 
     UInt64 getTimeTravelRetention();
 
@@ -85,14 +87,16 @@ public:
     }
 
 
-    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
-    void alter(const AlterCommands & commands, ContextPtr context, TableLockHolder & table_lock_holder) override;
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
+    void alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & table_lock_holder) override;
 
     void truncate(
         const ASTPtr & /*query*/,
         const StorageMetadataPtr & /* metadata_snapshot */,
-        ContextPtr /* context */,
+        ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
+
+    Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
 protected:
     StorageCnchMergeTree(
@@ -106,37 +110,32 @@ protected:
         std::unique_ptr<MergeTreeSettings> settings_);
 
 private:
-    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr context, ServerDataPartsVector & parts);
+    CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);
 
-    ServerDataPartsVector getAllParts(ContextPtr context);
+    ServerDataPartsVector getAllParts(ContextPtr local_context);
 
     Strings selectPartitionsByPredicate(
-        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr context);
+        const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context);
 
-    void eliminateParts(
-        ServerDataPartsVector & parts,
-        const ASTPtr & expression,
-        ContextPtr context,
-        const SelectQueryInfo & query_info) const;
-
-    ServerDataPartsVector & pruneParts(
+    ServerDataPartsVector pruneParts(
         const Names & column_names_to_return,
         ServerDataPartsVector & parts,
-        ContextPtr context,
+        ContextPtr local_context,
         const SelectQueryInfo & query_info) const;
 
-    void collectResource(ContextPtr context, ServerDataPartsVector & parts, const String & local_table_name);
+
+    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name);
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session
-    ServerDataPartsVector filterPartsInExplicitTransaction(ContextPtr query_context, ServerDataPartsVector && data_parts);
+    ServerDataPartsVector filterPartsInExplicitTransaction(ContextPtr local_context, ServerDataPartsVector && data_parts);
 
     /// Generate view dependency create queries for materialized view writing
-    Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr context, const String & table_suffix);
+    Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
 
-    // To store some temporary data for cnch
+    /// To store some temporary data for cnch
     StoragePolicyPtr local_store_volume;
     String relative_local_store_path;
 };
