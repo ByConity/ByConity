@@ -46,7 +46,11 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
         {
             try
             {
-                hit_segment->cacheToDisk(*this);
+                auto [disk, path] = get(hit_segment->getSegmentName());
+                if (disk == nullptr)
+                {
+                    hit_segment->cacheToDisk(*this);
+                }
             }
             catch (...)
             {
