@@ -3989,28 +3989,16 @@ TransactionCnchPtr Context::getCurrentTransaction() const
     return current_cnch_txn;
 }
 
-void Context::setCurrentTransactionID(const TxnTimestamp & txn_id)
-{
-    auto lock = getLock();
-
-    current_cnch_txn_id = txn_id;
-}
-
 TxnTimestamp Context::getCurrentTransactionID() const
 {
-    auto lock = getLock();
-
-    if (current_cnch_txn)
-    {
-        auto txn_id = current_cnch_txn->getTransactionID();
-        if (0 == UInt64(txn_id))
-            throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
-        return txn_id;
-    }
-
-    if (0 == UInt64(current_cnch_txn_id))
+    if (!current_cnch_txn)
         throw Exception("Transaction is not set (empty)", ErrorCodes::LOGICAL_ERROR);
-    return current_cnch_txn_id;
+
+    auto txn_id = current_cnch_txn->getTransactionID();
+    if (0 == UInt64(txn_id))
+        throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
+
+    return txn_id;
 }
 
 InterserverCredentialsPtr Context::getCnchInterserverCredentials()

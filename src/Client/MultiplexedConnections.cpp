@@ -161,12 +161,14 @@ void MultiplexedConnections::sendQuery(
         if (is_cnch_query)
         {
             auto txn_id = current_context->getCurrentTransactionID();
+            auto client_type = (current_context->getServerType() == ServerType::cnch_server) ?
+                ClientInfo::ClientType::CNCH_SERVER : ClientInfo::ClientType::CNCH_WORKER;
             auto rpc_port = (current_context->getServerType() == ServerType::cnch_worker)
                 ? current_context->getClientInfo().rpc_port
                 : current_context->getRPCPort();
 
             replica_states[0].connection->sendCnchQuery(
-                txn_id, timeouts, query, query_id, stage, &modified_settings, & client_info, with_pending_data, rpc_port);
+                txn_id, timeouts, query, query_id, stage, &modified_settings, & client_info, with_pending_data, client_type, rpc_port);
         }
         else
         {
