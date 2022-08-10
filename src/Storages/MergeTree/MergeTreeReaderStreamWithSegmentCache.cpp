@@ -18,7 +18,6 @@
 
 namespace DB
 {
-
 MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     const StorageID& storage_id_, const String& part_name_,
     const String& stream_name_, DiskPtr disk_, size_t marks_count_,
@@ -32,7 +31,8 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     clockid_t clock_type_):
         marks_loader(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
-            settings_.save_marks_in_cache, mark_offset_, mark_size_)
+            settings_.save_marks_in_cache, mark_offset_, mark_size_, 1,
+            segment_cache_, storage_id_.uuid, part_name_)
 {
     size_t max_mark_range_bytes = 0;
     size_t sum_mark_range_bytes = 0;

@@ -4,6 +4,9 @@
 #include <IO/LimitReadBuffer.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include "Storages/MergeTree/MergeTreeReaderCNCH.h"
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
+#include "Common/Exception.h"
 
 namespace ProfileEvents
 {
@@ -18,9 +21,9 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE)
+static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size)
 {
-    return disk->readFile(path, {.buffer_size = buffer_size});
+    return disk->readFile(path, {.buffer_size = std::min(file_size, static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE))});
 }
 
 static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offset, size_t file_size)
@@ -216,13 +219,41 @@ void MergeTreeDataPartCNCH::loadIndex()
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
     size_t key_size = primary_key.column_names.size();
 
-    if (key_size)
+    if (!key_size)
+        return;
+
+    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
+    if (enable_disk_cache)
     {
-        auto data_file = openForReading(volume->getDisk(), getFullRelativeDataPath());
-        auto checksums = getChecksums();
-        auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
-        LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
-        index = loadIndexFromBuffer(buf, primary_key);
+        try
+        {
+            auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+            PrimaryIndexDiskCacheSegment segment(shared_from_this());
+            auto [cache_disk, segment_path] = disk_cache->get(segment.getSegmentName());
+            if (cache_disk && cache_disk->exists(segment_path))
+            {
+                auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
+                index = loadIndexFromBuffer(*cache_buf, primary_key);
+                return;
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException("Could not load index from disk cache");
+        }
+    }
+
+    auto checksums = getChecksums();
+    auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
+    auto data_file = openForReading(volume->getDisk(), getFullRelativeDataPath(), file_size);
+    LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
+    index = loadIndexFromBuffer(buf, primary_key);
+
+    if (enable_disk_cache)
+    {
+        auto index_seg = std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this());
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
 }
 
@@ -233,6 +264,28 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     if (deleted)
         return checksums;
 
+    const bool enable_disk_cache = storage.getSettings()->enable_local_disk_cache;
+    if (enable_disk_cache)
+    {
+        try
+        {
+            ChecksumsDiskCacheSegment checksums_segment(shared_from_this());
+            auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+            auto [cache_disk, segment_path] = disk_cache->get(checksums_segment.getSegmentName());
+            if (cache_disk && cache_disk->exists(segment_path))
+            {
+                auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
+                if (checksums->read(*cache_buf))
+                    assertEOF(*cache_buf);
+                return checksums;
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException("Could not load checksums from disk");
+        }
+    }
+
     String data_path = getFullRelativeDataPath();
     auto data_footer = loadPartDataFooter();
     const auto & checksum_file = data_footer["checksums.txt"];
@@ -240,7 +293,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     if (checksum_file.file_size == 0/* && isDeleted() */)
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_path);
+    auto data_file = openForReading(volume->getDisk(), data_path, checksum_file.file_size);
     LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
 
     if (checksums->read(buf))
@@ -284,6 +337,14 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     {
         std::lock_guard lock(checksums_mutex);
         checksums_ptr = checksums;
+    }
+
+    /// store in disk cache
+    if (enable_disk_cache)
+    {
+        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
+        auto disk_cache = DiskCacheFactory::instance().getDefault().first;
+        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
 
     return checksums;

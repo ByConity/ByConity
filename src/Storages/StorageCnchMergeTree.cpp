@@ -24,11 +24,15 @@
 #include <Parsers/queryToString.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <DataTypes/DataTypeTuple.h>
 
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
+#include <Storages/MergeTree/MergeTreePartition.h>
+#include <common/logger_useful.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
 
 
 namespace ProfileEvents
@@ -195,36 +199,6 @@ void StorageCnchMergeTree::read(
         throw Exception(exception_message, ErrorCodes::INDEX_NOT_USED);
     }
 
-    if (metadata_snapshot->hasPartitionKey())
-    {
-        std::optional<KeyCondition> minmax_idx_condition;
-        std::optional<PartitionPruner> partition_pruner;
-        const auto & partition_key = metadata_snapshot->getPartitionKey();
-        auto minmax_columns_names = MergeTreeMetaBase::getMinMaxColumnsNames(partition_key);
-
-        minmax_idx_condition.emplace(
-            query_info, local_context, minmax_columns_names, MergeTreeMetaBase::getMinMaxExpr(partition_key,
-            ExpressionActionsSettings::fromContext(local_context)));
-        partition_pruner.emplace(metadata_snapshot, query_info, local_context, false /* strict */);
-
-        if (settings.force_index_by_date && (minmax_idx_condition->alwaysUnknownOrTrue() && partition_pruner->isUseless()))
-        {
-            String msg = "Neither MinMax index by columns (";
-            bool first = true;
-            for (const String & col : minmax_columns_names)
-            {
-                if (first)
-                    first = false;
-                else
-                    msg += ", ";
-                msg += col;
-            }
-            msg += ") nor partition expr is used and setting 'force_index_by_date' is set";
-
-            throw Exception(msg, ErrorCodes::INDEX_NOT_USED);
-        }
-    }
-
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     String local_table_name = getCloudTableName(local_context);
@@ -282,22 +256,22 @@ void StorageCnchMergeTree::read(
     // if (need_read_memory_buffer)
     // {
     //     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-    //         header, processed_stage, QualifiedTableName{getDatabaseName(), getTableName()}, context.getExternalTables(), true, nullptr);
+    //         header, processed_stage, QualifiedTableName{getDatabaseName(), getTableName()}, local_context.getExternalTables(), true, nullptr);
 
-    //     const auto & buffer_workers = getMemoryBufferWorkers(context);
+    //     const auto & buffer_workers = getMemoryBufferWorkers(local_context);
     //     if (buffer_workers.empty())
     //         throw Exception("No memory buffer found for " + getStorageID().getNameForLogs() + " while try to read buffers", ErrorCodes::LOGICAL_ERROR);
 
     //     auto vw_name = "#temp_buffer_vw";
     //     auto worker_group_name = "#temp_buffer_wg";
-    //     auto buffer_worker_group = std::make_shared<WorkerGroupHandleImpl>(worker_group_name, WorkerGroupHandleSource::TEMP, vw_name, buffer_workers, context);
+    //     auto buffer_worker_group = std::make_shared<WorkerGroupHandleImpl>(worker_group_name, WorkerGroupHandleSource::TEMP, vw_name, buffer_workers, local_context);
 
     //     LOG_TRACE(
     //         log,
     //         "Create temporary worker group: " << buffer_worker_group->getQualifiedName()
     //                                           << " with size: " << buffer_worker_group->getHostWithPortsVec().size());
 
-    //     auto streams_from_buffers = ClusterProxy::executeQuery(select_stream_factory, buffer_worker_group, query_info.query, context, settings);
+    //     auto streams_from_buffers = ClusterProxy::executeQuery(select_stream_factory, buffer_worker_group, query_info.query, local_context, settings);
     //     streams.insert(streams.end(), streams_from_buffers.begin(), streams_from_buffers.end());
     // }
 
@@ -306,109 +280,47 @@ void StorageCnchMergeTree::read(
 }
 
 Strings StorageCnchMergeTree::selectPartitionsByPredicate(
-    const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, ContextPtr local_context)
+    const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context)
 {
-    Strings res_partitions;
-    // Mask is for recoding whether a part can be removed.
-    // 0 represents it can be removed.
-    std::vector<int> mask(partition_list.size(), 1);
+    /// Coarse grained partition prunner: filter out the partition which will definately not sastify the query predicate. The benefit
+    /// is 2-folded: (1) we can prune data parts and (2) we can reduce numbers of calls to catalog to get parts 's metadata.
+    /// Note that this step still leaves false-positive parts. For example, the partition key is `toMonth(date)` and the query
+    /// condition is `date > '2022-02-22' and date < '2022-03-22'` then this step won't eliminate any partition.
 
-    /// FIXME: Add this after supporting implicitWhere()
-    // const ASTSelectQuery & select_ast = typeid_cast<const ASTSelectQuery &>(*query_info.query);
+    /// The partition pruning rules come from 3 types:
+    /// (1) TTL
+    /// (2) Columns in predicate that exactly match the partition key
+    /// (3) `_partition_id` or `_partition_value` if they're in predicate
 
-    // if (select_ast.implicitWhere())
-    // {
-    //     // Get column for each partition key
-    //     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
-
-    //     for (auto & partition : partition_list)
-    //     {
-    //         auto & partition_key = partition->value;
-    //         for (size_t i = 0; i < partition_key.size(); ++i)
-    //             columns[i]->insert(partition_key[i]);
-    //         if (partition_key.size() != columns.size())
-    //             throw Exception("Partition-" + partition->getID(*this) + " value size-" + std::to_string(partition_key.size())
-    //                             + " is different with current partition key size-" + std::to_string(columns.size()),
-    //                             ErrorCodes::ILLEGAL_COLUMN);
-    //     }
-
-    //     auto names_and_types_list = partition_key_sample.getNamesAndTypesList();
-
-    //     ColumnsWithTypeAndName columns_with_type_and_name;
-
-    //     auto nt_iter = names_and_types_list.begin();
-    //     auto column_iter = columns.begin();
-    //     while (nt_iter != names_and_types_list.end() && column_iter != columns.end())
-    //     {
-    //         columns_with_type_and_name.emplace_back(std::move(*column_iter), nt_iter->type, nt_iter->name);
-    //         nt_iter++;
-    //         column_iter++;
-    //     }
-
-    //     // Get index of the column in ColumnsWithTypeAndName
-    //     std::map<String, size_t> nameToIdx;
-    //     for (size_t idx = 0; idx < columns_with_type_and_name.size(); ++idx)
-    //         nameToIdx.insert({columns_with_type_and_name[idx].name, idx});
-
-    //     ASTs conditions = getConditions(select_ast.implicitWhere());
-    //     for (const auto & condition : conditions)
-    //     {
-    //         try
-    //         {
-    //             filterCondition(condition, columns_with_type_and_name, nameToIdx, global_context, mask, query_info);
-    //         }
-    //         catch(Exception & e)
-    //         {
-    //             LOG_ERROR(log, e.message());
-    //             throw;
-    //         }
-    //     }
-    // }
-
-    // prune partition by partition level TTL
+    /// (1) Prune partition by partition level TTL
     TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
     if (table_ttl.definition_ast)
     {
         TxnTimestamp start_ts = local_context->getCurrentTransactionID();
         time_t query_time = start_ts.toSecond();
-        size_t removed_count = 0;
-
-        for (size_t i = 0; i < partition_list.size(); i++)
-        {
-            /// do not need prune by ttl if the partition has been marked as to be removed
-            if (!mask[i])
-                continue;
-            time_t metadata_ttl = getTTLForPartition(*partition_list[i]);
-            if (metadata_ttl && metadata_ttl < query_time)
-            {
-                mask[i] = 0;
-                removed_count++;
-            }
-        }
-        if (removed_count)
-            LOG_DEBUG(log, "Eliminate {} TTL expired partitions.", removed_count);
+        size_t prev_sz = partition_list.size();
+        std::erase_if(partition_list, [&](const auto & partition) {
+            time_t metadata_ttl = getTTLForPartition(*partition);
+            return metadata_ttl && metadata_ttl < query_time;
+        });
+        if (partition_list.size() < prev_sz)
+            LOG_DEBUG(log, "TTL rules droped {} expired partitions", prev_sz - partition_list.size());
     }
 
-    for (size_t i = 0; i < partition_list.size(); ++i)
-    {
-        /// When partition is in pass list keep this partition
-        if (!mask[i])
-            continue;
-        res_partitions.emplace_back(partition_list[i]->getID(*this));
-    }
-
-    const auto & partition_key = getInMemoryMetadata().getPartitionKey();
+    const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
     const auto & partition_key_sample = partition_key.sample_block;
     const auto & partition_key_expr = partition_key.expression;
+    Strings res_partitions;
 
     if (local_context->getSettingsRef().enable_partition_prune && partition_key_sample.columns() > 0)
     {
-        std::set<String> res_partition_set;
+        /// (2) Prune partitions if there's a column in predicate that exactly match the partition key 
         Names partition_key_columns;
         for (const auto & name : partition_key_sample)
         {
             partition_key_columns.emplace_back(name.name);
         }
+        
         KeyCondition partition_condition(query_info, local_context, partition_key_columns, partition_key_expr);
         DataTypes result;
         result.reserve(partition_key_sample.getDataTypes().size());
@@ -416,24 +328,49 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
         {
             result.push_back(DataTypeFactory::instance().get(data_type->getName(), data_type->getFlags()));
         }
-
-        for (auto & partition : partition_list)
-        {
+        size_t prev_sz = partition_list.size();
+        std::erase_if(partition_list, [&](const auto & partition) {
             const auto & partition_value = partition->value;
             std::vector<FieldRef> index_value(partition_value.begin(), partition_value.end());
-            if (partition_condition.mayBeTrueInRange(partition_key_columns.size(), index_value.data(), index_value.data(), result))
-                res_partition_set.emplace(partition->getID(*this));
-        }
-        LOG_DEBUG(log, "After partition prune part numbers from {} to {}", partition_list.size(), res_partition_set.size());
-        if (res_partitions.size() > res_partition_set.size())
+            auto res = partition_condition.mayBeTrueInRange(partition_key_columns.size(), index_value.data(), index_value.data(), result);
+            LOG_DEBUG(log, "Key condition {} is {} in [ ({}) - ({}) )", partition_condition.toString(), res, fmt::join(index_value, " "), fmt::join(index_value, " "));
+            return !res;
+        });
+        if (partition_list.size() < prev_sz)
+            LOG_DEBUG(log, "Query predicates on physical columns droped {} partitions", prev_sz - partition_list.size());
+
+        /// (3) Prune partitions if there's `_partition_id` or `_partition_value` in query predicate
+        bool has_partition_column = std::find_if(column_names_to_return.begin(), column_names_to_return.end(), [](const auto & name) {
+            return name == "_partition_id" || name == "_partition_value";
+        }) != column_names_to_return.end();
+
+        if (has_partition_column && !partition_list.empty())
         {
-            Strings temp_partitions = res_partitions;
-            res_partitions.clear();
-            for (String partition_id : temp_partitions)
-                if (res_partition_set.find(partition_id) != res_partition_set.end())
-                    res_partitions.emplace_back(partition_id);
+            Block partition_block = getBlockWithVirtualPartitionColumns(partition_list);
+            ASTPtr expression_ast;
+
+            /// Generate valid expressions for filtering
+            VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, partition_block, expression_ast);
+
+            /// Generate list of partition id that fit the query predicate
+            NameSet partition_ids;
+            if (expression_ast)
+            {
+                VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
+                partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
+            }
+            /// Prunning
+            prev_sz = partition_list.size();
+            std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
+                return partition_ids.find(partition->getID(*this)) == partition_ids.end();
+            });
+            if (partition_list.size() < prev_sz)
+                LOG_DEBUG(log, "Query predicates on `_partition_id` and `_partition_value` droped {} partitions", prev_sz - partition_list.size());
         }
     }
+    for (const auto & partition : partition_list)
+        res_partitions.emplace_back(partition->getID(*this));
+
     return res_partitions;
 }
 
@@ -445,78 +382,6 @@ static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
         column->insert(part->part_model_wrapper->name);
 
     return Block{ColumnWithTypeAndName(std::move(column), std::make_shared<DataTypeString>(), "_part")};
-}
-
-void StorageCnchMergeTree::eliminateParts(
-    ServerDataPartsVector & parts,
-    const ASTPtr & expression,
-    ContextPtr local_context,
-    const SelectQueryInfo & query_info) const
-{
-    const auto & partition_key_sample = getInMemoryMetadata().getPartitionKey().sample_block;
-
-    MutableColumns columns = partition_key_sample.cloneEmptyColumns();
-    for (const auto & part : parts)
-    {
-        const auto & partition_key = part->partition().value;
-        for (size_t i = 0; i < partition_key.size(); ++i)
-            columns[i]->insert(partition_key[i]);
-        if (partition_key.size() != columns.size())
-            throw Exception(
-                "Partition-" + part->name() + " partition.date value size-" + std::to_string(partition_key.size())
-                    + " is different with current partition key size-" + std::to_string(columns.size())
-                    + ".Try to add settings deduce_part_eliminate = 0.",
-                ErrorCodes::ILLEGAL_COLUMN);
-    }
-
-    auto names_and_types_list = partition_key_sample.getNamesAndTypesList();
-
-    ColumnsWithTypeAndName columns_with_type_and_name;
-
-    auto nt_iter = names_and_types_list.begin();
-    auto column_iter = columns.begin();
-    while (nt_iter != names_and_types_list.end() && column_iter != columns.end())
-    {
-        columns_with_type_and_name.emplace_back(std::move(*column_iter), nt_iter->type, nt_iter->name);
-        nt_iter++;
-        column_iter++;
-    }
-
-    // Get index of the column in ColumnsWithTypeAndName
-    std::map<String, size_t> name_to_idx;
-    for (size_t idx = 0; idx < columns_with_type_and_name.size(); ++idx)
-        name_to_idx.insert({columns_with_type_and_name[idx].name, idx});
-
-    // Mask is for recoding whether a part can be removed.
-    // 0 represents it can be removed.
-    std::vector<int> mask(parts.size(), 1);
-    ASTs conditions = getConditions(expression);
-    for (const auto & condition : conditions)
-    {
-        try
-        {
-            filterCondition(condition, columns_with_type_and_name, name_to_idx, local_context, mask, query_info);
-        }
-        catch (Exception & e)
-        {
-            LOG_ERROR(log, e.message());
-            throw;
-        }
-    }
-
-    // Manually implementation of erase remove_if idiom
-    // 1 - move all parts need to be removed to end of the vector
-    // 2 - erase all parts need to be removed
-    size_t first_to_remove = 0;
-    for (size_t i = 0; i < parts.size(); ++i)
-    {
-        if (mask[i])
-        {
-            std::swap(parts[first_to_remove], parts[i]);
-            std::swap(mask[first_to_remove++], mask[i]);
-        }
-    }
-    parts.erase(parts.begin() + first_to_remove, parts.end());
 }
 
 time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & partition) const
@@ -566,12 +431,19 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
         throw Exception("Unexpected type of result ttl column", ErrorCodes::LOGICAL_ERROR);
 }
 
-ServerDataPartsVector & StorageCnchMergeTree::pruneParts(
+ServerDataPartsVector StorageCnchMergeTree::pruneParts(
     const Names & column_names_to_return,
     ServerDataPartsVector & parts,
     ContextPtr local_context,
     const SelectQueryInfo & query_info) const
 {
+    /// Fine grained parts prunning by:
+    /// (1) partition min-max
+    /// (2) min-max index
+    /// (3) part name (if _part is in the query) and uuid (todo)
+    /// (4) primary key (TODO)
+    /// (5) block id for deduped part (TODO)
+
     bool part_column_queried = false;
 
     for (const String & name : column_names_to_return)
@@ -580,29 +452,39 @@ ServerDataPartsVector & StorageCnchMergeTree::pruneParts(
             part_column_queried = true;
     }
 
-    // Extra implicit part selection based on where_expression deduction.
-    // We believe all the partition columns which compared with const have been
-    // moved to implicit_where from where and prewhere. So we do filter parts only
-    // by select.implicitwhere_expression.
-    /// FIXME: Add this after supporting implicitWhere()
-    // if (context->getSettingsRef().deduce_part_eliminate && partition_key_expr)
-    // {
-    //     const ASTSelectQuery & select = typeid_cast<const ASTSelectQuery &>(*query_info.query);
-    //     if (select.implicitWhere())
-    //     {
-    //         try
-    //         {
-    //             size_t prev_sz = parts.size();
-    //             eliminateParts(parts, select.implicitWhere(), context, query_info);
-    //             LOG_DEBUG(log, "Deduced part elimination rule shrink from " << prev_sz << " to " << parts.size() << " parts");
-    //         }
-    //         catch (...)
-    //         {
-    //             LOG_DEBUG(log, "Failed of deducing part elimination rule");
-    //             throw;
-    //         }
-    //     }
-    // }
+    const Settings & settings = local_context->getSettingsRef();
+    std::optional<PartitionPruner> partition_pruner;
+    std::optional<KeyCondition> minmax_idx_condition;
+    DataTypes minmax_columns_types;
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+
+    if (metadata_snapshot->hasPartitionKey())
+    {
+        const auto & partition_key = metadata_snapshot->getPartitionKey();
+        auto minmax_columns_names = getMinMaxColumnsNames(partition_key);
+        minmax_columns_types = getMinMaxColumnsTypes(partition_key);
+
+        minmax_idx_condition.emplace(
+            query_info, local_context, minmax_columns_names, getMinMaxExpr(partition_key, ExpressionActionsSettings::fromContext(local_context)));
+        partition_pruner.emplace(metadata_snapshot, query_info, local_context, false /* strict */);
+
+        if (settings.force_index_by_date && (minmax_idx_condition->alwaysUnknownOrTrue() && partition_pruner->isUseless()))
+        {
+            String msg = "Neither MinMax index by columns (";
+            bool first = true;
+            for (const String & col : minmax_columns_names)
+            {
+                if (first)
+                    first = false;
+                else
+                    msg += ", ";
+                msg += col;
+            }
+            msg += ") nor partition expr is used and setting 'force_index_by_date' is set";
+
+            throw Exception(msg, ErrorCodes::INDEX_NOT_USED);
+        }
+    }
 
     /// If `_part` virtual column is requested, we try to use it as an index.
     Block virtual_columns_block = getBlockWithPartColumn(parts);
@@ -611,53 +493,52 @@ ServerDataPartsVector & StorageCnchMergeTree::pruneParts(
 
     auto part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
 
-    const auto & partition_key = getInMemoryMetadata().getPartitionKey();
+    size_t prev_sz = parts.size();
+    size_t empty = 0, partition_minmax = 0, minmax_idx = 0, part_value = 0;
+    std::erase_if(parts, [&](const auto & part) {
+        if (part->isEmpty())
+        {
+            ++empty;
+            return true;
+        }
+        else if (partition_pruner && partition_pruner->canBePruned(*part))
+        {
+            ++partition_minmax;
+            return true;
+        }
+        else if (minmax_idx_condition
+            && !minmax_idx_condition->checkInHyperrectangle(part->minmax_idx()->hyperrectangle, minmax_columns_types).can_be_true)
+        {
+            ++minmax_idx;
+            return true;
+        }
+        else if (part_values.find(part->name()) == part_values.end())
+        {
+            ++part_value;
+            return true;
+        }
 
-    std::optional<KeyCondition> minmax_idx_condition;
-    if (getInMemoryMetadata().hasPartitionKey())
-    {
-        minmax_idx_condition.emplace(query_info, local_context, MergeTreeData::getMinMaxColumnsNames(partition_key),
-                                    MergeTreeData::getMinMaxExpr(partition_key, ExpressionActionsSettings::fromContext(local_context)));
-    }
+        return false;
+    });
 
-    /// Select the parts in which there can be data that satisfy `minmax_idx_condition` and that match the condition on `_part`,
-    ///  as well as `max_block_number_to_read`.
-    {
-        parts.erase(
-            std::remove_if(
-                parts.begin(),
-                parts.end(),
-                [&](const auto & part) {
-                    if (part_values.find(part->name()) == part_values.end())
-                        return true;
-                    if (part->isEmpty())
-                        return true;
-                    /// When minmax index parallelogram size equal to minmax_idx_column_types size do minmax check
-                    /// When parallelogram size is same with minmax_idx_column_types do min max check
-                    /// In case of add partition key may cause this parameters have different size
-                    if (minmax_idx_condition && part->minmax_idx()->hyperrectangle.size() == minmax_idx_column_types.size()
-                        && !minmax_idx_condition->checkInHyperrectangle(part->minmax_idx()->hyperrectangle, minmax_idx_column_types).can_be_true)
-                        return true;
-                    return false;
-                }),
-            parts.end());
-    }
+    if (parts.size() < prev_sz)
+        LOG_DEBUG(log, "Parts prunning rules droped {} parts, include {} empty parts, {} parts by partition minmax, {} parts by minmax index, {} parts by part value", prev_sz - parts.size(), empty, partition_minmax, minmax_idx, part_value);
 
-    return parts;
+    return std::move(parts);
 }
 
 /// Add related tables for active timestamps
-static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & insert_query, ContextPtr context)
+static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & insert_query, ContextPtr local_context)
 {
     if (!insert_query.select)
         return;
 
-    auto txn = context->getCurrentTransaction();
+    auto txn = local_context->getCurrentTransaction();
     if (!txn)
         return;
 
-    auto & txn_coordinator = context->getCnchTransactionCoordinator();
-    auto current_database = context->getCurrentDatabase();
+    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
+    auto current_database = local_context->getCurrentDatabase();
 
     ASTs related_tables;
     bool has_table_func = false;
@@ -672,7 +553,7 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
         if (db_and_table.database == "system" || db_and_table.database == "default")
             continue;
 
-        if (auto table = DatabaseCatalog::instance().tryGetTable(StorageID{db_and_table.database, db_and_table.table}, context))
+        if (auto table = DatabaseCatalog::instance().tryGetTable(StorageID{db_and_table.database, db_and_table.table}, local_context))
             txn_coordinator.touchActiveTimestampByTable(table->getStorageID(), txn);
     }
 }
@@ -847,7 +728,7 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
             LOG_DEBUG(log, "{}", dependency_create_querie);
         worker_client->sendCreateQueries(local_context, dependency_create_queries);
 
-        /// Ensure worker session context rsource could be released
+        /// Ensure worker session local_context rsource could be released
         if (auto session_resource = local_context->tryGetCnchServerResource())
         {
             std::vector<size_t> index_values{index};
@@ -867,7 +748,7 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
     }
 }
 
-HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr query_context)
+HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
 {
     using ResourceManagement::VirtualWarehouseType;
     if (getSettings()->cnch_enable_memory_buffer)
@@ -902,7 +783,7 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
     }
     else
     {
-        String vw_name = query_context->getSettingsRef().virtual_warehouse_write;
+        String vw_name = local_context->getSettingsRef().virtual_warehouse_write;
         if (vw_name.empty())
             vw_name = getSettings()->cnch_vw_write;
 
@@ -910,7 +791,7 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
             throw Exception("Expected a nonempty vw name. Please specify it in query or table settings", ErrorCodes::BAD_ARGUMENTS);
 
         // No fixed workers for insertion, pick one randomly from worker pool
-        auto vw_handle = query_context->getVirtualWarehousePool().get(vw_name);
+        auto vw_handle = local_context->getVirtualWarehousePool().get(vw_name);
         HostWithPortsVec  res;
         for (const auto & [_, wg] : vw_handle->getAll())
         {
@@ -958,7 +839,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
 
     // auto assignment = assignCnchParts(worker_group, parts);
 
-    // ThreadPool allocate_pool(std::min<UInt64>(context.getSettingsRef().parts_preallocate_pool_size, num_of_workers));
+    // ThreadPool allocate_pool(std::min<UInt64>(local_context.getSettingsRef().parts_preallocate_pool_size, num_of_workers));
 
     // for (size_t i = 0; i < num_of_workers; ++i)
     // {
@@ -968,7 +849,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     //         if (it == assignment.end())
     //             return;
 
-    //         auto result = worker_clients[i]->checkDataParts(context.getCurrentCnchXID(), *this, local_table_name, create_table_query, it->second);
+    //         auto result = worker_clients[i]->checkDataParts(local_context.getCurrentCnchXID(), *this, local_table_name, create_table_query, it->second);
 
     //         {
     //            std::lock_guard lock(mutex);
@@ -1021,7 +902,7 @@ StorageCnchMergeTree::getPrunedServerParts(const Names & column_names_to_return,
         Stopwatch watch;
         auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
         // TEST_LOG(testlog, "get partition list.");
-        Strings pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, local_context);
+        Strings pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
         // TEST_LOG(testlog, "select partitions by predicate.");
         if (cur_txn->isSecondary())
         {
@@ -1125,8 +1006,8 @@ void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataP
     cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
 
-    // if (context.getSettingsRef().enable_virtual_part)
-    //     setVirtualPartSize(context, parts, worker_group->getReadWorkers().size());
+    // if (local_context.getSettingsRef().enable_virtual_part)
+    //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
 
     cnch_resource->addDataParts(getStorageUUID(), parts);
 }
@@ -1150,10 +1031,10 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
-ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ContextPtr query_context, ServerDataPartsVector && data_parts)
+ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ContextPtr local_context, ServerDataPartsVector && data_parts)
 {
-    Int64 primary_txn_id = query_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
-    TxnTimestamp start_time = query_context->getCurrentTransaction()->getStartTime();
+    Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
+    TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
     ServerDataPartsVector target_parts;
     std::map<TxnTimestamp, bool> success_secondary_txns;
     auto check_success_txn = [&success_secondary_txns, this] (const TxnTimestamp & txn_id) -> bool
@@ -1171,14 +1052,14 @@ ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(Con
             && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()))
             target_parts.push_back(part);
     });
-    getCommittedServerDataParts(data_parts, start_time, &(*query_context->getCnchCatalog()));
+    getCommittedServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()));
     std::move(data_parts.begin(), data_parts.end(), std::back_inserter(target_parts));
     return target_parts;
 }
 
-void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands*/, ContextPtr /*context*/) const
+void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands*/, ContextPtr /*local_context*/) const
 {
-    //checkAlterInCnchServer(commands, context);
+    //checkAlterInCnchServer(commands, local_context);
     //checkAlterSettings(commands);
 }
 
@@ -1221,15 +1102,43 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 void StorageCnchMergeTree::truncate(
     const ASTPtr & /*query*/,
     const StorageMetadataPtr & /* metadata_snapshot */,
-    ContextPtr /* context */,
+    ContextPtr /* local_context */,
     TableExclusiveLockHolder &)
 {
-    //if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
+    //if (forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
     //    return;
 }
 
 StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
 {
     return local_store_volume;
+}
+
+Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
+{
+    DataTypePtr partition_value_type = getPartitionValueType();
+    bool has_partition_value = typeid_cast<const DataTypeTuple *>(partition_value_type.get());
+    Block block{
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")
+    };
+
+
+    MutableColumns columns = block.mutateColumns();
+
+    auto & partition_id_column = columns[0];
+    auto & partition_value_column = columns[1];
+
+    for (const auto & partition : partition_list)
+    {
+        partition_id_column->insert(partition->getID(*this));
+        Tuple tuple(partition->value.begin(), partition->value.end());
+        if (has_partition_value)
+            partition_value_column->insert(std::move(tuple));
+    }
+    block.setColumns(std::move(columns));
+    if (!has_partition_value)
+        block.erase(block.getPositionByName("_partition_value"));
+    return block;
 }
 } // end namespace DB

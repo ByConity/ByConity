@@ -6,6 +6,7 @@ namespace DB
 {
 
 struct MergeTreeIndexGranularityInfo;
+class IDiskCache;
 
 class MergeTreeMarksLoader
 {
@@ -22,7 +23,10 @@ public:
         bool save_marks_in_cache_,
         off_t mark_file_offset_,
         size_t mark_file_size_,
-        size_t columns_in_mark_ = 1);
+        size_t columns_in_mark_ = 1,
+        IDiskCache * disk_cache_ = nullptr,
+        UUID storage_uuid_ = {},
+        const String & part_name_ = {});
 
     const MarkInCompressedFile & getMark(size_t row_index, size_t column_index = 0);
 
@@ -44,6 +48,10 @@ private:
     bool save_marks_in_cache = false;
     size_t columns_in_mark;
     MarkCache::MappedPtr marks;
+
+    IDiskCache * disk_cache;
+    UUID storage_uuid;
+    String part_name;
 
     void loadMarks();
     MarkCache::MappedPtr loadMarksImpl();

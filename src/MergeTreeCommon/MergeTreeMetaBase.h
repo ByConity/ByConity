@@ -141,8 +141,6 @@ public:
     StoragePolicyPtr getStoragePolicy() const override;
     virtual StoragePolicyPtr getLocalStoragePolicy() const;
 
-    bool supportsPrewhere() const override { return true; }
-
     bool supportsFinal() const override
     {
         return merging_params.mode == MergingParams::Collapsing
@@ -155,6 +153,8 @@ public:
     bool supportsSubcolumns() const override { return true; }
 
     NamesAndTypesList getVirtuals() const override;
+
+    bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand , ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override;
 
     /// Logger
     const String & getLogName() const { return log_name; }
@@ -496,6 +496,9 @@ protected:
     bool canUsePolymorphicParts(const MergeTreeSettings & settings, String * out_reason = nullptr) const;
 
     static void checkSampleExpression(const StorageInMemoryMetadata & metadata, bool allow_sampling_expression_not_in_primary_key);
+
+    /// Checks whether the column is in the primary key, possibly wrapped in a chain of functions with single argument.
+    bool isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(const ASTPtr & node, const StorageMetadataPtr & metadata_snapshot) const;
 
 private:
     // Record all query ids which access the table. It's guarded by `query_id_set_mutex` and is always mutable.
