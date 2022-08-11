@@ -45,6 +45,13 @@ public:
         SECONDARY_QUERY = 2,    /// Query that was initiated by another query for distributed or ON CLUSTER query execution.
     };
 
+    enum class ClientType : uint8_t
+    {
+        UNKNOWN = 0,
+        CNCH_SERVER = 1,
+        CNCH_WORKER = 2,  /// can be Write Worker or Aggregation Worker
+    };
+
 
     QueryKind query_kind = QueryKind::NO_QUERY;
 
@@ -96,6 +103,9 @@ public:
     UInt16 rpc_port = 0;
     UInt32 brpc_protocol_version = 0;
 
+    /// Client type
+    ClientType client_type = ClientType::UNKNOWN;
+
     /// Comma separated list of forwarded IP addresses (from X-Forwarded-For for HTTP interface).
     /// It's expected that proxy appends the forwarded address to the end of the list.
     /// The element can be trusted only if you trust the corresponding proxy.
@@ -115,8 +125,9 @@ public:
       * Only values that are not calculated automatically or passed separately are serialized.
       * Revisions are passed to use format that server will understand or client was used.
       */
-    void write(WriteBuffer & out, const UInt64 server_protocol_revision) const;
-    void read(ReadBuffer & in, const UInt64 client_protocol_revision);
+    void write(WriteBuffer & out, const UInt64 server_protocol_revision, UInt16 rpc_port_ = 0,
+        ClientType client_type_ = ClientType::UNKNOWN) const;
+    void read(ReadBuffer & in, const UInt64 client_protocol_revision, bool cnch_query = false);
 
     /// Initialize parameters on client initiating query.
     void setInitialQuery();

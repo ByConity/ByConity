@@ -21,7 +21,7 @@ namespace ErrorCodes
 }
 
 //TODO 
-void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision) const
+void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision, UInt16 rpc_port_, ClientType client_type_) const
 {
     if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
         throw Exception("Logical error: method ClientInfo::write is called for unsupported server revision", ErrorCodes::LOGICAL_ERROR);
@@ -91,10 +91,16 @@ void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision)
             writeBinary(uint8_t(0), out);
         }
     }
+
+    if (rpc_port_)
+        writeVarUInt(rpc_port_, out);
+
+    if (client_type_ != ClientType::UNKNOWN)
+        writeBinary(uint8_t(client_type_), out);
 }
 
 
-void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
+void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision, bool cnch_query)
 {
     if (client_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)
         throw Exception("Logical error: method ClientInfo::read is called for unsupported client revision", ErrorCodes::LOGICAL_ERROR);
@@ -171,6 +177,15 @@ void ClientInfo::read(ReadBuffer & in, const UInt64 client_protocol_revision)
             readBinary(client_trace_context.tracestate, in);
             readBinary(client_trace_context.trace_flags, in);
         }
+    }
+
+    if (cnch_query)
+    {
+        readVarUInt(rpc_port, in);
+
+        uint8_t read_client_type = 0;
+        readBinary(read_client_type, in);
+        client_type = ClientType(read_client_type);
     }
 }
 

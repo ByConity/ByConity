@@ -26,6 +26,8 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include "Common/tests/gtest_global_context.h"
@@ -34,6 +36,8 @@
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/processColumnTransformers.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <CloudServices/CnchServerResource.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnNullable.h>
 
@@ -186,12 +190,50 @@ BlockIO InterpreterInsertQuery::execute()
         }
     }
 
+    /// Directly forward the query to cnch worker if select or infile
+    if (getContext()->getServerType() == ServerType::cnch_server && (query.select || query.in_file) && table->isRemote())
+    {
+        /// Handle the insert commit for insert select/infile case in cnch server.
+        table->write(query_ptr, metadata_snapshot, getContext());
+
+        bool enable_staging_area_for_write = settings.enable_staging_area_for_write;
+        if (const auto * cnch_table = dynamic_cast<const StorageCnchMergeTree *>(table.get());
+            cnch_table && metadata_snapshot->hasUniqueKey() && !enable_staging_area_for_write)
+        {
+            /// for unique table, insert select|infile is committed from worker side
+            return {};
+        }
+        else
+        {
+            TransactionCnchPtr txn = getContext()->getCurrentTransaction();
+            txn->setMainTableUUID(table->getStorageUUID());
+            txn->commitV2();
+            LOG_TRACE(&Logger::get("InterpreterInsertQuery::execute"), "Finish insert infile/select commit in cnch server.");
+            return {};
+        }
+    }
+
     BlockOutputStreams out_streams;
     if (!is_distributed_insert_select || query.watch)
     {
         size_t out_streams_size = 1;
         if (query.select)
         {
+            auto insert_select_context = Context::createCopy(context);
+            /// Cannot use trySetVirtualWarehouseAndWorkerGroup, because it only works in server node
+            if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(table.get()))
+            {
+                auto worker_group = getWorkerGroupForTable(*cloud_table, insert_select_context);
+                insert_select_context->setCurrentWorkerGroup(worker_group);
+                /// set worker group for select query
+                insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
+                if (auto session_resource = insert_select_context->getCnchServerResource())
+                    session_resource->setWorkerGroup(worker_group);
+                LOG_DEBUG(
+                    &Logger::get("VirtualWarehouse"),
+                    "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());
+            }
+
             bool is_trivial_insert_select = false;
 
             if (settings.optimize_trivial_insert_select)
@@ -228,18 +270,17 @@ BlockIO InterpreterInsertQuery::execute()
                         new_settings.preferred_block_size_bytes = settings.min_insert_block_size_bytes;
                 }
 
-                auto new_context = Context::createCopy(context);
-                new_context->setSettings(new_settings);
+                insert_select_context->setSettings(new_settings);
 
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, new_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
             else
             {
                 /// Passing 1 as subquery_depth will disable limiting size of intermediate result.
                 InterpreterSelectWithUnionQuery interpreter_select{
-                    query.select, getContext(), SelectQueryOptions(QueryProcessingStage::Complete, 1)};
+                    query.select, insert_select_context, SelectQueryOptions(QueryProcessingStage::Complete, 1)};
                 res = interpreter_select.execute();
             }
 

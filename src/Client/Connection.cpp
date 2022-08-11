@@ -539,8 +539,11 @@ void Connection::sendCnchQuery(
     const Settings * settings,
     const ClientInfo * client_info,
     bool with_pending_data,
-    UInt16)
+    ClientInfo::ClientType client_type,
+    UInt16 server_rpc_port)
 {
+    if (client_type == ClientInfo::ClientType::UNKNOWN)
+        throw Exception("Client type should be SERVER or WORKER for CNCH Queries", ErrorCodes::LOGICAL_ERROR);
 
     if (!connected)
         connect(timeouts);
@@ -573,10 +576,10 @@ void Connection::sendCnchQuery(
     {
         // TODO:
         // client_info->rpc_port = server_rpc_port;
-        client_info->write(*out, server_revision);
+        client_info->write(*out, server_revision, server_rpc_port, client_type);
     }
     else
-        ClientInfo().write(*out, server_revision);
+        ClientInfo().write(*out, server_revision, server_rpc_port, client_type);
 
     /// Per query settings.
     if (settings)

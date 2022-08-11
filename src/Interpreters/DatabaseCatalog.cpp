@@ -269,7 +269,8 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         {
             assert(!db_and_table.first && !db_and_table.second);
             if (exception)
-                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} doesn't exist", table_id.getNameForLogs());
+                exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} with uuid: {} doesn't exist", table_id.getNameForLogs(),
+                    UUIDHelpers::UUIDToString(table_id.uuid));
             return {};
         }
 

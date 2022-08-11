@@ -23,6 +23,7 @@
 
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/ClientInfo.h>
 
 #include <Compression/ICompressionCodec.h>
 
@@ -178,6 +179,7 @@ public:
         const Settings * settings = nullptr,
         const ClientInfo * client_info = nullptr,
         bool with_pending_data = false,
+        ClientInfo::ClientType client_type = ClientInfo::ClientType::UNKNOWN,
         UInt16 server_rpc_port = 0);
 
     void sendPlanSegment(

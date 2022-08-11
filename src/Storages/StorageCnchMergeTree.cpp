@@ -735,9 +735,9 @@ BlockOutputStreamPtr StorageCnchMergeTree::write(const ASTPtr & query, const Sto
             session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
         }
 
-        // LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
-        // /// TODO: send insert query by rpc.
-        // sendQueryPerShard(local_context, query_statement, *write_shard_ptr);
+        LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+        /// TODO: send insert query by rpc.
+        sendQueryPerShard(local_context, query_statement, *write_shard_ptr);
 
         return nullptr;
     }

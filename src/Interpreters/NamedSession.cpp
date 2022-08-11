@@ -49,6 +49,8 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
     {
         if (throw_if_not_found)
             throw Exception("Session not found.", ErrorCodes::SESSION_NOT_FOUND);
+        else
+            LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, and create a new one");
 
         /// Create a new session from current context.
         it = sessions.insert(std::make_pair(session_id, std::make_shared<NamedSession>(session_id, context, timeout, *this))).first;

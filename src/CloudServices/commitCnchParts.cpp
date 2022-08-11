@@ -109,6 +109,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     }
 
     auto txn_id = curr_txn->getTransactionID();
+
     // write undo buffer first before dump to vfs
     UndoResources undo_resources;
     for (const auto & part : temp_parts)
