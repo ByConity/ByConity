@@ -1,7 +1,6 @@
 #include <Storages/PartCacheManager.h>
 
 #include <Core/Types.h>
-#include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -30,23 +29,51 @@ PartCacheManager::PartCacheManager(Context & context_)
 {
     partCachePtr = std::make_shared<CnchDataPartCache>(context.getConfigRef().getUInt("size_of_cached_parts", 100000));
     metrics_updater = context.getSchedulePool().createTask("PartMetricsUpdater",[this](){
-        updateTablePartitionsMetrics(false);
+        try
+        {
+            updateTablePartitionsMetrics(false);
+        }
+        catch(...)
+        {
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+        }
         /// schedule every 24 hours, maybe could be configurable later
         this->metrics_updater->scheduleAfter(24*60*60*1000);
     });
     metrics_initializer = context.getSchedulePool().createTask("PartMetricsInitializer",[this](){
-        updateTablePartitionsMetrics(true);
+        try
+        {
+            updateTablePartitionsMetrics(true);
+        }
+        catch(...)
+        {
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+        }
         /// schedule every 3 seconds
         this->metrics_initializer->scheduleAfter(3*1000);
     });
     meta_lock_cleaner = context.getSchedulePool().createTask("MetaLockCleaner", [this](){
-        cleanMetaLock();
+        try
+        {
+            cleanMetaLock();
+        }
+        catch(...)
+        {
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+        }
         /// schedule every hour.
         this->meta_lock_cleaner->scheduleAfter(3*1000);
     });
     active_table_loader = context.getSchedulePool().createTask("ActiveTablesLoader", [this](){
         // load tables when server start up.
-        loadActiveTables();
+        try
+        {
+            loadActiveTables();
+        }
+        catch(...)
+        {
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+        }
     });
     if (context.getServerType() == ServerType::cnch_server)
     {
@@ -569,8 +596,13 @@ void PartCacheManager::cleanMetaLock()
 void PartCacheManager::loadActiveTables()
 {
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Reloading active tables.");
-    auto cnch_catalog = context.getCnchCatalog();
-    auto tables_meta = cnch_catalog->getAllTables();
+    auto tables_meta = context.getCnchCatalog()->getAllTables();
+    if (tables_meta.empty())
+        return;
+    /// prepare session context to create storage from metadata.
+    auto session_context = Context::createCopy(context.getGlobalContext());
+    session_context->makeSessionContext();
+    session_context->makeQueryContext();
 
     auto rpc_port = context.getRPCPort();
     for (auto & table_meta : tables_meta)
@@ -580,7 +612,7 @@ void PartCacheManager::loadActiveTables()
         auto entry = getTableMeta(RPCHelpers::createUUID(table_meta.uuid()));
         if (!entry)
         {
-            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(context.shared_from_this(), &table_meta);
+            StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(session_context, &table_meta);
 
             auto host_port = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
             if (host_port.empty())
