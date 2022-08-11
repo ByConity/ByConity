@@ -90,7 +90,7 @@ public:
 
     /// select query has database, table and table function names as AST pointers
     /// Creates a copy of query, changes database, table and table function names.
-    static ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table, UInt64 txn_id = 0);
+    static ASTPtr rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table);
 
     StorageID table_id;
     String remote_database;
