@@ -16,6 +16,7 @@
 #include <boost/algorithm/string.hpp>
 #include <Poco/Base64Encoder.h>
 #include <Poco/SHA1Engine.h>
+#include <common/defines.h>
 
 #include <sstream>
 #include <iomanip>
@@ -568,8 +569,7 @@ bool KeeperStorage::createNode(
             [child_path](KeeperStorage::Node & parent)
             {
                 parent.addChild(child_path);
-                // TODO:
-                // chassert(parent.stat.numChildren == static_cast<int32_t>(parent.getChildren().size()));
+                chassert(parent.stat.numChildren == static_cast<int32_t>(parent.getChildren().size()));
             }
     );
 
@@ -597,7 +597,7 @@ bool KeeperStorage::removeNode(const std::string & path, int32_t version)
         [child_basename = getBaseName(node_it->key)](KeeperStorage::Node & parent)
         {
             parent.removeChild(child_basename);
-            // chassert(parent.stat.numChildren == static_cast<int32_t>(parent.getChildren().size()));
+            chassert(parent.stat.numChildren == static_cast<int32_t>(parent.getChildren().size()));
         }
     );
 
