@@ -1084,26 +1084,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setDiskUniqueRowStoreCache(disk_urs_meta_cache_size, disk_urs_file_cache_size);
     global_context->setDiskUniqueRowStoreBlockCache(disk_urs_data_cache_size);
 
-    if (global_context->getServerType() == ServerType::cnch_server)
-    {
-        /// Only server need txn coordinator and rely on schedule pool config.
-        global_context->initCnchTransactionCoordinator();
-
-        /// Initialize table and part cache, only server need part cache manager and storage cache.
-        // global_context->setPartCacheManager();
-        // if (config().getBool("enable_cnch_storage_cache", true))
-        // {
-        //     LOG_INFO(log, "Init cnch storage cache.");
-        //     global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
-        // }
-
-        /// only server need start up server manager
-        global_context->setCnchServerManager();
-
-        // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
-        // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
-        // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
-    }
 
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
@@ -1113,6 +1093,26 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->setCnchTopologyMaster();
 
+    if (global_context->getServerType() == ServerType::cnch_server)
+    {
+        /// Only server need txn coordinator and rely on schedule pool config.
+        global_context->initCnchTransactionCoordinator();
+
+        /// Initialize table and part cache, only server need part cache manager and storage cache.
+        global_context->setPartCacheManager();
+        if (config().getBool("enable_cnch_storage_cache", true))
+        {
+            LOG_INFO(log, "Init cnch storage cache.");
+            global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
+        }
+
+        /// only server need start up server manager
+        global_context->setCnchServerManager();
+
+        // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
+        // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
+        // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
+    }
 
 #if USE_HDFS
     /// Init hdfs user

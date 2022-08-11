@@ -35,14 +35,16 @@ CnchTopologyMaster::CnchTopologyMaster(Context & context_)
                     if (topologies.front().getExpiration() > last_topology.front().getExpiration() + 2*context.getSettings().topology_lease_life_ms.totalMilliseconds())
                     {
                         LOG_WARNING(log, "Reset part and table cache because of topology change");
-                        context.getPartCacheManager()->reset();
+                        if (context.getPartCacheManager())
+                            context.getPartCacheManager()->reset();
                         if (context.getCnchStorageCache())
                             context.getCnchStorageCache()->reset();
                     }
                     else if (!HostWithPorts::isExactlySameVec(topologies.front().getServerList(), last_topology.front().getServerList()))
                     {
                         LOG_WARNING(log, "Invalid outdated part and table cache because of topology change");
-                        context.getPartCacheManager()->invalidCacheWithNewTopology(topologies.front().getServerList());
+                        if (context.getPartCacheManager())
+                            context.getPartCacheManager()->invalidCacheWithNewTopology(topologies.front().getServerList());
                         /// TODO: invalid table cache with new topology.
                         if (context.getCnchStorageCache())
                             context.getCnchStorageCache()->reset();
