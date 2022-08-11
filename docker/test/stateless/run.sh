@@ -19,6 +19,9 @@ cp -r clickhouse/share/clickhouse-test /usr/share/
 # prepare test_output directory
 mkdir -p test_output
 mkdir -p sanitizer_log_output
+cp /home/code/.codebase/ci_scripts/ce_config/config.xml /etc/clickhouse-server/config.xml
+cp /home/code/.codebase/ci_scripts/ce_config/users.xml /etc/clickhouse-server/users.xml
+cp -r /home/code/tests/queries/. /usr/share/clickhouse-test/queries/.
 
 # For flaky check we also enable thread fuzzer
 if [ "$NUM_TRIES" -gt "1" ]; then
@@ -68,8 +71,6 @@ if [[ -n "$USE_DATABASE_REPLICATED" ]] && [[ "$USE_DATABASE_REPLICATED" -eq 1 ]]
 fi
 
 sleep 5
-
-cp -r /home/code/tests/queries/. /usr/share/clickhouse-test/queries/.
 
 function run_tests()
 {
