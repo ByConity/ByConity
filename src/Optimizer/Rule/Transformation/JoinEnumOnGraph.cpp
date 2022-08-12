@@ -19,7 +19,7 @@ PatternPtr JoinEnumOnGraph::getPattern() const
         ->with({Patterns::tree(), Patterns::tree()});
 }
 
-static std::pair<Names, Names> createJoinCondition(UnionFind & union_find, const std::vector<std::pair<String, String>> & edges)
+static std::pair<Names, Names> createJoinCondition(UnionFind<String> & union_find, const std::vector<std::pair<String, String>> & edges)
 {
     // extract equivalent map{representative symbol, all the symbols in the same equivalent set}
     std::unordered_map<String, std::vector<String>> left_set_to_symbols;
@@ -165,7 +165,7 @@ static ASTPtr getJoinFilter(const ASTPtr & all_filter, std::set<String> & left_s
 static GroupId buildJoinNode(
     OptContextPtr & context,
     std::vector<GroupId> groups,
-    UnionFind & union_find,
+    UnionFind<String> & union_find,
     Graph & graph,
     const std::set<String> & require_names,
     const ASTPtr & all_filter)

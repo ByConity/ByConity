@@ -14,6 +14,7 @@
 namespace DB
 {
 class ProjectionStep;
+struct AggregateDescription;
 
 namespace Utils
 {
@@ -27,6 +28,7 @@ namespace Utils
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
+    ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
 
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`

@@ -323,6 +323,10 @@ struct Analysis
     void setRelationTypeCoercion(IAST &, const DataTypes &);
     bool hasRelationTypeCoercion(IAST &);
     const DataTypes & getRelationTypeCoercion(IAST &);
+
+    /// Non-deterministic functions
+    std::unordered_set<IAST *> non_deterministic_functions;
+    void addNonDeterministicFunctions(IAST & ast);
 };
 
 }

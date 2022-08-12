@@ -160,6 +160,8 @@
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <TSO/TSOClient.h>
 #include <DaemonManager/DaemonManagerClient.h>
+#include <Optimizer/OptimizerMetrics.h>
+
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -4364,6 +4366,11 @@ void Context::createPlanNodeIdAllocator()
 void Context::createSymbolAllocator()
 {
     symbol_allocator = std::make_shared<SymbolAllocator>();
+}
+
+void Context::createOptimizerMetrics()
+{
+    optimizer_metrics = std::make_shared<OptimizerMetrics>();
 }
 
 std::shared_ptr<Statistics::StatisticsMemoryStore> Context::getStatisticsMemoryStore()

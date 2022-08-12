@@ -1,26 +1,101 @@
 #pragma once
 
-#include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
-#include <QueryPlan/PlanVisitor.h>
-
-#include <utility>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+#include <memory>
 
 namespace DB
 {
+// forward declaration
+template <typename T, typename Hash, typename Equal>
 class Equivalences;
-using EquivalencesPtr = std::shared_ptr<Equivalences>;
 
+template <typename T, typename Hash = std::hash<T>, typename Equal = std::equal_to<T>>
+struct UnionFind
+{
+    mutable std::unordered_map<T, T, Hash, Equal> parent;
+
+    UnionFind() = default;
+
+    UnionFind(const UnionFind & left, const UnionFind & right)
+    {
+        parent.insert(left.parent.begin(), left.parent.end());
+        parent.insert(right.parent.begin(), right.parent.end());
+    }
+
+    T find(const T & v) const
+    {
+        if (!parent.contains(v))
+            parent[v] = v;
+        if (v == parent[v])
+            return v;
+        return parent[v] = find(parent[v]);
+    }
+
+    void add(T a, T b)
+    {
+        a = find(a);
+        b = find(b);
+        if (a != b)
+            parent[b] = a;
+    }
+
+    bool isConnected(T a, T b) const
+    {
+        return find(a) == find(b);
+    }
+
+    std::vector<std::unordered_set<T>> getSets()
+    {
+        std::vector<std::unordered_set<T, Hash, Equal>> result;
+        std::unordered_map<T, size_t, Hash, Equal> parent_to_index;
+
+        for (auto & item : parent)
+        {
+            auto p = find(item.first);
+            if (!parent_to_index.contains(p))
+            {
+                parent_to_index[p] = result.size();
+                result.emplace_back();
+            }
+            result[parent_to_index[p]].insert(item.first);
+        }
+
+        return result;
+    }
+};
+
+template <typename T, typename Hash = std::hash<T>, typename Equal = std::equal_to<T>>
 class Equivalences
 {
+    using EquivalencesType = Equivalences<T, Hash, Equal>;
+    using Ptr = std::shared_ptr<EquivalencesType>;
+    using Map = std::unordered_map<T, T, Hash, Equal>;
 public:
-    Equivalences() { }
-    Equivalences(Equivalences & left, Equivalences & right) : union_find(left.union_find, right.union_find) { }
+    Equivalences() = default;
+    Equivalences(const EquivalencesType & left, const EquivalencesType & right) : union_find(left.union_find, right.union_find) { }
 
-    void add(String first, String second) { union_find.add(std::move(first), std::move(second)); }
-    EquivalencesPtr translate(std::unordered_map<String, String> & identities)
+    Equivalences(const Equivalences&) = delete;
+    Equivalences& operator=(const Equivalences&) = delete;
+    Equivalences(Equivalences &&) noexcept = default;
+    Equivalences& operator=(Equivalences &&)  noexcept = default;
+
+    void add(T first, T second)
     {
-        auto result = std::make_shared<Equivalences>();
-        std::unordered_map<String, std::unordered_set<String>> str_to_set;
+        map.release();
+        union_find.add(std::move(first), std::move(second));
+    }
+
+    bool isEqual(T first, T second) const
+    {
+        return union_find.isConnected(first, second);
+    }
+
+    Ptr translate(std::unordered_map<T, T> & identities) const
+    {
+        auto result = std::make_shared<EquivalencesType>();
+        std::unordered_map<T, std::unordered_set<T>> str_to_set;
         for (auto & item : union_find.parent)
         {
             if (identities.contains(item.first))
@@ -44,10 +119,10 @@ public:
         return result;
     }
 
-    EquivalencesPtr translate(std::unordered_set<String> & identities)
+    Ptr translate(std::unordered_set<T> & identities) const
     {
-        auto result = std::make_shared<Equivalences>();
-        std::unordered_map<String, std::unordered_set<String>> str_to_set;
+        auto result = std::make_shared<EquivalencesType>();
+        std::unordered_map<T, std::unordered_set<T>> str_to_set;
         for (auto & item : union_find.parent)
         {
             if (identities.contains(item.first))
@@ -71,47 +146,32 @@ public:
         return result;
     }
 
-    NameToNameMap representMap() const
+    const Map & representMap() const
     {
-        std::unordered_map<String, std::unordered_set<String>> str_to_set;
+        if (map)
+            return *map;
+
+        std::unordered_map<T, std::unordered_set<T>, Hash, Equal> str_to_set;
         for (auto & item : union_find.parent)
         {
             str_to_set[item.second].insert(item.first);
         }
 
-
-        NameToNameMap result;
+        map = std::make_unique<Map>();
         for (auto & item : str_to_set)
         {
             auto & set = item.second;
             auto min = *std::min_element(set.begin(), set.end());
             for (auto & str : set)
             {
-                result[str] = min;
+                (*map)[str] = min;
             }
         }
-        return result;
+        return *map;
     }
 
 private:
-    UnionFind union_find;
-};
-
-
-class EquivalencesDerive
-{
-public:
-    static EquivalencesPtr deriveEquivalences(ConstQueryPlanStepPtr step, std::vector<EquivalencesPtr> children_equivalences);
-};
-
-class EquivalencesDeriveVisitor : public StepVisitor<EquivalencesPtr, std::vector<EquivalencesPtr>>
-{
-public:
-    EquivalencesPtr visitStep(const IQueryPlanStep & step, std::vector<EquivalencesPtr> & c) override;
-    EquivalencesPtr visitJoinStep(const JoinStep & step, std::vector<EquivalencesPtr> & context) override;
-    EquivalencesPtr visitFilterStep(const FilterStep & step, std::vector<EquivalencesPtr> & context) override;
-    EquivalencesPtr visitProjectionStep(const ProjectionStep & step, std::vector<EquivalencesPtr> & context) override;
-    EquivalencesPtr visitAggregatingStep(const AggregatingStep & step, std::vector<EquivalencesPtr> & context) override;
-    EquivalencesPtr visitExchangeStep(const ExchangeStep & step, std::vector<EquivalencesPtr> & context) override;
+    UnionFind<T, Hash, Equal> union_find;
+    mutable std::unique_ptr<Map> map {}; // cache
 };
 }

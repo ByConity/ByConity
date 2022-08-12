@@ -6,11 +6,12 @@
 #include <QueryPlan/QueryPlan.h>
 
 #include <filesystem>
+#include <memory>
 
 namespace DB
 {
 
-class BasePlanTest
+class BasePlanTest : public std::enable_shared_from_this<BasePlanTest>
 {
 public:
     explicit BasePlanTest(const String & database = "testdb", const std::unordered_map<String, Field> & session_settings = {});
@@ -21,11 +22,17 @@ public:
 
     QueryPlanPtr plan(const String & query, ContextMutablePtr query_context);
 
+    QueryPlanPtr plan(const String & query) { return plan(query, createQueryContext()); }
+
     PlanSegmentTreePtr planSegment(const String & query, ContextMutablePtr query_context);
 
     std::string execute(const String & query, ContextMutablePtr query_context);
 
+    std::string execute(const String & query) { return execute(query, createQueryContext()); }
+
     ContextMutablePtr createQueryContext(std::unordered_map<std::string, Field> settings = {});
+
+    const String & getDefaultDatabase() const { return database_name; }
 
 protected:
     String database_name;

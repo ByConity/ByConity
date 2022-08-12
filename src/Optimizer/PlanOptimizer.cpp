@@ -14,6 +14,7 @@
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
+#include <Optimizer/Rewriter/MaterializedViewRewriter.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanPattern.h>
@@ -45,6 +46,11 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+
+        //add reorder adjacent windows
+        std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(),"SwapAdjacent"),
+
+        std::make_shared<MaterializedViewRewriter>(),
 
         // add exchange
         std::make_shared<AddExchange>(),
@@ -137,6 +143,12 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<UnifyJoinOutputs>(),
+
+        //add reorder adjacent windows
+        std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(),"SwapAdjacent"),
+
+        //
+        std::make_shared<MaterializedViewRewriter>(),
 
         // Cost-based optimizer
         std::make_shared<CascadesOptimizer>(),

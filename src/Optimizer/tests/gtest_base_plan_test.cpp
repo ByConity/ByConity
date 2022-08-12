@@ -127,6 +127,7 @@ ContextMutablePtr BasePlanTest::createQueryContext(std::unordered_map<std::strin
     query_context->setCurrentQueryId("test_plan");
     query_context->createPlanNodeIdAllocator();
     query_context->createSymbolAllocator();
+    query_context->createOptimizerMetrics();
     for (const auto & item : settings)
         query_context->setSetting(item.first, item.second);
     return query_context;
@@ -188,7 +189,7 @@ std::string AbstractPlanTestSuite::explain(const std::string & name)
         {
             auto query_plan = plan(sql.first, context);
             CardinalityEstimator::estimate(*query_plan, context);
-            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, true, true);
+            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, true, true);
         }
         else
             execute(sql.first, context);
@@ -308,6 +309,7 @@ String AbstractPlanTestSuite::dump(const String & name)
             }
             context->createPlanNodeIdAllocator();
             context->createSymbolAllocator();
+            context->createOptimizerMetrics();
 
             ast = QueryRewriter::rewrite(ast, context);
             AnalysisPtr analysis = QueryAnalyzer::analyze(ast, context);
@@ -315,7 +317,7 @@ String AbstractPlanTestSuite::dump(const String & name)
             dumpDdlStats(*query_plan, context);
             PlanOptimizer::optimize(*query_plan, context);
             CardinalityEstimator::estimate(*query_plan, context);
-            String explain = DB::PlanPrinter::textLogicalPlan(*query_plan, true, true);
+            String explain = DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, true, true);
 
             String path = context->getSettingsRef().graphviz_path.toString() + context->getCurrentQueryId() + "/explain.txt";
             std::ofstream out(path);
@@ -365,7 +367,7 @@ String AbstractPlanTestSuite::reproduce(const String & query_id)
         auto query_plan = plan(query, local_context);
         CardinalityEstimator::estimate(*query_plan, local_context);
         std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan, *local_context);
-        explain = PlanPrinter::textLogicalPlan(*query_plan, true, true, costs);
+        explain = PlanPrinter::textLogicalPlan(*query_plan, session_context, true, true, costs);
     }
     return explain;
 }

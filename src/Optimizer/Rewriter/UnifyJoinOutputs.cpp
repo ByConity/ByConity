@@ -17,15 +17,15 @@ void UnifyJoinOutputs::rewrite(QueryPlan & plan, ContextMutablePtr context) cons
     plan.update(result);
 }
 
-std::unordered_map<PlanNodeId, UnionFind> UnifyJoinOutputs::UnionFindExtractor::extract(QueryPlan & plan)
+std::unordered_map<PlanNodeId, UnionFind<String>> UnifyJoinOutputs::UnionFindExtractor::extract(QueryPlan & plan)
 {
     UnionFindExtractor extractor {plan.getCTEInfo()};
-    std::unordered_map<PlanNodeId, UnionFind> union_find_map;
+    std::unordered_map<PlanNodeId, UnionFind<String>> union_find_map;
     VisitorUtil::accept(plan.getPlanNode(), extractor, union_find_map);
     return union_find_map;
 }
 
-Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::unordered_map<PlanNodeId, UnionFind> & union_find_map)
+Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::unordered_map<PlanNodeId, UnionFind<String>> & union_find_map)
 {
     auto step = dynamic_cast<const JoinStep *>(node.getStep().get());
     if (!step->supportReorder(true))
@@ -34,7 +34,7 @@ Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::u
     VisitorUtil::accept(node.getChildren()[0], *this, union_find_map);
     VisitorUtil::accept(node.getChildren()[1], *this, union_find_map);
 
-    UnionFind union_find{union_find_map[node.getChildren()[0]->getId()], union_find_map[node.getChildren()[1]->getId()]};
+    UnionFind<String> union_find{union_find_map[node.getChildren()[0]->getId()], union_find_map[node.getChildren()[1]->getId()]};
     for (size_t i = 0; i < step->getLeftKeys().size(); i++)
         union_find.add(step->getLeftKeys()[i], step->getRightKeys()[i]);
 
@@ -42,7 +42,7 @@ Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::u
     return Void{};
 }
 
-Void UnifyJoinOutputs::UnionFindExtractor::visitCTERefNode(CTERefNode & node, std::unordered_map<PlanNodeId, UnionFind> & context)
+Void UnifyJoinOutputs::UnionFindExtractor::visitCTERefNode(CTERefNode & node, std::unordered_map<PlanNodeId, UnionFind<String>> & context)
 {
     const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
     cte_helper.accept(step->getId(), *this, context);

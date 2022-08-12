@@ -1,6 +1,7 @@
 #include <Optimizer/Utils.h>
 
 #include <Functions/FunctionFactory.h>
+#include <Interpreters/AggregateDescription.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
@@ -92,6 +93,21 @@ std::unordered_map<String, String> computeIdentityTranslations(Assignments & ass
     }
     return output_to_input;
 }
+
+ASTPtr extractAggregateToFunction(const AggregateDescription & aggregate_description)
+{
+    const auto function = std::make_shared<ASTFunction>();
+    function->name = aggregate_description.function->getName();
+    function->arguments = std::make_shared<ASTExpressionList>();
+    function->parameters = std::make_shared<ASTExpressionList>();
+    function->children.push_back(function->arguments);
+    for (auto & argument : aggregate_description.argument_names)
+        function->arguments->children.emplace_back(std::make_shared<ASTIdentifier>(argument));
+    for (auto & parameter : aggregate_description.parameters)
+        function->parameters->children.emplace_back(std::make_shared<ASTLiteral>(parameter));
+    return function;
+}
+
 
 bool checkFunctionName(const ASTFunction & function, const String & expect_name)
 {

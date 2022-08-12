@@ -8,6 +8,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Common/SipHash.h>
 
 namespace DB::ASTEquality
@@ -65,6 +66,12 @@ bool compareNode(const ASTSetQuery & left, const ASTSetQuery & right)
     return left.changes == right.changes;
 }
 
+bool compareNode(const ASTTableColumnReference & left, const ASTTableColumnReference & right)
+{
+    return left.storage == right.storage && left.column_name == right.column_name;
+}
+
+
 bool compareTree(const ASTPtr & left, const ASTPtr & right, const SubtreeComparator & comparator)
 {
     // step 1. special cases
@@ -111,6 +118,9 @@ bool compareTree(const ASTPtr & left, const ASTPtr & right, const SubtreeCompara
             break;
         case ASTType::ASTSetQuery:
             node_equals = compareNode(left->as<ASTSetQuery &>(), right->as<ASTSetQuery &>());
+            break;
+        case ASTType::ASTTableColumnReference:
+            node_equals = compareNode(left->as<ASTTableColumnReference &>(), right->as<ASTTableColumnReference &>());
             break;
         default:
             node_equals = true;

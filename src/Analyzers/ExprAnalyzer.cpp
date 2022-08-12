@@ -375,8 +375,12 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         }
     }
 
-    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isSuitableForConstantFolding())
+    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isDeterministicInScopeOfQuery()
+        || !function_base->isSuitableForConstantFolding())
+    {
+        analysis.addNonDeterministicFunctions(*function);
         context->setFunctionDeterministic(function->name, false);
+    }
     return {nullptr, function_base->getResultType(), ""};
 }
 

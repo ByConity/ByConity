@@ -18,6 +18,7 @@ BlockIO InterpreterDumpInfoQueryUseOptimizer::execute()
     auto query_body_ptr = query_ptr->clone();
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
+    context->createOptimizerMetrics();
     BlockIO res;
     bool verbose = true;
 
@@ -33,7 +34,7 @@ BlockIO InterpreterDumpInfoQueryUseOptimizer::execute()
     PlanOptimizer::optimize(*query_plan, context);
     CardinalityEstimator::estimate(*query_plan, context);
     std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan, *context);
-    String explain = PlanPrinter::textLogicalPlan(*query_plan, true, verbose, costs);
+    String explain = PlanPrinter::textLogicalPlan(*query_plan, context, true, verbose, costs);
 
     String path = context->getSettingsRef().graphviz_path.toString() + context->getCurrentQueryId() + "/explain.txt";
     std::ofstream out(path);

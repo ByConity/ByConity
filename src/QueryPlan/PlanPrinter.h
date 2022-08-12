@@ -13,7 +13,7 @@ class PlanPrinter
 public:
     PlanPrinter() = delete;
 
-    static std::string textLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, PlanCostMap costs = {});
+    static std::string textLogicalPlan(QueryPlan & plan, ContextMutablePtr context, bool print_stats, bool verbose, PlanCostMap costs = {});
     static std::string jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose);
 
 private:
@@ -56,22 +56,6 @@ private:
     static std::string printSuffix(PlanNodeBase & plan);
     std::string printDetail(PlanNodeBase & plan, const TextPrinterIntent & intent) const;
     std::string printStatistics(const PlanNodeBase & plan) const;
-
-    template <class V>
-    static std::string join(const V & v, const String & sep, const String & prefix = {}, const String & suffix = {})
-    {
-        std::stringstream out;
-        out << prefix;
-        if (!v.empty())
-        {
-            auto it = v.begin();
-            out << *it++;
-            for (; it != v.end(); ++it)
-                out << sep << *it;
-        }
-        out << suffix;
-        return out.str();
-    }
 
     const bool print_stats;
     const bool verbose;

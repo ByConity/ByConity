@@ -645,8 +645,9 @@ class IColumn;
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select", 0) \
-    M(UInt64, iterative_optimizer_timeout, 3000, "Max running time of a single iterative optimizer in ms", 0) \
-    M(UInt64, cascades_optimizer_timeout, 3000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
+    M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
@@ -684,6 +685,10 @@ class IColumn;
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
+    M(Bool, enable_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
     /** Exchange setttings */ \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
     M(UInt64, exchange_source_pipeline_threads, 16, "Recommend number of threads for pipeline which reading data from exchange, ingoned if exchange need keep data order", 0) \

@@ -252,6 +252,9 @@ namespace ResourceManagement
 }
 using ResourceManagerClientPtr = std::shared_ptr<ResourceManagement::ResourceManagerClient>;
 
+class OptimizerMetrics;
+using OptimizerMetricsPtr = std::shared_ptr<OptimizerMetrics>;
+
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -425,7 +428,8 @@ private:
     PlanNodeIdAllocatorPtr id_allocator = nullptr;
     std::shared_ptr<SymbolAllocator> symbol_allocator = nullptr;
     std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
-
+    std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
+    
     std::unordered_map<std::string, bool> function_deterministic;
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
@@ -1124,6 +1128,9 @@ public:
     void createSymbolAllocator();
     std::shared_ptr<Statistics::StatisticsMemoryStore> getStatisticsMemoryStore();
 
+    void createOptimizerMetrics();
+    OptimizerMetricsPtr & getOptimizerMetrics() { return optimizer_metrics; }
+ 
     void setFunctionDeterministic(const std::string & fun_name, bool deterministic)
     {
         function_deterministic[fun_name] = deterministic;

@@ -76,6 +76,16 @@ public:
     static bool
     isJoinClauseUnmodified(std::set<std::pair<String, String>> & join_clauses, const Names & left_keys, const Names & right_keys);
 
+    /**
+     * @return residue expression if source expression is stronger than target,
+     *         {@code true} if it is equal to target,
+     *         {@code null} f it is weaker than target.
+     */
+    static ASTPtr splitPredicates(const ConstASTPtr & source, const ConstASTPtr & target);
+
+    static std::pair<std::vector<std::pair<ConstASTPtr, ConstASTPtr>>, std::vector<ConstASTPtr>>
+    extractEqualPredicates(const std::vector<ConstASTPtr> & predicates);
+
 private:
     static String flip(const String & fun_name);
     static void extractPredicate(ConstASTPtr & predicate, const std::string & fun_name, std::vector<ConstASTPtr> & result);

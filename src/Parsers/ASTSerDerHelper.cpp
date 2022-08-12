@@ -62,6 +62,7 @@
 #include <Parsers/ASTStatsQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTSystemQuery.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/ASTTTLElement.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTUseQuery.h>

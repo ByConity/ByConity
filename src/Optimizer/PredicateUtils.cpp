@@ -537,4 +537,78 @@ std::set<std::vector<ConstASTPtr>> PredicateUtils::cartesianProduct(std::vector<
     return CartesianProduct(sets);
 }
 
+static ConstASTPtr splitDisjuncts(const ConstASTPtr & expression, const ConstASTPtr & target)
+{
+    auto targets = PredicateUtils::extractDisjuncts(target);
+    std::unordered_set<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> targets_set{targets.begin(), targets.end()};
+
+    auto disjuncts = PredicateUtils::extractDisjuncts(expression);
+    bool size_equlas = targets.size() == disjuncts.size();
+    std::erase_if(disjuncts, [&](const ConstASTPtr & disjunct) { return targets_set.count(disjunct); });
+    if (!disjuncts.empty())
+        return nullptr;
+    else if (size_equlas)
+        return PredicateConst::TRUE_VALUE;
+    else
+        return expression;
+}
+
+static ASTPtr splitConjuncts(const ConstASTPtr & expression, const ConstASTPtr & target)
+{
+    auto targets = PredicateUtils::extractConjuncts(target);
+    std::unordered_set<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> targets_set;
+    for (auto & expr : targets)
+        if (!PredicateUtils::isTruePredicate(expr))
+            targets_set.emplace(expr);
+
+    auto conjuncts = PredicateUtils::extractConjuncts(expression);
+    std::unordered_set<ConstASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals> conjuncts_set;
+    for (auto & expr : conjuncts)
+        if (!PredicateUtils::isTruePredicate(expr))
+            conjuncts_set.emplace(expr);
+    bool all_contains = std::all_of(targets.begin(), targets.end(), [&](const ConstASTPtr & target_) {
+        return conjuncts_set.count(target_);
+    });
+    if (!all_contains)
+        return nullptr;
+
+    std::erase_if(conjuncts, [&](const ConstASTPtr & conjunct) { return targets_set.count(conjunct); });
+    return PredicateUtils::combineConjuncts(conjuncts);
+}
+
+ASTPtr PredicateUtils::splitPredicates(const ConstASTPtr & expression, const ConstASTPtr & target)
+{
+    if (PredicateUtils::isTruePredicate(target))
+        return expression->clone();
+    auto res = splitDisjuncts(expression, target);
+    if (res)
+        return res->clone();
+    return splitConjuncts(expression, target);
+}
+
+std::pair<std::vector<std::pair<ConstASTPtr, ConstASTPtr>>, std::vector<ConstASTPtr>>
+PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicates)
+{
+    std::vector<std::pair<ConstASTPtr, ConstASTPtr>> equal_predicates;
+    std::vector<ConstASTPtr> other_predicates;
+
+    for (auto & predicate : predicates)
+    {
+        for (auto & filter : PredicateUtils::extractConjuncts(predicate))
+        {
+            auto function = filter->as<ASTFunction>();
+            if (function && function->name == "equals")
+            {
+                if (function->children.size() == 2 && function->children[0]->getType() == ASTType::ASTIdentifier
+                    && function->children[1]->getType() == ASTType::ASTIdentifier)
+                {
+                    equal_predicates.emplace_back(function->children[0], function->children[1]);
+                    continue;
+                }
+            }
+            other_predicates.push_back(filter);
+        }
+    }
+    return {equal_predicates, other_predicates};
+}
 }

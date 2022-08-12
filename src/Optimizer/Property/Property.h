@@ -1,5 +1,10 @@
 #pragma once
 
+#include <Core/Names.h>
+#include <Core/SortDescription.h>
+#include <Core/Types.h>
+#include <Optimizer/Equivalences.h>
+
 #include <map>
 #include <utility>
 #include <vector>
@@ -13,7 +18,7 @@ namespace DB
 class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
-class Equivalences;
+using SymbolEquivalences = Equivalences<String>;
 
 using CTEId = UInt32;
 
@@ -70,7 +75,7 @@ public:
     bool isRequireHandle() const { return require_handle; }
     void setRequireHandle(bool require_handle_) { require_handle = require_handle_; }
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
-    Partitioning normalize(const Equivalences & equivalences) const;
+    Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
     bool satisfy(const Partitioning &) const;
 
     size_t hash() const;
@@ -245,6 +250,7 @@ public:
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
 
     Property translate(const std::unordered_map<String, String> & identities) const;
+    Property normalize(const SymbolEquivalences & symbol_equivalences) const;
 
     bool operator==(const Property & other) const
     {

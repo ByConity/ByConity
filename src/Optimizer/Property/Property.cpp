@@ -1,7 +1,7 @@
 #include <Optimizer/Property/Property.h>
 
 #include <Functions/FunctionsHashing.h>
-#include <Optimizer/Equivalences.h>
+#include <Optimizer/SymbolEquivalencesDeriver.h>
 
 namespace DB
 {
@@ -35,9 +35,9 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
     }
 }
 
-Partitioning Partitioning::normalize(const Equivalences & equivalences) const
+Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalences) const
 {
-    auto mapping = equivalences.representMap();
+    auto mapping = symbol_equivalences.representMap();
     for (const auto & item : columns)
     {
         if (!mapping.contains(item))
@@ -190,6 +190,14 @@ Property Property::translate(const std::unordered_map<String, String> & identiti
     Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions.translate(identities));
+    return result;
+}
+
+Property Property::normalize(const SymbolEquivalences & symbol_equivalences) const
+{
+    Property result{node_partitioning.normalize(symbol_equivalences), stream_partitioning.normalize(symbol_equivalences), sorting};
+    result.setPreferred(preferred);
+    result.setCTEDescriptions(cte_descriptions);
     return result;
 }
 

@@ -2,7 +2,7 @@
 
 #include <Interpreters/Context.h>
 #include <Optimizer/Rewriter/Rewriter.h>
-#include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/Equivalences.h>
 #include <QueryPlan/SimplePlanVisitor.h>
 
 namespace DB
@@ -18,21 +18,20 @@ private:
     class Rewriter;
 };
 
-class UnifyJoinOutputs::UnionFindExtractor : public SimplePlanVisitor<std::unordered_map<PlanNodeId, UnionFind>>
+class UnifyJoinOutputs::UnionFindExtractor : public SimplePlanVisitor<std::unordered_map<PlanNodeId, UnionFind<String>>>
 {
 public:
-    static std::unordered_map<PlanNodeId, UnionFind> extract(QueryPlan & plan);
-
+    static std::unordered_map<PlanNodeId, UnionFind<String>> extract(QueryPlan & plan);
 private:
     explicit UnionFindExtractor(CTEInfo & cte_info) : SimplePlanVisitor(cte_info) { }
-    Void visitJoinNode(JoinNode &, std::unordered_map<PlanNodeId, UnionFind> &) override;
-    Void visitCTERefNode(CTERefNode & node, std::unordered_map<PlanNodeId, UnionFind> & context) override;
+    Void visitJoinNode(JoinNode &, std::unordered_map<PlanNodeId, UnionFind<String>> &) override;
+    Void visitCTERefNode(CTERefNode & node, std::unordered_map<PlanNodeId, UnionFind<String>> & context) override;
 };
 
 class UnifyJoinOutputs::Rewriter : public PlanNodeVisitor<PlanNodePtr, std::set<String>>
 {
 public:
-    Rewriter(ContextMutablePtr context_, CTEInfo & cte_info_, std::unordered_map<PlanNodeId, UnionFind> & union_find_map_)
+    Rewriter(ContextMutablePtr context_, CTEInfo & cte_info_, std::unordered_map<PlanNodeId, UnionFind<String>> & union_find_map_)
         : context(context_), cte_helper(cte_info_), union_find_map(union_find_map_)
     {
     }
@@ -43,6 +42,6 @@ public:
 private:
     ContextMutablePtr context;
     CTEPreorderVisitHelper cte_helper;
-    std::unordered_map<PlanNodeId, UnionFind> & union_find_map;
+    std::unordered_map<PlanNodeId, UnionFind<String>> & union_find_map;
 };
 }

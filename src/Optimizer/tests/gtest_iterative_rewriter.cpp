@@ -385,7 +385,7 @@ TEST(OptimizerIterativeRewriterTest, DISABLED_RemoveNodeRule)
 TEST(OptimizerIterativeRewriterTest, TimeoutExhaust)
 {
     auto context = Context::createCopy(getContext().context);
-    context->getSettings().set("iterative_optimizer_timeout", 3000);
+    context->setSetting("iterative_optimizer_timeout", 3000);
     RulePtr neverEndRule = std::make_shared<NeverEndRule>();
     IterativeRewriter neverEndRewriter{{neverEndRule}, "test"};
 
@@ -398,7 +398,7 @@ TEST(OptimizerIterativeRewriterTest, TimeoutExhaust)
     IterativeRewriter sleepRewriter{{sleepRule}, "test"};
 
     ASSERT_THROW_DB_EXCEPTION_WITH_ERROR_CODE(sleepRewriter.rewrite(query_plan1, context), ErrorCodes::OPTIMIZER_TIMEOUT);
-    ASSERT_TRUE(sleepRule->runs > 0 && sleepRule->runs < 3);
+    ASSERT_TRUE(sleepRule->runs > 0 && sleepRule->runs < 5);
 }
 
 TEST(OptimizerIterativeRewriterTest, ChildrenRewrite)

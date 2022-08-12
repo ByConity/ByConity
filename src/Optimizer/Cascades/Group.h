@@ -3,9 +3,9 @@
 #include <Core/Types.h>
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Optimizer/Cascades/GroupExpression.h>
-#include <Optimizer/Equivalences.h>
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/SymbolEquivalencesDeriver.h>
 
 #include <memory>
 
@@ -99,7 +99,7 @@ public:
 
     const std::unordered_map<Property, WinnerPtr, PropertyHash> & getLowestCostExpressions() const { return lowest_cost_expressions; }
 
-    const EquivalencesPtr & getEquivalences() const { return equivalences; }
+    const SymbolEquivalencesPtr & getEquivalences() const { return equivalences; }
 
     const std::unordered_set<CTEId> & getCTESet() const { return cte_set; }
 private:
@@ -140,7 +140,7 @@ private:
 
     UInt32 max_table_scans = 0;
 
-    EquivalencesPtr equivalences;
+    SymbolEquivalencesPtr equivalences;
 
     bool simple_children = true;
     bool is_table_scan = false;

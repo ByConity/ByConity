@@ -492,8 +492,9 @@ namespace
     }
 }
 
-ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context)
+ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enable_materialized_view)
 {
+    (void) enable_materialized_view;
     graphviz_index = GraphvizPrinter::PRINT_AST_INDEX;
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-init");
 

@@ -77,16 +77,16 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
     {
         if (context.getContext()->getSettingsRef().enable_equivalences)
         {
-            std::vector<EquivalencesPtr> children;
+            std::vector<SymbolEquivalencesPtr> children;
             for (const auto & child : expression->getChildrenGroups())
             {
                 children.emplace_back(context.getMemo().getGroupById(child)->getEquivalences());
             }
-            equivalences = EquivalencesDerive::deriveEquivalences(expression->getStep(), children);
+            equivalences = SymbolEquivalencesDeriver::deriveEquivalences(expression->getStep(), children);
         }
         else
         {
-            equivalences = std::make_shared<Equivalences>();
+            equivalences = std::make_shared<SymbolEquivalences>();
         }
     }
 }
