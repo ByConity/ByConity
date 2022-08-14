@@ -437,7 +437,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
         }
         else
         {
-            /// prepare for laoding marks parallelly
+            /// prepare for loading marks parallelly
             stream_builders->emplace(std::move(stream_name), std::move(stream_builder));
         }
     };

@@ -1,6 +1,9 @@
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <IO/ReadBufferFromFile.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/IDiskCacheSegment.h>
+#include <Storages/DiskCache/IDiskCache.h>
 
 #include <utility>
 
@@ -25,7 +28,10 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     bool save_marks_in_cache_,
     off_t mark_file_offset_,
     size_t mark_file_size_,
-    size_t columns_in_mark_)
+    size_t columns_in_mark_,
+    IDiskCache * disk_cache_,
+    UUID storage_uuid_,
+    const String & part_name_)
     : disk(std::move(disk_))
     , mark_cache(mark_cache_)
     , mrk_path(mrk_path_)
@@ -35,7 +41,10 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     , mark_file_size(mark_file_size_)
     , index_granularity_info(index_granularity_info_)
     , save_marks_in_cache(save_marks_in_cache_)
-    , columns_in_mark(columns_in_mark_) {}
+    , columns_in_mark(columns_in_mark_)
+    , disk_cache(disk_cache_)
+    , storage_uuid {storage_uuid_}
+    , part_name(part_name_) {}
 
 const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, size_t column_index)
 {
@@ -66,10 +75,28 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 
     if (!index_granularity_info.is_adaptive)
     {
-        /// Read directly to marks.
-        auto buffer = disk->readFile(mrk_path, {.buffer_size = mark_file_size});
-        if (buffer->seek(mark_file_offset) != mark_file_offset)
-            throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+        auto buffer = [&, this]() -> std::unique_ptr<ReadBufferFromFileBase> {
+            if (index_granularity_info.has_disk_cache && disk_cache)
+            {
+                try
+                {
+                    String mrk_seg_key = IDiskCacheSegment::formatSegmentName(
+                        UUIDHelpers::UUIDToString(storage_uuid), part_name, stream_name, 0, index_granularity_info.marks_file_extension);
+                    auto [local_cache_disk, local_cache_path] = disk_cache->get(mrk_seg_key);
+                    if (local_cache_disk && local_cache_disk->exists(local_cache_path))
+                        return local_cache_disk->readFile(local_cache_path, {.buffer_size = mark_file_size});
+                }
+                catch (...)
+                {
+                    tryLogCurrentException("Could not load marks from disk cache");
+                }
+            }
+
+            auto buf = disk->readFile(mrk_path, {.buffer_size = mark_file_size});
+            if (buf->seek(mark_file_offset) != mark_file_offset)
+                throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+            return buf;
+        }();
 
         if (buffer->eof() || buffer->buffer().size() != mark_file_size)
             throw Exception("Cannot read all marks from file " + mrk_path + ", eof: " + std::to_string(buffer->eof())

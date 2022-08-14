@@ -50,29 +50,34 @@ String PrimaryIndexDiskCacheSegment::getSegmentName() const
     return segment_name;
 }
 
-void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache &)
+void PrimaryIndexDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 {
-    // auto metadata_snapshot = data_part->storage.getInMemoryMetadataPtr();
-    // const auto & primary_key = metadata_snapshot->getPrimaryKey();
-    // size_t key_size = primary_key.column_names.size();
+    auto metadata_snapshot = data_part->storage.getInMemoryMetadataPtr();
+    const auto & primary_key = metadata_snapshot->getPrimaryKey();
+    size_t key_size = primary_key.column_names.size();
 
-    // if (key_size == 0)
-    //     return;
+    if (key_size == 0)
+        return;
 
-    // auto index = data_part->getIndex();
-    // size_t marks_count = data_part->getMarksCount();
-    // MemoryWriteBuffer write_buffer;
-    // for (size_t i = 0; i < marks_count; ++i)
-    // {
-    //     for (size_t j = 0; j < index->size(); ++j)
-    //         data_part->storage.primary_key_data_types[j]->serializeBinary(*index->at(j), i, write_buffer);
-    // }
+    auto index = data_part->getIndex();
+    size_t marks_count = data_part->getMarksCount();
+    MemoryWriteBuffer write_buffer;
 
-    // size_t file_size = write_buffer.count();
-    // if (auto read_buffer = write_buffer.tryGetReadBuffer())
-    // {
-    //     disk_cache.set(getSegmentName(), *read_buffer, file_size);
-    // }
+    Serializations serializations(key_size);
+    for (size_t j = 0; j < key_size; ++j)
+        serializations[j] = primary_key.data_types[j]->getDefaultSerialization();
+
+    for (size_t i = 0; i < marks_count; ++i)
+    {
+        for (size_t j = 0; j < index->size(); ++j)
+            serializations[j]->serializeBinary(*index->at(j), i, write_buffer);
+    }
+
+    size_t file_size = write_buffer.count();
+    if (auto read_buffer = write_buffer.tryGetReadBuffer())
+    {
+        disk_cache.set(getSegmentName(), *read_buffer, file_size);
+    }
 }
 
 }
