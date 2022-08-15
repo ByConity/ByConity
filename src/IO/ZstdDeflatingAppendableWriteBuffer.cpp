@@ -1,6 +1,7 @@
 #include <IO/ZstdDeflatingAppendableWriteBuffer.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Exception.h>
+#include <IO/ReadBufferFromFile.h>
 
 namespace DB
 {
@@ -11,7 +12,7 @@ namespace ErrorCodes
 }
 
 ZstdDeflatingAppendableWriteBuffer::ZstdDeflatingAppendableWriteBuffer(
-    WriteBuffer & out_, int compression_level, bool append_to_existing_stream_,
+    WriteBufferFromFile & out_, int compression_level, bool append_to_existing_stream_,
     size_t buf_size, char * existing_memory, size_t alignment)
     : BufferWithOwnMemory<WriteBuffer>(buf_size, existing_memory, alignment)
     , out(out_)
@@ -33,13 +34,11 @@ void ZstdDeflatingAppendableWriteBuffer::nextImpl()
     if (!offset())
         return;
 
-    ZSTD_EndDirective mode = ZSTD_e_flush;
-
     input.src = reinterpret_cast<unsigned char *>(working_buffer.begin());
     input.size = offset();
     input.pos = 0;
 
-    if (first_write && append_to_existing_stream)
+    if (first_write && append_to_existing_stream && isNeedToAddEmptyBlock())
     {
         addEmptyBlock();
         first_write = false;
@@ -56,7 +55,7 @@ void ZstdDeflatingAppendableWriteBuffer::nextImpl()
             output.size = out.buffer().size();
             output.pos = out.offset();
 
-            size_t compression_result = ZSTD_compressStream2(cctx, &output, &input, mode);
+            size_t compression_result = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_flush);
             if (ZSTD_isError(compression_result))
                 throw Exception(
                     ErrorCodes::ZSTD_ENCODER_FAILED, "Zstd stream encoding failed: error code: {}; zstd version: {}", ZSTD_getErrorName(compression_result), ZSTD_VERSION_STRING);
@@ -141,7 +140,7 @@ void ZstdDeflatingAppendableWriteBuffer::finishImpl()
     while (remaining != 0)
     {
         if (ZSTD_isError(remaining))
-            throw Exception(ErrorCodes::ZSTD_ENCODER_FAILED, "zstd stream encoder end failed: error: '{}' zstd version: {}", ZSTD_getErrorName(remaining), ZSTD_VERSION_STRING);
+            throw Exception(ErrorCodes::ZSTD_ENCODER_FAILED, "Zstd stream encoder end failed: error: '{}' zstd version: {}", ZSTD_getErrorName(remaining), ZSTD_VERSION_STRING);
 
         remaining = ZSTD_compressStream2(cctx, &output, &input, ZSTD_e_end);
     }
@@ -151,14 +150,37 @@ void ZstdDeflatingAppendableWriteBuffer::finishImpl()
 void ZstdDeflatingAppendableWriteBuffer::addEmptyBlock()
 {
     /// HACK: https://github.com/facebook/zstd/issues/2090#issuecomment-620158967
-    static const char empty_block[3] = {0x01, 0x00, 0x00};
-
-    if (out.buffer().size() - out.offset() < sizeof(empty_block))
+    if (out.buffer().size() - out.offset() < ZSTD_CORRECT_TERMINATION_LAST_BLOCK.size())
         out.next();
 
-    std::memcpy(out.buffer().begin() + out.offset(), empty_block, sizeof(empty_block));
+    std::memcpy(out.buffer().begin() + out.offset(), ZSTD_CORRECT_TERMINATION_LAST_BLOCK.data(), ZSTD_CORRECT_TERMINATION_LAST_BLOCK.size());
 
-    out.position() = out.buffer().begin() + out.offset() + sizeof(empty_block);
+    out.position() = out.buffer().begin() + out.offset() + ZSTD_CORRECT_TERMINATION_LAST_BLOCK.size();
+}
+
+bool ZstdDeflatingAppendableWriteBuffer::isNeedToAddEmptyBlock()
+{
+    ReadBufferFromFile reader(out.getFileName());
+    auto fsize = reader.size();
+    if (fsize > 3)
+    {
+        std::array<char, 3> result;
+        reader.seek(fsize - 3, SEEK_SET);
+        reader.readStrict(result.data(), 3);
+
+        /// If we don't have correct block in the end, then we need to add it manually.
+        /// NOTE: maybe we can have the same bytes in case of data corruption/unfinished write.
+        /// But in this case file still corrupted and we have to remove it.
+        return result != ZSTD_CORRECT_TERMINATION_LAST_BLOCK;
+    }
+    else if (fsize > 0)
+    {
+        throw Exception(
+            ErrorCodes::ZSTD_ENCODER_FAILED,
+            "Trying to write to non-empty file '{}' with tiny size {}. It can lead to data corruption",
+            out.getFileName(), fsize);
+    }
+    return false;
 }
 
 }

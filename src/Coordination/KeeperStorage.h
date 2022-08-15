@@ -392,7 +392,7 @@ public:
     Container::const_iterator getSnapshotIteratorBegin() const { return container.begin(); }
 
     /// Clear outdated data from internal container.
-    void clearGarbageAfterSnapshot(size_t up_to_size) { container.clearOutdatedNodes(up_to_size); }
+    void clearGarbageAfterSnapshot() { container.clearOutdatedNodes(); }
 
     /// Get all active sessions
     const SessionAndTimeout & getActiveSessions() const { return session_and_timeout; }

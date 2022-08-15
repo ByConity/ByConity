@@ -16,7 +16,7 @@
 #include <Poco/SHA1Engine.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
-
+#include <common/scope_guard.h>
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <Common/SipHash.h>
 #include <Common/ZooKeeper/ZooKeeperConstants.h>
@@ -1833,6 +1833,7 @@ void KeeperStorage::preprocessRequest(
     std::vector<Delta> new_deltas;
     TransactionInfo transaction{.zxid = new_last_zxid};
     uint64_t new_digest = getNodesDigest(false).value;
+
     SCOPE_EXIT({
         if (digest_enabled)
             // if the version of digest we got from the leader is the same as the one this instances has, we can simply copy the value

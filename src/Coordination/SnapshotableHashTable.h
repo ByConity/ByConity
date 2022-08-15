@@ -40,6 +40,8 @@ private:
     size_t current_version{0};
     size_t snapshot_up_to_version{0};
     ArenaWithFreeLists arena;
+    /// Collect invalid iterators to avoid traversing the whole list
+    std::vector<Mapped> snapshot_invalid_iters;
 
     uint64_t approximate_data_size{0};
 
@@ -179,6 +181,7 @@ public:
                 list_itr->active_in_map = false;
                 auto new_list_itr = list.insert(list.end(), std::move(elem));
                 it->getMapped() = new_list_itr;
+                snapshot_invalid_iters.push_back(list_itr);
             }
             else
             {
@@ -199,6 +202,7 @@ public:
         if (snapshot_mode)
         {
             list_itr->active_in_map = false;
+            snapshot_invalid_iters.push_back(list_itr);
             list_itr->free_key = true;
             map.erase(it->getKey());
         }
@@ -238,6 +242,7 @@ public:
             {
                 auto elem_copy = *(list_itr);
                 list_itr->active_in_map = false;
+                snapshot_invalid_iters.push_back(list_itr);
                 updater(elem_copy.value);
                 elem_copy.version = current_version;
                 auto itr = list.insert(list.end(), std::move(elem_copy));
@@ -276,26 +281,17 @@ public:
         return it->getMapped()->value;
     }
 
-    void clearOutdatedNodes(size_t up_to_size)
+    void clearOutdatedNodes()
     {
-        auto start = list.begin();
-        size_t counter = 0;
-        for (auto itr = start; counter < up_to_size; ++counter)
+        for (auto & itr: snapshot_invalid_iters)
         {
-            if (!itr->active_in_map)
-            {
-                updateDataSize(CLEAR_OUTDATED_NODES, itr->key.size, itr->value.sizeInBytes(), 0);
-                if (itr->free_key)
-                    arena.free(const_cast<char *>(itr->key.data), itr->key.size);
-                itr = list.erase(itr);
-            }
-            else
-            {
-                assert(!itr->free_key);
-                itr++;
-            }
+            assert(!itr->active_in_map);
+            updateDataSize(CLEAR_OUTDATED_NODES, itr->key.size, itr->value.sizeInBytes(), 0);
+            if (itr->free_key)
+                arena.free(const_cast<char *>(itr->key.data), itr->key.size);
+            list.erase(itr);
         }
-
+        snapshot_invalid_iters.clear();
     }
 
     void clear()

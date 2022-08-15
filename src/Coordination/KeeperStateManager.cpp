@@ -208,7 +208,7 @@ nuraft::ptr<nuraft::srv_state> KeeperStateManager::read_state()
                     hash.get64(),
                     read_checksum);
 #ifdef NDEBUG
-                LOG_ERROR(logger, fmt::runtime(error_string));
+                LOG_ERROR(logger, error_string);
                 return nullptr;
 #else
                 throw Exception(ErrorCodes::CORRUPTED_DATA, error_string);
