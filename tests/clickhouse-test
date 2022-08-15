@@ -751,9 +751,9 @@ def run_tests_array(all_tests_with_params):
             failures += 1
             print("{0} - Test internal error: {1}\n{2}\n{3}".format(MSG_FAIL, exc_type.__name__, exc_value, "\n".join(traceback.format_tb(tb, 10))))
 
-        if failures_chain >= 20:
-            stop_tests()
-            break
+        # if failures_chain >= 20:
+        #     stop_tests()
+        #     break
 
     failures_total = failures_total + failures
 

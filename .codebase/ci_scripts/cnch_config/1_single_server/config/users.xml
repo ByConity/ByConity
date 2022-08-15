@@ -18,6 +18,7 @@
                  in_order - first live replica is choosen in specified order.
             -->
             <load_balancing>random</load_balancing>
+            <default_database_engine>Cnch</default_database_engine>
             <min_insert_block_size_bytes>8589934592</min_insert_block_size_bytes>
         </default>
 
