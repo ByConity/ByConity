@@ -795,7 +795,6 @@ class IColumn;
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
     \
-    M(UInt64, prepared_transaction_id,0, "Prepared transaction id for this query",0)\
 
 
 // End of FORMAT_FACTORY_SETTINGS

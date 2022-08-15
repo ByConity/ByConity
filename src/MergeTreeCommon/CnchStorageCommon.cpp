@@ -104,28 +104,13 @@ String CnchStorageCommonHelper::getCloudTableName(ContextPtr context) const
 
 /// select query has database, table and table function names as AST pointers
 /// Creates a copy of query, changes database, table and table function names.
-ASTPtr CnchStorageCommonHelper::rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table, UInt64 txn_id)
+ASTPtr CnchStorageCommonHelper::rewriteSelectQuery(const ASTPtr & query, const std::string & database, const std::string & table)
 {
     auto modified_query_ast = query->clone();
 
     ASTSelectQuery & select_query = modified_query_ast->as<ASTSelectQuery &>();
 
     select_query.replaceDatabaseAndTable(database, table);
-    if (txn_id)
-    {
-        ASTPtr settings_ast;
-        if (!select_query.settings())
-        {
-            settings_ast = std::make_shared<ASTSetQuery>();
-            settings_ast->as<ASTSetQuery &>().is_standalone = false;
-        }
-        else
-        {
-            settings_ast = select_query.getSettings();
-        }
-        modifyOrAddSetting(settings_ast->as<ASTSetQuery &>(), "prepared_transaction_id", Field(txn_id));
-        select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::move(settings_ast));
-    }
 
     RestoreQualifiedNamesVisitor::Data data;
     data.distributed_table = DatabaseAndTableWithAlias(*getTableExpression(query->as<ASTSelectQuery &>(), 0));

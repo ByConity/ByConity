@@ -417,12 +417,6 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             context->setCurrentTransaction(txn);
             return txn;
         }
-        else if (context->getSettingsRef().prepared_transaction_id > 0)
-        {
-            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Creating temporary transaction {}\n", context->getSettingsRef().prepared_transaction_id);
-            context->setTemporaryTransaction(TxnTimestamp{context->getSettingsRef().prepared_transaction_id}, TxnTimestamp{context->getSettingsRef().prepared_transaction_id});
-            return context->getCurrentTransaction();
-        }
     }
 
     return {};
@@ -462,7 +456,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     /// FIXME: Use global join for cnch join works for sql mode first.
     /// Will be replaced by distributed query after @youzhiyuan add query plan runtime.
-    if (context->getServerType() == ServerType::cnch_server) 
+    if (context->getServerType() == ServerType::cnch_server)
     {
         context->setSetting("distributed_product_mode", String{"global"});
     }

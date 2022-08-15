@@ -103,7 +103,7 @@ QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
     {
         return QueryProcessingStage::Complete;
     }
-    else if (this->getSettings()->cnch_enable_memory_buffer)
+    else if (getSettings()->cnch_enable_memory_buffer)
     {
         return QueryProcessingStage::WithMergeableState;
     }
@@ -238,7 +238,7 @@ void StorageCnchMergeTree::read(
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
     LOG_TRACE(log, "original query before rewrite: {}", queryToString(query_info.query));
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name, local_context->getCurrentTransactionID());
+    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name);
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
@@ -314,13 +314,13 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
 
     if (local_context->getSettingsRef().enable_partition_prune && partition_key_sample.columns() > 0)
     {
-        /// (2) Prune partitions if there's a column in predicate that exactly match the partition key 
+        /// (2) Prune partitions if there's a column in predicate that exactly match the partition key
         Names partition_key_columns;
         for (const auto & name : partition_key_sample)
         {
             partition_key_columns.emplace_back(name.name);
         }
-        
+
         KeyCondition partition_condition(query_info, local_context, partition_key_columns, partition_key_expr);
         DataTypes result;
         result.reserve(partition_key_sample.getDataTypes().size());
@@ -571,7 +571,7 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
     if (!inner_query)
-        throw Exception("select query is necessary for mv table", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Select query is necessary for mv table", ErrorCodes::LOGICAL_ERROR);
 
     auto & select_query = inner_query->as<ASTSelectQuery &>();
     select_query.replaceDatabaseAndTable(mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
@@ -594,7 +594,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
 
     auto catalog_client = local_context->getCnchCatalog();
     if (!catalog_client)
-        throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Get catalog client failed", ErrorCodes::LOGICAL_ERROR);
 
     auto all_views_from_catalog = catalog_client->getAllViewsOn(*local_context, storage, start_time);
     if (all_views_from_catalog.empty())
@@ -608,7 +608,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
         auto table = DatabaseCatalog::instance().getTable(dependence, local_context);
         if (!table)
         {
-            LOG_WARNING(log, "table {} not found", dependence.getNameForLogs());
+            LOG_WARNING(log, "Table {} not found", dependence.getNameForLogs());
             continue;
         }
 
@@ -617,7 +617,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             auto target_table = mv->tryGetTargetTable();
             if (!target_table)
             {
-                LOG_WARNING(log, "target table for {} not exist", mv->getTargetTableName());
+                LOG_WARNING(log, "Target table for {} not exist", mv->getTargetTableName());
                 continue;
             }
 
@@ -625,7 +625,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(const StorageID & sto
             auto * cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (!cnch_merge)
             {
-                LOG_WARNING(log, "table type not matched for {}, CnchMergeTree is expected", target_table->getTableName());
+                LOG_WARNING(log, "Table type not matched for {}, CnchMergeTree is expected", target_table->getTableName());
                 continue;
             }
             auto create_target_query = target_table->getCreateTableSql();
