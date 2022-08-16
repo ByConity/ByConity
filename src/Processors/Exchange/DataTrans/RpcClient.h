@@ -18,6 +18,7 @@ public:
     const auto & getAddress() const { return host_port; }
     bool ok() const { return ok_.load(std::memory_order_relaxed); }
     void reset() { ok_.store(true, std::memory_order_relaxed); }
+    void checkAliveWithController(const brpc::Controller & cntl) noexcept;
 
     auto & getChannel() { return *brpc_channel; }
 
