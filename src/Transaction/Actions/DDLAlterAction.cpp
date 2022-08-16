@@ -37,7 +37,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
 {
     /// In DDLAlter, we only update schema.
     LOG_DEBUG(log, "Wait for change schema in Catalog.");
-    auto catalog = getContext()->getCnchCatalog();
+    auto catalog = global_context.getCnchCatalog();
     try
     {
         if (!mutation_commands.empty())
@@ -57,7 +57,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
             LOG_DEBUG(log, "Successfully create mutation for alter query.");
         }
 
-        // auto cache = getContext()->getMaskingPolicyCache();
+        // auto cache = global_context.getMaskingPolicyCache();
         // table->checkMaskingPolicy(*cache);
 
         updateTsCache(table->getStorageUUID(), commit_time);
@@ -79,7 +79,7 @@ void DDLAlterAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTim
 
 void DDLAlterAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
 {
-    auto & ts_cache_manager = getContext()->getCnchTransactionCoordinator().getTsCacheManager();
+    auto & ts_cache_manager = global_context.getCnchTransactionCoordinator().getTsCacheManager();
     auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
     auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
     ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);

@@ -26,7 +26,7 @@ public:
     // read_only transaction will not write transaction record to kv
     CnchServerTransaction(const ContextPtr & context_, TransactionRecord txn_record_);
 
-    ~CnchServerTransaction() override = default; 
+    ~CnchServerTransaction() override = default;
     String getTxnType() const override { return "CnchServerTransaction"; }
 
     void appendAction(ActionPtr act) override;

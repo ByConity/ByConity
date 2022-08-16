@@ -8,8 +8,8 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/formatAST.h>
 #include <Transaction/Actions/DDLCreateAction.h>
+#include <Transaction/Actions/DDLDropAction.h>
 #include <Transaction/ICnchTransaction.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -39,32 +39,22 @@ DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, ContextPtr local_con
 void DatabaseCnch::createTable(
     ContextPtr local_context,
     const String & table_name,
-    const StoragePtr & /*table*/,
+    const StoragePtr & table,
     const ASTPtr & query)
 {
-    //const auto & settings = local_context->getSettingsRef();
-    //const auto & create = query->as<ASTCreateQuery &>();
-    //assert(table_name == create.table);
     LOG_DEBUG(log, "Create table {} in query {}", table_name, local_context->getCurrentQueryId());
 
     String statement = serializeAST(*query);
-
-#if 1
-    getContext()->getCnchCatalog()->createTable(*local_context, getDatabaseName(), table_name, statement, "", 0, 0);
-#else
-    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
-    auto txn = txn_coordinator.createTransaction(CreateTransactionOption().setReadOnly(false).setPrimaryTransactionId(0).setForceCleanByDM(false));
+    auto txn = local_context->getCurrentTransaction();
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    /// create table action
-    CreateActionParams params = {getDatabaseName(), table_name, create.uuid, table->getCreateTableSql()};
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
-    txn_coordinator.commitV1(txn);
-    LOG_DEBUG(log, "Successfully create table {} in query {}", table_name, local_context->getCurrentQueryId());
-#endif
+    txn->commitV1();
+    LOG_TRACE(log, "Successfully create table {} in query {}", table_name, local_context->getCurrentQueryId());
 }
 
 void DatabaseCnch::dropTable(
@@ -74,17 +64,37 @@ void DatabaseCnch::dropTable(
 {
     LOG_DEBUG(log, "Drop table {} in query {}, no delay {}"
          , table_name, local_context->getCurrentQueryId(), no_delay);
+
+    auto txn = local_context->getCurrentTransaction();
+
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+    //auto table_lock = txn->createIntentLock({database_name, table_name});
+    //table_lock->lock();
+
     StoragePtr storage = local_context->getCnchCatalog()->getTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
     if (!storage)
         throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
-    getContext()->getCnchCatalog()->dropTable(storage, 0, TxnTimestamp::maxTS(), TxnTimestamp::maxTS());
+
+    DropActionParams params{getDatabaseName(), table_name, storage->commit_time, ASTDropQuery::Kind::Drop};
+    DDLDropActionPtr drop_action = std::make_shared<DDLDropAction>(local_context, txn->getTransactionID(), std::move(params), std::vector{std::move(storage)});
+    txn->appendAction(std::move(drop_action));
+    txn->commitV1();
 }
 
 void DatabaseCnch::drop(ContextPtr local_context)
 {
     LOG_DEBUG(log, "Drop database {} in query {}", database_name , local_context->getCurrentQueryId());
 
-    getContext()->getCnchCatalog()->dropDatabase(database_name, 0, TxnTimestamp::maxTS(), TxnTimestamp::maxTS());
+    auto txn = local_context->getCurrentTransaction();
+
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+    DropActionParams params{getDatabaseName(), "", commit_time, ASTDropQuery::Kind::Drop};
+    DDLDropActionPtr drop_action = std::make_shared<DDLDropAction>(local_context, txn->getTransactionID(), std::move(params));
+    txn->appendAction(std::move(drop_action));
+    txn->commitV1();
 }
 
 ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
@@ -189,6 +199,18 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
     }
 
     return ast;
+}
+
+void DatabaseCnch::createEntryInCnchCatalog(ContextPtr local_context) const
+{
+    auto txn = local_context->getCurrentTransaction();
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+    CreateActionParams params = {getDatabaseName(), "", getUUID(), ""};
+    auto create_db = txn->createAction<DDLCreateAction>(std::move(params));
+    txn->appendAction(std::move(create_db));
+    txn->commitV1();
 }
 
 }

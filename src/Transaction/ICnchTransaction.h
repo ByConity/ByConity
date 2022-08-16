@@ -1,25 +1,26 @@
 #pragma once
 
+#include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Core/Types.h>
 #include <MergeTreeCommon/InsertionLabel.h>
-#include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Transaction/Actions/IAction.h>
 #include <bthread/mutex.h>
 #include <cppkafka/cppkafka.h>
-#include <Transaction/Actions/IAction.h>
 // #include <Transaction/CnchLock.h>
 // #include <Transaction/IntentLock.h>
-#include <Transaction/TransactionCommon.h>
-#include <Transaction/TxnTimestamp.h>
-#include <common/logger_useful.h>
-#include <cppkafka/topic_partition_list.h>
-#include <MergeTreeCommon/InsertionLabel.h>
-#include <Common/serverLocality.h>
-#include <Common/TypePromotion.h>
-#include <common/getFQDNOrHostName.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
+#include <MergeTreeCommon/InsertionLabel.h>
+#include <Transaction/TransactionCommon.h>
+#include <Transaction/TxnTimestamp.h>
+#include <cppkafka/topic_partition_list.h>
+#include <Common/TypePromotion.h>
+#include <Common/serverLocality.h>
+#include <common/getFQDNOrHostName.h>
+#include <common/logger_useful.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <memory>
 #include <string>
@@ -38,8 +39,9 @@ bool isReadOnlyTransaction(const DB::IAST * ast);
 class ICnchTransaction : public TypePromotion<ICnchTransaction>, public WithContext
 {
 public:
-    explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_->getGlobalContext()) { }
-    explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record) : WithContext(context_->getGlobalContext()), txn_record(std::move(record))
+    explicit ICnchTransaction(const ContextPtr & context_) : WithContext(context_), global_context(*context_->getGlobalContext()) { }
+    explicit ICnchTransaction(const ContextPtr & context_, TransactionRecord record)
+        : WithContext(context_), global_context(*context_->getGlobalContext()), txn_record(std::move(record))
     {
     }
 
@@ -70,7 +72,7 @@ public:
 
     bool isPrepared() { return txn_record.isPrepared(); }
 
-    bool isPrimary() {return txn_record.isPrimary(); }
+    bool isPrimary() { return txn_record.isPrimary(); }
 
     bool isSecondary() { return txn_record.isSecondary(); }
 
@@ -87,7 +89,7 @@ public:
     ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
-    std::shared_ptr<TAction> createAction( Args &&... args) const
+    std::shared_ptr<TAction> createAction(Args &&... args) const
     {
         return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
     }
@@ -100,10 +102,7 @@ public:
     void unlock();
 
     // If transaction is initiated by worker, record the worker's host and port
-    void setCreator(String creator_)
-    {
-        creator = std::move(creator_);
-    }
+    void setCreator(String creator_) { creator = std::move(creator_); }
     const String & getCreator() const { return creator; }
 
     virtual String getTxnType() const = 0;
@@ -129,10 +128,12 @@ public:
         throw Exception("getKafkaTableID is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    virtual void setKafkaConsumerIndex(size_t) {
+    virtual void setKafkaConsumerIndex(size_t)
+    {
         throw Exception("setKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
-    virtual size_t getKafkaConsumerIndex() const {
+    virtual size_t getKafkaConsumerIndex() const
+    {
         throw Exception("getKafkaConsumerIndex is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
@@ -140,10 +141,7 @@ public:
     const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
     static constexpr auto default_lock_expire_duration = std::chrono::milliseconds(30000);
-    void setLockExpireDuration(std::chrono::milliseconds expire_duration)
-    {
-        lock_expire_duration = expire_duration;
-    }
+    void setLockExpireDuration(std::chrono::milliseconds expire_duration) { lock_expire_duration = expire_duration; }
 
 public:
     // Commit API for 2PC, internally calls precommit() and commit()
@@ -166,10 +164,7 @@ public:
     // Commit API for one-phase commit
     // DOES NOT support rollback if fails
     // DDL statements only supports commitV1 now
-    virtual TxnTimestamp commitV1()
-    {
-        throw Exception("commitV1 is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED);
-    }
+    virtual TxnTimestamp commitV1() { throw Exception("commitV1 is not supported for " + getTxnType(), ErrorCodes::NOT_IMPLEMENTED); }
 
     // Set transaction status to aborted
     // WILL NOT rollback
@@ -185,7 +180,7 @@ public:
     virtual void removeIntermediateData() { }
 
     bool force_clean_by_dm = false;
-    
+
 protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
@@ -195,6 +190,9 @@ private:
     void reportLockHeartBeatTask();
 
 protected:
+    /// Transaction still needs global context because the query context will expired after query is finished, but
+    /// the transaction still running even query is finished.
+    const Context & global_context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
 
@@ -215,7 +213,7 @@ private:
     // CnchLockPtrs cnch_locks;
     BackgroundSchedulePool::TaskHolder report_lock_heartbeat_task;
     static constexpr UInt64 heartbeat_interval = 5000;
-    std::chrono::milliseconds lock_expire_duration {default_lock_expire_duration};
+    std::chrono::milliseconds lock_expire_duration{default_lock_expire_duration};
     Poco::Logger * log{&Poco::Logger::get("ICnchTransaction")};
 };
 
@@ -229,7 +227,7 @@ public:
     TransactionCnchHolder(TransactionCnchHolder &&) = default;
     TransactionCnchHolder & operator=(TransactionCnchHolder &&) = default;
 
-    void release() {}
+    void release() { }
 
     ~TransactionCnchHolder() { release(); }
 

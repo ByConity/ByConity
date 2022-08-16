@@ -24,7 +24,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, CnchSe
     TransactionRecord record;
     record.setID(txn_id).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Worker)).setStatus(CnchTransactionStatus::Running);
     setTransactionRecord(std::move(record));
-    isInitiator = true;
+    is_initiator = true;
 }
 
 CnchWorkerTransaction::CnchWorkerTransaction(
@@ -37,7 +37,7 @@ CnchWorkerTransaction::CnchWorkerTransaction(
     TransactionRecord record;
     record.setID(txn_id).setStatus(CnchTransactionStatus::Running).setInitiator(txnInitiatorToString(CnchTransactionInitiator::Kafka));
     setTransactionRecord(std::move(record));
-    isInitiator = true;
+    is_initiator = true;
 }
 
 CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id)
@@ -57,7 +57,7 @@ CnchWorkerTransaction::~CnchWorkerTransaction()
 {
     try
     {
-        if (isInitiator && getTransactionID())
+        if (is_initiator && getTransactionID())
         {
             checkServerClient();
             server_client->finishTransaction(getTransactionID());
@@ -171,7 +171,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
         if (e.code() == ErrorCodes::BRPC_TIMEOUT)
         {
             // TODO: check in catalog
-            TxnTimestamp commit_ts = getContext()->getTimestamp();
+            TxnTimestamp commit_ts = global_context.getTimestamp();
             TransactionRecord prev_record;
             bool success = false;
             try
@@ -179,7 +179,7 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
                 TransactionRecord target_record = getTransactionRecord();
                 target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(commit_ts).setMainTableUUID(getMainTableUUID());
 
-                success = getContext()->getCnchCatalog()->setTransactionRecord(txn_record, target_record);
+                success = global_context.getCnchCatalog()->setTransactionRecord(txn_record, target_record);
                 txn_record = std::move(target_record);
             }
             catch (...)

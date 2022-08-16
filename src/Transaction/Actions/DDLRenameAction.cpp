@@ -49,7 +49,7 @@ void DDLRenameAction::renameTablePrefix(TxnTimestamp commit_time)
 
 void DDLRenameAction::executeV1(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = global_context.getCnchCatalog();
 
     if (params.type == RenameActionParams::Type::RENAME_TABLE)
     {
@@ -72,7 +72,7 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
 
 void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = getContext()->getCnchCatalog();
+    Catalog::CatalogPtr cnch_catalog = global_context.getCnchCatalog();
     // auto daemon_manager = getContext()->getDaemonManagerClient();
     // if (!daemon_manager)
     //     throw Exception("No DaemonManager client available.", ErrorCodes::LOGICAL_ERROR);
