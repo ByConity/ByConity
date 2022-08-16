@@ -712,11 +712,11 @@ namespace Catalog
 
                 /// get latest table version.
                 auto table = tryGetTableFromMetastore(table_uuid, UINT64_MAX);
-                const auto & db = table->database();
-                const auto & name = table->name();
 
                 if (table)
                 {
+                    const auto & db = table->database();
+                    const auto & name = table->name();
                     auto multiWrite = meta_proxy->createMultiWrite();
                     Protos::TableIdentifier identifier;
                     identifier.set_database(db);
