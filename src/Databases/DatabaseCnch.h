@@ -41,6 +41,7 @@ public:
     DatabaseTablesIteratorPtr getTablesIterator(ContextPtr context, const FilterByNameFunction & filter_by_table_name = {}) override;
     bool empty() const override;
     void shutdown() override {}
+    void createEntryInCnchCatalog(ContextPtr context) const;
 
     TxnTimestamp commit_time;
 protected:

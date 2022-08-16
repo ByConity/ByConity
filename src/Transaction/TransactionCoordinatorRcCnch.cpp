@@ -53,16 +53,9 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
 
     ContextPtr txn_context;
     if (opt.query_context)
-    { 
         txn_context = opt.query_context;
-    }
     else
-    {
-        auto tmp_context = Context::createCopy(getContext());
-        tmp_context->makeSessionContext();
-        tmp_context->makeQueryContext();
-        txn_context = std::move(tmp_context);
-    }
+        txn_context = getContext();
 
     TransactionCnchPtr txn = nullptr;
     if (opt.type == CnchTransactionType::Implicit)
