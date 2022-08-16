@@ -97,7 +97,7 @@
     <user_files_path>/Path_To_ClickHouse/cnch_test/worker/user_files/</user_files_path>
 
     <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
-    <users_config>/data01/vivek.lakshmanan.v/profiling/utils/deploy/cluster/Server-0/cnch-users.xml</users_config>
+    <users_config>/Path_To_ClickHouse/cnch-users.xml</users_config>
 
     <!-- Default profile of settings. -->
     <default_profile>default</default_profile>

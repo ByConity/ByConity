@@ -168,6 +168,7 @@ class Entity:
         self.conf.update(ROOT / 'path', self.workspace / "data")
         self.conf.update(ROOT / 'tmp_path', self.workspace / "tmp_data")
         self.conf.update(ROOT / 'user_files_path', self.workspace / "user_files")
+        self.conf.update(ROOT / 'users_config', self.workspace / "cnch-users.xml")
 
         self.conf.update(ROOT / 'format_schema_path',
                          self.workspace / "format_schemas")
@@ -431,8 +432,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--template_paths',
                         nargs = '+',
-                        help='server and worker templates for cnch;'\
-                             ' server/shard template for ce')
+                        help='server and worker templates for cnch;')
 
     parser.add_argument('-r',
                         '--num_read_worker',
