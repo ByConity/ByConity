@@ -1,8 +1,10 @@
 DROP TABLE IF EXISTS grouping_sets;
+DROP TABLE IF EXISTS grouping_sets_local;
 
-CREATE TABLE grouping_sets(fact_1_id Int32, fact_2_id Int32, fact_3_id Int32, fact_4_id Int32, sales_value Int32) ENGINE = Memory;
+CREATE TABLE grouping_sets_local(fact_1_id Int32, fact_2_id Int32, fact_3_id Int32, fact_4_id Int32, sales_value Int32) ENGINE = MergeTree ORDER BY tuple();
+CREATE TABLE grouping_sets AS grouping_sets_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), 'grouping_sets_local');
 
-INSERT INTO grouping_sets
+INSERT INTO grouping_sets_local
 SELECT
     number % 2 + 1 AS fact_1_id,
        number % 5 + 1 AS fact_2_id,
@@ -97,3 +99,4 @@ GROUP BY
 ORDER BY fact_3_id ASC NULLS FIRST;
 
 DROP TABLE IF EXISTS grouping_sets;
+DROP TABLE IF EXISTS grouping_sets_local;

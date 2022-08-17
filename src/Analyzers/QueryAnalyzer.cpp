@@ -1155,7 +1155,7 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
     if (select_query.groupBy())
     {
         bool allow_group_by_position = context->getSettingsRef().enable_replace_group_by_literal_to_symbol
-            && !select_query.group_by_with_rollup && !select_query.group_by_with_cube /* && !select_query.group_by_with_grouping_sets */;
+            && !select_query.group_by_with_rollup && !select_query.group_by_with_cube && !select_query.group_by_with_grouping_sets;
 
         auto analyze_grouping_set = [&](ASTs & grouping_expr_list)
         {
@@ -1195,29 +1195,15 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
             grouping_expressions.insert(grouping_expressions.end(), analyzed_grouping_set.begin(), analyzed_grouping_set.end());
         };
 
-        /*
         if (select_query.group_by_with_grouping_sets)
         {
             for (auto & grouping_set_element: select_query.groupBy()->children)
-            {
-                if (auto * func = grouping_set_element->as<ASTFunction>(); func && func->name == "tuple")
-                {
-                    analyze_grouping_set(func->arguments->children);
-                }
-                else
-                {
-                    ASTs grouping_expr_list {grouping_set_element};
-                    analyze_grouping_set(grouping_expr_list);
-                }
-            }
+                analyze_grouping_set(grouping_set_element->children);
         }
         else
         {
             analyze_grouping_set(select_query.groupBy()->children);
         }
-        */
-
-        analyze_grouping_set(select_query.groupBy()->children);
     }
 
     analysis.group_by_results[&select_query] = GroupByAnalysis {std::move(grouping_expressions), std::move(grouping_sets)};

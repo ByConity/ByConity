@@ -117,17 +117,24 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
         set.emplace_back(Property{Partitioning{Partitioning::Handle::SINGLE}});
         return {set};
     }
-    std::vector<String> group_bys;
-    for (const auto & key : keys)
-    {
-        group_bys.emplace_back(key);
-    }
-    PropertySet set;
-    set.emplace_back(Property{Partitioning{
+
+    PropertySets sets;
+
+    sets.emplace_back(PropertySet{Property{Partitioning{
         Partitioning::Handle::FIXED_HASH,
-        group_bys,
-    }});
-    return {set};
+        keys,
+    }}});
+
+    if (step.isGroupingSet())
+    {
+        keys.emplace_back("__grouping_set");
+        sets.emplace_back(PropertySet{Property{Partitioning{
+            Partitioning::Handle::FIXED_HASH,
+            keys,
+        }}});
+    }
+
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &)

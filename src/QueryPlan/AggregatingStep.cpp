@@ -110,6 +110,43 @@ Aggregator::Params AggregatingStep::createParams(Block header_before_aggregation
         header_before_aggregation, keys, aggregates, false, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, 0, 0, false, 0);
 }
 
+GroupingSetsParamsList AggregatingStep::prepareGroupingSetsParams() const
+{
+    bool is_prepared = std::any_of(grouping_sets_params.cbegin(), grouping_sets_params.cend(),
+                                   [](const auto & p) { return !p.used_keys.empty() || !p.missing_keys.empty(); });
+
+    if (is_prepared)
+        return grouping_sets_params;
+
+    ColumnNumbers all_keys_index;
+    const auto & input_header = input_streams.front().header;
+
+    for (const auto & key : keys)
+        all_keys_index.push_back(input_header.getPositionByName(key));
+
+    GroupingSetsParamsList result;
+
+    for (const auto & param: grouping_sets_params)
+    {
+        ColumnNumbers used_indexes;
+        std::unordered_set<size_t> used_indexes_set;
+        for (const auto & key_name : param.used_key_names)
+        {
+            used_indexes.push_back(input_header.getPositionByName(key_name));
+            used_indexes_set.insert(used_indexes.back());
+        }
+
+        ColumnNumbers missing_indexes;
+        for (size_t i = 0; i < all_keys_index.size(); ++i)
+        {
+            if (!used_indexes_set.count(all_keys_index[i]))
+                missing_indexes.push_back(i);
+        }
+        result.emplace_back(std::move(used_indexes), std::move(missing_indexes));
+    }
+
+    return result;
+}
 
 AggregatingStep::AggregatingStep(
     const DataStream & input_stream_,
@@ -258,7 +295,8 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
 
     if (!grouping_sets_params.empty())
     {
-        const size_t grouping_sets_size = grouping_sets_params.size();
+        const auto prepared_sets_params = prepareGroupingSetsParams();
+        const size_t grouping_sets_size = prepared_sets_params.size();
 
         const size_t streams = pipeline.getNumStreams();
 
@@ -287,7 +325,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                 Aggregator::Params params_for_set
                 {
                     transform_params->params.src_header,
-                    grouping_sets_params[i].used_keys,
+                    prepared_sets_params[i].used_keys,
                     transform_params->params.aggregates,
                     transform_params->params.overflow_row,
                     transform_params->params.max_rows_to_group_by,
@@ -309,7 +347,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     auto many_data = std::make_shared<ManyAggregatedData>(streams);
                     for (size_t j = 0; j < streams; ++j)
                     {
-                        auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set, many_data, j, merge_threads, temporary_data_merge_threads);
+                        auto aggregation_for_set = std::make_shared<AggregatingTransform>(input_header, transform_params_for_set, many_data, j, merge_max_threads, temporary_data_merge_threads);
                         // For each input stream we have `grouping_sets_size` copies, so port index
                         // for transform #j should skip ports of first (j-1) streams.
                         connect(*ports[i + grouping_sets_size * j], aggregation_for_set->getInputs().front());
@@ -366,7 +404,7 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                 index.push_back(grouping_node);
 
                 size_t missign_column_index = 0;
-                const auto & missing_columns = grouping_sets_params[set_counter].missing_keys;
+                const auto & missing_columns = prepared_sets_params[set_counter].missing_keys;
 
                 for (size_t i = 0; i < output_header.columns(); ++i)
                 {
@@ -608,6 +646,7 @@ void AggregatingStep::serialize(WriteBuffer & buf) const
     writeVarUInt(grouping_sets_params.size(), buf);
     for (const auto & grouping_sets_param : grouping_sets_params)
     {
+        writeBinary(grouping_sets_param.used_key_names, buf);
         writeBinary(grouping_sets_param.used_keys, buf);
         writeBinary(grouping_sets_param.missing_keys, buf);
     }
@@ -667,8 +706,9 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
     for (size_t i = 0; i < size; ++i)
     {
         GroupingSetsParams param;
+        readBinary(param.used_key_names, buf);
         readBinary(param.used_keys, buf);
-        readBinary(param.used_keys, buf);
+        readBinary(param.missing_keys, buf);
         grouping_sets_params_.emplace_back(param);
     }
 
@@ -694,7 +734,7 @@ QueryPlanStepPtr AggregatingStep::deserialize(ReadBuffer & buf, ContextPtr conte
 std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
 {
     //  todo
-    return std::make_shared<AggregatingStep>(input_streams[0], keys, params.aggregates, final, cube, rollup, groupings);
+    return std::make_shared<AggregatingStep>(input_streams[0], keys, params.aggregates, grouping_sets_params, final, cube, rollup, groupings);
 }
 
 }

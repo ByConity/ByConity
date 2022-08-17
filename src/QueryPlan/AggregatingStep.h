@@ -17,7 +17,11 @@ struct GroupingSetsParams
 {
     GroupingSetsParams() = default;
 
+    GroupingSetsParams(Names used_key_names_) : used_key_names(std::move(used_key_names_)) { }
+
     GroupingSetsParams(ColumnNumbers used_keys_, ColumnNumbers missing_keys_) : used_keys(std::move(used_keys_)), missing_keys(std::move(missing_keys_)) { }
+
+    Names used_key_names;
 
     ColumnNumbers used_keys;
     ColumnNumbers missing_keys;
@@ -61,6 +65,7 @@ public:
         const DataStream & input_stream_,
         Names keys_,
         AggregateDescriptions aggregates_,
+        GroupingSetsParamsList grouping_sets_params_,
         bool final_,
         bool cube_ = false,
         bool rollup_ = false,
@@ -69,7 +74,7 @@ public:
             input_stream_,
             keys_,
             createParams(input_stream_.header, aggregates_, keys_),
-            GroupingSetsParamsList{},
+            std::move(grouping_sets_params_),
             final_,
             0,
             0,
@@ -116,16 +121,21 @@ public:
     const Aggregator::Params & getParams() const { return params; }
     const AggregateDescriptions & getAggregates() const { return params.aggregates; }
     const Names & getKeys() const { return keys; }
+    const GroupingSetsParamsList & getGroupingSetsParams() const { return grouping_sets_params; }
     bool isFinal() const { return final; }
     bool isCube() const { return cube; }
     bool isRollup() const { return rollup; }
+    bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const NameToNameMap & getGroupings() const { return groupings; }
+
+    bool isNormal() const { return final && !cube && !rollup && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
     static Aggregator::Params createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys);
+    GroupingSetsParamsList prepareGroupingSetsParams() const;
 
 private:
     Poco::Logger * log = &Poco::Logger::get("TableScanStep");

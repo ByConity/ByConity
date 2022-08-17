@@ -1114,21 +1114,36 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
     }
 
     // collect group by keys & prune invisible columns
-    Names grouping_keys;
-    {
-        NameSet grouping_key_set;
-        FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
-        AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
+    Names keys_for_all_group;
+    NameSet key_set_for_all_group;
+    GroupingSetsParamsList grouping_sets_params;
+    FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
+    AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
 
-        for (auto & grouping_expr: group_by_analysis.grouping_expressions)
+    auto process_grouping_set = [&](const ASTs & grouping_set) {
+        Names keys_for_this_group;
+        NameSet key_set_for_this_group;
+
+        for (const auto & grouping_expr: grouping_set)
         {
             auto symbol = builder.translateToSymbol(grouping_expr);
+            bool new_global_key = false;
 
-            // skip duplicated grouping key
-            if (grouping_key_set.emplace(symbol).second)
+            if (!key_set_for_all_group.count(symbol))
             {
-                grouping_keys.push_back(symbol);
+                keys_for_all_group.push_back(symbol);
+                key_set_for_all_group.insert(symbol);
+                new_global_key = true;
+            }
 
+            if (!key_set_for_this_group.count(symbol))
+            {
+                keys_for_this_group.push_back(symbol);
+                key_set_for_this_group.insert(symbol);
+            }
+
+            if (new_global_key)
+            {
                 if (auto col_ref = analysis.tryGetColumnReference(grouping_expr);
                     col_ref && builder.isLocalScope(col_ref->scope))
                 {
@@ -1149,13 +1164,20 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
                 }
             }
         }
-        builder.withNewMappings(visible_fields, complex_expressions);
-    }
+
+        grouping_sets_params.emplace_back(std::move(keys_for_this_group));
+    };
+
+    for (const auto & grouping_set : group_by_analysis.grouping_sets)
+        process_grouping_set(grouping_set);
+
+    builder.withNewMappings(visible_fields, complex_expressions);
 
     auto agg_step = std::make_shared<AggregatingStep>(
         builder.getCurrentDataStream(),
-        grouping_keys,
-        aggregate_descriptions,
+        std::move(keys_for_all_group),
+        std::move(aggregate_descriptions),
+        grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
         true,
         select_query.group_by_with_cube,
         select_query.group_by_with_rollup,

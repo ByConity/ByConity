@@ -308,7 +308,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        child->getStep()->getOutputStream(), step->getKeys(), aggs, step->isFinal(), step->isCube(), step->isRollup(), step->getGroupings()
+        child->getStep()->getOutputStream(), step->getKeys(), aggs, step->getGroupingSetsParams(), step->isFinal(), step->isCube(), step->isRollup(), step->getGroupings()
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
     );

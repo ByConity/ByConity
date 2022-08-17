@@ -182,6 +182,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
         child->getStep()->getOutputStream(),
         step.getKeys(),
         descs_set_nullable,
+        step.getGroupingSetsParams(),
         step.isFinal(),
         step.isCube(),
         step.isRollup(),

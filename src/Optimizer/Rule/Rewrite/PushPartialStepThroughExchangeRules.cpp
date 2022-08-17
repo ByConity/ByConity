@@ -56,6 +56,7 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         exchange_child->getStep()->getOutputStream(),
         step->getKeys(),
         step->getAggregates(),
+        step->getGroupingSetsParams(),
         false,
         step->isCube(),
         step->isRollup(),
@@ -78,6 +79,11 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
     PlanNodes exchange{exchange_node};
     auto exchange_header = exchange_node->getStep()->getOutputStream().header;
     ColumnNumbers keys;
+    if (!step->getGroupingSetsParams().empty())
+    {
+        keys.push_back(exchange_header.getPositionByName("__grouping_set"));
+    }
+
     for (const auto & key : step->getKeys())
     {
         keys.emplace_back(exchange_header.getPositionByName(key));
