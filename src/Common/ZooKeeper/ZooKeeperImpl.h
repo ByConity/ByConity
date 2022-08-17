@@ -6,6 +6,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/ZooKeeper/IKeeper.h>
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
+#include <Coordination/KeeperConstants.h>
 
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
@@ -80,6 +81,10 @@ namespace CurrentMetrics
     extern const Metric ZooKeeperSession;
 }
 
+namespace DB
+{
+    class ZooKeeperLog;
+}
 
 namespace Coordination
 {
@@ -110,7 +115,8 @@ public:
         const String & auth_data,
         Poco::Timespan session_timeout_,
         Poco::Timespan connection_timeout,
-        Poco::Timespan operation_timeout_);
+        Poco::Timespan operation_timeout_,
+        std::shared_ptr<ZooKeeperLog> zk_log_);
 
     ~ZooKeeper() override;
 
@@ -158,6 +164,7 @@ public:
 
     void list(
         const String & path,
+        ListRequestType list_request_type,
         ListCallback callback,
         WatchCallback watch) override;
 
@@ -169,6 +176,8 @@ public:
     void multi(
         const Requests & requests,
         MultiCallback callback) override;
+
+    DB::KeeperApiVersion getApiVersion() override;
 
     /// Without forcefully invalidating (finalizing) ZooKeeper session before
     /// establishing a new one, there was a possibility that server is using
@@ -258,7 +267,14 @@ private:
     template <typename T>
     void read(T &);
 
+    void logOperationIfNeeded(const ZooKeeperRequestPtr & request, const ZooKeeperResponsePtr & response = nullptr, bool finalize = false);
+
+    void initApiVersion();
+
     CurrentMetrics::Increment active_session_metric_increment{CurrentMetrics::ZooKeeperSession};
+    std::shared_ptr<ZooKeeperLog> zk_log;
+
+    DB::KeeperApiVersion keeper_api_version{DB::KeeperApiVersion::ZOOKEEPER_COMPATIBLE};
 };
 
 }

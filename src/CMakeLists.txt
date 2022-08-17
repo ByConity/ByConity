@@ -382,15 +382,16 @@ target_link_libraries(clickhouse_common_io
 
 )
 
-
 target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR})
 target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${CONSUL_INCLUDE_DIR})
 # dbms_target_link_libraries(PUBLIC ${CONSUL_LIBRARIES})
 # dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${CONSUL_INCLUDE_DIR})
+
+# dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
+
 if (USE_RDKAFKA)
     dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
     dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})
-
     if(NOT USE_INTERNAL_RDKAFKA_LIBRARY)
         dbms_target_include_directories(SYSTEM BEFORE PRIVATE ${RDKAFKA_INCLUDE_DIR})
     endif()

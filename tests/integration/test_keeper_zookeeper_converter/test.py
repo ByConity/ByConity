@@ -95,7 +95,13 @@ def compare_states(zk1, zk2, path="/"):
     second_children = list(sorted(zk2.get_children(path)))
     print("Got children left", first_children)
     print("Got children rigth", second_children)
-    assert first_children == second_children, "Childrens are not equal on path " + path
+
+    if path == "/":
+        assert set(first_children) ^ set(second_children) == set(["keeper"])
+    else:
+        assert first_children == second_children, (
+            "Childrens are not equal on path " + path
+        )
 
     for children in first_children:
         print("Checking child", os.path.join(path, children))

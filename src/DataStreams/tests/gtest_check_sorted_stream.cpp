@@ -113,10 +113,12 @@ TEST(CheckSortedBlockInputStream, CheckBadLastRow)
 
     CheckSortedBlockInputStream sorted(stream, sort_description);
 
+    EXPECT_NO_THROW(sorted.read());
+    EXPECT_NO_THROW(sorted.read());
 
-    EXPECT_NO_THROW(sorted.read());
-    EXPECT_NO_THROW(sorted.read());
+#ifndef ABORT_ON_LOGICAL_ERROR
     EXPECT_THROW(sorted.read(), DB::Exception);
+#endif
 }
 
 
@@ -131,7 +133,9 @@ TEST(CheckSortedBlockInputStream, CheckUnsortedBlock1)
 
     CheckSortedBlockInputStream sorted(stream, sort_description);
 
+#ifndef ABORT_ON_LOGICAL_ERROR
     EXPECT_THROW(sorted.read(), DB::Exception);
+#endif
 }
 
 TEST(CheckSortedBlockInputStream, CheckUnsortedBlock2)
@@ -145,7 +149,9 @@ TEST(CheckSortedBlockInputStream, CheckUnsortedBlock2)
 
     CheckSortedBlockInputStream sorted(stream, sort_description);
 
+#ifndef ABORT_ON_LOGICAL_ERROR
     EXPECT_THROW(sorted.read(), DB::Exception);
+#endif
 }
 
 TEST(CheckSortedBlockInputStream, CheckUnsortedBlock3)
@@ -159,7 +165,9 @@ TEST(CheckSortedBlockInputStream, CheckUnsortedBlock3)
 
     CheckSortedBlockInputStream sorted(stream, sort_description);
 
+#ifndef ABORT_ON_LOGICAL_ERROR
     EXPECT_THROW(sorted.read(), DB::Exception);
+#endif
 }
 
 TEST(CheckSortedBlockInputStream, CheckEqualBlock)

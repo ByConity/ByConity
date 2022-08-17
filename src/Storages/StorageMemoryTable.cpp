@@ -76,21 +76,21 @@ namespace ErrorCodes
 }
 
 
-StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_, 
+StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_,
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
     const String & comment,
     ContextPtr context_,
     size_t num_shards_,
-    const Thresholds & min_thresholds_, 
+    const Thresholds & min_thresholds_,
     const Thresholds & max_thresholds_,
     const StorageID & destination_id_,
-    bool allow_materialized_, 
+    bool allow_materialized_,
     size_t write_block_queue_size)
     : IStorage(table_id_),
     WithContext(context_->getBufferContext()),
     num_shards(num_shards_),
-    min_thresholds(min_thresholds_), 
+    min_thresholds(min_thresholds_),
     max_thresholds(max_thresholds_),
     destination_id(destination_id_),
     allow_materialized(allow_materialized_),
@@ -106,7 +106,7 @@ StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_,
     setInMemoryMetadata(storage_metadata);
 
     log = &Poco::Logger::get("StorageMemoryTable (" + table_id_.getNameForLogs() + ")");
-    
+
     for (size_t i = 0; i < num_shards; ++i)
     {
         buffer_contexts[i].buffer.index = i;
@@ -117,7 +117,7 @@ StorageMemoryTable::StorageMemoryTable(const StorageID & table_id_,
         buffer_contexts[i].write_block_queue = std::make_shared<ConcurrentBoundedQueue<WriteBlockRequest>>(write_block_queue_size);
     }
     read_memory_mode = ReadMemoryTableMode::ALL;
-    
+
 }
 
 StorageMemoryTable::~StorageMemoryTable()
@@ -177,7 +177,7 @@ protected:
     {
         if (buffer.data.empty())
             return;
-        
+
         Columns columns;
         columns.reserve(column_names_and_types.size());
         for (const auto & elem : column_names_and_types)
@@ -217,7 +217,7 @@ protected:
         UInt64 size = columns.at(0)->size();
         result.setColumns(std::move(columns), size);
     }
-    
+
     Chunk generate() override
     {
         Chunk res;
@@ -524,7 +524,7 @@ void StorageMemoryTable::read(
 class MemoryTableBlockOutputStream : public IBlockOutputStream
 {
 public:
-    explicit MemoryTableBlockOutputStream(StorageMemoryTable & storage_, const StorageMetadataPtr & metadata_snapshot_) 
+    explicit MemoryTableBlockOutputStream(StorageMemoryTable & storage_, const StorageMetadataPtr & metadata_snapshot_)
     : storage(storage_), metadata_snapshot(metadata_snapshot_) {}
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
@@ -626,10 +626,11 @@ void StorageMemoryTable::shutdown()
     for (auto & buffer_context : buffer_contexts)
     {
         buffer_context.async_write_task->deactivate();
-        while (buffer_context.write_block_queue->size() != 0)
+        while (!buffer_context.write_block_queue->empty())
         {
             WriteBlockRequest write_request;
-            buffer_context.write_block_queue->pop(write_request);
+            if (!buffer_context.write_block_queue->pop(write_request))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not pop data from write_block_queue");
             writeBlockToDestination(write_request.blocks, DatabaseCatalog::instance().tryGetTable(destination_id, getContext()));
         }
     }
@@ -782,7 +783,8 @@ void StorageMemoryTable::flushBuffer(Buffer & buffer, bool check_thresholds)
         */
     try
     {
-        buffer_contexts[buffer.index].write_block_queue->push(WriteBlockRequest(blocks_to_write));
+        if (!buffer_contexts[buffer.index].write_block_queue->push(WriteBlockRequest(blocks_to_write)))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not push data to write_block_queue");
         buffer_contexts[buffer.index].async_write_task->schedule();
     }
     catch (...)
@@ -841,7 +843,7 @@ bool StorageMemoryTable::writeBlockToDestination(std::list<std::shared_ptr<Block
           * This will support some of the cases (but not all) when the table structure does not match.
           */
         std::shared_ptr<Block> front_raw_block = *immutable_blocks.begin();
-        Block structure_of_destination_table = allow_materialized ? destination_metadata_snapshot->getSampleBlock() 
+        Block structure_of_destination_table = allow_materialized ? destination_metadata_snapshot->getSampleBlock()
                                                                   : destination_metadata_snapshot->getSampleBlockNonMaterialized();
         Block block_to_write;
         for (size_t i : collections::range(0, structure_of_destination_table.columns()))
@@ -859,7 +861,7 @@ bool StorageMemoryTable::writeBlockToDestination(std::list<std::shared_ptr<Block
                 column_type_name.column = std::move(col_to);
                 if (!column_type_name.type->equals(*dst_col.type))
                 {
-                    LOG_WARNING(log, "Destination table {} have different type of column ({} != {}) .Block of data is converted.", destination_id.getNameForLogs(), 
+                    LOG_WARNING(log, "Destination table {} have different type of column ({} != {}) .Block of data is converted.", destination_id.getNameForLogs(),
                                                           backQuoteIfNeed(column_type_name.name), dst_col.type->getName(), column_type_name.type->getName());
                     column_type_name.column = castColumn(column_type_name, dst_col.type);
                     column_type_name.type = dst_col.type;
@@ -871,13 +873,13 @@ bool StorageMemoryTable::writeBlockToDestination(std::list<std::shared_ptr<Block
 
         if (block_to_write.columns() == 0)
         {
-            LOG_ERROR(log, "Destination table {} have no common columns with block in buffer. Block of data is discarded.", 
+            LOG_ERROR(log, "Destination table {} have no common columns with block in buffer. Block of data is discarded.",
                            destination_id.getNameForLogs());
             throw Exception("Destination table have no common columns with block in buffer. Block of data is discarded.", ErrorCodes::LOGICAL_ERROR);
         }
 
         if (block_to_write.columns() != front_raw_block->columns())
-            LOG_WARNING(log, "Not all columns from block in buffer exist in destination table {}. Some columns are discarded.", 
+            LOG_WARNING(log, "Not all columns from block in buffer exist in destination table {}. Some columns are discarded.",
                              destination_id.getNameForLogs());
 
         auto list_of_columns = std::make_shared<ASTExpressionList>();
@@ -907,10 +909,12 @@ void StorageMemoryTable::asyncWriteBlock(size_t buffer_index)
 {
     try
     {
-        while (buffer_contexts[buffer_index].write_block_queue->size() != 0)
+        while (!buffer_contexts[buffer_index].write_block_queue->empty())
         {
             WriteBlockRequest write_request;
-            buffer_contexts[buffer_index].write_block_queue->pop(write_request);
+            if (!buffer_contexts[buffer_index].write_block_queue->pop(write_request))
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not pop data from write_block_queue");
+
             LOG_TRACE(log, "asyncWriteBlock thread process block write request block size-{}", write_request.blocks.size());
             writeBlockToDestination(write_request.blocks, DatabaseCatalog::instance().tryGetTable(destination_id, getContext()));
         }

@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <common/types.h>
 
-#include <Core/Defines.h>
+#include <Core/ProtocolDefines.h>
 #include <Common/Stopwatch.h>
 
 

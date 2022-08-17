@@ -1,7 +1,7 @@
 #include "NativeChunkOutputStream.h"
 #include <Compression/CompressedWriteBuffer.h>
 #include <Core/Block.h>
-#include <Core/Defines.h>
+#include <Core/ProtocolDefines.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <IO/VarInt.h>
 #include <Common/typeid_cast.h>
