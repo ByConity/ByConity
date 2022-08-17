@@ -1,0 +1,28 @@
+CounterID	UInt32						
+StartDate	Date						
+UserID	UInt32						
+VisitID	UInt32						
+NestedColumn.A	Array(UInt8)						
+NestedColumn.S	Array(String)						
+ToDrop	UInt32						
+Added0	UInt32						
+Added1	UInt32						
+Added2	UInt32						
+AddedNested1.A	Array(UInt32)						
+AddedNested1.B	Array(UInt64)						
+AddedNested1.C	Array(String)						
+AddedNested2.A	Array(UInt32)						
+AddedNested2.B	Array(UInt64)						
+CounterID	UInt32						
+StartDate	Date						
+UserID	UInt32						
+VisitID	UInt32						
+Added0	String						
+Added1	UInt32						
+Added2	UInt32						
+AddedNested1.A	Array(UInt32)						
+AddedNested1.C	Array(String)						
+AddedNested2.A	Array(UInt32)						
+AddedNested2.B	Array(UInt64)						
+CREATE TABLE test.memory_buffer_test\n(\n    `i` Int64,\n    `ts` DateTime\n)\nENGINE = CnchMergeTree\nPARTITION BY toDate(ts)\nORDER BY ts\nSETTINGS index_granularity = 8192, cnch_enable_memory_buffer = 0, storage_policy = \'cnch_default_hdfs\'
+CREATE TABLE test.memory_buffer_test\n(\n    `i` Int64,\n    `ts` DateTime\n)\nENGINE = CnchMergeTree\nPARTITION BY toDate(ts)\nORDER BY ts\nSETTINGS index_granularity = 8192, cnch_enable_memory_buffer = 1, storage_policy = \'cnch_default_hdfs\'
