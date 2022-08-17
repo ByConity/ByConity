@@ -4,7 +4,7 @@
 #include <Common/ZooKeeper/ZooKeeperCommon.h>
 #include <Common/ZooKeeper/ZooKeeperIO.h>
 #include <Common/Exception.h>
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
+#include <libnuraft/nuraft.hxx>
 #include <Coordination/KeeperLogStore.h>
 #include <Coordination/Changelog.h>
 #include <common/logger_useful.h>
@@ -64,7 +64,8 @@ int main(int argc, char *argv[])
     ResponsesQueue queue{std::numeric_limits<size_t>::max()};
     SnapshotsQueue snapshots_queue{1};
     CoordinationSettingsPtr settings = std::make_shared<CoordinationSettings>();
-    auto state_machine = std::make_shared<KeeperStateMachine>(queue, snapshots_queue, argv[1], settings);
+    KeeperContextPtr keeper_context = std::make_shared<DB::KeeperContext>();
+    auto state_machine = std::make_shared<KeeperStateMachine>(queue, snapshots_queue, argv[1], settings, keeper_context);
     state_machine->init();
     size_t last_commited_index = state_machine->last_commit_index();
 
