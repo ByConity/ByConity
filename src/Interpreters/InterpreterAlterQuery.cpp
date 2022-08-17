@@ -48,7 +48,6 @@ BlockIO InterpreterAlterQuery::execute()
     BlockIO res;
     const auto & alter = query_ptr->as<ASTAlterQuery &>();
 
-
     if (!alter.cluster.empty())
         return executeDDLQueryOnCluster(query_ptr, getContext(), getRequiredAccess());
 
@@ -70,11 +69,9 @@ BlockIO InterpreterAlterQuery::execute()
     auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
-    TransactionCnchPtr cnch_txn{nullptr};
-    //IntentLockPtr cnch_table_lock{nullptr};
     if (database->getEngineName() == "Cnch")
     {
-        cnch_txn = getContext()->getCurrentTransaction();
+        auto cnch_txn = getContext()->getCurrentTransaction();
 
         if (!cnch_txn)
             throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
@@ -82,7 +79,6 @@ BlockIO InterpreterAlterQuery::execute()
         LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
         //cnch_table_lock = cnch_txn->createIntentLock(table->getStorageID());
     }
-
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
     AddDefaultDatabaseVisitor visitor(table_id.getDatabaseName());
