@@ -57,7 +57,7 @@ BasePlanTest::BasePlanTest(const String & database_name_, const std::unordered_m
     session_context->applySettingsChanges(setting_changes);
 
     if (DatabaseCatalog::instance().tryGetDatabase(database_name))
-        DatabaseCatalog::instance().detachDatabase(database_name, true, false);
+        DatabaseCatalog::instance().detachDatabase(session_context, database_name, true, false);
 
     auto database = std::make_shared<DatabaseMemory>(database_name, session_context);
     DatabaseCatalog::instance().attachDatabase(database_name, database);
@@ -453,7 +453,7 @@ void AbstractPlanTestSuite::createClusterInfo(const String & path)
     String database_name = others_object.get("CurrentDatabase").toString();
 
     if (DatabaseCatalog::instance().tryGetDatabase(database_name))
-        DatabaseCatalog::instance().detachDatabase(database_name, true, false);
+        DatabaseCatalog::instance().detachDatabase(session_context, database_name, true, false);
 
     auto database = std::make_shared<DatabaseMemory>(database_name, session_context);
     DatabaseCatalog::instance().attachDatabase(database_name, database);

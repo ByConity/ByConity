@@ -17,4 +17,3 @@ TEST(UUIDHelperTest, UUIDToString)
 }
 
 } /// end anonymous namespace
-

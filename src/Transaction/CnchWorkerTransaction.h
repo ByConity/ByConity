@@ -68,10 +68,10 @@ private:
     StorageID kafka_table_id{StorageID::createEmpty()};
     size_t kafka_consumer_index{SIZE_MAX};
     Poco::Logger * log {&Poco::Logger::get("CnchWorkerTransaction")};
-    
+
 
     // Transaction is initiated by us or get from somewhere else
-    bool isInitiator {false};
+    bool is_initiator {false};
 };
 
 using CnchWorkerTransactionPtr = std::shared_ptr<CnchWorkerTransaction>;

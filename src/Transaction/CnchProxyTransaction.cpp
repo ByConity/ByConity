@@ -6,7 +6,7 @@
 #include <Transaction/TxnTimestamp.h>
 
 
-namespace DB 
+namespace DB
 {
 
 namespace ErrorCodes
@@ -25,8 +25,8 @@ CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServ
     const auto & [txn_id, start_time] = remote_client->createTransaction(primary_txn_id);
     /// Load the transction record from byte kv, if creating transaction
     /// success, should be available at this time
-    auto record = getContext()->getCnchCatalog()->tryGetTransactionRecord(txn_id);
-    if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id) 
+    auto record = global_context.getCnchCatalog()->tryGetTransactionRecord(txn_id);
+    if (!record || record->status() != CnchTransactionStatus::Running || record->primaryTxnID() != primary_txn_id)
     {
         throw Exception("CnchProxyTransaction: create transaction on remote server failed", ErrorCodes::LOGICAL_ERROR);
     }
@@ -35,7 +35,7 @@ CnchProxyTransaction::CnchProxyTransaction(const ContextPtr & context_, CnchServ
 
 void CnchProxyTransaction::precommit()
 {
-        throw Exception("Proxy transaction does not support precommit", ErrorCodes::LOGICAL_ERROR); 
+        throw Exception("Proxy transaction does not support precommit", ErrorCodes::LOGICAL_ERROR);
 }
 
 TxnTimestamp CnchProxyTransaction::commit()
@@ -52,7 +52,7 @@ TxnTimestamp CnchProxyTransaction::abort()
 {
     /// With proxy transaction, abort is identical to rollback
     return rollback();
-} 
+}
 
 TxnTimestamp CnchProxyTransaction::rollback()
 {
@@ -92,6 +92,6 @@ void CnchProxyTransaction::syncTransactionStatus(bool throw_on_missmatch)
 void CnchProxyTransaction::setTransactionStatus(CnchTransactionStatus status)
 {
     setStatus(status);
-} 
+}
 
 }

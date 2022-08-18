@@ -123,7 +123,7 @@ public:
     const CacheDictionaryUpdateQueueConfiguration & getConfiguration() const { return configuration; }
 
     /// Is queue finished
-    bool isFinished() const { return finished; }
+    bool isFinished() const { return update_queue.isFinished(); }
 
     /// Synchronous wait for update queue to stop
     void stopAndWait();
@@ -163,8 +163,6 @@ private:
 
     mutable std::mutex update_mutex;
     mutable std::condition_variable is_update_finished;
-
-    std::atomic<bool> finished{false};
 };
 
 extern template class CacheDictionaryUpdateQueue<DictionaryKeyType::simple>;

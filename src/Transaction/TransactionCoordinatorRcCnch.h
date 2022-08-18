@@ -23,7 +23,7 @@ struct CreateTransactionOption
         ContextPtr query_context = nullptr;                                     // query context, optional
         bool read_only = false;                                                 // read only txn
         TxnTimestamp primary_txn_id = {0};                                      // primary txn id if create secondary txn
-        CnchTransactionType type = CnchTransactionType::Implicit;               // implicit or explicit   
+        CnchTransactionType type = CnchTransactionType::Implicit;               // implicit or explicit
         CnchTransactionInitiator initiator = CnchTransactionInitiator::Server;  // initiator of txn
         CnchTransactionPriority priority = CnchTransactionPriority::high;       // priority when cleaning
         TxnTimestamp txn_hint = {0};                                            // hint
@@ -39,7 +39,7 @@ struct CreateTransactionOption
         CreateTransactionOption & setPriority(CnchTransactionPriority priority_) { this->priority = priority_; return *this; }
         CreateTransactionOption & setTxnHint(TxnTimestamp txn_hint_) { this->txn_hint = txn_hint_; return *this; }
         CreateTransactionOption & setForceCleanByDM(bool force_clean_by_dm_) { this->force_clean_by_dm = force_clean_by_dm_; return *this; }
-        
+
         void validate() const { } // TODO: throw on invalid options
 };
 
@@ -93,21 +93,21 @@ public:
     //                                      |
     //                           CnchInternalTransaction (Merge, Kafka, Mem-buffer)
     //
-    // The explicit txn is created by BEGIN / BEGIN TRANSACTION statement. The implicit txn is created 
+    // The explicit txn is created by BEGIN / BEGIN TRANSACTION statement. The implicit txn is created
     // for each query implicitly. In addition, an implicit txn can also be Primary or Secondary:
     // 1. If the query is a single query, then its txn is Primary.
     // 2. If the query is in BEGIN / COMMIT or BEGIN / ROLLBACK block, then its txn is Secondary.
     // 3. (NOT IMPLEMENTED) MV support
-    // Secondary txns will have a primary_txn_id, which is the txn_id of an explicit txn. If a txn is 
+    // Secondary txns will have a primary_txn_id, which is the txn_id of an explicit txn. If a txn is
     // primary, then it will have a primary_txn_id of itself (primary_txn_id == txn_id).
     // Secondary txns have two differences from normal implicit txns:
     // 1. They do not own data - data is owned by the explicit txn (parts mutation is primary_txn_id).
     // 2. After commit, their data is only visible to other query that are in the same explicit txn.
 
     // TODO: @ducle.canh - change CnchServerTransaction to CnchImplicitTransaction, remove CnchWorkerTransaction.
-    // If we forward a query forward to worker, then use CnchProxyTransaction on worker. Internal transaction 
+    // If we forward a query forward to worker, then use CnchProxyTransaction on worker. Internal transaction
     // such as kafka, memory_buffer related should has their own class.
-    
+
     // create transactions
     // used for all queries including read only and writes.
     TransactionCnchPtr createTransaction(const CreateTransactionOption & opt = {});

@@ -52,6 +52,7 @@
 #include <Databases/DatabaseReplicated.h>
 #include <Databases/IDatabase.h>
 #include <Databases/DatabaseOnDisk.h>
+#include <Databases/DatabaseCnch.h>
 
 #include <Compression/CompressionFactory.h>
 
@@ -237,9 +238,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     }
 
     DatabasePtr database = DatabaseFactory::get(create, metadata_path / "", getContext());
-    /// CNCH TODO replace with transaction, enable with catalog avail
-    if (database->getEngineName() == "Cnch")
-        getContext()->getCnchCatalog()->createDatabase(database->getDatabaseName(), database->getUUID(), 0, 0);
+    if (const auto * database_cnch = dynamic_cast<const DatabaseCnch *>(database.get()))
+        database_cnch->createEntryInCnchCatalog(getContext());
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;
@@ -295,7 +295,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             assert(removed);
         }
         if (added)
-            DatabaseCatalog::instance().detachDatabase(database_name, false, false);
+            DatabaseCatalog::instance().detachDatabase(getContext(), database_name, false, false);
 
         throw;
     }

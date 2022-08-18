@@ -119,7 +119,8 @@ protected:
             while (true)
             {
                 //std::cerr << "popping\n";
-                output_queue.pop(res);
+                if (!output_queue.pop(res))
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not pop output_data");
 
                 if (res.exception)
                 {
@@ -170,7 +171,8 @@ protected:
 
         /// We will wait until the next block is ready or an exception is thrown.
         //std::cerr << "popping\n";
-        output_queue.pop(received_payload);
+        if (!output_queue.pop(received_payload))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Could not pop output_data");
 
         if (received_payload.exception)
         {
@@ -194,8 +196,8 @@ protected:
 
         finalize();
 
-        for (size_t i = 0; i < children.size(); ++i)
-            children[i]->readSuffix();
+        for (auto & child : children)
+            child->readSuffix();
     }
 
 private:
@@ -216,12 +218,12 @@ private:
 
         void onBlock(Block & block, size_t /*thread_num*/)
         {
-            parent.output_queue.push(Payload(block));
+            (void)parent.output_queue.emplace(Payload(block));
         }
 
         void onFinish()
         {
-            parent.output_queue.push(Payload());
+            parent.output_queue.finish();
         }
 
         void onFinishThread(size_t /*thread_num*/)
@@ -236,7 +238,7 @@ private:
             ///  when before exception, an empty block (end of data) will be put into the queue,
             ///  and the exception is lost.
 
-            parent.output_queue.push(exception);
+            (void)parent.output_queue.emplace(exception);
             parent.cancel(false);    /// Does not throw exceptions.
         }
 

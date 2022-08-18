@@ -13,7 +13,7 @@
 
 namespace DB
 {
-/// ProxyTransaction - A proxy to work with transaction on other server. 
+/// ProxyTransaction - A proxy to work with transaction on other server.
 /// - Alway `write` transaction (RO transaction can stand alone on any server w/o proxy)
 /// - Not all method are supported. See comments in each the method detail information
 
@@ -27,7 +27,7 @@ private:
 public:
     explicit CnchProxyTransaction(const ContextPtr & context_) : Base(context_) {}
     explicit CnchProxyTransaction(const ContextPtr & context_, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id);
-    ~CnchProxyTransaction() override = default; 
+    ~CnchProxyTransaction() override = default;
     String getTxnType() const override { return "CnchProxyTransaction"; }
     void precommit() override;
     TxnTimestamp commit() override;

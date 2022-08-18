@@ -132,7 +132,8 @@
 #endif
 
 #if USE_NURAFT
-#   include <Server/KeeperTCPHandlerFactory.h>
+#    include <Coordination/FourLetterCommand.h>
+#    include <Server/KeeperTCPHandlerFactory.h>
 #endif
 
 #if USE_JEMALLOC
@@ -935,6 +936,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
             if (config->has("max_partition_size_to_drop"))
                 global_context->setMaxPartitionSizeToDrop(config->getUInt64("max_partition_size_to_drop"));
 
+            // if (config->has("max_concurrent_queries"))
+            //     global_context->getProcessList().setMaxSize(config->getInt("max_concurrent_queries", 0));
+
+            if (config->has("keeper_server"))
+                global_context->updateKeeperConfiguration(*config);
+
             if (!initial_loading)
             {
                 /// We do not load ZooKeeper configuration on the first config loading
@@ -1215,8 +1222,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (config().has("keeper_server"))
     {
 #if USE_NURAFT
-        /// Initialize test keeper RAFT. Do nothing if no nu_keeper_server in config.
-        global_context->initializeKeeperStorageDispatcher();
+        //// If we don't have configured connection probably someone trying to use clickhouse-server instead
+        //// of clickhouse-keeper, so start synchronously.
+        bool can_initialize_keeper_async = false;
+
+        if (has_zookeeper) /// We have configured connection to some zookeeper cluster
+        {
+            /// If we cannot connect to some other node from our cluster then we have to wait our Keeper start
+            /// synchronously.
+            can_initialize_keeper_async = global_context->tryCheckClientConnectionToMyKeeperCluster();
+        }
+        /// Initialize keeper RAFT.
+        global_context->initializeKeeperDispatcher(can_initialize_keeper_async);
+
         for (const auto & listen_host : listen_hosts)
         {
             /// TCP Keeper
@@ -1225,8 +1243,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 Poco::Net::ServerSocket socket;
                 auto address = socketBindListen(socket, listen_host, port);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
+                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
                 servers_to_start_before_tables->emplace_back(
                     port_name,
                     std::make_unique<Poco::Net::TCPServer>(
@@ -1241,8 +1259,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #if USE_SSL
                 Poco::Net::SecureServerSocket socket;
                 auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
+                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
+                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
                 servers_to_start_before_tables->emplace_back(
                     secure_port_name,
                     std::make_unique<Poco::Net::TCPServer>(
@@ -1299,7 +1317,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             else
                 LOG_INFO(log, "Closed connections to servers for tables.");
 
-            global_context->shutdownKeeperStorageDispatcher();
+            global_context->shutdownKeeperDispatcher();
         }
 
         // if (global_context->getComplexQueryActive())

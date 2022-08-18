@@ -48,9 +48,9 @@ void InsertAction::executeV1(TxnTimestamp commit_time)
     for (auto & bitmap : delete_bitmaps)
         bitmap->updateCommitTime(commit_time);
 
-    auto catalog = getContext()->getCnchCatalog();
+    auto catalog = global_context.getCnchCatalog();
     catalog->finishCommit(table, txn_id, commit_time, {parts.begin(), parts.end()}, delete_bitmaps, false, /*preallocate_mode=*/ false);
-    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+    // ServerPartLog::addNewParts(getContext(),ServerPartLogElement::INSERT_PART, parts, txn_id, false);
 }
 
 void InsertAction::executeV2()
@@ -63,7 +63,7 @@ void InsertAction::executeV2()
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    auto catalog = getContext()->getCnchCatalog();
+    auto catalog = global_context.getCnchCatalog();
     catalog->writeParts(table, txn_id, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, false, /*preallocate_mode=*/ false);
 }
 
@@ -71,22 +71,22 @@ void InsertAction::executeV2()
 void InsertAction::postCommit(TxnTimestamp commit_time)
 {
     /// set commit time for part and bitmaps
-    getContext()->getCnchCatalog()->setCommitTime(
+    global_context.getCnchCatalog()->setCommitTime(
         table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, commit_time, txn_id);
 
     for (auto & part : parts)
         part->commit_time = commit_time;
 
-    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::INSERT_PART, parts, txn_id, false);
+    // ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, false);
 }
 
 void InsertAction::abort()
 {
     // clear parts in kv
     // skip part cache to avoid blocking by write lock of part cache for long time
-    getContext()->getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, true);
+    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, true);
 
-    // ServerPartLog::addNewParts(getContext()-> ServerPartLogElement::INSERT_PART, parts, txn_id, true);
+    // ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
 }
 
 UInt32 InsertAction::collectNewParts() const

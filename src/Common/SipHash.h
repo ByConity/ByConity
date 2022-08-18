@@ -15,6 +15,7 @@
 
 #include <common/types.h>
 #include <common/unaligned.h>
+#include <common/extended_types.h>
 #include <string>
 #include <type_traits>
 #include <Core/Defines.h>
@@ -146,6 +147,11 @@ public:
         update(x.data(), x.length());
     }
 
+    ALWAYS_INLINE void update(const std::string_view x)
+    {
+        update(x.data(), x.size());
+    }
+
     /// Get the result in some form. This can only be done once!
 
     void get128(char * out)
@@ -189,6 +195,15 @@ inline void sipHash128(const char * data, const size_t size, char * out)
     SipHash hash;
     hash.update(data, size);
     hash.get128(out);
+}
+
+inline UInt128 sipHash128(const char * data, const size_t size)
+{
+    SipHash hash;
+    hash.update(data, size);
+    UInt128 res;
+    hash.get128(res);
+    return res;
 }
 
 inline UInt64 sipHash64(const char * data, const size_t size)

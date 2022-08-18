@@ -1066,12 +1066,10 @@ void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
 {
     auto table_id = getStorageID();
-    //auto old_storage_settings = getSettings();
 
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
-    auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
     DDLAlterActionPtr alter_act = txn->createAction<DDLAlterAction>(shared_from_this());
     alter_act->setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
@@ -1087,6 +1085,8 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
         applyMetadataChangesToCreateQuery(ast, new_metadata);
         alter_act->setNewSchema(queryToString(ast));
+
+        LOG_DEBUG(log, "new schema for alter query: {}", alter_act->getNewSchema());
         txn->appendAction(alter_act);
     }
 
@@ -1095,8 +1095,8 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     //setTTLExpressions(new_metadata.ttl_for_table_ast);
     //setCreateTableSql(alter_act->getNewSchema());
 
-    txn_coordinator.commitV1(txn);
-    LOG_DEBUG(log, "Updated shared metadata in Catalog.");
+    txn->commitV1();
+    LOG_TRACE(log, "Updated shared metadata in Catalog.");
 }
 
 void StorageCnchMergeTree::truncate(
