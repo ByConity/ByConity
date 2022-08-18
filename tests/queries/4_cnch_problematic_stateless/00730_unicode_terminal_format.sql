@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS unicode;
 CREATE TABLE unicode(c1 Int,c2 String, c3 String) ENGINE = CnchMergeTree ORDER BY c1;
 INSERT INTO unicode VALUES (1,'Здравствуйте', 'Этот код можно отредактировать и запустить!');

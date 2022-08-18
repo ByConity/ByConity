@@ -14,7 +14,7 @@ SELECT k, y FROM (SELECT arrayJoin([1, 2, 3]) AS k, 'Hello' AS x) ANY RIGHT JOIN
 SELECT x, y FROM (SELECT arrayJoin([1, 2, 3]) AS k, 'Hello' AS x) ANY RIGHT JOIN (SELECT range(k) AS y, arrayJoin([3, 4, 5]) AS k) USING k WHERE k < 10 ORDER BY k;
 SELECT k FROM (SELECT arrayJoin([1, 2, 3]) AS k, 'Hello' AS x) ANY RIGHT JOIN (SELECT range(k) AS y, arrayJoin([3, 4, 5]) AS k) USING k WHERE k < 10 ORDER BY k;
 
-USE test;
+
 DROP TABLE IF EXISTS t1_00203;
 DROP TABLE IF EXISTS t2_00203;
 CREATE TABLE t1_00203 (k1 UInt32, k2 UInt32, k3 UInt32, val_t1 String) ENGINE=CnchMergeTree ORDER BY k1;

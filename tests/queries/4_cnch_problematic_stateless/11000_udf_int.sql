@@ -1,8 +1,8 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP FUNCTION IF EXISTS test.py_script_20;
+DROP FUNCTION IF EXISTS py_script_20;
 
-CREATE FUNCTION test.py_script_20 LANGUAGE PYTHON AS
+CREATE FUNCTION py_script_20 LANGUAGE PYTHON AS
 $code$
 from iudf import IUDF
 from overload import overload
@@ -17,11 +17,11 @@ class py_script_20(IUDF):
         return a + b + 1
 $code$;
 
-select test.py_script_20(number) from numbers(10);
+select py_script_20(number) from numbers(10);
 
-DROP FUNCTION IF EXISTS test.py_script_20;
+DROP FUNCTION IF EXISTS py_script_20;
 
-CREATE FUNCTION test.py_script_20 LANGUAGE PYTHON AS
+CREATE FUNCTION py_script_20 LANGUAGE PYTHON AS
 $code$
 from iudf import IUDF
 from overload import overload
@@ -36,6 +36,6 @@ class py_script_20(IUDF):
         return a + b + 1
 $code$;
 
-select test.py_script_20(number) from numbers(10);
+select py_script_20(number) from numbers(10);
 
-DROP FUNCTION IF EXISTS test.py_script_20;
+DROP FUNCTION IF EXISTS py_script_20;

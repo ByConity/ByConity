@@ -1,4 +1,4 @@
-USE test;
+
 SET send_logs_level = 'none';
 --SET allow_suspicious_codecs = 1;
 

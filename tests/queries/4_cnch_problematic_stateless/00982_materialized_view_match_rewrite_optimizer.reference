@@ -2,9 +2,9 @@
 Projection Est. ? rows
 │     Expressions: [sum(k)], divide(sum(salary), 100):=`sum(salary)` / 100, plus(deptno, 1):=deptno + 1
 └─ Gather Exchange Est. ? rows
-   └─ TableScan test.mv_data Est. ? rows
+   └─ TableScan mv_data Est. ? rows
             Outputs: [deptno, sum(k), sum(salary)]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 11	285	300
 21	80	100
 2-1. test filter rewrite
@@ -13,9 +13,9 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: deptno = 10
-      └─ TableScan test.mv_data Est. ? rows
+      └─ TableScan mv_data Est. ? rows
                Outputs: [deptno, empid, name]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 100	Bill
 110	Theodore
 150	Sebastian
@@ -25,9 +25,9 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: empid > 120
-      └─ TableScan test.mv_data Est. ? rows
+      └─ TableScan mv_data Est. ? rows
                Outputs: [empid, name]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 150	Sebastian
 200	Eric
 3. test rollup aggregate rewrite
@@ -42,9 +42,9 @@ Projection Est. ? rows
             │     Aggregates: sum()(c):=sum(c)
             └─ Projection Est. ? rows
                │     Expressions: [c], deptno_2:=deptno
-               └─ TableScan test.mv_data Est. ? rows
+               └─ TableScan mv_data Est. ? rows
                         Outputs: [c, deptno]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 4	10
 2	20
 4. test rollup aggregate rewrite
@@ -59,9 +59,9 @@ Projection Est. ? rows
             │     Aggregates: countMerge()(c):=countMerge(c)
             └─ Projection Est. ? rows
                │     Expressions: [c], deptno_2:=deptno
-               └─ TableScan test.mv_data Est. ? rows
+               └─ TableScan mv_data Est. ? rows
                         Outputs: [c, deptno]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 3	10
 1	20
 5-2. test rollup aggregate rewrite with filter
@@ -70,7 +70,7 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: empid = 150
-      └─ TableScan test.mv_data Est. ? rows
+      └─ TableScan mv_data Est. ? rows
                Outputs: [a, c, deptno, empid]
-note: Materialized Views is applied for 1 times: test.mv_data.
+note: Materialized Views is applied for 1 times: mv_data.
 1	7000	150	10

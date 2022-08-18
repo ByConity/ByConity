@@ -1,8 +1,8 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP FUNCTION IF EXISTS test.py_script_33;
+DROP FUNCTION IF EXISTS py_script_33;
 
-CREATE FUNCTION test.py_script_33
+CREATE FUNCTION py_script_33
 RETURNS FixedString(12)
 LANGUAGE PYTHON AS
 $code$
@@ -17,13 +17,13 @@ class py_script_33(IUDF):
 $code$;
 
 
-select test.py_script_33(number) from numbers(10);
+select py_script_33(number) from numbers(10);
 
-DROP FUNCTION IF EXISTS test.py_script_33;
+DROP FUNCTION IF EXISTS py_script_33;
 
-DROP TABLE IF EXISTS test.py_fixedstring;
+DROP TABLE IF EXISTS py_fixedstring;
 
-CREATE TABLE test.py_fixedstring
+CREATE TABLE py_fixedstring
 (
     a FixedString(2),
     b FixedString(3)
@@ -32,10 +32,10 @@ ENGINE = CnchMergeTree()
 ORDER BY b;
 
 
-INSERT INTO test.py_fixedstring(a, b)
+INSERT INTO py_fixedstring(a, b)
 VALUES ('aa', 'aaa') ('bb', 'bbb') ('cc', 'ccc') ('dd', 'ddd') ('ee', 'eee') ('ff', 'fff') ('gg', 'ggg') ('ab', 'abc') ('cb', 'cba') ('tt', 'zzz');
 
-CREATE FUNCTION test.py_script_33
+CREATE FUNCTION py_script_33
 RETURNS FixedString(5)
 LANGUAGE PYTHON AS
 $code$
@@ -49,7 +49,7 @@ class py_script_33(IUDF):
 
 $code$;
 
-select test.py_script_33(a, b) from test.py_fixedstring;
+select py_script_33(a, b) from py_fixedstring;
 
-DROP FUNCTION IF EXISTS test.py_script_33;
-DROP TABLE IF EXISTS test.py_fixedstring;
+DROP FUNCTION IF EXISTS py_script_33;
+DROP TABLE IF EXISTS py_fixedstring;

@@ -1,9 +1,9 @@
-USE test;
+
 set enable_debug_queries = 1;
 
-DROP TABLE IF EXISTS test.a;
-CREATE TABLE test.a (a UInt8, b UInt8) ENGINE CnchMergeTree ORDER BY a;
+DROP TABLE IF EXISTS a;
+CREATE TABLE a (a UInt8, b UInt8) ENGINE CnchMergeTree ORDER BY a;
 
-ANALYZE SELECT * FROM test.a;
+ANALYZE SELECT * FROM a;
 
-DROP TABLE test.a;
+DROP TABLE a;

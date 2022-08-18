@@ -1,4 +1,4 @@
-USE test;
+
 set receive_timeout = 600; 
 set send_timeout = 600;
 set max_memory_usage = 0;

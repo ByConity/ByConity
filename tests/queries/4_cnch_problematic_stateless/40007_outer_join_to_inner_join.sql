@@ -1,55 +1,55 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.people;
-DROP TABLE IF EXISTS test.city;
+DROP TABLE IF EXISTS people;
+DROP TABLE IF EXISTS city;
 
-CREATE TABLE test.people(`id` Int32, `name` String, `city_id` Int32)
+CREATE TABLE people(`id` Int32, `name` String, `city_id` Int32)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.city(`id` Int32, `name` String)
+CREATE TABLE city(`id` Int32, `name` String)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-INSERT INTO test.city values (1, 'ct1') (2, 'ct2') (3, 'ct3');
-INSERT INTO test.people values (1001, 'pe1', 1) (1002, 'pe2', 1) (1003, 'pe3', 2) (1004, 'pe4', 100);
+INSERT INTO city values (1, 'ct1') (2, 'ct2') (3, 'ct3');
+INSERT INTO people values (1001, 'pe1', 1) (1002, 'pe2', 1) (1003, 'pe3', 2) (1004, 'pe4', 100);
 
 SELECT '--case 1';
 SET join_use_nulls = 1;
-select * from test.people p left join test.city c on p.city_id = c.id where c.id > -1 order by p.id;
+select * from people p left join city c on p.city_id = c.id where c.id > -1 order by p.id;
 SELECT '--case 2';
 SET join_use_nulls = 1;
-select * from test.people p left join test.city c on p.city_id = c.id where p.name != 'foo' and c.id > -1 and rand(1) >100 order by p.id;
+select * from people p left join city c on p.city_id = c.id where p.name != 'foo' and c.id > -1 and rand(1) >100 order by p.id;
 SELECT '--case 3';
 SET join_use_nulls = 1;
-select * from test.people p left join test.city c on p.city_id = c.id where p.id > -1 order by p.id;
+select * from people p left join city c on p.city_id = c.id where p.id > -1 order by p.id;
 SELECT '--case 4';
 SET join_use_nulls = 1;
-select * from test.people p right join test.city c on p.city_id = c.id where p.id > -1 order by p.id;
+select * from people p right join city c on p.city_id = c.id where p.id > -1 order by p.id;
 SELECT '--case 5';
 SET join_use_nulls = 1;
-select * from test.people p full join test.city c on p.city_id = c.id where p.id > -1 order by p.id;
+select * from people p full join city c on p.city_id = c.id where p.id > -1 order by p.id;
 SELECT '--case 6';
 SET join_use_nulls = 1;
-select * from test.people p full join test.city c on p.city_id = c.id where c.id > -1 order by p.id;
+select * from people p full join city c on p.city_id = c.id where c.id > -1 order by p.id;
 SELECT '--case 7';
 SET join_use_nulls = 1;
-select * from test.people p full join test.city c on p.city_id = c.id where p.id > -1 and c.id > -1 order by p.id;
+select * from people p full join city c on p.city_id = c.id where p.id > -1 and c.id > -1 order by p.id;
 SELECT '--case 8';
 SET join_use_nulls = 1;
-select c.id, c.name from test.city c any left join test.people p on p.city_id = c.id where p.id > -1 order by c.id;
+select c.id, c.name from city c any left join people p on p.city_id = c.id where p.id > -1 order by c.id;
 SELECT '--case 9';
 SET join_use_nulls = 0;
-select * from test.people p left join test.city c on p.city_id = c.id where c.id > -1 order by p.id;
+select * from people p left join city c on p.city_id = c.id where c.id > -1 order by p.id;
 SELECT '--case 10';
 SET join_use_nulls = 0;
-select * from test.people p left join test.city c on p.city_id = c.id where c.id > 0 order by p.id;
+select * from people p left join city c on p.city_id = c.id where c.id > 0 order by p.id;
 SELECT '--case 11';
 SET join_use_nulls = 1;
 select
@@ -58,42 +58,42 @@ from (
          select
              p.id as people_id,
              c.id + rand() % 2 as city_id
-         from test.people p
-             left join test.city c
+         from people p
+             left join city c
          on p.city_id = c.id
      )
 where city_id > 0
 order by people_id;
 
 SELECT '--case 12';
-DROP TABLE IF EXISTS test.country;
-DROP TABLE IF EXISTS test.state;
-DROP TABLE IF EXISTS test.city;
+DROP TABLE IF EXISTS country;
+DROP TABLE IF EXISTS state;
+DROP TABLE IF EXISTS city;
 
-CREATE TABLE test.country(`id` Int32, `name` String)
+CREATE TABLE country(`id` Int32, `name` String)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.state(`id` Int32, `name` String, `country_id` Int32)
+CREATE TABLE state(`id` Int32, `name` String, `country_id` Int32)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.city(`id` Int32, `name` String, `state_id` Int32)
+CREATE TABLE city(`id` Int32, `name` String, `state_id` Int32)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-INSERT INTO test.country values (1, 'co1') (2, 'co2') (3, 'co3');
-INSERT INTO test.state values (101, 'st1', 1) (102, 'st2', 1) (103, 'st3', 2) (104, 'some_state', 4);
-INSERT INTO test.city values (1001, 'ct3', 101) (1002, 'ct4', 101) (1003, 'ct5', 103) (1004, 'some_city', 109);
+INSERT INTO country values (1, 'co1') (2, 'co2') (3, 'co3');
+INSERT INTO state values (101, 'st1', 1) (102, 'st2', 1) (103, 'st3', 2) (104, 'some_state', 4);
+INSERT INTO city values (1001, 'ct3', 101) (1002, 'ct4', 101) (1003, 'ct5', 103) (1004, 'some_city', 109);
 
 SET join_use_nulls = 1;
 
@@ -114,52 +114,52 @@ from (
              city.id as c_id,
              city.name as c_name,
              city.state_id as c_state_id
-         from test.state
-                  left join test.city
+         from state
+                  left join city
                             on state.id = city.state_id
      ) t
-         right join test.country on country.id = t.s_country_id
+         right join country on country.id = t.s_country_id
 where c_id > 0
 order by country.id, t.s_id, t.c_id;
 
 SELECT '--case 13';
-DROP TABLE IF EXISTS test.people;
-DROP TABLE IF EXISTS test.company;
-DROP TABLE IF EXISTS test.city;
-DROP TABLE IF EXISTS test.state;
+DROP TABLE IF EXISTS people;
+DROP TABLE IF EXISTS company;
+DROP TABLE IF EXISTS city;
+DROP TABLE IF EXISTS state;
 
-CREATE TABLE test.people(`id` Int32, `name` String, `company_id` Int32, `state_id` Int32, `city_id` Int32)
+CREATE TABLE people(`id` Int32, `name` String, `company_id` Int32, `state_id` Int32, `city_id` Int32)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.company(`id` Int32, `name` String)
+CREATE TABLE company(`id` Int32, `name` String)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.city(`id` Int32, `name` String, `state_id` Int32)
+CREATE TABLE city(`id` Int32, `name` String, `state_id` Int32)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-CREATE TABLE test.state(`id` Int32, `name` String)
+CREATE TABLE state(`id` Int32, `name` String)
     ENGINE = CnchMergeTree()
     PARTITION BY `id`
     PRIMARY KEY `id`
     ORDER BY `id`
     SETTINGS index_granularity = 8192;
 
-INSERT INTO test.people values (1001, 'p1', 2001, 4001, 3001) (1002, 'p2', 2002, 4001, 3001) (1003, 'p3', 2001, 4002, 3003) (1004, 'p4', 2002, 4019, 3018) (1005, 'p5', 2009, 4001, 3002);
-INSERT INTO test.company values (2001, 'comp1') (2002, 'comp2') (2003, 'comp3');
-INSERT INTO test.city values (3001, 'c1', 4001) (3002, 'c2', 4001) (3003, 'c3', 4002) (3004, 'c4', 4003) (3005, 'c5', 4009);
-INSERT INTO test.state values (4001, 's1') (4002, 's2') (4003, 's3') (4004, 's4') (0, 'xx');
+INSERT INTO people values (1001, 'p1', 2001, 4001, 3001) (1002, 'p2', 2002, 4001, 3001) (1003, 'p3', 2001, 4002, 3003) (1004, 'p4', 2002, 4019, 3018) (1005, 'p5', 2009, 4001, 3002);
+INSERT INTO company values (2001, 'comp1') (2002, 'comp2') (2003, 'comp3');
+INSERT INTO city values (3001, 'c1', 4001) (3002, 'c2', 4001) (3003, 'c3', 4002) (3004, 'c4', 4003) (3005, 'c5', 4009);
+INSERT INTO state values (4001, 's1') (4002, 's2') (4003, 's3') (4004, 's4') (0, 'xx');
 
 SET join_use_nulls = 1;
 
@@ -179,8 +179,8 @@ from (
              p.city_id as p_c_id,
              p.state_id as p_s_id,
              comp.id as comp_id
-         from test.company comp
-                  left join test.people p
+         from company comp
+                  left join people p
                             on p.company_id = comp.id
      ) x
          join (
@@ -188,8 +188,8 @@ from (
         s.id as s_id,
         c.id as c_id,
         c.state_id as c_s_id
-    from test.state s
-             full outer join test.city c
+    from state s
+             full outer join city c
                              on s.id = c.state_id
 ) y
               on x.p_s_id = y.s_id and x.p_c_id = y.c_id
@@ -214,8 +214,8 @@ from (
              p.city_id as p_c_id,
              p.state_id as p_s_id,
              comp.id as comp_id
-         from test.company comp
-                  left join test.people p
+         from company comp
+                  left join people p
                             on p.company_id = comp.id
      ) x
          join (
@@ -223,8 +223,8 @@ from (
         s.id as s_id,
         c.id as c_id,
         c.state_id as c_s_id
-    from test.state s
-             full outer join test.city c
+    from state s
+             full outer join city c
                              on s.id = c.state_id
 ) y
               on x.p_s_id = y.s_id and x.p_c_id = y.c_id
@@ -249,8 +249,8 @@ from (
              p.city_id as p_c_id,
              p.state_id as p_s_id,
              comp.id as comp_id
-         from test.company comp
-                  left join test.people p
+         from company comp
+                  left join people p
                             on p.company_id = comp.id
      ) x
          left join (
@@ -258,8 +258,8 @@ from (
         s.id as s_id,
         c.id as c_id,
         c.state_id as c_s_id
-    from test.state s
-             full outer join test.city c
+    from state s
+             full outer join city c
                              on s.id = c.state_id
 ) y
                    on x.p_s_id = y.s_id and x.p_c_id = y.c_id

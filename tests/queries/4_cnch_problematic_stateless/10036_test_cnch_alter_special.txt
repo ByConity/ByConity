@@ -1,56 +1,56 @@
 -- step 1
 -- test CLEAR_MAP_KEY, should wait for alter done.
 SET allow_alter_with_unfinished_task = 1;
-drop table if exists test.alter_map;
-create table test.alter_map (id Int32, x Map(String, String), p_date Date) Engine = CnchMergeTree partition by p_date order by p_date;
-insert into test.alter_map values (1, {'a': 'test_before', 'b': 'bd', 'c': 'ce'}, '20210222');
-alter table test.alter_map clear map key x('a', 'b');
-insert into test.alter_map values (2, {'a': 'test_after', 'b': 'bd2', 'c': 'ce2'}, '20210222');
+drop table if exists alter_map;
+create table alter_map (id Int32, x Map(String, String), p_date Date) Engine = CnchMergeTree partition by p_date order by p_date;
+insert into alter_map values (1, {'a': 'test_before', 'b': 'bd', 'c': 'ce'}, '20210222');
+alter table alter_map clear map key x('a', 'b');
+insert into alter_map values (2, {'a': 'test_after', 'b': 'bd2', 'c': 'ce2'}, '20210222');
 
 -- test BUILD_BITMAP, should wait for alter done.
-drop table if exists test.alter_bitmap;
-create table test.alter_bitmap (x Array(String), y Array(Int32), date Date) Engine = CnchMergeTree partition by date order by date;
-insert into test.alter_bitmap values (['a', 'b', 'c'], [1001, 2001], '20210222'), (['x', 'y', 'z'], [1002, 1003], '20210223');
-alter table test.alter_bitmap modify column x Array(String) BLOOM;
-alter table test.alter_bitmap build bitmap x;
+drop table if exists alter_bitmap;
+create table alter_bitmap (x Array(String), y Array(Int32), date Date) Engine = CnchMergeTree partition by date order by date;
+insert into alter_bitmap values (['a', 'b', 'c'], [1001, 2001], '20210222'), (['x', 'y', 'z'], [1002, 1003], '20210223');
+alter table alter_bitmap modify column x Array(String) BLOOM;
+alter table alter_bitmap build bitmap x;
 
 -- test rename command, should wait for alter done.
-drop table if exists test.alter_rename;
-create table test.alter_rename (x1 Int32, x2 Int32, date Date) Engine = CnchMergeTree partition by date order by date;
-insert into test.alter_rename values (1, 1, '20210222'), (2, 2, '20210222');
-alter table test.alter_rename rename column x1 to r1;
-alter table test.alter_rename rename column x2 to r2;
-insert into test.alter_rename values (3, 3, '20210222');
-alter table test.alter_rename rename column r2 to r3;
-insert into test.alter_rename values (4, 4, '20210222');
-alter table test.alter_rename add column x1 String after r3;
-insert into test.alter_rename values (5, 5, 'abc', '20210222');
+drop table if exists alter_rename;
+create table alter_rename (x1 Int32, x2 Int32, date Date) Engine = CnchMergeTree partition by date order by date;
+insert into alter_rename values (1, 1, '20210222'), (2, 2, '20210222');
+alter table alter_rename rename column x1 to r1;
+alter table alter_rename rename column x2 to r2;
+insert into alter_rename values (3, 3, '20210222');
+alter table alter_rename rename column r2 to r3;
+insert into alter_rename values (4, 4, '20210222');
+alter table alter_rename add column x1 String after r3;
+insert into alter_rename values (5, 5, 'abc', '20210222');
 -- end step 1
 
 
 -- step 2
 -- test clear_map_key
 SET allow_alter_with_unfinished_task = 1;
-select * from test.alter_map order by id;
+select * from alter_map order by id;
 
 -- test build bitmap
 -- select countIf(has_bitmap=1) from system.cnch_parts where database = 'test' and table = 'alter_bitmap' and active;
--- alter table test.alter_bitmap drop column x;
+-- alter table alter_bitmap drop column x;
 -- select countIf(has_bitmap=1) from system.cnch_parts where database = 'test' and table = 'alter_bitmap' and active;
--- alter table test.alter_bitmap modify column y Array(Int32) BLOOM;
+-- alter table alter_bitmap modify column y Array(Int32) BLOOM;
 -- select countIf(has_bitmap=1) from system.cnch_parts where database = 'test' and table = 'alter_bitmap' and active;
 
 -- test rename command
-select x1, r1, r3, date from test.alter_rename order by r1;
-alter table test.alter_rename drop column r1;
-select x1, r3, date from test.alter_rename order by r3;
+select x1, r1, r3, date from alter_rename order by r1;
+alter table alter_rename drop column r1;
+select x1, r3, date from alter_rename order by r3;
 -- end step 2
 
 
 -- step 3
-drop table test.alter_map;
-drop table test.alter_bitmap;
-drop table test.alter_rename;
+drop table alter_map;
+drop table alter_bitmap;
+drop table alter_rename;
 -- end step 3
 
 

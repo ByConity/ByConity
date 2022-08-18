@@ -1,4 +1,4 @@
-use test;
+
 
 DROP TABLE IF EXISTS t;
 

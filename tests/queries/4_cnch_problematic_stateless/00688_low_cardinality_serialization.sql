@@ -3,7 +3,7 @@ select toTypeName(dict), dict, lowCardinalityIndices(dict), lowCardinalityKeys(d
 select '-';
 select toTypeName(dict), dict, lowCardinalityIndices(dict), lowCardinalityKeys(dict) from (select '123_' || toLowCardinality(v) as dict from (select arrayJoin(['a', Null, 'bb', '', 'a', Null, 'ccc', 'a', 'bb', '', 'dddd']) as v));
 select 'MergeTree';
-USE test;
+
 drop table if exists lc_small_dict;
 drop table if exists lc_big_dict;
 create table lc_small_dict (str StringWithDictionary) engine = CnchMergeTree order by str;

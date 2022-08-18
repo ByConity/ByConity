@@ -1,4 +1,4 @@
-USE test;
+
 
 DROP TABLE IF EXISTS types;
 CREATE TABLE types(I16 Int16, I32 Int32, I64 Int64, F32 Float32, F64 Float64, D Date, DT DateTime) Engine = CnchMergeTree ORDER BY tuple();

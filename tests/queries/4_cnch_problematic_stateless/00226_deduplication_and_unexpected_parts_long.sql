@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS deduplication;
 CREATE TABLE deduplication (d Date DEFAULT '2015-01-01', x Int8) 
 ENGINE = CnchMergeTree PARTITION BY d ORDER BY x SETTINGS index_granularity = 1;

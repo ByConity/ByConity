@@ -1,4 +1,4 @@
-USE test;
+
 drop table if exists null_lc_set_index;
 set allow_experimental_data_skipping_indices = 1;
 

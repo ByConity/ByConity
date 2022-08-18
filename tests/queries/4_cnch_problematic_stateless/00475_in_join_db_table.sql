@@ -1,4 +1,4 @@
-USE test;
+
 SET enable_optimizer = 0; -- in table don't support in optimizer
 DROP TABLE IF EXISTS set;
 CREATE TABLE set (x String) ENGINE = CnchMergeTree ORDER BY x;

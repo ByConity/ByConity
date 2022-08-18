@@ -1,43 +1,43 @@
-use test;
 
-drop table if exists test.merge_gc;
-create table test.merge_gc(date Date, x Int32) Engine = CnchMergeTree partition by date order by tuple();
 
-system stop gc test.merge_gc;
-system stop merges test.merge_gc;
+drop table if exists merge_gc;
+create table merge_gc(date Date, x Int32) Engine = CnchMergeTree partition by date order by tuple();
+
+system stop gc merge_gc;
+system stop merges merge_gc;
 
 select 'insert';
-insert into test.merge_gc values ('2021-04-12', 1), ('2021-04-11', 2);
-insert into test.merge_gc values ('2021-04-12', 3), ('2021-04-11', 4);
+insert into merge_gc values ('2021-04-12', 1), ('2021-04-11', 2);
+insert into merge_gc values ('2021-04-12', 3), ('2021-04-11', 4);
 select count(1), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc';
 
 -- exec merge.
 select 'optimize';
-optimize table test.merge_gc partition id '20210412' final;
-optimize table test.merge_gc partition id '20210411' final;
+optimize table merge_gc partition id '20210412' final;
+optimize table merge_gc partition id '20210411' final;
 select sleep(2.5) format Null;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc';
 
 select 'start merge after alter';
 -- generate partial parts.
-alter table test.merge_gc drop column x;
+alter table merge_gc drop column x;
 -- start merges to exec mutation task.
-system start merges test.merge_gc;
+system start merges merge_gc;
 select sleep(2.5) format Null;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc';
 
 select 'optimize';
 -- stop merges to avoid conflict between merge task and optimize query.
-system stop merges test.merge_gc;
-optimize table test.merge_gc final;
+system stop merges merge_gc;
+optimize table merge_gc final;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc';
 
 select 'insert';
-insert into test.merge_gc values ('2021-04-12'), ('2021-04-11');
+insert into merge_gc values ('2021-04-12'), ('2021-04-11');
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc';
 
 select 'optimize';
-optimize table test.merge_gc partition '2021-04-12' final;
+optimize table merge_gc partition '2021-04-12' final;
 select sleep(2.5) format Null;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc' group by partition_id order by partition_id;
 
@@ -45,12 +45,12 @@ select count(), countIf(active=1) from system.cnch_parts where database = 'test'
 -- test gc task.
 -- clear covered parts.
 select 'gc1';
-system force gc test.merge_gc;
+system force gc merge_gc;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc' group by partition_id order by partition_id;
 
 select 'gc2';
 -- clear mark dropped parts.
-system force gc test.merge_gc;
+system force gc merge_gc;
 select count(), countIf(active=1) from system.cnch_parts where database = 'test' and table = 'merge_gc' group by partition_id order by partition_id;
 
--- drop table test.merge_gc;
+-- drop table merge_gc;

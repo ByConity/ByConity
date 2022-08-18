@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.python_udf;
-CREATE TABLE test.python_udf
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
 (
     `event_id` UInt8,
     `timestamp` Date,
@@ -10,9 +10,9 @@ CREATE TABLE test.python_udf
 ENGINE = CnchMergeTree()
 ORDER BY timestamp;
 
-INSERT INTO test.python_udf (timestamp, event_id, timestamp_d) VALUES (1546300800, 1, 1546300800), ('2019-01-01', 2, '2019-01-01 00:00:00'), ('2019-01-02', 3, '2019-01-02 00:00:00'), (1546300900, 1, 1546300900);
+INSERT INTO python_udf (timestamp, event_id, timestamp_d) VALUES (1546300800, 1, 1546300800), ('2019-01-01', 2, '2019-01-01 00:00:00'), ('2019-01-02', 3, '2019-01-02 00:00:00'), (1546300900, 1, 1546300900);
 
-use test;
+
 DROP FUNCTION IF EXISTS test_python_date;
 DROP FUNCTION IF EXISTS test_python_datetime;
 
@@ -43,4 +43,4 @@ select timestamp_d+1000, timestamp+6500, test_python_datetime(timestamp_d), test
 DROP FUNCTION IF EXISTS test_python_date;
 DROP FUNCTION IF EXISTS test_python_datetime;
 
-DROP TABLE test.python_udf;
+DROP TABLE python_udf;

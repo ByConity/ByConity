@@ -1,8 +1,8 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP FUNCTION IF EXISTS test.py_script_9;
+DROP FUNCTION IF EXISTS py_script_9;
 
-CREATE FUNCTION test.py_script_9
+CREATE FUNCTION py_script_9
 RETURNS Date
 LANGUAGE PYTHON AS
 $code$
@@ -19,7 +19,7 @@ class py_script_9(IUDF):
         return a + b
 $code$;
 
-select test.py_script_9(number) from numbers(10);
-select test.py_script_9(number, 100) from numbers(10);
+select py_script_9(number) from numbers(10);
+select py_script_9(number, 100) from numbers(10);
 
-DROP FUNCTION IF EXISTS test.py_script_9;
+DROP FUNCTION IF EXISTS py_script_9;

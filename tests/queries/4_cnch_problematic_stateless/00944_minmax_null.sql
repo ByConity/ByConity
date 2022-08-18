@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS min_max_with_nullable_string;
 set allow_experimental_data_skipping_indices = 1;
 CREATE TABLE min_max_with_nullable_string (

@@ -1,4 +1,4 @@
-USE test;
+
 set allow_experimental_data_skipping_indices = 1;
 set show_table_uuid_in_table_create_query_if_not_nil = 0;
 DROP TABLE IF EXISTS minmax_idx;

@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS test.window_frame_between;
-CREATE TABLE test.window_frame_between
+DROP TABLE IF EXISTS window_frame_between;
+CREATE TABLE window_frame_between
 (
     a UInt64,
     b Float64
@@ -8,7 +8,7 @@ ENGINE = CnchMergeTree()
 PRIMARY KEY a
 ORDER BY a;
 
-INSERT INTO test.window_frame_between (a, b)
+INSERT INTO window_frame_between (a, b)
 VALUES (0, 0) (0, 1) (0, 2) (0, 3) (0, 4) (1, 6) (1, 7) (2, 8) (5, 9) (5, 10) (4, 11) (2, 12) (3, 13) (0, -5);
 
 SELECT
@@ -38,6 +38,6 @@ SELECT
   SUM(b) OVER (PARTITION BY a ORDER BY b ROWS BETWEEN (1+1) FOLLOWING AND 0 PRECEDING) as res22,
   SUM(b) OVER (PARTITION BY a ORDER BY b ROWS BETWEEN (1+1) FOLLOWING AND (2-2) PRECEDING) as res23
 FROM
-  test.window_frame_between
+  window_frame_between
 ORDER BY a,b;
-DROP TABLE test.window_frame_between;
+DROP TABLE window_frame_between;

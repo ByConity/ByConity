@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS cnch_test;
 CREATE TABLE cnch_test (s String) ENGINE = CnchMergeTree order by s;
 SELECT * FROM cnch_test LIMIT 1;

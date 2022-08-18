@@ -1,4 +1,4 @@
-USE test;
+
 set send_logs_level = 'none';
 
 drop table if exists test_stack;

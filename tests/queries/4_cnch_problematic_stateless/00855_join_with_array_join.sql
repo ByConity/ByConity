@@ -15,7 +15,7 @@ SELECT '-';
 
 SET joined_subquery_requires_alias = 1;
 
-use test;
+
 DROP TABLE IF EXISTS f;
 DROP TABLE IF EXISTS d;
 CREATE TABLE f (`d_ids` Array(Int64) ) ENGINE = CnchMergeTree ORDER BY d_ids;

@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS set;
 DROP TABLE IF EXISTS set2;
 SET enable_optimizer = 0; -- in table don't support in optimizer

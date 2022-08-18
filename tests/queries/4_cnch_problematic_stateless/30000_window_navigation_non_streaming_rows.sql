@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS test.window_navigation;
-CREATE TABLE test.window_navigation
+DROP TABLE IF EXISTS window_navigation;
+CREATE TABLE window_navigation
 (
     a UInt64,
     b String,
@@ -9,7 +9,7 @@ ENGINE = CnchMergeTree()
 PRIMARY KEY a
 ORDER BY a;
 
-INSERT INTO test.window_navigation
+INSERT INTO window_navigation
 VALUES (0, 'a', 4.2) (0, 'a', 4.1) (1, 'a', -2) (0, 'b', 0) (2, 'c', 9) (1, 'b', -55);
 SELECT
   a,
@@ -20,7 +20,7 @@ SELECT
   DENSE_RANK() OVER (PARTITION BY c ORDER BY a, b ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING),
   LEAD(c*a+1, 1, 1) OVER (PARTITION BY b ORDER BY a, c),
   LAG(c*a+1, 1, 1) OVER (PARTITION BY b ORDER BY a, c)
-FROM test.window_navigation
+FROM window_navigation
 ORDER BY a, b, c;
 
-DROP TABLE test.window_navigation;
+DROP TABLE window_navigation;

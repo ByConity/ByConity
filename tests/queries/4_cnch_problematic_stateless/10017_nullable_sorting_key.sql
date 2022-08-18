@@ -1,5 +1,5 @@
-USE test;
-USE test;
+
+
 
 DROP TABLE IF EXISTS null_test;
 CREATE TABLE null_test (p_date Date, name Nullable(String), age Nullable(Int32), gender String) ENGINE = CnchMergeTree() PARTITION BY p_date ORDER BY (name, age) SETTINGS enable_nullable_sorting_key = 1;

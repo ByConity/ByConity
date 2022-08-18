@@ -1,4 +1,4 @@
-USE test;
+
 SET send_logs_level = 'none';
 DROP TABLE IF EXISTS alter_compression_codec;
 CREATE TABLE alter_compression_codec (somedate Date CODEC(LZ4), id UInt64 CODEC(NONE)) ENGINE = CnchMergeTree PARTITION BY somedate ORDER BY id;
@@ -19,7 +19,7 @@ INSERT INTO alter_compression_codec VALUES('2018-01-01', 5, '5');
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 6, '6');
 SELECT * FROM alter_compression_codec ORDER BY id;
 
-OPTIMIZE TABLE test.alter_compression_codec FINAL;
+OPTIMIZE TABLE alter_compression_codec FINAL;
 SELECT * FROM alter_compression_codec ORDER BY id;
 
 --SET allow_suspicious_codecs = 1;
@@ -28,7 +28,7 @@ SELECT compression_codec FROM system.cnch_columns WHERE database = currentDataba
 
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 7, '7');
 INSERT INTO alter_compression_codec VALUES('2018-01-01', 8, '8');
-OPTIMIZE TABLE test.alter_compression_codec FINAL;
+OPTIMIZE TABLE alter_compression_codec FINAL;
 SELECT * FROM alter_compression_codec ORDER BY id;
 
 ALTER TABLE alter_compression_codec MODIFY COLUMN alter_column FixedString(100);
@@ -67,7 +67,7 @@ INSERT INTO store_of_hash_00804 SELECT sum(cityHash64(*)) FROM large_alter_table
 
 ALTER TABLE large_alter_table_00804 MODIFY COLUMN data CODEC(NONE, LZ4, LZ4HC, ZSTD);
 
-OPTIMIZE TABLE test.large_alter_table_00804;
+OPTIMIZE TABLE large_alter_table_00804;
 
 SELECT compression_codec FROM system.cnch_columns WHERE database = currentDatabase() AND table = 'large_alter_table_00804' AND name = 'data';
 

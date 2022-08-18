@@ -1,5 +1,5 @@
 set enable_optimizer=0;
-USE test;
+
 set enable_optimizer=0;
 set joined_subquery_requires_alias = 0;
 drop table if exists t_00725_2;

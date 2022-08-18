@@ -1,6 +1,6 @@
 SET show_table_uuid_in_table_create_query_if_not_nil = 0;  -- show table without uuid
 
-USE test;
+
 
 DROP TABLE IF EXISTS prop_table;
 

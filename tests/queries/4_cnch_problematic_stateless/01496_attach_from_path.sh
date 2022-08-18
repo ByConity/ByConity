@@ -8,7 +8,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # Attach partition from path
 ${CLICKHOUSE_CLIENT} --multiquery << EOF
 
-USE test;
+
 DROP TABLE IF EXISTS test_attach_from_path_partition_src;
 DROP TABLE IF EXISTS test_attach_from_path_partition_dst;
 
@@ -33,7 +33,7 @@ EOF
 
 ${CLICKHOUSE_CLIENT} --multiquery << EOF
 
-USE test;
+
 
 DROP TABLE test_attach_from_path_partition_src;
 
@@ -44,7 +44,7 @@ EOF
 # Attach parts from path
 ${CLICKHOUSE_CLIENT} --multiquery << EOF
 
-USE test;
+
 DROP TABLE IF EXISTS test_attach_from_path_parts_src;
 DROP TABLE IF EXISTS test_attach_from_path_parts_dst;
 
@@ -67,7 +67,7 @@ EOF
 
 ${CLICKHOUSE_CLIENT} --multiquery << EOF
 
-USE test;
+
 
 DROP TABLE test_attach_from_path_parts_src;
 

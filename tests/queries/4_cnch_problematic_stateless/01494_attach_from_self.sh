@@ -8,7 +8,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # Attach from self's detached partition
 $CLICKHOUSE_CLIENT --multiquery <<'EOF'
 
-USE test;
+
 DROP TABLE IF EXISTS test_attach_detached_from_self;
 CREATE TABLE test_attach_detached_from_self (key Int, value Int) ENGINE = CnchMergeTree() PARTITION BY key ORDER BY (key, value);
 
@@ -38,7 +38,7 @@ EOF
 # Attach from self's detached part
 $CLICKHOUSE_CLIENT --multiquery << 'EOF'
 
-USE test;
+
 DROP TABLE IF EXISTS test_attach_from_self_detached_part;
 CREATE TABLE test_attach_from_self_detached_part (key Int, value Int) ENGINE = CnchMergeTree() PARTITION BY key ORDER BY (key, value);
 
@@ -52,7 +52,7 @@ EOF
 
 $CLICKHOUSE_CLIENT --multiquery << EOF
 
-USE test;
+
 SELECT '---';
 SELECT * FROM test_attach_from_self_detached_part ORDER BY (key, value);
 SELECT '---';

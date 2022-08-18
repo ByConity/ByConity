@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS table1;
 DROP TABLE IF EXISTS table2;
 CREATE TABLE table1 ( id String ) ENGINE = CnchMergeTree ORDER BY id;

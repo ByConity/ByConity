@@ -1,4 +1,4 @@
-USE test;
+
 
 DROP TABLE IF EXISTS t;
 CREATE TABLE t (a Int32, b Int32) ENGINE = CnchMergeTree() ORDER BY a;

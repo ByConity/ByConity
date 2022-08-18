@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.python_udf;
-CREATE TABLE test.python_udf
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
 (
     a Int8,
     b Int16,
@@ -13,10 +13,10 @@ PRIMARY KEY a
 ORDER BY a;
 
 -- 18446744073709551615 in 5th row will get converted to 0 as it overflows
-INSERT INTO test.python_udf (a, b, c, d)
+INSERT INTO python_udf (a, b, c, d)
 VALUES (12,2,3,4) (-12,6553,13,14) (21,-3276,429496729,24) (31,3276,33,34) (0,0,0,1844674407370955161) (0,0,214748364,0) (0,0,0,-922337203685477580) (0,0,0,922337203685477580);
 
-use test;
+
 
 DROP FUNCTION IF EXISTS test_python_int_2;
 
@@ -35,7 +35,7 @@ SELECT
   sum(a),
   test_python_int_2(a, b, c, d)
 FROM
-  test.python_udf
+  python_udf
 GROUP BY test_python_int_2(a, b, c, d)
 ORDER BY test_python_int_2(a, b, c, d) desc;
 
@@ -53,7 +53,7 @@ class test_python_int_2(IUDF):
         return a + b + c + d + 200
 $code$;
 
-select a + b + c + d + 200, test_python_int_2(a, b, c, d) FROM test.python_udf order by test_python_int_2(a, b, c, d);
+select a + b + c + d + 200, test_python_int_2(a, b, c, d) FROM python_udf order by test_python_int_2(a, b, c, d);
 
 select number + 203, test_python_int_2(number,1,1,1) FROM numbers(10)  order by test_python_int_2(number,1,1,1);
 
@@ -74,4 +74,4 @@ $code$;
 select number+23, test_python_int_2(number,1,1,1) FROM numbers(10) order by test_python_int_2(number,1,1,1);
 
 DROP FUNCTION IF EXISTS test_python_int_2;
-DROP TABLE IF EXISTS test.python_udf;
+DROP TABLE IF EXISTS python_udf;

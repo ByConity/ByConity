@@ -1,4 +1,4 @@
-Use test;
+
 DROP TABLE IF EXISTS clicks;
 DROP TABLE IF EXISTS transactions;
 SET output_format_json_quote_64bit_integers = 1;

@@ -1,5 +1,5 @@
-DROP TABLE IF EXISTS test.lambda_udf;
-CREATE TABLE test.lambda_udf
+DROP TABLE IF EXISTS lambda_udf;
+CREATE TABLE lambda_udf
 (
     a UInt64,
     b Float64,
@@ -12,10 +12,10 @@ ORDER BY a;
 
 CREATE DATABASE IF NOT EXISTS test_2;
 
-INSERT INTO test.lambda_udf (a, b, c, d)
+INSERT INTO lambda_udf (a, b, c, d)
 VALUES (0, 0, 'abc', 'def') (1, 4.5, 'adcf', 'dew') (1, 4.5, 'abcc', 'defs') (2, 5, 'abwc', 'defv') (5, 9, 'abdc', 'deqf') (5, 99, 'abc', 'def') (4, 1, 'abc', 'def') (2, 1, 'abc', 'def') (3, 2.1, 'abc', 'def') (0, -5, 'abc', 'def');
 
-use test;
+
 DROP FUNCTION IF EXISTS test_lambda_sum;
 DROP FUNCTION IF EXISTS test_2.test_lambda_string_concat;
 CREATE FUNCTION test_lambda_sum AS (x, y) -> x+y;
@@ -32,11 +32,11 @@ SELECT
   test_2.test_lambda_string_concat('', d),
   test_2.test_lambda_string_concat(c, '_all_good')
 FROM
-  test.lambda_udf
+  lambda_udf
 where test_lambda_sum(a, b) > 5
 ORDER BY test_lambda_sum(a, b), test_2.test_lambda_string_concat(c, '_all_good');
 
-DROP TABLE test.lambda_udf;
+DROP TABLE lambda_udf;
 DROP FUNCTION IF EXISTS test_lambda_sum;
 DROP FUNCTION IF EXISTS test_2.test_lambda_string_concat;
 DROP DATABASE test_2;

@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS decimal;
 CREATE TABLE IF NOT EXISTS decimal (x DECIMAL(10, -2)) ENGINE = CnchMergeTree ORDER BY x; -- { serverError 69 }
 CREATE TABLE IF NOT EXISTS decimal (x DECIMAL(10, 15)) ENGINE = CnchMergeTree ORDER BY x; -- { serverError 69 }
