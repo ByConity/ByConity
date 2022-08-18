@@ -303,12 +303,16 @@
     <cnch_type>worker</cnch_type>
 
    	<catalog_service>
+        <type>bytekv</type>
 		<bytekv>
 			<service_name>bytedance.bytekv.bytekv_default</service_name>
 			<cluster_name>bytekv_default</cluster_name>
 			<name_space>bytekv_cnch_dev</name_space>
 			<table_name>cnch_metastore_hz_dev</table_name>
 		</bytekv>
+        <fdb>
+            <cluster_file>/Path_To_ClickHouse/fdb/cluster_config</cluster_file>
+        </fdb>
 	</catalog_service>
 
     <enable_metastore_mock>0</enable_metastore_mock>

@@ -198,7 +198,7 @@ class Server(Entity):
     TEMPLATE_HDFS_CONFIG = 'hdfs3.xml'
     TEMPLATE_USER_CONFIG = 'cnch-users.xml'
 
-    def __init__(self, name, template_path, cluster_dir, hdfs_prefix):
+    def __init__(self, name, template_path, cluster_dir, hdfs_prefix, catalog_type):
         # the order must be the same as that in the service_discovery section
         self.port_list = [
             'tcp_port', 'rpc_port', 'http_port', 'tcp_secure_port',
@@ -208,6 +208,7 @@ class Server(Entity):
         super(Server, self).__init__(name, template_path, cluster_dir,
                                      self.port_list)
         self.hdfs_prefix = hdfs_prefix
+        self.catalog_type = catalog_type
 
     def gen_sd_config(self):
         '''generate xml node of this server in service discovery section'''
@@ -258,6 +259,11 @@ class Server(Entity):
                          "server_namespace_" + os.getlogin())
         self.conf.update(ROOT / "server_leader_election/point",
                          "server_point_" + os.getlogin())
+        if self.catalog_type == 'fdb':
+            fdb_path = f'{self.workspace}/fdb/cluster_config/'
+            self.conf.update(ROOT / "catalog_service/fdb/cluster_file", fdb_path)
+            self.conf.update(ROOT / "tso_service/fdb/cluster_file", fdb_path)
+            Path(fdb_path).resolve().mkdir(parents=True, exist_ok=True)
 
         self.conf.save()
         shutil.copy(self.template_dir / self.TEMPLATE_USER_CONFIG,
@@ -270,9 +276,9 @@ class Worker(Server):
     SD = ROOT / "service_discovery/vw"
     BIN = 'clickhouse-server'
 
-    def __init__(self, name, template_path, cluster_dir, vw_name, hdfs_prefix):
+    def __init__(self, name, template_path, cluster_dir, vw_name, hdfs_prefix, catalog_type):
         super(Worker, self).__init__(name, template_path, cluster_dir,
-                                     hdfs_prefix)
+                                     hdfs_prefix, catalog_type)
         self.vw_name = vw_name
 
     def gen_sd_config(self):
@@ -356,24 +362,24 @@ class Cluster(Entity):
 class CNCHCluster(Cluster):
     def __init__(self, num_servers, num_read_workers, num_write_workers,
                  num_default_workers, template_paths, cluster_dir,
-                 hdfs_prefix):
+                 hdfs_prefix, catalog_type):
         super(CNCHCluster, self).__init__('cnchcluster', template_paths[0],
                                           cluster_dir)
         self.servers = [
-            Server(f'Server-{i}', template_paths[0], cluster_dir, hdfs_prefix)
+            Server(f'Server-{i}', template_paths[0], cluster_dir, hdfs_prefix, catalog_type)
             for i in range(num_servers)
         ]
         self.read_workers = [
             Worker(f'ReadWorker-{i}', template_paths[1], cluster_dir,
-                   'vw_read', hdfs_prefix) for i in range(num_read_workers)
+                   'vw_read', hdfs_prefix, catalog_type) for i in range(num_read_workers)
         ]
         self.write_workers = [
             Worker(f'WriteWorker-{i}', template_paths[1], cluster_dir,
-                   'vw_write', hdfs_prefix) for i in range(num_write_workers)
+                   'vw_write', hdfs_prefix, catalog_type) for i in range(num_write_workers)
         ]
         self.default_workers = [
             Worker(f'DefaultWorker-{i}', template_paths[1], cluster_dir,
-                   'vw_default', hdfs_prefix)
+                   'vw_default', hdfs_prefix, catalog_type)
             for i in range(num_default_workers)
         ]
 
@@ -384,9 +390,7 @@ class CNCHCluster(Cluster):
         self.client = Client(self.servers[0].name + '-client',
                              self.servers[0].port_gen.get('tcp_port'))
 
-        self.entities = self.workers + self.servers + [
-            self.dm, self.tso, self.client
-        ]
+        self.entities = [self.tso] + self.workers + self.servers + [self.dm, self.client]
 
     def config(self, overwrite=False):
         if not overwrite:
@@ -433,6 +437,12 @@ if __name__ == '__main__':
     parser.add_argument('--template_paths',
                         nargs = '+',
                         help='server and worker templates for cnch;')
+
+    parser.add_argument('-c',
+                        '--catalog_type',
+                        default='bytekv',
+                        choices=['bytekv', 'fdb'],
+                        help="Type of catalog to use")
 
     parser.add_argument('-r',
                         '--num_read_worker',
@@ -481,7 +491,7 @@ if __name__ == '__main__':
 
     cluster = CNCHCluster(opts.num_server, opts.num_read_worker,
                             opts.num_write_worker, opts.num_default_worker,
-                            template_paths, cluster_dir, opts.hdfs_prefix)
+                            template_paths, cluster_dir, opts.hdfs_prefix, opts.catalog_type)
 
     cluster.config(opts.overwrite)
     cluster.kill(opts.dry_run)
