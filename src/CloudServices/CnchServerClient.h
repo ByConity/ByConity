@@ -50,7 +50,7 @@ public:
         const TxnTimestamp & txnID,
         const bool is_merged_parts,
         const bool preallocate_mode);
-    
+
     void redirectSetCommitTime(
         const StoragePtr & table,
         const Catalog::CommitItems & commit_data,
@@ -86,6 +86,15 @@ public:
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
+    void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action);
+    void cleanTransaction(const TransactionRecord & txn_record);
+    std::set<UUID> getDeletingTablesInGlobalGC();
+
+    UInt64 getServerStartTime();
+    bool scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables);
+    size_t getNumOfTablesCanSendForGlobalGC();
+    google::protobuf::RepeatedPtrField<DB::Protos::BackgroundThreadStatus>
+    getBackGroundStatus(const CnchBGThreadType & type);
 
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;

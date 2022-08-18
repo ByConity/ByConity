@@ -12,6 +12,7 @@ using HostWithPortsVec = std::vector<HostWithPorts>;
 
 std::string addBracketsIfIpv6(const std::string & host);
 std::string createHostPortString(const std::string & host, uint16_t port);
+std::string createHostPortString(const std::string & host, const std::string & port);
 bool isSameHost(const std::string & lhs_host, const std::string & rhs_host);
 std::string_view removeBracketsIfIpv6(const std::string & host_name);
 
