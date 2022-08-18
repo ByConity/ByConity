@@ -3,7 +3,7 @@
 #include <IO/WriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Core/Defines.h>
+#include <Core/ProtocolDefines.h>
 #include <common/getFQDNOrHostName.h>
 #include <unistd.h>
 
@@ -20,7 +20,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-//TODO 
+//TODO
 void ClientInfo::write(WriteBuffer & out, const UInt64 server_protocol_revision, UInt16 rpc_port_, ClientType client_type_) const
 {
     if (server_protocol_revision < DBMS_MIN_REVISION_WITH_CLIENT_INFO)

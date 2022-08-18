@@ -1,4 +1,5 @@
 #include <memory>
+#include <common/defines.h>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 #include <Common/LinkedHashMap.h>
@@ -6,10 +7,10 @@ using namespace DB;
 
 
 #if defined(ABORT_ON_LOGICAL_ERROR)
-// skip this test, since ASSERT_DEATH is not stable
-#define ASSERT_LOGICAL_ERROR(p)
+    // skip this test, since ASSERT_DEATH is not stable
+    #define ASSERT_LOGICAL_ERROR(p)
 #else
-#define ASSERT_LOGICAL_ERROR(p) ASSERT_ANY_THROW(p)
+    #define ASSERT_LOGICAL_ERROR(p) ASSERT_ANY_THROW(p)
 #endif
 
 TEST(LinkedHashMap, String)

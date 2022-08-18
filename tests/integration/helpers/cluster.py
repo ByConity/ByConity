@@ -1575,6 +1575,20 @@ class ClickHouseCluster:
                     logging.debug("Trying to kill forcefully")
                     run_and_check(self.base_cmd + ['kill'])
 
+            # Check server logs for Fatal messages and sanitizer failures.
+            # NOTE: we cannot do this via docker since in case of Fatal message container may already die.
+            for name, instance in self.instances.items():
+                if instance.contains_in_log(SANITIZER_SIGN, from_host=True):
+                    sanitizer_assert_instance = instance.grep_in_log(SANITIZER_SIGN, from_host=True)
+                    logging.error("Sanitizer in instance %s log %s", name, sanitizer_assert_instance)
+
+                if instance.contains_in_log("Fatal", from_host=True):
+                    fatal_log = instance.grep_in_log("Fatal", from_host=True)
+                    if 'Child process was terminated by signal 9 (KILL)' in fatal_log:
+                        fatal_log = None
+                        continue
+                    logging.error("Crash in instance %s fatal log %s", name, fatal_log)
+
             try:
                 subprocess_check_call(self.base_cmd + ['down', '--volumes'])
             except Exception as e:
@@ -2134,6 +2148,9 @@ class ClickHouseInstance:
     def replace_config(self, path_to_config, replacement):
         self.exec_in_container(["bash", "-c", "echo '{}' > {}".format(replacement, path_to_config)])
 
+    def replace_in_config(self, path_to_config, replace, replacement):
+        self.exec_in_container(["bash", "-c", f"sed -i 's/{replace}/{replacement}/g' {path_to_config}"])
+
     def create_dir(self, destroy_dir=True):
         """Create the instance directory and all the needed files there."""
 
@@ -2144,10 +2161,10 @@ class ClickHouseInstance:
 
         os.makedirs(self.path)
 
-        instance_config_dir = p.abspath(p.join(self.path, 'configs'))        
+        instance_config_dir = p.abspath(p.join(self.path, 'configs'))
         os.makedirs(instance_config_dir)
-        print(f"Copy common default production configuration from {self.base_config_dir}. Files: {self.main_config_name}, {self.users_config_name}")               
-        shutil.copyfile(p.join(self.base_config_dir, self.main_config_name), p.join(instance_config_dir, self.main_config_name))        
+        print(f"Copy common default production configuration from {self.base_config_dir}. Files: {self.main_config_name}, {self.users_config_name}")
+        shutil.copyfile(p.join(self.base_config_dir, self.main_config_name), p.join(instance_config_dir, self.main_config_name))
         shutil.copyfile(p.join(self.base_config_dir, self.users_config_name), p.join(instance_config_dir, self.users_config_name))
 
         logging.debug("Create directory for configuration generated in this helper")

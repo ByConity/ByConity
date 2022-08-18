@@ -1,3 +1,4 @@
+#include "Common/ZooKeeper/IKeeper.h"
 #include <Common/ZooKeeper/TestKeeper.h>
 #include <Common/setThreadName.h>
 #include <Common/StringUtils/StringUtils.h>
@@ -119,10 +120,15 @@ struct TestKeeperSetRequest final : SetRequest, TestKeeperRequest
     }
 };
 
-struct TestKeeperListRequest final : ListRequest, TestKeeperRequest
+struct TestKeeperListRequest : ListRequest, TestKeeperRequest
 {
     ResponsePtr createResponse() const override;
     std::pair<ResponsePtr, Undo> process(TestKeeper::Container & container, int64_t zxid) const override;
+};
+
+struct TestKeeperFilteredListRequest final : TestKeeperListRequest
+{
+    ListRequestType list_request_type;
 };
 
 struct TestKeeperCheckRequest final : CheckRequest, TestKeeperRequest
@@ -383,7 +389,16 @@ std::pair<ResponsePtr, Undo> TestKeeperListRequest::process(TestKeeper::Containe
             ++child_it)
         {
             if (parentPath(child_it->first) == path)
-                response.names.emplace_back(baseName(child_it->first));
+            {
+                ListRequestType list_request_type = ListRequestType::ALL;
+                if (const auto * filtered_list = dynamic_cast<const TestKeeperFilteredListRequest *>(this))
+                    list_request_type = filtered_list->list_request_type;
+
+                const auto is_ephemeral = child_it->second.stat.ephemeralOwner != 0;
+                if (list_request_type == ListRequestType::ALL || (is_ephemeral && list_request_type == ListRequestType::EPHEMERAL_ONLY)
+                    || (!is_ephemeral && list_request_type == ListRequestType::PERSISTENT_ONLY))
+                    response.names.emplace_back(baseName(child_it->first));
+            }
         }
 
         response.stat = it->second.stat;
@@ -751,11 +766,13 @@ void TestKeeper::set(
 
 void TestKeeper::list(
         const String & path,
+        ListRequestType list_request_type,
         ListCallback callback,
         WatchCallback watch)
 {
-    TestKeeperListRequest request;
+    TestKeeperFilteredListRequest request;
     request.path = path;
+    request.list_request_type = list_request_type;
 
     RequestInfo request_info;
     request_info.request = std::make_shared<TestKeeperListRequest>(std::move(request));

@@ -19,9 +19,12 @@
 #include <Common/OpenTelemetryTraceContext.h>
 #include <Common/RemoteHostFilter.h>
 #include <Common/ThreadPool.h>
+#include <Common/isLocalAddress.h>
 #include <common/types.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+// #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/HDFSFileSystem.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -35,8 +38,6 @@
 #include <mutex>
 #include <optional>
 #include <thread>
-// #include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/HDFS/HDFSFileSystem.h>
 
 
 namespace Poco::Net { class IPAddress; }
@@ -99,6 +100,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class ZooKeeperLog;
 struct MergeTreeSettings;
 class StorageS3Settings;
 class IDatabase;
@@ -134,7 +136,8 @@ class StoragePolicySelector;
 using StoragePolicySelectorPtr = std::shared_ptr<const StoragePolicySelector>;
 struct PartUUIDs;
 using PartUUIDsPtr = std::shared_ptr<PartUUIDs>;
-class KeeperStorageDispatcher;
+class KeeperDispatcher;
+
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
@@ -849,11 +852,18 @@ public:
     /// Same as above but return a zookeeper connection from auxiliary_zookeepers configuration entry.
     std::shared_ptr<zkutil::ZooKeeper> getAuxiliaryZooKeeper(const String & name) const;
 
+    /// Try to connect to Keeper using get(Auxiliary)ZooKeeper. Useful for
+    /// internal Keeper start (check connection to some other node). Return true
+    /// if connected successfully (without exception) or our zookeeper client
+    /// connection configured for some other cluster without our node.
+    bool tryCheckClientConnectionToMyKeeperCluster() const;
+
 #if USE_NURAFT
-    std::shared_ptr<KeeperStorageDispatcher> & getKeeperStorageDispatcher() const;
+    std::shared_ptr<KeeperDispatcher> & getKeeperDispatcher() const;
 #endif
-    void initializeKeeperStorageDispatcher() const;
-    void shutdownKeeperStorageDispatcher() const;
+    void initializeKeeperDispatcher(bool start_async) const;
+    void shutdownKeeperDispatcher() const;
+    void updateKeeperConfiguration(const Poco::Util::AbstractConfiguration & config);
 
     /// Set auxiliary zookeepers configuration at server starting or configuration reloading.
     void reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & config);
@@ -963,6 +973,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
+    std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
     /// Provide table name to make required checks.
@@ -993,6 +1004,7 @@ public:
     DisksMap getDisksMap() const;
     void updateStorageConfiguration(Poco::Util::AbstractConfiguration & config);
     void updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguration & config) const;
+
 
     /// Provides storage politics schemes
     StoragePolicyPtr getStoragePolicy(const String & name) const;
