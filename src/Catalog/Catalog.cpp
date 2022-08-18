@@ -1260,7 +1260,7 @@ namespace Catalog
                             *storage,
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
+                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, ts);
                             },
                             ts.toUInt64());
                         source = "PartCache";

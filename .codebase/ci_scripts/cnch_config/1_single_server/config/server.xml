@@ -4,7 +4,7 @@
 --><yandex>
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
-        <level>debug</level>
+        <level>trace</level>
         <log>/artifacts/server/server.log</log>
         <errorlog>/artifacts/server/server.err.log</errorlog>
         <testlog>/artifacts/server/server.test.log</testlog>
