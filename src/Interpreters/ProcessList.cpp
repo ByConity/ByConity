@@ -503,8 +503,8 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     QueryStatusInfo res{};
 
     res.query             = query;
-    /// TODO @canh: fix me
-    // res.client_info       = client_info;
+    /// TODO @canh: fix me for union query
+    res.client_info       = client_info;
     res.query_rewrite_by_view = query_rewrite_by_view;
     res.elapsed_seconds   = watch.elapsedSeconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
