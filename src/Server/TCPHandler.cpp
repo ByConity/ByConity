@@ -1273,8 +1273,11 @@ void TCPHandler::receiveCnchQuery()
     state.is_empty = false;
     UInt64 txn_id;
     readIntBinary(txn_id, *in);
-    readStringBinary(state.query_id, *in);
+    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
+    query_context = Context::createCopy(named_session->context);
+    query_context->setSessionContext(named_session->context);
 
+    readStringBinary(state.query_id, *in);
     /// Client info
     ClientInfo & client_info = query_context->getClientInfo();
     client_info.read(*in, client_tcp_protocol_version, /*cnch_query*/ true);
@@ -1309,10 +1312,6 @@ void TCPHandler::receiveCnchQuery()
     state.compression = static_cast<Protocol::Compression>(compression);
 
     readStringBinary(state.query, *in);
-
-    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
-    query_context = named_session->context;
-    query_context->setSessionContext(named_session->context);
 
     /// It is OK to check only when query != INITIAL_QUERY,
     /// since only in that case the actions will be done.

@@ -52,17 +52,19 @@ std::shared_ptr<NamedSession> NamedSessionsImpl<NamedSession>::acquireSession(
         else
             LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "Session not found, and create a new one");
 
-        /// Create a new session from current context.
-        it = sessions.insert(std::make_pair(session_id, std::make_shared<NamedSession>(session_id, context, timeout, *this))).first;
+        it = sessions.insert(std::make_pair(session_id, std::make_shared<NamedSession>(session_id, context->getGlobalContext(), timeout, *this))).first;
     }
 
     /// Use existing session.
     const auto & session = it->second;
 
-    if (!session.unique())
-        throw Exception("Session is locked by a concurrent client.", ErrorCodes::SESSION_IS_LOCKED);
-
-    session->context->getClientInfo() = context->getClientInfo();
+    /// For cnch, it's of for session to not be unique, e.g. in union query, the sub-query will have same transaction id,
+    /// therefore they shared same session on worker.
+    if constexpr (!std::is_same_v<NamedSession,NamedCnchSession>)
+    {
+        if (!session.unique())
+            throw Exception("Session is locked by a concurrent client.", ErrorCodes::SESSION_IS_LOCKED);
+    }
 
     return session;
 }
@@ -161,7 +163,7 @@ void NamedCnchSession::release()
 {
     timeout = std::chrono::steady_clock::duration{0}; /// release immediately
     parent.releaseSession(*this);
-    LOG_TRACE(&Poco::Logger::get("NamedCnchSession"), "release CnchWorkerResource({})", key);
+    LOG_DEBUG(&Poco::Logger::get("NamedCnchSession"), "release CnchWorkerResource({})", key);
 }
 
 template class NamedSessionsImpl<NamedSession>;
