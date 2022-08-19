@@ -81,11 +81,11 @@ void CnchServerResource::addBufferWorkers(const UUID & storage_id, const HostWit
 
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
+    auto lock = getLock();
     std::vector<AssignedResource> resource_to_send;
     auto worker_client = worker_group->getWorkerClient(worker);
 
     {
-        auto lock = getLock();
         allocateResource(context, lock);
 
         auto it = assigned_worker_resource.find(worker);
