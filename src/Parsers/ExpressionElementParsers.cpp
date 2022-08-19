@@ -9,6 +9,7 @@
 #include <Parsers/DumpASTNode.h>
 
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
@@ -1736,6 +1737,8 @@ const char * ParserAlias::restricted_keywords[] =
     "ARRAY",
     "ASOF",
     "BETWEEN",
+    "BUCKETS",
+    "CLUSTER",
     "CROSS",
     "FINAL",
     "FORMAT",
@@ -2232,6 +2235,77 @@ bool ParserExistsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         return true;
     }
     return false;
+}
+
+bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserExpression elem_p;
+    ParserKeyword into("INTO");
+    ParserKeyword buckets("BUCKETS");
+    ParserKeyword split_number("SPLIT_NUMBER");
+    ParserKeyword with_range("WITH_RANGE");
+    ParserUnsignedInteger total_bucket_number_p;
+    ParserUnsignedInteger split_number_p;
+
+    // parse columns in CLUSTER BY. Must come first as pos and expected is passed in after parsing CLUSTER BY
+    ASTPtr columns_elem;
+    if (!elem_p.parse(pos, columns_elem, expected))
+        return false;
+
+    // parse total bucket number from INTO
+    if (!into.ignore(pos, expected))
+        return false;
+
+    ASTPtr total_bucket_number_elem;
+    if (!total_bucket_number_p.parse(pos, total_bucket_number_elem, expected))
+        return false;
+
+    // Check if total_bucket_number is > 0
+    ASTLiteral * literal = total_bucket_number_elem->as<ASTLiteral>();
+    Int64 total_bucket_number = literal->value.get<Int64>();
+    if (total_bucket_number <= 0)
+    {
+        expected.add(pos, "Total bucket number to be > 0");
+        return false;
+    }
+
+    // If BUCKETS not found, return false
+    if (!buckets.ignore(pos))
+        return false;
+
+    ASTPtr split_number_elem;
+    Int64 split_number_value = -1 ; // default value, might be moved to SETTINGS
+
+    // parses the SPLIT_NUMBER. This argument is optional.
+    if (split_number.ignore(pos, expected))
+    {
+        if (!split_number_p.parse(pos, split_number_elem, expected))
+            return false;
+
+        ASTLiteral * split_number_literal = split_number_elem->as<ASTLiteral>();
+        split_number_value = split_number_literal->value.get<Int64>();
+        if (split_number_value <= 0)
+        {
+            expected.add(pos, "required SPLIT_NUMBER > 0");
+            return false;
+        }
+    }
+
+    // check if WITH_RANGE is present
+    bool is_with_range_present = false;
+    if (with_range.ignore(pos, expected))
+    {
+        if (split_number_value <= 0)
+        {
+            expected.add(pos, "required SPLIT_NUMBER > 0 for WITH_RANGE");
+            return false;
+        }
+        is_with_range_present = true;
+    }
+
+    node = std::make_shared<ASTClusterByElement>(columns_elem, total_bucket_number_elem, split_number_value, is_with_range_present);
+
+    return true;
 }
 
 bool ParserOrderByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
