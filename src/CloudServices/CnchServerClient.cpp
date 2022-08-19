@@ -432,4 +432,109 @@ void CnchServerClient::removeIntermediateData(const TxnTimestamp & txn_id)
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }
+
+void CnchServerClient::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action)
+{
+    brpc::Controller cntl;
+    Protos::ControlCnchBGThreadReq request;
+    Protos::ControlCnchBGThreadResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+    request.set_type(uint32_t(type));
+    request.set_action(uint32_t(action));
+
+    stub->controlCnchBGThread(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
+{
+    brpc::Controller cntl;
+    Protos::CleanTransactionReq request;
+    Protos::CleanTransactionResp response;
+
+    LOG_DEBUG(&Poco::Logger::get(__func__), "clean txn: [{}] on server: {}", txn_record.toString(), getRPCAddress());
+
+    request.mutable_txn_record()->CopyFrom(txn_record.pb_model);
+    stub->cleanTransaction(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
+{
+    brpc::Controller cntl;
+    Protos::GetDeletingTablesInGlobalGCReq request;
+    Protos::GetDeletingTablesInGlobalGCResp response;
+
+    stub->getDeletingTablesInGlobalGC(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+
+    std::set<UUID> res;
+    for (auto & uuid : response.uuids())
+        res.insert(RPCHelpers::createUUID(uuid));
+    return res;
+}
+
+UInt64 CnchServerClient::getServerStartTime()
+{
+    brpc::Controller cntl;
+    Protos::GetServerStartTimeReq request;
+    Protos::GetServerStartTimeResp response;
+
+    stub->getServerStartTime(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    return response.server_start_time();
+}
+
+bool CnchServerClient::scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables)
+{
+    brpc::Controller cntl;
+    Protos::ScheduleGlobalGCReq request;
+
+    for (auto & table : tables)
+    {
+        DB::Protos::DataModelTable * temp_table = request.add_tables();
+        temp_table->CopyFrom(table);
+    }
+    Protos::ScheduleGlobalGCResp response;
+
+    stub->scheduleGlobalGC(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    return response.ret();
+}
+
+UInt64 CnchServerClient::getNumOfTablesCanSendForGlobalGC()
+{
+    brpc::Controller cntl;
+    Protos::GetNumOfTablesCanSendForGlobalGCReq request;
+    Protos::GetNumOfTablesCanSendForGlobalGCResp response;
+
+    stub->getNumOfTablesCanSendForGlobalGC(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    return response.num_of_tables_can_send();
+}
+
+google::protobuf::RepeatedPtrField<DB::Protos::BackgroundThreadStatus>
+CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
+{
+    brpc::Controller cntl;
+    Protos::BackgroundThreadStatusReq request;
+    Protos::BackgroundThreadStatusResp response;
+    request.set_type(type);
+
+    stub->getBackgroundThreadStatus(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.status();
+}
+
 }

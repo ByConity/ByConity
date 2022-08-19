@@ -2,6 +2,7 @@
 #include <Protos/DataModelHelpers.h>
 // #include <WAL/CnchLogHelpers.h>
 #include <IO/ReadHelpers.h>
+#include <DaemonManager/BGJobStatusInCatalog.h>
 #include <cstddef>
 #include <sstream>
 #include <random>
@@ -1404,6 +1405,81 @@ void MetastoreProxy::getTableClusterStatus(const String & name_space, const Stri
         is_clustered = false;
 }
 
+/// BackgroundJob related API
+void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type, CnchBGThreadStatus status)
+{
+    if (type == CnchBGThreadType::Clustering)
+        metastore_ptr->put(
+            clusterBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else if (type == CnchBGThreadType::MergeMutate)
+        metastore_ptr->put(
+            mergeBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
+    else
+        throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
+}
+
+std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type)
+{
+    String status_store_data;
+    if (type == CnchBGThreadType::Clustering)
+        metastore_ptr->get(clusterBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::MergeMutate)
+        metastore_ptr->get(mergeBGJobStatusKey(name_space, uuid), status_store_data);
+    else
+        throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
+
+    if (status_store_data.empty())
+        return {};
+
+    return BGJobStatusInCatalog::deserializeFromString(status_store_data);
+}
+
+UUID MetastoreProxy::parseUUIDFromBGJobStatusKey(const std::string & key)
+{
+    auto pos = key.rfind("_");
+    if (pos == std::string::npos || pos == (key.size() -1))
+        throw Exception("invalid BGJobStatusKey", ErrorCodes::LOGICAL_ERROR);
+    std::string uuid = key.substr(pos + 1);
+    return UUIDHelpers::toUUID(uuid);
+}
+
+std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(const String & name_space, CnchBGThreadType type)
+{
+    auto get_iter_lambda = [&] ()
+        {
+            if (type == CnchBGThreadType::Clustering)
+                return metastore_ptr->getByPrefix(allClusterBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::MergeMutate)
+                return metastore_ptr->getByPrefix(allMergeBGJobStatusKeyPrefix(name_space));
+            else
+                throw Exception(String{"persistent status is not support for "} + toString(type), ErrorCodes::LOGICAL_ERROR);
+        };
+
+    std::unordered_map<UUID, CnchBGThreadStatus> res;
+    IMetaStore::IteratorPtr it = get_iter_lambda();
+    while (it->next())
+    {
+        res.insert(
+            std::make_pair(
+                parseUUIDFromBGJobStatusKey(it->key()),
+                BGJobStatusInCatalog::deserializeFromString(it->value())
+                )
+        );
+    }
+
+    return res;
+}
+
+void MetastoreProxy::dropBGJobStatuses(const String & name_space, const String & uuid)
+{
+    metastore_ptr->drop(clusterBGJobStatusKey(name_space, uuid));
+    metastore_ptr->drop(mergeBGJobStatusKey(name_space, uuid));
+}
+
 void MetastoreProxy::setTablePreallocateVW(const String & name_space, const String & uuid, const String & vw)
 {
     metastore_ptr->put(preallocateVW(name_space, uuid), vw);
@@ -1517,7 +1593,7 @@ void MetastoreProxy::removeCnchLogMetadata(const String & name_space, const Stri
 std::vector<Protos::CnchLogMetadata> MetastoreProxy::getBufferLogMetadataVec([[maybe_unused]]const String & name_space, [[maybe_unused]]const UUID & uuid)
 {
     std::vector<Protos::CnchLogMetadata> res;
-    ///FIXME: 
+    ///FIXME:
     //auto buffer_log_prefix = cnchLogKey(name_space, getCnchLogPrefixForBuffer(uuid));
     String buffer_log_prefix = "mock";
     auto it = metastore_ptr->getByPrefix(buffer_log_prefix);
@@ -1552,7 +1628,7 @@ void MetastoreProxy::setBufferManagerMetadata(
     String value;
     if (!metadata.SerializeToString(&value))
         throw Exception("Failed to serialize metadata of buffer manager to string", ErrorCodes::LOGICAL_ERROR);
-    
+
     ///FIXME:
     //auto manager_key = cnchLogKey(name_space, getCnchLogNameForBufferManager(uuid));
     String manager_key = "mock";

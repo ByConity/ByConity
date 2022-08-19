@@ -11,6 +11,8 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <common/logger_useful.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
+#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
 
 
 namespace DB
@@ -199,15 +201,36 @@ HDFSFSPtr createHDFSFS(hdfsBuilder * builder)
 
 std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
 {
-    std::vector<cpputil::consul::ServiceEndpoint> nnproxys = cpputil::consul::lookup_name(nnproxy);
-    if (nnproxys.size() == 0)
-        throw Exception("No available nnproxy", ErrorCodes::NETWORK_ERROR);
-    std::vector<cpputil::consul::ServiceEndpoint> sample;
-    int numRetry = 3;
-    while (1)
+    HostWithPortsVec nnproxys;
+    auto sd_consul = ServiceDiscoveryFactory::instance().tryGet(ServiceDiscoveryMode::CONSUL);
+    if (sd_consul)
+    {
+        int retry = 0;
+        do
+        {
+            if (retry++ > 2)
+                throw Exception("No available nnproxy " + nnproxy, ErrorCodes::NETWORK_ERROR);
+            nnproxys = sd_consul->lookup(nnproxy, ComponentType::NNPROXY);
+        } while (nnproxys.empty());
+    }
+    else
+    {
+        int retry = 0;
+        do
+        {
+            if (retry++ > 2)
+                throw Exception("No available nnproxy " + nnproxy, ErrorCodes::NETWORK_ERROR);
+            auto endpoints = cpputil::consul::lookup_name(nnproxy);
+            nnproxys = ServiceDiscoveryConsul::formatResult(endpoints, ComponentType::NNPROXY);
+        } while (nnproxys.empty());
+    }
+
+    HostWithPortsVec sample;
+    int num_retry = 3;
+    while (true)
     {
         std::sample(nnproxys.begin(), nnproxys.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
-        if (!sample.empty() && numRetry-- > 0)
+        if (!sample.empty() && num_retry-- > 0)
         {
             if (brokenNNs.isBrokenNN(sample[0].host)) continue;
         }
@@ -215,10 +238,10 @@ std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
     }
     std::string host{};
     size_t port{};
-    for (auto service : sample)
+    for (const auto & service : sample)
     {
         host = service.host;
-        port = service.port;
+        port = service.tcp_port;
     }
 
     host = normalizeHost(host);

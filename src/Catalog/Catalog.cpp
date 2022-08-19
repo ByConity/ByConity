@@ -399,6 +399,14 @@ namespace ProfileEvents
     extern const Event DropMaskingPoliciesFailed;
     extern const Event IsHostServerSuccess;
     extern const Event IsHostServerFailed;
+    extern const Event SetBGJobStatusSuccess;
+    extern const Event SetBGJobStatusFailed;
+    extern const Event GetBGJobStatusSuccess;
+    extern const Event GetBGJobStatusFailed;
+    extern const Event GetBGJobStatusesSuccess;
+    extern const Event GetBGJobStatusesFailed;
+    extern const Event DropBGJobStatusesSuccess;
+    extern const Event DropBGJobStatusesFailed;
 }
 
 namespace DB
@@ -3643,6 +3651,56 @@ namespace Catalog
             ProfileEvents::IsTableClusteredSuccess,
             ProfileEvents::IsTableClusteredFailed);
         return outRes;
+    }
+
+    void Catalog::setBGJobStatus(const UUID & table_uuid, CnchBGThreadType type, CnchBGThreadStatus status)
+    {
+        runWithMetricSupport(
+            [&] {
+                    meta_proxy->setBGJobStatus(
+                        name_space, UUIDHelpers::UUIDToString(table_uuid), type, status);
+                },
+            ProfileEvents::SetBGJobStatusSuccess,
+            ProfileEvents::SetBGJobStatusFailed);
+    }
+
+    std::optional<CnchBGThreadStatus> Catalog::getBGJobStatus(const UUID & table_uuid, CnchBGThreadType type)
+    {
+        std::optional<CnchBGThreadStatus> res;
+        runWithMetricSupport(
+            [&] {
+                    res = meta_proxy->getBGJobStatus(
+                        name_space, UUIDHelpers::UUIDToString(table_uuid), type);
+                },
+            ProfileEvents::GetBGJobStatusSuccess,
+            ProfileEvents::GetBGJobStatusFailed);
+
+        return res;
+    }
+
+    std::unordered_map<UUID, CnchBGThreadStatus> Catalog::getBGJobStatuses(CnchBGThreadType type)
+    {
+        std::unordered_map<UUID, CnchBGThreadStatus> res;
+        runWithMetricSupport(
+            [&] {
+                    res = meta_proxy->getBGJobStatuses(
+                        name_space, type);
+                },
+            ProfileEvents::GetBGJobStatusesSuccess,
+            ProfileEvents::GetBGJobStatusesFailed);
+
+        return res;
+    }
+
+    void Catalog::dropBGJobStatuses(const UUID & table_uuid)
+    {
+        runWithMetricSupport(
+            [&] {
+                    meta_proxy->dropBGJobStatuses(
+                        name_space, UUIDHelpers::UUIDToString(table_uuid));
+                },
+            ProfileEvents::DropBGJobStatusesSuccess,
+            ProfileEvents::DropBGJobStatusesFailed);
     }
 
     void Catalog::setTablePreallocateVW(const UUID & table_uuid, const String vw)

@@ -323,7 +323,7 @@ void CnchServerServiceImpl::createTransactionForKafka(
     Protos::CreateKafkaTransactionResp * response,
     google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = getContext(); 
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done, response, [cntl = cntl, request = request, response = response, done = done, &global_context = *context_ptr, log = log] {
             brpc::ClosureGuard done_guard(done);
@@ -352,7 +352,7 @@ void CnchServerServiceImpl::createTransactionForKafka(
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
             RPCHelpers::handleException(response->mutable_exception());
         }
-        
+
     });
 }
 
@@ -362,7 +362,7 @@ void CnchServerServiceImpl::getTransactionStatus(
     ::DB::Protos::GetTransactionStatusResp * response,
     ::google::protobuf::Closure * done)
 {
-    ContextPtr context_ptr = getContext(); 
+    ContextPtr context_ptr = getContext();
     RPCHelpers::serviceHandler(
         done,
         response,
@@ -553,7 +553,9 @@ void CnchServerServiceImpl::getServerStartTime(
     Protos::GetServerStartTimeResp * response,
     google::protobuf::Closure * done)
 {
+
 }
+
 void CnchServerServiceImpl::scheduleGlobalGC(
     google::protobuf::RpcController * cntl,
     const Protos::ScheduleGlobalGCReq * request,

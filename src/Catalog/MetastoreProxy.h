@@ -19,6 +19,7 @@
 // #include <Statistics/StatisticsBase.h>
 #include <ResourceManagement/CommonData.h>
 #include <Catalog/IMetastore.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 
 namespace DB
 {
@@ -57,6 +58,8 @@ namespace Catalog
 #define DATABASE_TRASH_PREFIX "DTRASH_"
 #define SERVERS_TOPOLOGY_KEY "SERVERS_TOPOLOGY"
 #define TABLE_CLUSTER_STATUS "TCS_"
+#define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
+#define MERGE_BG_JOB_STATUS "MERGE_BGJS_"
 #define PREALLOCATE_VW "PVW_"
 #define DICTIONARY_STORE_PREFIX "DIC_"
 #define RESOURCE_GROUP_PREFIX "RG_"
@@ -372,13 +375,34 @@ public:
         return escapeString(name_space) + '_' + KV_LOCK_PREFIX + uuid + '_' + part_name;
     }
 
-
     static std::string clusterStatusKey(const std::string & name_space, const std::string & uuid)
     {
         std::stringstream ss;
         ss << escapeString(name_space) << '_' << TABLE_CLUSTER_STATUS << uuid;
         return ss.str();
     }
+
+    static std::string allClusterBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + CLUSTER_BG_JOB_STATUS;
+    }
+
+    static std::string clusterBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allClusterBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static std::string allMergeBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + MERGE_BG_JOB_STATUS;
+    }
+
+    static std::string mergeBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allMergeBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
+    static UUID parseUUIDFromBGJobStatusKey(const std::string & key);
 
     static std::string preallocateVW(const std::string & name_space, const std::string & uuid)
     {
@@ -650,6 +674,14 @@ public:
 
     void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered);
     void getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered);
+
+    /// BackgroundJob related API
+    void setBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type, CnchBGThreadStatus status);
+    std::optional<CnchBGThreadStatus> getBGJobStatus(const String & name_space, const String & uuid, CnchBGThreadType type);
+
+    std::unordered_map<UUID, CnchBGThreadStatus> getBGJobStatuses(const String & name_space, CnchBGThreadType type);
+
+    void dropBGJobStatuses(const String & name_space, const String & uuid);
 
     void setTablePreallocateVW(const String & name_space, const String & uuid, const String & vw);
     void getTablePreallocateVW(const String & name_space, const String & uuid, String & vw);

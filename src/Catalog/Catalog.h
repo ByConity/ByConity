@@ -428,6 +428,12 @@ public:
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
     bool isTableClustered(const UUID & table_uuid);
 
+    /// BackgroundJob related API
+    void setBGJobStatus(const UUID & table_uuid, CnchBGThreadType type, CnchBGThreadStatus status);
+    std::optional<CnchBGThreadStatus> getBGJobStatus(const UUID & table_uuid, CnchBGThreadType type);
+    std::unordered_map<UUID, CnchBGThreadStatus> getBGJobStatuses(CnchBGThreadType type);
+    void dropBGJobStatuses(const UUID & table_uuid);
+
     void setTablePreallocateVW(const UUID & table_uuid, const String vw);
     void getTablePreallocateVW(const UUID & table_uuid, String & vw);
 

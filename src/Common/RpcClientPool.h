@@ -155,10 +155,7 @@ public:
         std::unique_lock lock(state_mutex);
         updateIfNeedUnlocked(lock);
 
-        if (!clients_vec.empty())
-            return clients_vec;
-
-        throw Exception("No available service for " + service_name, ErrorCodes::NO_SUCH_SERVICE);
+        return clients_vec;
     }
 
     HostWithPortsVec getAllHostWithPorts()

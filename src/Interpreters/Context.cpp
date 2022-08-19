@@ -73,9 +73,6 @@
 #include <Interpreters/HaReplicaHandler.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/DDLWorker.h>
-#include <Interpreters/DDLTask.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <IO/ReadBufferFromFile.h>
