@@ -303,7 +303,11 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         return {};
     }
 
-    DatabasePtr database = tryGetDatabaseCnch(table_id.getDatabaseName());
+    DatabasePtr database{};
+
+    if (use_cnch_catalog)
+        database = tryGetDatabaseCnch(table_id.getDatabaseName());
+
     if (!database)
     {
         std::lock_guard lock{databases_mutex};
@@ -656,7 +660,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
-    , use_cnch_catalog{global_context_->getServerType() != ServerType::standalone}
+    , use_cnch_catalog{global_context_->getServerType() == ServerType::server}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
