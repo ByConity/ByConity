@@ -152,18 +152,18 @@ fdb_error_t FDBClient::MultiGet(FDBTransactionPtr tr, const std::vector<std::str
     return 0;
 }
 
-fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const MultiWriteRequest & req, MultiWriteResponse & resp)
+fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchCommitRequest & req, Catalog::BatchCommitResponse & resp)
 {
     AssertTrsansactionStatus(tr);
     std::vector<int> index_of_cas_req;
     std::vector<FDBFuturePtr> future_list;
-    for (size_t i=0; i<req.puts_.size(); i++)
+    for (size_t i=0; i<req.puts.size(); i++)
     {
-        const PutRequest & single_put_req = req.puts_[i];
+        const Catalog::SinglePutRequest & single_put_req = req.puts[i];
         if (single_put_req.if_not_exists || single_put_req.expected_value)
         {
-            const uint8_t* p_key = reinterpret_cast<const uint8_t*>(single_put_req.key.data);
-            FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, single_put_req.key.size, 0));
+            const uint8_t* p_key = reinterpret_cast<const uint8_t*>(single_put_req.key.data());
+            FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, single_put_req.key.size(), 0));
             future_list.emplace_back(f_read);
             index_of_cas_req.emplace_back(i);
         }
@@ -179,43 +179,43 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const MultiWriteRequest 
         RETURN_ON_ERROR(fdb_future_get_error(future_list[i]->future));
         RETURN_ON_ERROR(fdb_future_get_value(future_list[i]->future, &present, &outValue, &outValueLength));
 
-        const PutRequest & put_req = req.puts_[index_of_cas_req[i]];
+        const Catalog::SinglePutRequest & put_req = req.puts[index_of_cas_req[i]];
 
         if (put_req.if_not_exists)
         {
             if (present)
-                resp.puts_.emplace_back(index_of_cas_req[i], std::string(outValue, outValue+outValueLength));
+                resp.puts.emplace(index_of_cas_req[i], std::string(outValue, outValue+outValueLength));
         }
         else if (put_req.expected_value)
         {
             if (present)
             {
-                if (put_req.expected_value->size!=static_cast<size_t>(outValueLength) || memcmp(put_req.expected_value->data, outValue, outValueLength))
-                    resp.puts_.emplace_back(index_of_cas_req[i], std::string(outValue, outValue+outValueLength));
+                if (put_req.expected_value->size()!=static_cast<size_t>(outValueLength) || memcmp(put_req.expected_value->data(), outValue, outValueLength))
+                    resp.puts.emplace(index_of_cas_req[i], std::string(outValue, outValue+outValueLength));
             }
             else
             {
-                resp.puts_.emplace_back(index_of_cas_req[i], "");
+                resp.puts.emplace(index_of_cas_req[i], "");
             }
         }
     }
 
     /// return immediately if find any conflict in current commit;
-    if (resp.puts_.size())
+    if (resp.puts.size())
         return FDBError::FDB_not_committed;
 
-    for (size_t i=0; i<req.puts_.size(); i++)
+    for (size_t i=0; i<req.puts.size(); i++)
     {
          fdb_transaction_set(tr->transaction,
-            reinterpret_cast<const uint8_t*>(req.puts_[i].key.data),
-            req.puts_[i].key.size,
-            reinterpret_cast<const uint8_t*>(req.puts_[i].value.data),
-            req.puts_[i].value.size
+            reinterpret_cast<const uint8_t*>(req.puts[i].key.data()),
+            req.puts[i].key.size(),
+            reinterpret_cast<const uint8_t*>(req.puts[i].value.data()),
+            req.puts[i].value.size()
         );
     }
 
-    for (size_t i=0; i<req.deletes_.size(); i++)
-        fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(req.deletes_[i].c_str()), req.deletes_[i].size());
+    for (size_t i=0; i<req.deletes.size(); i++)
+        fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(req.deletes[i].c_str()), req.deletes[i].size());
 
     FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
     RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));

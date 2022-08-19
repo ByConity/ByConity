@@ -532,7 +532,7 @@ public:
     void setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 ttl = 0);
 
     std::pair<bool, String> updateTransactionRecordWithRequests(
-        const String & name_space, UInt64 txn_id, WriteRequest txn_request, WriteRequests * additional_requests = nullptr);
+        SinglePutRequest & txn_request, BatchCommitRequest & requests, BatchCommitResponse & response);
 
     bool writeIntent(const String & name_space, const String & uuid, const std::vector<WriteIntent> & intents, std::vector<String> & cas_failed_list);
     bool resetIntent(const String & name_space, const String & uuid, const std::vector<WriteIntent> & intents, const UInt64 & new_txn_id, const String & new_location);
@@ -581,7 +581,7 @@ public:
     void updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
-    void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, MultiWritePtr & container);
+    void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, BatchCommitRequest & batch_write);
     bool alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add);
     Strings getAllTablesInDB(const String & name_space, const String & database);
     IMetaStore::IteratorPtr getAllTablesMeta(const String & name_space);
@@ -603,10 +603,10 @@ public:
     std::vector<std::shared_ptr<DB::Protos::DataModelDictionary>> getDictionariesFromTrash(const String & name_space, const String & database);
 
     void prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
-                             const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, MultiWritePtr & container,
+                             const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
                              const std::vector<String> & expected_parts, bool update_sync_list = false);
     void prepareAddStagedParts(const String & name_space, const String & table_uuid, const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
-                               MultiWritePtr & container, const std::vector<String> & expected_staged_parts);
+                               BatchCommitRequest & batch_write, const std::vector<String> & expected_staged_parts);
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);
@@ -650,13 +650,10 @@ public:
     IMetaStore::IteratorPtr getAllUndoBuffer(const String & name_space);
 
     void multiDrop(const Strings & keys);
+
+    bool batchWrite(const BatchCommitRequest & request, BatchCommitResponse response);
     /// tmp api to help debug drop keys failed issue. remove this later.
     std::vector<String> multiDropAndCheck(const Strings & keys);
-
-    void lockPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const String & txnID, std::vector<std::pair<uint32_t , String>> & cas_failed);
-
-    bool unLockPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const String & txnID);
-    bool resetAndLockConflictPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const Strings & expected_txnID, const String & txnID);
 
     IMetaStore::IteratorPtr getPartitionList(const String & name_space, const String & uuid);
 
@@ -688,14 +685,12 @@ public:
 
     /// delete bitmap/keys related api
     void prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps,
-                                 MultiWritePtr & container, const std::vector<String> & expected_bitmaps = {});
+                                 BatchCommitRequest & batch_write, const std::vector<String> & expected_bitmaps = {});
     void addDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
     void removeDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
     Strings getDeleteBitmapByKeys(const Strings & key);
 
     IMetaStore::IteratorPtr getMetaInRange(const String & prefix, const String & range_start, const String & range_end, bool include_start, bool include_end);
-
-    MultiWritePtr createMultiWrite(bool with_cas = true) { return metastore_ptr->createMultiWrite(with_cas); }
 
     std::shared_ptr<Protos::BufferManagerMetadata> tryGetBufferManagerMetadata(const String & name_space, const UUID & uuid);
     void setBufferManagerMetadata(const String & name_space, const UUID & uuid, const Protos::BufferManagerMetadata & metadata);

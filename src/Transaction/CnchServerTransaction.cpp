@@ -207,7 +207,8 @@ TxnTimestamp CnchServerTransaction::commit()
             }
             else
             {
-                Catalog::WriteRequests requests;
+                Catalog::BatchCommitRequest requests(true, true);
+                Catalog::BatchCommitResponse response;
 
                 String label_key;
                 String label_value;
@@ -217,8 +218,8 @@ TxnTimestamp CnchServerTransaction::commit()
                     insertion_label->commit();
                     label_key = global_context.getCnchCatalog()->getInsertionLabelKey(insertion_label);
                     label_value = insertion_label->serializeValue();
-                    requests.push_back(Catalog::WriteRequest{label_key, std::nullopt, label_value, true, {}});
-                    requests.back().callback = [label = insertion_label](int code, const std::string & msg) {
+                    Catalog::SinglePutRequest put_req(label_key, label_value, true);
+                    put_req.callback = [label = insertion_label](int code, const std::string & msg) {
                         if (code == Catalog::CAS_FAILED)
                             throw Exception(
                                 "Insertion label " + label->name + " already exists: " + msg, ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS);
@@ -226,6 +227,7 @@ TxnTimestamp CnchServerTransaction::commit()
                             throw Exception(
                                 "Failed to put insertion label " + label->name + ": " + msg, ErrorCodes::FAILED_TO_PUT_INSERTION_LABEL);
                     };
+                    requests.AddPut(put_req);
                 }
 
                 // CAS operation
@@ -234,7 +236,7 @@ TxnTimestamp CnchServerTransaction::commit()
                              .setCommitTs(commit_ts)
                              .setMainTableUUID(getMainTableUUID());
 
-                bool success = global_context.getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, &requests);
+                bool success = global_context.getCnchCatalog()->setTransactionRecordWithRequests(txn_record, target_record, requests, response);
 
                 txn_record = std::move(target_record);
 

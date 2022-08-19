@@ -204,19 +204,6 @@ public:
 
     bool isDictionaryExists(const String & db, const String & name);
 
-
-    ///Lock related interface
-    void tryLockPartInKV(
-        const StoragePtr & table,
-        const std::vector<String> & parts,
-        std::map<String, std::vector<String>> & conflict_parts,
-        const TxnTimestamp & txnID);
-
-    void unLockPartInKV(const StoragePtr & table, const std::vector<String> & parts, const TxnTimestamp & txnID);
-
-    void tryResetAndLockConflictPartsInKV(
-        const StoragePtr & table, const std::map<String, std::vector<String>> & conflict_parts, const TxnTimestamp & txnID);
-
     /// API for transaction model
     void createTransactionRecord(const TransactionRecord & record);
 
@@ -234,7 +221,7 @@ public:
     /// CAS operation
     /// Similiar to setTransactionRecord, but we want to pack addition requests (e.g. create a insertion label)
     bool setTransactionRecordWithRequests(
-        const TransactionRecord & expected_record, TransactionRecord & record, WriteRequests * additional_requests = nullptr);
+        const TransactionRecord & expected_record, TransactionRecord & record, BatchCommitRequest & request, BatchCommitResponse & response);
 
     void setTransactionRecordCleanTime(TransactionRecord record, const TxnTimestamp & ts, UInt64 ttl);
 
@@ -544,9 +531,9 @@ private:
         Protos::TableIdentifier & table_id,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts,
-        MultiWritePtr & multiWrite);
+        BatchCommitRequest & batchWrite);
     void restoreTableFromTrash(
-        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, MultiWritePtr & multiWrite);
+        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, BatchCommitRequest & batch_write);
 
     void clearDataPartsMetaInternal(
         const StoragePtr & table, const DataPartsVector & parts, const DeleteBitmapMetaPtrVector & delete_bitmaps = {});
