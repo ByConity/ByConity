@@ -500,22 +500,6 @@
                     <port><name>PORT0</name><value>8080</value></port>
                 </ports>
             </node>
-            <node>
-                <host>ip_address_replace_me</host>
-                <hostname>tso0</hostname>
-                <ports>
-                    <!-- RPC/Primary -->
-                    <port><name>PORT0</name><value>8081</value></port>
-                </ports>
-            </node>
-            <node>
-                <host>ip_address_replace_me</host>
-                <hostname>tso0</hostname>
-                <ports>
-                    <!-- RPC/Primary -->
-                    <port><name>PORT0</name><value>8082</value></port>
-                </ports>
-            </node>
         </tso>
         <vw>
             <psm>data.cnch.vw_default</psm>
