@@ -38,14 +38,17 @@ void TransactionCleaner::cleanTransaction(const TransactionCnchPtr & txn)
     if (!txn_record.ended())
         txn->abort();
 
-    scheduleTask(
-        [this, txn] {
-            TxnCleanTask & task = getCleanTask(txn->getTransactionID());
-            txn->clean(task);
-        },
-        CleanTaskPriority::HIGH,
-        txn_record.txnID(),
-        txn_record.status());
+    TxnCleanTask & task = getCleanTask(txn->getTransactionID());
+    txn->clean(task);
+
+    // scheduleTask(
+    //     [this, txn] {
+    //         TxnCleanTask & task = getCleanTask(txn->getTransactionID());
+    //         txn->clean(task);
+    //     },
+    //     CleanTaskPriority::HIGH,
+    //     txn_record.txnID(),
+    //     txn_record.status());
 }
 
 void TransactionCleaner::cleanTransaction(const TransactionRecord & txn_record)
@@ -67,7 +70,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
         TxnCleanTask & task = getCleanTask(txn_record.txnID());
         auto catalog = global_context.getCnchCatalog();
         // first clear any filesys lock if hold
-        catalog->clearFilesysLock(txn_record.txnID()); 
+        catalog->clearFilesysLock(txn_record.txnID());
         catalog->clearZombieIntent(txn_record.txnID());
         auto undo_buffer = catalog->getUndoBuffer(txn_record.txnID());
 
