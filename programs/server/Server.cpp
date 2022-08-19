@@ -1106,8 +1106,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initCnchTransactionCoordinator();
 
         /// Initialize table and part cache, only server need part cache manager and storage cache.
-        /// TODO @zheguan: fix it when part cache ready
-        // global_context->setPartCacheManager();
+        global_context->setPartCacheManager();
         if (config().getBool("enable_cnch_storage_cache", true))
         {
             LOG_INFO(log, "Init cnch storage cache.");

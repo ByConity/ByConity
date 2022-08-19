@@ -3680,7 +3680,6 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
 
 void Context::initTSOClientPool(const String & service_name)
 {
-    fmt::print(stderr, "Init tso with {}\n", service_name);
     shared->tso_client_pool
         = std::make_unique<TSOClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
 }

@@ -39,11 +39,11 @@ CLICKHOUSE_WATCHDOG_ENABLE=0
 
 # start services
 ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/tso0/asan.tso0.log nohup /clickhouse/bin/tso-server --config-file ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso0.xml >/dev/null 2>&1 &
-sleep 2
-ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/tso1/asan.tso1.log nohup /clickhouse/bin/tso-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso1.xml >/dev/null 2>&1 &
-sleep 2
-ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/tso2/asan.tso2.log nohup /clickhouse/bin/tso-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso2.xml >/dev/null 2>&1 &
-sleep 2
+sleep 6
+# ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/tso1/asan.tso1.log nohup /clickhouse/bin/tso-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso1.xml >/dev/null 2>&1 &
+# sleep 2
+# ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/tso2/asan.tso2.log nohup /clickhouse/bin/tso-server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso2.xml >/dev/null 2>&1 &
+# sleep 2
 #ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/resource-manager0/asan.rm0.log nohup /clickhouse/bin/resource_manager --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/rm0.xml  >/dev/null 2>&1 &
 #sleep 2
 #ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/resource-manager1/asan.rm1.log nohup /clickhouse/bin/resource_manager --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/rm1.xml  >/dev/null 2>&1 &

@@ -99,40 +99,29 @@ private:
             return;
         }
 
-        // auto & thread_pool = (priority == CleanTaskPriority::HIGH) ? *server_thread_pool : *dm_thread_pool;
+        auto & thread_pool = (priority == CleanTaskPriority::HIGH) ? *server_thread_pool : *dm_thread_pool;
 
-        // bool res = thread_pool.trySchedule(
-        //     [this, f = std::forward<F>(f), txn_id] {
-        //         try
-        //         {
-        //             f();
-        //         }
-        //         catch (...)
-        //         {
-        //             tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        //         }
-        //         removeTask(txn_id);
-        //     },
-        //     wait_for_schedule);
+        bool res = thread_pool.trySchedule(
+            [this, f = std::forward<F>(f), txn_id] {
+                try
+                {
+                    f();
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                }
+                removeTask(txn_id);
+            },
+            wait_for_schedule);
 
-        try
+        if (!res)
         {
-            f();
-            LOG_DEBUG(log, "Successfully clean transaction {}\n", txn_id);
+            removeTask(txn_id);
+            LOG_WARNING(log, "TransactionCleaner queue is full. Clean task of transaction {} will be rescheduled by dm\n", txn_id.toUInt64());
         }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        }
-        removeTask(txn_id);
-
-        // if (!res)
-        // {
-        //     removeTask(txn_id);
-        //     LOG_WARNING(log, "TransactionCleaner queue is full. Clean task of transaction {} will be rescheduled by dm\n", txn_id.toUInt64());
-        // }
-        // else
-        //     LOG_DEBUG(log, "Successfully schedule clean task in cleaner queue for transaction {}\n", txn_id.toUInt64());
+        else
+            LOG_DEBUG(log, "Successfully schedule clean task in cleaner queue for transaction {}\n", txn_id.toUInt64());
     }
 
 private:
