@@ -38,17 +38,14 @@ void TransactionCleaner::cleanTransaction(const TransactionCnchPtr & txn)
     if (!txn_record.ended())
         txn->abort();
 
-    TxnCleanTask & task = getCleanTask(txn->getTransactionID());
-    txn->clean(task);
-
-    // scheduleTask(
-    //     [this, txn] {
-    //         TxnCleanTask & task = getCleanTask(txn->getTransactionID());
-    //         txn->clean(task);
-    //     },
-    //     CleanTaskPriority::HIGH,
-    //     txn_record.txnID(),
-    //     txn_record.status());
+    scheduleTask(
+        [this, txn] {
+            TxnCleanTask & task = getCleanTask(txn->getTransactionID());
+            txn->clean(task);
+        },
+        CleanTaskPriority::HIGH,
+        txn_record.txnID(),
+        txn_record.status());
 }
 
 void TransactionCleaner::cleanTransaction(const TransactionRecord & txn_record)
