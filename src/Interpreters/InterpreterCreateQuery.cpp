@@ -1023,7 +1023,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         }
     }
 
-    if (database->getEngineName() == "Cnch")
+    if (need_add_to_database && database->getEngineName() == "Cnch")
     {
         if (!create.cluster.empty())
         {

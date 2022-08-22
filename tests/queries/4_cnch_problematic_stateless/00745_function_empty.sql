@@ -1,5 +1,5 @@
-USE test;
-USE test;
+
+
 
 DROP TABLE IF EXISTS empty_test;
 

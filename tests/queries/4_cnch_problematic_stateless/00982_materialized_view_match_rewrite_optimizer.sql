@@ -1,12 +1,12 @@
 set enable_optimizer=1;
-USE test;
 
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.emps;
-DROP TABLE IF EXISTS test.depts;
-DROP TABLE IF EXISTS test.locations;
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS emps;
+DROP TABLE IF EXISTS depts;
+DROP TABLE IF EXISTS locations;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 
 CREATE TABLE emps(
     empid UInt32,
@@ -42,8 +42,8 @@ INSERT INTO locations VALUES (10, 'San Francisco');
 INSERT INTO locations VALUES (20, 'San Diego');
 
 -- 1.test projection rewrite
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 CREATE TABLE mv_data ENGINE = CnchMergeTree() ORDER BY deptno AS
 select deptno, sum(salary), sum(commission), sum(k)
 from (select deptno, salary, commission, 100 as k
@@ -69,8 +69,8 @@ group by deptno
 order by deptno;
 
 -- 2. test filter rewrite
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 CREATE TABLE mv_data ENGINE = CnchMergeTree() ORDER BY deptno AS
 select deptno, empid, name from emps
 where deptno = 10 or deptno = 20 or empid < 160;
@@ -87,13 +87,13 @@ explain select empid as x, name from emps where (deptno = 10 or deptno = 20 or e
 select empid as x, name from emps where (deptno = 10 or deptno = 20 or empid < 160) and empid > 120 order by empid;
 
 -- 3. test rollup aggregate rewrite
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 CREATE TABLE mv_data ENGINE = CnchMergeTree() ORDER BY deptno AS
 select empid, deptno, count(*) as c, sum(empid) as s
 from emps group by empid, deptno;
 
-DROP TABLE IF EXISTS test.mv_define;
+DROP TABLE IF EXISTS mv_define;
 CREATE MATERIALIZED VIEW mv_define TO mv_data AS
 select empid, deptno, count(*) as c, sum(empid) as s
 from emps group by empid, deptno;
@@ -103,13 +103,13 @@ explain select count(*) + 1 as c, deptno from emps group by deptno;
 select count(*) + 1 as c, deptno from emps group by deptno order by deptno;
 
 -- 4. test rollup aggregate rewrite with agg state
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 CREATE TABLE mv_data ENGINE = CnchMergeTree() ORDER BY deptno AS
 select empid, deptno, countState(*) as c, sumState(empid) as s
 from emps group by empid, deptno;
 
-DROP TABLE IF EXISTS test.mv_define;
+DROP TABLE IF EXISTS mv_define;
 CREATE MATERIALIZED VIEW mv_define TO mv_data AS
 select empid, deptno, countState(*) as c, sumState(empid) as s
 from emps group by empid, deptno;
@@ -119,14 +119,14 @@ explain select count(*) as c, deptno from emps group by deptno;
 select count(*) as c, deptno from emps group by deptno order by deptno;
 
 -- 5. test rollup aggregate rewrite with filter
-DROP TABLE IF EXISTS test.mv_define;
-DROP TABLE IF EXISTS test.mv_data;
+DROP TABLE IF EXISTS mv_define;
+DROP TABLE IF EXISTS mv_data;
 CREATE TABLE mv_data ENGINE = CnchMergeTree() ORDER BY deptno AS
 select empid, deptno, count(*) as c, sum(empid) as s, avg(salary) as a
 from emps
 group by empid, deptno;
 
-DROP TABLE IF EXISTS test.mv_define;
+DROP TABLE IF EXISTS mv_define;
 CREATE MATERIALIZED VIEW mv_define TO mv_data AS
 select empid, deptno, count(*) as c, sum(empid) as s, avg(salary) as a
 from emps

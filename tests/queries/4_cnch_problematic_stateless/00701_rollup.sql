@@ -1,4 +1,4 @@
-use test;
+
 DROP TABLE IF EXISTS rollup;
 CREATE TABLE rollup(a String, b Int32, s Int32) ENGINE = CnchMergeTree() ORDER BY a;
 

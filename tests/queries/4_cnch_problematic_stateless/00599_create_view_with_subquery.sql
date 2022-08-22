@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS test_00599;
 DROP TABLE IF EXISTS test_view_00599;
 CREATE TABLE test_00599(id UInt64) ENGINE = CnchMergeTree ORDER BY id;

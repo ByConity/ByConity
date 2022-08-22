@@ -1,4 +1,4 @@
-USE test;
+
 
 -- Test Attach other table's detached partition
 DROP TABLE IF EXISTS test_attach_other_tbl_detached_src;

@@ -21,7 +21,7 @@ public:
 
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
-    bool supportsPrewhere() const override { return false; }
+    bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
     bool canUseAdaptiveGranularity() const override { return false; }

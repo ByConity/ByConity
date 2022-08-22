@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.python_udf;
-CREATE TABLE test.python_udf
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
 (
     a Nullable(String),
     b String
@@ -9,9 +9,9 @@ CREATE TABLE test.python_udf
 ENGINE = CnchMergeTree()
 ORDER BY b;
 
-INSERT INTO test.python_udf (a, b) VALUES ('my name is bahubali', 'age:110'), ('why, is, this, format, stupid', 'look:normal'), ('let-me-do-it', 'country:Singapore'), (NULL, 'country:India'), (NULL, 'country:India'), ('sing', 'city:Mumbai'), ('singh,is,king', 'city:Mumbai'), ('singh--are--king', 'city:Mumbai');
+INSERT INTO python_udf (a, b) VALUES ('my name is bahubali', 'age:110'), ('why, is, this, format, stupid', 'look:normal'), ('let-me-do-it', 'country:Singapore'), (NULL, 'country:India'), (NULL, 'country:India'), ('sing', 'city:Mumbai'), ('singh,is,king', 'city:Mumbai'), ('singh--are--king', 'city:Mumbai');
 
-use test;
+
 DROP FUNCTION IF EXISTS test_python_string_sanitise;
 
 CREATE FUNCTION test_python_string_sanitise RETURNS String LANGUAGE PYTHON AS
@@ -63,4 +63,4 @@ select a, b, z from
 ) t1;
 
 DROP FUNCTION IF EXISTS test_python_string_sanitise;
-DROP TABLE test.python_udf;
+DROP TABLE python_udf;

@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS tvs;
 CREATE TABLE tvs(k UInt32, t UInt32, tv UInt64) ENGINE = CnchMergeTree ORDER BY k;
 INSERT INTO tvs(k,t,tv) SELECT k, t, t

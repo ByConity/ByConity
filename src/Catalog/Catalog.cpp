@@ -720,11 +720,11 @@ namespace Catalog
 
                 /// get latest table version.
                 auto table = tryGetTableFromMetastore(table_uuid, UINT64_MAX);
-                const auto & db = table->database();
-                const auto & name = table->name();
 
                 if (table)
                 {
+                    const auto & db = table->database();
+                    const auto & name = table->name();
                     auto multiWrite = meta_proxy->createMultiWrite();
                     Protos::TableIdentifier identifier;
                     identifier.set_database(db);
@@ -1268,7 +1268,7 @@ namespace Catalog
                             *storage,
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
+                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, ts);
                             },
                             ts.toUInt64());
                         source = "PartCache";

@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS test_00688;
 CREATE TABLE test_00688 (a UInt8) ENGINE = CnchMergeTree ORDER BY a;
 INSERT INTO test_00688 VALUES (1), (2), (1), (3);

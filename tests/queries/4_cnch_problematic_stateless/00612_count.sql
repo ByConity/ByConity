@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS count;
 CREATE TABLE count (x UInt64) ENGINE = CnchMergeTree ORDER BY tuple();
 INSERT INTO count SELECT * FROM numbers(1234567);

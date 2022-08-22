@@ -168,7 +168,7 @@ void MultiplexedConnections::sendQuery(
                 : current_context->getRPCPort();
 
             replica_states[0].connection->sendCnchQuery(
-                txn_id, timeouts, query, query_id, stage, &modified_settings, & client_info, with_pending_data, client_type, rpc_port);
+                txn_id, timeouts, query, query_id, stage, &modified_settings, &client_info, with_pending_data, client_type, rpc_port);
         }
         else
         {

@@ -1,4 +1,4 @@
-USE test;
+
 SELECT bitmapToArray(bitmapBuild([1, 2, 3, 4, 5]));
 SELECT bitmapToArray(bitmapAnd(bitmapBuild([1,2,3]),bitmapBuild([3,4,5])));
 SELECT bitmapToArray(bitmapOr(bitmapBuild([1,2,3]),bitmapBuild([3,4,5])));
@@ -13,8 +13,8 @@ SELECT bitmapAndCardinality(bitmapBuild([100, 200, 500]), bitmapBuild(CAST([100,
 SELECT bitmapToArray(bitmapAnd(bitmapBuild([100, 200, 500]), bitmapBuild(CAST([100, 200], 'Array(UInt16)'))));
 
 -- between column and expression test
-DROP TABLE IF EXISTS bitmap_column_expr_test;
-CREATE TABLE bitmap_column_expr_test
+DROP TABLE IF EXISTS bitmap_column_expr_test_community;
+CREATE TABLE bitmap_column_expr_test_community
 (
     t DateTime,
     z AggregateFunction(groupBitmap, UInt32)
@@ -23,16 +23,16 @@ ENGINE = CnchMergeTree()
 PARTITION BY toYYYYMMDD(t)
 ORDER BY t;
 
-INSERT INTO bitmap_column_expr_test VALUES (now(), bitmapBuild(cast([3,19,47] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test_community VALUES (now(), bitmapBuild(cast([3,19,47] as Array(UInt32))));
 
-SELECT bitmapAndCardinality( bitmapBuild(cast([19,7] AS Array(UInt32))), z) FROM bitmap_column_expr_test;
-SELECT bitmapAndCardinality( z, bitmapBuild(cast([19,7] AS Array(UInt32))) ) FROM bitmap_column_expr_test;
+SELECT bitmapAndCardinality( bitmapBuild(cast([19,7] AS Array(UInt32))), z) FROM bitmap_column_expr_test_community;
+SELECT bitmapAndCardinality( z, bitmapBuild(cast([19,7] AS Array(UInt32))) ) FROM bitmap_column_expr_test_community;
 
-SELECT bitmapCardinality(bitmapAnd(bitmapBuild(cast([19,7] AS Array(UInt32))), z )) FROM bitmap_column_expr_test;
-SELECT bitmapCardinality(bitmapAnd(z, bitmapBuild(cast([19,7] AS Array(UInt32))))) FROM bitmap_column_expr_test;
+SELECT bitmapCardinality(bitmapAnd(bitmapBuild(cast([19,7] AS Array(UInt32))), z )) FROM bitmap_column_expr_test_community;
+SELECT bitmapCardinality(bitmapAnd(z, bitmapBuild(cast([19,7] AS Array(UInt32))))) FROM bitmap_column_expr_test_community;
 
-DROP TABLE IF EXISTS bitmap_column_expr_test2;
-CREATE TABLE bitmap_column_expr_test2
+DROP TABLE IF EXISTS bitmap_column_expr_test_community2;
+CREATE TABLE bitmap_column_expr_test_community2
 (
     tag_id String,
     z AggregateFunction(groupBitmap, UInt32)
@@ -40,26 +40,26 @@ CREATE TABLE bitmap_column_expr_test2
 ENGINE = CnchMergeTree()
 ORDER BY tag_id;
 
-INSERT INTO bitmap_column_expr_test2 VALUES ('tag1', bitmapBuild(cast([1,2,3,4,5,6,7,8,9,10] as Array(UInt32))));
-INSERT INTO bitmap_column_expr_test2 VALUES ('tag2', bitmapBuild(cast([6,7,8,9,10,11,12,13,14,15] as Array(UInt32))));
-INSERT INTO bitmap_column_expr_test2 VALUES ('tag3', bitmapBuild(cast([2,4,6,8,10,12] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test_community2 VALUES ('tag1', bitmapBuild(cast([1,2,3,4,5,6,7,8,9,10] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test_community2 VALUES ('tag2', bitmapBuild(cast([6,7,8,9,10,11,12,13,14,15] as Array(UInt32))));
+INSERT INTO bitmap_column_expr_test_community2 VALUES ('tag3', bitmapBuild(cast([2,4,6,8,10,12] as Array(UInt32))));
 
-SELECT groupBitmapMerge(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
-SELECT arraySort(bitmapToArray(groupBitmapMergeState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+SELECT groupBitmapMerge(z) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
+SELECT arraySort(bitmapToArray(groupBitmapMergeState(z))) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
 
-SELECT groupBitmapOr(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
-SELECT arraySort(bitmapToArray(groupBitmapOrState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+SELECT groupBitmapOr(z) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
+SELECT arraySort(bitmapToArray(groupBitmapOrState(z))) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
 
-SELECT groupBitmapAnd(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
-SELECT arraySort(bitmapToArray(groupBitmapAndState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+SELECT groupBitmapAnd(z) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
+SELECT arraySort(bitmapToArray(groupBitmapAndState(z))) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
 
-SELECT groupBitmapXor(z) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
-SELECT arraySort(bitmapToArray(groupBitmapXorState(z))) FROM bitmap_column_expr_test2 WHERE like(tag_id, 'tag%');
+SELECT groupBitmapXor(z) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
+SELECT arraySort(bitmapToArray(groupBitmapXorState(z))) FROM bitmap_column_expr_test_community2 WHERE like(tag_id, 'tag%');
 
 DROP TABLE IF EXISTS bitmap_test;
 -- DROP TABLE IF EXISTS bitmap_state_test;
-DROP TABLE IF EXISTS bitmap_column_expr_test;
-DROP TABLE IF EXISTS bitmap_column_expr_test2;
+DROP TABLE IF EXISTS bitmap_column_expr_test_community;
+DROP TABLE IF EXISTS bitmap_column_expr_test_community2;
 
 -- bitmapHasAny:
 ---- Empty

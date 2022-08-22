@@ -1,4 +1,4 @@
-USE test;
+
 
 DROP TABLE IF EXISTS tvs;
 DROP TABLE IF EXISTS trades;

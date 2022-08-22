@@ -1,5 +1,5 @@
 -- check ALTER MODIFY COLUMN with partitions
-USE test;
+
 SET send_logs_level = 'none';
 DROP TABLE IF EXISTS alter_column;
 CREATE TABLE alter_column(x UInt32, y Int32) ENGINE CnchMergeTree PARTITION BY x ORDER BY x;

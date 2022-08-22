@@ -1,4 +1,4 @@
-USE test;
+
 
 DROP TABLE IF EXISTS funnel_test;
 CREATE TABLE funnel_test (uid UInt32 default 1, timestamp UInt32, event UInt32, prop String) engine=CnchMergeTree() ORDER BY uid;

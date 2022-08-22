@@ -8,9 +8,9 @@ set -e -o pipefail
 # Run the client.
 $CLICKHOUSE_CLIENT --multiquery <<'EOF'
 CREATE DATABASE IF NOT EXISTS test;
-DROP TABLE IF EXISTS test.table;
+DROP TABLE IF EXISTS table;
 
-CREATE TABLE test.table (id Int64,
+CREATE TABLE table (id Int64,
                          address Nullable(String),
                          name String,
                          nums Array(UInt32),
@@ -19,6 +19,6 @@ CREATE TABLE test.table (id Int64,
                          ) ENGINE = CnchMergeTree ORDER BY tuple();
 EOF
 
-cat $CURDIR/00825_protobuf_custom_format_input.data | $CLICKHOUSE_CLIENT --query="INSERT INTO test.table FORMAT Protobuf SETTINGS format_schema = '$CURDIR/00825_protobuf_custom_format:TestMessage'"
+cat $CURDIR/00825_protobuf_custom_format_input.data | $CLICKHOUSE_CLIENT --query="INSERT INTO table FORMAT Protobuf SETTINGS format_schema = '$CURDIR/00825_protobuf_custom_format:TestMessage'"
 
-$CLICKHOUSE_CLIENT --query "SELECT * FROM test.table;"
+$CLICKHOUSE_CLIENT --query "SELECT * FROM table;"

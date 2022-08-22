@@ -1,8 +1,8 @@
 CREATE DATABASE IF NOT EXISTS test;
 CREATE DATABASE IF NOT EXISTS test_2;
 
-DROP TABLE IF EXISTS test.python_udf;
-CREATE TABLE test.python_udf
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
 (
     a UInt64,
     b Float64,
@@ -15,10 +15,10 @@ ENGINE = CnchMergeTree()
 PRIMARY KEY a
 ORDER BY a;
 
-INSERT INTO test.python_udf (a, b, c, d, timestamp, nullable_col)
+INSERT INTO python_udf (a, b, c, d, timestamp, nullable_col)
 VALUES (0, 0, NULL, 'def', 1546300800, 1) (1, 4.5, 'adcf', 'dew', '2019-01-11 00:00:00', 2) (1, 4.5, 'abcc', 'defs', '2020-01-01 00:00:00', NULL) (2, 5, 'abwc', 'defv', '2019-01-06 00:00:00', 6) (5, 9, 'abdc', 'deqf', '2019-05-01 00:00:00', NULL) (5, 99, 'abc', 'def', 1546309800, 7) (4, 1, 'abc', 'def', 1546300800, NULL) (2, 1, 'abc', 'def', '2019-02-01 00:00:00', NULL) (3, 2.1, 'abc', 'def', 1546300810, NULL) (0, -5, 'abc', 'def', '2019-01-01 00:00:00', 8);
 
-use test;
+
 
 DROP FUNCTION IF EXISTS test_2.test_python_string_concat;
 DROP FUNCTION IF EXISTS test_2.test_lambda_string_concat;
@@ -63,7 +63,7 @@ DROP FUNCTION IF EXISTS test_lambda_sum;
 
 CREATE FUNCTION test_lambda_sum AS (x, y) -> x+y;
 
-select a+2+5+1, test_lambda_sum(test_python_sum_3(a, 2.0), 5) from test.python_udf order by a+2+5+1, test_lambda_sum(test_python_sum_3(a, 2.0), 5);
+select a+2+5+1, test_lambda_sum(test_python_sum_3(a, 2.0), 5) from python_udf order by a+2+5+1, test_lambda_sum(test_python_sum_3(a, 2.0), 5);
 
 SELECT
   a,
@@ -83,7 +83,7 @@ SELECT
   test_2.test_lambda_string_concat(test_2.test_python_string_concat(c, d), '_py_in_lambda'),
   test_2.test_python_string_concat(test_2.test_lambda_string_concat(c, d), '_lambda_in_py')
 FROM
-  test.python_udf
+  python_udf
   where test_python_sum_3(a, b) != 0
 ORDER BY test_python_sum_3(a, b), test_2.test_python_string_concat(c, '_all_good');
 

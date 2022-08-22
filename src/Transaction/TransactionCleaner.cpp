@@ -67,7 +67,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
         TxnCleanTask & task = getCleanTask(txn_record.txnID());
         auto catalog = global_context.getCnchCatalog();
         // first clear any filesys lock if hold
-        catalog->clearFilesysLock(txn_record.txnID()); 
+        catalog->clearFilesysLock(txn_record.txnID());
         catalog->clearZombieIntent(txn_record.txnID());
         auto undo_buffer = catalog->getUndoBuffer(txn_record.txnID());
 

@@ -4,54 +4,54 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # partition level uniqueness
 # --------------------------
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS test.u10105_pl;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE test.u10105_pl (p String, k1 Int64, v1 Int64, v2 Int64) Engine=CnchMergeTree() partition by p unique key k1 order by v1";
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS u10105_pl;"
+$CLICKHOUSE_CLIENT --query="CREATE TABLE u10105_pl (p String, k1 Int64, v1 Int64, v2 Int64) Engine=CnchMergeTree() partition by p unique key k1 order by v1";
 
 # Test: concurrent "INSERT VALUES" with the same key
 for i in {1..20}; do
     # switch between partition 'p1' and 'p0'
-    $CLICKHOUSE_CLIENT --query="INSERT INTO test.u10105_pl VALUES ('p$((i % 2))', 1, $i, -$i)" &
+    $CLICKHOUSE_CLIENT --query="INSERT INTO u10105_pl VALUES ('p$((i % 2))', 1, $i, -$i)" &
 done
 wait
 
 $CLICKHOUSE_CLIENT --query="SELECT 'After concurrent insert values' "
-$CLICKHOUSE_CLIENT --query="SELECT p, k1, v1 + v2 FROM test.u10105_pl ORDER BY p"
+$CLICKHOUSE_CLIENT --query="SELECT p, k1, v1 + v2 FROM u10105_pl ORDER BY p"
 
 # Test: concurrent "INSERT SELECT" with the same key
 for i in {1..20}; do
     # switch between partition 'p1' and 'p0'
-    $CLICKHOUSE_CLIENT --query="INSERT INTO test.u10105_pl SELECT 'p$((i % 2))', number, number, -number FROM system.numbers limit 10" &
+    $CLICKHOUSE_CLIENT --query="INSERT INTO u10105_pl SELECT 'p$((i % 2))', number, number, -number FROM system.numbers limit 10" &
 done
 wait
 
 $CLICKHOUSE_CLIENT --query="SELECT 'After concurrent insert select' "
-$CLICKHOUSE_CLIENT --query="SELECT p, count(1), count(distinct k1), sum(v1 + v2) FROM test.u10105_pl GROUP BY p ORDER BY p"
+$CLICKHOUSE_CLIENT --query="SELECT p, count(1), count(distinct k1), sum(v1 + v2) FROM u10105_pl GROUP BY p ORDER BY p"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS test.u10105_pl;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS u10105_pl;"
 
 # table level uniqueness
 # ----------------------
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS test.u10105_tl;"
-$CLICKHOUSE_CLIENT --query="CREATE TABLE test.u10105_tl (p String, k1 Int64, v1 Int64, v2 Int64) Engine=CnchMergeTree() partition by p unique key k1 order by v1 SETTINGS partition_level_unique_keys = 0";
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS u10105_tl;"
+$CLICKHOUSE_CLIENT --query="CREATE TABLE u10105_tl (p String, k1 Int64, v1 Int64, v2 Int64) Engine=CnchMergeTree() partition by p unique key k1 order by v1 SETTINGS partition_level_unique_keys = 0";
 
 # Test: concurrent "INSERT VALUES" with the same key
 for i in {1..20}; do
     # switch between partition 'p1' and 'p0'
-    $CLICKHOUSE_CLIENT --query="INSERT INTO test.u10105_tl VALUES ('p$((i % 2))', 1, $i, -$i)" &
+    $CLICKHOUSE_CLIENT --query="INSERT INTO u10105_tl VALUES ('p$((i % 2))', 1, $i, -$i)" &
 done
 wait
 
 $CLICKHOUSE_CLIENT --query="SELECT 'After concurrent insert values (table level)' "
-$CLICKHOUSE_CLIENT --query="SELECT k1, v1 + v2 FROM test.u10105_tl"
+$CLICKHOUSE_CLIENT --query="SELECT k1, v1 + v2 FROM u10105_tl"
 
 # Test: concurrent "INSERT SELECT" with the same key
 for i in {1..20}; do
     # switch between partition 'p1' and 'p0'
-    $CLICKHOUSE_CLIENT --query="INSERT INTO test.u10105_tl SELECT 'p$((i % 2))', number, number, -number FROM system.numbers limit 10" &
+    $CLICKHOUSE_CLIENT --query="INSERT INTO u10105_tl SELECT 'p$((i % 2))', number, number, -number FROM system.numbers limit 10" &
 done
 wait
 
 $CLICKHOUSE_CLIENT --query="SELECT 'After concurrent insert select (table level)' "
-$CLICKHOUSE_CLIENT --query="SELECT count(1), count(distinct k1), sum(v1 + v2) FROM test.u10105_tl"
+$CLICKHOUSE_CLIENT --query="SELECT count(1), count(distinct k1), sum(v1 + v2) FROM u10105_tl"
 
-$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS test.u10105_tl;"
+$CLICKHOUSE_CLIENT --query="DROP TABLE IF EXISTS u10105_tl;"

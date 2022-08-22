@@ -1,8 +1,8 @@
 set enable_optimizer=1;
 
 DROP DATABASE IF EXISTS test;
-CREATE DATABASE test;
-use test;
+
+
 
 DROP TABLE IF EXISTS grouping_sets;
 

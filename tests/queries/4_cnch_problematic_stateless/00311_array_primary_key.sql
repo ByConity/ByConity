@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS array_pk;
 CREATE TABLE array_pk (key Array(UInt8), s String, n UInt64, d Date MATERIALIZED '2000-01-01') 
 ENGINE =CnchMergeTree PARTITION BY d ORDER BY (key, s, n) SETTINGS index_granularity = 1;

@@ -1,23 +1,23 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.python_join_1;
-DROP TABLE IF EXISTS test.python_join_2;
+DROP TABLE IF EXISTS python_join_1;
+DROP TABLE IF EXISTS python_join_2;
 
-CREATE TABLE test.python_join_1(Id Int, name String)
+CREATE TABLE python_join_1(Id Int, name String)
 ENGINE = CnchMergeTree()
 PRIMARY KEY Id
 ORDER BY Id;
 
-CREATE TABLE test.python_join_2(Id Int, text String, scores Int)
+CREATE TABLE python_join_2(Id Int, text String, scores Int)
 ENGINE = CnchMergeTree()
 PRIMARY KEY Id
 ORDER BY Id;
 
-INSERT INTO test.python_join_1 VALUES (1, 'A'), (2, 'B'), (3, 'A');
+INSERT INTO python_join_1 VALUES (1, 'A'), (2, 'B'), (3, 'A');
 
-INSERT INTO test.python_join_2 VALUES (1, 'Text A', 10), (1, 'Another text A', 20), (2, 'Text B', 30);
+INSERT INTO python_join_2 VALUES (1, 'Text A', 10), (1, 'Another text A', 20), (2, 'Text B', 30);
 
-use test;
+
 DROP FUNCTION IF EXISTS test_python_join_starts_with;
 
 CREATE FUNCTION test_python_join_starts_with RETURNS UInt8 LANGUAGE PYTHON AS
@@ -48,5 +48,5 @@ SELECT name, text, startsWith(python_join_2.text, 'Text') FROM python_join_1 LEF
     ON python_join_1.Id = python_join_2.Id and startsWith(python_join_2.text, 'Text') = 1 order by name, text SETTINGS join_use_nulls=0;
 
 DROP FUNCTION IF EXISTS test_python_join_starts_with;
-DROP TABLE IF EXISTS test.python_join_1;
-DROP TABLE IF EXISTS test.python_join_2;
+DROP TABLE IF EXISTS python_join_1;
+DROP TABLE IF EXISTS python_join_2;

@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS test;
 
-DROP TABLE IF EXISTS test.python_udf;
-CREATE TABLE test.python_udf
+DROP TABLE IF EXISTS python_udf;
+CREATE TABLE python_udf
 (
     a Int32,
     b Int64,
@@ -12,10 +12,10 @@ ENGINE = CnchMergeTree()
 PRIMARY KEY a
 ORDER BY a;
 
-INSERT INTO test.python_udf (a, b, c, d)
+INSERT INTO python_udf (a, b, c, d)
 VALUES (127,2,3.5,4) (-128,65535,13,14.78999) (21,-32768,4294967295.343454,24.121) (31,32767,33,34.233) (0,0,0,18446744073709551614.1) (0,0,2147483647,0.999) (0,0,0.001,-9223372036854775807.09) (0,0,0,9223372036854775806.12);
 
-use test;
+
 
 DROP FUNCTION IF EXISTS test_python_float;
 
@@ -35,8 +35,8 @@ SELECT
   a+b+c+d+1.0,
   test_python_float(a, b, c, d)
 FROM
-  test.python_udf
+  python_udf
 ORDER BY test_python_float(a, b, c, d) desc;
 
 DROP FUNCTION IF EXISTS test_python_float;
-DROP TABLE IF EXISTS test.python_udf;
+DROP TABLE IF EXISTS python_udf;

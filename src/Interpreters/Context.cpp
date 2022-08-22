@@ -667,7 +667,7 @@ Context::acquireNamedCnchSession(const UInt64 & txn_id, std::chrono::steady_cloc
 {
     if (!shared->named_cnch_sessions)
         throw Exception("Support for named sessions is not enabled", ErrorCodes::NOT_IMPLEMENTED);
-
+    LOG_DEBUG(&Poco::Logger::get("acquireNamedCnchSession"), "Trying to acquire session for {}\n", txn_id);
     return shared->named_cnch_sessions->acquireSession(txn_id, shared_from_this(), timeout, session_check);
 }
 
@@ -3677,7 +3677,6 @@ ServiceDiscoveryClientPtr Context::getServiceDiscoveryClient() const
 
 void Context::initTSOClientPool(const String & service_name)
 {
-    fmt::print(stderr, "Init tso with {}\n", service_name);
     shared->tso_client_pool
         = std::make_unique<TSOClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::TSO); });
 }

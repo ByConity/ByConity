@@ -1,4 +1,4 @@
-USE test;
+
 drop table if exists t_00725_4;
 drop table if exists s_00725_4;
 create table t_00725_4(a Int64, b Int64, c String) engine = CnchMergeTree ORDER BY a;

@@ -1,4 +1,4 @@
-USE test;
+
 
 DROP TABLE IF EXISTS detach_test;
 CREATE TABLE detach_test (id Int32, score Int32) Engine = CnchMergeTree ORDER BY id;

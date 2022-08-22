@@ -81,10 +81,11 @@ void CnchServerResource::addBufferWorkers(const UUID & storage_id, const HostWit
 
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
+    auto lock = getLock();
     std::vector<AssignedResource> resource_to_send;
+    auto worker_client = worker_group->getWorkerClient(worker);
 
     {
-        auto lock = getLock();
         allocateResource(context, lock);
 
         auto it = assigned_worker_resource.find(worker);
@@ -93,22 +94,20 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
 
         resource_to_send = std::move(it->second);
         assigned_worker_resource.erase(it);
-    }
 
-    auto worker_client = worker_group->getWorkerClient(worker);
+        bool is_local = context->getServerType() == ServerType::cnch_worker && worker.getRPCAddress() == context->getHostWithPorts().getRPCAddress();
 
-    bool is_local = context->getServerType() == ServerType::cnch_worker && worker.getRPCAddress() == context->getHostWithPorts().getRPCAddress();
-
-    if (!is_local)
-    {
-        /// skip send create query to local shard in offloading mode
-        std::vector<String> create_queries;
-        for (auto & resource: resource_to_send)
+        if (!is_local)
         {
-            if (!resource.sent_create_query)
-                create_queries.emplace_back(resource.create_table_query);
+            /// skip send create query to local shard in offloading mode
+            std::vector<String> create_queries;
+            for (auto & resource: resource_to_send)
+            {
+                if (!resource.sent_create_query)
+                    create_queries.emplace_back(resource.create_table_query);
+            }
+            worker_client->sendCreateQueries(context, create_queries);
         }
-        worker_client->sendCreateQueries(context, create_queries);
     }
 
     /// send data parts.

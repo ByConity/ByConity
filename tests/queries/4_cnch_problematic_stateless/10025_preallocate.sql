@@ -1,13 +1,13 @@
-USE test;
-DROP TABLE IF EXISTS test.preallocate;
-CREATE TABLE test.preallocate (d Date, k UInt64) ENGINE=CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY k;
 
-INSERT INTO test.preallocate VALUES ('2015-01-01', 10);
+DROP TABLE IF EXISTS preallocate;
+CREATE TABLE preallocate (d Date, k UInt64) ENGINE=CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY k;
 
-SELECT * FROM test.preallocate ORDER BY k;
+INSERT INTO preallocate VALUES ('2015-01-01', 10);
 
-PREALLOCATE test.preallocate;
+SELECT * FROM preallocate ORDER BY k;
 
-SELECT * FROM test.preallocate ORDER BY k;
+PREALLOCATE preallocate;
 
-DROP TABLE test.preallocate;
+SELECT * FROM preallocate ORDER BY k;
+
+DROP TABLE preallocate;

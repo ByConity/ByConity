@@ -38,7 +38,7 @@ class Chunk:
         self.data_ = new_data + self.data_[len(new_data):]
 
     def dump_sql(self):
-        res = "INSERT INTO test.unique_merge VALUES " + ' '.join(
+        res = "INSERT INTO unique_merge VALUES " + ' '.join(
             x for x in self.inserts_) + ";"
         if self.replace_:
             res += "  --- Upsert sql"

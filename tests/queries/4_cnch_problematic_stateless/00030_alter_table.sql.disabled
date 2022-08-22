@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS alter_test;
 CREATE TABLE alter_test (CounterID UInt32, StartDate Date, UserID UInt32, VisitID UInt32,  
 NestedColumn Nested(A UInt8, S String), ToDrop UInt32)  ENGINE = CnchMergeTree 

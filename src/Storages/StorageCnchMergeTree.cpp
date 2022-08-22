@@ -31,6 +31,7 @@
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <Processors/Sources/NullSource.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
+#include "Common/Exception.h"
 #include <common/logger_useful.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 
@@ -390,11 +391,13 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
     if (!table_ttl.definition_ast)
         return 0;
 
-    // construct a block consists of partition keys
-    // then compute ttl values according to this block
+    /// Construct a block consists of partition keys then compute ttl values according to this block
     const auto & partition_key_sample = getInMemoryMetadata().getPartitionKey().sample_block;
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     const auto & partition_key = partition.value;
+    /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
+    if (columns.size() != partition_key.size())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Partition key columns definition missmatch between inmemory and metastore, this is a bug");
     for (size_t i = 0; i < partition_key.size(); ++i)
         columns[i]->insert(partition_key[i]);
 

@@ -1,8 +1,8 @@
-USE test;
+
 DROP TABLE IF EXISTS test_subquery;
 CREATE TABLE test_subquery(x Int32, y String) Engine = CnchMergeTree ORDER BY tuple();
 INSERT INTO test_subquery VALUES (1, 'a'), (2, 'b');
-SELECT x, y FROM test.test_subquery WHERE x = (SELECT max(x) FROM test.test_subquery);
+SELECT x, y FROM test_subquery WHERE x = (SELECT max(x) FROM test_subquery);
 DROP TABLE test_subquery;
 
 DROP TABLE IF EXISTS table_1;

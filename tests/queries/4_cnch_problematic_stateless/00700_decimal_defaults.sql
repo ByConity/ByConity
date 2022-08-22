@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS decimal;
 CREATE TABLE IF NOT EXISTS decimal
 (

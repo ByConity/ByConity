@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS empty;
 DROP TABLE IF EXISTS data;
 CREATE TABLE empty (value Int8) ENGINE = CnchMergeTree ORDER BY value;

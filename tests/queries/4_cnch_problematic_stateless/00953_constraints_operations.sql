@@ -1,4 +1,4 @@
-USE test;
+
 DROP TABLE IF EXISTS test_constraints;
 CREATE TABLE test_constraints
 (

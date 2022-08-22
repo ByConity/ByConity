@@ -1,4 +1,4 @@
-USE test;
+
 drop table if exists test_bloom;
 
 create table test_bloom (date Date, vid Array(Int32) BLOOM) engine = CnchMergeTree partition by date order by date;

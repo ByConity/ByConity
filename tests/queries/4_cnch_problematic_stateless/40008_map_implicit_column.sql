@@ -1,4 +1,4 @@
-use test;
+
 
 DROP TABLE IF EXISTS test_map_implicit_column;
 DROP TABLE IF EXISTS test_map_implicit_column2;
