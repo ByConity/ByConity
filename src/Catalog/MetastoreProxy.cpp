@@ -51,29 +51,29 @@ void MetastoreProxy::addDatabase(const String & name_space, const Protos::DataMo
     String db_meta;
     db_model.SerializeToString(&db_meta);
 
-    auto multiWrite = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
     if (db_model.has_uuid())
-        multiWrite->addPut(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))), "", "", true);
-    multiWrite->addPut(dbKey(name_space, db_model.name(), db_model.commit_time()), db_meta);
+        batch_write.AddPut(SinglePutRequest(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))), "", true));
+    batch_write.AddPut(SinglePutRequest(dbKey(name_space, db_model.name(), db_model.commit_time()), db_meta));
 
+    BatchCommitResponse resp;
     try
     {
-        multiWrite->commit();
+        metastore_ptr->batchWrite(batch_write, resp);
     }
     catch (Exception & e)
-    {
+    {   
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            auto conflict_details = multiWrite->collectConflictInfo();
-            if (conflict_details.count(0))
-            {
+             /// check if db uuid has conflict with current metainfo
+            if (resp.puts.count(0))
                 throw Exception(
-                    "Database with the same uuid(" + UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid())) + ") already exists in catalog. Please use another uuid or "
-                    "clear old version of this database and try again.",
-                    ErrorCodes::METASTORE_DB_UUID_CAS_ERROR);
-            }
+                        "Database with the same uuid(" + UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid())) + ") already exists in catalog. Please use another uuid or "
+                        "clear old version of this database and try again.",
+                        ErrorCodes::METASTORE_DB_UUID_CAS_ERROR);
         }
-        throw e;
+        else
+            throw e;
     }
 }
 
@@ -123,18 +123,20 @@ void MetastoreProxy::dropDatabase(const String & name_space, const Protos::DataM
     String name = db_model.name();
     UInt64 ts = db_model.commit_time();
 
-    auto multiWrite = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
 
     /// get all trashed dictionaries of current db and remove them with db metadata
     auto dic_ptrs = getDictionariesFromTrash(name_space, name + "_" + toString(ts));
     for (auto & dic_ptr : dic_ptrs)
-        multiWrite->addDelete(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name()));
+        batch_write.AddDelete(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name()));
 
-    multiWrite->addDelete(dbKey(name_space, name, ts));
-    multiWrite->addDelete(dbTrashKey(name_space, name, ts));
+    batch_write.AddDelete(dbKey(name_space, name, ts));
+    batch_write.AddDelete(dbTrashKey(name_space, name, ts));
     if (db_model.has_uuid())
-        multiWrite->addDelete(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))));
-    multiWrite->commit();
+        batch_write.AddDelete(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))));
+    
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 String MetastoreProxy::getTableUUID(const String & name_space, const String & database, const String & name)
@@ -196,43 +198,43 @@ void MetastoreProxy::createTable(const String & name_space, const DB::Protos::Da
     String serialized_meta;
     table_data.SerializeToString(&serialized_meta);
 
-    auto multiWrite = metastore_ptr->createMultiWrite();
-    multiWrite->addPut(nonHostUpdateKey(name_space, uuid), "0", "", true);
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(nonHostUpdateKey(name_space, uuid), "0", true));
     // insert table meta
-    multiWrite->addPut(tableStoreKey(name_space, uuid, table_data.commit_time()), serialized_meta, "", true);
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, uuid, table_data.commit_time()), serialized_meta, true));
     /// add dependency mapping if need
     for (const String & dependency : dependencies)
-        multiWrite->addPut(viewDependencyKey(name_space, dependency, uuid), uuid);
+        batch_write.AddPut(SinglePutRequest(viewDependencyKey(name_space, dependency, uuid), uuid));
 
     for (const String & mask : masking_policy_mapping)
-        multiWrite->addPut(maskingPolicyTableMappingKey(name_space, mask, uuid), uuid);
+        batch_write.AddPut(SinglePutRequest(maskingPolicyTableMappingKey(name_space, mask, uuid), uuid));
 
     /// add `table name` ->`uuid` mapping
     Protos::TableIdentifier identifier;
     identifier.set_database(database);
     identifier.set_name(name);
     identifier.set_uuid(uuid);
-    multiWrite->addPut(tableUUIDMappingKey(name_space, database, name), identifier.SerializeAsString(), "", true);
-    multiWrite->addPut(tableUUIDUniqueKey(name_space, uuid), "", "", true);
+    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, database, name), identifier.SerializeAsString(), true));
+    batch_write.AddPut(SinglePutRequest(tableUUIDUniqueKey(name_space, uuid), "", true));
 
+    BatchCommitResponse resp;
     try
     {
-        multiWrite->commit();
+        metastore_ptr->batchWrite(batch_write, resp);
     }
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            auto conflict_details = multiWrite->collectConflictInfo();
-            auto size = multiWrite->getPutsSize();
-            if (conflict_details.count(size-1))
+            auto putssize = batch_write.puts.size();
+            if (resp.puts.count(putssize-1))
             {
                 throw Exception(
                     "Table with the same uuid already exists in catalog. Please use another uuid or "
                     "clear old version of this table and try again.",
                     ErrorCodes::METASTORE_TABLE_UUID_CAS_ERROR);
             }
-            else if (conflict_details.count(size-2))
+            else if (resp.puts.count(putssize-2))
             {
                 throw Exception(
                     "Table with the same name already exists in catalog. Please use another name and try again.",
@@ -442,13 +444,13 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     if (uuid.empty())
         return;
 
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
 
     /// remove all versions of table meta info.
     auto it_t = metastore_ptr->getByPrefix(tableStorePrefix(name_space, uuid));
     while(it_t->next())
     {
-        multiWrite->addDelete(it_t->key());
+        batch_write.AddDelete(it_t->key());
     }
 
     /// remove table partition list;
@@ -456,51 +458,52 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     auto it_p = metastore_ptr->getByPrefix(partition_list_prefix);
     while(it_p->next())
     {
-        multiWrite->addDelete(it_p->key());
+        batch_write.AddDelete(it_p->key());
     }
     /// remove dependency
     for (const String & dependency : dependencies)
-        multiWrite->addDelete(viewDependencyKey(name_space, dependency, uuid));
+        batch_write.AddDelete(viewDependencyKey(name_space, dependency, uuid));
 
     /// remove all records about memory buffers
     auto log_prefix = cnchLogKey(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(log_prefix); it->next(); )
     {
-        multiWrite->addDelete(it->key());
+        batch_write.AddDelete(it->key());
     }
 
     /// remove trash record if the table marked as deleted before be cleared
-    multiWrite->addDelete(tableTrashKey(name_space, database, table, ts));
+    batch_write.AddDelete(tableTrashKey(name_space, database, table, ts));
 
     /// remove MergeMutateThread meta
-    multiWrite->addDelete(mergeMutateThreadStartTimeKey(name_space, uuid));
+    batch_write.AddDelete(mergeMutateThreadStartTimeKey(name_space, uuid));
     /// remove table uuid unique key
-    multiWrite->addDelete(tableUUIDUniqueKey(name_space, uuid));
-    multiWrite->addDelete(nonHostUpdateKey(name_space, uuid));
+    batch_write.AddDelete(tableUUIDUniqueKey(name_space, uuid));
+    batch_write.AddDelete(nonHostUpdateKey(name_space, uuid));
 
     /// remove all statistics
     auto table_statistics_prefix = tableStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_prefix); it->next(); )
     {
-        multiWrite->addDelete(it->key());
+        batch_write.AddDelete(it->key());
     }
     auto table_statistics_tag_prefix = tableStatisticTagPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_tag_prefix); it->next(); )
     {
-        multiWrite->addDelete(it->key());
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_prefix = columnStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_prefix); it->next(); )
     {
-        multiWrite->addDelete(it->key());
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_tag_prefix = columnStatisticTagPrefixWithoutColumn(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_tag_prefix); it->next(); )
     {
-        multiWrite->addDelete(it->key());
+        batch_write.AddDelete(it->key());
     }
 
-    multiWrite->commit();
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 String MetastoreProxy::getMaskingPolicy(const String & name_space, const String & masking_policy_name) const
@@ -556,35 +559,36 @@ void MetastoreProxy::renameTable(const String & name_space,
                                  const String & old_db_name,
                                  const String & old_table_name,
                                  const String & uuid,
-                                 MultiWritePtr & container)
+                                 BatchCommitRequest & batch_write)
 {
     /// update `table`->`uuid` mapping.
-    container->addDelete(tableUUIDMappingKey(name_space, old_db_name, old_table_name));
+    batch_write.AddDelete(tableUUIDMappingKey(name_space, old_db_name, old_table_name));
     Protos::TableIdentifier identifier;
     identifier.set_database(table.database());
     identifier.set_name(table.name());
     identifier.set_uuid(uuid);
-    container->addPut(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString(), "", true);
+    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString(), true));
 
     String meta_data;
     table.SerializeToString(&meta_data);
     /// add new table meta data with new name
-    container->addPut(tableStoreKey(name_space, uuid, table.commit_time()), meta_data, "", true);
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, uuid, table.commit_time()), meta_data, true));
 }
 
 bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add)
 {
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
 
     String table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table.uuid()));
-    multiWrite->addPut(tableStoreKey(name_space, table_uuid, table.commit_time()), table.SerializeAsString(), "", true);
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, table.commit_time()), table.SerializeAsString(), true));
     for (const auto & name : masks_to_remove)
-        multiWrite->addDelete(maskingPolicyTableMappingKey(name_space, name, table_uuid));
+        batch_write.AddDelete(maskingPolicyTableMappingKey(name_space, name, table_uuid));
 
     for (const auto & name : masks_to_add)
-        multiWrite->addPut(maskingPolicyTableMappingKey(name_space, name, table_uuid), table_uuid);
+        batch_write.AddPut(SinglePutRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid), table_uuid));
 
-    return multiWrite->commit();
+    BatchCommitResponse resp;
+    return metastore_ptr->batchWrite(batch_write, resp);
 }
 
 Strings MetastoreProxy::getAllTablesInDB(const String & name_space, const String & database)
@@ -648,7 +652,7 @@ void MetastoreProxy::setNonHostUpdateTimeStamp(const String & name_space, const 
 }
 
 void MetastoreProxy::prepareAddDataParts(const String & name_space, const String & table_uuid, const Strings & current_partitions,
-        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, MultiWritePtr & container,
+        const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts, BatchCommitRequest & batch_write,
         const std::vector<String> & expected_parts, bool update_sync_list)
 {
     if (parts.empty())
@@ -671,14 +675,14 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
             commit_time = info_ptr->mutation;
         String part_meta = it->SerializeAsString();
 
-        container->addPut(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]);
+        batch_write.AddPut(SinglePutRequest(dataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_parts[it - parts.begin()]));
 
         if (!existing_partitions.count(info_ptr->partition_id) && !partition_map.count(info_ptr->partition_id))
             partition_map.emplace(info_ptr->partition_id, it->partition_minmax());
     }
 
     if (update_sync_list)
-        container->addPut(syncListKey(name_space, table_uuid, commit_time), std::to_string(commit_time));
+        batch_write.AddPut(SinglePutRequest(syncListKey(name_space, table_uuid, commit_time), std::to_string(commit_time)));
 
     Protos::PartitionMeta partition_model;
     for (auto it = partition_map.begin(); it != partition_map.end(); it++)
@@ -690,14 +694,14 @@ void MetastoreProxy::prepareAddDataParts(const String & name_space, const String
         partition_model.set_id(it->first);
         partition_model.set_partition_minmax(it->second);
 
-        container->addPut(ss.str(), partition_model.SerializeAsString());
+        batch_write.AddPut(SinglePutRequest(ss.str(), partition_model.SerializeAsString()));
     }
 }
 
 void MetastoreProxy::prepareAddStagedParts(
     const String & name_space, const String & table_uuid,
     const google::protobuf::RepeatedPtrField<Protos::DataModelPart> & parts,
-    MultiWritePtr & container,
+    BatchCommitRequest & batch_write,
     const std::vector<String> & expected_staged_parts)
 {
     if (parts.empty())
@@ -711,7 +715,7 @@ void MetastoreProxy::prepareAddStagedParts(
     {
         auto info_ptr = createPartInfoFromModel(it->part_info());
         String part_meta = it->SerializeAsString();
-        container->addPut(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]);
+        batch_write.AddPut(SinglePutRequest(stagedDataPartKey(name_space, table_uuid, info_ptr->getPartName()), part_meta, expected_staged_parts[it - parts.begin()]));
     }
 }
 
@@ -740,30 +744,30 @@ IMetaStore::IteratorPtr MetastoreProxy::getStagedPartsInPartition(const String &
 void MetastoreProxy::createRootPath(const String & root_path)
 {
     std::mt19937 gen(std::random_device{}());
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
 
     String path_id = std::to_string(gen());
     /// avoid generate reserved path id
     while (path_id == "0")
         path_id = std::to_string(gen());
 
-    multiWrite->addPut(ROOT_PATH_PREFIX + root_path, path_id, "", true);
-    multiWrite->addPut(ROOT_PATH_ID_UNIQUE_PREFIX + path_id, "", "", true);
+    batch_write.AddPut(SinglePutRequest(ROOT_PATH_PREFIX + root_path, path_id, true));
+    batch_write.AddPut(SinglePutRequest(ROOT_PATH_ID_UNIQUE_PREFIX + path_id, "", true));
 
+    BatchCommitResponse resp;
     try
     {
-        multiWrite->commit();
+        metastore_ptr->batchWrite(batch_write, resp);
     }
     catch (Exception & e)
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            auto conflict_details = multiWrite->collectConflictInfo();
-            if (conflict_details.count(0))
+            if (resp.puts.count(0))
             {
                 throw Exception("Root path " + root_path + " already exists.", ErrorCodes::METASTORE_ROOT_PATH_ALREADY_EXISTS);
             }
-            else if (conflict_details.count(1))
+            else if (resp.puts.count(1))
             {
                 throw Exception("Failed to create new root path because of path id collision, please try again.", ErrorCodes::METASTORE_ROOT_PATH_ID_NOT_UNIQUE);
             }
@@ -778,10 +782,10 @@ void MetastoreProxy::deleteRootPath(const String & root_path)
     metastore_ptr->get(ROOT_PATH_PREFIX + root_path, path_id);
     if (!path_id.empty())
     {
-        auto multiWrite = createMultiWrite();
-        multiWrite->addDelete(ROOT_PATH_PREFIX + root_path);
-        multiWrite->addDelete(ROOT_PATH_ID_UNIQUE_PREFIX + path_id);
-        multiWrite->commit();
+        BatchCommitRequest batch_write;
+        batch_write.AddDelete(ROOT_PATH_PREFIX + root_path);
+        batch_write.AddDelete(ROOT_PATH_ID_UNIQUE_PREFIX + path_id);
+        metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
     }
 }
 
@@ -831,12 +835,12 @@ void MetastoreProxy::removeTransactionRecords(const String & name_space, const s
     if (txn_ids.empty())
         return;
 
-    auto multi_write = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
 
     for (const auto & txn_id : txn_ids)
-        multi_write->addDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
+        batch_write.AddDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
 
-    multi_write->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 String MetastoreProxy::getTransactionRecord(const String & name_space, const UInt64 & txn_id)
@@ -866,7 +870,7 @@ IMetaStore::IteratorPtr MetastoreProxy::getAllTransactionRecord(const String & n
 
 std::pair<bool, String> MetastoreProxy::updateTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new)
 {
-    return metastore_ptr->putCASWithOldValue(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old);
+    return metastore_ptr->putCAS(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old, true);
 }
 
 bool MetastoreProxy::updateTransactionRecordWithOffsets(const String &name_space, const UInt64 &txn_id,
@@ -874,13 +878,13 @@ bool MetastoreProxy::updateTransactionRecordWithOffsets(const String &name_space
                                                         const String & consumer_group,
                                                         const cppkafka::TopicPartitionList & tpl)
 {
-    auto multi_write = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
 
-    multi_write->addPut(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old);
+    batch_write.AddPut(SinglePutRequest(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old));
     for (auto & tp : tpl)
-        multi_write->addPut(kafkaOffsetsKey(name_space, consumer_group, tp.get_topic(), tp.get_partition()), std::to_string(tp.get_offset()));
+        batch_write.AddPut(SinglePutRequest(kafkaOffsetsKey(name_space, consumer_group, tp.get_topic(), tp.get_partition()), std::to_string(tp.get_offset())));
 
-    return multi_write->commit();
+    return metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 
     /*** offsets committing may don't need CAS now
     Strings keys, old_values, new_values;
@@ -912,17 +916,17 @@ bool MetastoreProxy::updateTransactionRecordWithMemoryBuffer(
     const String & consumer_group,
     const cppkafka::TopicPartitionList & tpl)
 {
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
 
     // Write transaction record
-    multiWrite->addPut(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old);
+    batch_write.AddPut(SinglePutRequest(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old));
 
     // Write memory buffer info
     for (size_t i = 0; i < buffer_keys_in_kv.size(); i++)
     {
         auto & key = buffer_keys_in_kv[i];
         auto & value = buffer_values_in_kv[i];
-        multiWrite->addPut(cnchLogKey(name_space, key), value, value);
+        batch_write.AddPut(SinglePutRequest(cnchLogKey(name_space, key), value, value));
     }
 
     // Write Kafka consume offset
@@ -931,21 +935,21 @@ bool MetastoreProxy::updateTransactionRecordWithMemoryBuffer(
         auto key = kafkaOffsetsKey(name_space, consumer_group, tpl[i].get_topic(), tpl[i].get_partition());
         auto new_value = std::to_string(tpl[i].get_offset());
         // NOTE: no cas here for offset
-        multiWrite->addPut(key, new_value);
+        batch_write.AddPut(SinglePutRequest(key, new_value));
     }
 
+    BatchCommitResponse resp;
     bool res = false;
     try
     {
         // Do not allow cas fail here, so that we can catch cas failed exception and extract content store in kv.
-        res = multiWrite->commit(/*allow_cas_fail=*/false);
+        res = metastore_ptr->batchWrite(batch_write, resp);
     }
     catch (const Exception & e)
     {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
-            auto conflict_details = multiWrite->collectConflictInfo();
-            for (auto & [index, new_value] : conflict_details)
+            for (auto & [index, new_value] : resp.puts)
             {
                 if (index == 0)
                 {
@@ -971,19 +975,18 @@ bool MetastoreProxy::updateTransactionRecordWithMemoryBuffer(
 }
 
 std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordWithRequests(
-    const String & name_space, UInt64 txn_id, WriteRequest txn_request, WriteRequests * additional_requests)
+    SinglePutRequest & txn_request, BatchCommitRequest & requests, BatchCommitResponse & response)
 {
-    if (!additional_requests || additional_requests->empty())
+    if (requests.puts.empty())
     {
-        return metastore_ptr->putCASWithOldValue(
-            transactionRecordKey(name_space, txn_id), String(txn_request.new_value), String(*txn_request.old_value));
+        return metastore_ptr->putCAS(
+            String(txn_request.key), String(txn_request.value), String(*txn_request.expected_value), true);
     }
     else
     {
-        String record_key = transactionRecordKey(name_space, txn_id);
-        txn_request.key = record_key;
-        additional_requests->push_back(txn_request);
-        return {metastore_ptr->multiWriteCAS(*additional_requests), String{}};
+        requests.AddPut(txn_request);
+        metastore_ptr->batchWrite(requests, response);
+        return {response.puts.empty(), String{}};
         /// TODO: set txn_result
     }
 }
@@ -999,22 +1002,23 @@ void MetastoreProxy::setTransactionRecord(const String & name_space, const UInt6
 
 bool MetastoreProxy::writeIntent(const String & name_space, const String & intent_prefix, const std::vector<WriteIntent> & intents, std::vector<String> & cas_failed_list)
 {
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
     for (auto  & intent : intents)
     {
-        multiWrite->addPut(writeIntentKey(name_space, intent_prefix, intent.intent()), intent.serialize(), "", true);
+        batch_write.AddPut(SinglePutRequest(writeIntentKey(name_space, intent_prefix, intent.intent()), intent.serialize(), true));
     }
+
+    BatchCommitResponse resp;
     try
     {
-        multiWrite->commit();
+        metastore_ptr->batchWrite(batch_write, resp);
         return true;
     }
     catch (Exception & e)
     {
         if (e.code() == bytekv::sdk::Errorcode::CAS_FAILED)
         {
-            auto conflict_details = multiWrite->collectConflictInfo();
-            for (auto & [index, new_value] : conflict_details)
+            for (auto & [index, new_value] : resp.puts)
             {
                 cas_failed_list.push_back(new_value);
             }
@@ -1027,16 +1031,16 @@ bool MetastoreProxy::writeIntent(const String & name_space, const String & inten
 
 bool MetastoreProxy::resetIntent(const String & name_space, const String & intent_prefix, const std::vector<WriteIntent> & intents, const UInt64 & new_txn_id, const String & new_location)
 {
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
     for (const auto & intent : intents)
     {
         WriteIntent new_intent(new_txn_id, new_location, intent.intent());
-        multiWrite->addPut(writeIntentKey(name_space, intent_prefix, intent.intent()), new_intent.serialize(), intent.serialize());
+        batch_write.AddPut(SinglePutRequest(writeIntentKey(name_space, intent_prefix, intent.intent()), new_intent.serialize(), intent.serialize()));
     }
 
     try
     {
-        multiWrite->commit();
+        metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
         return true;
     }
     catch (const Exception & e)
@@ -1076,12 +1080,13 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
         return;
 
     /// then remove intents from metastore.
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
 
+    /// TODO: do we need CAS delete?
     for (auto idx : matched_intent_index)
-        multiWrite->addDelete(intent_names[idx], snapshot[idx].second);
+        batch_write.AddDelete(intent_names[idx]);
 
-    bool cas_success = multiWrite->commit(true);
+    bool cas_success = metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 
     if (!cas_success && intent_names.size() > 1)
     {
@@ -1108,19 +1113,21 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
 void MetastoreProxy::clearZombieIntent(const String & name_space, const UInt64 & txn_id)
 {
     auto it = metastore_ptr->getByPrefix(escapeString(name_space) + "_" + WRITE_INTENT_PREFIX);
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
     while(it->next())
     {
         Protos::DataModelWriteIntent intent_model;
         intent_model.ParseFromString(it->value());
         if (intent_model.txn_id() == txn_id)
         {
-            multiWrite->addDelete(it->value());
+            batch_write.AddDelete(it->value());
         }
     }
 
-    if (!multiWrite->isEmpty())
-        multiWrite->commit();
+    if (!batch_write.isEmpty())
+    {
+        metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
+    }
 }
 
 std::multimap<String, String> MetastoreProxy::getAllMutations(const String & name_space)
@@ -1172,13 +1179,13 @@ void MetastoreProxy::writeUndoBuffer(const String & name_space, const UInt64 & t
     if (resources.empty())
         return;
 
-    auto multiWrite = createMultiWrite();
+    BatchCommitRequest batch_write;
     for (auto & resource : resources)
     {
         resource.setUUID(uuid);
-        multiWrite->addPut(undoBufferStoreKey(name_space, txnID, resource), resource.serialize());
+        batch_write.AddPut(SinglePutRequest(undoBufferStoreKey(name_space, txnID, resource), resource.serialize()));
     }
-    multiWrite->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 void MetastoreProxy::clearUndoBuffer(const String & name_space, const UInt64 & txnID)
@@ -1198,12 +1205,17 @@ IMetaStore::IteratorPtr MetastoreProxy::getAllUndoBuffer(const String & name_spa
 
 void MetastoreProxy::multiDrop(const Strings & keys)
 {
-    auto multiWrite = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
     for (const auto & key : keys)
     {
-        multiWrite->addDelete(key);
+        batch_write.AddDelete(key);
     }
-    multiWrite->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
+}
+
+bool MetastoreProxy::batchWrite(const BatchCommitRequest & request, BatchCommitResponse response)
+{
+    return metastore_ptr->batchWrite(request, response);
 }
 
 void MetastoreProxy::writeFilesysLock(const String & name_space, UInt64 txn_id, const String & dir, const String & db, const String & table)
@@ -1250,60 +1262,6 @@ std::vector<String> MetastoreProxy::multiDropAndCheck(const Strings & keys)
     return keys_drop_failed;
 }
 
-void MetastoreProxy::lockPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const String & txnID, std::vector<std::pair<uint32_t, String>> & cas_failed)
-{
-    Strings keys;
-    std::transform(
-        parts.begin(),
-        parts.end(),
-        std::back_inserter(keys),
-        std::bind(kvLockKey, std::ref(name_space), std::ref(uuid), std::placeholders::_1)
-    );
-    metastore_ptr->multiPutCAS(keys, txnID, Strings{}, true, cas_failed);
-}
-
-bool MetastoreProxy::unLockPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const String & txnID)
-{
-    Strings keys;
-    Strings expected_values(parts.size(), txnID);
-
-    std::transform(
-        parts.begin(),
-        parts.end(),
-        std::back_inserter(keys),
-        std::bind(kvLockKey, std::ref(name_space), std::ref(uuid), std::placeholders::_1)
-    );
-
-    /// firstly, make CAS put to check current lock status.
-    std::vector<std::pair<uint32_t, String>> cas_failed;
-    metastore_ptr->multiPutCAS(keys, txnID, expected_values, false, cas_failed);
-
-    if (!cas_failed.empty())
-        return false;
-
-    /// if passed CAS test, unlock parts.
-    multiDrop(keys);
-    return true;
-}
-
-bool MetastoreProxy::resetAndLockConflictPartsInKV(const String & name_space, const String & uuid, const Strings & parts, const Strings & expected_txnID, const String & txnID)
-{
-
-    Strings keys;
-    std::transform(
-        parts.begin(),
-        parts.end(),
-        std::back_inserter(keys),
-        std::bind(kvLockKey, std::ref(name_space), std::ref(uuid), std::placeholders::_1)
-    );
-
-    std::vector<std::pair<uint32_t, String>> cas_failed;
-
-    metastore_ptr->multiPutCAS(keys, txnID, expected_txnID, false, cas_failed);
-
-    return cas_failed.empty();
-}
-
 IMetaStore::IteratorPtr MetastoreProxy::getPartitionList(const String & name_space, const String & uuid)
 {
     return metastore_ptr->getByPrefix(tablePartitionInfoPrefix(name_space, uuid));
@@ -1328,11 +1286,11 @@ IMetaStore::IteratorPtr MetastoreProxy::getSyncList(const String & name_space, c
 
 void MetastoreProxy::clearSyncList(const String & name_space, const String & uuid, const std::vector<TxnTimestamp> & sync_list)
 {
-    auto multi_write = createMultiWrite();
+    BatchCommitRequest batch_write;
     for (auto & ts : sync_list)
-        multi_write->addDelete(syncListKey(name_space, uuid, ts));
+        batch_write.AddDelete(syncListKey(name_space, uuid, ts));
 
-    multi_write->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 void MetastoreProxy::clearOffsetsForWholeTopic(const String &name_space, const String &topic, const String &consumer_group)
@@ -1497,7 +1455,7 @@ IMetaStore::IteratorPtr MetastoreProxy::getMetaInRange(const String & prefix, co
 
 void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid,
                                              const DeleteBitmapMetaPtrVector & bitmaps,
-                                             MultiWritePtr & container,
+                                             BatchCommitRequest & batch_write,
                                              const std::vector<String> & expected_bitmaps)
 {
     size_t expected_bitmaps_size = expected_bitmaps.size();
@@ -1509,9 +1467,9 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
     {
         const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
         if (expected_bitmaps_size == 0)
-            container->addPut(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString());
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString()));
         else
-            container->addPut(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString(), expected_bitmaps[idx]);
+            batch_write.AddPut(SinglePutRequest(deleteBitmapKey(name_space, table_uuid, model), model.SerializeAsString(), expected_bitmaps[idx]));
 
         ++idx;
     }
@@ -1519,22 +1477,22 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
 
 void MetastoreProxy::addDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps)
 {
-    auto multi_write = createMultiWrite();
-    prepareAddDeleteBitmaps(name_space, table_uuid, bitmaps, multi_write);
-    multi_write->commit();
+    BatchCommitRequest batch_write;
+    prepareAddDeleteBitmaps(name_space, table_uuid, bitmaps, batch_write);
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 void MetastoreProxy::removeDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps)
 {
-    auto multi_write = createMultiWrite();
+    BatchCommitRequest batch_write;
 
     for (const auto & dlb_ptr : bitmaps)
     {
         const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
-        multi_write->addDelete(deleteBitmapKey(name_space, table_uuid, model));
+        batch_write.AddDelete(deleteBitmapKey(name_space, table_uuid, model));
     }
 
-    multi_write->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 Strings MetastoreProxy::getDeleteBitmapByKeys(const Strings & keys)
@@ -1561,14 +1519,14 @@ void MetastoreProxy::setCnchLogMetadataInBatch(const String &name_space, const S
     if (log_names.size() != metadata_vec.size())
         throw Exception("Unmatched size of keys and values while setCnchLogMetadataInBatch", ErrorCodes::LOGICAL_ERROR);
 
-    auto multi_write = createMultiWrite();
+    BatchCommitRequest batch_write;
     for (size_t id = 0; id < log_names.size(); ++id)
     {
         String value;
         metadata_vec[id].SerializeToString(&value);
-        multi_write->addPut(cnchLogKey(name_space, log_names[id]), value);
+        batch_write.AddPut(SinglePutRequest(cnchLogKey(name_space, log_names[id]), value));
     }
-    multi_write->commit();
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 std::shared_ptr<Protos::CnchLogMetadata> MetastoreProxy::getCnchLogMetadata(const String & name_space, const String & log_name)
@@ -1686,10 +1644,10 @@ void MetastoreProxy::removeInsertionLabel(const String & name_space, const Strin
 
 void MetastoreProxy::removeInsertionLabels(const String & name_space, const std::vector<InsertionLabel> & labels)
 {
-    auto multi_write = metastore_ptr->createMultiWrite();
+    BatchCommitRequest batch_write;
     for (auto & label : labels)
-        multi_write->addDelete(insertionLabelKey(name_space, toString(label.table_uuid), label.name));
-    multi_write->commit();
+        batch_write.AddDelete(insertionLabelKey(name_space, toString(label.table_uuid), label.name));
+    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::scanInsertionLabels(const String & name_space, const String & uuid)

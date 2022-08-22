@@ -57,7 +57,7 @@ void MetastoreByteKVImpl::putTTL(const String & key, const String & value, UInt6
     assertStatus(OperationType::PUT, code, {Errorcode::OK});
 }
 
-bool MetastoreByteKVImpl::putCAS(const String & key, const String & value, const String & expected)
+std::pair<bool, String> MetastoreByteKVImpl::putCAS(const String & key, const String & value, const String & expected, [[maybe_unused]]bool with_old_value)
 {
     PutRequest put_req;
     PutResponse put_resp;
@@ -69,24 +69,11 @@ bool MetastoreByteKVImpl::putCAS(const String & key, const String & value, const
     auto code = client->Put(put_req, &put_resp);
 
     assertStatus(OperationType::PUT, code, {Errorcode::OK, Errorcode::CAS_FAILED});
-    return code == Errorcode::OK;
-}
 
-std::pair<bool, String> MetastoreByteKVImpl::putCASWithOldValue(const String & key, const String & value, const String & expected)
-{
-    PutRequest put_req;
-    PutResponse put_resp;
-    Slice expected_value{expected};
-    put_req.table = this->table_name;
-    put_req.key = key;
-    put_req.value = value;
-    put_req.expected_value = &expected_value;
-    auto code = client->Put(put_req, &put_resp);
+    if (code == Errorcode::OK)
+        return std::make_pair(true, "");
 
-    assertStatus(OperationType::PUT, code, {Errorcode::OK, Errorcode::CAS_FAILED});
-    bool cas_res = (code == Errorcode::OK);
-    String current_value = cas_res ? expected : put_resp.current_value;
-    return std::make_pair(cas_res, std::move(current_value));
+    return std::make_pair(false, std::move(put_resp.current_value));
 }
 
 uint64_t MetastoreByteKVImpl::get(const String & key, String & value)
@@ -126,192 +113,82 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
     return res;
 }
 
-void MetastoreByteKVImpl::MultiWrite::addPut(const String &key, const String &value, const String &expected, bool if_not_exists)
+bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse response)
 {
-    PutRequest put_req;
-    put_req.table = this->table_name;
-    cache_values.emplace_back(std::make_shared<String>(key));
-    put_req.key = *cache_values.back();
-    cache_values.emplace_back(std::make_shared<String>(value));
-    put_req.value = *cache_values.back();
-    put_req.if_not_exists = if_not_exists;
-    if (!expected.empty())
-    {
-        cache_values.emplace_back(std::make_shared<String>(expected));
-        auto slice = std::make_shared<Slice>(*cache_values.back());
-        expected_values.emplace_back(slice);
-        put_req.expected_value = slice.get();
-    }
-    wb_req.AddPut(put_req);
-}
-
-void MetastoreByteKVImpl::MultiWrite::addDelete(const String &key, const UInt64 & expected_version)
-{
-    DeleteRequest del_req;
-    del_req.table = this->table_name;
-    cache_values.emplace_back(std::make_shared<String>(key));
-    del_req.key = *cache_values.back();
-    del_req.expected_version = expected_version;
-    wb_req.AddDelete(del_req);
-}
-
-void MetastoreByteKVImpl::MultiWrite::setCommitTimeout(const UInt32 & timeout_ms)
-{
-    wb_req.write_timeout_ms = timeout_ms;
-}
-
-std::map<int, String> MetastoreByteKVImpl::MultiWrite::collectConflictInfo()
-{
-    std::map<int, String> res;
-    for (size_t i=0; i<wb_resp.puts_.size(); i++)
-    {
-        if (wb_resp.puts_[i].first == bytekv::sdk::Errorcode::CAS_FAILED)
-            res.emplace(i, wb_resp.puts_[i].second.current_value);
-    }
-    return res;
-}
-
-bool MetastoreByteKVImpl::MultiWrite::commit(bool allow_cas_fail)
-{
-    // do not perform commit if the wb_req is empty. bytekv will throw `bad request` exception
-    if (wb_req.deletes_.empty() && wb_req.puts_.empty())
-        return true;
-
-    Errorcode code{};
-    if (with_cas)
-    {
-        code = client->WriteBatch(wb_req, &wb_resp);
-        if (allow_cas_fail)
-            assertStatus(OperationType::WRITEBATCH, code, {Errorcode::OK, Errorcode::CAS_FAILED});
-        else
-            assertStatus(OperationType::WRITEBATCH, code, {Errorcode::OK});
-    }
-    else
-    {
-        code = client->MultiWrite(wb_req, &wb_resp);
-        assertStatus(OperationType::MULTIWRITE, code, {Errorcode::OK});
-        /// return code is OK cannot ensure all KV records be serted successfully in MultiWrite, we need check the response.
-        for (size_t i=0; i<wb_resp.puts_.size(); i++)
-        {
-            const auto & [put_code, put_resp] = wb_resp.puts_[i];
-            if (put_code != Errorcode::OK)
-                throw Exception("Encounter bytekv error: " + String(ErrorString(put_code)) + " while writing record with key : " + wb_req.puts_[i].key.ToString(), put_code);
-        }
-
-        for (size_t i=0; i<wb_resp.deletes_.size(); i++)
-        {
-            const auto & [del_code, del_resp] = wb_resp.deletes_[i];
-            if (del_code != Errorcode::OK)
-                throw Exception("Encounter bytekv error: " + String(ErrorString(del_code)) + " while deleteing record with key : " + wb_req.deletes_[i].key.ToString(), del_code);
-        }
-    }
-    return code == Errorcode::OK;
-}
-
-MultiWritePtr MetastoreByteKVImpl::createMultiWrite(bool with_cas)
-{
-    return std::make_shared<MultiWrite>(table_name, client, with_cas);
-}
-
-bool MetastoreByteKVImpl::multiWriteCAS(const WriteRequests & requests)
-{
-    WriteBatchRequest wb_req;
-    WriteBatchResponse wb_resp;
-
+    bytekv::sdk::WriteBatchRequest wb_req;
+    bytekv::sdk::WriteBatchResponse wb_resp;
     std::vector<Slice> expected_values;
+    expected_values.reserve(req.puts.size());
 
-    for (auto & req : requests)
+    for (auto & single_put : req.puts)
     {
-        PutRequest put_req;
+        bytekv::sdk::PutRequest put_req;
         put_req.table = this->table_name;
-        put_req.key = Slice(req.key.data(), req.key.size());
-        put_req.value = Slice(req.new_value.data(), req.new_value.size());
-        put_req.if_not_exists = req.if_not_exists;
+        put_req.key = Slice(single_put.key);
+        put_req.value = Slice(single_put.value);
+        put_req.if_not_exists = single_put.if_not_exists;
 
-        if (req.old_value)
+        if (single_put.expected_value)
         {
-            expected_values.push_back(Slice(req.old_value->data(), req.old_value->size()));
+            expected_values.push_back(Slice(single_put.expected_value.value()));
             put_req.expected_value = &expected_values.back();
         }
 
         wb_req.AddPut(put_req);
     }
 
-    auto code = client->WriteBatch(wb_req, &wb_resp);
-
-    if (requests.size() != wb_resp.puts_.size())
-        throw Exception("Wrong response size in multiWriteCAS. ", ErrorCodes::METASTORE_OPERATION_ERROR);
-
-    for (size_t i = 0; i < requests.size(); ++i)
+    for (auto & delete_key : req.deletes)
     {
-        if (auto c = wb_resp.puts_[i].first; requests[i].callback)
-            requests[i].callback(int(c), ErrorString(c));
+        DeleteRequest del_req;
+        del_req.table = this->table_name;
+        del_req.key = Slice(delete_key);
+        // del_req.expected_version = expected_version;
+        wb_req.AddDelete(del_req);
     }
 
-    assertStatus(OperationType::MULTIPUTCAS, code, {Errorcode::OK, Errorcode::CAS_FAILED});
-    return code == Errorcode::OK;
-}
-
-void MetastoreByteKVImpl::multiPutCAS(const Strings & keys, const String & value_to_insert, const Strings & old_values, bool if_not_exists, std::vector<std::pair<uint32_t , String>> & cas_failed)
-{
-    ///sanity check
-    if (!if_not_exists && keys.size() != old_values.size())
-        throw Exception("Wrong arguments.", ErrorCodes::METASTORE_OPERATION_ERROR);
-
-    WriteBatchRequest wb_req;
-    WriteBatchResponse wb_resp;
-
-    std::vector<Slice> expected_values;
-
-    if (!if_not_exists)
-        expected_values.reserve(keys.size());
-
-    for (size_t i=0; i<keys.size(); i++)
-    {
-        PutRequest put_req;
-        PutResponse put_resp;
-        put_req.table = this->table_name;
-        put_req.key =  keys[i];
-        put_req.value = value_to_insert;
-        if (if_not_exists)
-            put_req.if_not_exists = true;
-        else
-        {
-            expected_values[i] = Slice(old_values[i]);
-            put_req.expected_value = &expected_values[i];
-        }
-
-        wb_req.AddPut(put_req);
-    }
-
-    auto code = client->WriteBatch(wb_req, &wb_resp);
-    assertStatus(OperationType::MULTIPUTCAS, code, {Errorcode::OK, Errorcode::CAS_FAILED});
-
-    if (keys.size() != wb_resp.puts_.size())
-        throw Exception("Wrong response size in multiPutCAS. ", ErrorCodes::METASTORE_OPERATION_ERROR);
-
-    if (code == Errorcode::CAS_FAILED)
+    auto collect_conflict_info = [&]()
     {
         for (size_t i=0; i < wb_resp.puts_.size(); i++)
         {
             PutResponse & put_response = std::get<1>(wb_resp.puts_[i]);
-
-            if (if_not_exists)
+            if (req.puts[i].if_not_exists)
             {
                 if (put_response.current_version!=0)
-                    cas_failed.emplace_back(i, put_response.current_value);
+                    response.puts.emplace(i, put_response.current_value);
             }
-            else if (put_response.current_value != old_values[i])
-                cas_failed.emplace_back(i, put_response.current_value);
+            else if (req.puts[i].expected_value && req.puts[i].expected_value.value() != put_response.current_value)
+            {
+                response.puts.emplace(i, put_response.current_value);
+            }
         }
+    };
+
+    if (req.with_cas)
+    {
+        auto code = client->WriteBatch(wb_req, &wb_resp);
+
+        if (code == Errorcode::CAS_FAILED)
+            collect_conflict_info();
+
+        if (code == Errorcode::CAS_FAILED && req.allow_cas_fail)
+        {
+            /// report conflict info if cas failure is allowed
+            assertStatus(OperationType::WRITEBATCH, code, {Errorcode::OK, Errorcode::CAS_FAILED});
+        }
+        else
+            assertStatus(OperationType::WRITEBATCH, code, {Errorcode::OK});
     }
+    else
+    {
+        auto code = client->MultiWrite(wb_req, &wb_resp);
+        assertStatus(OperationType::MULTIWRITE, code, {Errorcode::OK});
+        /// return code is OK cannot ensure all KV records be inserted successfully in MultiWrite, still need check the response.
+        collect_conflict_info();
+    }
+
+    return response.puts.size() == 0;
 }
 
-void MetastoreByteKVImpl::update(const String& key, const String& value)
-{
-    ///bytekv will write a new version. we may need version control here.
-    put(key, value);
-}
 
 void MetastoreByteKVImpl::drop(const String & key, const UInt64 & expected_version)
 {

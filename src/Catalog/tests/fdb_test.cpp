@@ -20,26 +20,26 @@ bool testPutAndGet(DB::Catalog::MetastoreFDBImpl & metastore)
         return false;
 }
 
-bool testMultiPut(DB::Catalog::MetastoreFDBImpl & metastore)
-{
-    auto multiwrite = metastore.createMultiWrite();
-    int batch_size = 1000;
-    String base_key_prefix = "batch_write_key_";
-    String base_value_prefix = "batch_write_value_";
-    for (int i=1; i<=batch_size; i++)
-        multiwrite->addPut(base_key_prefix+std::to_string(i), base_value_prefix+std::to_string(i));
-    multiwrite->commit();
+// bool testMultiPut(DB::Catalog::MetastoreFDBImpl & metastore)
+// {
+//     auto multiwrite = metastore.createMultiWrite();
+//     int batch_size = 1000;
+//     String base_key_prefix = "batch_write_key_";
+//     String base_value_prefix = "batch_write_value_";
+//     for (int i=1; i<=batch_size; i++)
+//         multiwrite->addPut(base_key_prefix+std::to_string(i), base_value_prefix+std::to_string(i));
+//     multiwrite->commit();
 
-    DB::Catalog::MetastoreFDBImpl::IteratorPtr it = metastore.getByPrefix(base_key_prefix);
-    int counter = 0;
-    while (it->next())
-        counter++;
+//     DB::Catalog::MetastoreFDBImpl::IteratorPtr it = metastore.getByPrefix(base_key_prefix);
+//     int counter = 0;
+//     while (it->next())
+//         counter++;
 
-    if (counter == batch_size)
-        return true;
-    std::cout << "counter is : " << std::to_string(counter) << std::endl;
-    return false;
-}
+//     if (counter == batch_size)
+//         return true;
+//     std::cout << "counter is : " << std::to_string(counter) << std::endl;
+//     return false;
+// }
 
 bool testMultiGet(DB::Catalog::MetastoreFDBImpl & metastore)
 {
@@ -92,7 +92,7 @@ bool testPutCAS(DB::Catalog::MetastoreFDBImpl & metastore)
     metastore.put(put_key, origin_value);
     auto func = [&](String value_to_write)
     {
-        auto res = metastore.putCASWithOldValue(put_key, value_to_write, "put_cas_origin");
+        auto res = metastore.putCAS(put_key, value_to_write, "put_cas_origin", true);
         if (res.first)
             std::cout << "write succeses , current value is : " << res.second << std::endl;
         else
@@ -110,7 +110,7 @@ bool testPutCAS(DB::Catalog::MetastoreFDBImpl & metastore)
     return test_success;
 }
 
-bool testMultiPutCASWithoutConflict(DB::Catalog::MetastoreFDBImpl & metastore)
+bool testBatchWriteWithoutConflict(DB::Catalog::MetastoreFDBImpl & metastore)
 {
     int total_size = 10;
     std::vector<String> keys;
@@ -121,7 +121,7 @@ bool testMultiPutCASWithoutConflict(DB::Catalog::MetastoreFDBImpl & metastore)
     for (int i=1; i<=total_size; i++)
         keys.emplace_back(base_key_prefix+std::to_string(i));
 
-    metastore.multiPutCAS(keys, "multi_write_value", {}, true, cas_failed);
+    // metastore.multiPutCAS(keys, "multi_write_value", {}, true, cas_failed);
 
     if (!cas_failed.empty())
     {
@@ -132,14 +132,14 @@ bool testMultiPutCASWithoutConflict(DB::Catalog::MetastoreFDBImpl & metastore)
     return true;
 }
 
-bool testMultiPutCASWithConflict(DB::Catalog::MetastoreFDBImpl & metastore)
+bool testBatchWriteWithConflict(DB::Catalog::MetastoreFDBImpl & metastore)
 {
     String base_key_prefix = "multi_write_cas_key_";
     // metastore.clean(base_key_prefix);
     auto func = [&](std::vector<String> keys, std::vector<String> expected_values, String value)
     {
         std::vector<std::pair<uint32_t , String>> cas_failed;
-        metastore.multiPutCAS(keys, value, expected_values, false, cas_failed);
+        // metastore.multiPutCAS(keys, value, expected_values, false, cas_failed);
         if (!cas_failed.empty())
         {
             std::cout << "MultiPut falied." << std::endl;
@@ -190,14 +190,11 @@ int main(int , char ** argv)
 
     {
         doTest("Put & Get", [&]()->bool{return testPutAndGet(metastore);});
-        doTest("MultiPut", [&]()->bool{return testMultiPut(metastore);});
+        // doTest("MultiPut", [&]()->bool{return testMultiPut(metastore);});
         doTest("MultiGet", [&]()->bool{return testMultiGet(metastore);});
         doTest("DropRange", [&]()->bool{return testDropRange(metastore);});
     }
     doTest("PutCAS", [&]()->bool{return testPutCAS(metastore);});
     std::cout << " preparing data for test" << std::endl;
-    doTest("MultiPutCASNOConflict", [&]()->bool{return testMultiPutCASWithoutConflict(metastore);});
-    std::cout << " start test " << std::endl;
-    doTest("MultiPutCASWithConflict", [&]()->bool{return testMultiPutCASWithConflict(metastore);});
     std::cout << "===== Finish all tests. ======" << std::endl;
 }

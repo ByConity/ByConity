@@ -51,47 +51,17 @@ public:
         fdb_error_t error_code = 0;
     };
 
-    class MultiWrite : public IMultiWrite
-    {
-    public:
-        MultiWrite(FDB::FDBClientPtr client) : fdb_client(client) {}
-        void addPut(const String & key, const String & value, const String & expected = "", bool if_not_exists = false) override;
-        void addDelete(const String & , [[maybe_unused]]const UInt64 & expected_version = 0) override;
-        inline bool isEmpty() override {return w_req.puts_.empty() && w_req.deletes_.empty(); }
-        bool commit(bool allow_cas_fail = true) override;
-        void setCommitTimeout(const UInt32 & /*timeout_ms*/) override {}
-        inline size_t getPutsSize() override { return w_req.puts_.size(); }
-        inline size_t getDeleteSize() override { return  w_req.deletes_.size(); }
-        std::map<int, String> collectConflictInfo() override {return {};}
-        ~MultiWrite() override {}
-
-    private:
-        FDB::FDBClientPtr fdb_client = nullptr;
-        std::vector<std::shared_ptr<String>> cached_values;
-        FDB::MultiWriteRequest w_req;
-        FDB::MultiWriteResponse w_resp;
-    };
-
     MetastoreFDBImpl(const String & cluster_config_path);
-
-    MultiWritePtr createMultiWrite(bool with_cas = false) override;
 
     void put(const String & key, const String & value, bool if_not_exists = false) override;
 
-    bool putCAS(const String & key, const String & value, const String & expected) override;
-
-    std::pair<bool, String> putCASWithOldValue(const String & key, const String & value, const String & expected) override;
+    std::pair<bool, String> putCAS(const String & key, const String & value, const String & expected, bool with_old_value = false) override;
 
     uint64_t get(const String & key, String & value) override;
 
     std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys) override;
 
-    void multiPutCAS(const Strings & keys, const String & value_to_insert, const Strings & old_values,
-                     bool if_not_exists, std::vector<std::pair<uint32_t , String>> & cas_failed) override;
-
-    bool multiWriteCAS(const WriteRequests & requests) override;
-
-    void update(const String& key, const String& value) override;
+    bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse response) override;
 
     void drop(const String &, const UInt64 & expected = 0) override;
 
