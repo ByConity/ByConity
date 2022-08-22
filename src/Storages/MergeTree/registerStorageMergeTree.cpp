@@ -248,6 +248,7 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name [ON CLUSTER cluster]
 ) ENGINE = MergeTree()
 ORDER BY expr
 [PARTITION BY expr]
+[CLUSTER BY expr INTO <TOTAL_BUCKET_NUMBER> BUCKETS [SPLIT_NUMBER <SPLIT_NUMBER_VALUE>] [WITH_RANGE] ]
 [PRIMARY KEY expr]
 [SAMPLE BY expr]
 [TTL expr [DELETE|TO DISK 'xxx'|TO VOLUME 'xxx'], ...]
@@ -296,7 +297,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         */
     bool is_extended_storage_def = args.storage_def->partition_by || args.storage_def->primary_key || args.storage_def->order_by
         || args.storage_def->unique_key || args.storage_def->sample_by || (args.query.columns_list->indices && !args.query.columns_list->indices->children.empty())
-        || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings;
+        || (args.query.columns_list->projections && !args.query.columns_list->projections->children.empty()) || args.storage_def->settings || args.storage_def->cluster_by;
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
 
@@ -727,6 +728,9 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// value in partition_key structure. MergeTree checks this case and use
         /// single default partition with name "all".
         metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
+
+        if (args.storage_def->cluster_by)
+            metadata.cluster_by_key = KeyDescription::getKeyFromAST(args.storage_def->cluster_by->ptr(), metadata.columns, args.getContext());
 
         /// PRIMARY KEY without ORDER BY is allowed and considered as ORDER BY.
         if (!args.storage_def->order_by && args.storage_def->primary_key)

@@ -1,5 +1,6 @@
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
+#include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Columns/ColumnConst.h>
 #include "common/logger_useful.h"
 #include "common/types.h"
@@ -148,6 +149,94 @@ void updateTTL(
 
 }
 
+BlocksWithPartition MergeTreeDataWriter::populatePartitions(const Block & block, const Block & block_copy, const size_t max_parts, const Names expression_columns, bool is_bucket_scatter)
+{
+
+    BlocksWithPartition result;
+
+    ColumnRawPtrs partition_columns;
+    partition_columns.reserve(expression_columns.size());
+    for (auto column_name : expression_columns)
+        partition_columns.emplace_back(block_copy.getByName(column_name).column.get());
+
+    PODArray<size_t> partition_num_to_first_row;
+    IColumn::Selector selector;
+    if(is_bucket_scatter)
+    {
+        buildBucketScatterSelector(partition_columns, partition_num_to_first_row, selector, max_parts);
+    }
+    else
+    {
+        buildScatterSelector(partition_columns, partition_num_to_first_row, selector, max_parts);
+    }
+
+    size_t partitions_count = partition_num_to_first_row.size();
+    result.reserve(partitions_count);
+
+    auto get_partition = [&](size_t num)
+    {
+        Row partition(partition_columns.size());
+        for (size_t i = 0; i < partition_columns.size(); ++i)
+            partition[i] = Field((*partition_columns[i])[partition_num_to_first_row[num]]);
+        return partition;
+    };
+
+     if (partitions_count == 1)
+    {
+        /// A typical case is when there is one partition (you do not need to split anything).
+        /// NOTE: returning a copy of the original block so that calculated partition key columns
+        /// do not interfere with possible calculated primary key columns of the same name.
+        result.emplace_back(Block(block), get_partition(0));
+        if (is_bucket_scatter)
+            result.back().bucket_info.bucket_number = result.back().partition[0].get<Int64>(); // only one field/column in the partition which is COLUMN_BUCKET_NUMBER
+        return result;
+    }
+
+    for (size_t i = 0; i < partitions_count; ++i)
+        result.emplace_back(block.cloneEmpty(), get_partition(i));
+
+    for (size_t col = 0; col < block.columns(); ++col)
+    {
+        MutableColumns scattered = block.getByPosition(col).column->scatter(partitions_count, selector);
+        for (size_t i = 0; i < partitions_count; ++i)
+        {
+            result[i].block.getByPosition(col).column = std::move(scattered[i]);
+            if (is_bucket_scatter)
+                result[i].bucket_info.bucket_number = result[i].partition[0].get<Int64>(); // only one field/column in the partition which is COLUMN_BUCKET_NUMBER
+        }
+    }
+
+    return result;
+}
+
+BlocksWithPartition MergeTreeDataWriter::splitBlockPartitionIntoPartsByClusterKey(
+    const BlockWithPartition & block_with_partition, size_t max_parts, const StorageMetadataPtr & metadata_snapshot)
+{
+    Block block = block_with_partition.block;
+
+    BlocksWithPartition result;
+    if (!block || !block.rows())
+        return result;
+
+    metadata_snapshot->check(block, true);
+
+    if (!metadata_snapshot->hasClusterByKey()) /// Table is not a bucket table.
+    {
+        result.emplace_back(Block(block), Row(block_with_partition.partition));
+        return result;
+    }
+
+    Block block_copy = block;
+
+    metadata_snapshot->getClusterByKey().expression->execute(block_copy);
+
+    auto split_number = metadata_snapshot->getSplitNumberFromClusterByKey();
+    auto is_with_range = metadata_snapshot->getWithRangeFromClusterByKey();
+    prepareBucketColumn(block_copy, metadata_snapshot->getClusterByKey().column_names, split_number, is_with_range, metadata_snapshot->getBucketNumberFromClusterByKey());
+
+    return populatePartitions(block, block_copy, max_parts, {COLUMN_BUCKET_NUMBER}, true);
+}
+
 BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(
         const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
@@ -166,47 +255,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockIntoParts(
     Block block_copy = block;
     /// After expression execution partition key columns will be added to block_copy with names regarding partition function.
     auto partition_key_names_and_types = MergeTreePartition::executePartitionByExpression(metadata_snapshot, block_copy, context);
-
-    ColumnRawPtrs partition_columns;
-    partition_columns.reserve(partition_key_names_and_types.size());
-    for (const auto & element : partition_key_names_and_types)
-        partition_columns.emplace_back(block_copy.getByName(element.name).column.get());
-
-    PODArray<size_t> partition_num_to_first_row;
-    IColumn::Selector selector;
-    buildScatterSelector(partition_columns, partition_num_to_first_row, selector, max_parts);
-
-    size_t partitions_count = partition_num_to_first_row.size();
-    result.reserve(partitions_count);
-
-    auto get_partition = [&](size_t num)
-    {
-        Row partition(partition_columns.size());
-        for (size_t i = 0; i < partition_columns.size(); ++i)
-            partition[i] = Field((*partition_columns[i])[partition_num_to_first_row[num]]);
-        return partition;
-    };
-
-    if (partitions_count == 1)
-    {
-        /// A typical case is when there is one partition (you do not need to split anything).
-        /// NOTE: returning a copy of the original block so that calculated partition key columns
-        /// do not interfere with possible calculated primary key columns of the same name.
-        result.emplace_back(Block(block), get_partition(0));
-        return result;
-    }
-
-    for (size_t i = 0; i < partitions_count; ++i)
-        result.emplace_back(block.cloneEmpty(), get_partition(i));
-
-    for (size_t col = 0; col < block.columns(); ++col)
-    {
-        MutableColumns scattered = block.getByPosition(col).column->scatter(partitions_count, selector);
-        for (size_t i = 0; i < partitions_count; ++i)
-            result[i].block.getByPosition(col).column = std::move(scattered[i]);
-    }
-
-    return result;
+    return populatePartitions(block , block_copy, max_parts, partition_key_names_and_types.getNames());
 }
 
 Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_description, Names & partition_key_columns, IColumn::Permutation *& permutation)
@@ -282,6 +331,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     BlockWithPartition & block_with_partition, const StorageMetadataPtr & metadata_snapshot, ContextPtr context, UInt64 block_id, Int64 mutation, Int64 hint_mutation)
 {
     Block & block = block_with_partition.block;
+    Int64 bucket_number = block_with_partition.bucket_info.bucket_number;
 
     static const String TMP_PREFIX = "tmp_insert_";
 
@@ -399,6 +449,7 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     new_data_part->partition = std::move(partition);
     new_data_part->minmax_idx = std::move(minmax_idx);
     new_data_part->checksums_ptr = std::make_shared<MergeTreeMetaBase::DataPart::Checksums>();
+    new_data_part->bucket_number = bucket_number;
     // new_data_part->is_temp = true;
 
     SyncGuardPtr sync_guard;

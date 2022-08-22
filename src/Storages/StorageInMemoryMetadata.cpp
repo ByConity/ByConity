@@ -7,6 +7,7 @@
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ReadHelpers.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -36,6 +37,7 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     , constraints(other.constraints)
     , projections(other.projections.clone())
     , partition_key(other.partition_key)
+    , cluster_by_key(other.cluster_by_key)
     , primary_key(other.primary_key)
     , sorting_key(other.sorting_key)
     , sampling_key(other.sampling_key)
@@ -61,6 +63,7 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
     constraints = other.constraints;
     projections = other.projections.clone();
     partition_key = other.partition_key;
+    cluster_by_key = other.cluster_by_key;
     primary_key = other.primary_key;
     sorting_key = other.sorting_key;
     unique_key = other.unique_key;
@@ -460,6 +463,48 @@ Names StorageInMemoryMetadata::getColumnsRequiredForPartitionKey() const
     return {};
 }
 
+const KeyDescription & StorageInMemoryMetadata::getClusterByKey() const
+{
+    return cluster_by_key;
+}
+
+bool StorageInMemoryMetadata::isClusterByKeyDefined() const
+{
+    return cluster_by_key.definition_ast != nullptr;
+}
+
+bool StorageInMemoryMetadata::hasClusterByKey() const
+{
+    return !cluster_by_key.column_names.empty();
+}
+
+Names StorageInMemoryMetadata::getColumnsRequiredForClusterByKey() const
+{
+    if (hasClusterByKey())
+        return cluster_by_key.expression->getRequiredColumns();
+    return {};
+}
+
+Int64 StorageInMemoryMetadata::getBucketNumberFromClusterByKey() const
+{
+    if (isClusterByKeyDefined())
+        return cluster_by_key.definition_ast->as<ASTClusterByElement>()->getTotalBucketNumber()->as<ASTLiteral>()->value.get<Int64>();
+    return -1;
+}
+
+Int64 StorageInMemoryMetadata::getSplitNumberFromClusterByKey() const
+{
+    if (hasClusterByKey())
+        return cluster_by_key.definition_ast->as<ASTClusterByElement>()->split_number;
+    return -1;
+}
+
+bool StorageInMemoryMetadata::getWithRangeFromClusterByKey() const
+{
+    if (hasClusterByKey())
+        return cluster_by_key.definition_ast->as<ASTClusterByElement>()->is_with_range;
+    return -1;
+}
 
 const KeyDescription & StorageInMemoryMetadata::getSortingKey() const
 {

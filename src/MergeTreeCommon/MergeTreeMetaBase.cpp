@@ -13,6 +13,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/NestedUtils.h>
 #include <IO/ConcatReadBuffer.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTNameTypePair.h>
@@ -29,6 +30,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Functions/IFunction.h>
 #include <QueryPlan/QueryIdHolder.h>
+#include <Parsers/queryToString.h>
 
 
 namespace
@@ -1434,6 +1436,27 @@ bool MergeTreeMetaBase::mayBenefitFromIndexForIn(
 
         return isPrimaryOrMinMaxKeyColumnPossiblyWrappedInFunctions(left_in_operand, metadata_snapshot);
     }
+}
+
+UInt64 MergeTreeMetaBase::getTableHashForClusterBy() const
+{
+    const auto & metadata = getInMemoryMetadata();
+    const auto & partition_by_ast = metadata.getPartitionKeyAST();
+    const auto & order_by_ast = metadata.getSortingKeyAST();
+    const auto & cluster_by_ast = metadata.getClusterByKeyAST();
+    String partition_by = partition_by_ast ? queryToString(partition_by_ast) : "";
+    String order_by = order_by_ast ? queryToString(order_by_ast) : "";
+    String cluster_by = cluster_by_ast ? queryToString(cluster_by_ast) : "";
+
+    String cluster_definition = partition_by + order_by + cluster_by;
+
+    cluster_definition.erase(remove(cluster_definition.begin(), cluster_definition.end(), '\''), cluster_definition.end());
+
+    std::hash<String> hasher;
+    auto cluster_definition_hash = hasher(cluster_definition);
+
+    return cluster_definition_hash;
+
 }
 
 }
