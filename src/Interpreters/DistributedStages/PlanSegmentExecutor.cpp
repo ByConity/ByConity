@@ -1,3 +1,4 @@
+#include <exception>
 #include <memory>
 #include <vector>
 #include <DataStreams/BlockIO.h>
@@ -244,23 +245,31 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;
     std::vector<LocalBroadcastChannel *> local_receivers;
+    std::exception_ptr exception;
 
-    for (const auto & processor : procesors)
+    try
     {
-        auto exchange_source_ptr = std::dynamic_pointer_cast<ExchangeSource>(processor);
-        if (!exchange_source_ptr)
-            continue;
-        auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
-        auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
-        if (local_receiver)
-            local_receivers.push_back(local_receiver);
-        else
+        for (const auto & processor : procesors)
         {
-            auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
-            if (unlikely(!brpc_receiver))
-                throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
-            async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+            auto exchange_source_ptr = std::dynamic_pointer_cast<ExchangeSource>(processor);
+            if (!exchange_source_ptr)
+                continue;
+            auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
+            auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
+            if (local_receiver)
+                local_receivers.push_back(local_receiver);
+            else
+            {
+                auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
+                if (unlikely(!brpc_receiver))
+                    throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
+                async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+            }
         }
+    }
+    catch (...)
+    {
+        exception = std::current_exception();
     }
 
     for (auto * local_receiver : local_receivers)
@@ -269,6 +278,9 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     /// Wait all brpc register rpc done
     for (auto & res : async_results)
         brpc::Join(res.cntl->call_id());
+
+    if (exception)
+        std::rethrow_exception(std::move(exception));
 
     /// get result
     for (auto & res : async_results)
