@@ -41,6 +41,7 @@ void BrpcExchangeReceiverRegistryService::registry(
                 String error_msg
                     = "Create stream for " + sender_proxy->getDataKey()->getKey() + " failed by exception: " + getCurrentExceptionMessage(false);
                 LOG_ERROR(log, error_msg);
+                return;
             }
             try
             {
