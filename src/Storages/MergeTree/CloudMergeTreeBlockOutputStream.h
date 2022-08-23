@@ -32,6 +32,7 @@ public:
     Block getHeader() const override;
 
     void write(const Block & block) override;
+    MergeTreeMutableDataPartsVector convertBlockIntoDataParts(const Block & block);
     void writeSuffix() override;
     void writeSuffixImpl();
 
