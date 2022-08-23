@@ -25,6 +25,7 @@ namespace ErrorCodes
     extern const int UNEXPECTED_PACKET_FROM_SERVER;
     extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
+    extern const int UNKNOWN_EXCEPTION;
 }
 
 PlanSegmentsStatusPtr
@@ -137,13 +138,15 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_map_ite = query_map.find(query_id);
     if (query_map_ite != query_map.end())
+    {
         query_map.erase(query_map_ite);
+    }
 
     auto seg_status_map_ite = segment_status_map.find(query_id);
     if (seg_status_map_ite != segment_status_map.end())
         segment_status_map.erase(seg_status_map_ite);
 
-    query_to_exception.remove(query_id);
+    query_to_exception_with_code.remove(query_id);
     return true;
 }
 
@@ -194,21 +197,37 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->code = segment_status.code;
 }
 
-void SegmentScheduler::updateException(const String & query_id, const String & exception)
+void SegmentScheduler::updateException(const String & query_id, const String & exception, int code)
 {
     std::unique_lock<bthread::Mutex> lock(mutex);
-    // only record one exception
     // if query map can not find query_id means query has already finished
     if (query_map.count(query_id))
-        query_to_exception.putIfNotExists(query_id, std::make_shared<String>(exception));
+    {
+        if (query_to_exception_with_code.exist(query_id))
+        {
+            const auto ptr = query_to_exception_with_code.get(query_id, 10);
+            if (ptr)
+            {
+                const auto & new_exception = ptr->exception + ":" + exception;
+                query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(new_exception, code));
+            }
+            else
+                query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(exception, code));
+
+        }
+        else
+        {
+            query_to_exception_with_code.put(query_id, std::make_shared<ExceptionWithCode>(exception, code));
+        }
+    }
 }
 
-String SegmentScheduler::getException(const String &query_id, size_t timeout_ms) {
-    const auto ptr = query_to_exception.get(query_id, timeout_ms);
+ExceptionWithCode SegmentScheduler::getException(const String & query_id, size_t timeout_ms) {
+    const auto ptr = query_to_exception_with_code.get(query_id, timeout_ms);
     if (ptr)
         return *ptr;
     else
-        return "Unknown";
+        return {"Unknown", ErrorCodes::UNKNOWN_EXCEPTION};
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)

@@ -78,10 +78,11 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     }
     catch (...)
     {
+        int exception_code = getCurrentExceptionCode();
         RuntimeSegmentsStatus status(
-            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), -1);
+            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), exception_code);
         tryLogCurrentException(logger, __PRETTY_FUNCTION__);
-        if (getCurrentExceptionCode() == ErrorCodes::QUERY_WAS_CANCELLED)
+        if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
             status.is_canceled = true;
         sendSegmentStatus(status);
         return status;

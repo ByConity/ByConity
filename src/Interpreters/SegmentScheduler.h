@@ -33,6 +33,13 @@ struct PlanSegmentsStatus
     String exception;
 };
 
+struct ExceptionWithCode
+{
+    ExceptionWithCode(const String & exception_, int code_) : exception(exception_), code(code_) { }
+    String exception;
+    int code;
+};
+
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
@@ -97,8 +104,8 @@ public:
 
     String getCurrentDispatchStatus(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateException(const String & query_id, const String & exception);
-    String getException(const String & query_id, size_t timeout_ms);
+    void updateException(const String & query_id, const String & exception, int code);
+    ExceptionWithCode getException(const String & query_id, size_t timeout_ms);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
@@ -106,7 +113,7 @@ private:
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
     // record exception when exception occurred
-    ConcurrentShardMap<String, String> query_to_exception;
+    ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
     Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
