@@ -42,6 +42,13 @@ struct KeyDescription
         const ColumnsDescription & columns,
         ContextPtr context);
 
+    /// Parse key structure from  cluster by key definition. Requires all columns, available
+    /// in storage.
+    static KeyDescription getClusterByKeyFromAST(
+        const ASTPtr & definition_ast,
+        const ColumnsDescription & columns,
+        ContextPtr context);
+
     /// Sorting key can contain additional column defined by storage type (like
     /// Version column in VersionedCollapsingMergeTree).
     static KeyDescription getSortingKeyFromAST(

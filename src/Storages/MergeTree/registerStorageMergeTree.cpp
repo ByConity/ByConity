@@ -730,7 +730,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         metadata.partition_key = KeyDescription::getKeyFromAST(partition_by_key, metadata.columns, args.getContext());
 
         if (args.storage_def->cluster_by)
-            metadata.cluster_by_key = KeyDescription::getKeyFromAST(args.storage_def->cluster_by->ptr(), metadata.columns, args.getContext());
+            metadata.cluster_by_key = KeyDescription::getClusterByKeyFromAST(args.storage_def->cluster_by->ptr(), metadata.columns, args.getContext());
 
         /// PRIMARY KEY without ORDER BY is allowed and considered as ORDER BY.
         if (!args.storage_def->order_by && args.storage_def->primary_key)
