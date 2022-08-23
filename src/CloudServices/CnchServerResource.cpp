@@ -143,12 +143,15 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
 
     const auto & host_ports_vec = worker_group->getHostWithPortsVec();
 
-    /// TODO: assign data_parts for bucket tables.
     for (auto & resource: resource_to_allocate)
     {
         const auto & storage = resource.storage;
         const auto & server_parts = resource.server_parts;
-        auto assigned_map = assignCnchParts(worker_group, server_parts);
+        ServerAssignmentMap assigned_map;
+        if (isCnchBucketTable(context, *storage, server_parts))
+            assigned_map = assignCnchPartsForBucketTable(server_parts, worker_group->getWorkerIDVec());
+        else
+            assigned_map = assignCnchParts(worker_group, server_parts);
 
         for (const auto & host_ports : host_ports_vec)
         {

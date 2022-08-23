@@ -15,6 +15,7 @@ using ServerAssignmentMap = std::unordered_map<String, ServerDataPartsVector>;
 
 ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
 
-bool isCnchBucketTable(const Context & context, const IStorage & storage, const ServerDataPartsVector & parts);
+bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts);
+ServerAssignmentMap assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers);
 
 }
