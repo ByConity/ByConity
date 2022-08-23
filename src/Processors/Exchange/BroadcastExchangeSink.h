@@ -1,8 +1,10 @@
 #pragma once
 #include <atomic>
+#include <Processors/Exchange/BufferChunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/IProcessor.h>
+#include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/IExchangeSink.h>
+#include <Processors/IProcessor.h>
 #include <bthread/mtx_cv_base.h>
 #include <Poco/Logger.h>
 
@@ -13,7 +15,7 @@ namespace DB
 class BroadcastExchangeSink : public IExchangeSink
 {
 public:
-    explicit BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_);
+    BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_);
     virtual ~BroadcastExchangeSink() override;
     String getName() const override { return "BroadcastExchangeSink"; }
     
@@ -24,9 +26,9 @@ protected:
 
 private:
     BroadcastSenderPtrs senders;
+    ExchangeOptions options;
+    BufferChunk buffer_chunk;
     Poco::Logger * logger;
-    std::atomic_bool senders_are_merged = false;
-    mutable bthread::Mutex senders_mutex;
 };
 
 }

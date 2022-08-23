@@ -55,15 +55,16 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             if(sender_stream_id != brpc::INVALID_STREAM_ID)
                 brpc::StreamClose(sender_stream_id);
         }
-
+        if (trans_keys.empty())
+            return;
         QueryExchangeLogElement element;
         if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_keys.front()))
         {
-            element.initial_query_id = key->query_id;
-            element.write_segment_id = key->write_segment_id;
-            element.read_segment_id = key->read_segment_id;
-            element.partition_id = key->parallel_index;
-            element.coordinator_address = key->coordinator_address;
+            element.initial_query_id = key->getQueryId();
+            element.write_segment_id = std::to_string(key->getWriteSegmentId());
+            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.partition_id = std::to_string(key->getParallelIndex());
+            element.coordinator_address = key->getCoordinatorAddress();
         }
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(
@@ -266,7 +267,12 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         int actual_status_code = status_code_;
         int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
         if (ret_code == 0)
+        {
             is_modifer = true;
+            // Close stream if all data are sent to make peer stream finished faster
+            if (actual_status_code == BroadcastStatusCode::ALL_SENDERS_DONE)
+                brpc::StreamClose(stream_id);
+        }
         else
             // already has been changed
             code = actual_status_code;

@@ -48,11 +48,11 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
         QueryExchangeLogElement element;
         if(auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_key))
         {
-            element.initial_query_id = key->query_id;
-            element.write_segment_id = key->write_segment_id;
-            element.read_segment_id = key->read_segment_id;
-            element.partition_id = key->parallel_index;
-            element.coordinator_address = key->coordinator_address;
+            element.initial_query_id = key->getQueryId();
+            element.write_segment_id = std::to_string(key->getWriteSegmentId());
+            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.partition_id = std::to_string(key->getParallelIndex());
+            element.coordinator_address = key->getCoordinatorAddress();
         }
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(
@@ -98,7 +98,12 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 
     Protos::RegistryRequest request;
     Protos::RegistryResponse response;
-    request.set_data_key(trans_key->getKey());
+    auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
+    request.set_query_id(exchange_key->getQueryId());
+    request.set_write_segment_id(exchange_key->getWriteSegmentId());
+    request.set_read_segment_id(exchange_key->getReadSegmentId());
+    request.set_parallel_id(exchange_key->getParallelIndex());
+    request.set_coordinator_address(exchange_key->getCoordinatorAddress());
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
 
     stub.registry(&cntl, &request, &response, nullptr);
@@ -249,7 +254,13 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     if (stream_id == brpc::INVALID_STREAM_ID)
         throw Exception("Stream id is invalid for " + getName(), ErrorCodes::BRPC_EXCEPTION);
 
-    res.request->set_data_key(trans_key->getKey());
+    auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
+
+    res.request->set_query_id(exchange_key->getQueryId());
+    res.request->set_write_segment_id(exchange_key->getWriteSegmentId());
+    res.request->set_read_segment_id(exchange_key->getReadSegmentId());
+    res.request->set_parallel_id(exchange_key->getParallelIndex());
+    res.request->set_coordinator_address(exchange_key->getCoordinatorAddress());
     res.request->set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
     stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
     metric.register_time_ms += s.elapsedMilliseconds();

@@ -89,11 +89,10 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         {
             auto context = CurrentThread::get().getQueryContext();
             auto query_id = context->getClientInfo().initial_query_id;
-            String exception = context->getSegmentScheduler()->getException(query_id, 100);
+            auto exception_with_code = context->getSegmentScheduler()->getException(query_id, 1000);
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code)
-                    + " exception: " + exception,
-                ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+                    + " exception: " + exception_with_code.exception, exception_with_code.code);
         }
 
         // If receiver is finihsed and not cancelly by pipeline, we should cancel pipeline here

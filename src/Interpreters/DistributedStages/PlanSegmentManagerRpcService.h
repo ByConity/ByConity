@@ -50,7 +50,9 @@ public:
         if (!request->is_succeed() && !request->is_canceled())
         {
             scheduler->updateException(
-                request->query_id(), "Segment:" + std::to_string(request->segment_id()) + ", exception:" + request->message());
+                request->query_id(),
+                "Segment:" + std::to_string(request->segment_id()) + ", exception:" + request->message(),
+                request->code());
             try
             {
                 scheduler->cancelPlanSegmentsFromCoordinator(request->query_id(), request->message(), context);

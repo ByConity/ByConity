@@ -129,7 +129,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ms = options.exhcange_timeout_ms};
         if (input->getSourceAddress().empty())
             throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
-        bool is_final_plan_segment = (input->getExchangeMode() == ExchangeMode::GATHER);
+        bool is_final_plan_segment = plan_segment_id == 0;
         for (const auto & source_address : input->getSourceAddress())
         {
             auto write_address_info = extractExchangeHostPort(source_address);
