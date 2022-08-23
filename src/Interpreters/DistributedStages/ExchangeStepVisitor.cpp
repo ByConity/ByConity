@@ -92,7 +92,7 @@ ExchangeStepResult ExchangeStepVisitor::visitJoinNode(QueryPlan::Node * node, Ex
     auto left_stream = step->getInputStreams()[0];
     auto right_stream = step->getInputStreams()[1];
 
-    auto add_exchange = [&](DataStream data_stream, size_t index, ExchangeMode mode, const Names & keys)
+    auto add_exchange = [&](DataStream & data_stream, size_t index, ExchangeMode mode, const Names & keys)
     {
         auto exchange_step = std::make_unique<ExchangeStep>(DataStreams{data_stream}, mode, Partitioning(keys));
         exchange_step->setStepDescription(exchangeModeToString(mode));
