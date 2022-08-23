@@ -55,7 +55,8 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             if(sender_stream_id != brpc::INVALID_STREAM_ID)
                 brpc::StreamClose(sender_stream_id);
         }
-
+        if (trans_keys.empty())
+            return;
         QueryExchangeLogElement element;
         if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_keys.front()))
         {
