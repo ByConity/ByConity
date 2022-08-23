@@ -43,14 +43,6 @@ public:
             .force_use_buffer = settings.exchange_force_use_buffer};
     }
 
-    static inline DataTransKeyPtr parseDataKey(const String & key_str) noexcept
-    {
-        std::vector<std::string> elements = absl::StrSplit(key_str, '_');
-        if (elements.size() != 5)
-            return DataTransKeyPtr();
-        return std::make_shared<ExchangeDataKey>(elements[0], elements[1], elements[2], elements[3], elements[4]);
-    }
-
     static inline BroadcastStatus sendAndCheckReturnStatus(IBroadcastSender & sender, Chunk chunk)
     {
         BroadcastStatus status = sender.send(std::move(chunk));

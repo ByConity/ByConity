@@ -290,17 +290,25 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         {
             LOG_INFO(
                 &Poco::Logger::get("PlanSegmentExecutor"),
-                "Receiver register sender successfully but sender already finished, host-{} , data_key-{}",
+                "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}_{}",
                 butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                res.request->data_key());
+                res.request->query_id(),
+                res.request->write_segment_id(),
+                res.request->read_segment_id(),
+                res.request->parallel_id(),
+                res.request->coordinator_address());
             continue;
         }
         res.channel->assertController(*res.cntl);
-        LOG_DEBUG(
+        LOG_TRACE(
             &Poco::Logger::get("PlanSegmentExecutor"),
-            "Receiver register sender successfully, host-{} , data_key-{}",
+            "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}_{}",
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
-            res.request->data_key());
+            res.request->query_id(),
+            res.request->write_segment_id(),
+            res.request->read_segment_id(),
+            res.request->parallel_id(),
+            res.request->coordinator_address());
     }
 }
 

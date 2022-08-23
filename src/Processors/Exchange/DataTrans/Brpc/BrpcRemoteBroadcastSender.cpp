@@ -60,11 +60,11 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
         QueryExchangeLogElement element;
         if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_keys.front()))
         {
-            element.initial_query_id = key->query_id;
-            element.write_segment_id = key->write_segment_id;
-            element.read_segment_id = key->read_segment_id;
-            element.partition_id = key->parallel_index;
-            element.coordinator_address = key->coordinator_address;
+            element.initial_query_id = key->getQueryId();
+            element.write_segment_id = std::to_string(key->getWriteSegmentId());
+            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.partition_id = std::to_string(key->getParallelIndex());
+            element.coordinator_address = key->getCoordinatorAddress();
         }
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(

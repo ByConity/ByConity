@@ -61,18 +61,18 @@ void BrpcExchangeReceiverRegistryService::registry(
     brpc::ClosureGuard done_guard(done);
     brpc::StreamOptions stream_options;
     stream_options.max_buf_size = max_buf_size;
-    auto data_key = ExchangeUtils::parseDataKey(request->data_key());
-    if (!data_key)
-    {
-        LOG_ERROR(log, "Fail to parse data_key {}", request->data_key());
-        cntl->SetFailed(EINVAL, "Fail to parse data_key");
-        return;
-    }
-    
+
+    auto data_key = std::make_shared<ExchangeDataKey>(
+        request->query_id(),
+        request->write_segment_id(),
+        request->read_segment_id(),
+        request->parallel_id(),
+        request->coordinator_address());
+
     if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
     {
         sender_stream_id = brpc::INVALID_STREAM_ID;
-        String error_msg = "Fail to accept stream for data_key-" + request->data_key();
+        String error_msg = "Fail to accept stream for data_key-" + data_key->getKey();
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
         return;
