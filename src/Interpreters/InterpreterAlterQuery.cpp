@@ -18,7 +18,6 @@
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Common/typeid_cast.h>
-#include <Storages/StorageHaUniqueMergeTree.h>
 
 #include <boost/range/algorithm_ext/push_back.hpp>
 
@@ -140,7 +139,7 @@ BlockIO InterpreterAlterQuery::execute()
     if (!partition_commands.empty())
     {
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
-        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext(), query_ptr);
+        auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
             res.pipeline.init(std::move(partition_commands_pipe));
         table->setUpdateTimeNow();
@@ -168,15 +167,7 @@ BlockIO InterpreterAlterQuery::execute()
         alter_commands.validate(table->getStorageID(), metadata, getContext());
         alter_commands.prepare(metadata);
         table->checkAlterIsPossible(alter_commands, getContext());
-        if (dynamic_cast<const StorageHaUniqueMergeTree*>(table.get()))
-        {
-            /// Unique table needs to forward queries to leader
-            table->alter(alter_commands, getContext(), alter_lock, query_ptr);
-        }
-        else
-        {
-            table->alter(alter_commands, getContext(), alter_lock);
-        }
+        table->alter(alter_commands, getContext(), alter_lock);
         table->setUpdateTimeNow();
     }
 

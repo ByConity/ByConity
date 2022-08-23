@@ -50,12 +50,6 @@ StorageSystemPartsColumns::StorageSystemPartsColumns(const StorageID & table_id_
         {"disk_name",                                  std::make_shared<DataTypeString>()},
         {"path",                                       std::make_shared<DataTypeString>()},
 
-        /// For unique table
-        {"delete_rows",                                std::make_shared<DataTypeUInt64>()},
-        {"delete_version",                             std::make_shared<DataTypeUInt64>()},
-        {"unique_index_size",                          std::make_shared<DataTypeUInt64>()},
-        {"unique_index_bytes_in_memory",               std::make_shared<DataTypeUInt64>()},
-
         {"column",                                     std::make_shared<DataTypeString>()},
         {"type",                                       std::make_shared<DataTypeString>()},
         {"column_position",                            std::make_shared<DataTypeUInt64>()},
@@ -188,15 +182,6 @@ void StorageSystemPartsColumns::processNextStorage(
                 columns[res_index++]->insert(part->volume->getDisk()->getName());
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(part->getFullPath());
-
-            if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->numDeletedRows());
-            if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->getDeleteVersion());
-            if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->getUniqueIndexSize());
-            if (columns_mask[src_index++])
-                columns[res_index++]->insert(part->getUniqueIndexMemorySize());
 
             if (columns_mask[src_index++])
                 columns[res_index++]->insert(column.name);

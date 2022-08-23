@@ -5,7 +5,6 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/HaMergeTreeLogManager.h>
 #include <Storages/StorageHaMergeTree.h>
-#include <Storages/StorageHaUniqueMergeTree.h>
 
 namespace CurrentMetrics
 {
@@ -236,83 +235,6 @@ void HaMergeTreeReplicaEndpoint::onGetMutationStatus(ReadBuffer & in, WriteBuffe
     writeBoolText(is_found, out);
     writeBoolText(is_done, out);
     writeIntBinary(finish_time, out);
-    out.next();
-}
-
-HaUniqueMergeTreeReplicaEndpoint::HaUniqueMergeTreeReplicaEndpoint(StorageHaUniqueMergeTree & storage_)
-    : storage(storage_)
-    , weak_storage(storage.shared_from_this())
-    , logger(&Poco::Logger::get("HaUniqueMergeTreeReplicaEndpoint (" + storage.getStorageID().database_name+ "." + storage.getStorageID().table_name + ")"))
-{
-}
-
-void HaUniqueMergeTreeReplicaEndpoint::processPacket(UInt64 packet_type, ReadBuffer & in, WriteBuffer & out)
-{
-    auto owned_storage = weak_storage.lock();
-    if (!owned_storage)
-        throw Exception("The table was already dropped", ErrorCodes::UNKNOWN_TABLE);
-
-    switch (packet_type)
-    {
-        case Protocol::HaClient::FetchManifestLogs:
-            onFetchManifestLogs(in, out);
-            return;
-
-        case Protocol::HaClient::GetManifestStatus:
-            onGetManifestStatus(in, out);
-            return;
-
-        case Protocol::HaClient::GetManifestSnapshot:
-            onGetManifestSnapshot(in, out);
-            return;
-
-        default:
-            HaDefaultReplicaEndpoint::processPacket(packet_type, in, out);
-    }
-}
-
-void HaUniqueMergeTreeReplicaEndpoint::onFetchManifestLogs(ReadBuffer & in, WriteBuffer & out)
-{
-    UInt64 from, limit;
-    readVarUInt(from, in);
-    readVarUInt(limit, in);
-    auto res = storage.manifest_store->getLogEntries(from, limit);
-    writeVarUInt(Protocol::HaServer::LogEntry, out);
-    writeVarUInt(res.size(), out);
-    for (auto & e : res)
-        e.writeText(out);
-    out.next();
-}
-
-void HaUniqueMergeTreeReplicaEndpoint::onGetManifestStatus(ReadBuffer &, WriteBuffer & out)
-{
-    writeVarUInt(Protocol::HaServer::Data, out);
-    writeIntBinary(UInt8(storage.is_leader), out);
-    writeVarUInt(storage.manifest_store->latestVersion(), out);
-    writeVarUInt(storage.manifest_store->commitVersion(), out);
-    writeVarUInt(storage.manifest_store->checkpointVersion(), out);
-    writeVarUInt(CurrentMetrics::values[CurrentMetrics::ReplicatedSend].load(std::memory_order_relaxed), out);
-    out.next();
-}
-
-void HaUniqueMergeTreeReplicaEndpoint::onGetManifestSnapshot(ReadBuffer & in, WriteBuffer & out)
-{
-    UInt64 version;
-    readVarUInt(version, in);
-    auto commit_version = storage.manifest_store->commitVersion();
-    if (version > commit_version)
-        throw Exception("Request version " + toString(version) + " > commit version " + toString(commit_version),
-                        ErrorCodes::BAD_ARGUMENTS);
-    auto snapshot = storage.manifest_store->getSnapshot(version);
-    writeVarUInt(Protocol::HaServer::Data, out);
-    writeVarUInt(snapshot.parts.size(), out);
-    for (auto & entry : snapshot.parts)
-    {
-        writeStringBinary(entry.first, out);
-        writeVarUInt(entry.second, out);
-    }
-    writeStringBinary(snapshot.metadata_str, out);
-    writeStringBinary(snapshot.columns_str, out);
     out.next();
 }
 

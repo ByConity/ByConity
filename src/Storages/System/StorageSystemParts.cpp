@@ -53,12 +53,6 @@ StorageSystemParts::StorageSystemParts(const StorageID & table_id_)
         {"disk_name",                                   std::make_shared<DataTypeString>()},
         {"path",                                        std::make_shared<DataTypeString>()},
 
-        /// For unique table
-        {"delete_rows",                                std::make_shared<DataTypeUInt64>()},
-        {"delete_version",                             std::make_shared<DataTypeUInt64>()},
-        {"unique_index_size",                          std::make_shared<DataTypeUInt64>()},
-        {"unique_index_bytes_in_memory",               std::make_shared<DataTypeUInt64>()},
-
         {"hash_of_all_files",                           std::make_shared<DataTypeString>()},
         {"hash_of_uncompressed_files",                  std::make_shared<DataTypeString>()},
         {"uncompressed_hash_of_compressed_files",       std::make_shared<DataTypeString>()},
@@ -202,15 +196,6 @@ void StorageSystemParts::processNextStorage(
             if (columns_mask[src_index++])
                 columns[res_index++]->insertDefault();
         }
-
-        if (columns_mask[src_index++])
-            columns[res_index++]->insert(part->numDeletedRows());
-        if (columns_mask[src_index++])
-            columns[res_index++]->insert(part->getDeleteVersion());
-        if (columns_mask[src_index++])
-            columns[res_index++]->insert(part->getUniqueIndexSize());
-        if (columns_mask[src_index++])
-            columns[res_index++]->insert(part->getUniqueIndexMemorySize());
 
         {
             MinimalisticDataPartChecksums helper;

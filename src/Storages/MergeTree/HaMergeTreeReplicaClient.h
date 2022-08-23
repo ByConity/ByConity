@@ -4,7 +4,6 @@
 #include <Storages/MergeTree/HaConnectionMessages.h>
 #include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/LSNStatus.h>
-#include <Storages/MergeTree/ManifestStore.h>
 
 namespace DB
 {
@@ -26,10 +25,6 @@ public:
     bool checkPartExist(const String & name, UInt64 & remote_num_send);
     Strings findActiveContainingPart(const Strings & names, UInt64 & remote_num_send);
     LSNStatus getLSNStatus();
-
-    ManifestStore::LogEntries fetchManifestLogs(UInt64 from, UInt64 limit = 0);
-    ManifestStatus getManifestStatus();
-    ManifestStore::Snapshot getManifestSnapshot(UInt64 version);
 
     GetMutationStatusResponse getMutationStatus(const String & mutation_id);
 };

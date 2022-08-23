@@ -82,8 +82,6 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     /// FIXME: add after supporting primary key index cache
     // , primary_index_cache(context_->getDiskPrimaryKeyIndexCache())
-    , unique_key_index_cache(context_->getDiskUniqueKeyIndexCache())
-    , unique_row_store_cache(context_->getDiskUniqueRowStoreCache())
 {
     if (!date_column_name.empty())
     {
@@ -1184,8 +1182,8 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing && mode != MergingParams::Unique)
-        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing or Unique.",
+    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
+        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)
@@ -1229,9 +1227,6 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
 
             throw Exception("Logical error: Version column for storage " + storage + " is empty", ErrorCodes::LOGICAL_ERROR);
         }
-
-        if (mode == Unique && version_column == partition_value_as_version)
-            return;
 
         bool miss_column = true;
         for (const auto & column : columns)
@@ -1293,9 +1288,6 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         check_version_column(false, "VersionedCollapsingMergeTree");
     }
 
-    if (mode == MergingParams::Unique)
-        check_version_column(true, "UniqueMergeTree");
-
     /// TODO Checks for Graphite mode.
 }
 
@@ -1310,7 +1302,6 @@ String MergeTreeMetaBase::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
-        case Unique:        return "Unique";
     }
 
     __builtin_unreachable();

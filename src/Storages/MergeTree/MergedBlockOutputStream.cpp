@@ -3,12 +3,6 @@
 #include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
 
-#include <Interpreters/sortBlock.h>
-#include <Storages/IndexFile/FilterPolicy.h>
-#include <Storages/IndexFile/IndexFileWriter.h>
-#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
-#include <Common/Coding.h>
-
 namespace DB
 {
 
@@ -26,7 +20,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     CompressionCodecPtr default_codec_,
     bool blocks_are_granules_size,
     bool optimize_map_column_serialization,
-    bool is_merge)
+    bool /*is_merge*/)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , columns_list(columns_list_)
     , default_codec(default_codec_)
@@ -58,13 +52,13 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     else
         writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
-    if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    {
-        auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
-        if (!writer_wide)
-            throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
-        writer_wide->setMergeStatus(is_merge);
-    }
+    // if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
+    // {
+    //     auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
+    //     if (!writer_wide)
+    //         throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
+    //     writer_wide->setMergeStatus(is_merge);
+    // }
 }
 
 /// If data is pre-sorted.

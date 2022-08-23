@@ -1170,7 +1170,7 @@ void StorageHaMergeTree::foreachCommittedParts(Func && func, bool select_sequent
 std::optional<UInt64> StorageHaMergeTree::totalRows(const Settings & settings) const
 {
     UInt64 res = 0;
-    foreachCommittedParts([&res](auto & part) { res += part->numRowsRemovingDeletes(); }, settings.select_sequential_consistency);
+    foreachCommittedParts([&res](auto & part) { res += part->rows_count; }, settings.select_sequential_consistency);
     return res;
 }
 
@@ -4032,7 +4032,7 @@ void StorageHaMergeTree::clearEmptyParts()
 }
 
 // Partition helpers
-void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & /*query*/)
+void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context)
 {
     auto & settings = query_context->getSettingsRef();
 
@@ -4042,7 +4042,7 @@ void StorageHaMergeTree::dropPartition(const ASTPtr & partition, bool detach, Co
     dropAllPartsInPartitions(zookeeper, {partition_id}, detach, settings.replication_alter_partitions_sync > 0);
 }
 
-void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context, const ASTPtr & /*query*/)
+void StorageHaMergeTree::dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr query_context)
 {
     auto & settings = query_context->getSettingsRef();
 

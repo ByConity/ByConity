@@ -105,7 +105,6 @@
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Storages/CompressionCodecSelector.h>
-#include <Storages/DiskUniqueIndexFileCache.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Processors/QueryCache.h>
@@ -330,8 +329,6 @@ struct ContextSharedPart
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
 
-    mutable std::optional<BackgroundSchedulePool> unique_table_schedule_pool; /// A thread pool that can run different jobs in background (used for unique table)
-
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
     /// Rules for selecting the compression settings, depending on the size of the part.
@@ -388,14 +385,9 @@ struct ContextSharedPart
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
-    mutable IndexFileBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
-    mutable DiskUniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
     using KMSKeyCache = std::unordered_map<String, String>;
     mutable KMSKeyCache kms_cache;
-
-    mutable IndexFileBlockCachePtr unique_row_store_block_cache; /// Shared block cache of unique row stores
-    mutable DiskUniqueRowStoreCachePtr unique_row_store_cache; /// Shared object cache of unique row stores
 
     CpuSetScaleManagerPtr cpu_set_scale_manager;
 
@@ -3558,34 +3550,6 @@ void Context::setMetaCheckerStatus(bool stop)
     shared->stop_sync = stop;
 }
 
-void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-    if (shared->unique_key_index_block_cache)
-        throw Exception("Unique key index block cache has been already created", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_key_index_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
-}
-
-IndexFileBlockCachePtr Context::getDiskUniqueKeyIndexBlockCache() const
-{
-    auto lock = getLock();
-    return shared->unique_key_index_block_cache;
-}
-
-void Context::setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size)
-{
-    auto lock = getLock();
-    if (shared->unique_key_index_cache)
-        throw Exception("Unique key index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_key_index_cache = std::make_shared<DiskUniqueKeyIndexCache>(disk_uki_meta_cache_size, disk_uki_file_cache_size);
-}
-
-std::shared_ptr<DiskUniqueKeyIndexCache> Context::getDiskUniqueKeyIndexCache() const
-{
-    auto lock = getLock();
-    return shared->unique_key_index_cache;
-}
-
 String Context::getKMSKeyCache(const String & config_name) const
 {
     auto lock = getLock();
@@ -3615,34 +3579,6 @@ void Context::setChecksumsCache(size_t cache_size_in_bytes)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
-}
-
-void Context::setDiskUniqueRowStoreBlockCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-    if (shared->unique_row_store_block_cache)
-        throw Exception("Unique row store block cache has been already created", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_row_store_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
-}
-
-IndexFileBlockCachePtr Context::getDiskUniqueRowStoreBlockCache() const
-{
-    auto lock = getLock();
-    return shared->unique_row_store_block_cache;
-}
-
-void Context::setDiskUniqueRowStoreCache(size_t disk_urs_meta_cache_size, size_t disk_urs_file_cache_size)
-{
-    auto lock = getLock();
-    if (shared->unique_row_store_cache)
-        throw Exception("Unique row store cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_row_store_cache = std::make_shared<DiskUniqueRowStoreCache>(disk_urs_meta_cache_size, disk_urs_file_cache_size);
-}
-
-std::shared_ptr<DiskUniqueRowStoreCache> Context::getDiskUniqueRowStoreCache() const
-{
-    auto lock = getLock();
-    return shared->unique_row_store_cache;
 }
 
 void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)

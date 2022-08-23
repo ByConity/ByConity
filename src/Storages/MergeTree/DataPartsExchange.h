@@ -40,7 +40,6 @@ public:
     void processQueryPart(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response, bool incrementally);
     void processQueryPartList(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
     void processQueryExist(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
-    void processQueryDeleteFiles(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response);
 
 private:
     MergeTreeData::DataPartPtr findPart(const String & name);
@@ -92,21 +91,6 @@ public:
         bool try_use_s3_copy = true,
         const DiskPtr disk_s3 = nullptr,
         bool incrementally = false);
-
-    /// Download delete files for `parts' at `delete_version'. Returns loaded delete bitmap for each part.
-    MergeTreeData::DataPartsDeleteSnapshot fetchDeleteFiles(
-        const StorageMetadataPtr & metadata_snapshot,
-        ContextPtr context,
-        const MergeTreeData::DataParts & parts,
-        UInt64 delete_version,
-        const String & replica_path,
-        const String & host,
-        int port,
-        const ConnectionTimeouts & timeouts,
-        const String & user,
-        const String & password,
-        const String & interserver_scheme,
-        const ThrottlerPtr & throttler = nullptr);
 
     Strings fetchPartList(
         const String & partition_id,

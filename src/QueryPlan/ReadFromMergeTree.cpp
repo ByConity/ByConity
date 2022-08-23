@@ -600,7 +600,6 @@ static void addMergingFinal(
         switch (merging_params.mode)
         {
             case MergeTreeMetaBase::MergingParams::Ordinary:
-            case MergeTreeMetaBase::MergingParams::Unique:
             {
                 return std::make_shared<MergingSortedTransform>(header, num_outputs,
                            sort_description, max_block_size);

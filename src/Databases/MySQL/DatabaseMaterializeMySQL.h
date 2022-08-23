@@ -67,20 +67,13 @@ public:
 
     void shutdownSynchronizationThread();
 
-    bool shouldSyncTable(const String & table_name) const { return materialize_thread.shouldSyncTable(table_name); }
-
     friend class DatabaseMaterializeTablesIterator;
-
-private:
-
-    void checkAndWaitUntilBecomingLeader(const StoragePtr & table) const;
 };
 
 
 void setSynchronizationThreadException(const DatabasePtr & materialize_mysql_db, const std::exception_ptr & exception);
 void stopDatabaseSynchronization(const DatabasePtr & materialize_mysql_db);
 void rethrowSyncExceptionIfNeed(const IDatabase * materialize_mysql_db);
-bool checkIfShouldSyncTable(const DatabasePtr & materialize_mysql_db, const String & table_name);
 
 }
 

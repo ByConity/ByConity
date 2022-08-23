@@ -120,5 +120,6 @@ private:
     std::atomic<size_t> pick_group_sequence = 0; /// round-robin index for pickWorkerGroup.
 };
 
+using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
 
 }

@@ -47,10 +47,6 @@ namespace zkutil { class ZooKeeper; }
 
 namespace DB
 {
-namespace IndexFile
-{
-    class Cache;
-}
 
 struct ContextSharedPart;
 class ContextAccess;
@@ -185,12 +181,6 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 using ReadTaskCallback = std::function<String()>;
 
 class DeleteBitmapCache;
-/// Used in unique table for caching unique key
-class DiskUniqueKeyIndexCache;
-/// Used in unique table for caching unique row store
-class DiskUniqueRowStoreCache;
-using IndexFileBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
-
 class CnchStorageCache;
 class PartCacheManager;
 class IServiceDiscovery;
@@ -1075,14 +1065,6 @@ public:
     void setDeleteBitmapCache(size_t cache_size_in_bytes);
     std::shared_ptr<DeleteBitmapCache> getDeleteBitmapCache() const;
 
-    /// Create a memory cache of data blocks reading from unique key index files.
-    void setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes);
-    IndexFileBlockCachePtr getDiskUniqueKeyIndexBlockCache() const;
-
-    /// Create a cache of UniqueKeyIndex objects.
-    void setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size);
-    std::shared_ptr<DiskUniqueKeyIndexCache> getDiskUniqueKeyIndexCache() const;
-
     String getKMSKeyCache(const String & config_name) const;
     void addKMSKeyCache(const String & config_name, const String & key) const;
 
@@ -1110,15 +1092,6 @@ public:
 
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
-
-    /// Create a memory cache of data blocks reading from unique key row store files.
-    void setDiskUniqueRowStoreBlockCache(size_t cache_size_in_bytes);
-    IndexFileBlockCachePtr getDiskUniqueRowStoreBlockCache() const;
-
-    /// Create a cache of UniqueKeyRowStore objects.
-    /// urs: unique row store
-    void setDiskUniqueRowStoreCache(size_t disk_urs_meta_cache_size, size_t disk_urs_file_cache_size);
-    std::shared_ptr<DiskUniqueRowStoreCache> getDiskUniqueRowStoreCache() const;
 
     void setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config);
 

@@ -13,6 +13,8 @@
 namespace DB
 {
 
+class CnchWorkerClient;
+using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 
 using WorkerGroupData = ResourceManagement::WorkerGroupData;
 using WorkerGroupMetrics = ResourceManagement::WorkerGroupMetrics;
@@ -38,6 +40,9 @@ constexpr auto toString(WorkerGroupHandleSource s)
     return "Unknown";
 }
 
+
+class WorkerGroupHandleImpl;
+using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 
 /**
  *  WorkerGroupHandleImpl is an immutable class
@@ -130,7 +135,5 @@ private:
 
     static std::unique_ptr<DB::ConsistentHashRing> buildRing(const ShardsInfo & shards_info, const ContextPtr global_context);
 };
-
-using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 
 }

@@ -503,8 +503,8 @@ private:
     createDropRangePart(const String & name, const MergeTreePartInfo & part_info, const StorageMetadataPtr & metadata_snapshot);
 
     // Partition helpers
-    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context, const ASTPtr & query) override;
-    void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context, const ASTPtr & query) override;
+    void dropPartition(const ASTPtr & partition, bool detach, ContextPtr query_context) override;
+    void dropPartitionWhere(const ASTPtr & predicate, bool detach, ContextPtr context) override;
     PartitionCommandsResultInfo attachPartition(const ASTPtr & partition, const StorageMetadataPtr & metadata_snapshot, bool part, ContextPtr query_context) override;
     void replacePartitionFrom(const StoragePtr & source_table, const ASTPtr & partition, bool replace, ContextPtr query_context) override;
     void movePartitionToTable(const StoragePtr & dest_table, const ASTPtr & partition, ContextPtr query_context) override;

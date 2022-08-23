@@ -5,7 +5,6 @@
 #include <Common/Throttler.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Interpreters/ClientInfo.h>
-#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -25,8 +24,6 @@ public:
                             const String & query_,
                             const Settings & settings_,
                             const ClientInfo & client_info_);
-
-    static ASTPtr createInsertToRemoteTableQuery(const String & database, const String & table, const Block & sample_block);
 
     Block getHeader() const override { return header; }
 

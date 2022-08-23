@@ -140,63 +140,6 @@ LSNStatus HaMergeTreeReplicaClient::getLSNStatus()
     return lsn_status;
 }
 
-ManifestStore::LogEntries HaMergeTreeReplicaClient::fetchManifestLogs(UInt64 from, UInt64 limit)
-{
-    writeVarUInt(Protocol::HaClient::FetchManifestLogs, *out);
-    writeVarUInt(from, *out);
-    writeVarUInt(limit, *out);
-    out->next();
-
-    receivePacketTypeOrThrow(Protocol::HaServer::LogEntry);
-    UInt64 size {0};
-    readVarUInt(size, *in);
-
-    ManifestStore::LogEntries res;
-    res.resize(size);
-    for (size_t i = 0; i < size; ++i)
-        res[i].readText(*in);
-    return res;
-}
-
-ManifestStatus HaMergeTreeReplicaClient::getManifestStatus()
-{
-    writeVarUInt(Protocol::HaClient::GetManifestStatus, *out);
-    out->next();
-
-    receivePacketTypeOrThrow(Protocol::HaServer::Data);
-    ManifestStatus res {};
-    readIntBinary(res.is_leader, *in);
-    readVarUInt(res.latest_version, *in);
-    readVarUInt(res.commit_version, *in);
-    readVarUInt(res.checkpoint_version, *in);
-    readVarUInt(res.num_running_sends, *in);
-    return res;
-}
-
-ManifestStore::Snapshot HaMergeTreeReplicaClient::getManifestSnapshot(UInt64 version)
-{
-    writeVarUInt(Protocol::HaClient::GetManifestSnapshot, *out);
-    writeVarUInt(version, *out);
-    out->next();
-
-    receivePacketTypeOrThrow(Protocol::HaServer::Data);
-    ManifestStore::Snapshot res;
-    UInt64 size {0};
-    readVarUInt(size, *in);
-    for (size_t i = 0; i < size; ++i)
-    {
-        String part;
-        UInt64 delete_version;
-        readStringBinary(part, *in, /*MAX_STRING_SIZE=*/1 << 16);
-        readVarUInt(delete_version, *in);
-        res.parts.emplace(part, delete_version);
-    }
-    readStringBinary(res.metadata_str, *in);
-    readStringBinary(res.columns_str, *in);
-    return res;
-}
-
-
 GetMutationStatusResponse HaMergeTreeReplicaClient::getMutationStatus(const String & mutation_id)
 {
     TimeoutSetter timeout_setter(*socket, sync_request_timeout, true);

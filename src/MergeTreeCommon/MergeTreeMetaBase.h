@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/extractKeyExpressionList.h>
@@ -93,7 +94,6 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
-            Unique              = 102,
         };
 
         Mode mode;
@@ -473,8 +473,6 @@ protected:
 
     /// FIXME: add after supporting primary index cache
     // PrimaryIndexCachePtr primary_index_cache;
-    std::shared_ptr<DiskUniqueKeyIndexCache> unique_key_index_cache;
-    std::shared_ptr<DiskUniqueRowStoreCache> unique_row_store_cache;
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
 

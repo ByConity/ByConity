@@ -26,11 +26,6 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Storages/IStorage.h>
 
-#if USE_MYSQL
-#include <Databases/MySQL/DatabaseMaterializeMySQL.h>
-
-#endif
-
 namespace DB
 {
 
@@ -290,6 +285,30 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
     return std::make_tuple(non_nullable_primary_keys_names_and_types, getNames(*unique_keys, context, columns), getNames(*keys, context, columns), increment_columns);
 }
 
+static String getUniqueColumnName(NamesAndTypesList columns_name_and_type, const String & prefix)
+{
+    const auto & is_unique = [&](const String & column_name)
+    {
+        for (const auto & column_name_and_type : columns_name_and_type)
+        {
+            if (column_name_and_type.name == column_name)
+                return false;
+        }
+
+        return true;
+    };
+
+    if (is_unique(prefix))
+        return prefix;
+
+    for (size_t index = 0; ; ++index)
+    {
+        const String & cur_name = prefix + "_" + toString(index);
+        if (is_unique(cur_name))
+            return cur_name;
+    }
+}
+
 static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
 {
     const auto & numbers_partition = [&](const String & column_name, size_t type_max_size) -> ASTPtr
@@ -400,19 +419,6 @@ static ASTPtr getOrderByPolicy(
     return order_by_expression;
 }
 
-/// check whether this table should be synced
-static bool shouldSyncTable(const DatabasePtr & database, [[maybe_unused]] const String & table_name)
-{
-    if (!database)
-        throw Exception("Database is null", ErrorCodes::LOGICAL_ERROR);
-
-#if USE_MYSQL
-    return database->getEngineName() != "MaterializeMySQL" || checkIfShouldSyncTable(database, table_name);
-#else
-    return true;
-#endif
-}
-
 void InterpreterCreateImpl::validate(const InterpreterCreateImpl::TQuery & create_query, ContextPtr)
 {
     /// This is dangerous, because the like table may not exists in ClickHouse
@@ -442,11 +448,39 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
         throw Exception("The " + backQuoteIfNeed(mysql_database) + "." + backQuoteIfNeed(create_query.table)
             + " cannot be materialized, because there is no primary keys.", ErrorCodes::NOT_IMPLEMENTED);
 
-    if (!shouldSyncTable(DatabaseCatalog::instance().getDatabase(mapped_to_database, context), create_query.table))
-        return {};
-
     auto columns = std::make_shared<ASTColumns>();
+
+    const auto & create_materialized_column_declaration = [&](const String & name, const String & type, const auto & default_value)
+    {
+        auto column_declaration = std::make_shared<ASTColumnDeclaration>();
+        column_declaration->name = name;
+        column_declaration->type = makeASTFunction(type);
+        column_declaration->default_specifier = "MATERIALIZED";
+        column_declaration->default_expression = std::make_shared<ASTLiteral>(default_value);
+        column_declaration->children.emplace_back(column_declaration->type);
+        column_declaration->children.emplace_back(column_declaration->default_expression);
+        return column_declaration;
+    };
+
+    /// Add _sign and _version columns.
+    String sign_column_name = getUniqueColumnName(columns_name_and_type, "_sign");
+    String version_column_name = getUniqueColumnName(columns_name_and_type, "_version");
     columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description));
+    columns->columns->children.emplace_back(create_materialized_column_declaration(sign_column_name, "Int8", UInt64(1)));
+    columns->columns->children.emplace_back(create_materialized_column_declaration(version_column_name, "UInt64", UInt64(1)));
+
+    /// Add minmax skipping index for _version column.
+    auto version_index = std::make_shared<ASTIndexDeclaration>();
+    version_index->name = version_column_name;
+    auto index_expr = std::make_shared<ASTIdentifier>(version_column_name);
+    auto index_type = makeASTFunction("minmax");
+    index_type->no_empty_args = true;
+    version_index->set(version_index->expr, index_expr);
+    version_index->set(version_index->type, index_type);
+    version_index->granularity = 1;
+    ASTPtr indices = std::make_shared<ASTExpressionList>();
+    indices->children.push_back(version_index);
+    columns->set(columns->indices, indices);
 
     auto storage = std::make_shared<ASTStorage>();
 
@@ -456,21 +490,9 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
 
     /// The `order by` expression must use primary keys, otherwise the primary keys will not be merge.
     if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, unique_keys, keys, increment_columns))
-    {
         storage->set(storage->order_by, order_by_expression);
-        storage->set(storage->unique_key, order_by_expression);
-    }
 
-    /// FIXME: make sure the path is unique
-    ASTPtr path = std::make_shared<ASTLiteral>("/clickhouse/" + mapped_to_database + "/" + create_query.table + "/{shard}/{replica}");
-    ASTPtr replica = std::make_shared<ASTLiteral>("{replica}");
-    storage->set(storage->engine, makeASTFunction("HaUniqueMergeTree", path, replica));
-
-    /// set unique key in table level
-    ASTPtr settings = std::make_shared<ASTSetQuery>();
-    settings->as<ASTSetQuery>()->is_standalone = false;
-    settings->as<ASTSetQuery>()->changes.push_back({"partition_level_unique_keys", 0});
-    storage->set(storage->settings, settings);
+    storage->set(storage->engine, makeASTFunction("ReplacingMergeTree", std::make_shared<ASTIdentifier>(version_column_name)));
 
     rewritten_query->database = mapped_to_database;
     rewritten_query->table = create_query.table;
@@ -492,9 +514,6 @@ ASTs InterpreterDropImpl::getRewrittenQueries(
 
     /// Skip drop database|view|dictionary
     if (database_name != mapped_to_database || drop_query.table.empty() || drop_query.is_view || drop_query.is_dictionary)
-        return {};
-
-    if (!shouldSyncTable(DatabaseCatalog::instance().getDatabase(database_name, context), drop_query.table))
         return {};
 
     ASTPtr rewritten_query = drop_query.clone();
@@ -522,8 +541,6 @@ ASTs InterpreterRenameImpl::getRewrittenQueries(
 
         if (from_database == mapped_to_database)
         {
-            if (!shouldSyncTable(DatabaseCatalog::instance().getDatabase(from_database, context), rename_element.from.table))
-                continue;
             elements.push_back(ASTRenameQuery::Element());
             elements.back().from.database = mapped_to_database;
             elements.back().from.table = rename_element.from.table;
@@ -555,9 +572,6 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
     rewritten_alter_query->database = mapped_to_database;
     rewritten_alter_query->table = alter_query.table;
     rewritten_alter_query->set(rewritten_alter_query->command_list, std::make_shared<ASTExpressionList>());
-
-    if (!shouldSyncTable(DatabaseCatalog::instance().getDatabase(mapped_to_database, context), alter_query.table))
-        return {};
 
     String default_after_column;
     for (const auto & command_query : alter_query.command_list->children)
@@ -599,7 +613,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
                     Block storage_header = storage->getInMemoryMetadataPtr()->getSampleBlock();
 
                     /// Put the sign and version columns last
-                    default_after_column = storage_header.getByPosition(storage_header.columns() - 1).name;
+                    default_after_column = storage_header.getByPosition(storage_header.columns() - 3).name;
                 }
 
                 if (!alter_command->column_name.empty())
