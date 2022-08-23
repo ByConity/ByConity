@@ -39,7 +39,8 @@ public:
             .exhcange_timeout_ms = static_cast<UInt32>(settings.exchange_timeout_ms),
             .send_threshold_in_bytes = settings.exchange_buffer_send_threshold_in_bytes,
             .send_threshold_in_row_num = settings.exchange_buffer_send_threshold_in_row,
-            .force_remote_mode = settings.exchange_enable_force_remote_mode};
+            .force_remote_mode = settings.exchange_enable_force_remote_mode,
+            .force_use_buffer = settings.exchange_force_use_buffer};
     }
 
     static inline DataTransKeyPtr parseDataKey(const String & key_str) noexcept

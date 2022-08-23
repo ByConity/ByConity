@@ -66,7 +66,55 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
 
     auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
-    auto exchange_sink = std::make_shared<BroadcastExchangeSink>(header, std::vector<BroadcastSenderPtr>{sink_sender});
+    auto exchange_sink = std::make_shared<BroadcastExchangeSink>(header, std::vector<BroadcastSenderPtr>{sink_sender}, exchange_options);
+    connect(exchange_source->getPort(), exchange_sink->getPort());
+    Processors processors;
+    processors.emplace_back(std::move(exchange_source));
+    processors.emplace_back(std::move(exchange_sink));
+    PipelineExecutor executor(processors);
+    executor.execute(2);
+    for (int i = 0; i < 5; i++)
+    {
+        RecvDataPacket recv_res = sink_receiver->recv(2000);
+        ASSERT_TRUE(std::holds_alternative<Chunk>(recv_res));
+        Chunk & recv_chunk = std::get<Chunk>(recv_res);
+        ASSERT_TRUE(recv_chunk.getNumRows() == 10);
+        ASSERT_TRUE(recv_chunk.bytes() == total_bytes);
+    }
+}
+
+TEST(ExchangeSink, BroadcastExchangeSinkBufferTest)
+{
+    auto context = getContext().context;
+    Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};   
+    ExchangeOptions exchange_options {.exhcange_timeout_ms= 1000, .force_use_buffer = true};
+    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, 1, "");
+    auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options);
+    BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
+    source_sender->accept(context, header);
+    source_channel->registerToSenders(exchange_options.exhcange_timeout_ms);
+    BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);
+
+    auto sink_key = std::make_shared<ExchangeDataKey>("", 2, 2, 2, "");
+    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options);
+    BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
+    sink_sender->accept(context, header);
+    sink_channel->registerToSenders(exchange_options.exhcange_timeout_ms);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
+
+    Chunk chunk = createUInt8Chunk(10, 1, 8);
+    auto total_bytes = chunk.bytes();
+
+    for (int i = 0; i < 5; i++)
+    {
+        BroadcastStatus status = source_sender->send(chunk.clone());
+        ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
+    }
+    source_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "sink test");
+
+    auto exchange_source = std::make_shared<ExchangeSource>(header, source_receiver, exchange_options);
+    auto exchange_sink = std::make_shared<BroadcastExchangeSink>(header, std::vector<BroadcastSenderPtr>{sink_sender}, exchange_options);
     connect(exchange_source->getPort(), exchange_sink->getPort());
     Processors processors;
     processors.emplace_back(std::move(exchange_source));

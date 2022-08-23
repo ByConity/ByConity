@@ -369,7 +369,7 @@ void PlanSegmentExecutor::addBroadcastExchangeSink(QueryPipelinePtr & pipeline, 
     pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
         if (stream_type != QueryPipeline::StreamType::Main)
             return nullptr;
-        return std::make_shared<BroadcastExchangeSink>(header, senders);
+        return std::make_shared<BroadcastExchangeSink>(header, senders, options);
     });
 }
 
