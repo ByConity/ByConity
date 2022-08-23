@@ -396,6 +396,17 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
     {
         UInt64 total_send_time_ms = 0;
         Stopwatch watch;
+        /// random pick workers
+        std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(dag_graph_ptr->id_to_segment.begin()->second->getClusterName());
+        std::vector<size_t> random_worker_ids;
+
+        if (cluster)
+        {
+            random_worker_ids.resize(cluster->getShardsInfo().size(), 0);
+            std::iota(random_worker_ids.begin(), random_worker_ids.end(), 0);
+            thread_local std::random_device rd;
+            std::shuffle(random_worker_ids.begin(), random_worker_ids.end(), rd);
+        }
         // scheduler source
         for (auto segment_id : dag_graph_ptr->sources)
         {
@@ -407,7 +418,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 throw Exception("Logical error: source segment can not be found", ErrorCodes::LOGICAL_ERROR);
             AddressInfos address_infos;
             // TODO dongyifeng support send plansegment parallel
-            address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr);
+            address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, random_worker_ids);
             if (dag_graph_ptr->local_exchange_ids.find(segment_id) != dag_graph_ptr->local_exchange_ids.end()
                 && !dag_graph_ptr->has_set_local_exchange)
             {
@@ -466,7 +477,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                 {
                     AddressInfos address_infos;
                     watch.restart();
-                    address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr);
+                    address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr, random_worker_ids);
                     total_send_time_ms += watch.elapsedMilliseconds();
                     // local join/global join is not between two source stages, for example, group by subquery global join source table
                     if (dag_graph_ptr->local_exchange_ids.find(it->first) != dag_graph_ptr->local_exchange_ids.end()
@@ -824,7 +835,7 @@ void sendPlanSegmentToRemote(
 }
 
 AddressInfos SegmentScheduler::sendPlanSegment(
-    PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
+    PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr, std::vector<size_t> random_worker_ids)
 {
     LOG_TRACE(
         &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
@@ -973,8 +984,9 @@ AddressInfos SegmentScheduler::sendPlanSegment(
         auto & settings = query_context->getSettingsRef();
         size_t parallel_index_id_index = 0;
         // set ParallelIndexId and source address
-        for (const auto & shard_info : cluster->getShardsInfo())
+        for (auto i : random_worker_ids)
         {
+            const auto & shard_info = cluster->getShardsInfo()[i];
             parallel_index_id_index++;
             for (auto plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
             {

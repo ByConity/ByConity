@@ -19,6 +19,8 @@
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Common/Stopwatch.h>
+#include <algorithm>
+#include <random>
 
 #define TASK_ASSIGN_DEBUG
 
@@ -120,7 +122,7 @@ private:
     bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
 
 protected:
-    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
+    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> random_worker_ids);
 };
 
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;

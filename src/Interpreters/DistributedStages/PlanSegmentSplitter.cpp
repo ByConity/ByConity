@@ -278,6 +278,15 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
 {
     // if (split_context.coordinator)
     //     return {"", 1}; // dispatch to coordinator if server is empty
+    bool input_has_table = false;
+    for (auto & input : split_context.inputs)
+    {
+        if (input->getPlanSegmentType() == PlanSegmentType::SOURCE)
+        {
+            input_has_table = true;
+            break;
+        }
+    }
 
     auto partitioning = SourceNodeFinder::find(node, *plan_segment_context.context);
     switch (partitioning)
@@ -299,6 +308,13 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
             }
             break;
         case Partitioning::Handle::FIXED_HASH:
+            /// if all input are not table type, parallel size should respect distributed_max_parallel_size setting
+            if (!input_has_table && !split_context.inputs.empty())
+            {
+                size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
+                if (max_parallel_size > 0)
+                    return {plan_segment_context.cluster_name, std::min(max_parallel_size, plan_segment_context.shard_number)};
+            }
             return {plan_segment_context.cluster_name, plan_segment_context.shard_number};
         default:
             break;
