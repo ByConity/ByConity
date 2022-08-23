@@ -131,6 +131,14 @@ CancellationCode PlanSegmentProcessList::tryCancelPlanSegmentGroup(const String 
         {
             if (!coordinator_address.empty() && segment_group_it->second.coordinator_address != coordinator_address)
             {
+                LOG_WARNING(
+                    logger,
+                    "Fail to cancel distributed query[{}@{}], coordinator_address doesn't match, seg coordinator address is {}",
+                    initial_query_id,
+                    coordinator_address,
+                    segment_group_it->second.coordinator_address
+                    );
+
                 return CancellationCode::CancelCannotBeSent;
             }
 

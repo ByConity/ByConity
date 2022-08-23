@@ -116,7 +116,8 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
 
 void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context)
 {
-    String coordinator_host = query_context->getLocalHost();
+    String coordinator_addr =
+        query_context->getLocalHost() + ":" + std::to_string(query_context->getExchangeStatusPort());
     for (const auto & addr: dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
@@ -126,7 +127,7 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
         Protos::CancelQueryRequest request;
         Protos::CancelQueryResponse response;
         request.set_query_id(query_id);
-        request.set_coordinator_address(coordinator_host);
+        request.set_coordinator_address(coordinator_addr);
         manager.cancelQuery(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
         LOG_INFO(log, "Cancel plan segment query_id-{} on host-{}, ret_code-{}", query_id, extractExchangeHostPort(addr), response.ret_code());
