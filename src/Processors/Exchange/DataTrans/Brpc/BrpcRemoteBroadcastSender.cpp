@@ -266,7 +266,12 @@ BroadcastStatus BrpcRemoteBroadcastSender::finish(BroadcastStatusCode status_cod
         int actual_status_code = status_code_;
         int ret_code = brpc::StreamFinish(stream_id, actual_status_code, status_code_, true);
         if (ret_code == 0)
+        {
             is_modifer = true;
+            // Close stream if all data are sent to make peer stream finished faster
+            if (actual_status_code == BroadcastStatusCode::ALL_SENDERS_DONE)
+                brpc::StreamClose(stream_id);
+        }
         else
             // already has been changed
             code = actual_status_code;
