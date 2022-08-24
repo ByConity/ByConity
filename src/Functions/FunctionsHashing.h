@@ -44,6 +44,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <Functions/TargetSpecific.h>
 #include <Functions/PerformanceAdaptors.h>
+#include <Functions/hiveCityHash.h>
 #include <common/range.h>
 #include <common/bit_cast.h>
 
@@ -534,6 +535,17 @@ struct ImplCityHash64
 
     static auto combineHashes(UInt64 h1, UInt64 h2) { return CityHash_v1_0_2::Hash128to64(uint128_t(h1, h2)); }
     static auto apply(const char * s, const size_t len) { return CityHash_v1_0_2::CityHash64(s, len); }
+    static constexpr bool use_int_hash_for_pods = true;
+};
+
+struct ImplHiveCityHash64
+{
+    static constexpr auto name = "hiveCityHash64";
+    using ReturnType = UInt64;
+    using uint128_t = CityHash_v1_0_2::uint128;
+
+    static auto combineHashes(UInt64 h1, UInt64 h2) { return CityHash_v1_0_2::Hash128to64(uint128_t(h1, h2)); }
+    static auto apply(const char * s, const size_t len) { return HiveCityHash::cityHash64(s, 0, len); }
     static constexpr bool use_int_hash_for_pods = true;
 };
 
@@ -1470,6 +1482,7 @@ using FunctionSHA256 = FunctionStringHashFixedString<SHA256Impl>;
 #endif
 using FunctionSipHash128 = FunctionStringHashFixedString<SipHash128Impl>;
 using FunctionCityHash64 = FunctionAnyHash<ImplCityHash64>;
+using FunctionHiveHash64 = FunctionAnyHash<ImplHiveCityHash64>;
 using FunctionFarmFingerprint64 = FunctionAnyHash<ImplFarmFingerprint64>;
 using FunctionFarmHash64 = FunctionAnyHash<ImplFarmHash64>;
 using FunctionMetroHash64 = FunctionAnyHash<ImplMetroHash64>;
