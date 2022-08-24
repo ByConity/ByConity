@@ -1094,24 +1094,20 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     // build grouping operations
     // TODO: grouping function only work, when group by with rollup?
-    NameToNameMap grouping_operations_descs;
+    GroupingDescriptions grouping_operations_descs;
     for (auto & grouping_op : analysis.getGroupingOperations(select_query))
-    {
-        auto arg_symbol = builder.translateToSymbol(grouping_op->arguments->children[0]);
-        String output_symbol;
-
-        if (!grouping_operations_descs.count(arg_symbol))
+        if (!mappings_for_aggregate.count(grouping_op))
         {
-            output_symbol = context->getSymbolAllocator()->newSymbol(grouping_op);
-            grouping_operations_descs.emplace(arg_symbol, output_symbol);
-        }
-        else
-        {
-            output_symbol = grouping_operations_descs.at(arg_symbol);
-        }
+            GroupingDescription description;
 
-        mappings_for_aggregate.emplace(grouping_op, output_symbol);
-    }
+            for (const auto & argument: grouping_op->arguments->children)
+                description.argument_names.emplace_back(builder.translateToSymbol(argument));
+
+            description.output_name = context->getSymbolAllocator()->newSymbol(grouping_op);
+
+            mappings_for_aggregate.emplace(grouping_op, description.output_name);
+            grouping_operations_descs.emplace_back(std::move(description));
+        }
 
     // collect group by keys & prune invisible columns
     Names keys_for_all_group;

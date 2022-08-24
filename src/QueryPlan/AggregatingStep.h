@@ -29,7 +29,18 @@ struct GroupingSetsParams
 
 using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
 
+struct GroupingDescription
+{
+    Names argument_names;
+    String output_name;
+};
+
+using GroupingDescriptions = std::vector<GroupingDescription>;
+
 Block appendGroupingSetColumn(Block header);
+
+void computeGroupingFunctions(QueryPipeline & pipeline, const GroupingDescriptions & groupings, const Names & keys,
+                              const GroupingSetsParamsList & grouping_set_params, const BuildQueryPipelineSettings & build_settings);
 
 /// Aggregation. See AggregatingTransform.
 class AggregatingStep : public ITransformingStep
@@ -69,7 +80,7 @@ public:
         bool final_,
         bool cube_ = false,
         bool rollup_ = false,
-        NameToNameMap groupings_ = {}, bool /*totals_*/ = false)
+        GroupingDescriptions groupings_ = {}, bool /*totals_*/ = false)
         : AggregatingStep(
             input_stream_,
             keys_,
@@ -103,7 +114,7 @@ public:
         SortDescription group_by_sort_description_,
         bool cube_ = false,
         bool rollup_ = false,
-        NameToNameMap groupings_ = {},
+        GroupingDescriptions groupings_ = {},
         bool totals_ = false);
 
 
@@ -126,7 +137,7 @@ public:
     bool isCube() const { return cube; }
     bool isRollup() const { return rollup; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
-    const NameToNameMap & getGroupings() const { return groupings; }
+    const GroupingDescriptions & getGroupings() const { return groupings; }
 
     bool isNormal() const { return final && !cube && !rollup && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
@@ -155,7 +166,7 @@ private:
 
     bool cube = false;
     bool rollup = false;
-    NameToNameMap groupings;
+    GroupingDescriptions groupings;
 
     Processors aggregating_in_order;
     Processors aggregating_sorted;

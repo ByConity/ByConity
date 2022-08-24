@@ -99,6 +99,9 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
     // TODO check
     QueryPlanStepPtr final_agg = std::make_shared<MergingAggregatedStep>(
         exchange_node->getStep()->getOutputStream(),
+        step->getKeys(),
+        step->getGroupingSetsParams(),
+        step->getGroupings(),
         transform_params,
         false,
         context.context->getSettingsRef().max_threads,

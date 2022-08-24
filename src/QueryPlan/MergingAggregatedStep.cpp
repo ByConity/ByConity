@@ -1,4 +1,5 @@
 #include <QueryPlan/MergingAggregatedStep.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Processors/Transforms/MergingAggregatedTransform.h>
@@ -23,13 +24,44 @@ static ITransformingStep::Traits getTraits()
     };
 }
 
+static Block appendGroupingColumns(Block header, const GroupingDescriptions & groupings)
+{
+    for (const auto & grouping: groupings)
+        header.insert({std::make_shared<DataTypeUInt64>(), grouping.output_name});
+
+    return header;
+}
+
 MergingAggregatedStep::MergingAggregatedStep(
     const DataStream & input_stream_,
     AggregatingTransformParamsPtr params_,
     bool memory_efficient_aggregation_,
     size_t max_threads_,
     size_t memory_efficient_merge_threads_)
-    : ITransformingStep(input_stream_, params_->getHeader(), getTraits())
+    : MergingAggregatedStep(input_stream_,
+                            {},
+                            {},
+                            {},
+                            std::move(params_),
+                            memory_efficient_aggregation_,
+                            max_threads_,
+                            memory_efficient_merge_threads_)
+{
+}
+
+MergingAggregatedStep::MergingAggregatedStep(
+    const DataStream & input_stream_,
+    Names keys_,
+    GroupingSetsParamsList grouping_sets_params_,
+    GroupingDescriptions groupings_,
+    AggregatingTransformParamsPtr params_,
+    bool memory_efficient_aggregation_,
+    size_t max_threads_,
+    size_t memory_efficient_merge_threads_)
+    : ITransformingStep(input_stream_, appendGroupingColumns(params_->getHeader(), groupings_), getTraits())
+    , keys(std::move(keys_))
+    , grouping_sets_params(std::move(grouping_sets_params_))
+    , groupings(std::move(groupings_))
     , params(params_)
     , memory_efficient_aggregation(memory_efficient_aggregation_)
     , max_threads(max_threads_)
@@ -45,7 +77,7 @@ void MergingAggregatedStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
 }
 
-void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
+void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_settings)
 {
     if (!memory_efficient_aggregation)
     {
@@ -66,6 +98,8 @@ void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const Bu
 
         pipeline.addMergingAggregatedMemoryEfficientTransform(params, num_merge_threads);
     }
+
+    computeGroupingFunctions(pipeline, groupings, keys, grouping_sets_params, build_settings);
 }
 
 void MergingAggregatedStep::describeActions(FormatSettings & settings) const
@@ -85,6 +119,23 @@ void MergingAggregatedStep::serialize(WriteBuffer & buf) const
     writeBinary(memory_efficient_aggregation, buf);
     writeBinary(max_threads, buf);
     writeBinary(memory_efficient_merge_threads, buf);
+
+    serializeStrings(keys, buf);
+
+    writeVarUInt(groupings.size(), buf);
+    for (const auto & item : groupings)
+    {
+        writeBinary(item.argument_names, buf);
+        writeStringBinary(item.output_name, buf);
+    }
+
+    writeVarUInt(grouping_sets_params.size(), buf);
+    for (const auto & grouping_sets_param : grouping_sets_params)
+    {
+        writeBinary(grouping_sets_param.used_key_names, buf);
+        writeBinary(grouping_sets_param.used_keys, buf);
+        writeBinary(grouping_sets_param.missing_keys, buf);
+    }
 }
 
 QueryPlanStepPtr MergingAggregatedStep::deserialize(ReadBuffer & buf, ContextPtr context)
@@ -103,11 +154,38 @@ QueryPlanStepPtr MergingAggregatedStep::deserialize(ReadBuffer & buf, ContextPtr
     readBinary(max_threads, buf);
     readBinary(memory_efficient_merge_threads, buf);
 
+    auto keys = deserializeStrings(buf);
+
+    size_t size;
+    readVarUInt(size, buf);
+    GroupingDescriptions groupings;
+    for (size_t i = 0; i < size; ++i)
+    {
+        GroupingDescription item;
+        readBinary(item.argument_names, buf);
+        readStringBinary(item.output_name, buf);
+        groupings.emplace_back(std::move(item));
+    }
+
+    readVarUInt(size, buf);
+    GroupingSetsParamsList grouping_sets_params;
+    for (size_t i = 0; i < size; ++i)
+    {
+        GroupingSetsParams param;
+        readBinary(param.used_key_names, buf);
+        readBinary(param.used_keys, buf);
+        readBinary(param.missing_keys, buf);
+        grouping_sets_params.emplace_back(param);
+    }
+
     auto step = std::make_unique<MergingAggregatedStep>(input_stream,
-                                                   std::move(transform_params),
-                                                   memory_efficient_aggregation,
-                                                   max_threads,
-                                                   memory_efficient_merge_threads);
+                                                        std::move(keys),
+                                                        std::move(grouping_sets_params),
+                                                        std::move(groupings),
+                                                        std::move(transform_params),
+                                                        memory_efficient_aggregation,
+                                                        max_threads,
+                                                        memory_efficient_merge_threads);
 
     step->setStepDescription(step_description);
     return step;

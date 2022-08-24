@@ -1550,7 +1550,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
         if (!analysis.getGroupingOperations(select_query).empty())
         {
             auto & representative = analysis.getGroupingOperations(select_query)[0];
-            throw Exception("Invalid grouping operation: " + serializeAST(*representative), ErrorCodes::ILLEGAL_AGGREGATION);
+            throw Exception("Invalid grouping operation: " + serializeAST(*representative), ErrorCodes::BAD_ARGUMENTS);
         }
 
         return;
@@ -1571,11 +1571,9 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
     if (auto & grouping_ops = analysis.getGroupingOperations(select_query); !grouping_ops.empty())
     {
         for (const auto & grouping_op: grouping_ops)
-        {
-            auto grouping_op_arg = grouping_op->arguments->children[0];
-            if (!grouping_expressions.count(grouping_op_arg))
-                throw Exception("Invalid grouping operation: " + serializeAST(*grouping_op), ErrorCodes::ILLEGAL_AGGREGATION);
-        }
+            for (const auto & grouping_op_arg: grouping_op->arguments->children)
+                if (!grouping_expressions.count(grouping_op_arg))
+                    throw Exception("Invalid grouping operation: " + serializeAST(*grouping_op), ErrorCodes::BAD_ARGUMENTS);
     }
 
     // verify no reference to non grouping fields after aggregate

@@ -34,6 +34,8 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int UNKNOWN_IDENTIFIER;
     extern const int ILLEGAL_AGGREGATION;
+    extern const int TOO_FEW_ARGUMENTS_FOR_FUNCTION;
+    extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
 class ExprAnalyzerVisitor : public ASTVisitor<ColumnWithTypeAndName, const Void>
@@ -475,17 +477,17 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeGroupingOperation(ASTFunctionP
 
     in_aggregate = true;
 
-    if (!function->arguments)
-        throw Exception("Grouping operation doesn't have argument", ErrorCodes::BAD_ARGUMENTS);
+    if (!function->arguments || function->arguments->children.empty())
+        throw Exception(ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION, "Function GROUPING expects at least one argument");
 
-    if (function->arguments->children.size() != 1)
-        throw Exception("Grouping operation should have exact 1 argument", ErrorCodes::BAD_ARGUMENTS);
+    if (function->arguments->children.size() > 64)
+        throw Exception(ErrorCodes::TOO_MANY_ARGUMENTS_FOR_FUNCTION, "Function GROUPING can have up to 64 arguments, but {} provided", function->arguments->children.size());
 
-    process(function->arguments->children.front());
+    processNodes(function->arguments->children);
 
     analysis.grouping_operations[options.select_query].push_back(function);
     in_aggregate = false;
-    return {nullptr, std::make_shared<DataTypeUInt8>(), ""};
+    return {nullptr, std::make_shared<DataTypeUInt64>(), ""};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeInSubquery(ASTFunctionPtr & function)
