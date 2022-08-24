@@ -362,6 +362,7 @@ void OptimizeInput::execute()
 
                     auto first_handle = first_props.getNodePartitioning().getPartitioningHandle();
                     auto first_bucket_count = first_props.getNodePartitioning().getBuckets();
+                    auto first_sharding_expr = first_props.getNodePartitioning().getSharingExpr();
                     const auto first_partition_column
                         = first_props.getNodePartitioning().normalize(*left_equivalences).getPartitioningColumns();
 
@@ -369,7 +370,8 @@ void OptimizeInput::execute()
                     {
                         auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
                         if (translated_prop.getNodePartitioning().getPartitioningHandle() != first_handle
-                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count)
+                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count
+                            || !ASTEquality::compareTree(translated_prop.getNodePartitioning().getSharingExpr(), first_sharding_expr))
                         {
                             match = false;
                             break;
@@ -419,7 +421,7 @@ void OptimizeInput::execute()
             }
             else
             {
-                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props);
+                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props, *context->getOptimizerContext().getContext());
             }
 
             // Not need to do pruning here because it has been done when we get the
@@ -443,7 +445,7 @@ void OptimizeInput::execute()
                 // add remote exchange
                 remote_exchange
                     = PropertyEnforcer::enforceNodePartitioning(group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual);
+                actual = PropertyDeriver::deriveProperty(remote_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       remote_exchange->getStep(),
@@ -464,7 +466,7 @@ void OptimizeInput::execute()
                 // add local exchange
                 local_exchange = PropertyEnforcer::enforceStreamPartitioning(
                     remote_exchange ? remote_exchange : group_expr, require, actual, *context->getOptimizerContext().getContext());
-                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual);
+                actual = PropertyDeriver::deriveProperty(local_exchange->getStep(), actual, *context->getOptimizerContext().getContext());
                 // add cost
                 cur_total_cost += CostCalculator::calculate(
                                       local_exchange->getStep(),

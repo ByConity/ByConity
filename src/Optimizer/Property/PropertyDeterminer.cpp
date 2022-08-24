@@ -71,8 +71,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
             right_keys_asof.emplace_back(right_keys[i]);
         }
 
-        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, true}};
-        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, false}};
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys_asof, false, 0, nullptr, true}};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys_asof, false, 0, nullptr, false}};
         PropertySet set;
         set.emplace_back(left);
         set.emplace_back(right);
@@ -95,8 +95,8 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         return {set};
     }
 
-    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, true}};
-    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}};
+    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, nullptr, true}};
+    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, nullptr, false}};
     PropertySet set;
     set.emplace_back(left);
     set.emplace_back(right);

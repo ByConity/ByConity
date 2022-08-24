@@ -23,7 +23,8 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
 {
     if (requirement.require_handle)
         return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-            && getPartitioningColumns() == requirement.getPartitioningColumns();
+            && getPartitioningColumns() == requirement.getPartitioningColumns()
+            && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
 
     switch (requirement.getPartitioningHandle())
     {
@@ -31,7 +32,8 @@ bool Partitioning::satisfy(const Partitioning & requirement) const
             return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement);
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-                && getPartitioningColumns() == requirement.getPartitioningColumns();
+                && getPartitioningColumns() == requirement.getPartitioningColumns()
+                && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
     }
 }
 
@@ -81,7 +83,7 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
             translate_columns.emplace_back(identities.at(column));
         else // note: don't discard column
             translate_columns.emplace_back(column);
-    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin};
+    return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
 }
 
 String Partitioning::toString() const

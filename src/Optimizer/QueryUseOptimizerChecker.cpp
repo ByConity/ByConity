@@ -7,23 +7,59 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
-#include <QueryPlan/QueryPlan.h>
-#include <Parsers/ASTDumpInfoQuery.h>
 //#include <Common/TestLog.h>
 
 namespace DB
 {
+
+void changeDistributedStages(ASTPtr &node)
+{
+    if (!node)
+        return;
+
+    if (auto * select = node->as<ASTSelectQuery>())
+    {
+        auto & settings_ptr = select->settings();
+        if (!settings_ptr)
+            return;
+        auto & ast = settings_ptr->as<ASTSetQuery &>();
+        for (auto it = ast.changes.begin(); it != ast.changes.end();++it)
+        {
+            if (it->name == "enable_distributed_stages")
+            {
+                it->value = Field(false);
+                return;
+            }
+        }
+    }
+    else
+    {
+        for (auto & child : node->children)
+            changeDistributedStages(child);
+    }
+}
+void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
+{
+    SettingsChanges setting_changes;
+
+    setting_changes.emplace_back("enable_optimizer", false);
+
+    context->applySettingsChanges(setting_changes);
+    changeDistributedStages(node);
+}
+
 bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context)
 {
     if (!node || !context->getSettingsRef().enable_optimizer)
     {
-        context->setSetting("enable_optimizer", false);
+        turnOffOptimizer(context, node);
         return false;
     }
 
@@ -34,7 +70,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
     // in worker.
     if (context->getApplicationType() != Context::ApplicationType::SERVER)
     {
-        context->setSetting("enable_optimizer", false);
+        turnOffOptimizer(context, node);
         return false;
     }
 
@@ -66,14 +102,14 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         }
         catch (Exception &)
         {
-//            if (e.code() != ErrorCodes::NOT_IMPLEMENTED)
+            //            if (e.code() != ErrorCodes::NOT_IMPLEMENTED)
             throw;
-//            support = false;
+            //            support = false;
         }
     }
 
     if (!support)
-        context->setSetting("enable_optimizer", false);
+        turnOffOptimizer(context, node);
 
     return support;
 }
