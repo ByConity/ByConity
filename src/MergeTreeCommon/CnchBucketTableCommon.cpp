@@ -1,6 +1,6 @@
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnsNumber.h> // Already in function factory. remove?
+#include <Columns/ColumnsNumber.h>
 #include <Common/SipHash.h>
 #include <Functions/FunctionFactory.h>
 #include <Columns/ColumnConst.h>
@@ -20,11 +20,12 @@ namespace ErrorCodes
  * is generated. This is then inserted to the bucket_number column for that corresponding row.
  * NOTE: block passed in here is the block_copy, not the original block.
  * NOTE: total_shard_num is TOTAL_BUCKET_NUMBER
+ * NOTE: context here is a required arg for FunctionPtr::execute but DTSPartition hash does not use it. It can be provided an empty context.
  * For more details on design, see here: https://bytedance.feishu.cn/docs/doccnItYKlNwRLFT1ADehyc9Efe
  * TODO: Add test cases
  **/
 void prepareBucketColumn(
-    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num)
+    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num, const ContextPtr & context)
 {
     if (split_number <= 0 && is_with_range)
         throw Exception("Unexpected operation. SPLIT_NUMBER is required for WITH_RANGE ", ErrorCodes::LOGICAL_ERROR);
@@ -32,8 +33,15 @@ void prepareBucketColumn(
     ColumnPtr bucket_number_column;
     if (split_number > 0)
     {
-        auto split_value_column = createColumnWithSipHash(block, bucket_columns, split_number);
-        block.insert(ColumnWithTypeAndName{std::move(split_value_column), std::make_shared<DataTypeInt64>(), "split_value"});
+        if (bucket_columns.size() == 1)
+        {
+            createColumnWithDtsPartitionHash(block, bucket_columns, split_number, context);
+        }
+        else
+        {
+            auto split_value_column = createColumnWithSipHash(block, bucket_columns, split_number);
+            block.insert(ColumnWithTypeAndName{std::move(split_value_column), std::make_shared<DataTypeInt64>(), "split_value"});
+        }
         bucket_number_column = createBucketNumberColumn(block, split_number, is_with_range, total_shard_num);
     }
     else
@@ -81,6 +89,33 @@ void buildBucketScatterSelector(
         if (partitions_count > 1)
             selector[i] = it->second;
     }
+}
+
+
+void createColumnWithDtsPartitionHash(Block & block, const Names & bucket_columns, const Int64 & split_number, const ContextPtr & context)
+{
+    // use columnConst instead? Perf diff between int column with one value and column const
+    // create split_number column of type ColumnConst since this column has one constant value in it
+    auto split_number_column = ColumnInt64::create();
+    split_number_column->insertValue(split_number);
+    auto split_number_column_const = ColumnConst::create(std::move(split_number_column), 1);
+    auto split_number_column_with_type = ColumnWithTypeAndName{std::move(split_number_column_const), std::make_shared<DataTypeInt64>(), "split_number"};
+
+    // create split_value column
+    auto split_value_column = ColumnInt64::create();
+    auto split_value_column_with_type = ColumnWithTypeAndName{std::move(split_value_column), std::make_shared<DataTypeInt64>(), "split_value"};
+
+    // insert new columns to block
+    block.insert(split_number_column_with_type);
+    block.insert(split_value_column_with_type);
+
+    // generate arguments for DTSPartition. This is the index of the CLUSTER BY column and the split_value column in the block
+    ColumnsWithTypeAndName args = { block.getByPosition(block.getPositionByName(bucket_columns[0])), block.getByPosition(block.columns() - 2) };
+
+    // Create DTSPartition hasher and execute hashing on the block to populate split_value column
+    auto dts_hasher = FunctionFactory::instance().get("dtspartition", context)->build({ block.getByName(bucket_columns[0]), split_number_column_with_type });
+    auto col_to = dts_hasher->execute(args, {}, block.rows(), 0);
+    block.getByPosition(block.columns() - 1).column = std::move(col_to);
 }
 
 // Util functions for prepareBucketColumn

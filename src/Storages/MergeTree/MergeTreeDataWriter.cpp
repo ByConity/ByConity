@@ -210,7 +210,7 @@ BlocksWithPartition MergeTreeDataWriter::populatePartitions(const Block & block,
 }
 
 BlocksWithPartition MergeTreeDataWriter::splitBlockPartitionIntoPartsByClusterKey(
-    const BlockWithPartition & block_with_partition, size_t max_parts, const StorageMetadataPtr & metadata_snapshot)
+    const BlockWithPartition & block_with_partition, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context)
 {
     Block block = block_with_partition.block;
 
@@ -232,7 +232,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockPartitionIntoPartsByClusterKe
 
     auto split_number = metadata_snapshot->getSplitNumberFromClusterByKey();
     auto is_with_range = metadata_snapshot->getWithRangeFromClusterByKey();
-    prepareBucketColumn(block_copy, metadata_snapshot->getClusterByKey().column_names, split_number, is_with_range, metadata_snapshot->getBucketNumberFromClusterByKey());
+    prepareBucketColumn(block_copy, metadata_snapshot->getClusterByKey().column_names, split_number, is_with_range, metadata_snapshot->getBucketNumberFromClusterByKey(), context);
 
     return populatePartitions(block, block_copy, max_parts, {COLUMN_BUCKET_NUMBER}, true);
 }

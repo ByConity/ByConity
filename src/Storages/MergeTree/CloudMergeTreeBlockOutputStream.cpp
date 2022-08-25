@@ -48,7 +48,7 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     for (auto & block_with_partition : part_blocks)
     {
         Row original_partition{block_with_partition.partition};
-        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot);
+        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
         LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)

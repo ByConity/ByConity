@@ -52,7 +52,7 @@ public:
       * Works deterministically: if same block was passed, function will return same result in same order.
       */
     static BlocksWithPartition splitBlockIntoParts(const Block & block, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
-    static BlocksWithPartition splitBlockPartitionIntoPartsByClusterKey(const BlockWithPartition & block_with_partition, size_t max_parts, const StorageMetadataPtr & metadata_snapshot);
+    static BlocksWithPartition splitBlockPartitionIntoPartsByClusterKey(const BlockWithPartition & block_with_partition, size_t max_parts, const StorageMetadataPtr & metadata_snapshot, ContextPtr context);
     static BlocksWithPartition populatePartitions(const Block & block, const Block & block_copy, const size_t max_parts, const Names expression_columns, bool is_bucket_scatter = false);
 
     /** All rows must correspond to same partition.

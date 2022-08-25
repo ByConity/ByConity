@@ -15,8 +15,9 @@ namespace DB
 #define COLUMN_BUCKET_NUMBER "_bucket_number_internal"
 
 void prepareBucketColumn(
-    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num);
+    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num, const ContextPtr & context);
 void buildBucketScatterSelector(const ColumnRawPtrs & columns, PODArray<size_t> & partition_num_to_first_row, IColumn::Selector & selector, size_t max_parts);
+void createColumnWithDtsPartitionHash(Block & block, const Names & bucket_columns, const Int64 & split_number, const ContextPtr & context);
 ColumnPtr createColumnWithSipHash(Block & block, const Names & bucket_columns, const Int64 & divisor);
 ColumnPtr createBucketNumberColumn(Block & block, const Int64 & split_number, const bool is_with_range, const Int64 total_shard_num);
 
