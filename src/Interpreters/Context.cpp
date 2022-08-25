@@ -156,6 +156,7 @@
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <TSO/TSOClient.h>
+#include <DaemonManager/DaemonManagerClient.h>
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -405,6 +406,7 @@ struct ContextSharedPart
 
     Context::ApplicationType application_type = Context::ApplicationType::SERVER;
     std::unique_ptr<TSOClientPool> tso_client_pool;
+    std::unique_ptr<DaemonManagerClientPool> daemon_manager_pool;
 
     /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
@@ -3772,6 +3774,19 @@ std::shared_ptr<Catalog::Catalog> Context::getCnchCatalog() const
         throw Exception("Cnch catalog is not initialized", ErrorCodes::LOGICAL_ERROR);
 
     return shared->cnch_catalog;
+}
+
+void Context::initDaemonManagerClientPool(const String & service_name)
+{
+    shared->daemon_manager_pool
+        = std::make_unique<DaemonManagerClientPool>(service_name, [sd = shared->sd, service_name] { return sd->lookup(service_name, ComponentType::DAEMON_MANAGER); });
+}
+
+DaemonManagerClientPtr Context::getDaemonManagerClient() const
+{
+    if (!shared->daemon_manager_pool)
+        throw Exception("Cnch daemon manager client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->daemon_manager_pool->get();
 }
 
 void Context::setCnchServerManager()

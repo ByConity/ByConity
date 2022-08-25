@@ -89,9 +89,7 @@ public:
 
     ///table related interface
     void createTable(
-        const Context & query_context,
-        const String & db,
-        const String & name,
+        const StorageID & storage_id,
         const String & create_query,
         const String & virtual_warehouse,
         const TxnTimestamp & txnID,

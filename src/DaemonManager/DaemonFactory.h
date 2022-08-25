@@ -37,6 +37,13 @@ public:
             throw Exception("DaemonFactory: the daemon name '" + job_name + "' is not unique", ErrorCodes::LOGICAL_ERROR);
     }
 
+    bool validateJobName(const String & job_name) const
+    {
+        if (local_daemon_jobs.count(job_name) ||
+            daemon_jobs_for_bg_thread_in_server.count(job_name))
+            return true;
+        return false;
+    }
 private:
     std::unordered_map<String, LocalDaemonJobCreator> local_daemon_jobs;
     std::unordered_map<String, DaemonJobForBGThreadInServerCreator> daemon_jobs_for_bg_thread_in_server;

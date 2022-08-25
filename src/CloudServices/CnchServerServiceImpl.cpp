@@ -25,7 +25,11 @@ namespace ErrorCodes
 }
 
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
-    : WithMutableContext(global_context), log(&Poco::Logger::get("CnchServerService"))
+    : WithMutableContext(global_context),
+      server_start_time(global_context->getTimestamp()),
+      global_gc_manager(global_context),
+
+      log(&Poco::Logger::get("CnchServerService"))
 {
 }
 
@@ -476,7 +480,51 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
     Protos::BackgroundThreadStatusResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                std::map<StorageID, CnchBGThreadStatus> res;
+
+                auto type = CnchBGThreadType(request->type());
+                if (
+                    type == CnchBGThreadType::PartGC ||
+                    type == CnchBGThreadType::MergeMutate ||
+                    type == CnchBGThreadType::MemoryBuffer ||
+                    type == CnchBGThreadType::Consumer ||
+                    type == CnchBGThreadType::DedupWorker ||
+                    type == CnchBGThreadType::Clustering)
+                {
+#if 0
+                    auto threads = global_context.getCnchBGThreads(type);
+                    res = threads->getStatusMap();
+#endif
+                }
+                else
+                {
+                    throw Exception("Not support type " + toString(int(request->type())), ErrorCodes::NOT_IMPLEMENTED);
+                }
+
+                for (const auto & [storage_id, status] : res)
+                {
+                    auto * item = response->mutable_status()->Add();
+                    RPCHelpers::fillStorageID(storage_id, *(item->mutable_storage_id()));
+                    item->set_status(status);
+                }
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
+
 void CnchServerServiceImpl::getNumBackgroundThreads(
     google::protobuf::RpcController * cntl,
     const Protos::BackgroundThreadNumReq * request,
@@ -525,6 +573,27 @@ void CnchServerServiceImpl::cleanTransaction(
     Protos::CleanTransactionResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            auto & txn_cleaner = gc->getCnchTransactionCoordinator().getTxnCleaner();
+            TransactionRecord txn_record{request->txn_record()};
+
+            try
+            {
+                txn_cleaner.cleanTransaction(txn_record);
+            }
+            catch (...)
+            {
+                LOG_WARNING(log, "Clean txn record {} failed.", txn_record.toString());
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 void CnchServerServiceImpl::acquireLock(
     google::protobuf::RpcController * cntl,
@@ -553,7 +622,8 @@ void CnchServerServiceImpl::getServerStartTime(
     Protos::GetServerStartTimeResp * response,
     google::protobuf::Closure * done)
 {
-
+    brpc::ClosureGuard done_guard(done);
+    response->set_server_start_time(server_start_time);
 }
 
 void CnchServerServiceImpl::scheduleGlobalGC(
@@ -562,13 +632,51 @@ void CnchServerServiceImpl::scheduleGlobalGC(
     Protos::ScheduleGlobalGCResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, & global_gc_manager = this->global_gc_manager, log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            std::vector<Protos::DataModelTable> tables (request->tables().begin(), request->tables().end());
+            LOG_DEBUG(log, "Receive {} tables from DM, they are", tables.size());
+
+            for (size_t i = 0; i < tables.size(); ++i)
+            {
+                LOG_DEBUG(log, "table {} : {}.{}", i + 1, tables[i].database(), tables[i].name());
+            }
+
+            try
+            {
+                bool ret = global_gc_manager->schedule(std::move(tables));
+                response->set_ret(ret);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                response->set_ret(false);
+            }
+        }
+    );
 }
+
 void CnchServerServiceImpl::getNumOfTablesCanSendForGlobalGC(
     google::protobuf::RpcController * cntl,
     const Protos::GetNumOfTablesCanSendForGlobalGCReq * request,
     Protos::GetNumOfTablesCanSendForGlobalGCResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        response->set_num_of_tables_can_send(GlobalGCHelpers::amountOfWorkCanReceive(global_gc_manager->getMaxThreads(), global_gc_manager->getNumberOfDeletingTables()));
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        response->set_num_of_tables_can_send(0);
+    }
 }
 void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
     google::protobuf::RpcController * cntl,
@@ -576,6 +684,21 @@ void CnchServerServiceImpl::getDeletingTablesInGlobalGC(
     Protos::GetDeletingTablesInGlobalGCResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto uuids = global_gc_manager->getDeletingUUIDs();
+        for (const auto & uuid : uuids)
+        {
+            auto * item = response->mutable_uuids()->Add();
+            RPCHelpers::fillUUID(uuid, *item);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+    }
 }
 void CnchServerServiceImpl::redirectCommitParts(
     google::protobuf::RpcController * controller,

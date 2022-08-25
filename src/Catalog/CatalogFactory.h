@@ -20,9 +20,9 @@ public:
 
     static DatabasePtr getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context);
 
-    static StoragePtr getTableByDataModel(ContextPtr context, const DB::Protos::DataModelTable * table_model);
+    static StoragePtr getTableByDataModel(ContextMutablePtr context, const DB::Protos::DataModelTable * table_model);
 
-    static StoragePtr getTableByDefinition(ContextPtr context, const String & db, const String & table, const String & create);
+    static StoragePtr getTableByDefinition(ContextMutablePtr context, const String & db, const String & table, const String & create);
 
     static ASTPtr getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary * dict_model);
 };

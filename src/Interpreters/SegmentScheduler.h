@@ -19,6 +19,8 @@
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
 #include <Common/Stopwatch.h>
+#include <algorithm>
+#include <random>
 
 #define TASK_ASSIGN_DEBUG
 
@@ -31,6 +33,13 @@ struct PlanSegmentsStatus
     volatile bool is_final_stage_start = false;
     std::atomic<bool> is_cancel{false};
     String exception;
+};
+
+struct ExceptionWithCode
+{
+    ExceptionWithCode(const String & exception_, int code_) : exception(exception_), code(code_) { }
+    String exception;
+    int code;
 };
 
 using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
@@ -97,8 +106,8 @@ public:
 
     String getCurrentDispatchStatus(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
-    void updateException(const String & query_id, const String & exception);
-    String getException(const String & query_id, size_t timeout_ms);
+    void updateException(const String & query_id, const String & exception, int code);
+    ExceptionWithCode getException(const String & query_id, size_t timeout_ms);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
@@ -106,14 +115,14 @@ private:
     mutable bthread::Mutex segment_status_mutex;
     mutable SegmentStatusMap segment_status_map;
     // record exception when exception occurred
-    ConcurrentShardMap<String, String> query_to_exception;
+    ConcurrentShardMap<String, ExceptionWithCode> query_to_exception_with_code;
     Poco::Logger * log;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
 
 protected:
-    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
+    virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> random_worker_ids);
 };
 
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;

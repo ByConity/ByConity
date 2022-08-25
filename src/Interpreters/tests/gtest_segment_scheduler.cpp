@@ -25,7 +25,7 @@ public:
     MockSegmentScheduler() = default;
     virtual ~MockSegmentScheduler() override {}
 
-    virtual AddressInfos sendPlanSegment(PlanSegment *, bool, ContextPtr, std::shared_ptr<DAGGraph>) override
+    virtual AddressInfos sendPlanSegment(PlanSegment *, bool, ContextPtr, std::shared_ptr<DAGGraph>, std::vector<size_t>) override
     {
         AddressInfos res;
         AddressInfo address("127.0.0.1", 9000, "test", "test", 9001, 9002);

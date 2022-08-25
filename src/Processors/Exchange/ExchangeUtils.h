@@ -39,15 +39,8 @@ public:
             .exhcange_timeout_ms = static_cast<UInt32>(settings.exchange_timeout_ms),
             .send_threshold_in_bytes = settings.exchange_buffer_send_threshold_in_bytes,
             .send_threshold_in_row_num = settings.exchange_buffer_send_threshold_in_row,
-            .force_remote_mode = settings.exchange_enable_force_remote_mode};
-    }
-
-    static inline DataTransKeyPtr parseDataKey(const String & key_str) noexcept
-    {
-        std::vector<std::string> elements = absl::StrSplit(key_str, '_');
-        if (elements.size() != 5)
-            return DataTransKeyPtr();
-        return std::make_shared<ExchangeDataKey>(elements[0], elements[1], elements[2], elements[3], elements[4]);
+            .force_remote_mode = settings.exchange_enable_force_remote_mode,
+            .force_use_buffer = settings.exchange_force_use_buffer};
     }
 
     static inline BroadcastStatus sendAndCheckReturnStatus(IBroadcastSender & sender, Chunk chunk)

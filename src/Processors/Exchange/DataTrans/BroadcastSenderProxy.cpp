@@ -64,7 +64,7 @@ BroadcastStatus BroadcastSenderProxy::finish(BroadcastStatusCode status_code, St
             std::lock_guard lock(mutex);
             // Wakeup all pending call for waitBecomeRealSender and waitAccept
             closed = true;
-            wait_become_real.notify_all();
+            wait_accept.notify_all();
             wait_become_real.notify_all();
             return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY, false, "Sender not ready");
         }

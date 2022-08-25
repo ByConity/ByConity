@@ -1,3 +1,4 @@
+#include <exception>
 #include <memory>
 #include <vector>
 #include <DataStreams/BlockIO.h>
@@ -78,10 +79,11 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
     }
     catch (...)
     {
+        int exception_code = getCurrentExceptionCode();
         RuntimeSegmentsStatus status(
-            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), -1);
+            plan_segment->getQueryId(), plan_segment->getPlanSegmentId(), false, false, getCurrentExceptionMessage(false), exception_code);
         tryLogCurrentException(logger, __PRETTY_FUNCTION__);
-        if (getCurrentExceptionCode() == ErrorCodes::QUERY_WAS_CANCELLED)
+        if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
             status.is_canceled = true;
         sendSegmentStatus(status);
         return status;
@@ -243,23 +245,31 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     const Processors & procesors = pipeline.getProcessors();
     std::vector<AsyncRegisterResult> async_results;
     std::vector<LocalBroadcastChannel *> local_receivers;
+    std::exception_ptr exception;
 
-    for (const auto & processor : procesors)
+    try
     {
-        auto exchange_source_ptr = std::dynamic_pointer_cast<ExchangeSource>(processor);
-        if (!exchange_source_ptr)
-            continue;
-        auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
-        auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
-        if (local_receiver)
-            local_receivers.push_back(local_receiver);
-        else
+        for (const auto & processor : procesors)
         {
-            auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
-            if (unlikely(!brpc_receiver))
-                throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
-            async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+            auto exchange_source_ptr = std::dynamic_pointer_cast<ExchangeSource>(processor);
+            if (!exchange_source_ptr)
+                continue;
+            auto * receiver_ptr = exchange_source_ptr->getReceiver().get();
+            auto * local_receiver = dynamic_cast<LocalBroadcastChannel *>(receiver_ptr);
+            if (local_receiver)
+                local_receivers.push_back(local_receiver);
+            else
+            {
+                auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
+                if (unlikely(!brpc_receiver))
+                    throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
+                async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
+            }
         }
+    }
+    catch (...)
+    {
+        exception = std::current_exception();
     }
 
     for (auto * local_receiver : local_receivers)
@@ -269,6 +279,9 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
     for (auto & res : async_results)
         brpc::Join(res.cntl->call_id());
 
+    if (exception)
+        std::rethrow_exception(std::move(exception));
+
     /// get result
     for (auto & res : async_results)
     {
@@ -277,17 +290,25 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         {
             LOG_INFO(
                 &Poco::Logger::get("PlanSegmentExecutor"),
-                "Receiver register sender successfully but sender already finished, host-{} , data_key-{}",
+                "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}_{}",
                 butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                res.request->data_key());
+                res.request->query_id(),
+                res.request->write_segment_id(),
+                res.request->read_segment_id(),
+                res.request->parallel_id(),
+                res.request->coordinator_address());
             continue;
         }
         res.channel->assertController(*res.cntl);
-        LOG_DEBUG(
+        LOG_TRACE(
             &Poco::Logger::get("PlanSegmentExecutor"),
-            "Receiver register sender successfully, host-{} , data_key-{}",
+            "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}_{}",
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
-            res.request->data_key());
+            res.request->query_id(),
+            res.request->write_segment_id(),
+            res.request->read_segment_id(),
+            res.request->parallel_id(),
+            res.request->coordinator_address());
     }
 }
 
@@ -356,7 +377,7 @@ void PlanSegmentExecutor::addBroadcastExchangeSink(QueryPipelinePtr & pipeline, 
     pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
         if (stream_type != QueryPipeline::StreamType::Main)
             return nullptr;
-        return std::make_shared<BroadcastExchangeSink>(header, senders);
+        return std::make_shared<BroadcastExchangeSink>(header, senders, options);
     });
 }
 
