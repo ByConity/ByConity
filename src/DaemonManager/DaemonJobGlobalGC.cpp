@@ -249,13 +249,29 @@ bool DaemonJobGlobalGC::executeImpl()
     }
 
     Stopwatch watch;
-
-    trash_table_it = catalog->getTrashTableIDIterator(BYTEKV_BATCH_SCAN);
+    bool new_iteration = false;
+    if (!trash_table_it)
+    {
+        trash_table_it = catalog->getTrashTableIDIterator(BYTEKV_BATCH_SCAN);
+        new_iteration = true;
+    }
     UInt64 milliseconds = watch.elapsedMilliseconds();
     if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
         LOG_DEBUG(log, "get trash table iterator took {} ms.", milliseconds);
-    while(trash_table_it->next() && (!num_of_table_can_send_sorted.empty()))
+    while(!num_of_table_can_send_sorted.empty())
     {
+        if (!trash_table_it->next())
+        {
+            if (new_iteration)
+                break;
+            else
+            {
+                trash_table_it = catalog->getTrashTableIDIterator(BYTEKV_BATCH_SCAN);
+                new_iteration = true;
+                continue;
+            }
+        }
+
         if (this->tables_need_gc.size() >= GlobalGCManager::MAX_BATCH_WORK_SIZE)
         {
             bool ret = GlobalGCHelpers::sendToServerForGC(
@@ -316,6 +332,7 @@ bool DaemonJobGlobalGC::executeImpl()
         catalog->clearDatabaseMeta(db.name(), db.commit_time());
     }
 
+    LOG_INFO(log, "Finish executeImpl in global GC");
     return true;
 }
 

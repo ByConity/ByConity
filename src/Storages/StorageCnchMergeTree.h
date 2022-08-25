@@ -98,6 +98,7 @@ public:
 
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
 
+    const String & getLocalStorePath() const;
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

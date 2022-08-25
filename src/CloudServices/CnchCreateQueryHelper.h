@@ -17,7 +17,7 @@ extern String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::opti
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query, const ContextPtr & context);
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage);
 
-StoragePtr createStorageFromQuery(const String & query, const ContextPtr & context);
+StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & context);
 
 void replaceCnchWithCloud(ASTCreateQuery & create_query, const String & new_table_name, const String & cnch_db, const String & cnch_table);
 

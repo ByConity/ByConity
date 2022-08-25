@@ -1117,6 +1117,11 @@ StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const
     return local_store_volume;
 }
 
+const String & StorageCnchMergeTree::getLocalStorePath() const
+{
+    return relative_local_store_path;
+}
+
 Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const
 {
     DataTypePtr partition_value_type = getPartitionValueType();

@@ -20,16 +20,16 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query
     return std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
 }
 
-StoragePtr createStorageFromQuery(const String & query, const ContextPtr & context)
+StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & context)
 {
     auto ast = getASTCreateQueryFromString(query, context);
 
     return StorageFactory::instance().get(
         *ast,
         "",
-        context->getQueryContext(),
+        context,
         context->getGlobalContext(),
-        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context->getSessionContext(), false),
+        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context, false),
         InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints),
         false /*has_force_restore_data_flag*/);
 }

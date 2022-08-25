@@ -110,6 +110,7 @@ void DaemonJob::execute()
         if (!ret)
             getExecuteErrorMetric(getType()) << 1;
         task->scheduleAfter(interval_ms);
+        LOG_TRACE(log, "finish execute {}, try again after {}", toString(getType()), interval_ms);
     }
     catch (...)
     {

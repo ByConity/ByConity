@@ -1,5 +1,5 @@
-#include <Catalog/CatalogFactory.h>
 #include <DaemonManager/DaemonHelper.h>
+#include <DaemonManager/DaemonFactory.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -12,10 +12,6 @@ namespace ErrorCodes
 
 namespace DaemonManager
 {
-StoragePtr getStoragePtr(ContextPtr context, const String & database, const String & table, const String & definition)
-{
-    return Catalog::CatalogFactory::getTableByDefinition(std::move(context), database, table, definition);
-}
 
 std::map<std::string, unsigned int> updateConfig(
     std::map<std::string, unsigned int> && default_config,
@@ -30,10 +26,14 @@ std::map<std::string, unsigned int> updateConfig(
             if (startsWith(key, "job"))
             {
                 auto job_name = app_config.getString("daemon_manager.daemon_jobs." + key + ".name");
+
+                if (!DaemonFactory::instance().validateJobName(job_name))
+                    throw Exception("invalid config, there is no job named " + job_name,
+                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+
                 auto it = default_config.find(job_name);
                 if (it == default_config.end())
-                    throw Exception("invalid config, there is not job named " + key,
-                        ErrorCodes::INVALID_CONFIG_PARAMETER);
+                    return;
 
                 bool disable = app_config.getBool("daemon_manager.daemon_jobs." + key + ".disable", false);
                 if (disable)

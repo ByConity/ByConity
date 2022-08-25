@@ -54,7 +54,7 @@ ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/vw-default/asan.worker-defa
 sleep 2
 ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/vw-write/asan.worker-write.log WORKER_ID='default-worker-1' WORKER_GROUP_ID='write' VIRTUAL_WAREHOUSE_ID='vw_write' nohup  /clickhouse/bin/clickhouse-server --config-file   ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/worker1.xml >/dev/null 2>&1 &
 sleep 2
-ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/daemon-manager/asan.daemon_manager.log nohup /clickhouse/bin/daemon_manager  --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/daemon-manager.xml  >/dev/null 2>&1 &
+ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/daemon-manager/asan.daemon_manager.log nohup /clickhouse/bin/daemon-manager  --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/daemon-manager.xml  >/dev/null 2>&1 &
 sleep 2
 # ASAN_OPTIONS=halt_on_error=false,log_path=/artifacts/udf_manager/asan.udf_manager.log nohup /clickhouse/bin/udf_manager_server --config-file  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/udf-manager.xml >/dev/null 2>&1 &
 # udf_script log has been defiend in server.xml     <udf_path>/builds/dp/artifacts/udf_script</udf_path>

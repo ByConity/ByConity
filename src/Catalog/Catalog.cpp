@@ -639,9 +639,7 @@ namespace Catalog
     }
 
     void Catalog::createTable(
-        const Context & query_context,
-        const String & db,
-        const String & name,
+        const StorageID & storage_id,
         const String & create_query,
         const String & virtual_warehouse,
         const TxnTimestamp & txnID,
@@ -649,31 +647,29 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
-                LOG_INFO(log, "start createTable {} {}.{}", name_space, db, name);
-                /// To get table uuid.
-                StoragePtr storage = CatalogFactory::getTableByDefinition(query_context.shared_from_this(), db, name, create_query);
+                String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
+                LOG_INFO(log, "start createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
                 Protos::DataModelTable tb_data;
 
-                tb_data.set_database(db);
-                tb_data.set_name(name);
+                tb_data.set_database(storage_id.getDatabaseName());
+                tb_data.set_name(storage_id.getTableName());
                 tb_data.set_definition(create_query);
                 tb_data.set_txnid(txnID.toUInt64());
                 tb_data.set_commit_time(ts.toUInt64());
-                RPCHelpers::fillUUID(storage->getStorageID().uuid, *(tb_data.mutable_uuid()));
+                RPCHelpers::fillUUID(storage_id.uuid, *(tb_data.mutable_uuid()));
 
                 if (!virtual_warehouse.empty())
                     tb_data.set_vw_name(virtual_warehouse);
 
-                String uuid = UUIDHelpers::UUIDToString(storage->getStorageID().uuid);
                 ASTPtr ast = parseCreateQuery(create_query);
                 Strings dependencies = tryGetDependency(ast);
                 ///FIXME: if masking policy is ready.
                 // Strings masking_policy_names = getMaskingPolicyNames(ast);
                 Strings masking_policy_names = {};
                 meta_proxy->createTable(name_space, tb_data, dependencies, masking_policy_names);
-                meta_proxy->setTableClusterStatus(name_space, uuid, true);
+                meta_proxy->setTableClusterStatus(name_space, uuid_str, true);
 
-                LOG_INFO(log, "finish createTable {}: {}.{}", name_space, db, name);
+                LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
             },
             ProfileEvents::CreateTableSuccess,
             ProfileEvents::CreateTableFailed);
@@ -4101,9 +4097,9 @@ namespace Catalog
         table.set_name(table_name);
     }
 
-    StoragePtr Catalog::createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model)
+    StoragePtr Catalog::createTableFromDataModel(const Context & context, const Protos::DataModelTable & data_model)
     {
-        StoragePtr res = CatalogFactory::getTableByDataModel(session_context.shared_from_this(), &data_model);
+        StoragePtr res = CatalogFactory::getTableByDataModel(Context::createCopy(context.shared_from_this()), &data_model);
 
         /// set worker group for StorageCnchMergeTree if virtual warehouse is exists.
         ///FIXME: if StorageCnchMergeTree is ready
