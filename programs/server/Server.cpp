@@ -563,7 +563,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // global_context->initByteJournalClient();
         global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
         global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "default"));
-        // global_context->initDaemonManagerClientPool(root_config.service_discovery.daemon_manager_psm);
+        global_context->initDaemonManagerClientPool(config().getString("service_discovery.daemon_manager.psm", "default"));
         // global_context->initBytepondClientPool(root_config.service_discovery.bytepond_psm);
         global_context->initCnchServerClientPool(root_config.service_discovery.server_psm);
 

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <MergeTreeCommon/GlobalGCManager.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_server_rpc.pb.h>
 #include <common/logger_useful.h>
+
 
 namespace DB
 {
@@ -236,6 +238,8 @@ public:
         google::protobuf::Closure * done) override;
 
 private:
+    const UInt64 server_start_time;
+    std::optional<GlobalGCManager> global_gc_manager;
     Poco::Logger * log;
 };
 

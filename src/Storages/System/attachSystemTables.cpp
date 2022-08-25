@@ -99,6 +99,9 @@
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchDatabasesHistory.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
+#include <Storages/System/StorageSystemGlobalGCManager.h>
+#include <Storages/System/StorageSystemDMBGJobs.h>
+#include <Storages/System/StorageSystemPersistentBGJobStatus.h>
 
 namespace DB
 {
@@ -205,6 +208,9 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
     attach<StorageSystemCnchTables>(system_database, "cnch_tables");
     attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
+    attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
+    attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
+    attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

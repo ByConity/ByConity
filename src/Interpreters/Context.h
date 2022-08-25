@@ -25,6 +25,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 // #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
+#include <DaemonManager/DaemonManagerClient_fwd.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -1144,6 +1145,10 @@ public:
     void initCatalog(Catalog::CatalogConfig & catalog_conf, const String & name_space);
     std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
     std::shared_ptr<Catalog::Catalog> getCnchCatalog() const;
+
+    /// client for Daemon Manager Service
+    void initDaemonManagerClientPool(const String & service_name);
+    DaemonManagerClientPtr getDaemonManagerClient() const;
 
     void setCnchServerManager();
     std::shared_ptr<CnchServerManager> getCnchServerManager() const;

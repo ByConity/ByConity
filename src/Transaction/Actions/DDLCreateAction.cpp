@@ -22,7 +22,8 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
     {
         /// create table
         updateTsCache(params.uuid, commit_time);
-        cnch_catalog->createTable(*getContext(), params.database, params.table, params.statement, "", txn_id, commit_time);
+        StorageID storage_id{params.database, params.table, params.uuid};
+        cnch_catalog->createTable(storage_id, params.statement, "", txn_id, commit_time);
     }
 }
 

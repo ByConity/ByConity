@@ -39,7 +39,7 @@ CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Pro
 }
 
 StoragePtr CatalogFactory::getTableByDataModel(
-    ContextPtr context,
+    ContextMutablePtr context,
     const DB::Protos::DataModelTable * table_model)
 {
     const auto & db = table_model->database();
@@ -55,7 +55,7 @@ StoragePtr CatalogFactory::getTableByDataModel(
             auto s = getTableByDefinition(context, db, table, version.definition());
             merge_tree->previous_versions_part_columns[version.commit_time()] = std::make_shared<NamesAndTypesList>(s->getInMemoryMetadataPtr()->getColumns().getAllPhysical());
         }
-        
+
     }
     storage_ptr->is_dropped = DB::Status::isDeleted(table_model->status());
     storage_ptr->is_detached = DB::Status::isDetached(table_model->status());
@@ -63,7 +63,7 @@ StoragePtr CatalogFactory::getTableByDataModel(
 }
 
 StoragePtr CatalogFactory::getTableByDefinition(
-    ContextPtr context,
+    ContextMutablePtr context,
     [[maybe_unused]] const String & db,
     [[maybe_unused]] const String & table,
     const String & create)

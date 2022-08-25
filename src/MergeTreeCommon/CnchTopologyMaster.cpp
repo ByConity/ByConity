@@ -4,6 +4,7 @@
 #include <Storages/CnchStorageCache.h>
 #include <common/logger_useful.h>
 #include <Common/ConsistentHashUtils/Hash.h>
+#include <CloudServices/CnchServerClient.h>
 
 namespace DB
 {
@@ -166,7 +167,8 @@ void CnchTopologyMaster::shutDown()
 {
     try
     {
-        topology_fetcher->deactivate();
+        if (topology_fetcher)
+            topology_fetcher->deactivate();
     }
     catch (...)
     {

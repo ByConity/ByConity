@@ -1,5 +1,6 @@
 #include <DaemonManager/DaemonJobServerBGThread.h>
 #include <Catalog/Catalog.h>
+#include <Catalog/CatalogFactory.h>
 #include <DaemonManager/DaemonFactory.h>
 #include <DaemonManager/DaemonHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
@@ -13,6 +14,7 @@ namespace DB::DaemonManager
 void DaemonJobServerBGThread::init()
 {
     background_jobs = fetchCnchBGThreadStatus();
+    bg_job_executor = std::make_unique<BackgroundJobExecutor>(*getContext(), getType());
     DaemonJob::init();
 }
 
@@ -36,13 +38,21 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
             {
                 auto res = cache->getOrSet(data_model.definition(), [&]()
                 {
-                   return getStoragePtr(daemon_job.getContext(), data_model.database(), data_model.name(), data_model.definition());
+                    return Catalog::CatalogFactory::getTableByDefinition(
+                        daemon_job.getContext(),
+                        data_model.database(),
+                        data_model.name(),
+                        data_model.definition());
                 });
                 storage = std::move(res.first);
             }
             else
             {
-                storage = getStoragePtr(daemon_job.getContext(), data_model.database(), data_model.name(), data_model.definition());
+                storage = Catalog::CatalogFactory::getTableByDefinition(
+                        daemon_job.getContext(),
+                        data_model.database(),
+                        data_model.name(),
+                        data_model.definition());
             }
 
             if (!storage)
@@ -56,6 +66,7 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
         catch (Exception & e)
         {
             LOG_WARNING(log, "Fail to schedule for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
 

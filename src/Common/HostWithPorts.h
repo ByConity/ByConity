@@ -16,6 +16,10 @@ std::string createHostPortString(const std::string & host, const std::string & p
 bool isSameHost(const std::string & lhs_host, const std::string & rhs_host);
 std::string_view removeBracketsIfIpv6(const std::string & host_name);
 
+const std::string & getHostIPFromEnv();
+
+const char * getLoopbackIPFromEnv();
+
 struct HostWithPorts
 {
     std::string id;
