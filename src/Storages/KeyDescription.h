@@ -70,6 +70,13 @@ struct KeyDescription
         const ColumnsDescription & columns,
         ContextPtr context);
 
+    /// Recalculate all expressions and fields for cluster by key with new ast without
+    /// changes in constant fields. Just wrapper for static methods.
+    void recalculateClusterByKeyWithNewAST(
+        const ASTPtr & new_ast,
+        const ColumnsDescription & columns,
+        ContextPtr context);
+
     KeyDescription() = default;
 
     /// We need custom copy constructors because we don't want

@@ -30,6 +30,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_rename_column("RENAME COLUMN");
     ParserKeyword s_comment_column("COMMENT COLUMN");
     ParserKeyword s_modify_order_by("MODIFY ORDER BY");
+    ParserKeyword s_modify_cluster_by("MODIFY CLUSTER BY");
     ParserKeyword s_modify_sample_by("MODIFY SAMPLE BY");
     ParserKeyword s_modify_ttl("MODIFY TTL");
     ParserKeyword s_materialize_ttl("MATERIALIZE TTL");
@@ -148,6 +149,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserSelectWithUnionQuery select_p(dt);
     ParserTTLExpressionList parser_ttl_list(dt);
     ParserList parser_map_key_list(std::make_unique<ParserStringLiteral>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserClusterByElement cluster_p;
 
     // Optional CASCADING keyword for drop/detach partition
     if (s_cascading.ignore(pos, expected))
@@ -793,6 +795,13 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
             command->type = ASTAlterCommand::MODIFY_ORDER_BY;
         }
+        else if (s_modify_cluster_by.ignore(pos, expected))
+        {
+            if (!cluster_p.parse(pos, command->cluster_by, expected))
+                return false;
+
+            command->type = ASTAlterCommand::MODIFY_CLUSTER_BY;
+        }
         else if (s_modify_sample_by.ignore(pos, expected))
         {
             if (!parser_exp_elem.parse(pos, command->sample_by, expected))
@@ -1027,6 +1036,8 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         command->children.push_back(command->partition);
     if (command->order_by)
         command->children.push_back(command->order_by);
+    if (command->cluster_by)
+        command->children.push_back(command->cluster_by);
     if (command->sample_by)
         command->children.push_back(command->sample_by);
     if (command->index_decl)

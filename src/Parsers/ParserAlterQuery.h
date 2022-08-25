@@ -14,6 +14,8 @@ namespace DB
   *     [MODIFY COLUMN [IF EXISTS] col_to_modify type, ...]
   *     [RENAME COLUMN [IF EXISTS] col_name TO col_name]
   *     [MODIFY PRIMARY KEY (a, b, c...)]
+  *     [MODIFY ORDER BY new_expression]
+  *     [MODIFY CLUSTER BY new_expression]
   *     [MODIFY SETTING setting_name=setting_value, ...]
   *     [RESET SETTING setting_name, ...]
   *     [COMMENT COLUMN [IF EXISTS] col_name string]

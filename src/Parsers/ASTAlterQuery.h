@@ -43,6 +43,7 @@ public:
         RESET_SETTING,
         MODIFY_QUERY,
         REMOVE_TTL,
+        MODIFY_CLUSTER_BY,
 
         ADD_INDEX,
         DROP_INDEX,
@@ -115,6 +116,11 @@ public:
     /** For MODIFY ORDER BY
      */
     ASTPtr order_by;
+
+    /** For MODIFY CLUSTER BY
+     */
+    ASTPtr cluster_by;
+
 
     /** For MODIFY SAMPLE BY
      */

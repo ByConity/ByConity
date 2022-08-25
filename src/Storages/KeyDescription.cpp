@@ -73,6 +73,14 @@ void KeyDescription::recalculateWithNewAST(
     *this = getSortingKeyFromAST(new_ast, columns, context, additional_column);
 }
 
+void KeyDescription::recalculateClusterByKeyWithNewAST(
+    const ASTPtr & new_ast,
+    const ColumnsDescription & columns,
+    ContextPtr context)
+{
+    *this = getClusterByKeyFromAST(new_ast, columns, context);
+}
+
 void KeyDescription::recalculateWithNewColumns(
     const ColumnsDescription & new_columns,
     ContextPtr context)

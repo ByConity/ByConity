@@ -29,6 +29,7 @@ struct AlterCommand
         MODIFY_COLUMN,
         COMMENT_COLUMN,
         MODIFY_ORDER_BY,
+        MODIFY_CLUSTER_BY,
         MODIFY_SAMPLE_BY,
         ADD_INDEX,
         DROP_INDEX,
@@ -96,6 +97,9 @@ struct AlterCommand
 
     /// For MODIFY_ORDER_BY
     ASTPtr order_by = nullptr;
+
+    /// For MODIFY_CLUSTER_BY
+    ASTPtr cluster_by = nullptr;
 
     /// For MODIFY_SAMPLE_BY
     ASTPtr sample_by = nullptr;

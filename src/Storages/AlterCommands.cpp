@@ -195,6 +195,14 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.order_by = command_ast->order_by;
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::MODIFY_CLUSTER_BY;
+        command.cluster_by = command_ast->cluster_by;
+        return command;
+    }
     else if (command_ast->type == ASTAlterCommand::MODIFY_SAMPLE_BY)
     {
         AlterCommand command;
@@ -461,6 +469,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
 
         /// Recalculate key with new order_by expression.
         sorting_key.recalculateWithNewAST(order_by, metadata.columns, context);
+    }
+    else if (type == MODIFY_CLUSTER_BY)
+    {
+        metadata.cluster_by_key.recalculateClusterByKeyWithNewAST(cluster_by, metadata.columns, context);
     }
     else if (type == MODIFY_SAMPLE_BY)
     {
@@ -755,6 +767,10 @@ bool AlterCommand::isRequireMutationStage(const StorageInMemoryMetadata & metada
     if (type == DROP_COLUMN || type == DROP_INDEX || type == DROP_PROJECTION || type == RENAME_COLUMN || type == CLEAR_MAP_KEY)
         return true;
 
+    if (type == MODIFY_CLUSTER_BY)
+        return true;
+
+
     if (type != MODIFY_COLUMN || data_type == nullptr)
         return false;
 
@@ -867,6 +883,10 @@ std::optional<MutationCommand> AlterCommand::tryConvertToMutationCommand(Storage
         result.column_name = column_name;
         result.map_keys = map_keys;
     }
+    // else if (type == MODIFY_CLUSTER_BY)
+    // {
+    //     result.type = MutationCommand::Type::RECLUSTER;
+    // }
 
     result.ast = ast->clone();
     apply(metadata, context);
@@ -900,6 +920,8 @@ String alterTypeToString(const AlterCommand::Type type)
         return "MODIFY COLUMN";
     case AlterCommand::Type::MODIFY_ORDER_BY:
         return "MODIFY ORDER BY";
+    case AlterCommand::Type::MODIFY_CLUSTER_BY:
+        return "MODIFY CLUSTER BY";
     case AlterCommand::Type::MODIFY_SAMPLE_BY:
         return "MODIFY SAMPLE BY";
     case AlterCommand::Type::MODIFY_TTL:
@@ -946,6 +968,9 @@ void AlterCommands::apply(StorageInMemoryMetadata & metadata, ContextPtr context
     /// And in partition key expression
     if (metadata_copy.partition_key.definition_ast != nullptr)
         metadata_copy.partition_key.recalculateWithNewAST(metadata_copy.partition_key.definition_ast, metadata_copy.columns, context);
+
+    if (metadata_copy.cluster_by_key.definition_ast != nullptr)
+        metadata_copy.cluster_by_key.recalculateClusterByKeyWithNewAST(metadata_copy.cluster_by_key.definition_ast, metadata.columns, context);
 
     // /// And in sample key expression
     if (metadata_copy.sampling_key.definition_ast != nullptr)
