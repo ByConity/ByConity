@@ -12,8 +12,8 @@ create table lc_big_dict (str StringWithDictionary) engine = CnchMergeTree order
 insert into lc_small_dict select toString(number % 1000) from system.numbers limit 1000000;
 insert into lc_big_dict select toString(number) from system.numbers limit 1000000;
 
-detach table lc_small_dict;
-detach table lc_big_dict;
+detach table lc_small_dict PERMANENTLY;
+detach table lc_big_dict PERMANENTLY;
 
 attach table lc_small_dict;
 attach table lc_big_dict;

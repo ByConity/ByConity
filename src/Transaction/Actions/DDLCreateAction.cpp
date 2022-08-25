@@ -10,19 +10,20 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
 {
     Catalog::CatalogPtr cnch_catalog = global_context.getCnchCatalog();
 
-    /// TODO: Before add db or table into kv, we should create a redo buffer can be used to index the added record fast.
-    /// need support from Catalog client
-
     if (!params.database.empty() && params.table.empty())
     {
         /// create database
+        assert(!params.attach);
         cnch_catalog->createDatabase(params.database, params.uuid, txn_id, commit_time);
     }
     else
     {
         /// create table
         updateTsCache(params.uuid, commit_time);
-        cnch_catalog->createTable(*getContext(), params.database, params.table, params.statement, "", txn_id, commit_time);
+        if (params.attach)
+            cnch_catalog->attachTable(params.database, params.table, commit_time);
+        else
+            cnch_catalog->createTable(*getContext(), params.database, params.table, params.statement, "", txn_id, commit_time);
     }
 }
 

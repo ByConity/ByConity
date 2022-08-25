@@ -331,9 +331,9 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 
             auto action = txn->createAction<DropRangeAction>(txn->getTransactionRecord(), storage_ptr);
             for (const auto & part : dumped_data.parts)
-                action->appendPart(part);
+                action->as<DropRangeAction &>().appendPart(part);
             for (const auto & bitmap : dumped_data.bitmaps)
-                action->appendDeleteBitmap(bitmap);
+                action->as<DropRangeAction &>().appendDeleteBitmap(bitmap);
 
             txn->appendAction(std::move(action));
             commit_time = txn_coordinator.commitV2(txn);

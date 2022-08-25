@@ -12,6 +12,7 @@ struct CreateActionParams
     String table;
     UUID uuid;
     String statement;
+    bool attach = false;
 };
 
 class DDLCreateAction : public IAction

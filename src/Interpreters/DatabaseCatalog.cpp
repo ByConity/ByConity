@@ -214,8 +214,8 @@ DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextP
 {
     if (use_cnch_catalog)
     {
-        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS() , false);
-        if (storage)
+        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), local_context->getCurrentTransactionID().toUInt64(), false);
+        if (storage && !storage->is_dropped && !storage->is_detached)
         {
             DatabasePtr database_cnch = getDatabaseCnch(storage->getDatabaseName());
             if (!database_cnch)
