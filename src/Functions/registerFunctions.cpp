@@ -57,6 +57,7 @@ void registerFunctionBayesAB(FunctionFactory &);
 void registerFunctionTid(FunctionFactory & factory);
 void registerFunctionLogTrace(FunctionFactory & factory);
 void registerFunctionTopoFindDown(FunctionFactory &);
+void registerFunctionDtsPartition(FunctionFactory &);
 
 #if USE_SSL
 void registerFunctionEncrypt(FunctionFactory & factory);
@@ -136,6 +137,7 @@ void registerFunctions()
     registerFunctionLogTrace(factory);
     registerFunctionTopoFindDown(factory);
     registerInternalFunctionDynamicFilter(factory);
+    registerFunctionDtsPartition(factory);
 }
 
 }
