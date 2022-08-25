@@ -260,7 +260,7 @@ bool KeeperDispatcher::putRequest(const Coordination::ZooKeeperRequestPtr & requ
     return true;
 }
 
-void KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration & config, bool standalone_keeper, bool start_async)
+void KeeperDispatcher::initialize(const Poco::Util::AbstractConfiguration & config,bool standalone_keeper, bool start_async)
 {
     LOG_DEBUG(log, "Initializing storage dispatcher");
 

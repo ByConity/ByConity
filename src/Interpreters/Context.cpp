@@ -52,6 +52,7 @@
 #include <Access/User.h>
 #include <Compression/ICompressionCodec.h>
 #include <Coordination/KeeperDispatcher.h>
+#include <Coordination/Defines.h>
 #include <Core/AnsiSettings.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/Settings.h>
@@ -229,7 +230,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
     extern const int CNCH_SERVER_NOT_FOUND;
-
+    extern const int NOT_A_LEADER;
 }
 
 /** Set of known objects (environment), that could be used in query.
@@ -402,6 +403,9 @@ struct ContextSharedPart
     std::unique_ptr<TSOClientPool> tso_client_pool;
     std::unique_ptr<DaemonManagerClientPool> daemon_manager_pool;
 
+    mutable String tso_leader_host_port;
+    mutable std::mutex tso_mutex;
+
     /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
 
@@ -472,13 +476,13 @@ struct ContextSharedPart
 #endif
 
             if (server_manager)
-                server_manager->shutDown();
+                server_manager.reset();
 
             if (topology_master)
-                topology_master->shutDown();
+                topology_master.reset();
 
             if (cache_manager)
-                cache_manager->shutDown();
+                cache_manager.reset();
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -2095,11 +2099,18 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
 {
     std::lock_guard lock(shared->zookeeper_mutex);
 
-    const auto & config = shared->zookeeper_config ? *shared->zookeeper_config : getConfigRef();
-    if (!shared->zookeeper)
-        shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog());
-    else if (shared->zookeeper->expired())
-        shared->zookeeper = shared->zookeeper->startNewSession();
+    if (hasZooKeeper())
+    {
+        const auto & config = shared->zookeeper_config ? *shared->zookeeper_config : getConfigRef();
+        ServiceEndpoints endpoints;
+        if (getConfigRef().has("service_discovery.keeper"))
+            endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.keeper.psm");
+
+        if (!shared->zookeeper)
+            shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
+        else if (shared->zookeeper->expired())
+            shared->zookeeper = shared->zookeeper->startNewSession();
+    }
 
     return shared->zookeeper;
 }
@@ -2247,8 +2258,9 @@ zkutil::ZooKeeperPtr Context::getAuxiliaryZooKeeper(const String & name) const
                 "config.xml",
                 name);
 
-        zookeeper = shared->auxiliary_zookeepers.emplace(name,
-                        std::make_shared<zkutil::ZooKeeper>(config, "auxiliary_zookeepers." + name, getZooKeeperLog())).first;
+        zookeeper = shared->auxiliary_zookeepers.emplace(
+            name,
+            std::make_shared<zkutil::ZooKeeper>(config, "auxiliary_zookeepers." + name, getZooKeeperLog(), ServiceEndpoints{})).first;
     }
     else if (zookeeper->second->expired())
         zookeeper->second = zookeeper->second->startNewSession();
@@ -2262,15 +2274,18 @@ void Context::resetZooKeeper() const
     shared->zookeeper.reset();
 }
 
-static void reloadZooKeeperIfChangedImpl(const ConfigurationPtr & config, const std::string & config_name, zkutil::ZooKeeperPtr & zk,
-                                         std::shared_ptr<ZooKeeperLog> zk_log)
+static void reloadZooKeeperIfChangedImpl(
+    const ConfigurationPtr & config,
+    const std::string & config_name, zkutil::ZooKeeperPtr & zk,
+    std::shared_ptr<ZooKeeperLog> zk_log,
+    const ServiceEndpoints & endpoints)
 {
-    if (!zk || zk->configChanged(*config, config_name))
+    if (!zk || zk->configChanged(*config, config_name, endpoints))
     {
         if (zk)
             zk->finalize();
 
-        zk = std::make_shared<zkutil::ZooKeeper>(*config, config_name, std::move(zk_log));
+        zk = std::make_shared<zkutil::ZooKeeper>(*config, config_name, std::move(zk_log), endpoints);
     }
 }
 
@@ -2278,7 +2293,11 @@ void Context::reloadZooKeeperIfChanged(const ConfigurationPtr & config) const
 {
     std::lock_guard lock(shared->zookeeper_mutex);
     shared->zookeeper_config = config;
-    reloadZooKeeperIfChangedImpl(config, "zookeeper", shared->zookeeper, getZooKeeperLog());
+
+    ServiceEndpoints endpoints;
+    if (getConfigRef().has("service_discovery.keeper"))
+        endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.keeper.psm");
+    reloadZooKeeperIfChangedImpl(config, "zookeeper", shared->zookeeper, getZooKeeperLog(), endpoints);
 }
 
 void Context::reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & config)
@@ -2293,7 +2312,7 @@ void Context::reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & 
             it = shared->auxiliary_zookeepers.erase(it);
         else
         {
-            reloadZooKeeperIfChangedImpl(config, "auxiliary_zookeepers." + it->first, it->second, getZooKeeperLog());
+            reloadZooKeeperIfChangedImpl(config, "auxiliary_zookeepers." + it->first, it->second, getZooKeeperLog(), {});
             ++it;
         }
     }
@@ -2302,7 +2321,7 @@ void Context::reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & 
 
 bool Context::hasZooKeeper() const
 {
-    return getConfigRef().has("zookeeper");
+    return getConfigRef().has("zookeeper") || getConfigRef().has("service_discovery.keeper");
 }
 
 bool Context::hasAuxiliaryZooKeeper(const String & name) const
@@ -3722,19 +3741,69 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
     if (!shared->tso_client_pool)
         throw Exception("Cnch tso client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-    return shared->tso_client_pool->get();
+    auto host_port = getTSOLeaderHostPort();
+
+    if (!host_port.empty())
+    {
+        return shared->tso_client_pool->get(host_port);
+    }
+    else
+    {
+        updateTSOLeaderHostPort();
+        return shared->tso_client_pool->get(getTSOLeaderHostPort());
+    }
+}
+
+String Context::getTSOLeaderHostPort() const
+{
+    std::lock_guard lock(shared->tso_mutex);
+    return shared->tso_leader_host_port;
+}
+
+void Context::updateTSOLeaderHostPort() const
+{
+    if (!hasZooKeeper())
+        return;
+
+    auto current_zookeeper = getZooKeeper();
+    String tso_election_path = getConfigRef().getString("tso_service.election_path", TSO_ELECTION_DEFAULT_PATH);
+
+    if (!current_zookeeper->exists(tso_election_path))
+    {
+        /// leader election maybe disabled, if there only one tso-server.
+        std::lock_guard lock(shared->tso_mutex);
+        shared->tso_leader_host_port = "";
+        return;
+    }
+
+    auto children = current_zookeeper->getChildren(tso_election_path);
+    if (children.empty())
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current tso-leader, leader election path {} is empty", tso_election_path);
+
+    std::sort(children.begin(), children.end());
+    auto current_leader_node = tso_election_path + "/" + children.front();
+    String current_leader = current_zookeeper->get(current_leader_node);
+    if (current_leader.empty())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
+
+    {
+        std::lock_guard lock(shared->tso_mutex);
+        shared->tso_leader_host_port = std::move(current_leader);
+    }
+}
+
+void Context::setTSOLeaderHostPort(String host_port) const
+{
+    std::lock_guard lock(shared->tso_mutex);
+    shared->tso_leader_host_port = std::move(host_port);
 }
 
 UInt64 Context::getTimestamp() const
 {
-    /// Uncomment to get local ts in ns
-    // auto current_time = std::chrono::high_resolution_clock::now();
-    // UInt64 ts = std::chrono::duration_cast<std::chrono::nanoseconds>(current_time.time_since_epoch()).count();
-    // return ts;
-    return getCnchTSOClient()->getTimestamp().timestamp();
+    return TSO::getTSOResponse(shared_from_this(), TSO::TSORequestType::GetTimestamp);
 }
 
-UInt64 Context::tryGetTimestamp([[maybe_unused]]const String & pretty_func_name) const
+UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
 {
     try
     {
@@ -3742,14 +3811,14 @@ UInt64 Context::tryGetTimestamp([[maybe_unused]]const String & pretty_func_name)
     }
     catch (...)
     {
-        LOG_DEBUG(&Poco::Logger::get(pretty_func_name), "Unable to reach TSO during call to tryGetTimestamp and falling back to fallbackTS.");
+        tryLogCurrentException(pretty_func_name.c_str(), "Unable to reach TSO during call to tryGetTimestamp");
         return TxnTimestamp::fallbackTS();
     }
 }
 
 UInt64 Context::getTimestamps(UInt32 size) const
 {
-    return getCnchTSOClient()->getTimestamps(size).max_timestamp();
+    return TSO::getTSOResponse(shared_from_this(), TSO::TSORequestType::GetTimestamps, size);
 }
 
 UInt64 Context::getPhysicalTimestamp() const
@@ -3758,7 +3827,7 @@ UInt64 Context::getPhysicalTimestamp() const
     const auto tso_ts = tryGetTimestamp();
     if (TxnTimestamp::fallbackTS() == tso_ts)
         return 0;
-    return tso_ts >> 18;
+    return TxnTimestamp(tso_ts).toMillisecond();
 }
 
 void Context::setCnchStorageCache(size_t max_cache_size)
@@ -3783,7 +3852,7 @@ void Context::setPartCacheManager()
     if (shared->cache_manager)
         throw Exception("Part cache manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->cache_manager = std::make_shared<PartCacheManager>(*this);
+    shared->cache_manager = std::make_shared<PartCacheManager>(shared_from_this());
 }
 
 PartCacheManagerPtr Context::getPartCacheManager() const
@@ -3829,7 +3898,7 @@ void Context::setCnchServerManager()
     if (shared->server_manager)
         throw Exception("Server manager has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->server_manager = std::make_shared<CnchServerManager>(*this);
+    shared->server_manager = std::make_shared<CnchServerManager>(shared_from_this());
 }
 
 std::shared_ptr<CnchServerManager> Context::getCnchServerManager() const
@@ -3844,7 +3913,7 @@ void Context::setCnchTopologyMaster()
     if (shared->topology_master)
         throw Exception("Topology master has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->topology_master = std::make_shared<CnchTopologyMaster>(*this);
+    shared->topology_master = std::make_shared<CnchTopologyMaster>(shared_from_this());
 }
 
 std::shared_ptr<CnchTopologyMaster> Context::getCnchTopologyMaster() const

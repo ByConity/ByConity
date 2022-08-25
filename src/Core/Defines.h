@@ -92,3 +92,5 @@
 /// It's not necessary to increase this version number in most cases
 /// unless the serialization of plan segment has changed.
 #define DBMS_BRPC_PROTOCOL_VERSION 1
+
+#define TEST_KNOB_FORCE_META_REBUILD 0x08ull

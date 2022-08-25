@@ -22,7 +22,7 @@ namespace DB
 {
 using ZooKeeperResponseCallback = std::function<void(const Coordination::ZooKeeperResponsePtr & response)>;
 
-/// Highlevel wrapper for ClickHouse Keeper.
+/// High level wrapper for ClickHouse Keeper.
 /// Process user requests via consensus and return responses.
 class KeeperDispatcher
 {
@@ -80,7 +80,7 @@ private:
     /// Counter for new session_id requests.
     std::atomic<int64_t> internal_session_id_counter{0};
 
-private:
+
     /// Thread put requests to raft
     void requestThread();
     /// Thread put responses for subscribed sessions
@@ -103,7 +103,7 @@ private:
     void forceWaitAndProcessResult(RaftAppendResult & result, KeeperStorage::RequestsForSessions & requests_for_sessions);
 
 public:
-    /// Just allocate some objects, real initialization is done by `intialize method`
+    /// Just allocate some objects, real initialization is done by `initialize method`
     KeeperDispatcher();
 
     /// Call shutdown
@@ -152,6 +152,11 @@ public:
     bool isLeader() const
     {
         return server->isLeader();
+    }
+
+    String getLeader() const
+    {
+        return server->tryGetLeader();
     }
 
     bool hasLeader() const

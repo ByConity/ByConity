@@ -2,9 +2,7 @@
 #include <CloudServices/RpcClientBase.h>
 #include <Protos/tso.pb.h>
 
-namespace DB
-{
-namespace TSO
+namespace DB::TSO
 {
 class TSO_Stub;
 
@@ -28,6 +26,25 @@ private:
 
 using TSOClientPtr = std::shared_ptr<TSOClient>;
 
+enum class TSORequestType
+{
+    GetTimestamp,
+    GetTimestamps
+};
+
+inline std::string typeToString(TSORequestType type)
+{
+    switch (type)
+    {
+        case TSORequestType::GetTimestamp:
+            return "GetTimestamp";
+        case TSORequestType::GetTimestamps:
+            return "GetTimestamps";
+    }
+
+    __builtin_unreachable();
 }
+
+UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size = 1);
 
 }

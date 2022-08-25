@@ -1,8 +1,8 @@
 #pragma once
 
-#include <Interpreters/Context.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/Context_fwd.h>
 
 namespace DB
 {
@@ -11,10 +11,10 @@ namespace DB
  * A background task will periodically fetch topology from metastore to ensure the cached topology
  * keeps up to date.
  */
-class CnchTopologyMaster
+class CnchTopologyMaster: WithContext
 {
 public:
-    CnchTopologyMaster(Context & context_);
+    explicit CnchTopologyMaster(ContextPtr context_);
 
     ~CnchTopologyMaster();
 
@@ -22,22 +22,22 @@ public:
 
     /// Get target server for table with current timestamp.
     HostWithPorts getTargetServer(const String & table_uuid, bool allow_empty_result, bool allow_tso_unavailable = false);
-
     /// Get target server with provided timestamp.
-    HostWithPorts getTargetServer(const String & table_uuid, const UInt64 ts,  bool allow_empty_result, bool allow_tso_unavailable = false);
+    HostWithPorts getTargetServer(const String & table_uuid, UInt64 ts,  bool allow_empty_result, bool allow_tso_unavailable = false);
 
     void shutDown();
 private:
 
+    void fetchTopologies();
+
     HostWithPorts getTargetServerImpl(
         const String & table_uuid,
         std::list<CnchServerTopology> & current_topology,
-        const UInt64 current_ts,
+        UInt64 current_ts,
         bool allow_empty_result,
         bool allow_tso_unavailable);
 
     Poco::Logger * log = &Poco::Logger::get("CnchTopologyMaster");
-    Context & context;
     BackgroundSchedulePool::TaskHolder topology_fetcher;
     std::list<CnchServerTopology> topologies;
     mutable std::mutex mutex;

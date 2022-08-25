@@ -11,6 +11,7 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <boost/algorithm/string.hpp>
+#include <libnuraft/callback.hxx>
 #include <libnuraft/cluster_config.hxx>
 #include <libnuraft/log_val_type.hxx>
 #include <libnuraft/ptr.hxx>
@@ -248,8 +249,8 @@ void KeeperServer::forceRecovery()
 void KeeperServer::launchRaftServer(bool enable_ipv6)
 {
     nuraft::raft_params params;
-    params.heart_beat_interval_
-        = getValueOrMaxInt32AndLogWarning(coordination_settings->heart_beat_interval_ms.totalMilliseconds(), "heart_beat_interval_ms", log);
+    params.heart_beat_interval_ = getValueOrMaxInt32AndLogWarning(
+        coordination_settings->heart_beat_interval_ms.totalMilliseconds(), "heart_beat_interval_ms", log);
     params.election_timeout_lower_bound_ = getValueOrMaxInt32AndLogWarning(
         coordination_settings->election_timeout_lower_bound_ms.totalMilliseconds(), "election_timeout_lower_bound_ms", log);
     params.election_timeout_upper_bound_ = getValueOrMaxInt32AndLogWarning(
@@ -258,15 +259,15 @@ void KeeperServer::launchRaftServer(bool enable_ipv6)
     params.snapshot_distance_ = getValueOrMaxInt32AndLogWarning(coordination_settings->snapshot_distance, "snapshot_distance", log);
     params.stale_log_gap_ = getValueOrMaxInt32AndLogWarning(coordination_settings->stale_log_gap, "stale_log_gap", log);
     params.fresh_log_gap_ = getValueOrMaxInt32AndLogWarning(coordination_settings->fresh_log_gap, "fresh_log_gap", log);
-    params.client_req_timeout_
-        = getValueOrMaxInt32AndLogWarning(coordination_settings->operation_timeout_ms.totalMilliseconds(), "operation_timeout_ms", log);
+    params.client_req_timeout_ = getValueOrMaxInt32AndLogWarning(
+        coordination_settings->operation_timeout_ms.totalMilliseconds(), "operation_timeout_ms", log);
     params.auto_forwarding_ = coordination_settings->auto_forwarding;
     params.auto_forwarding_req_timeout_
         = std::max<uint64_t>(coordination_settings->operation_timeout_ms.totalMilliseconds() * 2, std::numeric_limits<int32_t>::max());
-    params.auto_forwarding_req_timeout_
-        = getValueOrMaxInt32AndLogWarning(coordination_settings->operation_timeout_ms.totalMilliseconds() * 2, "operation_timeout_ms", log);
-    params.max_append_size_
-        = getValueOrMaxInt32AndLogWarning(coordination_settings->max_requests_batch_size, "max_requests_batch_size", log);
+    params.auto_forwarding_req_timeout_ = getValueOrMaxInt32AndLogWarning(
+        coordination_settings->operation_timeout_ms.totalMilliseconds() * 2, "operation_timeout_ms", log);
+    params.max_append_size_ = getValueOrMaxInt32AndLogWarning(
+        coordination_settings->max_requests_batch_size, "max_requests_batch_size", log);
 
     params.return_method_ = nuraft::raft_params::async_handler;
 
@@ -475,6 +476,12 @@ uint64_t KeeperServer::getFollowerCount() const
     return raft_instance->get_peer_info_all().size();
 }
 
+String KeeperServer::tryGetLeader() const
+{
+    auto leader_id = raft_instance->get_leader();
+    return state_manager->tryGetServerEndpoint(leader_id);
+}
+
 uint64_t KeeperServer::getSyncedFollowerCount() const
 {
     uint64_t last_log_idx = raft_instance->get_last_log_idx();
@@ -580,6 +587,7 @@ nuraft::cb_func::ReturnCode KeeperServer::callbackFunc(nuraft::cb_func::Type typ
             /// We become leader and store is empty or we already committed it
             if (commited_store || initial_batch_committed)
                 set_initialized();
+
             return nuraft::cb_func::ReturnCode::Ok;
         }
         case nuraft::cb_func::BecomeFollower:

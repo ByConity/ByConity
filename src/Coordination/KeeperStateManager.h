@@ -1,12 +1,13 @@
 #pragma once
 
 #include <Core/Types.h>
+#include <mutex>
 #include <string>
 #include <Coordination/KeeperLogStore.h>
 #include <Coordination/CoordinationSettings.h>
-#include <libnuraft/nuraft.hxx> // Y_IGNORE
+#include <libnuraft/nuraft.hxx>
 #include <Poco/Util/AbstractConfiguration.h>
-#include "Coordination/KeeperStateMachine.h"
+#include <Coordination/KeeperStateMachine.h>
 #include <Coordination/KeeperSnapshotManager.h>
 
 namespace DB
@@ -115,6 +116,15 @@ public:
     {
         std::lock_guard lock(configuration_wrapper_mutex);
         return configuration_wrapper.cluster_config->get_servers().size();
+    }
+
+    String tryGetServerEndpoint(int server_id) const
+    {
+        std::lock_guard lock(configuration_wrapper_mutex);
+        auto server = configuration_wrapper.cluster_config->get_server(server_id);
+        if (!server)
+            return "";
+        return server->get_endpoint();
     }
 
     /// Read all log entries in log store from the begging and return latest config (with largest log_index)

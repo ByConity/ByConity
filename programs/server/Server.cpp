@@ -936,9 +936,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // if (config->has("max_concurrent_queries"))
             //     global_context->getProcessList().setMaxSize(config->getInt("max_concurrent_queries", 0));
 
-            if (config->has("keeper_server"))
-                global_context->updateKeeperConfiguration(*config);
-
             if (!initial_loading)
             {
                 /// We do not load ZooKeeper configuration on the first config loading
@@ -1046,30 +1043,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Rely on schedule pool config
         global_context->initCnchBGThreads();
     }
-    global_context->setCnchTopologyMaster();
-
-    if (global_context->getServerType() == ServerType::cnch_server)
-    {
-        /// Only server need txn coordinator and rely on schedule pool config.
-        global_context->initCnchTransactionCoordinator();
-
-        /// Initialize table and part cache, only server need part cache manager and storage cache.
-        if (config().getBool("enable_part_cache", true))
-            global_context->setPartCacheManager();
-        if (config().getBool("enable_cnch_storage_cache", true))
-        {
-            LOG_INFO(log, "Init cnch storage cache.");
-            global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
-        }
-
-        /// only server need start up server manager
-        if (config().getBool("enable_server_manager", true))
-            global_context->setCnchServerManager();
-
-        // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
-        // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
-        // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
-    }
 
 #if USE_HDFS
     /// Init hdfs user
@@ -1136,7 +1109,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         reloadFormatSchema(remote_format_schema_path, format_schema_path.string(), log);
     }
-    catch(const Exception& )
+    catch(const Exception &)
     {
         LOG_ERROR(log, "load remote format schema fail, reload it later manually");
     }
@@ -1149,88 +1122,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
 
-    Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
+    global_context->setCnchTopologyMaster();
 
-    Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
-    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
-    http_params->setTimeout(settings.http_receive_timeout);
-    http_params->setKeepAliveTimeout(keep_alive_timeout);
-
-    auto servers_to_start_before_tables = std::make_shared<std::vector<ProtocolServerAdapter>>();
-    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
-    std::vector<std::unique_ptr<::google::protobuf::Service>> rpc_services;
-    std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
-
-    bool listen_try = config().getBool("listen_try", false);
-    if (listen_hosts.empty())
+    if (global_context->getServerType() == ServerType::cnch_server)
     {
-        listen_hosts.emplace_back("::1");
-        listen_hosts.emplace_back("127.0.0.1");
-        listen_try = true;
-    }
+        /// Only server need txn coordinator and rely on schedule pool config.
+        global_context->initCnchTransactionCoordinator();
 
-    if (config().has("keeper_server"))
-    {
-#if USE_NURAFT
-        //// If we don't have configured connection probably someone trying to use clickhouse-server instead
-        //// of clickhouse-keeper, so start synchronously.
-        bool can_initialize_keeper_async = false;
-
-        if (has_zookeeper) /// We have configured connection to some zookeeper cluster
+        /// Initialize table and part cache, only server need part cache manager and storage cache.
+        global_context->setPartCacheManager();
+        if (config().getBool("enable_cnch_storage_cache", true))
         {
-            /// If we cannot connect to some other node from our cluster then we have to wait our Keeper start
-            /// synchronously.
-            can_initialize_keeper_async = global_context->tryCheckClientConnectionToMyKeeperCluster();
+            LOG_INFO(log, "Init cnch storage cache.");
+            global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
         }
-        /// Initialize keeper RAFT.
-        global_context->initializeKeeperDispatcher(can_initialize_keeper_async);
 
-        for (const auto & listen_host : listen_hosts)
-        {
-            /// TCP Keeper
-            const char * port_name = "keeper_server.tcp_port";
-            createServer(listen_host, port_name, listen_try, [&](UInt16 port)
-            {
-                Poco::Net::ServerSocket socket;
-                auto address = socketBindListen(socket, listen_host, port);
-                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
-                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
-                servers_to_start_before_tables->emplace_back(
-                    port_name,
-                    std::make_unique<Poco::Net::TCPServer>(
-                        new KeeperTCPHandlerFactory(*this, false), server_pool, socket, new Poco::Net::TCPServerParams));
+        /// only server need start up server manager
+        global_context->setCnchServerManager();
 
-                LOG_INFO(log, "Listening for connections to Keeper (tcp): {}", address.toString());
-            });
-
-            const char * secure_port_name = "keeper_server.tcp_port_secure";
-            createServer(listen_host, secure_port_name, listen_try, [&](UInt16 port)
-            {
-#if USE_SSL
-                Poco::Net::SecureServerSocket socket;
-                auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
-                socket.setReceiveTimeout(config().getUInt64("keeper_server.socket_receive_timeout_sec", DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC));
-                socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
-                servers_to_start_before_tables->emplace_back(
-                    secure_port_name,
-                    std::make_unique<Poco::Net::TCPServer>(
-                        new KeeperTCPHandlerFactory(*this, true), server_pool, socket, new Poco::Net::TCPServerParams));
-                LOG_INFO(log, "Listening for connections to Keeper with secure protocol (tcp_secure): {}", address.toString());
-#else
-                UNUSED(port);
-                throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
-                    ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-            });
-        }
-#else
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "ClickHouse server built without NuRaft library. Cannot use internal coordination.");
-#endif
-
+        // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
+        // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
+        // global_context->setMaskingPolicyCache(masking_policy_cache_size, masking_policy_cache_lifetime);
     }
-
-    for (auto & server : *servers_to_start_before_tables)
-        server.start();
 
     SCOPE_EXIT({
         /** Ask to cancel background jobs all table engines,
@@ -1243,35 +1156,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->shutdown();
 
         LOG_DEBUG(log, "Shut down storages.");
-
-        if (!servers_to_start_before_tables->empty())
-        {
-            LOG_DEBUG(log, "Waiting for current connections to servers for tables to finish.");
-            int current_connections = 0;
-            for (auto & server : *servers_to_start_before_tables)
-            {
-                server.stop();
-                current_connections += server.currentConnections();
-            }
-
-            if (current_connections)
-                LOG_INFO(log, "Closed all listening sockets. Waiting for {} outstanding connections.", current_connections);
-            else
-                LOG_INFO(log, "Closed all listening sockets.");
-
-            if (current_connections > 0)
-                current_connections = waitServersToFinish(*servers_to_start_before_tables, config().getInt("shutdown_wait_unfinished", 5));
-
-            if (current_connections)
-                LOG_INFO(log, "Closed connections to servers for tables. But {} remain. Probably some tables of other users cannot finish their connections after context shutdown.", current_connections);
-            else
-                LOG_INFO(log, "Closed connections to servers for tables.");
-
-            global_context->shutdownKeeperDispatcher();
-        }
-
-        /// Wait server pool to avoid use-after-free of destroyed context in the handlers
-        server_pool.joinAll();
 
         // Uses a raw pointer to global context for getting ZooKeeper.
         main_config_reloader.reset();
@@ -1414,11 +1298,31 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "TaskStats is not implemented for this OS. IO accounting will be disabled.");
 #endif
 
+    Poco::Timespan keep_alive_timeout(config().getUInt("keep_alive_timeout", 10), 0);
+
+    Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    http_params->setTimeout(settings.http_receive_timeout);
+    http_params->setKeepAliveTimeout(keep_alive_timeout);
+
+    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
+    std::vector<std::unique_ptr<::google::protobuf::Service>> rpc_services;
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
+
+    std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
+
+    bool listen_try = config().getBool("listen_try", false);
+    if (listen_hosts.empty())
+    {
+        listen_hosts.emplace_back("::1");
+        listen_hosts.emplace_back("127.0.0.1");
+        listen_try = true;
+    }
+
     {
         /// This object will periodically calculate some metrics.
         AsynchronousMetrics async_metrics(
-            global_context, config().getUInt("asynchronous_metrics_update_period_s", 1), servers_to_start_before_tables, servers);
+            global_context, config().getUInt("asynchronous_metrics_update_period_s", 1), {}, servers);
         attachSystemTablesAsync(*DatabaseCatalog::instance().getSystemDatabase(), async_metrics);
 
         for (const auto & listen_host : listen_hosts)
@@ -1434,10 +1338,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                 servers->emplace_back(
                     port_name,
+                    "http://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(), createHandlerFactory(*this, async_metrics, "HTTPHandler-factory"), server_pool, socket, http_params));
-
-                LOG_INFO(log, "Listening for http://{}", address.toString());
             });
 
             /// HTTPS
@@ -1451,10 +1354,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 socket.setSendTimeout(settings.http_send_timeout);
                 servers->emplace_back(
                     port_name,
+                    "https://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(), createHandlerFactory(*this, async_metrics, "HTTPSHandler-factory"), server_pool, socket, http_params));
-
-                LOG_INFO(log, "Listening for https://{}", address.toString());
 #else
                 UNUSED(port);
                 throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
@@ -1470,13 +1372,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port);
                 socket.setReceiveTimeout(settings.receive_timeout);
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(port_name, std::make_unique<Poco::Net::TCPServer>(
-                    new TCPHandlerFactory(*this, /* secure */ false, /* proxy protocol */ false),
-                    server_pool,
-                    socket,
-                    new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for connections with native protocol (tcp): {}", address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "native protocol (tcp): " + address.toString(),
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new TCPHandlerFactory(*this, /* secure */ false, /* proxy protocol */ false),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
             });
 
             /// TCP with PROXY protocol, see https://github.com/wolfeidau/proxyv2/blob/master/docs/proxy-protocol.txt
@@ -1487,13 +1390,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port);
                 socket.setReceiveTimeout(settings.receive_timeout);
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(port_name, std::make_unique<Poco::Net::TCPServer>(
-                    new TCPHandlerFactory(*this, /* secure */ false, /* proxy protocol */ true),
-                    server_pool,
-                    socket,
-                    new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for connections with native protocol (tcp) with PROXY: {}", address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "native protocol (tcp) with PROXY: " + address.toString(),
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new TCPHandlerFactory(*this, /* secure */ false, /* proxy protocol */ true),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
             });
 
             /// TCP with SSL
@@ -1505,12 +1409,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
                 socket.setReceiveTimeout(settings.receive_timeout);
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(port_name, std::make_unique<Poco::Net::TCPServer>(
-                    new TCPHandlerFactory(*this, /* secure */ true, /* proxy protocol */ false),
-                    server_pool,
-                    socket,
-                    new Poco::Net::TCPServerParams));
-                LOG_INFO(log, "Listening for connections with secure native protocol (tcp_secure): {}", address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "secure native protocol (tcp_secure): " + address.toString(),
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new TCPHandlerFactory(*this, /* secure */ true, /* proxy protocol */ false),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
 #else
                 UNUSED(port);
                 throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
@@ -1528,14 +1434,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 socket.setSendTimeout(settings.http_send_timeout);
                 servers->emplace_back(
                     port_name,
+                    "replica communication (interserver): http://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
                         createHandlerFactory(*this, async_metrics, "InterserverIOHTTPHandler-factory"),
                         server_pool,
                         socket,
                         http_params));
-
-                LOG_INFO(log, "Listening for replica communication (interserver): http://{}", address.toString());
             });
 
             port_name = "interserver_https_port";
@@ -1548,14 +1453,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 socket.setSendTimeout(settings.http_send_timeout);
                 servers->emplace_back(
                     port_name,
+                    "secure replica communication (interserver): https://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
                         createHandlerFactory(*this, async_metrics, "InterserverIOHTTPSHandler-factory"),
                         server_pool,
                         socket,
                         http_params));
-
-                LOG_INFO(log, "Listening for secure replica communication (interserver): https://{}", address.toString());
 #else
                 UNUSED(port);
                 throw Exception{"SSL support for TCP protocol is disabled because Poco library was built without NetSSL support.",
@@ -1570,13 +1474,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
                 socket.setReceiveTimeout(Poco::Timespan());
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(port_name, std::make_unique<Poco::Net::TCPServer>(
-                    new MySQLHandlerFactory(*this),
-                    server_pool,
-                    socket,
-                    new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for MySQL compatibility protocol: {}", address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "MySQL compatibility protocol: " + address.toString(),
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new MySQLHandlerFactory(*this),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
             });
 
             port_name = "postgresql_port";
@@ -1586,13 +1491,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 auto address = socketBindListen(socket, listen_host, port, /* secure = */ true);
                 socket.setReceiveTimeout(Poco::Timespan());
                 socket.setSendTimeout(settings.send_timeout);
-                servers->emplace_back(port_name, std::make_unique<Poco::Net::TCPServer>(
-                    new PostgreSQLHandlerFactory(*this),
-                    server_pool,
-                    socket,
-                    new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for PostgreSQL compatibility protocol: " + address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "PostgreSQL compatibility protocol: " + address.toString(),
+                    std::make_unique<Poco::Net::TCPServer>(
+                        new PostgreSQLHandlerFactory(*this),
+                        server_pool,
+                        socket,
+                        new Poco::Net::TCPServerParams));
             });
 
 #if USE_GRPC
@@ -1600,8 +1506,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             createServer(listen_host, port_name, listen_try, [&](UInt16 port)
             {
                 Poco::Net::SocketAddress server_address(listen_host, port);
-                servers->emplace_back(port_name, std::make_unique<GRPCServer>(*this, makeSocketAddress(listen_host, port, log)));
-                LOG_INFO(log, "Listening for gRPC protocol: " + server_address.toString());
+                servers->emplace_back(
+                    port_name,
+                    "gRPC protocol: " + server_address.toString(),
+                    std::make_unique<GRPCServer>(*this, makeSocketAddress(listen_host, port, log)));
             });
 #endif
 
@@ -1615,14 +1523,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 socket.setSendTimeout(settings.http_send_timeout);
                 servers->emplace_back(
                     port_name,
+                    "Prometheus: http://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
                         createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"),
                         server_pool,
                         socket,
                         http_params));
-
-                LOG_INFO(log, "Listening for Prometheus: http://{}", address.toString());
             });
         }
 
@@ -1733,7 +1640,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         for (auto & server : *servers)
+        {
             server.start();
+            LOG_INFO(log, "Listening for {}", server.getDescription());
+        }
 
         /// Server and worker rpc services
         std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
@@ -1813,6 +1723,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>", current_connections);
             else
                 LOG_INFO(log, "Closed connections.");
+
+            /// Wait server pool to avoid use-after-free of destroyed context in the handlers
+            server_pool.joinAll();
 
             dns_cache_updater.reset();
 

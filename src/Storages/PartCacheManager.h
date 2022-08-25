@@ -2,12 +2,12 @@
 
 #include <Catalog/CatalogUtils.h>
 #include <Core/Types.h>
-#include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/CnchPartitionInfo.h>
 #include <Common/RWLock.h>
 #include <Common/HostWithPorts.h>
 #include <Common/CurrentThread.h>
+#include <Interpreters/Context_fwd.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Protos/DataModelHelpers.h>
 #include <Storages/CnchPartitionInfo.h>
@@ -55,7 +55,7 @@ struct TableMetaEntry
     std::atomic_bool load_parts_by_partition = false;
     std::mutex fetch_mutex;
     std::condition_variable fetch_cv;
-    /// used to decide if the part/partition cache are still valid when enable write ha. If the fetched 
+    /// used to decide if the part/partition cache are still valid when enable write ha. If the fetched
     /// NHUT from metastore differs with cached one, we should update cache with metastore.
     std::atomic_uint64_t cached_non_host_update_ts {0};
     bool need_invalid_cache {false};
@@ -64,13 +64,14 @@ struct TableMetaEntry
 
 using TableMetaEntryPtr = std::shared_ptr<TableMetaEntry>;
 
-class PartCacheManager
+class PartCacheManager: WithMutableContext
 {
 public:
     using DataPartPtr = std::shared_ptr<const MergeTreeDataPartCNCH>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    PartCacheManager(Context & context_);
+    PartCacheManager(ContextMutablePtr context_);
+    ~PartCacheManager();
 
     void mayUpdateTableMeta(const IStorage & storage);
 
@@ -82,13 +83,13 @@ public:
 
     bool getTableClusterStatus(const UUID & uuid);
 
-    void setTableClusterStatus(const UUID & uuid, const bool clustered);
+    void setTableClusterStatus(const UUID & uuid, bool clustered);
 
-    void setTablePreallocateVW(const UUID & uuid, const String vw);
+    void setTablePreallocateVW(const UUID & uuid, String vw);
 
     String getTablePreallocateVW(const UUID & uuid);
 
-    bool getTablePartitionMetrics(const IStorage & storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
+    bool getTablePartitionMetrics(const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
 
     bool getTablePartitions(const IStorage & storage, Catalog::PartitionMap & partitions);
 
@@ -102,9 +103,9 @@ public:
 
     void invalidPartCache(const UUID & uuid, const DataPartsVector & parts);
 
-    void insertDataPartsIntoCache(const IStorage & mutable_storage_id, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics);
+    void insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics);
 
-    /// Get count and weight in Part cache 
+    /// Get count and weight in Part cache
     std::pair<UInt64, UInt64> dumpPartCache();
 
     std::unordered_map<String, std::pair<size_t, size_t>> getTableCacheInfo();
@@ -112,7 +113,7 @@ public:
     using LoadPartsFunc = std::function<DataModelPartPtrVector(const Strings&, const Strings&)>;
 
     ServerDataPartsVector getOrSetServerDataPartsInPartitions(
-        const IStorage & storage, const Strings & partitions, LoadPartsFunc && load_func, const UInt64 & ts);
+        const IStorage & table, const Strings & partitions, LoadPartsFunc && load_func, const UInt64 & ts);
 
     void mayUpdateTableMeta(const StoragePtr & table);
 
@@ -127,12 +128,11 @@ public:
     bool couldLeverageCache(const StoragePtr & storage);
 private:
     mutable std::mutex cache_mutex;
-    Context & context;
-    CnchDataPartCachePtr partCachePtr;
+    CnchDataPartCachePtr part_cache_ptr;
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
 
     /// A cache for the NHUT which has been written to bytekv. Do not need to update NHUT each time when non-host server commit parts
-    /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is 
+    /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is
     /// different from it.
     std::unordered_map<UUID, UInt64> cached_nhut_for_update {};
     std::mutex cached_nhut_mutex;
@@ -155,16 +155,16 @@ private:
 
     // we supply two implementation for getting parts. Normally, we just use getPartsInternal. If the table parts number is huge we can
     // fetch parts sequentially for each partition by using getPartsByPartition.
-    ServerDataPartsVector getServerPartsInternal(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr, 
+    ServerDataPartsVector getServerPartsInternal(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
         const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
-    ServerDataPartsVector getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr, 
+    ServerDataPartsVector getServerPartsByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
         const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
     //DataModelPartWrapperVector getPartsModelByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
     //    const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
 
     Strings getPartitionIDList(const IStorage & storage);
 
-    void checkTimeLimit(Stopwatch & watch);
+    static void checkTimeLimit(Stopwatch & watch);
 };
 
 using PartCacheManagerPtr = std::shared_ptr<PartCacheManager>;

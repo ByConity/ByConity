@@ -14,6 +14,7 @@
 #include <Common/Status.h>
 #include <Common/ConsistentHashUtils/Hash.h>
 #include <common/logger_useful.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -24,11 +25,11 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-PartCacheManager::PartCacheManager(Context & context_)
-    : context(context_)
+PartCacheManager::PartCacheManager(ContextMutablePtr context_)
+    : WithMutableContext(context_)
 {
-    partCachePtr = std::make_shared<CnchDataPartCache>(context.getConfigRef().getUInt("size_of_cached_parts", 100000));
-    metrics_updater = context.getSchedulePool().createTask("PartMetricsUpdater",[this](){
+    part_cache_ptr = std::make_shared<CnchDataPartCache>(getContext()->getConfigRef().getUInt("size_of_cached_parts", 100000));
+    metrics_updater = getContext()->getSchedulePool().createTask("PartMetricsUpdater",[this](){
         try
         {
             updateTablePartitionsMetrics(false);
@@ -38,9 +39,9 @@ PartCacheManager::PartCacheManager(Context & context_)
             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
         }
         /// schedule every 24 hours, maybe could be configurable later
-        this->metrics_updater->scheduleAfter(24*60*60*1000);
+        this->metrics_updater->scheduleAfter(24 * 60 * 60 * 1000);
     });
-    metrics_initializer = context.getSchedulePool().createTask("PartMetricsInitializer",[this](){
+    metrics_initializer = getContext()->getSchedulePool().createTask("PartMetricsInitializer",[this](){
         try
         {
             updateTablePartitionsMetrics(true);
@@ -50,9 +51,9 @@ PartCacheManager::PartCacheManager(Context & context_)
             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
         }
         /// schedule every 3 seconds
-        this->metrics_initializer->scheduleAfter(3*1000);
+        this->metrics_initializer->scheduleAfter(3 * 1000);
     });
-    meta_lock_cleaner = context.getSchedulePool().createTask("MetaLockCleaner", [this](){
+    meta_lock_cleaner = getContext()->getSchedulePool().createTask("MetaLockCleaner", [this](){
         try
         {
             cleanMetaLock();
@@ -62,9 +63,9 @@ PartCacheManager::PartCacheManager(Context & context_)
             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
         }
         /// schedule every hour.
-        this->meta_lock_cleaner->scheduleAfter(3*1000);
+        this->meta_lock_cleaner->scheduleAfter(3 * 1000);
     });
-    active_table_loader = context.getSchedulePool().createTask("ActiveTablesLoader", [this](){
+    active_table_loader = getContext()->getSchedulePool().createTask("ActiveTablesLoader", [this](){
         // load tables when server start up.
         try
         {
@@ -75,13 +76,25 @@ PartCacheManager::PartCacheManager(Context & context_)
             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
         }
     });
-    if (context.getServerType() == ServerType::cnch_server)
+    if (getContext()->getServerType() == ServerType::cnch_server)
     {
         metrics_updater->activate();
-        metrics_updater->scheduleAfter(60*60*1000);
+        metrics_updater->scheduleAfter(60 * 60 * 1000);
         metrics_initializer->activateAndSchedule();
         meta_lock_cleaner->activateAndSchedule();
         active_table_loader->activateAndSchedule();
+    }
+}
+
+PartCacheManager::~PartCacheManager()
+{
+    try
+    {
+        shutDown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
     }
 }
 
@@ -91,27 +104,29 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
 
     /// Only handle MergeTree tables
     const auto * cnch_table = dynamic_cast<const MergeTreeMetaBase*>(&storage);
-    if (cnch_table == nullptr)
+    if (!cnch_table)
         return;
 
-    auto load_nhut = [&](TableMetaEntryPtr & metaPtr) {
-        if (context.getSettingsRef().server_write_ha)
+    auto load_nhut = [&](TableMetaEntryPtr & meta_ptr)
+    {
+        if (getContext()->getSettingsRef().server_write_ha)
         {
-            UInt64 pts = context.getPhysicalTimestamp();
+            UInt64 pts = getContext()->getPhysicalTimestamp();
             if (pts)
             {
-                UInt64 fetched_nhut = context.getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(storage.getStorageUUID());
+                UInt64 fetched_nhut = getContext()->getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(storage.getStorageUUID());
                 if (pts - fetched_nhut > 9)
-                    metaPtr->cached_non_host_update_ts = fetched_nhut;
+                    meta_ptr->cached_non_host_update_ts = fetched_nhut;
             }
         }
     };
 
-    auto load_table_partitions = [&](TableMetaEntryPtr & metaPtr) {
-        auto table_lock = metaPtr->writeLock();
-        context.getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, metaPtr->partitions);
-        context.getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), metaPtr->is_clustered);
-        context.getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), metaPtr->preallocate_vw);
+    auto load_table_partitions = [&](TableMetaEntryPtr & meta_ptr)
+    {
+        auto table_lock = meta_ptr->writeLock();
+        getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
+        getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
+        getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
     };
 
     UUID uuid = storage.getStorageUUID();
@@ -147,7 +162,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         load_table_partitions(meta_ptr);
 
         /// may reload partition metrics.
-        if (context.getServerType() == ServerType::cnch_server)
+        if (getContext()->getServerType() == ServerType::cnch_server)
             meta_ptr->partition_metrics_loaded = false;
 
     }
@@ -187,7 +202,7 @@ bool PartCacheManager::checkIfCacheValidWithNHUT(const UUID & uuid, const UInt64
         }
 
         /// try invalid the part cache if the cached nhut is old enough;
-        if (table_entry->need_invalid_cache && context.getPhysicalTimestamp() - table_entry->cached_non_host_update_ts > 9000)
+        if (table_entry->need_invalid_cache && getContext()->getPhysicalTimestamp() - table_entry->cached_non_host_update_ts > 9000)
         {
             LOG_DEBUG(&Poco::Logger::get("PartCacheManager::getTableMeta"), "invalid part cache for {}. NHUT is {}", UUIDHelpers::UUIDToString(uuid), table_entry->cached_non_host_update_ts);
             invalidPartCache(uuid);
@@ -246,7 +261,7 @@ UInt64 PartCacheManager::getTableLastUpdateTime(const UUID & uuid)
         }
         if (last_update_time == 0)
         {
-            UInt64 ts = context.tryGetTimestamp();
+            UInt64 ts = getContext()->tryGetTimestamp();
             auto lock = table_entry->writeLock();
             if (table_entry->last_update_time == 0)
             {
@@ -280,7 +295,7 @@ bool PartCacheManager::getTableClusterStatus(const UUID & uuid)
         clustered =  table_entry->is_clustered;
     }
     else
-        context.getCnchCatalog()->getTableClusterStatus(uuid, clustered);
+        getContext()->getCnchCatalog()->getTableClusterStatus(uuid, clustered);
 
     return clustered;
 }
@@ -306,26 +321,26 @@ String PartCacheManager::getTablePreallocateVW(const UUID & uuid)
         vw =  table_entry->preallocate_vw;
     }
     else
-        context.getCnchCatalog()->getTablePreallocateVW(uuid, vw);
+        getContext()->getCnchCatalog()->getTablePreallocateVW(uuid, vw);
 
     return vw;
 }
 
-bool PartCacheManager::getTablePartitionMetrics(const IStorage & table, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info)
+bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info)
 {
-    TableMetaEntryPtr table_entry = getTableMeta(table.getStorageUUID());
+    TableMetaEntryPtr table_entry = getTableMeta(i_storage.getStorageUUID());
     if (table_entry)
     {
         auto lock = table_entry->readLock();
         if (table_entry->partition_metrics_loaded)
         {
-            auto * storage = dynamic_cast<const MergeTreeMetaBase*>(&table);
+            const auto * storage = dynamic_cast<const MergeTreeMetaBase*>(&i_storage);
             if (!storage)
                 return true;
             FormatSettings format_settings {};
-            for (auto it = table_entry->partitions.begin(); it != table_entry->partitions.end(); it++)
+            for (auto & partition : table_entry->partitions)
             {
-                PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(it->second);
+                PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(partition.second);
                 const auto & partition_key_sample = storage->getInMemoryMetadataPtr()->getPartitionKey().sample_block;
                 if (partition_key_sample.columns() > 0 && require_partition_info)
                 {
@@ -346,7 +361,7 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & table, std::uno
                         partition_ptr->first_partition = out.str();
                     }
                 }
-                partitions.emplace(it->first, partition_ptr);
+                partitions.emplace(partition.first, partition_ptr);
             }
             return true;
         }
@@ -366,27 +381,27 @@ bool PartCacheManager::getTablePartitions(const IStorage & storage, Catalog::Par
     return false;
 }
 
-Strings PartCacheManager::getPartitionIDList(const IStorage & table)
+Strings PartCacheManager::getPartitionIDList(const IStorage & storage)
 {
     Catalog::PartitionMap partitions;
-    getTablePartitions(table, partitions);
-    Strings parrition_ids;
+    getTablePartitions(storage, partitions);
+    Strings partition_ids;
 
-    for (auto it=partitions.begin(); it!=partitions.end(); it++)
-        parrition_ids.push_back(it->first);
+    for (auto & partition : partitions)
+        partition_ids.push_back(partition.first);
 
-    return parrition_ids;
+    return partition_ids;
 }
 
-bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
+bool PartCacheManager::getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
 {
-    TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
+    TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
 
     if (meta_ptr)
     {
         auto table_lock = meta_ptr->readLock();
-        for (auto it=meta_ptr->partitions.begin(); it!=meta_ptr->partitions.end(); it++)
-            partition_list.push_back(it->second->partition_ptr);
+        for (auto & partition : meta_ptr->partitions)
+            partition_list.push_back(partition.second->partition_ptr);
         return true;
     }
 
@@ -404,7 +419,7 @@ void PartCacheManager::invalidCacheWithNewTopology(const HostWithPortsVec & serv
     // do nothing if servers is empty
     if (servers.empty())
         return;
-    String rpc_port = std::to_string(context.getRPCPort());
+    String rpc_port = std::to_string(getContext()->getRPCPort());
     std::unique_lock<std::mutex> lock(cache_mutex);
     for (auto it=active_tables.begin(); it!= active_tables.end();)
     {
@@ -412,7 +427,7 @@ void PartCacheManager::invalidCacheWithNewTopology(const HostWithPortsVec & serv
         if (!isLocalServer(servers[hashed_index].getRPCAddress(), rpc_port))
         {
             LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidCacheWithNewTopology"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(it->first));
-            partCachePtr->dropCache(it->first);
+            part_cache_ptr->dropCache(it->first);
             it = active_tables.erase(it);
         }
         else
@@ -426,7 +441,7 @@ void PartCacheManager::invalidPartCacheWithoutLock(const UUID & uuid, std::uniqu
 {
     active_tables.erase(uuid);
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidPartCacheWithoutLock"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(uuid));
-    partCachePtr->dropCache(uuid);
+    part_cache_ptr->dropCache(uuid);
 }
 
 void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector & parts)
@@ -438,7 +453,7 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
 
     /// TODO: optimized the lock here.
     std::unordered_map<String, DataPartsVector> partition_to_parts;
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         const String & partition_id = part->info.partition_id;
         auto it = partition_to_parts.find(partition_id);
@@ -455,18 +470,18 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
 
     auto lock = meta_ptr->writeLock();
 
-    UInt64 ts = context.tryGetTimestamp();
+    UInt64 ts = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
 
-    for (auto it = partition_to_parts.begin(); it != partition_to_parts.end(); it++)
+    for (auto & partition_to_part : partition_to_parts)
     {
-        auto cached = partCachePtr->get({uuid, it->first});
+        auto cached = part_cache_ptr->get({uuid, partition_to_part.first});
 
         PartitionMetricsPtr partition_metrics{nullptr};
-        auto found = meta_ptr->partitions.find(it->first);
+        auto found = meta_ptr->partitions.find(partition_to_part.first);
         if (found != meta_ptr->partitions.end())
             partition_metrics = found->second->metrics_ptr;
 
-        for (auto & part : it->second)
+        for (auto & part : partition_to_part.second)
         {
             if (cached)
             {
@@ -502,18 +517,19 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
 void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics)
 {
     /// Only cache MergeTree tables
-    if (dynamic_cast<const MergeTreeMetaBase*>(&table) == nullptr)
+    if (!dynamic_cast<const MergeTreeMetaBase*>(&table))
         return;
+
     mayUpdateTableMeta(table);
     UUID uuid = table.getStorageUUID();
     TableMetaEntryPtr meta_ptr = getTableMeta(uuid);
     if (meta_ptr)
     {
-        UInt64 ts = context.tryGetTimestamp();
+        UInt64 ts = getContext()->tryGetTimestamp();
         auto table_lock = meta_ptr->writeLock();
-        for (auto & part_model : parts_model)
+        for (const auto & part_model : parts_model)
         {
-            auto & storage = dynamic_cast<const MergeTreeMetaBase&>(table);
+            const auto & storage = dynamic_cast<const MergeTreeMetaBase&>(table);
             auto partition_ptr = createParitionFromMetaString(storage, part_model.partition_minmax());
             String partition_id = partition_ptr->getID(storage);
             Catalog::PartitionMap::iterator it = meta_ptr->partitions.emplace(partition_id, std::make_shared<CnchPartitionInfo>(partition_ptr)).first;
@@ -528,7 +544,7 @@ void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb
             if (it->second->cache_status != CacheStatus::UINIT)
             {
                 auto part_wrapper_ptr = createPartWrapperFromModel(storage, part_model);
-                partCachePtr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
+                part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
             }
         }
         if (!is_merged_parts)
@@ -545,23 +561,23 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
     table_meta->loading_metrics = true;
     try
     {
-        auto cnch_catalog = context.getCnchCatalog();
-        auto partitions_ = cnch_catalog->getTablePartitionMetricsFromMetastore(UUIDHelpers::UUIDToString(uuid));
+        auto cnch_catalog = getContext()->getCnchCatalog();
+        auto partitions = cnch_catalog->getTablePartitionMetricsFromMetastore(UUIDHelpers::UUIDToString(uuid));
 
         {
             size_t total_parts_number {0};
             auto lock = table_meta->writeLock();
-            for (auto it = table_meta->partitions.begin(); it != table_meta->partitions.end(); it++)
+            for (auto & partition : table_meta->partitions)
             {
-                const String & partition_id = it->first;
-                auto found = partitions_.find(partition_id);
+                const String & partition_id = partition.first;
+                auto found = partitions.find(partition_id);
                 /// update metrics if we have recalculated it for current partition
-                if (found != partitions_.end())
-                    it->second->metrics_ptr = found->second;
+                if (found != partitions.end())
+                    partition.second->metrics_ptr = found->second;
 
-                total_parts_number += it->second->metrics_ptr->total_parts_number;
+                total_parts_number += partition.second->metrics_ptr->total_parts_number;
             }
-            table_meta->metrics_last_update_time = context.tryGetTimestamp(__PRETTY_FUNCTION__);
+            table_meta->metrics_last_update_time = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
             table_meta->partition_metrics_loaded = true;
             /// reset load_parts_by_partition if parts number of current table is less than 5 million;
             if (table_meta->load_parts_by_partition && total_parts_number<5000000)
@@ -595,26 +611,28 @@ void PartCacheManager::cleanMetaLock()
 
 void PartCacheManager::loadActiveTables()
 {
-    LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Reloading active tables.");
-    auto tables_meta = context.getCnchCatalog()->getAllTables();
+    auto tables_meta = getContext()->getCnchCatalog()->getAllTables();
     if (tables_meta.empty())
         return;
+    LOG_DEBUG(&Poco::Logger::get("PartCacheManager"), "Reloading {} active tables.", tables_meta.size());
+
     /// prepare session context to create storage from metadata.
-    auto session_context = Context::createCopy(context.getGlobalContext());
+    auto session_context = Context::createCopy(getContext()->getGlobalContext());
     session_context->makeSessionContext();
     session_context->makeQueryContext();
 
-    auto rpc_port = context.getRPCPort();
+    auto rpc_port = getContext()->getRPCPort();
     for (auto & table_meta : tables_meta)
     {
         if (table_meta.database() == "cnch_system" || table_meta.database() == "system" || Status::isDeleted(table_meta.status()))
             continue;
+
         auto entry = getTableMeta(RPCHelpers::createUUID(table_meta.uuid()));
         if (!entry)
         {
             StoragePtr table = Catalog::CatalogFactory::getTableByDataModel(session_context, &table_meta);
 
-            auto host_port = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
+            auto host_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
             if (host_port.empty())
                 continue;
 
@@ -626,7 +644,7 @@ void PartCacheManager::loadActiveTables()
 
 void PartCacheManager::updateTablePartitionsMetrics(bool skip_if_already_loaded)
 {
-    auto cnch_catalog = context.getCnchCatalog();
+    auto cnch_catalog = getContext()->getCnchCatalog();
 
     std::unordered_map<UUID, TableMetaEntryPtr> tables_snapshot;
     {
@@ -634,13 +652,13 @@ void PartCacheManager::updateTablePartitionsMetrics(bool skip_if_already_loaded)
         tables_snapshot = active_tables;
     }
 
-    for (auto it = tables_snapshot.begin(); it != tables_snapshot.end(); it++)
+    for (auto & table_snapshot : tables_snapshot)
     {
-        if (it->second->loading_metrics || (skip_if_already_loaded && it->second->partition_metrics_loaded))
+        if (table_snapshot.second->loading_metrics || (skip_if_already_loaded && table_snapshot.second->partition_metrics_loaded))
             continue;
-        UUID uuid = it->first;
-        TableMetaEntryPtr meta_ptr = it->second;
-        context.getPartCacheManagerThreadPool().trySchedule([this, uuid, meta_ptr]() {reloadPartitionMetrics(uuid, meta_ptr);});
+        UUID uuid = table_snapshot.first;
+        TableMetaEntryPtr meta_ptr = table_snapshot.second;
+        getContext()->getPartCacheManagerThreadPool().trySchedule([this, uuid, meta_ptr]() {reloadPartitionMetrics(uuid, meta_ptr);});
     }
 }
 
@@ -652,12 +670,14 @@ inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_pt
 }
 
 DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
-    const IStorage & table, const Strings & partitions,
-    PartCacheManager::LoadPartsFunc && load_func, const UInt64 & ts)
+    const IStorage & table,
+    const Strings & partitions,
+    PartCacheManager::LoadPartsFunc && load_func,
+    const UInt64 & ts)
 {
     ServerDataPartsVector res;
     mayUpdateTableMeta(table);
-    auto & storage = dynamic_cast<const MergeTreeMetaBase &>(table);
+    const auto & storage = dynamic_cast<const MergeTreeMetaBase &>(table);
     TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
 
     if (!meta_ptr)
@@ -666,7 +686,7 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
     Strings all_existing_partitions = getPartitionIDList(table);
 
     /// On cnch worker, we disable part cache to avoid cache synchronization with server.
-    if (context.getServerType() != ServerType::cnch_server)
+    if (getContext()->getServerType() != ServerType::cnch_server)
     {
         DataModelPartPtrVector fetched = load_func(partitions, all_existing_partitions);
         for (auto & part_model_ptr : fetched)
@@ -705,19 +725,19 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
     Strings partitions_not_cached;
     {
         auto lock = meta_ptr->writeLock();
-        for (auto & partition_id : partitions)
+        for (const auto & partition_id : partitions)
         {
             /// required partition may not exist. skip it.
             if (!meta_ptr->partitions.count(partition_id))
                 continue;
 
             PartitionInfoPtr partition_info_ptr = meta_ptr->partitions[partition_id];
-            auto cached = partCachePtr->get({uuid, partition_id});
+            auto cached = part_cache_ptr->get({uuid, partition_id});
 
             if (partition_info_ptr->cache_status == CacheStatus::LOADED && cached)
             {
-                for (auto it = cached->begin(); it != cached->end(); it++)
-                    data_from_cache.push_back(it->second);
+                for (auto & item : *cached)
+                    data_from_cache.push_back(item.second);
             }
             else
             {
@@ -768,7 +788,7 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
             auto lock = meta_ptr->writeLock();
             for (auto & [partition_id, parts_wrapper_vector] : partition_to_parts)
             {
-                auto cached = partCachePtr->get({uuid, partition_id});
+                auto cached = part_cache_ptr->get({uuid, partition_id});
                 for (const auto & part_wrapper_ptr : parts_wrapper_vector)
                 {
                     if (cached)
@@ -777,12 +797,12 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
                         // do not update cache if the cached data is newer than bytekv.
                         if (it == cached->end() || it->second->part_model->commit_time() < part_wrapper_ptr->part_model->commit_time())
                         {
-                            partCachePtr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
+                            part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
                         }
                     }
                     else
                     {
-                        partCachePtr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
+                        part_cache_ptr->insert({uuid, partition_id}, part_wrapper_ptr->name, part_wrapper_ptr);
                     }
 
                     /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
@@ -844,12 +864,12 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
             }
 
             partition_info_ptr = meta_ptr->partitions[partition_id];
-            auto cached = partCachePtr->get({uuid, partition_id});
+            auto cached = part_cache_ptr->get({uuid, partition_id});
 
             if (partition_info_ptr->cache_status == CacheStatus::LOADED && cached)
             {
-                for (auto it = cached->begin(); it != cached->end(); it++)
-                    data_from_cache.push_back(it->second);
+                for (auto & item : *cached)
+                    data_from_cache.push_back(item.second);
 
                 /// already get parts from cache, continue to next partition
                 i++;
@@ -886,20 +906,20 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                 std::unordered_map<String, DataModelPartWrapperVector> partition_to_parts;
                 fetched = load_func({partition_id}, all_existing_partitions);
                 DataModelPartWrapperVector fetched_data;
-                for (auto & dataModelPartPtr : fetched)
+                for (auto & data_model_part_ptr : fetched)
                 {
-                    fetched_data.push_back(createPartWrapperFromModel(storage, *dataModelPartPtr));
+                    fetched_data.push_back(createPartWrapperFromModel(storage, *data_model_part_ptr));
                 }
 
                 auto lock = meta_ptr->writeLock();
                 /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
                 /// sure the cache contains all parts of the partition.
-                auto cached = partCachePtr->get({uuid, partition_id});
+                auto cached = part_cache_ptr->get({uuid, partition_id});
                 if (!cached)
                 {
                     /// Insert a Map to the cache to ensure the partition id exists in LRU even if there is no part
                     cached = std::make_shared<DataPartModelsMap>();
-                    partCachePtr->insert({uuid, partition_id}, cached);
+                    part_cache_ptr->insert({uuid, partition_id}, cached);
                 }
 
                 for (auto & data_wrapper_ptr : fetched_data)
@@ -915,7 +935,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                     }
                     else
                     {
-                        partCachePtr->insert({uuid, partition_id}, data_wrapper_ptr->name, data_wrapper_ptr);
+                        part_cache_ptr->insert({uuid, partition_id}, data_wrapper_ptr->name, data_wrapper_ptr);
                     }
 
                     /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
@@ -955,18 +975,18 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
             auto lock = meta_ptr->readLock();
             if (partition_info_ptr->cache_status == CacheStatus::LOADED)
             {
-                auto cached = partCachePtr->get({uuid, partition_id});
+                auto cached = part_cache_ptr->get({uuid, partition_id});
                 if (!cached)
                 {
                     throw Exception("Cannot get already loaded parts from cache. Its a logic error.", ErrorCodes::LOGICAL_ERROR);
                 }
-                for (auto it = cached->begin(); it != cached->end(); it++)
+                for (auto & item : *cached)
                 {
-                    DataPartPtr datapart_ptr = createPartFromModel(storage, *(it->second->part_model));
+                    // DataPartPtr data_part_ptr = createPartFromModel(storage, *(item.second->part_model));
                     /// Only filter the parts when both commit_time and txnid are smaller or equal to ts (txnid is helpful for intermediate parts).
-                    if (isVisible(it->second, ts))
+                    if (isVisible(item.second, ts))
                     {
-                        res.push_back(std::make_shared<ServerDataPart>(it->second));
+                        res.push_back(std::make_shared<ServerDataPart>(item.second));
                         logPartsVector(storage, res);
                     }
                 }
@@ -1004,20 +1024,20 @@ void PartCacheManager::checkTimeLimit(Stopwatch & watch)
 std::pair<UInt64, UInt64> PartCacheManager::dumpPartCache()
 {
     std::unique_lock<std::mutex> lock(cache_mutex);
-    return {partCachePtr->count(), partCachePtr->weight()};
+    return {part_cache_ptr->count(), part_cache_ptr->weight()};
 }
 
 std::unordered_map<String, std::pair<size_t, size_t>> PartCacheManager::getTableCacheInfo()
 {
-    CnchDataPartCachePtr cachePtr = nullptr;
+    CnchDataPartCachePtr cache_ptr;
     {
         std::unique_lock<std::mutex> lock(cache_mutex);
-        cachePtr = partCachePtr;
+        cache_ptr = part_cache_ptr;
     }
-    if (!cachePtr)
+    if (!cache_ptr)
         return {};
 
-    return cachePtr->getTableCacheInfo();
+    return cache_ptr->getTableCacheInfo();
 }
 
 void PartCacheManager::reset()
@@ -1025,7 +1045,7 @@ void PartCacheManager::reset()
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::reset"), "Resetting part cache manager.");
     std::unique_lock<std::mutex> lock(cache_mutex);
     active_tables.clear();
-    partCachePtr->reset();
+    part_cache_ptr->reset();
     /// reload active tables when topology change.
     active_table_loader->schedule();
 }

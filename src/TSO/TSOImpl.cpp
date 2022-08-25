@@ -3,6 +3,7 @@
 #include <brpc/controller.h>
 #include <Protos/RPCHelpers.h>
 #include <common/logger_useful.h>
+
 #include <atomic>
 #include <memory>
 #include <thread>
@@ -18,6 +19,9 @@ namespace ErrorCodes
 
 namespace TSO
 {
+
+TSOImpl::TSOImpl() = default;
+TSOImpl::~TSOImpl() = default;
 
 /** Here we make the setting operation of TSO value atomically.
   * Because if the physical time and logical time are set separately,
@@ -39,20 +43,28 @@ UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
     return timestamp;
 }
 
-void TSOImpl::GetTimestamp(::google::protobuf::RpcController *,
-                            const ::DB::TSO::GetTimestampReq * /*request*/,
-                            ::DB::TSO::GetTimestampResp *response,
-                            ::google::protobuf::Closure *done)
+void TSOImpl::GetTimestamp(
+    ::google::protobuf::RpcController *,
+    const ::DB::TSO::GetTimestampReq * /*request*/,
+    ::DB::TSO::GetTimestampResp *response,
+    ::google::protobuf::Closure *done)
 {
     brpc::ClosureGuard done_guard(done);
 
     try
     {
+        if (!is_leader.load(std::memory_order_relaxed))
+        {
+            response->set_is_leader(false);
+            return;
+        }
+
         UInt64 cur_ts = fetchAddLogical(1);
         if (ts_to_physical(cur_ts) == 0)
             throw Exception("Timestamp not found.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
 
         response->set_timestamp(cur_ts);
+        response->set_is_leader(true);
     }
     catch (...)
     {
@@ -70,6 +82,12 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
 
     try
     {
+        if (!is_leader.load(std::memory_order_relaxed))
+        {
+            response->set_is_leader(false);
+            return;
+        }
+
         /// avoid requesting zero timestamp
         UInt32 size = request->size() ? request->size() : 1;
         if (size > MAX_LOGICAL / 8)
@@ -83,6 +101,7 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
         UInt32 logical = ts_to_logical(cur_ts) + size - 1;
         UInt64 max_ts = physical_logical_to_ts(physical, logical);
         response->set_max_timestamp(max_ts);
+        response->set_is_leader(true);
     }
     catch (...)
     {

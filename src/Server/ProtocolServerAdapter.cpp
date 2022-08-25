@@ -23,8 +23,8 @@ private:
     std::unique_ptr<Poco::Net::TCPServer> tcp_server;
 };
 
-ProtocolServerAdapter::ProtocolServerAdapter(const char * port_name_, std::unique_ptr<Poco::Net::TCPServer> tcp_server_)
-    : port_name(port_name_), impl(std::make_unique<TCPServerAdapterImpl>(std::move(tcp_server_)))
+ProtocolServerAdapter::ProtocolServerAdapter(const char * port_name_, const std::string & description_, std::unique_ptr<Poco::Net::TCPServer> tcp_server_)
+    : port_name(port_name_), description(description_), impl(std::make_unique<TCPServerAdapterImpl>(std::move(tcp_server_)))
 {
 }
 
@@ -44,8 +44,8 @@ private:
     std::unique_ptr<GRPCServer> grpc_server;
 };
 
-ProtocolServerAdapter::ProtocolServerAdapter(const char * port_name_, std::unique_ptr<GRPCServer> grpc_server_)
-    : port_name(port_name_), impl(std::make_unique<GRPCServerAdapterImpl>(std::move(grpc_server_)))
+ProtocolServerAdapter::ProtocolServerAdapter(const char * port_name_, const std::string & description_, std::unique_ptr<GRPCServer> grpc_server_)
+    : port_name(port_name_), description(description_), impl(std::make_unique<GRPCServerAdapterImpl>(std::move(grpc_server_)))
 {
 }
 #endif

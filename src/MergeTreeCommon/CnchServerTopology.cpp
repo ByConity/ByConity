@@ -45,7 +45,7 @@ String CnchServerTopology::format() const
     return ss.str();
 }
 
-String dumpTopologies(const std::list<CnchServerTopology>& topologies)
+String dumpTopologies(const std::list<CnchServerTopology> & topologies)
 {
     std::stringstream ss;
     ss << "[";

@@ -3,15 +3,19 @@
 #include <Protos/tso.pb.h>
 #include <Protos/RPCHelpers.h>
 #include <TSO/TSOImpl.h>
-
+#include <Interpreters/Context.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+
+#include <chrono>
+#include <thread>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
+    extern const int BRPC_TIMEOUT;
     extern const int TSO_INTERNAL_ERROR;
 }
 
@@ -27,7 +31,7 @@ TSOClient::TSOClient(HostWithPorts host_ports_)
 {
 }
 
-TSOClient::~TSOClient() { }
+TSOClient::~TSOClient() = default;
 
 GetTimestampResp TSOClient::getTimestamp()
 {
@@ -57,6 +61,66 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
 
     return resp;
 }
+
+UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size)
+{
+    const auto & config = context->getConfigRef();
+    int tos_max_retry = config.getInt("tso_service.tso_max_retry_count", 3);
+    bool use_tso_fallback = config.getBool("tso_service.use_fallback", true);
+
+    std::string new_leader;
+    int retry = tos_max_retry;
+
+    while (retry--)
+    {
+        try
+        {
+            auto tso_client = context->getCnchTSOClient();
+
+            switch (type)
+            {
+                case TSORequestType::GetTimestamp:
+                {
+                    auto response = tso_client->getTimestamp();
+                    if (response.is_leader())
+                        return response.timestamp();
+                    break;
+                }
+                case TSORequestType::GetTimestamps:
+                {
+                    auto response = tso_client->getTimestamps(size);
+                    if (response.is_leader())
+                        return response.max_timestamp();
+                    break;
+                }
+            }
+
+            context->updateTSOLeaderHostPort();
+        }
+        catch (Exception & e)
+        {
+            if (use_tso_fallback && e.code() != ErrorCodes::BRPC_TIMEOUT)
+            {
+                /// old leader may be unavailable
+                context->updateTSOLeaderHostPort();
+                throw;
+            }
+
+            const auto error_string = fmt::format(
+                    "TSO request: {} failed. Retries: {}/{}, Error message: {}",
+                    typeToString(type),
+                    std::to_string(tos_max_retry - retry),
+                    std::to_string(tos_max_retry),
+                    e.displayText());
+
+            tryLogCurrentException("getTSOResponse", error_string);
+        }
+    }
+
+    context->updateTSOLeaderHostPort();
+    throw Exception(ErrorCodes::TSO_OPERATION_ERROR, "Can't get process TSO request, type: {}", typeToString(type));
+}
+
 }
 
 }

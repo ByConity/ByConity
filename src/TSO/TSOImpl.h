@@ -1,6 +1,7 @@
 #pragma once
 
 #include <TSO/TSOProxy.h>
+#include <TSO/Defines.h>
 #include <Protos/tso.pb.h>
 #include <Poco/Logger.h>
 #include <atomic>
@@ -8,19 +9,10 @@
 namespace DB
 {
 
+class KeeperDispatcher;
+
 namespace TSO
 {
-
-
-constexpr size_t TSO_BITS = 64;
-constexpr size_t LOGICAL_BITS = 18;
-constexpr size_t MAX_LOGICAL = 1 << LOGICAL_BITS;
-constexpr size_t LOGICAL_BITMASK = 0x3FFFF;
-constexpr size_t TSO_UPDATE_INTERVAL = 50;  /// 50 milliseconds
-
-#define ts_to_physical(ts) ((ts) >> LOGICAL_BITS)
-#define ts_to_logical(ts) ((ts) & LOGICAL_BITMASK)
-#define physical_logical_to_ts(physical, logical) ((physical << LOGICAL_BITS) | (logical & LOGICAL_BITMASK))
 
 struct TSOClock
 {
@@ -28,14 +20,19 @@ struct TSOClock
     UInt32 logical;
 };
 
-class TSOImpl : public DB::TSO::TSO {
+class TSOServer;
+
+class TSOImpl : public TSO
+{
 
 public:
-    TSOImpl() {}
+    explicit TSOImpl();
 
-    ~TSOImpl() override {}
+    ~TSOImpl() override;
 
     void setPhysicalTime(UInt64 time);
+
+    void setIsLeader(bool is_leader_) { is_leader = is_leader_; }
 
     TSOClock getClock() const
     {
@@ -44,18 +41,21 @@ public:
         return clock;
     }
 
-    void GetTimestamp(::google::protobuf::RpcController* /*controller*/,
-                        const ::DB::TSO::GetTimestampReq* request,
-                        ::DB::TSO::GetTimestampResp* response,
-                        ::google::protobuf::Closure* done) override;
+    void GetTimestamp(
+        ::google::protobuf::RpcController* /*controller*/,
+        const ::DB::TSO::GetTimestampReq* request,
+        ::DB::TSO::GetTimestampResp* response,
+        ::google::protobuf::Closure* done) override;
 
-    void GetTimestamps(::google::protobuf::RpcController* /*controller*/,
-                        const ::DB::TSO::GetTimestampsReq* request,
-                        ::DB::TSO::GetTimestampsResp* response,
-                        ::google::protobuf::Closure* done) override;
+    void GetTimestamps(
+        ::google::protobuf::RpcController* /*controller*/,
+        const ::DB::TSO::GetTimestampsReq* request,
+        ::DB::TSO::GetTimestampsResp* response,
+        ::google::protobuf::Closure* done) override;
 
 private:
     std::atomic<UInt64> ts = 0;
+    std::atomic_bool is_leader{false};
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
 
