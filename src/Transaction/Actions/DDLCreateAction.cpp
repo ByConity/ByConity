@@ -23,7 +23,7 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
         if (params.attach)
             cnch_catalog->attachTable(params.database, params.table, commit_time);
         else
-            cnch_catalog->createTable(*getContext(), params.database, params.table, params.statement, "", txn_id, commit_time);
+            cnch_catalog->createTable(StorageID{params.database, params.table, params.uuid}, params.statement, "", txn_id, commit_time);
     }
 }
 

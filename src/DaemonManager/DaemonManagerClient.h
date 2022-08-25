@@ -7,6 +7,7 @@
 #include <CloudServices/RpcClientBase.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
+#include <DaemonManager/DaemonManagerClient_fwd.h>
 
 namespace DB
 {
@@ -37,8 +38,6 @@ public:
 private:
     std::unique_ptr<Protos::DaemonManagerService_Stub> stub_ptr;
 };
-
-using DaemonManagerClientPtr = std::shared_ptr<DaemonManagerClient>;
 
 }
 }

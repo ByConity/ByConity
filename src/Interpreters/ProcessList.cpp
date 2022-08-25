@@ -14,6 +14,11 @@
 #include <common/logger_useful.h>
 #include <chrono>
 
+namespace ProfileEvents
+{
+    extern const Event UserTimeMicroseconds;
+    extern const Event SystemTimeMicroseconds;
+}
 
 namespace DB
 {
@@ -23,6 +28,7 @@ namespace ErrorCodes
     extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int LOGICAL_ERROR;
+    extern const int TIMEOUT_EXCEEDED;
     extern const int QUERY_WAS_CANCELLED;
 }
 
@@ -427,6 +433,44 @@ void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
     std::lock_guard lock(executors_mutex);
     assert(std::find(executors.begin(), executors.end(), e) != executors.end());
     std::erase_if(executors, [e](PipelineExecutor * x) { return x == e; });
+}
+
+bool QueryStatus::checkCpuTimeLimit(String node_name)
+{
+    if (is_killed.load())
+        return false;
+
+    // query thread group Counters.
+    if (thread_group != nullptr)
+    {
+        UInt64 total_query_cpu_micros = thread_group->performance_counters[ProfileEvents::SystemTimeMicroseconds]
+                + thread_group->performance_counters[ProfileEvents::UserTimeMicroseconds];
+        UInt64 thread_cpu_micros = CurrentThread::getProfileEvents()[ProfileEvents::SystemTimeMicroseconds]
+                + CurrentThread::getProfileEvents()[ProfileEvents::UserTimeMicroseconds];
+
+        double total_query_cpu_seconds = total_query_cpu_micros * 1.0 / 1000000;
+        double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
+
+        ContextPtr context = thread_group->query_context.lock();
+        const Settings & settings = context->getSettingsRef();
+        LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
+                    node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_second);
+        if (settings.max_query_cpu_second > 0 && total_query_cpu_micros > settings.max_query_cpu_second * 1000000)
+        {
+            switch (overflow_mode)
+            {
+                case OverflowMode::THROW:
+                    throw Exception("Timeout exceeded: elapsed " + toString(total_query_cpu_seconds)
+                                  + " seconds, maximum: " + toString(static_cast<double>(settings.max_query_cpu_second)), ErrorCodes::TIMEOUT_EXCEEDED);
+                case OverflowMode::BREAK:
+                    return true;
+                default:
+                    throw Exception("Logical error: unknown overflow mode", ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+    return true;
 }
 
 bool QueryStatus::checkTimeLimit()

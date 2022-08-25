@@ -2,7 +2,6 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogConfig.h>
 #include <Catalog/CatalogFactory.h>
-//#include <Core/BackgroundSchedulePool.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
 #include <Common/getMultipleKeysFromConfig.h>
@@ -11,6 +10,7 @@
 #include <DaemonManager/registerDaemons.h>
 #include <DaemonManager/DaemonJobGlobalGC.h>
 #include <Dictionaries/registerDictionaries.h>
+#include <Disks/registerDisks.h>
 #include <Functions/registerFunctions.h>
 #include <CloudServices/CnchServerClient.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
@@ -188,7 +188,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     DB::registerTableFunctions();
     DB::registerStorages();
     DB::registerDictionaries();
-    //DB::registerDisks();
+    DB::registerDisks();
     DB::registerServiceDiscovery();
     registerDaemonJobs();
 
@@ -210,6 +210,7 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     global_context->makeGlobalContext();
     global_context->setServerType("daemon_manager");
+    global_context->setSetting("background_schedule_pool_size", config().getUInt64("background_schedule_pool_size", 12));
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 
     global_context->initCatalog(catalog_conf, config().getString("catalog.name_space", "default"));
@@ -219,8 +220,15 @@ int DaemonManager::main(const std::vector<std::string> &)
     //global_context->initByteJournalClient();
     global_context->initTSOClientPool(config().getString("service_discovery.tso.psm", "data.cnch.tso"));
 
-    //global_context->setCnchTopologyMaster();
+    global_context->setCnchTopologyMaster();
     global_context->setSetting("cnch_data_retention_time_in_sec", config().getUInt64("cnch_data_retention_time_in_sec", 3*24*60*60));
+
+    std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
+    global_context->setPath(path);
+
+    HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(config());
+    global_context->setHdfsConnectionParams(hdfs_params);
+
 
     LOG_INFO(log, "Global context initialized.");
 
@@ -235,7 +243,8 @@ int DaemonManager::main(const std::vector<std::string> &)
         LOG_INFO(log, "Destroyed global context.");
     });
 
-    std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> daemon_jobs_for_bg_thread_in_server = createDaemonJobsForBGThread(config(), global_context, log);
+    std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> daemon_jobs_for_bg_thread_in_server =
+        createDaemonJobsForBGThread(config(), global_context, log);
     std::vector<DaemonJobPtr> local_daemon_jobs = createLocalDaemonJobs(config(), global_context, log);
 
     std::for_each(local_daemon_jobs.begin(), local_daemon_jobs.end(),
@@ -301,7 +310,20 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     waitForTerminationRequest();
 
-    LOG_INFO(log, "Wait for daemons to finish.");
+    LOG_INFO(log, "Shutting down!");
+    LOG_INFO(log, "BRPC server stop accepting new connections and requests from existing connections");
+    if (0 == server.Stop(5000))
+        LOG_INFO(log, "BRPC server stop succesfully");
+    else
+        LOG_INFO(log, "BRPC server doesn't stop succesfully with in 5 second");
+
+    LOG_INFO(log, "Wait until brpc requests in progress are done");
+    if (0 == server.Join())
+        LOG_INFO(log, "brpc joins succesfully");
+    else
+        LOG_INFO(log, "brpc doesn't join succesfully");
+
+    LOG_INFO(log, "Wait for daemons for bg thread to finish.");
     std::for_each(
         daemon_jobs_for_bg_thread_in_server.begin(),
         daemon_jobs_for_bg_thread_in_server.end(),
@@ -311,11 +333,14 @@ int DaemonManager::main(const std::vector<std::string> &)
         }
     );
 
+    LOG_INFO(log, "Wait for daemons for local job to finish.");
     std::for_each(local_daemon_jobs.begin(), local_daemon_jobs.end(),
         [] (const DaemonJobPtr & daemon_job) {
             daemon_job->stop();
         }
     );
+
+    LOG_INFO(log, "daemons for local job finish succesfully.");
 
     return Application::EXIT_OK;
 }

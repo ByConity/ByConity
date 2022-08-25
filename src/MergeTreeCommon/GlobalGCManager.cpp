@@ -67,6 +67,26 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
     return 0;
 }
 
+namespace {
+
+void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger * log)
+{
+    for (const DiskPtr & disk : disks)
+    {
+        if (disk->exists(relative_path))
+        {
+            disk->removeRecursive(relative_path);
+            LOG_TRACE(log, "Removed relative path {} of disk type {}, root path {}!",
+                relative_path, DiskType::toString(disk->getType()), disk->getPath());
+        }
+        else
+            LOG_WARNING(log, "Relative path {} of disk type {}, root path {} doesn't exist!",
+                relative_path, DiskType::toString(disk->getType()), disk->getPath());
+    }
+}
+
+} /// end anonymous namespace
+
 bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)
 {
     auto storage_id = StorageID{table.database(), table.name(), RPCHelpers::createUUID(table.uuid())};
@@ -95,18 +115,15 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         if (mergetree)
         {
             LOG_DEBUG(log, "Remove data path for table {}", storage_id.getNameForLogs());
-/// TODO::
-#if 0
-            VolumePtr hdfs_volume = mergetree->getStorageSelector().getHDFSVolume();
-            for (const DiskPtr& disk : hdfs_volume->getDisks())
-            {
-                String table_rel_path = mergetree->getStorageSelector().tableRelativePathOnDisk(disk);
-                if (disk->exists(table_rel_path))
-                    disk->removeRecursive(table_rel_path);
-                else
-                    LOG_WARNING(log, "Relative path {} of data path {} doesn't exist!", table_rel_path, disk->getPath());
-            }
-#endif
+            StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy();
+            Disks remote_disks = remote_storage_policy->getDisks();
+            const String & relative_path = mergetree->getRelativeDataPath();
+            cleanDisks(remote_disks, relative_path, log);
+
+            StoragePolicyPtr local_storage_policy = mergetree->getLocalStoragePolicy();
+            Disks local_disks = local_storage_policy->getDisks();
+            //const String local_store_path = mergetree->getLocalStorePath();
+            cleanDisks(local_disks, relative_path, log);
 
             LOG_DEBUG(log, "Remove background job statues for table {}", storage_id.getNameForLogs());
             catalog->dropBGJobStatuses(storage_id.uuid);
@@ -116,10 +133,12 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         LOG_DEBUG(log, "Remove data parts meta for table {}", storage_id.getNameForLogs());
         catalog->clearDataPartsMetaForTable(storage);
 
-        /// delete bitmaps;
+        /// TODO delete bitmaps is not support;
+#if 0
         auto all_delete_bitmaps = catalog->getAllDeleteBitmaps(storage, TxnTimestamp::maxTS());
         for (auto & delete_bitmap : all_delete_bitmaps)
             delete_bitmap->removeFile();
+#endif
 
         /// delete table's metadata
         LOG_DEBUG(log, "Remove table meta for table {}", storage_id.getNameForLogs());

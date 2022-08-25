@@ -207,6 +207,7 @@ public:
     /// Removes a pipeline to the QueryStatus
     void removePipelineExecutor(PipelineExecutor * e);
 
+    bool checkCpuTimeLimit(String node_name);
     /// Checks the query time limits (cancelled or timeout)
     bool checkTimeLimit();
     /// Same as checkTimeLimit but it never throws

@@ -136,6 +136,8 @@ void SourceWithProgress::progress(const Progress & value)
             last_profile_events_update_time = total_elapsed_microseconds;
         }
 
+        process_list_elem->checkCpuTimeLimit("SourceWithProgress");
+
         /// Should be done in PipelineExecutor.
         /// It is here for compatibility with IBlockInputsStream.
         limits.speed_limits.throttle(progress.read_rows, progress.read_bytes, total_rows, total_elapsed_microseconds);

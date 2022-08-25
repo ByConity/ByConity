@@ -15,8 +15,6 @@ namespace DaemonManager
         return cnch_table != nullptr;
     }
 
-    StoragePtr getStoragePtr(ContextPtr context, const String & database, const String & table, const String & definition);
-
     void printConfig(std::map<std::string, unsigned int> & config, Poco::Logger * log);
 
     std::map<std::string, unsigned int> updateConfig(
