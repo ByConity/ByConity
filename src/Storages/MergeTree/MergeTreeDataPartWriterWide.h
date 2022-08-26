@@ -2,17 +2,6 @@
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterOnDisk.h>
 
-
-namespace rocksdb
-{
-class DB;
-}
-
-namespace IndexFile
-{
-struct IndexFileInfo;
-}
-
 namespace DB
 {
 
@@ -30,8 +19,6 @@ public:
         const MergeTreeWriterSettings & settings,
         const MergeTreeIndexGranularity & index_granularity);
 
-    ~MergeTreeDataPartWriterWide() override;
-
     void write(const Block & block, const IColumn::Permutation * permutation) override;
 
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
@@ -42,15 +29,6 @@ private:
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
     void finishDataSerialization(IMergeTreeDataPart::Checksums & checksums, bool sync);
-
-    /// Write row store data for unique table to speed up lookup based on row number
-    void writeRowStoreIfNeed(const Block & block, const IColumn::Permutation * permutation, std::vector<String> & serialized_values, ThreadPool & serialized_values_pool);
-
-    bool shouldWriteRowStore()
-    {
-        /// When it's under merge status, it'll generate row store later via merging all origin row stores directly.
-        return enable_unique_row_store && !is_merge;
-    }
 
     /// Method for self check (used in debug-build only). Checks that written
     /// data and corresponding marks are consistent. Otherwise throws logical
@@ -71,8 +49,6 @@ private:
     /// Also useful to have exact amount of rows in last (non-final) mark.
     void adjustLastMarkIfNeedAndFlushToDisk(size_t new_rows_in_last_mark);
 
-    void init();
-
     bool canGranuleNotComplete() override { return true; }
 
     size_t getRowsWrittenInLastMark() override { return rows_written_in_last_mark; }
@@ -84,29 +60,6 @@ private:
     size_t rows_written_in_last_mark = 0;
 
     Poco::Logger * log;
-
-    /// ------------ Unique Table Only -----------------------------------------
-    void writeToTempUniqueKeyIndex(Block & block, size_t first_rid, rocksdb::DB & temp_index);
-    void writeFinalUniqueKeyIndex(IndexFile::IndexFileInfo & file_info);
-    void closeTempUniqueKeyIndex();
-
-    /// whether to generate unique key index for unique table
-    bool enable_disk_based_key_index = false;
-
-    /// whether to generate row store for unique table
-    bool enable_unique_row_store = false;
-    /// generate row store to speed up lookup based on row number
-    IndexFile::IndexFileInfo unique_row_store_file_info;
-
-    size_t rows_count = 0;
-
-    /// If the part contains only one block (normal insert case), we generate the key index file
-    /// directly from the buffered block, avoiding the overhead of "temp_unique_key_index"
-    Block buffered_unique_key_block;
-    /// If the part contains more than one blocks (merge case), we first use "temp_unique_key_index"
-    /// to sort and persist index entries, then generate the key index file from "temp_unique_key_index"
-    String temp_unique_key_index_dir;
-    rocksdb::DB * temp_unique_key_index = nullptr;
 };
 
 }

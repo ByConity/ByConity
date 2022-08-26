@@ -57,9 +57,6 @@ public:
 
     static bool isMySQLSyncThread();
 
-    /// check whether this table should be synced base on the settings "include_tables" and "exclude_tables"
-    bool shouldSyncTable(const String & table_name) const;
-
 private:
     Poco::Logger * log;
 
@@ -70,8 +67,6 @@ private:
     mutable MySQLClient client;
     MaterializeMySQLSettings * settings;
     String query_prefix;
-
-    Int64 already_skip_errors = 0;
 
     // USE MySQL ERROR CODE:
     // https://dev.mysql.com/doc/mysql-errors/5.7/en/server-error-reference.html

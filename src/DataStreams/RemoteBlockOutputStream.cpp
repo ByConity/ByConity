@@ -147,17 +147,4 @@ RemoteBlockOutputStream::~RemoteBlockOutputStream()
     }
 }
 
-ASTPtr RemoteBlockOutputStream::createInsertToRemoteTableQuery(const String & database, const String & table, const Block & sample_block)
-{
-    auto query = std::make_shared<ASTInsertQuery>();
-    query->table_id = StorageID(database, table);
-
-    auto columns = std::make_shared<ASTExpressionList>();
-    query->columns = columns;
-    query->children.push_back(columns);
-    for (const auto & col : sample_block)
-        columns->children.push_back(std::make_shared<ASTIdentifier>(col.name));
-
-    return query;
-}
 }

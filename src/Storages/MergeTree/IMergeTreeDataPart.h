@@ -19,8 +19,6 @@
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Storages/UniqueKeyIndex.h>
-#include <Storages/UniqueRowStore.h>
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
 #include <common/types.h>
@@ -346,7 +344,6 @@ public:
 
     MinMaxIndex minmax_idx;
 
-
 	Versions versions;
 
     /// only be used if the storage enables persistent checksums.
@@ -460,141 +457,7 @@ public:
     /// Required for distinguish different copies of the same part on S3
     String getUniqueId() const;
 
-    /// UniqueMergeTree-only
-    /// --------------------
     DeleteBitmapPtr getDeleteBitmap() const;
-
-    UInt64 getDeleteVersion() const
-    {
-        return delete_version.load(std::memory_order_relaxed);
-    }
-
-    String getDeleteFilePathWithVersion(UInt64 version) const
-    {
-        return getFullPath() + delete_file_prefix + "." + std::to_string(version);
-    }
-
-    String getDeleteFilePath() const;
-
-    void writeDeleteFileWithVersion(const DeleteBitmapPtr & bitmap, UInt64 version) const;
-    DeleteBitmapPtr readDeleteFileWithVersion(UInt64 version, bool log_on_error = true) const;
-    std::vector<UInt64> listDeleteFiles(UInt64 min_version) const;
-
-    void writeDeleteFile(const DeleteBitmapPtr & bitmap, bool sync) const;
-    DeleteBitmapPtr readDeleteFile(bool log_on_error = true) const;
-
-    /// For unique table: when attach a new part into table, we need to allocate a new lsn
-    /// and rename the delete file to this new version.
-    void renameDeleteFileToVersion(UInt64 version) const;
-    /// For unique table: remove unneeded delete files according to current table commit version.
-    /// If nothing is performed, set `retry_next_time' to true and return 0.
-    /// Otherwise set `retry_next_time' to false and return number of delete files removed.
-    UInt32 clearOldDeleteFilesIfNeeded(UInt64 commit_version, bool & retry_next_time) const;
-    /// For unique table: remove all unneeded delete files expect the current used one.
-    UInt32 clearDeleteFilesExceptCurrentVersion() const;
-
-    /// If current index contains too many deleted items or hasn't been used for a long time, do garbage collection to save memory.
-    /// If force_unload is true, unload the index anyway.
-    /// Return number of memory bytes freed.
-    UInt64 gcUniqueIndexIfNeeded(const time_t * now = nullptr, bool force_unload = false);
-
-    size_t getUniqueIndexSize() const { return unique_index_size.load(std::memory_order_relaxed); }
-
-    size_t getUniqueIndexMemorySize() const { return unique_index_memory_size.load(std::memory_order_relaxed); }
-
-    /// If uki type is "UNKNOWN", change it to either "MEMORY" or "DISK" depending on whether uki file exists.
-    UniqueKeyIndexPtr getUniqueKeyIndex() const;
-
-    /// If row store file exists, return row store. Otherwise, return nullptr.
-    UniqueRowStorePtr tryGetUniqueRowStore() const;
-
-    /// If row store meta file exists, return row store meta. Otherwise, return nullpter.
-    UniqueRowStoreMetaPtr tryGetUniqueRowStoreMeta() const;
-
-    void setUniqueRowStoreMeta(UniqueRowStoreMetaPtr row_store_meta);
-
-    /// If `key' is found, return true and set its corresponding `rowid' and optional `version' and `is_offline'.
-    /// Otherwise return false.
-    bool getValueFromUniqueIndex(
-        const UniqueKeyIndexPtr & unique_key_index,
-        const String & key,
-        UInt32 & rowid,
-        UInt64 * version = nullptr,
-        UInt8 * is_offline = nullptr) const;
-
-    /// When storage.merging_params.partitionValueAsVersion() == true,
-    /// use partition value as version for all rows in this part.
-    /// should be accessed via getVersionFromPartition()
-    mutable std::optional<UInt64> version_from_partition;
-    /// Return version value from partition. Throws exception if the table didn't use partition as version
-    UInt64 getVersionFromPartition() const;
-
-    MemoryUniqueKeyIndexPtr memory_unique_index;
-    std::atomic<size_t> unique_index_size{0};
-    std::atomic<size_t> unique_index_memory_size{0};
-    /// type of unique key index
-    mutable UkiType uki_type = UkiType::UNKNOWN;
-
-    // FIXME (UNIQUE KEY): Put this into metainfo leter
-    mutable std::mutex unique_index_mutex;
-
-    /// Stats used by GC thread
-    struct DeleteFilesStat
-    {
-        std::atomic<time_t> last_add_time {0};
-        /// the following fields are only used by single gc thread, thereby no synchronization is needed
-        /// last time the GC thread scans part's dir for delete files
-        time_t last_scan_dir_time {0};
-        /// cached versions (in ascending order) of delete files in this part
-        std::vector<UInt64> versions;
-    };
-    mutable DeleteFilesStat delete_files_stat;
-    static constexpr auto delete_file_prefix = "delete";
-    static constexpr UInt8 delete_file_format_version = 1;
-
-    UInt64 deleteBitmapVersion() const { return delete_version.load(std::memory_order_acquire); }
-    UInt32 numDeletedRows() const;
-    size_t estimateSizeRemovingDeletes() const
-    {
-        auto num_deletes = numDeletedRows();
-        if (num_deletes == 0)
-            return bytes_on_disk;
-        double ratio = 1.0 - num_deletes / static_cast<double>(rows_count);
-        return static_cast<size_t>(bytes_on_disk * std::max(0.0, ratio));
-    }
-    UInt32 numRowsRemovingDeletes() const
-    {
-        auto num_deletes = numDeletedRows();
-        if (rows_count < num_deletes)
-            throw Exception("Part " + name + " has " + toString(num_deletes) + " deleted rows but only " + toString(rows_count) + " total rows", ErrorCodes::LOGICAL_ERROR);
-        return rows_count - num_deletes;
-    }
-
-    /// Caller must hold DataPartsLock
-    void setDeleteBitmapWithVersion(const DeleteBitmapPtr & new_delete, UInt64 version) const
-    {
-        delete_bitmap = new_delete;
-        delete_rows = delete_bitmap ? delete_bitmap->cardinality() : 0;
-        delete_version.store(version, std::memory_order_release);
-        delete_files_stat.last_add_time.store(time(nullptr), std::memory_order_relaxed);
-    }
-
-    /// If Checksum has not been initialized, load it from filesystem(local/remote).
-    // void loadChecksumsIfNeed();
-
-    void loadMemoryUniqueIndex(const std::unique_lock<std::mutex> & unique_index_lock);
-
-    /// Return disk unique key index (corresponding to unique_key.idx) if the part has unique key.
-    DiskUniqueKeyIndexPtr loadDiskUniqueIndex();
-
-    /// Return unique row store (corresponding to row_store.data) if the part has unique row store.
-    UniqueRowStorePtr loadUniqueRowStore();
-
-    String ALWAYS_INLINE getMemoryAddress() const
-    {
-        auto addr = reinterpret_cast<uintptr_t>(this);
-        return String(reinterpret_cast<char *>(&addr), sizeof(addr));
-    }
 
     bool containsExactly(const IMergeTreeDataPart & other) const
     {
@@ -614,22 +477,6 @@ public:
     /// implemented as mutation commands and parts become immutable.
     mutable std::mutex mutate_mutex;
 
-    /// Delete bitmap is a bitmap containing the row numbers of deleted rows in this part.
-    /// It's populated from the "delete file" on disk and is used to filter out deleted rows when reading from the part.
-    ///
-    /// Used by UniqueMergeTree to cache the latest version of delete bitmap.
-    /// Changes should be done via `setDeleteBitmapWithVersion(..)' under the DataPartsLock.
-    mutable DeleteBitmapPtr delete_bitmap;
-    /// Cache the cardinality of delete bitmap so that
-    /// 1) for UniqueMergeTree, caller can get numDeletedRows() without acquiring parts lock.
-    /// 2) for ordinary MergeTree, we don't need to load the delete bitmap each time numDeleteRows() is called.
-    mutable std::atomic<UInt32> delete_rows {0};
-    /// FIXME (UNIQUE KEY): Put this into metastore later
-    mutable std::atomic<UInt64> delete_version {0};
-    /// Whether the part has inserted the delete bitmap into cache before.
-    /// Used by ordinal MergeTree
-    std::atomic<bool> is_delete_bitmap_cached = false;
-    /// --------------------
     /// Total size on disk, not only columns. May not contain size of
     /// checksums.txt and columns.txt. 0 - if not counted;
     UInt64 bytes_on_disk{0};
@@ -743,11 +590,6 @@ private:
     CompressionCodecPtr detectDefaultCompressionCodec() const;
 
     mutable State state{State::Temporary};
-
-    /// Used to prevent concurrent modification to row store mata.
-    mutable std::mutex row_store_meta_mutex;
-    /// Row store meta contains columns and removed columns info
-    mutable UniqueRowStoreMetaPtr row_store_meta;
 
     mutable IMergeTreeDataPartPtr prev_part;
 

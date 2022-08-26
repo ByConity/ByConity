@@ -36,8 +36,6 @@
 #include <Storages/System/StorageSystemReplicas.h>
 #include <Storages/System/StorageSystemReplicationQueue.h>
 #include <Storages/System/StorageSystemHaReplicas.h>
-#include <Storages/System/StorageSystemHaUniqueReplicas.h>
-#include <Storages/System/StorageSystemUniqueLogs.h>
 #include <Storages/System/StorageSystemHaQueue.h>
 #include <Storages/System/StorageSystemDistributionQueue.h>
 #include <Storages/System/StorageSystemSettings.h>
@@ -176,8 +174,6 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemReplicas>(system_database, "replicas");
     attach<StorageSystemReplicationQueue>(system_database, "replication_queue");
     attach<StorageSystemHaReplicas>(system_database, "ha_replicas");
-    attach<StorageSystemHaUniqueReplicas>(system_database, "ha_unique_replicas");
-    attach<StorageSystemUniqueLogs>(system_database, "unique_logs");
     attach<StorageSystemHaQueue>(system_database, "ha_queue");
     attach<StorageSystemDDLWorkerQueue>(system_database, "distributed_ddl_queue");
     attach<StorageSystemDistributionQueue>(system_database, "distribution_queue");

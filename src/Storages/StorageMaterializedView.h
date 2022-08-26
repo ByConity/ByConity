@@ -56,7 +56,7 @@ public:
 
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
 
-    Pipe alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr context, const ASTPtr & query) override;
+    Pipe alterPartition(const StorageMetadataPtr & metadata_snapshot, const PartitionCommands & commands, ContextPtr context) override;
 
     void checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
 

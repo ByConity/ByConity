@@ -169,8 +169,6 @@ public:
             return ColumnLowCardinality::create(dictionary.getColumnUniquePtr(), getIndexes().cut(start, length));
     }
 
-    ColumnPtr selectDefault() const override;
-
     void insert(const Field & x) override;
     void insertDefault() override;
 
