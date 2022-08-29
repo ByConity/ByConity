@@ -36,24 +36,21 @@ public:
     String getEngineName() const override { return "Cnch"; }
     UUID getUUID() const override { return db_uuid; }
     bool canContainMergeTreeTables() const override { return false; }
-    void createTable(
-        ContextPtr local_context,
-        const String & table_name,
-        const StoragePtr & table,
-        const ASTPtr & query) override;
-
-    void dropTable(
-        ContextPtr local_context,
-        const String & table_name,
-        bool no_delay) override;
-
+    void createTable(ContextPtr local_context, const String & table_name, const StoragePtr & table, const ASTPtr & query) override;
+    void dropTable(ContextPtr local_context, const String & table_name, bool no_delay) override;
     [[noreturn]] StoragePtr detachTable(const String & name) override
     {
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, fmt::format("Cnch database doesn't support DETACH, use DETACH {} PERMANENTLY", name));
     }
-
     void detachTablePermanently(ContextPtr local_context, const String & name) override;
-
+    void renameDatabase(ContextPtr local_cotnext, const String & new_name) override;
+    void renameTable(
+        ContextPtr context,
+        const String & table_name,
+        IDatabase & to_database,
+        const String & to_table_name,
+        bool exchange,
+        bool dictionary) override;
     ASTPtr getCreateDatabaseQuery() const override;
     void drop(ContextPtr context) override;
     bool isTableExist(const String & name, ContextPtr local_context) const override;

@@ -1,5 +1,3 @@
-DROP DATABASE IF EXISTS test;
-
 
 DROP TABLE IF EXISTS groups_sum_unbounded_preceding_unbounded_following;
 

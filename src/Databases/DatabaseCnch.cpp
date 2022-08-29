@@ -10,8 +10,11 @@
 #include <Transaction/Actions/DDLDropAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <common/scope_guard.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <Transaction/Actions/DDLRenameAction.h>
 
 namespace DB
 {
@@ -20,6 +23,8 @@ namespace ErrorCodes
 {
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
     extern const int SYSTEM_ERROR;
+    extern const int TABLE_ALREADY_EXISTS;
+    extern const int NOT_IMPLEMENTED;
 }
 
 class CnchDatabaseTablesSnapshotIterator final : public DatabaseTablesSnapshotIterator
@@ -41,15 +46,18 @@ DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, ContextPtr local_con
 void DatabaseCnch::createTable(ContextPtr local_context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
 {
     LOG_DEBUG(log, "Create table {} in query {}", table_name, local_context->getCurrentQueryId());
+    auto txn = local_context->getCurrentTransaction();
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
     if (!query->as<ASTCreateQuery>())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
     auto create_query = query->as<ASTCreateQuery &>();
+    if (create_query.isView())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
+    if (!startsWith(create_query.storage->engine->name, "Cnch"))
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
+
     String statement = serializeAST(*query);
-    auto txn = local_context->getCurrentTransaction();
-
-    if (!txn)
-        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-
     CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
@@ -242,6 +250,34 @@ StoragePtr DatabaseCnch::tryGetTableImpl(const String & name, ContextPtr local_c
 {
     return getContext()->getCnchCatalog()->getTable(
         *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+}
+
+void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_name)
+{
+    auto txn = local_context->getCurrentTransaction();
+    RenameActionParams params;
+    params.db_params = RenameActionParams::RenameDBParams{database_name, new_name, {}};
+    params.type = RenameActionParams::Type::RENAME_DB;
+    auto rename = txn->createAction<DDLRenameAction>(std::move(params));
+    txn->appendAction(std::move(rename));
+    txn->commitV1();
+}
+
+void DatabaseCnch::renameTable(
+    ContextPtr local_context, const String & table_name, IDatabase & to_database, const String & to_table_name, bool /*exchange*/, bool /*dictionary*/)
+{
+    auto txn = local_context->getCurrentTransaction();
+    if (to_database.isTableExist(to_table_name, local_context))
+        throw Exception("Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+    StoragePtr from_table = tryGetTable(table_name, local_context);
+    if (!from_table)
+        throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+
+    RenameActionParams params;
+    params.table_params = RenameActionParams::RenameTableParams{database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
+    auto rename_table = txn->createAction<DDLRenameAction>(std::move(params));
+    txn->appendAction(std::move(rename_table));
+    /// Commit in InterpreterRenameQuery because we can rename multiple tables in a same transaction
 }
 
 }
