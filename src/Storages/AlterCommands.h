@@ -30,6 +30,7 @@ struct AlterCommand
         COMMENT_COLUMN,
         MODIFY_ORDER_BY,
         MODIFY_CLUSTER_BY,
+        DROP_CLUSTER,
         MODIFY_SAMPLE_BY,
         ADD_INDEX,
         DROP_INDEX,

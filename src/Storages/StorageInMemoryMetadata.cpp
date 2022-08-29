@@ -496,14 +496,14 @@ Int64 StorageInMemoryMetadata::getSplitNumberFromClusterByKey() const
 {
     if (hasClusterByKey())
         return cluster_by_key.definition_ast->as<ASTClusterByElement>()->split_number;
-    return -1;
+    return 0;
 }
 
 bool StorageInMemoryMetadata::getWithRangeFromClusterByKey() const
 {
     if (hasClusterByKey())
         return cluster_by_key.definition_ast->as<ASTClusterByElement>()->is_with_range;
-    return -1;
+    return false;
 }
 
 const KeyDescription & StorageInMemoryMetadata::getSortingKey() const

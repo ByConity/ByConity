@@ -151,7 +151,10 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY CLUSTER BY " << (settings.hilite ? hilite_none : "");
         cluster_by->formatImpl(settings, state, frame);
     }
-
+    else if (type == ASTAlterCommand::DROP_CLUSTER)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP CLUSTER";
+    }
     else if (type == ASTAlterCommand::MODIFY_SAMPLE_BY)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY SAMPLE BY " << (settings.hilite ? hilite_none : "");

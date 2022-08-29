@@ -31,6 +31,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_comment_column("COMMENT COLUMN");
     ParserKeyword s_modify_order_by("MODIFY ORDER BY");
     ParserKeyword s_modify_cluster_by("MODIFY CLUSTER BY");
+    ParserKeyword s_drop_cluster("DROP CLUSTER");
     ParserKeyword s_modify_sample_by("MODIFY SAMPLE BY");
     ParserKeyword s_modify_ttl("MODIFY TTL");
     ParserKeyword s_materialize_ttl("MATERIALIZE TTL");
@@ -801,6 +802,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
 
             command->type = ASTAlterCommand::MODIFY_CLUSTER_BY;
+        }
+        else if (s_drop_cluster.ignore(pos, expected))
+        {
+            command->type = ASTAlterCommand::DROP_CLUSTER;
         }
         else if (s_modify_sample_by.ignore(pos, expected))
         {

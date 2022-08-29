@@ -203,6 +203,13 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.cluster_by = command_ast->cluster_by;
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::DROP_CLUSTER)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.type = AlterCommand::DROP_CLUSTER;
+        return command;
+    }
     else if (command_ast->type == ASTAlterCommand::MODIFY_SAMPLE_BY)
     {
         AlterCommand command;
@@ -474,6 +481,10 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
     {
         metadata.cluster_by_key.recalculateClusterByKeyWithNewAST(cluster_by, metadata.columns, context);
     }
+    else if (type == DROP_CLUSTER)
+    {
+        metadata.cluster_by_key = KeyDescription{};
+    }
     else if (type == MODIFY_SAMPLE_BY)
     {
         metadata.sampling_key.recalculateWithNewAST(sample_by, metadata.columns, context);
@@ -671,6 +682,9 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
             rename_visitor.visit(metadata.sampling_key.definition_ast);
 
         if (metadata.isPartitionKeyDefined())
+            rename_visitor.visit(metadata.partition_key.definition_ast);
+
+        if (metadata.isClusterByKeyDefined())
             rename_visitor.visit(metadata.partition_key.definition_ast);
 
         for (auto & index : metadata.secondary_indices)

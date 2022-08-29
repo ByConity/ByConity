@@ -2,6 +2,7 @@ USE test;
 
 DROP TABLE IF EXISTS test.bucket;
 DROP TABLE IF EXISTS test.bucket2;
+DROP TABLE IF EXISTS test.bucket3;
 DROP TABLE IF EXISTS test.bucket_with_split_number;
 DROP TABLE IF EXISTS test.bucket_with_split_number_n_range;
 DROP TABLE IF EXISTS test.dts_bucket_with_split_number_n_range;
@@ -9,6 +10,7 @@ DROP TABLE IF EXISTS test.dts_bucket_with_split_number_n_range;
 
 CREATE TABLE test.bucket (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY age INTO 1 BUCKETS ORDER BY name;
 CREATE TABLE test.bucket2 (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY age INTO 1 BUCKETS ORDER BY name;
+CREATE TABLE test.bucket3 (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY age INTO 1 BUCKETS ORDER BY name;
 CREATE TABLE test.bucket_with_split_number (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY (name, age) INTO 1 BUCKETS SPLIT_NUMBER 60 ORDER BY name;
 CREATE TABLE test.bucket_with_split_number_n_range (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY (name, age) INTO 1 BUCKETS SPLIT_NUMBER 60 WITH_RANGE ORDER BY name;
 CREATE TABLE test.dts_bucket_with_split_number_n_range (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY (name) INTO 1 BUCKETS SPLIT_NUMBER 60 WITH_RANGE ORDER BY name;
@@ -29,6 +31,12 @@ ALTER TABLE test.bucket MODIFY CLUSTER BY age INTO 3 BUCKETS;
 -- SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'bucket' FORMAT CSV;
 
 -- TODO: to uncomment once system tables are fixed
+-- DROP bucket table definition, INSERT, ensure new part's bucket number is -1
+ALTER TABLE test.bucket3 DROP CLUSTER;
+-- INSERT INTO test.bucket3 VALUES ('jack', 15);
+-- SELECT * FROM test.bucket3 ORDER BY name FORMAT CSV;
+-- SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'bucket3' FORMAT CSV;
+
 
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio 
 INSERT INTO test.bucket_with_split_number VALUES ('vivek', 10);
@@ -51,6 +59,7 @@ SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 
 
 DROP TABLE test.bucket;
 DROP TABLE test.bucket2;
+DROP TABLE test.bucket3;
 DROP TABLE test.bucket_with_split_number;
 DROP TABLE test.bucket_with_split_number_n_range;
 DROP TABLE test.dts_bucket_with_split_number_n_range;

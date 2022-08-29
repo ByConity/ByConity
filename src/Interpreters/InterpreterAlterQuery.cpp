@@ -243,6 +243,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::MODIFY_CLUSTER_BY:
+        case ASTAlterCommand::DROP_CLUSTER:
         {
             required_access.emplace_back(AccessType::ALTER_CLUSTER_BY, database, table);
             break;
