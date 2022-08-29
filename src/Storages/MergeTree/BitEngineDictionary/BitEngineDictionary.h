@@ -7,7 +7,6 @@
 
 
 #include <Storages/MergeTree/MergeTreeData.h>
-#include <Storages/MergeTree/BitEngineDictionary/BitEngineDataExchanger.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Functions/FunctionHelpers.h>
 #include <common/logger_useful.h>

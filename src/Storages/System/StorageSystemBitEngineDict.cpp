@@ -7,7 +7,6 @@
 #include <Interpreters/Context.h>
 #include <Access/ContextAccess.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 
 namespace DB

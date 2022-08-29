@@ -36,7 +36,6 @@
 #include <Disks/DiskRestartProxy.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/Kafka/StorageHaKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -143,89 +142,6 @@ AccessType getRequiredAccessType(StorageActionBlockType action_type)
 
 constexpr std::string_view table_is_not_replicated = "Table {} is not replicated";
 
-
-BlockIO executeOrSkipLog(const ASTSystemQuery & query, StorageHaMergeTree & ha, ContextPtr local_context)
-{
-    auto table_id = ha.getStorageID();
-
-    String generated_query = fmt::format(
-        "SELECT type, lsn, create_time, source_replica, new_part_name FROM system.ha_queue "
-        "WHERE database = '{}' AND table = '{}' AND {}",
-        table_id.database_name,
-        table_id.table_name,
-        query.predicate);
-
-    auto block_io = executeQuery(generated_query, Context::createCopy(local_context), true);
-    auto in = block_io.getInputStream();
-    auto block = in->read();
-    if (!block)
-        return block_io;
-
-    auto column = block.getByName("lsn").column;
-    std::vector<UInt64> lsns(column->size());
-    for (size_t i = 0; i < column->size(); ++i)
-        lsns[i] = column->getUInt(i);
-
-    if (query.type == ASTSystemQuery::Type::EXECUTE_LOG)
-    {
-        ha.systemExecuteLog(lsns);
-    }
-    else if (query.type == ASTSystemQuery::Type::SKIP_LOG)
-    {
-        ha.systemSkipLog(lsns);
-    }
-
-    block_io.in = std::make_shared<OneBlockInputStream>(block);
-    return block_io;
-}
-
-BlockIO executeOnTable(const ASTSystemQuery & query, const StorageID & table_id, ContextPtr local_context)
-{
-    using Type = ASTSystemQuery::Type;
-
-    BlockIO block_io;
-    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, local_context);
-
-#define CAST_CALL(_table, _storage, _f) \
-    do \
-    { \
-        if (auto _t = dynamic_cast<_storage *>(_table.get())) \
-            _f(_t); \
-        else \
-            throw Exception("Table " + table_id.getNameForLogs() + " is not " + #_storage, ErrorCodes::BAD_ARGUMENTS); \
-    } while (false);
-
-    switch (query.type)
-    {
-        case Type::EXECUTE_LOG:
-        case Type::SKIP_LOG:
-            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { block_io = executeOrSkipLog(query, *t, local_context); })
-            break;
-
-        case Type::SET_VALUE:
-            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->systemSetValues(query.values_changes); })
-            break;
-
-        case Type::MARK_LOST:
-            CAST_CALL(table, StorageHaMergeTree, [&](auto * t) { t->markLost(); })
-            break;
-
-        case Type::EXECUTE_MUTATION:
-            CAST_CALL(table, StorageHaMergeTree, [&] (auto * t) { t->systemExecuteMutation(query.mutation_id); })
-            break;
-
-        case Type::RELOAD_MUTATION:
-            CAST_CALL(table, StorageHaMergeTree, [&] (auto * t) { t->systemReloadMutation(query.mutation_id); })
-            break;
-
-        default:
-            throw Exception("Unknown type of SYSTEM query on table", ErrorCodes::BAD_ARGUMENTS);
-    }
-
-#undef CAST_CALL
-
-    return block_io;
-}
 }
 
 /// Implements SYSTEM [START|STOP] <something action from ActionLocks>
@@ -492,17 +408,6 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::SYNC_REPLICA:
             syncReplica(query);
             break;
-        case Type::OFFLINE_REPLICA:
-        case Type::OFFLINE_NODE:
-            offlineHa(query, query.type == Type::OFFLINE_NODE);
-            break;
-        case Type::ONLINE_REPLICA:
-        case Type::ONLINE_NODE:
-            onlineHa(query, query.type == Type::ONLINE_NODE);
-            break;
-        case Type::SYNC_MUTATION:
-            syncMutation(query, system_context);
-            break;
         case Type::FLUSH_DISTRIBUTED:
             flushDistributed(query);
             break;
@@ -547,13 +452,6 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::FETCH_PARTS:
             fetchParts(query, table_id, system_context);
             break;
-        case Type::EXECUTE_LOG:
-        case Type::SKIP_LOG:
-        case Type::SET_VALUE:
-        case Type::MARK_LOST:
-        case Type::EXECUTE_MUTATION:
-        case Type::RELOAD_MUTATION:
-            return executeOnTable(query, table_id, system_context);
         case Type::METASTORE:
             executeMetastoreCmd(query);
             break;
@@ -652,7 +550,6 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
     if (!table)
         return nullptr;
     if (!dynamic_cast<const StorageReplicatedMergeTree *>(table.get()) &&
-        !dynamic_cast<const StorageHaMergeTree *>(table.get()) &&
         !dynamic_cast<const StorageHaKafka *>(table.get()))
         return nullptr;
 
@@ -830,90 +727,6 @@ bool InterpreterSystemQuery::dropReplicaImpl(ASTSystemQuery & query, const Stora
     return true;
 }
 
-void InterpreterSystemQuery::offlineHa(DB::ASTSystemQuery& query, bool is_node)
-{
-    if (is_node)
-    {
-        // TODO, get replica name based on node ip
-        // This operation is dangerous, and limit its usage
-        auto databases = DatabaseCatalog::instance().getDatabases();
-        for (const auto & database : databases)
-        {
-            // offline a replica in two-phase:
-            // 1. set replica as offfline node
-            // 2. mark replica as lost
-            // iterator all the tables
-            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                auto table = iterator->table();
-                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
-                if (ha_table)
-                    ha_table->offlineNodePhaseOne(query.replica);
-            }
-        }
-
-        for (const auto & database : databases)
-        {
-            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                auto table = iterator->table();
-                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
-                if (ha_table)
-                    ha_table->offlineNodePhaseTwo(query.replica);
-            }
-        }
-    }
-    else
-    {
-        String & database = query.database;
-        String & table = query.table;
-        String & replica = query.replica;
-        if (database.empty() || table.empty() || replica.empty())
-            throw Exception("Database, table, replica must be specified when offline table.", ErrorCodes::LOGICAL_ERROR);
-
-        auto table_ptr = DatabaseCatalog::instance().getTable(table_id, getContext());
-        // only apply to HaMergeTree
-        if (!table_ptr || !dynamic_cast<StorageHaMergeTree *>(table_ptr.get())) return;
-
-        auto *explicit_table = dynamic_cast<StorageHaMergeTree *>(table_ptr.get());
-        explicit_table->offlineReplica(replica);
-    }
-}
-
-void InterpreterSystemQuery::onlineHa(DB::ASTSystemQuery& query, bool is_node)
-{
-    if (is_node)
-    {
-        // This operation is dangerous, and limit its usage
-        auto databases = DatabaseCatalog::instance().getDatabases();
-        for (const auto & database : databases)
-        {
-            for (auto iterator = database.second->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
-            {
-                StoragePtr table = iterator->table();
-                auto *ha_table = dynamic_cast<StorageHaMergeTree *>(table.get());
-                if (ha_table)
-                    ha_table->onlineNode(query.replica);
-            }
-        }
-    }
-    else
-    {
-        String & database = query.database;
-        String & table = query.table;
-        String & replica = query.replica;
-        if (database.empty() || table.empty() || replica.empty())
-            throw Exception("Database, table, replica must be specified when online table.", ErrorCodes::LOGICAL_ERROR);
-
-        auto table_ptr = DatabaseCatalog::instance().getTable(table_id, getContext());
-        // only apply to HaMergeTree
-        if (!table_ptr || !dynamic_cast<StorageHaMergeTree *>(table_ptr.get())) return;
-
-        auto *explicit_table = dynamic_cast<StorageHaMergeTree *>(table_ptr.get());
-        explicit_table->onlineNode(replica);
-    }
-}
-
 void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
 {
     getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
@@ -931,31 +744,8 @@ void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
         }
         LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
     }
-    else if (auto storage_ha = dynamic_cast<StorageHaMergeTree *>(table.get()))
-    {
-        LOG_TRACE(log, "Synchronizing entries in replica's queue with table's log and waiting for it to become empty");
-        if (!storage_ha->waitForShrinkingQueueSize(0, getContext()->getSettingsRef().receive_timeout.totalMilliseconds()))
-        {
-            LOG_ERROR(log, "SYNC REPLICA {}: Timed out!", table_id.getNameForLogs());
-            throw Exception(
-                "SYNC REPLICA " + table_id.getNameForLogs() + ": command timed out! See the 'receive_timeout' setting",
-                ErrorCodes::TIMEOUT_EXCEEDED);
-        }
-        LOG_TRACE(log, "SYNC REPLICA {}: OK", table_id.getNameForLogs());
-    }
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS, table_is_not_replicated.data(), table_id.getNameForLogs());
-}
-
-void InterpreterSystemQuery::syncMutation(ASTSystemQuery &, ContextMutablePtr system_context)
-{
-    /// TODO: getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
-    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
-
-    if (auto ha = dynamic_cast<StorageHaMergeTree *>(table.get()))
-        ha->waitAllMutations(system_context->getSettingsRef().receive_timeout.value.totalMilliseconds());
-    else
-        throw Exception("Table " + table_id.getNameForLogs() + " is not HaMergeTree", ErrorCodes::BAD_ARGUMENTS);
 }
 
 void InterpreterSystemQuery::flushDistributed(ASTSystemQuery &)
@@ -1205,17 +995,6 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTART_DISK);
             break;
         }
-        case Type::OFFLINE_REPLICA:
-        case Type::OFFLINE_NODE:
-        case Type::ONLINE_REPLICA:
-        case Type::ONLINE_NODE:
-        case Type::EXECUTE_LOG:
-        case Type::SKIP_LOG:
-        case Type::SET_VALUE:
-        case Type::SYNC_MUTATION:
-        case Type::MARK_LOST:
-        case Type::EXECUTE_MUTATION:
-        case Type::RELOAD_MUTATION:
         case Type::METASTORE:
         case Type::CLEAR_BROKEN_TABLES:
         /// TODO:

@@ -70,7 +70,6 @@
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/InterserverIOHandler.h>
-#include <Interpreters/HaReplicaHandler.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/SegmentScheduler.h>
@@ -88,7 +87,6 @@
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/HaReplicaHandler.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/NamedSession.h>
@@ -313,7 +311,6 @@ struct ContextSharedPart
     ReplicatedFetchList replicated_fetch_list;
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
-    HaReplicaHandler ha_replica_handler;                    /// Handler for ha communication.
 
     mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
     mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
@@ -592,8 +589,6 @@ Context::~Context() = default;
 
 
 InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
-
-HaReplicaHandler & Context::getHaReplicaHandler() { return shared->ha_replica_handler; }
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {

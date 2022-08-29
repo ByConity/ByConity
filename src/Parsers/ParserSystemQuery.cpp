@@ -162,47 +162,11 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
-        case Type::OFFLINE_REPLICA:
-        case Type::ONLINE_REPLICA:
-        {
-            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
-                return false;
-            if (!ParserKeyword("OF").ignore(pos, expected))
-                return false;
-            if (!parseIdentifierOrStringLiteral(pos, expected, res->replica))
-                return false;
-            break;
-        }
-        case Type::OFFLINE_NODE:
-        case Type::ONLINE_NODE:
-        {
-            if (!parseIdentifierOrStringLiteral(pos, expected, res->replica))
-                return false;
-            break;
-        }
-
         case Type::RESTART_REPLICA:
         case Type::SYNC_REPLICA:
-        case Type::SYNC_MUTATION:
-        case Type::MARK_LOST:
             if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
                 return false;
             break;
-
-        case Type::EXECUTE_MUTATION:
-        case Type::RELOAD_MUTATION:
-        {
-            /// system execute|reload mutation 'mutation_id' on db.table
-            ASTPtr ast;
-            if (!ParserStringLiteral{}.parse(pos, ast, expected))
-                return false;
-            res->mutation_id = ast->as<ASTLiteral &>().value.safeGet<String>();
-            if (!ParserKeyword{"ON"}.ignore(pos, expected))
-                return false;
-            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
-                return false;
-            break;
-        }
 
         case Type::RESTART_DISK:
         {
@@ -290,30 +254,6 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             }
 
             res->seconds = seconds->as<ASTLiteral>()->value.get<UInt64>();
-            break;
-        }
-
-        case Type::SKIP_LOG:
-        case Type::EXECUTE_LOG:
-        {
-            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
-                return false;
-
-            if (!ParserKeyword{"WHERE"}.ignore(pos, expected))
-                return false;
-
-            if (!ParserExpression{dt}.parse(pos, res->predicate, expected))
-                return false;
-
-            break;
-        }
-
-        case Type::SET_VALUE:
-        {
-            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
-                return false;
-            if (!ParserSetQuery(true).parse(pos, res->values_changes, expected))
-                return false;
             break;
         }
 

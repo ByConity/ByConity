@@ -53,7 +53,6 @@ public:
         const ContextPtr & context_);
 
     bool ingestPartition();
-    void ingestPartitionFromRemote(const String & source_replica, const String & source_database, const String & source_table);
 
     static Names getOrderedKeys(const Names & key_names, const StorageInMemoryMetadata & data);
     static zkutil::EphemeralNodeHolderPtr getIngestTaskLock(const zkutil::ZooKeeperPtr & zk_ptr, const String & zookeeper_path, const String & replica_name, const String & partition_id);

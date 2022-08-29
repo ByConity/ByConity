@@ -7,7 +7,6 @@
 #include <Interpreters/Context.h>
 #include <Access/ContextAccess.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 
 namespace DB
@@ -46,8 +45,7 @@ void StorageSystemBitEngine::fillData(MutableColumns & res_columns, ContextPtr c
         for (auto tables_it = database->getTablesIterator(context); tables_it->isValid(); tables_it->next())
         {
             const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(tables_it->table().get());
-            const StorageHaMergeTree * ha_merge_tree = dynamic_cast<const StorageHaMergeTree *>(tables_it->table().get());
-            if (merge_tree || ha_merge_tree)
+            if (merge_tree)
                 tables[database_name][tables_it->name()] = tables_it->table();
         }
     }

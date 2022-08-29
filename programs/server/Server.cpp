@@ -29,7 +29,6 @@
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Server/HTTPHandlerFactory.h>
-#include <Server/HaTCPHandlerFactory.h>
 #include <Server/MySQLHandlerFactory.h>
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
@@ -1423,7 +1422,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
-    std::shared_ptr<ProtocolServerAdapter> ha_server;
     {
         /// This object will periodically calculate some metrics.
         AsynchronousMetrics async_metrics(
@@ -1572,21 +1570,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
             });
 
-            port_name = "ha_tcp_port";
-            createServer(listen_host, port_name, listen_try, [&](UInt16 port)
-            {
-                Poco::Net::ServerSocket socket;
-                auto address = socketBindListen(socket, listen_host, port);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
-                ha_server = std::make_shared<ProtocolServerAdapter>(
-                    port_name,
-                    std::make_unique<Poco::Net::TCPServer>(
-                        new HaTCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for ha communication (tcp): {}", address.toString());
-            });
-
             port_name = "mysql_port";
             createServer(listen_host, port_name, listen_try, [&](UInt16 port)
             {
@@ -1721,8 +1704,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         for (auto & server : *servers)
             server.start();
-        if (ha_server)
-            ha_server->start();
 
         /// Server and worker rpc services
         std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
@@ -1780,8 +1761,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server.stop();
                 current_connections += server.currentConnections();
             }
-            if (ha_server)
-                ha_server->stop();
 
             for (auto & rpc_server : rpc_servers)
                 rpc_server->Stop(0);
