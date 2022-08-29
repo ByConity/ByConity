@@ -14,7 +14,5 @@
 
 	"rows": 0,
 
-	"rows_before_limit_at_least": 10,
-
-	"mv_match": 0
+	"rows_before_limit_at_least": 10
 }
