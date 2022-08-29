@@ -2,7 +2,6 @@
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/PartLinker.h>
@@ -442,24 +441,10 @@ bool IngestPartition::ingestPartition()
     {
         String source_db_table = source_data->getStorageID().getFullTableName();
         String target_db_table = target_data->getStorageID().getFullTableName();
-        if (auto * ha_target_table = dynamic_cast<StorageHaMergeTree *>(target_table.get()))
-        {
-            String detach_query = "ALTER TABLE " + source_db_table + " DETACH PARTITION ID '" + partition_id + "'";
-            String move_query = "ALTER TABLE " + target_db_table + " MOVE PARTITION ID '" + partition_id + "' FROM " + source_db_table;
-            String attach_query = "ALTER TABLE " + target_db_table + " ATTACH PARTITION ID '" + partition_id + "'";
+        String move_to_query = "ALTER TABLE " + source_db_table + " MOVE PARTITION ID '" + partition_id + "'" + " TO TABLE " + target_db_table;
+        LOG_TRACE(log, "AST move partition: {}", move_to_query);
 
-            LOG_TRACE(log, "AST move partition: {}, {}, {}", detach_query, move_query, attach_query);
-            execute_query(detach_query);
-            ha_target_table->movePartitionFrom(source_table, partition, context);
-            ha_target_table->attachPartition(partition, target_meta, false, context);
-        }
-        else
-        {
-            String move_to_query = "ALTER TABLE " + source_db_table + " MOVE PARTITION ID '" + partition_id + "'" + " TO TABLE " + target_db_table;
-            LOG_TRACE(log, "AST move partition: {}", move_to_query);
-
-            execute_query(move_to_query);
-        }
+        execute_query(move_to_query);
 
         return false;
     }
@@ -523,96 +508,6 @@ bool IngestPartition::ingestPartition()
     // context->dropCaches(target_data->getDatabaseName(), target_data->getTableName());
 
     return true;
-}
-
-void IngestPartition::ingestPartitionFromRemote(const String & source_replica, const String & source_database_in, const String & source_table_in)
-{
-    StorageHaMergeTree * target_data = dynamic_cast<StorageHaMergeTree *>(target_table.get());
-    String source_database_name = source_database_in;
-    String source_table_name = source_table_in;
-    if (!target_data)
-        return;
-    /// Asks to complete merges and does not allow them to start.
-    auto merge_blocker = target_table->getActionLock(ActionLocks::PartsMerge);
-    // lock table structure and lock write
-    // auto lock = target_table->lockAlterIntention(RWLockImpl::NO_QUERY);
-    // target_table->lockNewDataStructureExclusively(lock, RWLockImpl::NO_QUERY);
-    // target_table->lockStructureForShare(true, context->getCurrentQueryId());
-    String partition_id = target_data->getPartitionIDFromQuery(partition, context);
-
-    auto parts_to_ingest = target_data->getDataPartsVectorInPartition(MergeTreeDataPartState::Committed,
-                                                              partition_id);
-    if (parts_to_ingest.empty())
-    {
-        /** For remote ingest, if the target is empty, we can return directly since its
-         *  remote should generate a GET_PART log.
-         */
-        return;
-        // throw Exception("The required partition is empty when ingest columns", ErrorCodes::LOGICAL_ERROR);
-    }
-
-    Names all_columns(column_names.begin(), column_names.end());
-    all_columns.insert(all_columns.end(), key_names.begin(), key_names.end());
-
-    /// STEP 1: Construct RemoteBlockInputStream, fetch the partition data from remote server
-    auto replica_address = target_data->getReplicaAddress(source_replica);
-    // auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(target_data->getContext()->getSettingsRef());
-    // auto client_info = target_data->getContext()->getClientInfo();
-    // String user = client_info.current_user;
-    // String password = client_info.current_password;
-    auto credentials = target_data->getContext()->getInterserverCredentials();
-    auto user = credentials->getUser();
-    auto password = credentials->getPassword();
-    /**
-     * For sync mode, we use source table from replica_address, which means remote source table is its replicated table intead of temp source table.
-     */
-    if (source_table_name.empty())
-    {
-        source_database_name = replica_address.database;
-        source_table_name = replica_address.table;
-    }
-    //LOG_TRACE(log, " <<< debug user and password: " + user + " : " + password + " from database.table: " + source_database + "." + source_table);
-
-    Connection connection(
-            replica_address.host,
-            replica_address.queries_port,
-            source_database_name,
-            user,
-            password,
-            "",
-            "",
-            "ingest_client",
-            Protocol::Compression::Enable,
-            Protocol::Secure::Disable);
-
-    auto remote_query = generateRemoteQuery(source_database_name, source_table_name, partition_id, all_columns);
-
-    LOG_TRACE(log, " Do {} from source {}", remote_query, source_replica);
-
-    RemoteBlockInputStream remote_input(connection, remote_query, {}, context);
-    IngestSources src_blocks;
-    auto match_type = std::make_shared<DataTypeUInt8>();
-
-    remote_input.readPrefix();
-    while (Block block = remote_input.read())
-    {
-        // append match count column into block
-        auto match_col = match_type->createColumn();
-        typeid_cast<ColumnUInt8 &>(*match_col).getData().resize_fill(block.rows());
-        block.insert(ColumnWithTypeAndName(std::move(match_col), match_type, "___match_count"));
-        src_blocks.push_back(std::make_shared<IngestSource>(block));
-    }
-    remote_input.readSuffix();
-
-    /// STEP 2: Perform outer join, complete the ingestion
-    const auto &settings = context->getSettingsRef();
-
-    IngestParts ingest_parts = generateIngestParts(*target_data, parts_to_ingest);
-
-    ingestion(*target_data, ingest_parts, src_blocks, column_names, key_names, all_columns, settings);
-
-    // After ingest, the columns have been updated
-    // context->dropCaches(target_data->getDatabaseName(), target_data->getTableName());
 }
 
 IngestPartition::IngestSources IngestPartition::generateSourceBlocks(MergeTreeData & source_data,

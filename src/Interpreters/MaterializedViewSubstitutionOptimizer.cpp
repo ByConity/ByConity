@@ -56,7 +56,7 @@ class Logger;
 namespace DB
 {
     static const int MAX = std::numeric_limits<int>::max();
-    static const std::unordered_set<String> MERGE_TREES{"MergeTree", "ReplicatedMergeTree", "HaMergeTree"};
+    static const std::unordered_set<String> MERGE_TREES{"MergeTree", "ReplicatedMergeTree"};
     static const std::unordered_set<String> AGGREGATING_MERGE_TREES{"AggregatingMergeTree",
                                                                     "ReplicatedAggregatingMergeTree",
                                                                     "HaAggregatingMergeTree"};

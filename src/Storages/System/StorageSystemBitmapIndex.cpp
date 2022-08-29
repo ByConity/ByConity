@@ -6,7 +6,6 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Access/ContextAccess.h>
 
 
@@ -40,9 +39,8 @@ void StorageSystemBitmapIndex::fillData(MutableColumns & res_columns, ContextPtr
         for (auto iterator = database->getTablesIterator(context); iterator->isValid(); iterator->next())
         {
             const StorageMergeTree * merge_tree = dynamic_cast<const StorageMergeTree *>(iterator->table().get());
-            const StorageHaMergeTree * ha_merge_tree = dynamic_cast<const StorageHaMergeTree *>(iterator->table().get());
 
-            if (merge_tree || ha_merge_tree)
+            if (merge_tree)
                 bitmap_index_tables[database_name][iterator->name()] = iterator->table();
         }
     }

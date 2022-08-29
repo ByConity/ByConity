@@ -38,10 +38,6 @@ public:
         UNKNOWN,
         SHUTDOWN,
         KILL,
-        OFFLINE_REPLICA, // offline replica of a table
-        ONLINE_REPLICA, // online replica of a table
-        OFFLINE_NODE,    // offline the node in case unrecoverable failure
-        ONLINE_NODE,
         SUSPEND,
         DROP_DNS_CACHE,
         DROP_MARK_CACHE,
@@ -58,9 +54,6 @@ public:
         RESTORE_REPLICA,
         DROP_REPLICA,
         SYNC_REPLICA,
-        SYNC_MUTATION,
-        EXECUTE_MUTATION,
-        RELOAD_MUTATION,
         START_RESOURCE_GROUP,
         STOP_RESOURCE_GROUP,
         RELOAD_DICTIONARY,
@@ -88,10 +81,6 @@ public:
         FLUSH_DISTRIBUTED,
         STOP_DISTRIBUTED_SENDS,
         START_DISTRIBUTED_SENDS,
-        SKIP_LOG,
-        EXECUTE_LOG,
-        SET_VALUE,
-        MARK_LOST,
         START_CONSUME,
         STOP_CONSUME,
         RESTART_CONSUME,

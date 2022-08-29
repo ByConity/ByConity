@@ -2,8 +2,6 @@
 
 #include <Storages/MergeTree/BitEngineDictionary/IBitEngineDictionaryManager.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionarySnapshot.h>
-#include <Storages/MergeTree/BitEngineDictionary/BitEngineDataExchanger.h>
-#include <Storages/MergeTree/HaMergeTreeAddress.h>
 
 #include <Interpreters/InterserverIOHandler.h>
 #include <Common/RWLock.h>
@@ -16,15 +14,12 @@
 namespace DB
 {
 class MergeTreeData;
-class StorageHaMergeTree;
 class BitEngineDictionarySnapshot;
 class BitEngineDataService;
-class BitEngineDataExchanger;
 class BitEngineDictionary;
 class IncrementOffset;
 class IncrementData;
 
-using BitEngineDataExchangerPtr = std::shared_ptr<BitEngineDataExchanger>;
 using BitEngineDictionaryPtr = std::shared_ptr<BitEngineDictionary>;
 using BitEngineDictionarySnapshotPtr = std::shared_ptr<BitEngineDictionarySnapshot>;
 
@@ -137,105 +132,4 @@ private:
 
 using BitEngineDictionaryManagerPtr = std::shared_ptr<IBitEngineDictionaryManager>;
 
-
-
-/////////////   StartOf BitEngineDictionaryHaManager
-
-
-class BitEngineDictionaryHaManager
-{
-public:
-    BitEngineDictionaryHaManager(StorageHaMergeTree & storage, BitEngineDictionaryManager * bitengine_manager, const String & zookeeper_path, const String & replica_name);
-    ~BitEngineDictionaryHaManager();
-    zkutil::ZooKeeperPtr getZooKeeper();
-    String getReplicaPath() { return replica_path; }
-    String getReplicaPath(const String & replica) { return zookeeper_path + "/replicas/" + replica; }
-
-    std::tuple<size_t, String> getMaxVersionAndReplica();
-    size_t getMinVersion();
-    size_t getVersionOnZooKeeper();
-    void updateVersionOnZookeeper();
-    void updateVersion();
-    void tryUpdateDictFromReplica(const String & replica);
-    void tryUpdateDictFromReplicaPath(const String & src_replica_path);
-    void tryUpdateDict();
-    void resetDict() { resetDictImpl(); } // used in repair mode where dicts in all replicas are corrupted.
-
-    void tryUpdateVersionAndDict();
-    String getDatabaseAndTable();
-
-    void readData(ReadBuffer & in);
-    void writeData(WriteBuffer & out);
-    void readIncrementData(ReadBuffer & in);
-    void writeIncrementData(WriteBuffer & out, const IncrementOffset & increment_offset);
-    IncrementOffset readIncrementOffset(ReadBuffer & in);
-    void writeIncrementOffset(WriteBuffer & out);
-
-    bool isValid() {
-        if (bitengine_manager)
-            return is_valid && bitengine_manager->isValid();
-        return false;
-    }
-    void setInvalid();
-    void setValid();
-    void flush();
-
-    struct BitEngineLock
-    {
-        BitEngineLock(BitEngineDictionaryHaManager & ha_manager, const String & lock_path);
-        ~BitEngineLock();
-        BitEngineDictionaryHaManager & ha_manager;
-        String lock_path;
-    };
-
-    using BitEngineLockPtr = std::shared_ptr<BitEngineLock>;
-
-    BitEngineLockPtr tryGetLock();
-
-    void stop();
-    bool isStopped() { return stopped; }
-
-    void checkBitEnginePart(const MergeTreeData::DataPartPtr & part);
-    bool recodeBitEnginePart(const FutureMergedMutatedPart & part, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
-    bool recodeBitEngineParts(const std::vector<FutureMergedMutatedPart> & parts, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
-    bool recodeBitEnginePartsParallel(const std::vector<FutureMergedMutatedPart> & parts, ContextPtr query_context, bool can_skip = false, bool part_in_detach = true);
-    MergeTreeData::DataPartsVector checkEncodedParts(const MergeTreeData::DataPartsVector & parts, ContextPtr query_context, bool without_lock = false);
-
-private:
-    friend class BitEngineDataExchanger;
-    friend class BitEngineDataService;
-
-    void prepareZookeeper();
-    Strings getReplicas();
-    HaMergeTreeAddress getReplicaAddress(const String & replica_name_);
-    Strings getActiveReplicas();
-    bool isActiveReplica(const String & replica);
-    bool isActiveReplica(const String & replica, zkutil::ZooKeeperPtr & zookeeper);
-    size_t getVersionOfReplica(const String & replica, zkutil::ZooKeeperPtr & zookeeper);
-    void setVersionOnZookeeper();
-    void resetDictImpl();
-
-    StorageHaMergeTree & storage;
-    BitEngineDictionaryManager * bitengine_manager;
-
-    String zookeeper_path;
-    String replica_name;
-    String replica_path;
-    String version_path;
-    String lock_path;
-    bool is_valid = true;
-
-    Poco::Logger * log;
-
-    size_t version = 0;
-    bool stopped = false;
-    zkutil::ZooKeeperPtr current_zookeeper;
-    std::mutex ha_mutex;
-    std::mutex lock_mutex;
-
-    BitEngineDataExchangerPtr bitengine_dict_exchanger;
-    InterserverIOEndpointPtr bitengine_dict_endpoint;
-
-    zkutil::EventPtr event = std::make_shared<Poco::Event>();
-};
 }

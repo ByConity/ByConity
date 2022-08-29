@@ -3,7 +3,6 @@
 #include <Interpreters/DatabaseCatalog.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 
@@ -177,8 +176,7 @@ ColumnPtr encodeColumnDiscardUnknown(
     ColumnWithTypeAndName column_encoded;
     BitEngineEncodeSettings settings(context->getSettingsRef(), merge_tree->getSettings());
 
-    if (dynamic_cast<StorageMergeTree *>(storage.get()) ||
-        dynamic_cast<StorageHaMergeTree *>(storage.get()))
+    if (dynamic_cast<StorageMergeTree *>(storage.get()))
     {
 
         auto dict_ptr = getBitEngineDictionaryPtr(*merge_tree, dict_name);
@@ -236,7 +234,7 @@ ColumnPtr encodeColumnAddUnknown(
     bool need_update = false;
     BitEngineEncodeSettings settings(context->getSettingsRef(), merge_tree->getSettings());
 
-    /// Below: for MergeTree/HaMergeTree
+    /// Below: for MergeTree
     auto dict_ptr = getBitEngineDictionaryPtr(*merge_tree, dict_name);
     if (!dict_ptr->isValid())
         throw Exception("BitEngine cannot encode column " + column.name + ", since the dict is invalid", ErrorCodes::LOGICAL_ERROR);
@@ -294,25 +292,6 @@ ColumnPtr encodeColumnAddUnknown(
     {
         encodeColumnData();
     }
-    else if (auto * ha_merge_tree = dynamic_cast<StorageHaMergeTree *>(storage.get()); ha_merge_tree)
-    {
-        if (auto * dict_ha_manager = ha_merge_tree->getBitEngineDictionaryHaManager(); dict_ha_manager)
-        {
-            // version in zk is updated when releasing the BitEngineLock
-            auto bitengine_lock = dict_ha_manager->tryGetLock();
-            dict_ha_manager->tryUpdateDict();
-            // double-check the status of bitengine manager if the storage is shutdown when it was waitting for the lock
-            if (!dict_ha_manager || dict_ha_manager->isStopped())
-            {
-                LOG_DEBUG(&Poco::Logger::get("encodeColumnAddUnknown"), "The HaMergeTree Engine doesn't work well now, encoding column failed.");
-                return column_encoded.column;
-            }
-            encodeColumnData();
-        }
-        else
-            throw Exception("BitEngineDictionaryHaManager is not found in " + table + ", encoding column failed."
-                            ,ErrorCodes::LOGICAL_ERROR);
-    }
     else
     {
         throw Exception("BitEngine doesn't work in the table engine, input is: " + database + "." + table ,ErrorCodes::LOGICAL_ERROR);
@@ -341,7 +320,7 @@ ColumnPtr decodeColumn(
     ColumnPtr column_decoded;
     String valid_dict_name = try_parse_dict_name ? getValidDictName(storage, dict_name) : dict_name;
 
-    /// Below: for MergeTree/HaMergeTree
+    /// Below: for MergeTree
     auto * dict_manager = dynamic_cast<BitEngineDictionaryManager *>((merge_tree->bitengine_dictionary_manager).get());
     if (!dict_manager)
         throw Exception("BitEngine cannot decode column " + column.name + ", since the dictionary is invalid",

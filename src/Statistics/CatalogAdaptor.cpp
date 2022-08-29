@@ -5,7 +5,6 @@
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);
-CatalogAdaptorPtr createCatalogAdaptorHa(ContextPtr context);
 
 CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
 {
@@ -13,7 +12,8 @@ CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
     {
         return createCatalogAdaptorMemory(context);
     }
-    return createCatalogAdaptorHa(context);
+    /// TODO: revise me
+    return createCatalogAdaptorMemory(context);
 }
 
 

@@ -139,27 +139,6 @@ struct Settings;
     \
     /** ByteDance settings */ \
     \
-    /* HaMergeTree related settings */                                                                        \
-    /** When we find a mutation is finished on the other replica, we don't check for hang mutation            \
-     *  immediately because the current replica may finish the execution later on. So we wait for             \
-     *  the configured period of time before continue. */                                                     \
-    M(UInt64, ha_check_hang_mutations_wait_period, 600, "", 0) \
-    M(UInt64, ha_check_hang_mutations_interval, 60, "", 0) \
-    M(UInt64, ha_log_exchanger_queue_max_size, 8192, "", 0) \
-    M(UInt64, ha_mark_lost_replica_timeout, 36 * 60 * 60, "", 0) \
-    M(UInt64, ha_mark_bad_lsn_timeout, 37 * 60 * 60, "", 0) \
-    M(UInt64, ha_mark_bad_lsn_min_timeout, 2 * 60 * 60, "", 0) \
-    M(UInt64, ha_queue_update_sleep_ms, 25 * 1000, "", 0) \
-    M(UInt64, ha_update_replica_stats_min_period, 10, "", 0) \
-    M(UInt64, ha_update_replica_stats_period, 60, "", 0) \
-    M(UInt64, ha_commit_log_period, 120, "", 0) \
-    M(UInt64, ha_logs_to_keep, 1000, "", 0) \
-    M(UInt64, ha_log_batch_size, 2, "", 0) \
-    M(UInt64, ha_max_log_try_times, 20, "", 0) \
-    M(Float, ha_min_log_select_interval, 0.5, "", 0) \
-    M(Float, ha_max_log_select_interval, 60.0, "", 0) \
-    M(Float, ha_log_select_interval_multiplier, 2.0, "", 0) \
-    M(Bool, ha_queue_prefer_parent_merge, true, "", 0) \
     /* Bitmap index settings */        \
     /* TODO doongyifeng change it to false    */                    \
     M(Bool, enable_build_ab_index, true, "", 0) \

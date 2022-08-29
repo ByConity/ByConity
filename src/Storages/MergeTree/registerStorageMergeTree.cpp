@@ -5,7 +5,6 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/Macros.h>
@@ -849,22 +848,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
     if (replicated)
     {
         return StorageReplicatedMergeTree::create(
-            zookeeper_path,
-            replica_name,
-            args.attach,
-            args.table_id,
-            args.relative_data_path,
-            metadata,
-            args.getContext(),
-            date_column_name,
-            merging_params,
-            std::move(storage_settings),
-            args.has_force_restore_data_flag,
-            allow_renaming);
-    }
-    else if (is_ha)
-    {
-        return StorageHaMergeTree::create(
             zookeeper_path,
             replica_name,
             args.attach,

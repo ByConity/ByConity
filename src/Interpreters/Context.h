@@ -66,7 +66,6 @@ class ExternalModelsLoader;
 class InterserverCredentials;
 using InterserverCredentialsPtr = std::shared_ptr<const InterserverCredentials>;
 class InterserverIOHandler;
-class HaReplicaHandler;
 class BackgroundSchedulePool;
 class MergeList;
 class ManipulationList;
@@ -715,8 +714,6 @@ public:
     OutputFormatPtr getOutputFormatParallelIfPossible(const String & name, WriteBuffer & buf, const Block & sample) const;
 
     InterserverIOHandler & getInterserverIOHandler();
-
-    HaReplicaHandler & getHaReplicaHandler();
 
     /// How other servers can access this for downloading replicated data.
     void setInterserverIOAddress(const String & host, UInt16 port);
