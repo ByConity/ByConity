@@ -1,5 +1,3 @@
-DROP DATABASE IF EXISTS test;
-
 
 DROP TABLE IF EXISTS range_sum_current_1_following;
 

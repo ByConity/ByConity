@@ -236,7 +236,11 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     DatabasePtr database = DatabaseFactory::get(create, metadata_path / "", getContext());
     if (const auto * database_cnch = dynamic_cast<const DatabaseCnch *>(database.get()))
+    {
+        if (create.attach || create.attach_short_syntax || create.attach_from_path)
+            throw Exception("Cnch database doesn't support ATTACH", ErrorCodes::SUPPORT_IS_DISABLED);
         database_cnch->createEntryInCnchCatalog(getContext());
+    }
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;

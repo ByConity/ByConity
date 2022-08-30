@@ -767,10 +767,12 @@ namespace Catalog
     bool Catalog::isTableExists(const String & db, const String & name, const TxnTimestamp & ts)
     {
         bool res = false;
+        std::shared_ptr<Protos::DataModelTable> table;
         runWithMetricSupport(
             [&] {
                 String table_uuid = meta_proxy->getTableUUID(name_space, db, name);
-                if (!table_uuid.empty() && tryGetTableFromMetastore(table_uuid, ts.toUInt64()))
+
+                if (!table_uuid.empty() && (table = tryGetTableFromMetastore(table_uuid, ts.toUInt64())) && !Status::isDetached(table->status()) && !Status::isDeleted(table->status()))
                     res = true;
             },
             ProfileEvents::IsTableExistsSuccess,

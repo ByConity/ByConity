@@ -89,7 +89,7 @@ public:
     ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
-    std::shared_ptr<TAction> createAction(Args &&... args) const
+    ActionPtr createAction(Args &&... args) const
     {
         return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
     }

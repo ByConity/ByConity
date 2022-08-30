@@ -212,10 +212,10 @@ void DatabaseCatalog::shutdownImpl()
 
 DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextPtr & local_context) const
 {
-    if (use_cnch_catalog)
+    if (use_cnch_catalog && local_context->getCurrentTransaction())
     {
-        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), TxnTimestamp::maxTS() , false);
-        if (storage)
+        StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), local_context->getCurrentTransactionID().toUInt64(), false);
+        if (storage && !storage->is_dropped && !storage->is_detached)
         {
             DatabasePtr database_cnch = getDatabaseCnch(storage->getDatabaseName());
             if (!database_cnch)

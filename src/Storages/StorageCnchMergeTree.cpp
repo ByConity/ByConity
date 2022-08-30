@@ -33,6 +33,7 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include "Common/Exception.h"
 #include <common/logger_useful.h>
+#include "Transaction/Actions/DDLAlterAction.h"
 #include <Catalog/DataModelPartWrapper_fwd.h>
 
 
@@ -1074,7 +1075,8 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    DDLAlterActionPtr alter_act = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto alter_act = action->as<DDLAlterAction>();
     alter_act->setMutationCommands(commands.getMutationCommands(old_metadata, false, local_context));
 
     commands.apply(table_id, new_metadata, local_context);
@@ -1090,7 +1092,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
         alter_act->setNewSchema(queryToString(ast));
 
         LOG_DEBUG(log, "new schema for alter query: {}", alter_act->getNewSchema());
-        txn->appendAction(alter_act);
+        txn->appendAction(action);
     }
 
     //setProperties(new_metadata, false);

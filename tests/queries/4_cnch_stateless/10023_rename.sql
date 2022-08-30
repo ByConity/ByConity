@@ -3,7 +3,6 @@ DROP TABLE IF EXISTS rename1;
 DROP TABLE IF EXISTS rename2;
 DROP TABLE IF EXISTS rename11;
 DROP TABLE IF EXISTS rename22;
-
 CREATE TABLE rename1 (d Date, a String, b String) ENGINE = CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY d SETTINGS index_granularity = 8192;
 CREATE TABLE rename2 (d Date, a String, b String) ENGINE = CnchMergeTree() PARTITION BY toYYYYMM(d) ORDER BY d SETTINGS index_granularity = 8192;
 INSERT INTO rename1 VALUES ('2015-01-01', 'hello', 'world');
