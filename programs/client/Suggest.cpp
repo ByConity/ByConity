@@ -154,6 +154,8 @@ void Suggest::fetch(Connection & connection, const ConnectionTimeouts & timeouts
                 continue;
             case Protocol::Server::ProfileInfo:
                 continue;
+            case Protocol::Server::QueryMetrics:
+                continue;
             case Protocol::Server::Totals:
                 continue;
             case Protocol::Server::Extremes:

@@ -100,6 +100,8 @@ public:
     google::protobuf::RepeatedPtrField<DB::Protos::BackgroundThreadStatus>
     getBackGroundStatus(const CnchBGThreadType & type);
 
+    void submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element);
+
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

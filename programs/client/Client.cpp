@@ -2084,6 +2084,9 @@ private:
                 onEndOfStream();
                 return false;
 
+            case Protocol::Server::QueryMetrics:
+                return true;
+
             default:
                 throw Exception(
                     ErrorCodes::UNKNOWN_PACKET_FROM_SERVER, "Unknown packet {} from server {}", packet.type, connection->getDescription());

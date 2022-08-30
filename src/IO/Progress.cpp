@@ -75,6 +75,8 @@ bool Progress::incrementPiecewiseAtomically(const Progress & rhs)
     written_rows += rhs.written_rows;
     written_bytes += rhs.written_bytes;
 
+    written_elapsed_milliseconds += rhs.written_elapsed_milliseconds;
+
     return rhs.read_rows || rhs.written_rows;
 }
 
@@ -89,6 +91,8 @@ void Progress::reset()
 
     written_rows = 0;
     written_bytes = 0;
+
+    written_elapsed_milliseconds = 0;
 }
 
 ProgressValues Progress::getValues() const
@@ -136,6 +140,8 @@ Progress & Progress::operator=(Progress && other)
 
     written_rows = other.written_rows.load(std::memory_order_relaxed);
     written_bytes = other.written_bytes.load(std::memory_order_relaxed);
+
+    written_elapsed_milliseconds = other.written_elapsed_milliseconds.load(std::memory_order_relaxed);
 
     return *this;
 }

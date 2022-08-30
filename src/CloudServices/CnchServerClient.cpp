@@ -6,6 +6,7 @@
 #include <brpc/controller.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 
 
 namespace DB
@@ -577,6 +578,19 @@ CnchServerClient::getBackGroundStatus(const CnchBGThreadType & type)
     RPCHelpers::checkResponse(response);
 
     return response.status();
+}
+
+void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element)
+{
+    brpc::Controller cntl;
+    Protos::SubmitQueryWorkerMetricsReq request;
+    Protos::SubmitQueryWorkerMetricsResp response;
+
+    fillQueryWorkerMetricElement(query_worker_metric_element, *request.mutable_element());
+
+    stub->submitQueryWorkerMetrics(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
 }
 
 }

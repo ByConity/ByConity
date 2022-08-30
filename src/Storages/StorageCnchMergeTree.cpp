@@ -619,6 +619,7 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
         mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
         mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
 
+    /// Remark: this `getObjectDefinitionFromCreateQuery` may cause issue, refer to `getTableDefinitionFromCreateQuery` in cnch-dev branch if issue happens
     return getObjectDefinitionFromCreateQuery(ast, false);
 }
 
@@ -788,7 +789,7 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
 
         LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
         /// TODO: send insert query by rpc.
-        sendQueryPerShard(local_context, query_statement, *write_shard_ptr);
+        sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
 
         return nullptr;
     }

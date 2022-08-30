@@ -5,6 +5,7 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Protos/RPCHelpers.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
@@ -791,11 +792,32 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
 {
 }
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController * /*cntl*/,
     const Protos::SubmitQueryWorkerMetricsReq * request,
     Protos::SubmitQueryWorkerMetricsResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto query_worker_metric_element = createQueryWorkerMetricElement(request->element());
+                gc->insertQueryWorkerMetricsElement(query_worker_metric_element);
+
+                LOG_TRACE(log, "Submit query worker metrics [{}] from {}: {}", query_worker_metric_element.current_query_id,
+                    query_worker_metric_element.worker_id, query_worker_metric_element.query);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 
 #if defined(__clang__)

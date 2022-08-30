@@ -33,7 +33,7 @@ CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Pro
     }
     else
     {
-        throw Exception("DataModelDB has no uuid", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+        throw Exception("DataModelDB " + db_model.name() + " has no uuid", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
     }
     return db;
 }

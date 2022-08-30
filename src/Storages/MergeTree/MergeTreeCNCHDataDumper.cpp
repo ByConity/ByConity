@@ -275,7 +275,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
                 if (!local_part_disk->exists(file_rel_path))
                     throw Exception("Fail to dump local file: " + file_rel_path + " be cause file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
-                LOG_DEBUG(log, "Dumping file {}...\n", file_rel_path);
+                LOG_TRACE(log, "Dumping file {}...\n", file_rel_path);
 
                 ReadBufferFromFile from(file_full_path);
                 copyData(from, *data_out);
@@ -302,7 +302,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             index_size = index_checksum.file_size;
             index_hash = index_checksum.file_hash;
             data_out->next();
-            LOG_DEBUG(log, "Index offset {}, size {}, hash {}-{}\n", index_offset, index_size, index_hash.first, index_hash.second);
+            LOG_TRACE(log, "Index offset {}, size {}, hash {}-{}\n", index_offset, index_size, index_hash.first, index_hash.second);
             ///TODO: fix getPositionInFile
             if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
@@ -325,7 +325,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             ///TODO: fix getPositionInFile
             checksums_size = data_out->getPositionInFile() - checksums_offset;
             checksums_hash = checksums_hashing.getHash();
-            LOG_DEBUG(log, "Checksum offset {}, size {}, hash {}-{}\n", checksums_offset, checksums_size, checksums_hash.first, checksums_hash.second);
+            LOG_TRACE(log, "Checksum offset {}, size {}, hash {}-{}\n", checksums_offset, checksums_size, checksums_hash.first, checksums_hash.second);
             if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
                  throw Exception("checksums.txt in data part "  + part_name + " check error, checksum offset: " +
@@ -346,7 +346,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             ///TODO: fix getPositionInFile
             meta_info_size = data_out->getPositionInFile() - meta_info_offset;
             meta_info_hash = meta_info_hashing.getHash();
-            LOG_DEBUG(log, "Meta info offset {}, size {}, hash {}-{}\n", meta_info_offset, meta_info_size, meta_info_hash.first, meta_info_hash.second);
+            LOG_TRACE(log, "Meta info offset {}, size {}, hash {}-{}\n", meta_info_offset, meta_info_size, meta_info_hash.first, meta_info_hash.second);
             if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
                  throw Exception("meta info in data part "  + part_name + " check error, meta offset: " +

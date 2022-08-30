@@ -79,7 +79,8 @@ namespace Protocol
             ReadTaskRequest = 13,     /// String (UUID) describes a request for which next task is needed
                                       /// This is such an inverted logic, where server sends requests
                                       /// And client returns back response
-            MAX = ReadTaskRequest,
+            QueryMetrics = 14,        /// Query metrics in cnch worker side
+            MAX = QueryMetrics,
 
         };
 
@@ -103,7 +104,8 @@ namespace Protocol
                 "Log",
                 "TableColumns",
                 "PartUUIDs",
-                "ReadTaskRequest"
+                "ReadTaskRequest",
+                "QueryMetrics"
             };
             return packet <= MAX
                 ? data[packet]
