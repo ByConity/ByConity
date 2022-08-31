@@ -1,3 +1,4 @@
+USE default;
 DROP TABLE IF EXISTS cube;
 CREATE TABLE cube(a String, b Int32, s Int32) ENGINE = Memory;
 

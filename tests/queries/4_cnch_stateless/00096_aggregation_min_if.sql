@@ -1,3 +1,4 @@
+USE default;
 DROP TABLE IF EXISTS min_if;
 CREATE TABLE min_if (arr Array(UInt8), str String, int Int32) ENGINE = Memory;
 INSERT INTO min_if SELECT emptyArrayUInt8() AS arr, '' AS str, toInt32(0) AS int FROM system.numbers LIMIT 100000;
