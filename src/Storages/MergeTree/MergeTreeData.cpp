@@ -152,6 +152,7 @@ MergeTreeData::MergeTreeData(
         merging_params_,
         std::move(storage_settings_),
         require_part_metadata_,
+        attach,
         std::move(broken_part_callback_))
     , bitmap_index(std::make_shared<MergeTreeBitmapIndex>(*this))
     , mark_bitmap_index(std::make_shared<MergeTreeMarkBitmapIndex>(*this))
@@ -162,7 +163,6 @@ MergeTreeData::MergeTreeData(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
     const auto settings = getSettings();
-    // allow_nullable_key = attach || settings->allow_nullable_key;
     enable_metastore = settings->enable_metastore;
 
     if (relative_data_path.empty())

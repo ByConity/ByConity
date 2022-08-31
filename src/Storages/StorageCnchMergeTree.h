@@ -62,7 +62,7 @@ public:
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
-    ServerDataPartsVector getPrunedServerParts(
+    ServerDataPartsVector selectPartsToRead(
         const Names & column_names_to_return,
         ContextPtr local_context,
         const SelectQueryInfo & query_info);
@@ -103,14 +103,18 @@ protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,
         const String & relative_data_path_,
-        const StorageInMemoryMetadata & metadata,
-        bool attach,
+        const StorageInMemoryMetadata & metadata_,
+        bool attach_,
         ContextMutablePtr context_,
-        const String & date_column_name,
+        const String & date_column_name_,
         const MergeTreeMetaBase::MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> settings_);
 
 private:
+    /// To store some temporary data for cnch
+    StoragePolicyPtr local_store_volume;
+    String relative_local_store_path;
+
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts);
 
     ServerDataPartsVector getAllParts(ContextPtr local_context);
@@ -118,11 +122,11 @@ private:
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const Names & column_names_to_return, ContextPtr local_context);
 
-    ServerDataPartsVector pruneParts(
-        const Names & column_names_to_return,
+    void filterPartsByPartition(
         ServerDataPartsVector & parts,
         ContextPtr local_context,
-        const SelectQueryInfo & query_info) const;
+        const SelectQueryInfo & query_info,
+        const Names & column_names_to_return) const;
 
 
     void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name);
@@ -130,15 +134,12 @@ private:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session
-    ServerDataPartsVector filterPartsInExplicitTransaction(ContextPtr local_context, ServerDataPartsVector && data_parts);
+    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context);
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
 
-    /// To store some temporary data for cnch
-    StoragePolicyPtr local_store_volume;
-    String relative_local_store_path;
 };
 
 }

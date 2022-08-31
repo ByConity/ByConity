@@ -732,8 +732,6 @@ private:
 
     virtual void startBackgroundMovesIfNeeded() = 0;
 
-    // bool allow_nullable_key{};
-
     bool enable_metastore{};
 
     void addPartContributionToDataVolume(const DataPartPtr & part);

@@ -158,7 +158,6 @@ struct Settings;
     M(Bool, enable_ingest_wide_part, false, "", 0) \
     /** detach partition lightweight rename directory instead of makeClone */                                 \
     M(Bool, light_detach_partition, false, "", 0) \
-    M(Bool, enable_nullable_sorting_key, false, "", 0) \
     M(Bool, ha_fast_create_table, false, "", 0) \
     M(UInt64, zk_local_diff_threshold, 12, "", 0) \
     M(Bool, only_use_ttl_of_metadata, true, "", 0) \

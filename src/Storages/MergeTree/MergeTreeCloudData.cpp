@@ -1,4 +1,5 @@
 #include <Storages/MergeTree/MergeTreeCloudData.h>
+#include "Processors/QueryPipeline.h"
 
 namespace DB
 {
@@ -41,9 +42,11 @@ MergeTreeCloudData::MergeTreeCloudData(
         date_column_name_,
         merging_params_,
         std::move(settings_),
-        false /// require_part_metadata
+        false, /// require_part_metadata
+        false  /// attach
     )
 {
+    allow_nullable_key = getSettings()->allow_nullable_key;
 }
 
 void MergeTreeCloudData::addPreparedPart(MutableDataPartPtr & part, DataPartsLock & lock)
@@ -99,7 +102,7 @@ void MergeTreeCloudData::removeDataParts(const DataPartsVector & parts, DataPart
 
     auto lock = lockParts();
 
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         auto it = data_parts_by_info.find(part->info);
         if (it != data_parts_by_info.end())
@@ -126,7 +129,7 @@ void MergeTreeCloudData::removeDataParts(const Names & names, Names * names_not_
 
     auto lock = lockParts();
 
-    for (auto & part_name : names)
+    for (const auto & part_name : names)
     {
         auto part_info = MergeTreePartInfo::fromPartName(part_name, format_version);
         auto it = data_parts_by_info.find(part_info);
@@ -346,12 +349,12 @@ void MergeTreeCloudData::deactivateOutdatedParts()
 
     while (curr_jt != data_parts_by_state_and_info.end() && (*curr_jt)->state == DataPartState::Committed)
     {
-        auto & prev_part = *prev_jt;
-        auto & curr_part = *curr_jt;
+        const auto & prev_part = *prev_jt;
+        const auto & curr_part = *curr_jt;
 
         if (curr_part->isPartial() && curr_part->containsExactly(*prev_part))
         {
-            if (auto & p = curr_part->tryGetPreviousPart())
+            if (const auto & p = curr_part->tryGetPreviousPart())
                 throw Exception("Part " + curr_part->name + " has already owned prev_part: " + p->name, ErrorCodes::LOGICAL_ERROR);
             curr_part->setPreviousPart(prev_part);
             deactivate_part(prev_jt);

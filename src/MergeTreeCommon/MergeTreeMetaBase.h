@@ -133,6 +133,7 @@ public:
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> storage_settings_,
         bool require_part_metadata_,
+        bool attach_,
         BrokenPartCallback broken_part_callback_ = [](const String &) {});
 
     /// Names
@@ -392,6 +393,9 @@ protected:
     /// Used to determine which UUIDs to send to root query executor for deduplication.
     mutable std::shared_mutex pinned_part_uuids_mutex;
     PinnedPartUUIDsPtr pinned_part_uuids;
+
+    /// Nullable key
+    bool allow_nullable_key = false;
 
     /// Work with data parts
 
