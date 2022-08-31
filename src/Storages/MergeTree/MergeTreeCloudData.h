@@ -47,7 +47,7 @@ protected:
 
     void deactivateOutdatedParts();
 
-    void runOverPartsInParallel(MutableDataPartsVector & parts, size_t threads, const std::function<void(MutableDataPartPtr &)> & op);
+    static void runOverPartsInParallel(MutableDataPartsVector & parts, size_t threads, const std::function<void(MutableDataPartPtr &)> & op);
 
     /// TODO: calculateColumnSizesImpl
 

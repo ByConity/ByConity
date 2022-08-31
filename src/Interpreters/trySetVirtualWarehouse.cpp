@@ -59,11 +59,11 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
     //         "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
     //     return true;
     // }
-    // else if (auto view_table = dynamic_cast<StorageView *>(storage.get()))
-    // {
-    //     if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))
-    //         return true;
-    // }
+    else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
+    {
+        if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))
+            return true;
+    }
     // else if (auto mv_table = dynamic_cast<StorageMaterializedView *>(storage.get()))
     // {
     //     if (trySetVirtualWarehouseFromAST(mv_table->getInnerQuery(), context))

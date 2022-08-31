@@ -67,6 +67,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> storage_settings_,
     bool require_part_metadata_,
+    bool attach_,
     BrokenPartCallback broken_part_callback_)
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
@@ -83,6 +84,8 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     /// FIXME: add after supporting primary key index cache
     // , primary_index_cache(context_->getDiskPrimaryKeyIndexCache())
 {
+    const auto & settings = getSettings();
+    allow_nullable_key = attach_ || settings->allow_nullable_key;
     if (!date_column_name.empty())
     {
         try
@@ -258,7 +261,7 @@ void MergeTreeMetaBase::checkProperties(
         auto new_unique_key_sample = ExpressionAnalyzer(new_unique_key_expr_list, new_unique_key_syntax, getContext())
             .getActions(/*add_aliases*/true)->getSampleBlock();
 
-        checkKeyExpression(*new_unique_key_expr, new_unique_key_sample, "Unique", /*allow_nullable_key*/ false);
+        checkKeyExpression(*new_unique_key_expr, new_unique_key_sample, "Unique", allow_nullable_key);
 
         /// check column type
         for (auto & col_with_type: new_unique_key_sample.getNamesAndTypesList())
@@ -305,7 +308,7 @@ void MergeTreeMetaBase::checkProperties(
         }
     }
 
-    checkKeyExpression(*new_sorting_key.expression, new_sorting_key.sample_block, "Sorting", /*allow_nullable_key*/ false);
+    checkKeyExpression(*new_sorting_key.expression, new_sorting_key.sample_block, "Sorting", allow_nullable_key);
 
 }
 
@@ -374,7 +377,7 @@ void MergeTreeMetaBase::checkPartitionKeyAndInitMinMax(const KeyDescription & ne
     if (new_partition_key.expression_list_ast->children.empty())
         return;
 
-    checkKeyExpression(*new_partition_key.expression, new_partition_key.sample_block, "Partition", /*allow_nullable_key*/ false);
+    checkKeyExpression(*new_partition_key.expression, new_partition_key.sample_block, "Partition", allow_nullable_key);
 
     /// Add all columns used in the partition key to the min-max index.
     DataTypes minmax_idx_columns_types = getMinMaxColumnsTypes(new_partition_key);

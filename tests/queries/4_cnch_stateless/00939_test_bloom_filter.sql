@@ -9,9 +9,6 @@ insert into table test_bloom values ('2019-01-03', [3]);
 insert into table test_bloom values ('2019-01-04', [1, 2]);
 insert into table test_bloom values ('2019-01-05', [1, 3]);
 
-set enable_bloom_filter = 1;
-set enable_range_bloom_filter = 1;
-
 select date from test_bloom where arraySetCheck(vid, (1)) order by date;
 select date from test_bloom where arraySetCheck(vid, (2)) order by date;
 
