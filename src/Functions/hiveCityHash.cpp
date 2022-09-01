@@ -19,7 +19,7 @@ static UInt64 asUInt64(Int64 l) {
 
 static Int64 unsignedShift(Int64 val, int shift)
 {
-    return static_cast<UInt64>(val >> shift);
+    return static_cast<UInt64>(val) >> shift;
 }
 
 static Int64 toLongLE(const char* b, int i) {
