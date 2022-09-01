@@ -70,7 +70,6 @@
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/InterserverIOHandler.h>
-#include <Interpreters/HaReplicaHandler.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/SegmentScheduler.h>
@@ -88,7 +87,6 @@
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
 #include <Interpreters/ExternalModelsLoader.h>
-#include <Interpreters/HaReplicaHandler.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/NamedSession.h>
@@ -105,7 +103,6 @@
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Storages/CompressionCodecSelector.h>
-#include <Storages/DiskUniqueIndexFileCache.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Processors/QueryCache.h>
@@ -314,7 +311,6 @@ struct ContextSharedPart
     ReplicatedFetchList replicated_fetch_list;
     ConfigurationPtr users_config;                          /// Config with the users, profiles and quotas sections.
     InterserverIOHandler interserver_io_handler;            /// Handler for interserver communication.
-    HaReplicaHandler ha_replica_handler;                    /// Handler for ha communication.
 
     mutable std::optional<BackgroundSchedulePool> buffer_flush_schedule_pool; /// A thread pool that can do background flush for Buffer tables.
     mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
@@ -330,8 +326,6 @@ struct ContextSharedPart
 
     mutable ThrottlerPtr replicated_fetches_throttler; /// A server-wide throttler for replicated fetches
     mutable ThrottlerPtr replicated_sends_throttler; /// A server-wide throttler for replicated sends
-
-    mutable std::optional<BackgroundSchedulePool> unique_table_schedule_pool; /// A thread pool that can run different jobs in background (used for unique table)
 
     MultiVersion<Macros> macros;                            /// Substitutions extracted from config.
     std::unique_ptr<DDLWorker> ddl_worker;                  /// Process ddl commands from zk.
@@ -389,14 +383,9 @@ struct ContextSharedPart
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
-    mutable IndexFileBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
-    mutable DiskUniqueKeyIndexCachePtr unique_key_index_cache; /// Shared object cache of unique key indexes
 
     using KMSKeyCache = std::unordered_map<String, String>;
     mutable KMSKeyCache kms_cache;
-
-    mutable IndexFileBlockCachePtr unique_row_store_block_cache; /// Shared block cache of unique row stores
-    mutable DiskUniqueRowStoreCachePtr unique_row_store_cache; /// Shared object cache of unique row stores
 
     CpuSetScaleManagerPtr cpu_set_scale_manager;
 
@@ -600,8 +589,6 @@ Context::~Context() = default;
 
 
 InterserverIOHandler & Context::getInterserverIOHandler() { return shared->interserver_io_handler; }
-
-HaReplicaHandler & Context::getHaReplicaHandler() { return shared->ha_replica_handler; }
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
@@ -3560,34 +3547,6 @@ void Context::setMetaCheckerStatus(bool stop)
     shared->stop_sync = stop;
 }
 
-void Context::setDiskUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-    if (shared->unique_key_index_block_cache)
-        throw Exception("Unique key index block cache has been already created", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_key_index_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
-}
-
-IndexFileBlockCachePtr Context::getDiskUniqueKeyIndexBlockCache() const
-{
-    auto lock = getLock();
-    return shared->unique_key_index_block_cache;
-}
-
-void Context::setDiskUniqueKeyIndexCache(size_t disk_uki_meta_cache_size, size_t disk_uki_file_cache_size)
-{
-    auto lock = getLock();
-    if (shared->unique_key_index_cache)
-        throw Exception("Unique key index cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_key_index_cache = std::make_shared<DiskUniqueKeyIndexCache>(disk_uki_meta_cache_size, disk_uki_file_cache_size);
-}
-
-std::shared_ptr<DiskUniqueKeyIndexCache> Context::getDiskUniqueKeyIndexCache() const
-{
-    auto lock = getLock();
-    return shared->unique_key_index_cache;
-}
-
 String Context::getKMSKeyCache(const String & config_name) const
 {
     auto lock = getLock();
@@ -3617,34 +3576,6 @@ void Context::setChecksumsCache(size_t cache_size_in_bytes)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
-}
-
-void Context::setDiskUniqueRowStoreBlockCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-    if (shared->unique_row_store_block_cache)
-        throw Exception("Unique row store block cache has been already created", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_row_store_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
-}
-
-IndexFileBlockCachePtr Context::getDiskUniqueRowStoreBlockCache() const
-{
-    auto lock = getLock();
-    return shared->unique_row_store_block_cache;
-}
-
-void Context::setDiskUniqueRowStoreCache(size_t disk_urs_meta_cache_size, size_t disk_urs_file_cache_size)
-{
-    auto lock = getLock();
-    if (shared->unique_row_store_cache)
-        throw Exception("Unique row store cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-    shared->unique_row_store_cache = std::make_shared<DiskUniqueRowStoreCache>(disk_urs_meta_cache_size, disk_urs_file_cache_size);
-}
-
-std::shared_ptr<DiskUniqueRowStoreCache> Context::getDiskUniqueRowStoreCache() const
-{
-    auto lock = getLock();
-    return shared->unique_row_store_cache;
 }
 
 void Context::setCpuSetScaleManager(const Poco::Util::AbstractConfiguration & config)

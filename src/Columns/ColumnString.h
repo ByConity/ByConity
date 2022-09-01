@@ -267,8 +267,6 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    ColumnPtr selectDefault() const override;
-
     ColumnPtr compress() const override;
 
     void reserve(size_t n) override;

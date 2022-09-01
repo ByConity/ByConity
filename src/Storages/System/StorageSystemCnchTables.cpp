@@ -14,8 +14,7 @@
 #include <Common/Status.h>
 #include <common/logger_useful.h>
 // #include <Parsers/ASTClusterByElement.h>
-#include <DataStreams/NullBlockInputStream.h>
-#include <DataStreams/OneBlockInputStream.h>
+#include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
 
 namespace DB
@@ -54,7 +53,7 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
     setInMemoryMetadata(storage_metadata);
 }
 
-static std::unordered_set<String> key_columns = 
+static std::unordered_set<String> key_columns =
 {
     "partition_key",
     "sorting_key",
@@ -75,7 +74,7 @@ Pipe StorageSystemCnchTables::read(
     const unsigned /*num_streams*/)
 {
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
-    
+
     if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
         throw Exception("Table system.cnch_tables_history only support cnch_server", ErrorCodes::LOGICAL_ERROR);
 
@@ -92,7 +91,7 @@ Pipe StorageSystemCnchTables::read(
     NameSet names_set(column_names.begin(), column_names.end());
 
     Block sample_block = metadata_snapshot->getSampleBlock();
-    Block res_block;
+    Block header;
 
     std::vector<UInt8> columns_mask(sample_block.columns());
     for (size_t i = 0, size = columns_mask.size(); i < size; ++i)
@@ -100,7 +99,7 @@ Pipe StorageSystemCnchTables::read(
         if (names_set.count(sample_block.getByPosition(i).name))
         {
             columns_mask[i] = 1;
-            res_block.insert(sample_block.getByPosition(i));
+            header.insert(sample_block.getByPosition(i));
         }
     }
 
@@ -133,11 +132,11 @@ Pipe StorageSystemCnchTables::read(
     VirtualColumnUtils::filterBlockWithQuery(query_info.query, block_to_filter, context);
 
     if (!block_to_filter.rows())
-        return {};
+        return Pipe(std::make_shared<NullSource>(std::move(header)));
 
     ColumnPtr filtered_index_column = block_to_filter.getByName("index").column;
 
-    MutableColumns res_columns = metadata_snapshot->getSampleBlock().cloneEmptyColumns();
+    MutableColumns res_columns = header.cloneEmptyColumns();
 
     for (size_t i = 0; i<filtered_index_column->size(); i++)
     {
@@ -146,18 +145,42 @@ Pipe StorageSystemCnchTables::read(
             continue;
 
         size_t col_num = 0;
-        res_columns[col_num++]->insert(table_model.database());
-        res_columns[col_num++]->insert(table_model.name());
-        res_columns[col_num++]->insert(RPCHelpers::createUUID(table_model.uuid()));
-        res_columns[col_num++]->insert(table_model.vw_name());
-        res_columns[col_num++]->insert(table_model.definition());
-        res_columns[col_num++]->insert(table_model.txnid());
-        res_columns[col_num++]->insert(table_model.previous_version());
-        res_columns[col_num++]->insert(table_model.commit_time());
-        auto modification_time = (table_model.commit_time() >> 18) ;  // first 48 bits represent times
-        res_columns[col_num++]->insert(modification_time/1000) ; // convert to seconds
-        res_columns[col_num++]->insert(table_model.vw_name().size() != 0); // is_preallocated should be 1 when vw_name exists
-        res_columns[col_num++]->insert(Status::isDetached(table_model.status())) ;
+        size_t src_index = 0;
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.database());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.name());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(RPCHelpers::createUUID(table_model.uuid()));
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.vw_name());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.definition());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.txnid());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.previous_version());
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.commit_time());
+
+        if (columns_mask[src_index++])
+        {
+            auto modification_time = (table_model.commit_time() >> 18) ;  // first 48 bits represent times
+            res_columns[col_num++]->insert(modification_time/1000) ; // convert to seconds
+        }
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(table_model.vw_name().size() != 0); // is_preallocated should be 1 when vw_name exists
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(Status::isDetached(table_model.status())) ;
 
         if (require_key_columns)
         {
@@ -194,13 +217,19 @@ Pipe StorageSystemCnchTables::read(
                 }
             }
 
-            ast_partition_by ? (res_columns[col_num++]->insert(queryToString(*ast_partition_by))) : (res_columns[col_num++]->insertDefault());
 
-            ast_order_by ? (res_columns[col_num++]->insert(queryToString(*ast_order_by))) : (res_columns[col_num++]->insertDefault());
+            if (columns_mask[src_index++])
+                ast_partition_by ? (res_columns[col_num++]->insert(queryToString(*ast_partition_by))) : (res_columns[col_num++]->insertDefault());
 
-            ast_primary_key ? (res_columns[col_num++]->insert(queryToString(*ast_primary_key))) : (res_columns[col_num++]->insertDefault());
 
-            ast_sample_by ? (res_columns[col_num++]->insert(queryToString(*ast_sample_by))) : (res_columns[col_num++]->insertDefault());
+            if (columns_mask[src_index++])
+                ast_order_by ? (res_columns[col_num++]->insert(queryToString(*ast_order_by))) : (res_columns[col_num++]->insertDefault());
+
+            if (columns_mask[src_index++])
+                ast_primary_key ? (res_columns[col_num++]->insert(queryToString(*ast_primary_key))) : (res_columns[col_num++]->insertDefault());
+
+            if (columns_mask[src_index++])
+                ast_sample_by ? (res_columns[col_num++]->insert(queryToString(*ast_sample_by))) : (res_columns[col_num++]->insertDefault());
 
             if(ast_cluster_by)
             {
@@ -211,26 +240,22 @@ Pipe StorageSystemCnchTables::read(
             }
             else
             {
-                res_columns[col_num++]->insertDefault();
-                res_columns[col_num++]->insert(-1); // shard ratio is not available
-                res_columns[col_num++]->insert(0); // with range is not available
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insertDefault();
+
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(-1); // shard ratio is not available
+
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(0); // with range is not available
             }
         }
-    }
-
-    Block res = metadata_snapshot->getSampleBlock().cloneEmpty();
-    size_t col_num = 0;
-    size_t num_columns = res.columns();
-    while (col_num < num_columns)
-    {
-        res.getByPosition(col_num).column = std::move(res_columns[col_num]);
-        ++col_num;
     }
 
     UInt64 num_rows = res_columns.at(0)->size();
     Chunk chunk(std::move(res_columns), num_rows);
 
-    return Pipe(std::make_shared<SourceFromSingleChunk>(std::move(res), std::move(chunk)));
+    return Pipe(std::make_shared<SourceFromSingleChunk>(std::move(header), std::move(chunk)));
 }
 
 }

@@ -139,54 +139,6 @@ struct Settings;
     \
     /** ByteDance settings */ \
     \
-    /* HaMergeTree related settings */                                                                        \
-    /** When we find a mutation is finished on the other replica, we don't check for hang mutation            \
-     *  immediately because the current replica may finish the execution later on. So we wait for             \
-     *  the configured period of time before continue. */                                                     \
-    M(UInt64, ha_check_hang_mutations_wait_period, 600, "", 0) \
-    M(UInt64, ha_check_hang_mutations_interval, 60, "", 0) \
-    M(UInt64, ha_log_exchanger_queue_max_size, 8192, "", 0) \
-    M(UInt64, ha_mark_lost_replica_timeout, 36 * 60 * 60, "", 0) \
-    M(UInt64, ha_mark_bad_lsn_timeout, 37 * 60 * 60, "", 0) \
-    M(UInt64, ha_mark_bad_lsn_min_timeout, 2 * 60 * 60, "", 0) \
-    M(UInt64, ha_queue_update_sleep_ms, 25 * 1000, "", 0) \
-    M(UInt64, ha_update_replica_stats_min_period, 10, "", 0) \
-    M(UInt64, ha_update_replica_stats_period, 60, "", 0) \
-    M(UInt64, ha_commit_log_period, 120, "", 0) \
-    M(UInt64, ha_logs_to_keep, 1000, "", 0) \
-    M(UInt64, ha_log_batch_size, 2, "", 0) \
-    M(UInt64, ha_max_log_try_times, 20, "", 0) \
-    M(Float, ha_min_log_select_interval, 0.5, "", 0) \
-    M(Float, ha_max_log_select_interval, 60.0, "", 0) \
-    M(Float, ha_log_select_interval_multiplier, 2.0, "", 0) \
-    M(Bool, ha_queue_prefer_parent_merge, true, "", 0) \
-    /* UniqueMergeTree specific settings */                                                                   \
-    M(Bool, partition_level_unique_keys, true, "", 0) \
-    M(String, unique_is_offline_column, "", "", 0) \
-    M(UInt64, max_cached_delete_versions_per_part, 1000, "", 0) \
-    M(UInt64, delete_file_gc_part_scan_interval, 180, "", 0) \
-    M(UInt64, delete_file_gc_max_parts_per_round, 100, "", 0) \
-    M(UInt64, max_delete_buffer_size_per_merge, 1000000, "", 0) \
-    M(UInt64, unique_engine_scan_detach_interval, 5, "", 0) \
-    M(UInt64, unique_engine_temp_table_wait_interval, 0, "", 0) \
-    M(UInt64, unique_index_max_idle_seconds, 7200, "", 0) \
-    M(Bool, enable_unique_partial_update, false, "", 0) \
-    M(Bool, enable_unique_row_store, true, "", 0) \
-    /** When enable disk_based_unique_key_index and unique key index file exists, use disk_based uki. Otherwise, use in-memory uki. \
-        Notice: this setting is under control of engine setting 'enable_disk_based_unique_key_index_method'.  \
-        That's, when 'enable_disk_based_unique_key_index_method' is false, this setting will not take effect. */           \
-    M(Bool, enable_disk_based_unique_key_index, true, "", 0)                                                  \
-    /* HaUniqueMergeTree specific settings */                                                                 \
-    M(UInt64, ha_unique_become_leader_timeout, 20 * 60, "", 0) \
-    M(UInt64, ha_unique_update_log_sleep_ms, 5 * 1000, "", 0) \
-    M(UInt64, ha_unique_refresh_leader_interval, 10, "", 0) \
-    M(UInt64, ha_unique_save_commit_version_interval, 300, "", 0) \
-    M(UInt64, ha_unique_replay_log_sleep_ms, 5 * 1000, "", 0) \
-    M(UInt64, ha_unique_replay_log_retry_backoff_min_ms, 100, "", 0) \
-    M(UInt64, ha_unique_replay_log_retry_backoff_max_ms, 60 * 1000, "", 0) \
-    M(UInt64, ha_unique_checkpoint_attempt_interval, 60, "", 0) \
-    M(UInt64, ha_unique_checkpoint_min_logs, 100, "", 0) \
-    M(UInt64, ha_unique_replay_log_add_delay, 0, "", 0) \
     /* Bitmap index settings */        \
     /* TODO doongyifeng change it to false    */                    \
     M(Bool, enable_build_ab_index, true, "", 0) \
@@ -206,7 +158,6 @@ struct Settings;
     M(Bool, enable_ingest_wide_part, false, "", 0) \
     /** detach partition lightweight rename directory instead of makeClone */                                 \
     M(Bool, light_detach_partition, false, "", 0) \
-    M(Bool, enable_nullable_sorting_key, false, "", 0) \
     M(Bool, ha_fast_create_table, false, "", 0) \
     M(UInt64, zk_local_diff_threshold, 12, "", 0) \
     M(Bool, only_use_ttl_of_metadata, true, "", 0) \

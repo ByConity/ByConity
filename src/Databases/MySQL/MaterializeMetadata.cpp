@@ -89,6 +89,7 @@ void MaterializeMetadata::fetchMasterStatus(mysqlxx::PoolWithFailover::Entry & c
     if (!master_status || master_status.rows() != 1)
         throw Exception("Unable to get master status from MySQL.", ErrorCodes::LOGICAL_ERROR);
 
+    data_version = 1;
     binlog_file = (*master_status.getByPosition(0).column)[0].safeGet<String>();
     binlog_position = (*master_status.getByPosition(1).column)[0].safeGet<UInt64>();
     binlog_do_db = (*master_status.getByPosition(2).column)[0].safeGet<String>();
@@ -219,6 +220,7 @@ void MaterializeMetadata::transaction(const MySQLReplication::Position & positio
         writeString("\nBinlog File:\t" + binlog_file, out);
         writeString("\nExecuted GTID:\t" + executed_gtid_set, out);
         writeString("\nBinlog Position:\t" + toString(binlog_position), out);
+        writeString("\nData Version:\t" + toString(data_version), out);
 
         out.next();
         out.sync();
@@ -240,6 +242,8 @@ MaterializeMetadata::MaterializeMetadata(const String & path_, const Settings & 
         readString(executed_gtid_set, in);
         assertString("\nBinlog Position:\t", in);
         readIntText(binlog_position, in);
+        assertString("\nData Version:\t", in);
+        readIntText(data_version, in);
 
     }
 }

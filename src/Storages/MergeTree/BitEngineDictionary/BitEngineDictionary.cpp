@@ -14,7 +14,6 @@
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Common/Macros.h>

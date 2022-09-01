@@ -220,7 +220,7 @@ std::optional<UInt64> StorageMergeTree::totalRows(const Settings &) const
     {
         if (part->isEmpty())
             continue;
-        res += part->numRowsRemovingDeletes();
+        res += part->rows_count;
     }
     return res;
 }
@@ -1362,7 +1362,7 @@ void StorageMergeTree::dropPart(const String & part_name, bool detach, ContextPt
         dropPartsImpl({part}, detach);
 }
 
-void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr local_context, const ASTPtr & /*query*/)
+void StorageMergeTree::dropPartition(const ASTPtr & partition, bool detach, ContextPtr local_context)
 {
     DataPartsVector parts_to_remove;
     /// New scope controls lifetime of merge_blocker.

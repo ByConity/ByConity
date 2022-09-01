@@ -288,8 +288,6 @@ Block MergeTreeDataWriter::mergeBlock(const Block & block, SortDescription sort_
             case MergeTreeMetaBase::MergingParams::Graphite:
                 return std::make_shared<GraphiteRollupSortedAlgorithm>(
                     block, 1, sort_description, block_size + 1, data.merging_params.graphite_params, time(nullptr));
-            case MergeTreeMetaBase::MergingParams::Unique:
-                return nullptr; /// TODO::
         }
 
         __builtin_unreachable();
@@ -426,18 +424,13 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     bool has_bitmap = std::any_of(all_columns.begin(), all_columns.end(),
                                   [](const NameAndTypePair & name_type) { return isBitmap64(name_type.type);});
     if (has_bitmap) part_type = MergeTreeDataPartType::WIDE;
-    if (data.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    {
-        // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
-        part_type = MergeTreeDataPartType::WIDE;
-    }
 
-   auto new_data_part = data.createPart(
-       part_name,
-       part_type,
-       new_part_info,
-       createVolumeFromReservation(reservation, volume),
-       joinPaths({base_rel_path, TMP_PREFIX + part_name}, false));
+    auto new_data_part = data.createPart(
+        part_name,
+        part_type,
+        new_part_info,
+        createVolumeFromReservation(reservation, volume),
+        joinPaths({base_rel_path, TMP_PREFIX + part_name}, false));
 
     LOG_DEBUG(log, "Writing temp part to {}...\n", new_data_part->getFullRelativePath());
 

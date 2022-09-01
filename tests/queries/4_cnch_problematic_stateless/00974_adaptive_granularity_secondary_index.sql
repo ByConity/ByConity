@@ -1,6 +1,5 @@
 
 DROP TABLE IF EXISTS indexed_table;
-set allow_experimental_data_skipping_indices = 1;
 CREATE TABLE indexed_table
 (    `tm` DateTime,
     `log_message` String,

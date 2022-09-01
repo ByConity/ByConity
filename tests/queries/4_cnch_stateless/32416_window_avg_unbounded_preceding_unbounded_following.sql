@@ -1,5 +1,3 @@
-DROP DATABASE IF EXISTS test;
-
 
 DROP TABLE IF EXISTS avg_unbounded_preceding_unbounded_following;
 CREATE TABLE avg_unbounded_preceding_unbounded_following (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;

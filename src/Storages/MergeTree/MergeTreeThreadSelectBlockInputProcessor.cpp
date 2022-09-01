@@ -7,12 +7,6 @@
 namespace DB
 {
 
-namespace ErrorCodes
-{
-    extern const int MEMORY_LIMIT_EXCEEDED;
-    extern const int LOGICAL_ERROR;
-}
-
 MergeTreeThreadSelectBlockInputProcessor::MergeTreeThreadSelectBlockInputProcessor(
     const size_t thread_,
     const MergeTreeReadPoolPtr & pool_,

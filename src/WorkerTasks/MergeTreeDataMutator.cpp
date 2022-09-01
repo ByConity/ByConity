@@ -419,7 +419,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
         if (updated_delete_bitmap)
         {
-            new_data_part->writeDeleteFile(updated_delete_bitmap, need_sync);
+            // new_data_part->writeDeleteFile(updated_delete_bitmap, need_sync);
         }
 
         finalizeMutatedPart(source_part, new_data_part, compression_codec);

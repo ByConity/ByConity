@@ -5,8 +5,6 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
-#include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 
 #include <Common/Macros.h>
@@ -301,13 +299,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     String name_part = args.engine_name.substr(0, args.engine_name.size() - strlen("MergeTree"));
 
-    // FIXME (UNIQUE KEY): alter engine support maybe
-    // if (args.engine_name == "UniqueMergeTree")
-    // {
-    //     /// A fake unique merge tree used for unique table migration, changed it to MergeTree here
-    //     name_part = "";
-    // }
-
     bool replicated = startsWith(name_part, "Replicated");
     if (replicated)
         name_part = name_part.substr(strlen("Replicated"));
@@ -339,8 +330,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         merging_params.mode = MergeTreeMetaBase::MergingParams::Graphite;
     else if (name_part == "VersionedCollapsing")
         merging_params.mode = MergeTreeMetaBase::MergingParams::VersionedCollapsing;
-    else if (name_part == "Unique")
-        merging_params.mode = MergeTreeMetaBase::MergingParams::Unique;
     else if (!name_part.empty())
         throw Exception(
             "Unknown storage " + args.engine_name + getMergeTreeVerboseHelp(is_extended_storage_def), ErrorCodes::UNKNOWN_STORAGE);
@@ -378,9 +367,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             add_mandatory_param("path in ZooKeeper");
             add_mandatory_param("replica name");
         }
-
-        if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-            add_optional_param("version");
     }
 
     if (is_cloud)
@@ -453,7 +439,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         throw Exception(msg, ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
-    if (is_extended_storage_def && merging_params.mode != MergeTreeMetaBase::MergingParams::Unique)
+    if (is_extended_storage_def)
     {
         /// Allow expressions in engine arguments.
         /// In new syntax argument can be literal or identifier or array/tuple of identifiers.
@@ -680,31 +666,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         /// sorting key.
         merging_param_key_arg = merging_params.version_column;
     }
-    else if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    {
-        if (replicated)
-            throw Exception("ReplicatedUniqueMergeTree is not supported, use HaUniqueMergeTree instead", ErrorCodes::BAD_ARGUMENTS);
-        /// unique table is different from ordinary merge tree in many aspects, like merge algorithm, restoring using manifest, etc.
-        /// so it's non-trivial to implement UniqueMergeTree on top of StorageMergeTree.
-        if (!is_ha)
-            throw Exception("UniqueMergeTree is not supported, use HaUniqueMergeTree instead", ErrorCodes::BAD_ARGUMENTS);
-        if (!is_extended_storage_def)
-            throw Exception("HaUniqueMergeTree must be used with extended syntax.", ErrorCodes::BAD_ARGUMENTS);
-        if (engine_args.size() > 2)
-        {
-            if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
-                throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
-            /// besides choose an explicit column as version, we also support using `partition by` expression
-            /// as version for convenience and better performance
-            if (args.storage_def->partition_by && args.storage_def->partition_by->getColumnName() == engine_args.back()->getColumnName())
-                merging_params.version_column = MergeTreeMetaBase::MergingParams::partition_value_as_version;
-            else if (!tryGetIdentifierNameInto(engine_args.back(), merging_params.version_column))
-                throw Exception(
-                    "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
-                    ErrorCodes::BAD_ARGUMENTS);
-            ++arg_num;
-        }
-    }
 
     String date_column_name;
 
@@ -744,8 +705,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
         if (args.storage_def->unique_key)
         {
-            if (args.engine_name != "HaUniqueMergeTree")
-                throw Exception("UNIQUE KEY is only applicable to HaUniqueMergeTree", ErrorCodes::BAD_ARGUMENTS);
             metadata.unique_key = KeyDescription::getKeyFromAST(
                 args.storage_def->unique_key->ptr(), metadata.columns, args.getContext());
         }
@@ -906,40 +865,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.has_force_restore_data_flag,
             allow_renaming);
     }
-    else if (is_ha)
-    {
-        if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-        {
-            return StorageHaUniqueMergeTree::create(
-                zookeeper_path,
-                replica_name,
-                args.attach,
-                args.table_id,
-                args.relative_data_path,
-                metadata,
-                args.getContext(),
-                date_column_name,
-                merging_params,
-                std::move(storage_settings),
-                args.has_force_restore_data_flag);
-        }
-        else
-        {
-            return StorageHaMergeTree::create(
-                zookeeper_path,
-                replica_name,
-                args.attach,
-                args.table_id,
-                args.relative_data_path,
-                metadata,
-                args.getContext(),
-                date_column_name,
-                merging_params,
-                std::move(storage_settings),
-                args.has_force_restore_data_flag,
-                allow_renaming);
-        }
-    }
     else if (is_cloud)
     {
         return StorageCloudMergeTree::create(
@@ -1012,7 +937,6 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("ReplicatedVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("HaMergeTree", create, features);
-    factory.registerStorage("HaUniqueMergeTree", create, features);
     factory.registerStorage("HaCollapsingMergeTree", create, features);
     factory.registerStorage("HaReplacingMergeTree", create, features);
     factory.registerStorage("HaAggregatingMergeTree", create, features);

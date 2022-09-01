@@ -29,7 +29,6 @@
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Server/HTTPHandlerFactory.h>
-#include <Server/HaTCPHandlerFactory.h>
 #include <Server/MySQLHandlerFactory.h>
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
@@ -1044,54 +1043,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
     global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
 
-    /// file cache size can limit the number of fd used by the cache. Otherwise, it will exceed the limit of the operating system. 0 means unlimited. default is 50000.
-    /// meta cache is used for the index and bloom blocks, it should be set to a large number to keep hit rate near 100%. default is 1GB
-    /// data cache is used for the data blocks, it's ok to have a lower hit cache than meta cache. default is 1GB
-    size_t disk_uki_file_cache_size = config().getUInt64("disk_unique_key_index_file_cache_size", 50000);
-    size_t disk_uki_meta_cache_size = config().getUInt64("disk_unique_key_index_meta_cache_size", 10737418240); /// 10GB
-    size_t disk_uki_data_cache_size = config().getUInt64("disk_unique_key_index_data_cache_size", 21474836480); /// 20GB
-    if (size_t max_uki_meta_cache_size = memory_amount * 0.05; disk_uki_meta_cache_size > max_uki_meta_cache_size)
-    {
-        disk_uki_meta_cache_size = max_uki_meta_cache_size;
-        LOG_INFO(
-            log,
-            "Disk unique key index meta cache size is lowered to {} because the system has low amount of memory.",
-            formatReadableSizeWithBinarySuffix(disk_uki_meta_cache_size));
-    }
-    if (size_t max_uki_data_cache_size = memory_amount * 0.10; disk_uki_data_cache_size > max_uki_data_cache_size)
-    {
-        disk_uki_data_cache_size = max_uki_data_cache_size;
-        LOG_INFO(
-            log,
-            "Disk unique key index data cache size is lowered to {} because the system has low amount of memory.",
-            formatReadableSizeWithBinarySuffix(disk_uki_data_cache_size));
-    }
-    global_context->setDiskUniqueKeyIndexCache(disk_uki_meta_cache_size, disk_uki_file_cache_size);
-    global_context->setDiskUniqueKeyIndexBlockCache(disk_uki_data_cache_size);
-
-    size_t disk_urs_file_cache_size = config().getUInt64("disk_unique_row_store_file_cache_size", 50000);
-    size_t disk_urs_meta_cache_size = config().getUInt64("disk_unique_row_store_meta_cache_size", 10737418240); /// 10GB
-    size_t disk_urs_data_cache_size = config().getUInt64("disk_unique_row_store_data_cache_size", 21474836480); /// 20GB
-    if (size_t max_urs_meta_cache_size = memory_amount * 0.05; disk_urs_meta_cache_size > max_urs_meta_cache_size)
-    {
-        disk_urs_meta_cache_size = max_urs_meta_cache_size;
-        LOG_INFO(
-            log,
-            "Disk unique row store meta cache size is lowered to {} because the system has low amount of memory.",
-            formatReadableSizeWithBinarySuffix(disk_urs_meta_cache_size));
-    }
-    if (size_t max_urs_data_cache_size = memory_amount * 0.10; disk_urs_data_cache_size > max_urs_data_cache_size)
-    {
-        disk_urs_data_cache_size = max_urs_data_cache_size;
-        LOG_INFO(
-            log,
-            "Disk unique row store data cache size is lowered to {} because the system has low amount of memory.",
-            formatReadableSizeWithBinarySuffix(disk_urs_data_cache_size));
-    }
-    global_context->setDiskUniqueRowStoreCache(disk_urs_meta_cache_size, disk_urs_file_cache_size);
-    global_context->setDiskUniqueRowStoreBlockCache(disk_urs_data_cache_size);
-
-
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
         /// Rely on schedule pool config
@@ -1471,7 +1422,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
 
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
-    std::shared_ptr<ProtocolServerAdapter> ha_server;
     {
         /// This object will periodically calculate some metrics.
         AsynchronousMetrics async_metrics(
@@ -1620,21 +1570,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 #endif
             });
 
-            port_name = "ha_tcp_port";
-            createServer(listen_host, port_name, listen_try, [&](UInt16 port)
-            {
-                Poco::Net::ServerSocket socket;
-                auto address = socketBindListen(socket, listen_host, port);
-                socket.setReceiveTimeout(settings.receive_timeout);
-                socket.setSendTimeout(settings.send_timeout);
-                ha_server = std::make_shared<ProtocolServerAdapter>(
-                    port_name,
-                    std::make_unique<Poco::Net::TCPServer>(
-                        new HaTCPHandlerFactory(*this), server_pool, socket, new Poco::Net::TCPServerParams));
-
-                LOG_INFO(log, "Listening for ha communication (tcp): {}", address.toString());
-            });
-
             port_name = "mysql_port";
             createServer(listen_host, port_name, listen_try, [&](UInt16 port)
             {
@@ -1769,8 +1704,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         for (auto & server : *servers)
             server.start();
-        if (ha_server)
-            ha_server->start();
 
         /// Server and worker rpc services
         std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
@@ -1828,8 +1761,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 server.stop();
                 current_connections += server.currentConnections();
             }
-            if (ha_server)
-                ha_server->stop();
 
             for (auto & rpc_server : rpc_servers)
                 rpc_server->Stop(0);

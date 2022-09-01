@@ -1,13 +1,14 @@
-#include <Parsers/ASTRenameQuery.h>
+#include <Access/AccessRightsElement.h>
+#include <Databases/DatabaseReplicated.h>
 #include <Databases/IDatabase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterRenameQuery.h>
-#include <Storages/IStorage.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Interpreters/QueryLog.h>
-#include <Access/AccessRightsElement.h>
+#include <Interpreters/executeDDLQueryOnCluster.h>
+#include <Parsers/ASTRenameQuery.h>
+#include <Storages/IStorage.h>
+#include <Transaction/ICnchTransaction.h>
 #include <Common/typeid_cast.h>
-#include <Databases/DatabaseReplicated.h>
 
 
 namespace DB
@@ -104,6 +105,8 @@ BlockIO InterpreterRenameQuery::executeToTables(const ASTRenameQuery & rename, c
                 rename.dictionary);
         }
     }
+    if (auto txn = getContext()->getCurrentTransaction())
+        txn->commitV1();
 
     return {};
 }
@@ -120,7 +123,7 @@ BlockIO InterpreterRenameQuery::executeToDatabase(const ASTRenameQuery &, const 
 
     auto db = catalog.getDatabase(old_name);
     catalog.assertDatabaseDoesntExist(new_name);
-    db->renameDatabase(new_name);
+    db->renameDatabase(getContext(), new_name);
     return {};
 }
 

@@ -46,8 +46,8 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         const ColumnWithTypeAndName & join_key = arguments[2];
-        String rf_key = static_cast<const ColumnConst &>(*arguments[0].column).getValue<String>();
-        String column_key = static_cast<const ColumnConst &>(*arguments[1].column).getValue<String>();
+        String rf_key = arguments[0].column->size() == 0 ? "" : arguments[0].column->getDataAt(0).toString();
+        String column_key = arguments[1].column->size() == 0 ? "" : arguments[1].column->getDataAt(0).toString();
 
         /// When dynamic mode is enabled each time execute this function should get runtime filter otherwise get runtime filter only once
         if ((!context->getSettingsRef().runtime_filter_dynamic_mode && !runtime_filter)

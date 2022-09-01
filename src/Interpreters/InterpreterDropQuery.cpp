@@ -10,6 +10,7 @@
 #include <Common/escapeForFileName.h>
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include "Storages/StorageCnchMergeTree.h"
 #include <Databases/DatabaseReplicated.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -34,6 +35,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 

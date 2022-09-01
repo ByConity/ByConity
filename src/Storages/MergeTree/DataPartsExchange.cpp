@@ -10,7 +10,6 @@
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/NetException.h>
 #include <Common/createHardLink.h>
@@ -49,7 +48,6 @@ namespace ErrorCodes
     extern const int S3_ERROR;
     extern const int INCORRECT_PART_TYPE;
     extern const int SYNTAX_ERROR;
-    extern const int FILE_DOESNT_EXIST;
     extern const int FORMAT_VERSION_TOO_OLD;
 }
 
@@ -109,62 +107,6 @@ std::string Service::getId(const std::string & node_id) const
     return getEndpointId(node_id);
 }
 
-/// used by HaUniqueMergeTree to sync delete files between replicas
-void Service::processQueryDeleteFiles(
-    const HTMLForm & params, [[maybe_unused]] ReadBuffer & body, WriteBuffer & out, [[maybe_unused]] HTTPServerResponse & response)
-{
-    String param_lsn = params.get("lsn");
-    String param_parts = params.get("parts");
-
-    UInt64 delete_version;
-    ReadBufferFromString lsn_buf(param_lsn);
-    if (!tryReadIntText(delete_version, lsn_buf))
-        throw Exception("Illegal lsn param " + param_lsn, ErrorCodes::CANNOT_PARSE_NUMBER);
-
-    Strings part_names;
-    boost::split(part_names, param_parts, boost::is_any_of(","));
-
-    StoragePtr owned_storage = storage.lock();
-    if (!owned_storage)
-        throw Exception("The table was already dropped", ErrorCodes::UNKNOWN_TABLE);
-
-    /// check part and delete file exists
-    MergeTreeData::DataPartsVector parts;
-    for (auto & part_name : part_names)
-    {
-        auto part = findPart(part_name);
-        auto file_path = part->getDeleteFilePathWithVersion(delete_version);
-        Poco::File delete_file(file_path);
-        if (!delete_file.exists())
-            throw Exception("No such delete file: " + file_path, ErrorCodes::FILE_DOESNT_EXIST);
-        parts.push_back(part);
-    }
-
-    /// send responses
-    CurrentMetrics::Increment metric_increment{CurrentMetrics::ReplicatedSend};
-    LOG_TRACE(log, "Sending delete files for {} parts at version {}", parts.size(), delete_version);
-    writeBinary(parts.size(), out);
-    for (auto & part : parts)
-    {
-        String file_path = part->getDeleteFilePathWithVersion(delete_version);
-        UInt64 file_size = Poco::File(file_path).getSize();
-        writeStringBinary(part->name, out);
-        writeBinary(file_size, out);
-
-        HashingWriteBuffer hashing_out(out);
-        ReadBufferFromFile file_in(file_path);
-        copyData(file_in, hashing_out, blocker.getCounter());
-
-        if (blocker.isCancelled())
-            throw Exception("Transferring delete files to replica was cancelled", ErrorCodes::ABORTED);
-
-        if (hashing_out.count() != file_size)
-            throw Exception("Unexpected size of file " + file_path, ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
-
-        writePODBinary(hashing_out.getHash(), out);
-    }
-}
-
 void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuffer & out, HTTPServerResponse & response)
 {
     String qtype = params.get("qtype", "FetchPart");
@@ -181,10 +123,6 @@ void Service::processQuery(const HTMLForm & params, ReadBuffer & body, WriteBuff
     else if (qtype == "checkExist")
     {
         processQueryExist(params, body, out, response);
-    }
-    else if (qtype == "FetchDeleteFiles")
-    {
-        processQueryDeleteFiles(params, body, out, response);
     }
     else
     {
@@ -651,116 +589,6 @@ MergeTreeData::DataPartPtr Service::findPart(const String & name)
     throw Exception("No part " + name + " in table", ErrorCodes::NO_SUCH_DATA_PART);
 }
 
-MergeTreeData::DataPartsDeleteSnapshot Fetcher::fetchDeleteFiles(
-    const StorageMetadataPtr & /*metadata_snapshot*/,
-    ContextPtr /*context*/,
-    const MergeTreeData::DataParts & parts,
-    UInt64 delete_version,
-    const String & replica_path,
-    const String & host,
-    int port,
-    const ConnectionTimeouts & timeouts,
-    const String & user,
-    const String & password,
-    const String & interserver_scheme,
-    const ThrottlerPtr & /*throttler*/)
-{
-    const auto settings = data.getSettings();
-
-    std::map<String, MergeTreeData::DataPartPtr> parts_by_name;
-    /// cap the number of delete files per request in order to avoid exceed URI length limit
-    const auto max_delete_files_per_request = 20;
-    std::vector<Strings> part_names_per_iter;
-    for (auto & part : parts)
-    {
-        if (part_names_per_iter.empty() || part_names_per_iter.back().size() >= max_delete_files_per_request)
-            part_names_per_iter.emplace_back();
-        part_names_per_iter.back().push_back(part->name);
-        parts_by_name.insert({part->name, part});
-    }
-
-    MergeTreeData::DataPartsVector processed;
-    for (auto & part_names : part_names_per_iter)
-    {
-        Poco::URI uri;
-        uri.setScheme(interserver_scheme);
-        uri.setHost(host);
-        uri.setPort(port);
-        uri.setQueryParameters({{"qtype", "FetchDeleteFiles"},
-                                {"endpoint", getEndpointId(replica_path)},
-                                {"lsn", std::to_string(delete_version)},
-                                {"parts", boost::join(part_names, ",")},
-                                {"compress", "false"}});
-
-        Poco::Net::HTTPBasicCredentials creds{};
-        if (!user.empty())
-        {
-            creds.setUsername(user);
-            creds.setPassword(password);
-        }
-
-        PooledReadWriteBufferFromHTTP in{uri,
-                                         Poco::Net::HTTPRequest::HTTP_POST,
-                                         {},
-                                         timeouts,
-                                         creds,
-                                         DBMS_DEFAULT_BUFFER_SIZE,
-                                         0, /* no redirects */
-                                         settings->replicated_max_parallel_fetches_for_host};
-
-        size_t files;
-        readBinary(files, in);
-        for (size_t i = 0; i < files; ++i)
-        {
-            String part_name;
-            UInt64 file_size;
-            readStringBinary(part_name, in);
-            readBinary(file_size, in);
-
-            auto it = parts_by_name.find(part_name);
-            if (it == parts_by_name.end())
-                throw Exception("Fetching delete files got unknown part: " + part_name, ErrorCodes::LOGICAL_ERROR);
-
-            String delete_file_path = it->second->getDeleteFilePathWithVersion(delete_version);
-            WriteBufferFromFile file_out(delete_file_path, DBMS_DEFAULT_BUFFER_SIZE);
-            HashingWriteBuffer hashing_out(file_out);
-            copyData(in, hashing_out, file_size, blocker.getCounter());
-
-            if (blocker.isCancelled())
-            {
-                /// In fact it's OK to leave temporary or broken delete files because
-                /// they won't get loaded (delete version in manifest didn't change) and download process is reentrant.
-                for (auto & part : processed)
-                {
-                    Poco::File file(part->getDeleteFilePathWithVersion(delete_version));
-                    file.remove();
-                }
-                throw Exception("Fetching of delete files was cancelled", ErrorCodes::ABORTED);
-            }
-
-            MergeTreeDataPartChecksum::uint128 expected_hash;
-            readPODBinary(expected_hash, in);
-
-            if (expected_hash != hashing_out.getHash())
-                throw Exception(
-                    "Checksum mismatch for file " + delete_file_path + " transferred from " + replica_path,
-                    ErrorCodes::CHECKSUM_DOESNT_MATCH);
-            processed.push_back(it->second);
-        }
-        assertEOF(in);
-    }
-
-    /// load downloaded delete files
-    MergeTreeData::DataPartsDeleteSnapshot res;
-    for (auto & part : parts)
-    {
-        DeleteBitmapPtr bitmap = part->readDeleteFileWithVersion(delete_version);
-        res.insert({part, std::move(bitmap)});
-    }
-    return res;
-}
-
-
 MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
     const StorageMetadataPtr & metadata_snapshot,
     ContextPtr context,
@@ -782,9 +610,6 @@ MergeTreeData::MutableDataPartPtr Fetcher::fetchPart(
 {
     if (blocker.isCancelled())
         throw Exception("Fetching of part was cancelled", ErrorCodes::ABORTED);
-
-    if (data.isBitEngineMode())
-        fetchBitEngineDictionary(replica_path);
 
     /// Validation of the input that may come from malicious replica.
     auto part_info = MergeTreePartInfo::fromPartName(part_name, data.format_version);
@@ -1113,22 +938,6 @@ MergeTreeData::MutableDataPartPtr Fetcher::downloadPartToMemory(
 
     return new_data_part;
 }
-
-void Fetcher::fetchBitEngineDictionary(const String & replica_path)
-{
-    StorageHaMergeTree * ha_merge_tree = dynamic_cast<StorageHaMergeTree *>(&data);
-    if (!ha_merge_tree)
-        return;
-
-    BitEngineDictionaryHaManager * ha_manager = ha_merge_tree->getBitEngineDictionaryHaManager();
-    if (!ha_manager)
-        return;
-
-    LOG_DEBUG(log, "Try to fetch bitengine dictionary from {} ", replica_path);
-
-    ha_manager->tryUpdateDictFromReplicaPath(replica_path);
-}
-
 
 void Fetcher::downloadBaseOrProjectionPartToDisk(
     const String & replica_path,

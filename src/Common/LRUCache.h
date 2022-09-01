@@ -248,7 +248,6 @@ public:
     }
 
     void getStats(size_t & out_hits, size_t & out_misses) const
-
     {
         std::lock_guard lock(mutex);
         out_hits = hits;
@@ -284,8 +283,6 @@ public:
         std::lock_guard lock(mutex);
         return cells.size();
     }
-
-    virtual bool shouldRemoveEldestEntry() const { return current_size > max_size; }
 
     size_t maxSize() const
     {
@@ -459,7 +456,7 @@ private:
     {
         size_t current_weight_lost = 0;
         size_t queue_size = cells.size();
-        while (shouldRemoveEldestEntry() && (queue_size > 1))
+        while ((current_size > max_size) && (queue_size > 1))
         {
             const Key & key = queue.front();
 

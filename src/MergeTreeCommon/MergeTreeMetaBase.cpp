@@ -69,6 +69,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> storage_settings_,
     bool require_part_metadata_,
+    bool attach_,
     BrokenPartCallback broken_part_callback_)
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
@@ -84,9 +85,9 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
     /// FIXME: add after supporting primary key index cache
     // , primary_index_cache(context_->getDiskPrimaryKeyIndexCache())
-    , unique_key_index_cache(context_->getDiskUniqueKeyIndexCache())
-    , unique_row_store_cache(context_->getDiskUniqueRowStoreCache())
 {
+    const auto & settings = getSettings();
+    allow_nullable_key = attach_ || settings->allow_nullable_key;
     if (!date_column_name.empty())
     {
         try
@@ -262,7 +263,7 @@ void MergeTreeMetaBase::checkProperties(
         auto new_unique_key_sample = ExpressionAnalyzer(new_unique_key_expr_list, new_unique_key_syntax, getContext())
             .getActions(/*add_aliases*/true)->getSampleBlock();
 
-        checkKeyExpression(*new_unique_key_expr, new_unique_key_sample, "Unique", /*allow_nullable_key*/ false);
+        checkKeyExpression(*new_unique_key_expr, new_unique_key_sample, "Unique", allow_nullable_key);
 
         /// check column type
         for (auto & col_with_type: new_unique_key_sample.getNamesAndTypesList())
@@ -309,7 +310,7 @@ void MergeTreeMetaBase::checkProperties(
         }
     }
 
-    checkKeyExpression(*new_sorting_key.expression, new_sorting_key.sample_block, "Sorting", /*allow_nullable_key*/ false);
+    checkKeyExpression(*new_sorting_key.expression, new_sorting_key.sample_block, "Sorting", allow_nullable_key);
 
 }
 
@@ -378,7 +379,7 @@ void MergeTreeMetaBase::checkPartitionKeyAndInitMinMax(const KeyDescription & ne
     if (new_partition_key.expression_list_ast->children.empty())
         return;
 
-    checkKeyExpression(*new_partition_key.expression, new_partition_key.sample_block, "Partition", /*allow_nullable_key*/ false);
+    checkKeyExpression(*new_partition_key.expression, new_partition_key.sample_block, "Partition", allow_nullable_key);
 
     /// Add all columns used in the partition key to the min-max index.
     DataTypes minmax_idx_columns_types = getMinMaxColumnsTypes(new_partition_key);
@@ -1186,8 +1187,8 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing && mode != MergingParams::Unique)
-        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing or Unique.",
+    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
+        throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
     if (!columns_to_sum.empty() && mode != MergingParams::Summing)
@@ -1231,9 +1232,6 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
 
             throw Exception("Logical error: Version column for storage " + storage + " is empty", ErrorCodes::LOGICAL_ERROR);
         }
-
-        if (mode == Unique && version_column == partition_value_as_version)
-            return;
 
         bool miss_column = true;
         for (const auto & column : columns)
@@ -1295,9 +1293,6 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         check_version_column(false, "VersionedCollapsingMergeTree");
     }
 
-    if (mode == MergingParams::Unique)
-        check_version_column(true, "UniqueMergeTree");
-
     /// TODO Checks for Graphite mode.
 }
 
@@ -1312,7 +1307,6 @@ String MergeTreeMetaBase::MergingParams::getModeName() const
         case Replacing:     return "Replacing";
         case Graphite:      return "Graphite";
         case VersionedCollapsing: return "VersionedCollapsing";
-        case Unique:        return "Unique";
     }
 
     __builtin_unreachable();

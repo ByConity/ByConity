@@ -113,25 +113,6 @@ void ColumnTuple::get(size_t n, Field & res) const
     res = tuple;
 }
 
-ColumnPtr ColumnTuple::selectDefault() const
-{
-    size_t row_num = size();
-    auto res = ColumnVector<UInt8>::create(row_num, 1);
-    std::vector<ColumnPtr> default_columns;
-    default_columns.reserve(columns.size());
-    for (auto & column : columns)
-        default_columns.emplace_back(column->selectDefault());
-
-    IColumn::Filter & filter = res->getData();
-    for (auto & default_column : default_columns)
-    {
-        auto & default_filter = assert_cast<const ColumnVector<UInt8> &>(*default_column).getData();
-        for (size_t i = 0; i < row_num; ++i)
-            filter[i] = default_filter[i];
-    }
-    return res;
-}
-
 StringRef ColumnTuple::getDataAt(size_t) const
 {
     throw Exception("Method getDataAt is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

@@ -127,21 +127,21 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
 
     const auto & merging_params = data.merging_params;
 
-    /// Force unique key columns and extra column for Unique mode,
-    /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
-    if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    {
-        auto unique_key_expr = metadata_snapshot->getUniqueKey().expression;
-        if (!unique_key_expr)
-            throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
+    // /// Force unique key columns and extra column for Unique mode,
+    // /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
+    // if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
+    // {
+    //     auto unique_key_expr = metadata_snapshot->getUniqueKey().expression;
+    //     if (!unique_key_expr)
+    //         throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
 
-        Names index_columns_vec = unique_key_expr->getRequiredColumns();
-        std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
+    //     Names index_columns_vec = unique_key_expr->getRequiredColumns();
+    //     std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
 
-        /// also need version or is_offline column when building unique key index file
-        if (!metadata_snapshot->extra_column_name.empty())
-            key_columns.insert(metadata_snapshot->extra_column_name);
-    }
+    //     /// also need version or is_offline column when building unique key index file
+    //     if (!metadata_snapshot->extra_column_name.empty())
+    //         key_columns.insert(metadata_snapshot->extra_column_name);
+    // }
 
     /// Force sign column for Collapsing mode
     if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
@@ -386,7 +386,6 @@ void MergeTreeDataMerger::createMergedStream()
     switch (merging_params.mode)
     {
         case MergeTreeMetaBase::MergingParams::Ordinary:
-        case MergeTreeMetaBase::MergingParams::Unique:
             merged_transform = std::make_unique<MergingSortedTransform>(
                 header,
                 pipes.size(),

@@ -65,9 +65,6 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
 
-#include <Poco/UUIDGenerator.h>
-#include <Parsers/queryToString.h>
-
 #include <Catalog/Catalog.h>
 
 namespace DB
@@ -239,7 +236,11 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     DatabasePtr database = DatabaseFactory::get(create, metadata_path / "", getContext());
     if (const auto * database_cnch = dynamic_cast<const DatabaseCnch *>(database.get()))
+    {
+        if (create.attach || create.attach_short_syntax || create.attach_from_path)
+            throw Exception("Cnch database doesn't support ATTACH", ErrorCodes::SUPPORT_IS_DISABLED);
         database_cnch->createEntryInCnchCatalog(getContext());
+    }
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;
@@ -759,25 +760,8 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
             {
                 bool is_ha = startsWith(as_create.storage->engine->name, "Ha");
                 bool is_replicated = startsWith(as_create.storage->engine->name, "Replicated");
-                bool isHaUnique = startsWith(as_create.storage->engine->name, "HaUnique"); //HaUniqueMergeTree
 
-                if (isHaUnique)
-                {
-                    // Hack to implement sql `create table tmp as r1 IGNORE REPLICATED;` for HaUniqueMergeTree
-                    Poco::UUIDGenerator & gen = Poco::UUIDGenerator::defaultGenerator();
-                    Poco::UUID uuid = gen.createRandom();
-                    String zk_path = "/clickhouse/tables/temporary_table/" + create.table + "/" + uuid.toString();
-
-                    as_create.storage->engine->name = "HaUniqueMergeTree";
-                    if (as_create.storage->engine->arguments->children.size() < 2)
-                    {
-                        throw Exception("Expect haUniqueMergeTree argument exists", ErrorCodes::LOGICAL_ERROR);
-                    }
-                    as_create.storage->engine->arguments->children[0] = std::make_shared<ASTLiteral>(zk_path);
-                    auto & setting_changes = as_create.storage->settings->changes;
-                    setting_changes.emplace_back("unique_engine_temp_table_wait_interval", 1800);
-                }
-                else if (is_ha || is_replicated)
+                if (is_ha || is_replicated)
                 {
                     as_create.storage->engine->name = as_create.storage->engine->name.substr(is_replicated ? 10 : 2);
                     as_create.storage->engine->arguments = nullptr;

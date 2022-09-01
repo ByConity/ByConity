@@ -16,8 +16,6 @@
 #include <Storages/Kafka/HaKafkaBlockInputStream.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
-#include <Storages/StorageHaMergeTree.h>
-#include <Storages/StorageHaUniqueMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Common/Exception.h>
 #include <Common/escapeForFileName.h>
@@ -932,8 +930,8 @@ bool StorageHaKafka::hasUniqueTableDependencies()
         if (!target_table)
             continue;
 
-        if (auto unique = dynamic_cast<StorageHaUniqueMergeTree *>(target_table.get()); unique != nullptr)
-            return true;
+        // if (auto unique = dynamic_cast<StorageHaUniqueMergeTree *>(target_table.get()); unique != nullptr)
+        //     return true;
     }
     return false;
 }
@@ -1701,18 +1699,6 @@ void StorageHaKafka::updateAbsoluteDelayOfDependencies()
                 if (!target_table)
                     break;
 
-                if (auto ha = dynamic_cast<StorageHaMergeTree *>(target_table.get()); ha)
-                {
-                    max_absolute_delay = std::max(max_absolute_delay, ha->getAbsoluteDelay());
-                }
-                else if (auto unique = dynamic_cast<StorageHaUniqueMergeTree *>(target_table.get()); unique)
-                {
-                    max_absolute_delay = std::max(max_absolute_delay, unique->getAbsoluteDelay());
-                }
-                else
-                {
-                    break;
-                }
             } while (false);
 
             /// Recursive call

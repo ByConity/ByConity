@@ -44,7 +44,6 @@
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/MergeTree/ReplicatedMergeTreeTableMetadata.h>
 #include <Storages/MergeTree/BitEngineDictionary/BitEngineDictionaryManager.h>
 #include <Storages/MergeTree/MergeTreeBitmapIndex.h>
 #include <Storages/MergeTree/MergeTreeMarkBitmapIndex.h>
@@ -131,21 +130,6 @@ namespace ErrorCodes
     extern const int ALTER_OF_COLUMN_IS_FORBIDDEN;
     extern const int SUPPORT_IS_DISABLED;
     extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
-    extern const int NOT_FOUND_EXPECTED_DATA_PART;
-}
-
-String toString(UniqueTableState state)
-{
-    switch (state)
-    {
-        case UniqueTableState::INIT: return "INIT";
-        case UniqueTableState::BROKEN: return "BROKEN";
-        case UniqueTableState::REPAIR_MANIFEST: return "REPAIR_MANIFEST";
-        case UniqueTableState::REPAIR_DATA: return "REPAIR_DATA";
-        case UniqueTableState::REPAIRED: return "REPAIRED";
-        case UniqueTableState::NORMAL: return "NORMAL";
-    }
-    return "UNKNOWN";
 }
 
 MergeTreeData::MergeTreeData(
@@ -168,6 +152,7 @@ MergeTreeData::MergeTreeData(
         merging_params_,
         std::move(storage_settings_),
         require_part_metadata_,
+        attach,
         std::move(broken_part_callback_))
     , bitmap_index(std::make_shared<MergeTreeBitmapIndex>(*this))
     , mark_bitmap_index(std::make_shared<MergeTreeMarkBitmapIndex>(*this))
@@ -178,7 +163,6 @@ MergeTreeData::MergeTreeData(
           std::make_shared<Throttler>(getSettings()->max_replicated_sends_network_bandwidth, getContext()->getReplicatedSendsThrottler()))
 {
     const auto settings = getSettings();
-    // allow_nullable_key = attach || settings->allow_nullable_key;
     enable_metastore = settings->enable_metastore;
 
     if (relative_data_path.empty())
@@ -287,44 +271,6 @@ MergeTreeData::MergeTreeData(
     if (!canUsePolymorphicParts(*settings, &reason) && !reason.empty())
         LOG_WARNING(log, "{} Settings 'min_rows_for_wide_part', 'min_bytes_for_wide_part', "
             "'min_rows_for_compact_part' and 'min_bytes_for_compact_part' will be ignored.", reason);
-
-    if (merging_params.mode == MergingParams::Unique)
-    {
-        auto database_name = getStorageID().database_name;
-        auto table_name = getStorageID().table_name;
-        auto metadata_snapshot = getInMemoryMetadataPtr();
-        String columns_str = metadata_snapshot->getColumns().toString();
-        String metadata_str = ReplicatedMergeTreeTableMetadata(*this, metadata_snapshot).toString();
-        String data_part_path = getDataPaths()[0];
-        String dir = data_part_path + "manifest";
-        Poco::File(dir).createDirectory();
-        manifest_store = std::make_unique<ManifestStore>(dir, database_name + "." + table_name + " (ManifestStore)");
-        manifest_store->open(metadata_str, columns_str);
-        unique_within_partition = settings->partition_level_unique_keys;
-        if (!settings->unique_is_offline_column.value.empty())
-        {
-            is_offline_column = settings->unique_is_offline_column;
-            if (!merging_params.partitionValueAsVersion())
-                throw Exception("Must specify partition expression as version column when enable unique_is_offline_column", ErrorCodes::BAD_ARGUMENTS);
-            /// check existence and type of is_offline column
-            bool miss_column = true;
-            for (const auto & column : metadata_snapshot->getColumns().getAllPhysical())
-            {
-                if (column.name == is_offline_column)
-                {
-                    if (!typeid_cast<const DataTypeUInt8 *>(column.type.get()))
-                        throw Exception("is_offline column (" + is_offline_column + ")  must have type UInt8, but got " + column.type->getName(), ErrorCodes::BAD_TYPE_OF_FIELD);
-                    miss_column = false;
-                    break;
-                }
-            }
-            if (miss_column)
-                throw Exception("is_offline column " + is_offline_column + " does not exist in table declaration.", ErrorCodes::NO_SUCH_COLUMN_IN_TABLE);
-        }
-    }
-
-    // Init version type
-    initVersionType();
 }
 
 MergeTreeData::~MergeTreeData()
@@ -372,7 +318,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     for (const auto & part : parts)
     {
         if ((part_values.empty() || part_values.find(part->name) != part_values.end()) && !partition_pruner.canBePruned(*part))
-            res += part->numRowsRemovingDeletes();
+            res += part->rows_count;
     }
     return res;
 }
@@ -465,84 +411,9 @@ Int64 MergeTreeData::getMaxBlockNumber() const
     return max_block_num;
 }
 
-void MergeTreeData::resetUniqueTableToVersion(const DataPartsLock &, UInt64 version)
-{
-    if (merging_params.mode != MergingParams::Unique)
-        return;
-
-    LOG_INFO(log, "Resetting table to snapshot at version {}", version);
-    auto snapshot = manifest_store->getSnapshot(version);
-
-    /// mark part not in snapshot as outdated
-    std::vector<std::string> removed_parts;
-    for (auto it = data_parts_by_state_and_info.begin();
-         it != data_parts_by_state_and_info.end() && (*it)->getState() <= DataPartState::Committed;)
-    {
-        auto next = std::next(it);
-        if (snapshot.parts.count((*it)->name) == 0)
-        {
-            removed_parts.emplace_back((*it)->name);
-            LOG_INFO(log, "Removing part {} because it's not in the snapshot at version {}", (*it)->name, version);
-            (*it)->remove_time.store((*it)->modification_time, std::memory_order_relaxed);
-            modifyPartState(it, DataPartState::Outdated);
-        }
-        it = next;
-    }
-    /// The actual removed version for each part could be smaller than `version' here. But
-    /// maintaining that precise information needs extra works and adds a lot of complexity.
-    /// Since removed version is only used to determine when a part can be physically deleted,
-    /// there's no harm to use a higher version.
-    /// Therefore we prefer simply caching it than persisting it.
-    manifest_store->putPartRemovedVersion(removed_parts, version);
-
-    /// load the right delete bitmap for committed part
-    Stopwatch stopwatch;
-    size_t num_reloaded = 0;
-    Strings recovered_parts;
-    for (auto & entry : snapshot.parts)
-    {
-        auto part_info = MergeTreePartInfo::fromPartName(entry.first, format_version);
-        auto it = data_parts_by_info.find(part_info);
-        if (it == data_parts_by_info.end())
-            throw Exception("Doesn't contain part " + entry.first + " in manifest", ErrorCodes::NO_SUCH_DATA_PART);
-
-        auto part = *it;
-        if (!part)
-            throw Exception("Failed to get part " + (*it)->getNameWithState(), ErrorCodes::NO_SUCH_DATA_PART);
-
-        /// if part is outdated, revert to committed state.
-        /// let's say we have the following logs and parts locally
-        ///     versions:        10                     11                     12
-        ///        parts:  part_1_1_0(outdated)   part_2_2_0(outdated)   part_1_2_1(committed)
-        /// If the new leader decided to reset to version 11, according to the snapshot, we should
-        /// remove part_1_2_1 and re-added part_1_1_0 and part_2_2_0
-        if (part->getState() == DataPartState::Outdated)
-        {
-            part->remove_time.store(0, std::memory_order_relaxed);
-            modifyPartState(part, DataPartState::Committed);
-            recovered_parts.push_back(part->name);
-            LOG_INFO(log, "Recovering outdated part {} because it's in the snapshot at version {}", part->name, version);
-        }
-        else if (part->getState() != DataPartState::Committed)
-        {
-            throw Exception("Part " + (*it)->getNameWithState() + " in snapshot is not in committed state", ErrorCodes::LOGICAL_ERROR);
-        }
-
-        if (part->deleteBitmapVersion() != entry.second)
-        {
-            auto delete_bitmap = part->readDeleteFileWithVersion(entry.second);
-            part->setDeleteBitmapWithVersion(delete_bitmap, entry.second);
-            num_reloaded++;
-        }
-    }
-    manifest_store->deletePartRemovedVersion(recovered_parts);
-
-    LOG_INFO(log, "Takes {} seconds to reload {} delete bitmaps for {} parts", stopwatch.elapsedSeconds(), num_reloaded, snapshot.parts.size());
-}
-
 /** ----------------------- COMPATIBLE CODE BEGIN-------------------------- */
 /*  compatible with old metastore. remove this later  */
-bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
+bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks)
 {
     bool res = false;
     // try to find the old version metastore;
@@ -587,7 +458,7 @@ bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
                 if (!unloaded_parts.empty())
                 {
                     LOG_DEBUG(log, "[Compatible] Loading {} unloaded parts from file system.", unloaded_parts.size());
-                    loadPartsFromFileSystem(unloaded_parts, {}, skip_sanity_checks, attach, part_lock);
+                    loadPartsFromFileSystem(unloaded_parts, {}, skip_sanity_checks, part_lock);
                 }
 
                 /// parts have been loaded, sync the metadata to new metastore.
@@ -617,7 +488,7 @@ bool MergeTreeData::preLoadDataParts(bool skip_sanity_checks, bool attach)
 /*  -----------------------  COMPATIBLE CODE END -------------------------- */
 
 /// if metastore is enabled and ready for use, it will try to load parts from metastore first. Other wise, load parts from file system.
-void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
+void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 {
     bool force_meta_rebuild = (getContext()->getSettingsRef().TEST_KNOB & TEST_KNOB_FORCE_META_REBUILD);
 
@@ -626,7 +497,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
     if (!force_meta_rebuild && metastore)
     {
         /// try to load parts from metastore with old metastore format. will transform metadata from old version to new after loading.
-        loaded_from_old_metastore = preLoadDataParts(skip_sanity_checks, attach);
+        loaded_from_old_metastore = preLoadDataParts(skip_sanity_checks);
     }
     /*  -----------------------  COMPATIBLE CODE END -------------------------- */
     if (loaded_from_old_metastore)
@@ -663,7 +534,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
         if (!unloaded_parts.empty() || !wals_with_disks.empty())
         {
             LOG_DEBUG(log, "Loading {} unloaded parts from file system.", unloaded_parts.size());
-            loadPartsFromFileSystem(unloaded_parts, wals_with_disks, skip_sanity_checks, attach, part_lock);
+            loadPartsFromFileSystem(unloaded_parts, wals_with_disks, skip_sanity_checks, part_lock);
         }
         LOG_DEBUG(log, "Takes {}ms to load parts from metastore.", stopwatch.elapsedMilliseconds());
     }
@@ -738,7 +609,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
         if (enable_metastore && metastore)
             metastore->cleanMetastore();
 
-        loadPartsFromFileSystem(part_names_with_disks, wal_name_with_disks, skip_sanity_checks, attach, part_lock);
+        loadPartsFromFileSystem(part_names_with_disks, wal_name_with_disks, skip_sanity_checks, part_lock);
 
         if (metastore)
             metastore->setMetastoreStatus(*this);
@@ -801,7 +672,7 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks, bool attach)
     LOG_DEBUG(log, "Loaded data parts ({} items)", data_parts_indexes.size());
 }
 
-void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_disks, PartNamesWithDisks wal_with_disks, bool skip_sanity_checks, bool attach, DataPartsLock & part_lock)
+void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_disks, PartNamesWithDisks wal_with_disks, bool skip_sanity_checks, DataPartsLock & part_lock)
 {
     auto metadata_snapshot = getInMemoryMetadataPtr();
     const auto settings = getSettings();
@@ -938,35 +809,12 @@ void MergeTreeData::loadPartsFromFileSystem(PartNamesWithDisks part_names_with_d
     for (auto & part : broken_parts_to_detach)
         part->renameToDetached("broken-on-start"); /// detached parts must not have '_' in prefixes
 
-    if (manifest_store)
-    {
-        for (const auto & it : data_parts_by_state_and_info)
-        {
-            if (it->getState() != DataPartState::Committed)
-                throw Exception(
-                    "Unexpected state of part " + it->getNameWithState() + ". Expected: Committed.",
-                    ErrorCodes::NOT_FOUND_EXPECTED_DATA_PART);
-        }
-        if (attach)
-        {
-            auto version = manifest_store->commitVersion();
-            try
-            {
-                resetUniqueTableToVersion(part_lock, version);
-            }
-            catch (...)
-            {
-                LOG_WARNING(log, "Table is broken at version {}: {}", version, getCurrentExceptionMessage(false));
-                setUniqueTableState(UniqueTableState::BROKEN);
-            }
-        }
-    }
-    else if (data_parts_indexes.size() >= 2)
-    {
-        /// Delete from the set of current parts those parts that are covered by another part (those parts that
-        /// were merged), but that for some reason are still not deleted from the filesystem.
-        /// Deletion of files will be performed later in the clearOldParts() method.
+    /// Delete from the set of current parts those parts that are covered by another part (those parts that
+    /// were merged), but that for some reason are still not deleted from the filesystem.
+    /// Deletion of files will be performed later in the clearOldParts() method.
 
+    if (data_parts_indexes.size() >= 2)
+    {
         /// Now all parts are committed, so data_parts_by_state_and_info == committed_parts_range
         auto prev_jt = data_parts_by_state_and_info.begin();
         auto curr_jt = std::next(prev_jt);
@@ -1108,21 +956,10 @@ MergeTreeData::DataPartsVector MergeTreeData::grabOldParts(bool force)
 
             auto part_remove_time = part->remove_time.load(std::memory_order_relaxed);
 
-            bool can_delete = it->unique()
-                && ((now > part_remove_time && now - part_remove_time > getSettings()->old_parts_lifetime.totalSeconds()) || force
-                    || isInMemoryPart(part));
-            if (can_delete && merging_params.mode == MergingParams::Unique)
-            {
-                auto removed_version = manifest_store->getPartRemovedVersion((*it)->name);
-                if (removed_version == ManifestStore::INVALID_VERSION)
-                {
-                    LOG_WARNING(log, "Can't delete outdated part {} because removed version is unknown", (*it)->name);
-                    continue;
-                }
-                can_delete = removed_version <= unique_commit_version.load(std::memory_order_relaxed);
-            }
-
-            if (can_delete)
+            if (part.unique() && /// Grab only parts that are not used by anyone (SELECTs for example).
+                ((part_remove_time < now &&
+                now - part_remove_time > getSettings()->old_parts_lifetime.totalSeconds()) || force
+                || isInMemoryPart(part))) /// Remove in-memory parts immediately to not store excessive data in RAM
             {
                 parts_to_delete.emplace_back(it);
             }
@@ -3068,7 +2905,7 @@ void MergeTreeData::movePartitionToShard(const ASTPtr & /*partition*/, bool /*mo
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MOVE PARTITION TO SHARD is not supported by storage {}", getName());
 }
 
-void MergeTreeData::dropPartitionWhere(const ASTPtr &, bool, ContextPtr, const ASTPtr &)
+void MergeTreeData::dropPartitionWhere(const ASTPtr &, bool, ContextPtr)
 {
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "DROP PARTITION WHERE is not supported by storage {}", getName());
 }
@@ -3096,8 +2933,7 @@ void MergeTreeData::repairPartition(const ASTPtr & , bool , const String & , Con
 Pipe MergeTreeData::alterPartition(
     const StorageMetadataPtr & metadata_snapshot,
     const PartitionCommands & commands,
-    ContextPtr query_context,
-    const ASTPtr & query)
+    ContextPtr query_context)
 {
     PartitionCommandsResultInfo result;
     for (const PartitionCommand & command : commands)
@@ -3116,13 +2952,13 @@ Pipe MergeTreeData::alterPartition(
                 else
                 {
                     checkPartitionCanBeDropped(command.partition);
-                    dropPartition(command.partition, command.detach, query_context, query);
+                    dropPartition(command.partition, command.detach, query_context);
                 }
             }
             break;
 
             case PartitionCommand::DROP_PARTITION_WHERE:
-                dropPartitionWhere(command.partition, command.detach, query_context, query);
+                dropPartitionWhere(command.partition, command.detach, query_context);
                 break;
 
             case PartitionCommand::DROP_DETACHED_PARTITION:
@@ -4887,7 +4723,7 @@ void MergeTreeData::syncMetaImpl(DataPartsLock & lock)
     if (!parts_with_disks.empty() || !wals_with_disks.empty())
     {
         LOG_DEBUG(log, "Reloading {} missing parts and {} missing wal from file system.", parts_with_disks.size(), wals_with_disks.size());
-        loadPartsFromFileSystem(parts_with_disks, wals_with_disks, true, false, lock);
+        loadPartsFromFileSystem(parts_with_disks, wals_with_disks, true, lock);
 
         if (data_parts_indexes.size() >= 2)
         {
@@ -4969,357 +4805,4 @@ CurrentlySubmergingEmergingTagger::~CurrentlySubmergingEmergingTagger()
     storage.currently_emerging_big_parts.erase(emerging_part_name);
 }
 
-
-MergeTreeData::DataPartsVector MergeTreeData::SyncPartsTransaction::preCommit(MutableDataPartPtr & new_part)
-{
-    DataPartsVector covered_parts;
-    auto lock = data.lockParts();
-    data.renameTempPartAndReplace(new_part, nullptr, &new_part_txn, lock, &covered_parts);
-    return covered_parts;
-}
-
-void MergeTreeData::SyncPartsTransaction::commit()
-{
-    auto lock = data.lockParts();
-    new_part_txn.commit(&lock);
-    for (auto & [part, new_delete] : new_deletes)
-    {
-        part->setDeleteBitmapWithVersion(new_delete, commit_version);
-    }
-    committed = true;
-}
-
-void MergeTreeData::SyncPartsTransaction::rollback()
-{
-    if (committed) return;
-    /// There is no need to rollback delete files because they never get into part's state
-    /// and will be cleaned up by background GC activities.
-    /// When the server starts, we'll load the right delete file for each part based on manifest log.
-    new_part_txn.rollback();
-}
-
-void MergeTreeData::performUniqueIndexGc()
-{
-    auto now = time(nullptr);
-    size_t num = 0;
-    UInt64 total_reclaimed_memory = 0;
-    auto committed_parts = getDataPartsVector({DataPartState::Committed});
-    for (auto & part : committed_parts)
-    {
-        auto reclaimed = const_cast<IMergeTreeDataPart *>(part.get())->gcUniqueIndexIfNeeded(&now, /*force_unload=*/false);
-        if (reclaimed > 0)
-        {
-            num++;
-            total_reclaimed_memory += reclaimed;
-        }
-    }
-    auto outdated_parts = getDataPartsVector({DataPartState::Outdated});
-    for (auto & part : outdated_parts)
-    {
-        auto reclaimed = const_cast<IMergeTreeDataPart *>(part.get())->gcUniqueIndexIfNeeded(&now, /*force_unload=*/true);
-        if (reclaimed > 0)
-        {
-            num++;
-            total_reclaimed_memory += reclaimed;
-        }
-    }
-    LOG_DEBUG(log, "Reclaimed {} unique index memory from {} parts", formatReadableSizeWithBinarySuffix(total_reclaimed_memory), num);
-}
-
-void MergeTreeData::clearOldDeleteFilesFromFilesystem()
-{
-    if (disable_delete_file_gc)
-        return;
-    std::unique_lock<std::mutex> lock(delete_file_gc_mutex);
-    DataPartsVector parts = getDataPartsVector();
-    auto commit_version = unique_commit_version.load(std::memory_order_relaxed);
-    UInt32 total_removed_files = 0;
-    UInt32 num_part_performed = 0;
-    Stopwatch stopwatch;
-    for (auto & part : parts)
-    {
-        bool retry_next_time;
-        total_removed_files += part->clearOldDeleteFilesIfNeeded(commit_version, retry_next_time);
-        num_part_performed += retry_next_time ? 0 : 1;
-        if (num_part_performed >= getSettings()->delete_file_gc_max_parts_per_round)
-            break;
-    }
-    if (num_part_performed)
-        LOG_DEBUG(log, "Removed {} delete files in {}ms, commit version = {}", total_removed_files, stopwatch.elapsedMilliseconds(), commit_version);
-}
-
-MergeTreeData::AlterDataPartTransactionPtr
-MergeTreeData::alterDataPartForUniqueTable(const DataPartPtr & part, const NamesAndTypesList & new_columns)
-{
-    if (!isWidePart(part))
-        throw Exception("Expect part to be a wide part.", ErrorCodes::LOGICAL_ERROR);
-
-    AlterDataPartTransactionPtr transaction(new AlterDataPartTransaction(part));
-
-    std::map<String, const IDataType *> new_types;
-    for (const NameAndTypePair & column : new_columns)
-        new_types.emplace(column.name, column.type.get());
-
-    /// Collect counts for shared streams of different columns. As an example, Nested columns have shared stream with array sizes.
-    auto old_columns = part->columns;
-    std::map<String, size_t> stream_counts;
-    for (const NameAndTypePair & column : old_columns)
-    {
-        auto serialization = column.type->getDefaultSerialization();
-        serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path) {
-            ++stream_counts[ISerialization::getFileNameForStream(column.name, substream_path)];
-        });
-    }
-
-    for (const NameAndTypePair & column : old_columns)
-    {
-        if (!new_types.count(column.name))
-        {
-            /// The column was deleted.
-            if (!part || part->hasColumnFiles(column))
-            {
-                auto serialization = column.type->getDefaultSerialization();
-                serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path) {
-                    String file_name = ISerialization::getFileNameForStream(column.name, substream_path);
-
-                    /// Delete files if they are no longer shared with another column.
-                    if (--stream_counts[file_name] == 0)
-                    {
-                        auto mark_ext = part->getMarksFileExtension();
-                        transaction->rename_map[file_name + ".bin"] = "";
-                        transaction->rename_map[file_name + mark_ext] = "";
-                    }
-                });
-            }
-
-            /// remove implicit column file and base column file if necessary
-            if (column.type->isMap() && !column.type->isMapKVStore())
-            {
-                /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
-                NameSet file_set;
-                auto map_key_prefix = genMapKeyFilePrefix(column.name);
-                auto map_base_prefix = genMapBaseFilePrefix(column.name);
-
-                for (const auto & [file, _]: part->getChecksums()->files)
-                {
-                    if (startsWith(file, map_key_prefix))
-                    {
-                        if (part->versions->enable_compact_map_data)
-                        {
-                            String file_name = getMapFileNameFromImplicitFileName(file);
-                            if (!file_set.count(file_name))
-                                file_set.insert(file_name);
-                        }
-                        transaction->rename_map[file] = "";
-                    }
-                    else if (startsWith(file, map_base_prefix))
-                        transaction->rename_map[file] = "";
-                }
-                if (part->versions->enable_compact_map_data)
-                {
-                    for (String file: file_set)
-                        transaction->rename_map[file] = "";
-                }
-            }
-        }
-    }
-    if (transaction->rename_map.empty())
-    {
-        // No column files to drop for this part, return
-        return nullptr;
-    }
-
-    /// Update the checksums.
-    IMergeTreeDataPart::ChecksumsPtr new_checksums = std::make_shared<IMergeTreeDataPart::Checksums>();
-    *new_checksums = *(part->getChecksums());
-    for (auto it : transaction->rename_map)
-    {
-        if (it.second.empty())
-            new_checksums->files.erase(it.first);
-    }
-
-    if (part->storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    {
-        /// When there has commands of drop column, it's necessary to rewrite row store meta.
-        UniqueRowStoreMetaPtr current_row_store_meta = part->tryGetUniqueRowStoreMeta();
-        if (current_row_store_meta)
-        {
-            UniqueRowStoreMetaPtr new_row_store_meta = std::make_shared<UniqueRowStoreMeta>(*current_row_store_meta);
-            for (auto & [name, type] : new_row_store_meta->columns)
-            {
-                if (!new_types.count(name))
-                    new_row_store_meta->removed_columns.emplace(name);
-            }
-
-            /// Write to file
-            String tmp_suffix = ".tmp";
-            WriteBufferFromFile file(part->getFullPath() + UNIQUE_ROW_STORE_META_NAME + tmp_suffix, 4096);
-            HashingWriteBuffer out_hashing(file);
-            new_row_store_meta->write(out_hashing);
-            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_size = out_hashing.count();
-            new_checksums->files[UNIQUE_ROW_STORE_META_NAME].file_hash = out_hashing.getHash();
-            transaction->rename_map[UNIQUE_ROW_STORE_META_NAME + tmp_suffix] = UNIQUE_ROW_STORE_META_NAME;
-
-            /// Update row store meta in memory immediately, it's ok even transaction failed.
-            const_cast<IMergeTreeDataPart &>(*part).setUniqueRowStoreMeta(new_row_store_meta);
-        }
-    }
-
-    /// Write the checksums to the temporary file.
-    bool checksums_empty = part->getChecksums()->empty();
-    if (!checksums_empty)
-    {
-        transaction->new_checksums = *new_checksums;
-        WriteBufferFromFile checksums_file(part->getFullPath() + "checksums.txt.tmp", 4096);
-        new_checksums->write(checksums_file);
-        transaction->rename_map["checksums.txt.tmp"] = "checksums.txt";
-    }
-
-    /// Write the new column list to the temporary file.
-    transaction->new_columns = new_columns.filter(part->columns.getNames());
-    WriteBufferFromFile columns_file(part->getFullPath() + "columns.txt.tmp", 4096);
-    transaction->new_columns.writeText(columns_file);
-    transaction->rename_map["columns.txt.tmp"] = "columns.txt";
-    return transaction;
-}
-
-void MergeTreeData::AlterDataPartTransaction::innerCommit()
-{
-    String path = data_part->getFullPath();
-
-    /// NOTE: checking that a file exists before renaming or deleting it
-    /// is justified by the fact that, when converting an ordinary column
-    /// to a nullable column, new files are created which did not exist
-    /// before, i.e. they do not have older versions.
-
-    /// 1) Rename the old files.
-    for (const auto & from_to : rename_map)
-    {
-        String name = from_to.second.empty() ? from_to.first : from_to.second;
-        Poco::File file{path + name};
-        if (file.exists())
-            file.renameTo(path + name + ".tmp2");
-    }
-
-    /// 2) Move new files in the place of old and update the metadata in memory.
-    for (const auto & from_to : rename_map)
-    {
-        if (!from_to.second.empty())
-        {
-            Poco::File{path + from_to.first}.renameTo(path + from_to.second);
-        }
-    }
-
-    auto & mutable_part = const_cast<DataPart &>(*data_part);
-    {
-        std::lock_guard lock(mutable_part.checksums_mutex);
-        mutable_part.checksums_ptr = std::make_shared<IMergeTreeDataPart::Checksums>(new_checksums);
-        /// FIXME: this may cause UB to set column directly. Currently, only unique table alter drop column may cause this case, it's necessary to reimpl it.
-        mutable_part.columns = new_columns;
-    }
-
-    /// 3) Delete the old files.
-    for (const auto & from_to : rename_map)
-    {
-        String name = from_to.second.empty() ? from_to.first : from_to.second;
-        Poco::File file{path + name + ".tmp2"};
-        if (file.exists())
-            file.remove();
-    }
-
-    /// 4) Delete clear files.
-    for (const auto & clear_file : clear_files)
-    {
-        Poco::File file(path + clear_file);
-        if (file.exists())
-            file.remove();
-    }
-
-    mutable_part.bytes_on_disk = new_checksums.getTotalSizeOnDisk();
-
-    /// FIXME (UNIQUE KEY): update metastore
-    // data_part->storage.updateMetaInfo(mutable_part);
-}
-
-void MergeTreeData::AlterDataPartTransaction::commit()
-{
-    if (!data_part)
-        return;
-    try
-    {
-        /// FIXME (UNIQUE KEY): revist later
-        // auto lock = data_part->getColumnsWriteLock();
-
-        innerCommit();
-
-        clear();
-    }
-    catch (...)
-    {
-        /// Don't delete temporary files in the destructor in case something went wrong.
-        clear();
-        throw;
-    }
-}
-
-MergeTreeData::AlterDataPartTransaction::~AlterDataPartTransaction()
-{
-    try
-    {
-        if (!data_part)
-            return;
-
-        LOG_WARNING(data_part->storage.getLogger(), "Aborting ALTER of part {}", data_part->relative_path);
-
-        String path = data_part->getFullPath();
-        for (const auto & from_to : rename_map)
-        {
-            try
-            {
-                Poco::File file(path + from_to.first);
-                if (file.exists())
-                    file.remove();
-            }
-            catch (Poco::Exception & e)
-            {
-                LOG_WARNING(data_part->storage.getLogger(), "Can't remove {}: {} ", path + from_to.first, e.displayText());
-            }
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
-}
-
-
-void MergeTreeData::initVersionType()
-{
-    auto metadata_snapshot = getInMemoryMetadata();
-    /// NOTE: init version_type for unique table, directly save extra_column_name and
-    /// extra_column_size into metadata for leater use.
-    if (merging_params.partitionValueAsVersion())
-    {
-        metadata_snapshot.version_type |= metadata_snapshot.flag_partition_as_version;
-        if (!is_offline_column.empty())
-            metadata_snapshot.version_type |= metadata_snapshot.flag_is_offline;
-    }
-    else if (!merging_params.version_column.empty())
-    {
-        metadata_snapshot.version_type |= metadata_snapshot.flag_explicit_version;
-    }
-
-    if (metadata_snapshot.version_type & metadata_snapshot.flag_explicit_version)
-    {
-        metadata_snapshot.extra_column_name = merging_params.version_column;
-        /// TODO use size of version column's data type
-        metadata_snapshot.extra_column_size = 8;
-    }
-    else if (metadata_snapshot.version_type & metadata_snapshot.flag_is_offline)
-    {
-        metadata_snapshot.extra_column_name = is_offline_column;
-        metadata_snapshot.extra_column_size = 1;
-    }
-    setInMemoryMetadata(metadata_snapshot);
-}
 }

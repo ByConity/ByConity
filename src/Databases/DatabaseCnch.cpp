@@ -6,11 +6,15 @@
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/formatAST.h>
 #include <Transaction/Actions/DDLCreateAction.h>
 #include <Transaction/Actions/DDLDropAction.h>
 #include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Common/StringUtils/StringUtils.h>
+#include <common/scope_guard.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <Transaction/Actions/DDLRenameAction.h>
 
 namespace DB
 {
@@ -19,6 +23,8 @@ namespace ErrorCodes
 {
     extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
     extern const int SYSTEM_ERROR;
+    extern const int TABLE_ALREADY_EXISTS;
+    extern const int NOT_IMPLEMENTED;
 }
 
 class CnchDatabaseTablesSnapshotIterator final : public DatabaseTablesSnapshotIterator
@@ -29,41 +35,39 @@ public:
 };
 
 DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, ContextPtr local_context)
-    : IDatabase(name_), WithContext(local_context->getGlobalContext())
+    : IDatabase(name_)
+    , WithContext(local_context->getGlobalContext())
     , db_uuid(uuid)
     , log(&Poco::Logger::get("DatabaseCnch (" + name_ + ")"))
 {
     LOG_DEBUG(log, "Create database {} in query {}", database_name, local_context->getCurrentQueryId());
 }
 
-void DatabaseCnch::createTable(
-    ContextPtr local_context,
-    const String & table_name,
-    const StoragePtr & table,
-    const ASTPtr & query)
+void DatabaseCnch::createTable(ContextPtr local_context, const String & table_name, const StoragePtr & table, const ASTPtr & query)
 {
     LOG_DEBUG(log, "Create table {} in query {}", table_name, local_context->getCurrentQueryId());
-
-    String statement = serializeAST(*query);
     auto txn = local_context->getCurrentTransaction();
-
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+    if (!query->as<ASTCreateQuery>())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
+    auto create_query = query->as<ASTCreateQuery &>();
+    if (create_query.isView())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
+    if (!startsWith(create_query.storage->engine->name, "Cnch"))
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
-    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement};
+    String statement = serializeAST(*query);
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
     LOG_TRACE(log, "Successfully create table {} in query {}", table_name, local_context->getCurrentQueryId());
 }
 
-void DatabaseCnch::dropTable(
-    ContextPtr local_context,
-    const String & table_name,
-    bool no_delay)
+void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name, bool no_delay)
 {
-    LOG_DEBUG(log, "Drop table {} in query {}, no delay {}"
-         , table_name, local_context->getCurrentQueryId(), no_delay);
+    LOG_DEBUG(log, "Drop table {} in query {}, no delay {}", table_name, local_context->getCurrentQueryId(), no_delay);
 
     auto txn = local_context->getCurrentTransaction();
 
@@ -77,14 +81,14 @@ void DatabaseCnch::dropTable(
         throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
 
     DropActionParams params{getDatabaseName(), table_name, storage->commit_time, ASTDropQuery::Kind::Drop};
-    DDLDropActionPtr drop_action = std::make_shared<DDLDropAction>(local_context, txn->getTransactionID(), std::move(params), std::vector{std::move(storage)});
+    auto drop_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{std::move(storage)});
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
 }
 
 void DatabaseCnch::drop(ContextPtr local_context)
 {
-    LOG_DEBUG(log, "Drop database {} in query {}", database_name , local_context->getCurrentQueryId());
+    LOG_DEBUG(log, "Drop database {} in query {}", database_name, local_context->getCurrentQueryId());
 
     auto txn = local_context->getCurrentTransaction();
 
@@ -92,8 +96,27 @@ void DatabaseCnch::drop(ContextPtr local_context)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
     DropActionParams params{getDatabaseName(), "", commit_time, ASTDropQuery::Kind::Drop};
-    DDLDropActionPtr drop_action = std::make_shared<DDLDropAction>(local_context, txn->getTransactionID(), std::move(params));
+    auto drop_action = txn->createAction<DDLDropAction>(std::move(params));
     txn->appendAction(std::move(drop_action));
+    txn->commitV1();
+}
+
+void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String & name)
+{
+    TransactionCnchPtr txn = local_context->getCurrentTransaction();
+
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+    auto table = tryGetTable(name, local_context);
+
+    if (!table)
+        throw Exception("Table " + name + "." + name + " doesn't exists.", ErrorCodes::UNKNOWN_TABLE);
+
+    /// detach table action
+    DropActionParams params{getDatabaseName(), name, table->commit_time, ASTDropQuery::Kind::Detach};
+    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{table});
+    txn->appendAction(std::move(detach_action));
     txn->commitV1();
 }
 
@@ -108,46 +131,46 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 
 bool DatabaseCnch::isTableExist(const String & name, ContextPtr local_context) const
 {
-    /// TODO update timestamp
-    return local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, TxnTimestamp::maxTS());
+    return local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
 }
 
 StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context) const
 {
-    /// TODO update timestamp
-    StoragePtr res{nullptr};
     try
     {
-        res = local_context->getCnchCatalog()->getTable(*local_context, getDatabaseName(), name, TxnTimestamp::maxTS());
+        auto res = tryGetTableImpl(name, local_context);
+        if (res && !res->is_detached && !res->is_dropped)
+            return res;
     }
     catch (Exception & e)
     {
         if (e.code() != ErrorCodes::UNKNOWN_TABLE)
             throw e;
     }
-    return res;
+    return nullptr;
 }
 
 DatabaseTablesIteratorPtr DatabaseCnch::getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name)
 {
     Tables tables;
     Strings names = local_context->getCnchCatalog()->getTablesInDB(getDatabaseName());
-    std::transform(names.begin(), names.end(), std::inserter(tables, tables.end()),
-        [this, & local_context] (const String & name)
-        {
-            StoragePtr storage = tryGetTable(name, local_context);
-            if (!storage)
-                throw Exception("Can't get storage for table " + name, ErrorCodes::UNKNOWN_TABLE);
-
-            /// debug
-            StorageID storage_id = storage->getStorageID();
-            LOG_DEBUG(log, "uuid {} database {} table {}", UUIDHelpers::UUIDToString(storage_id.uuid), storage_id.getDatabaseName(), storage_id.getTableName());
-
-            /// end debug
-
-            return std::make_pair(name, std::move(storage));
-        }
-    );
+    std::for_each(names.begin(), names.end(), [this, &local_context, &tables](const String & name) {
+        StoragePtr storage = tryGetTableImpl(name, local_context);
+        if (!storage)
+            throw Exception("Can't get storage for table " + name, ErrorCodes::UNKNOWN_TABLE);
+        if (storage->is_detached || storage->is_dropped)
+            return;
+        /// debug
+        StorageID storage_id = storage->getStorageID();
+        LOG_DEBUG(
+            log,
+            "UUID {} database {} table {}",
+            UUIDHelpers::UUIDToString(storage_id.uuid),
+            storage_id.getDatabaseName(),
+            storage_id.getTableName());
+        /// end debug
+        tables.try_emplace(name, std::move(storage));
+    });
 
     if (!filter_by_table_name)
         return std::make_unique<CnchDatabaseTablesSnapshotIterator>(std::move(tables), database_name);
@@ -171,11 +194,13 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
     StoragePtr storage{};
     if (throw_on_error)
     {
-        storage = getContext()->getCnchCatalog()->getTable(*local_context, getDatabaseName(), name, TxnTimestamp::maxTS());
+        storage = getContext()->getCnchCatalog()->getTable(
+            *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
     }
     else
     {
-        storage = getContext()->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), name, TxnTimestamp::maxTS());
+        storage = getContext()->getCnchCatalog()->tryGetTable(
+            *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
     }
 
     if (!storage)
@@ -186,16 +211,24 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
     ASTPtr ast{};
     try
     {
-        ast = parseQuery(p_create_query, create_table_query, local_context->getSettingsRef().max_query_size
-            , local_context->getSettingsRef().max_parser_depth);
+        ast = parseQuery(
+            p_create_query,
+            create_table_query,
+            local_context->getSettingsRef().max_query_size,
+            local_context->getSettingsRef().max_parser_depth);
     }
     catch (...)
     {
         if (throw_on_error)
             throw;
         else
-            LOG_DEBUG(log, "Fail to parseQuery for table {} in datase {} query id {}, create query {}",
-                name , getDatabaseName(), local_context->getCurrentQueryId(), create_table_query);
+            LOG_DEBUG(
+                log,
+                "Fail to parseQuery for table {} in datase {} query id {}, create query {}",
+                name,
+                getDatabaseName(),
+                local_context->getCurrentQueryId(),
+                create_table_query);
     }
 
     return ast;
@@ -211,6 +244,40 @@ void DatabaseCnch::createEntryInCnchCatalog(ContextPtr local_context) const
     auto create_db = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_db));
     txn->commitV1();
+}
+
+StoragePtr DatabaseCnch::tryGetTableImpl(const String & name, ContextPtr local_context) const
+{
+    return getContext()->getCnchCatalog()->getTable(
+        *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+}
+
+void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_name)
+{
+    auto txn = local_context->getCurrentTransaction();
+    RenameActionParams params;
+    params.db_params = RenameActionParams::RenameDBParams{database_name, new_name, {}};
+    params.type = RenameActionParams::Type::RENAME_DB;
+    auto rename = txn->createAction<DDLRenameAction>(std::move(params));
+    txn->appendAction(std::move(rename));
+    txn->commitV1();
+}
+
+void DatabaseCnch::renameTable(
+    ContextPtr local_context, const String & table_name, IDatabase & to_database, const String & to_table_name, bool /*exchange*/, bool /*dictionary*/)
+{
+    auto txn = local_context->getCurrentTransaction();
+    if (to_database.isTableExist(to_table_name, local_context))
+        throw Exception("Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+    StoragePtr from_table = tryGetTable(table_name, local_context);
+    if (!from_table)
+        throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+
+    RenameActionParams params;
+    params.table_params = RenameActionParams::RenameTableParams{database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
+    auto rename_table = txn->createAction<DDLRenameAction>(std::move(params));
+    txn->appendAction(std::move(rename_table));
+    /// Commit in InterpreterRenameQuery because we can rename multiple tables in a same transaction
 }
 
 }

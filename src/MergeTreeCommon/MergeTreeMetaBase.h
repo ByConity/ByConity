@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/extractKeyExpressionList.h>
@@ -93,7 +94,6 @@ public:
             Replacing           = 5,
             Graphite            = 6,
             VersionedCollapsing = 7,
-            Unique              = 102,
         };
 
         Mode mode;
@@ -133,6 +133,7 @@ public:
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> storage_settings_,
         bool require_part_metadata_,
+        bool attach_,
         BrokenPartCallback broken_part_callback_ = [](const String &) {});
 
     /// Names
@@ -397,6 +398,9 @@ protected:
     mutable std::shared_mutex pinned_part_uuids_mutex;
     PinnedPartUUIDsPtr pinned_part_uuids;
 
+    /// Nullable key
+    bool allow_nullable_key = false;
+
     /// Work with data parts
 
     struct TagByInfo{};
@@ -477,8 +481,6 @@ protected:
 
     /// FIXME: add after supporting primary index cache
     // PrimaryIndexCachePtr primary_index_cache;
-    std::shared_ptr<DiskUniqueKeyIndexCache> unique_key_index_cache;
-    std::shared_ptr<DiskUniqueRowStoreCache> unique_row_store_cache;
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
 

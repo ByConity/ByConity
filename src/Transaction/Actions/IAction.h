@@ -6,12 +6,13 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Interpreters/Context_fwd.h>
+#include <Common/TypePromotion.h>
 
 namespace DB
 {
 class Context;
 
-class IAction : public WithContext
+class IAction : public TypePromotion<IAction>, public WithContext
 {
 public:
     IAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_);

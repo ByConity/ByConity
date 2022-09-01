@@ -1,6 +1,5 @@
 #pragma once
 
-#include <Storages/MergeTree/HaMergeTreeLogEntry.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <Storages/MergeTree/SimpleMergeSelector.h>
 

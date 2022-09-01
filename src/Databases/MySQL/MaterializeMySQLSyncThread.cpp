@@ -23,7 +23,6 @@
 #    include <Common/setThreadName.h>
 #    include <common/sleep.h>
 #    include <common/bit_cast.h>
-#    include <regex>
 
 namespace DB
 {
@@ -194,25 +193,15 @@ void MaterializeMySQLSyncThread::synchronization()
             }
             catch (const Exception & e)
             {
-                if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA && settings->max_wait_time_when_mysql_unavailable >= 0)
-                {
-                    flushBuffersData(buffers, metadata);
-                    LOG_INFO(log, "Lost connection to MySQL");
-                    need_reconnect = true;
-                    setSynchronizationThreadException(std::current_exception());
-                    sleepForMilliseconds(settings->max_wait_time_when_mysql_unavailable);
-                    continue;
-                }
-                else if (settings->skip_error_count < 0 || settings->skip_error_count > already_skip_errors)
-                {
-                    LOG_WARNING(log, "Skip this error due to MaterializedMySQLSetting [skip_error_count = " + settings->skip_error_count.toString()
-                                    + "], already skip " + toString(already_skip_errors) + " errors, this error message: " + e.message());
-                    if (settings->skip_error_count >= 0)
-                        already_skip_errors++;
-                    continue;
-                }
-                else
+                if (e.code() != ErrorCodes::CANNOT_READ_ALL_DATA || settings->max_wait_time_when_mysql_unavailable < 0)
                     throw;
+
+                flushBuffersData(buffers, metadata);
+                LOG_INFO(log, "Lost connection to MySQL");
+                need_reconnect = true;
+                setSynchronizationThreadException(std::current_exception());
+                sleepForMilliseconds(settings->max_wait_time_when_mysql_unavailable);
+                continue;
             }
             if (watch.elapsedMilliseconds() > max_flush_time || buffers.checkThresholds(
                     settings->max_rows_in_buffer, settings->max_bytes_in_buffer,
@@ -292,14 +281,14 @@ static inline void cleanOutdatedTables(const String & database_name, ContextPtr 
 }
 
 static inline BlockOutputStreamPtr
-getTableOutput(const String & database_name, const String & table_name, ContextMutablePtr query_context, bool insert_delete_falg_column = false)
+getTableOutput(const String & database_name, const String & table_name, ContextMutablePtr query_context, bool insert_materialized = false)
 {
     const StoragePtr & storage = DatabaseCatalog::instance().getTable(StorageID(database_name, table_name), query_context);
 
     WriteBufferFromOwnString insert_columns_str;
     const StorageInMemoryMetadata & storage_metadata = storage->getInMemoryMetadata();
     const ColumnsDescription & storage_columns = storage_metadata.getColumns();
-    const NamesAndTypesList & insert_columns_names = storage_columns.getOrdinary();
+    const NamesAndTypesList & insert_columns_names = insert_materialized ? storage_columns.getAllPhysical() : storage_columns.getOrdinary();
 
 
     for (auto iterator = insert_columns_names.begin(); iterator != insert_columns_names.end(); ++iterator)
@@ -308,10 +297,6 @@ getTableOutput(const String & database_name, const String & table_name, ContextM
             insert_columns_str << ", ";
 
         insert_columns_str << backQuoteIfNeed(iterator->name);
-    }
-    if (insert_delete_falg_column)
-    {
-        insert_columns_str << ", " << backQuoteIfNeed(StorageInMemoryMetadata::delete_flag_column_name);
     }
 
 
@@ -395,16 +380,6 @@ bool MaterializeMySQLSyncThread::prepareSynchronized(MaterializeMetadata & metad
             std::unordered_map<String, String> need_dumping_tables;
             metadata.startReplication(connection, mysql_database_name, opened_transaction, need_dumping_tables);
 
-            /// remove tables which is not necessary to be synced
-            for (auto it = need_dumping_tables.begin(); it != need_dumping_tables.end(); )
-            {
-                const auto & table_name = it->first;
-                if (!shouldSyncTable(table_name))
-                    it = need_dumping_tables.erase(it);
-                else
-                    ++it;
-            }
-
             if (!need_dumping_tables.empty())
             {
                 Position position;
@@ -482,16 +457,22 @@ void MaterializeMySQLSyncThread::flushBuffersData(Buffers & buffers, Materialize
     LOG_INFO(log, "MySQL executed position: \n {}", position_message());
 }
 
-static inline void fillSignColumnsData(Block & data, Int8 sign_value, size_t fill_size)
+static inline void fillSignAndVersionColumnsData(Block & data, Int8 sign_value, UInt64 version_value, size_t fill_size)
 {
-    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 1).column));
+    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 2).column));
+    MutableColumnPtr version_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 1).column));
 
     ColumnInt8::Container & sign_column_data = assert_cast<ColumnInt8 &>(*sign_mutable_column).getData();
+    ColumnUInt64::Container & version_column_data = assert_cast<ColumnUInt64 &>(*version_mutable_column).getData();
 
     for (size_t index = 0; index < fill_size; ++index)
+    {
         sign_column_data.emplace_back(sign_value);
+        version_column_data.emplace_back(version_value);
+    }
 
-    data.getByPosition(data.columns() - 1).column = std::move(sign_mutable_column);
+    data.getByPosition(data.columns() - 2).column = std::move(sign_mutable_column);
+    data.getByPosition(data.columns() - 1).column = std::move(version_mutable_column);
 }
 
 template <bool assert_nullable = false>
@@ -618,10 +599,10 @@ static void writeFieldsToColumn(
 }
 
 template <Int8 sign>
-static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer)
+static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer, size_t version)
 {
     size_t prev_bytes = buffer.bytes();
-    for (size_t column = 0; column < buffer.columns() - 1; ++column)
+    for (size_t column = 0; column < buffer.columns() - 2; ++column)
     {
         MutableColumnPtr col_to = IColumn::mutate(std::move(buffer.getByPosition(column).column));
 
@@ -629,7 +610,7 @@ static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer)
         buffer.getByPosition(column).column = std::move(col_to);
     }
 
-    fillSignColumnsData(buffer, sign, rows_data.size());
+    fillSignAndVersionColumnsData(buffer, sign, version, rows_data.size());
     return buffer.bytes() - prev_bytes;
 }
 
@@ -642,7 +623,7 @@ static inline bool differenceSortingKeys(const Tuple & row_old_data, const Tuple
     return false;
 }
 
-static inline size_t onUpdateData(const Row & rows_data, Block & buffer, const std::vector<size_t> & sorting_columns_index)
+static inline size_t onUpdateData(const Row & rows_data, Block & buffer, size_t version, const std::vector<size_t> & sorting_columns_index)
 {
     if (rows_data.size() % 2 != 0)
         throw Exception("LOGICAL ERROR: It is a bug.", ErrorCodes::LOGICAL_ERROR);
@@ -657,7 +638,7 @@ static inline size_t onUpdateData(const Row & rows_data, Block & buffer, const s
             DB::get<const Tuple &>(rows_data[index]), DB::get<const Tuple &>(rows_data[index + 1]), sorting_columns_index);
     }
 
-    for (size_t column = 0; column < buffer.columns() - 1; ++column)
+    for (size_t column = 0; column < buffer.columns() - 2; ++column)
     {
         MutableColumnPtr col_to = IColumn::mutate(std::move(buffer.getByPosition(column).column));
 
@@ -665,23 +646,31 @@ static inline size_t onUpdateData(const Row & rows_data, Block & buffer, const s
         buffer.getByPosition(column).column = std::move(col_to);
     }
 
-    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 1).column));
-    
+    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 2).column));
+    MutableColumnPtr version_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 1).column));
+
     ColumnInt8::Container & sign_column_data = assert_cast<ColumnInt8 &>(*sign_mutable_column).getData();
+    ColumnUInt64::Container & version_column_data = assert_cast<ColumnUInt64 &>(*version_mutable_column).getData();
 
     for (size_t index = 0; index < rows_data.size(); index += 2)
     {
         if (likely(!writeable_rows_mask[index]))
-            sign_column_data.emplace_back(0);
+        {
+            sign_column_data.emplace_back(1);
+            version_column_data.emplace_back(version);
+        }
         else
         {
             /// If the sorting keys is modified, we should cancel the old data, but this should not happen frequently
+            sign_column_data.emplace_back(-1);
             sign_column_data.emplace_back(1);
-            sign_column_data.emplace_back(0);
+            version_column_data.emplace_back(version);
+            version_column_data.emplace_back(version);
         }
     }
 
-    buffer.getByPosition(buffer.columns() - 1).column = std::move(sign_mutable_column);
+    buffer.getByPosition(buffer.columns() - 2).column = std::move(sign_mutable_column);
+    buffer.getByPosition(buffer.columns() - 1).column = std::move(version_mutable_column);
     return buffer.bytes() - prev_bytes;
 }
 
@@ -690,28 +679,22 @@ void MaterializeMySQLSyncThread::onEvent(Buffers & buffers, const BinlogEventPtr
     if (receive_event->type() == MYSQL_WRITE_ROWS_EVENT)
     {
         WriteRowsEvent & write_rows_event = static_cast<WriteRowsEvent &>(*receive_event);
-        if (!shouldSyncTable(write_rows_event.table))
-            return;
         Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(write_rows_event.table, getContext());
-        size_t bytes = onWriteOrDeleteData<0>(write_rows_event.rows, buffer->first);
+        size_t bytes = onWriteOrDeleteData<1>(write_rows_event.rows, buffer->first, ++metadata.data_version);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), write_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_UPDATE_ROWS_EVENT)
     {
         UpdateRowsEvent & update_rows_event = static_cast<UpdateRowsEvent &>(*receive_event);
-        if (!shouldSyncTable(update_rows_event.table))
-            return;
         Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(update_rows_event.table, getContext());
-        size_t bytes = onUpdateData(update_rows_event.rows, buffer->first, buffer->second);
+        size_t bytes = onUpdateData(update_rows_event.rows, buffer->first, ++metadata.data_version, buffer->second);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), update_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_DELETE_ROWS_EVENT)
     {
         DeleteRowsEvent & delete_rows_event = static_cast<DeleteRowsEvent &>(*receive_event);
-        if (!shouldSyncTable(delete_rows_event.table))
-            return;
         Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(delete_rows_event.table, getContext());
-        size_t bytes = onWriteOrDeleteData<1>(delete_rows_event.rows, buffer->first);
+        size_t bytes = onWriteOrDeleteData<-1>(delete_rows_event.rows, buffer->first, ++metadata.data_version);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), delete_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_QUERY_EVENT)
@@ -773,32 +756,6 @@ bool MaterializeMySQLSyncThread::isMySQLSyncThread()
     return getThreadName() == MYSQL_BACKGROUND_THREAD_NAME;
 }
 
-bool MaterializeMySQLSyncThread::shouldSyncTable(const String & table_name) const
-{
-    if (settings->include_tables.value.empty() && settings->exclude_tables.value.empty())
-        return true;
-    if (!settings->include_tables.value.empty())
-    {
-        std::set<String> include_tables = settings->include_tables.value;
-        for (const String & s: include_tables)
-        {
-            if (std::regex_match(table_name, std::regex(s)))
-                return true;
-        }
-        return false;
-    }
-    else
-    {
-        std::set<String> exclude_tables = settings->exclude_tables.value;
-        for (String s: exclude_tables)
-        {
-            if (std::regex_match(table_name, std::regex(s)))
-                return false;
-        }
-        return true;
-    }
-}
-
 void MaterializeMySQLSyncThread::setSynchronizationThreadException(const std::exception_ptr & exception)
 {
     auto db = DatabaseCatalog::instance().getDatabase(database_name);
@@ -854,7 +811,7 @@ MaterializeMySQLSyncThread::Buffers::BufferAndSortingColumnsPtr MaterializeMySQL
 
         const StorageInMemoryMetadata & metadata = storage->getInMemoryMetadata();
         BufferAndSortingColumnsPtr & buffer_and_soring_columns = data.try_emplace(
-            table_name, std::make_shared<BufferAndSortingColumns>(metadata.getSampleBlock(true), std::vector<size_t>{})).first->second;
+            table_name, std::make_shared<BufferAndSortingColumns>(metadata.getSampleBlock(), std::vector<size_t>{})).first->second;
 
         Names required_for_sorting_key = metadata.getColumnsRequiredForSortingKey();
 

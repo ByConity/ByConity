@@ -1,5 +1,3 @@
-CREATE DATABASE IF NOT EXISTS test ENGINE=Cnch;
-USE test;
 DROP TABLE IF EXISTS alter_test;
 
 CREATE TABLE alter_test (CounterID UInt32, StartDate Date, UserID UInt32, VisitID UInt32,  
@@ -37,11 +35,14 @@ DESC TABLE alter_test;
 
 DROP TABLE alter_test;
 
-DROP TABLE IF EXISTS test.memory_buffer_test;
-CREATE TABLE test.memory_buffer_test (i Int64, ts DateTime)
+CREATE DATABASE IF NOT EXISTS test_memory_buffer;
+
+DROP TABLE IF EXISTS test_memory_buffer.memory_buffer_test;
+CREATE TABLE test_memory_buffer.memory_buffer_test (i Int64, ts DateTime)
     ENGINE = CnchMergeTree PARTITION BY toDate(ts) ORDER BY ts SETTINGS index_granularity = 8192, cnch_enable_memory_buffer = 0;
 
-SHOW CREATE TABLE test.memory_buffer_test;
-ALTER TABLE test.memory_buffer_test MODIFY SETTING cnch_enable_memory_buffer = 1;
-SHOW CREATE TABLE test.memory_buffer_test;
-DROP TABLE test.memory_buffer_test;
+SHOW CREATE TABLE test_memory_buffer.memory_buffer_test;
+ALTER TABLE test_memory_buffer.memory_buffer_test MODIFY SETTING cnch_enable_memory_buffer = 1;
+SHOW CREATE TABLE test_memory_buffer.memory_buffer_test;
+DROP TABLE test_memory_buffer.memory_buffer_test;
+DROP DATABASE test_memory_buffer;

@@ -1,6 +1,5 @@
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
-#include <Storages/MergeTree/HaMergeTreeMutationEntry.h>
 #include <Common/CurrentMetrics.h>
 #include <common/getThreadId.h>
 #include <Common/CurrentThread.h>
@@ -112,16 +111,4 @@ MergeListElement::~MergeListElement()
         background_thread_memory_tracker->setParent(background_thread_memory_tracker_prev_parent);
 }
 
-void MergeList::cancelHaPartMutations(const StorageID & table_id, const HaMergeTreeMutationEntry & mutation_entry)
-{
-    std::lock_guard lock{mutex};
-    for (auto & element : entries)
-    {
-        if (!element.is_mutation || element.table_id != table_id)
-            continue;
-        if (mutation_entry.coverPartitionId(element.partition_id) && element.source_data_version < mutation_entry.block_number
-            && element.result_part_info.getDataVersion() >= mutation_entry.block_number)
-            element.is_cancelled = true;
-    }
-}
 }

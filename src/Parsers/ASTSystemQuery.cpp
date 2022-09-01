@@ -41,14 +41,6 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "SHUTDOWN";
         case Type::KILL:
             return "KILL";
-        case Type::OFFLINE_REPLICA:
-            return "OFFLINE REPLICA";
-        case Type::ONLINE_REPLICA:
-            return "ONLINE REPLICA";
-        case Type::OFFLINE_NODE:
-            return "OFFLINE NODE";
-        case Type::ONLINE_NODE:
-            return "ONLINE NODE";
         case Type::SUSPEND:
             return "SUSPEND";
         case Type::DROP_DNS_CACHE:
@@ -79,12 +71,6 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP REPLICA";
         case Type::SYNC_REPLICA:
             return "SYNC REPLICA";
-        case Type::SYNC_MUTATION:
-            return "SYNC MUTATION";
-        case Type::EXECUTE_MUTATION:
-            return "EXECUTE MUTATION";
-        case Type::RELOAD_MUTATION:
-            return "RELOAD MUTATION";
         case Type::FLUSH_DISTRIBUTED:
             return "FLUSH DISTRIBUTED";
         case Type::START_RESOURCE_GROUP:
@@ -139,14 +125,6 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "FLUSH LOGS";
         case Type::RESTART_DISK:
             return "RESTART DISK";
-        case Type::SKIP_LOG:
-            return "SKIP LOG";
-        case Type::EXECUTE_LOG:
-            return "EXECUTE LOG";
-        case Type::SET_VALUE:
-            return "SET VALUE";
-        case Type::MARK_LOST:
-            return "MARK LOST";
         case Type::START_CONSUME:
             return "START CONSUME";
         case Type::STOP_CONSUME:
@@ -251,8 +229,6 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (  type == Type::RESTART_REPLICA
             || type == Type::RESTORE_REPLICA
             || type == Type::SYNC_REPLICA
-            || type == Type::SYNC_MUTATION
-            || type == Type::MARK_LOST
             || type == Type::FLUSH_DISTRIBUTED
             || type == Type::RELOAD_DICTIONARY
              || type == Type::START_CONSUME
@@ -261,39 +237,9 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     {
         print_database_table();
     }
-    else if (   type == Type::EXECUTE_MUTATION
-             || type == Type::RELOAD_MUTATION)
-    {
-        WriteBufferFromOwnString wb;
-        writeQuoted(mutation_id, wb);
-        settings.ostr << " " << wb.str()
-                      << (settings.hilite ? hilite_keyword : "") << " ON"
-                      << (settings.hilite ? hilite_none : "");
-        print_database_table();
-    }
     else if (type == Type::DROP_REPLICA)
     {
         print_drop_replica();
-    }
-    else if (type == Type::OFFLINE_REPLICA)
-    {
-        print_database_table();
-        settings.ostr << " OF " << backQuoteIfNeed(replica);
-    }
-    else if (type == Type::ONLINE_REPLICA)
-    {
-        print_database_table();
-        settings.ostr << " OF " << backQuoteIfNeed(replica);
-    }
-    else if (type == Type::OFFLINE_NODE)
-    {
-        // reuse replica to record node 'ip'
-        settings.ostr << " " << backQuoteIfNeed(replica);
-    }
-    else if (type == Type::ONLINE_NODE)
-    {
-        // reuse replica to record node 'ip'
-        settings.ostr << " " << backQuoteIfNeed(replica);
     }
     else if (type == Type::SUSPEND)
     {
@@ -301,18 +247,6 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             << (settings.hilite ? hilite_none : "") << seconds
             << (settings.hilite ? hilite_keyword : "") << " SECOND"
             << (settings.hilite ? hilite_none : "");
-    }
-    else if (type == Type::SKIP_LOG || type == Type::EXECUTE_LOG)
-    {
-        print_database_table();
-        settings.ostr << " ";
-        predicate->formatImpl(settings, state, frame);
-    }
-    else if (type == Type::SET_VALUE)
-    {
-        print_database_table();
-        settings.ostr << " ";
-        values_changes->formatImpl(settings, state, frame);
     }
     else if (type == Type::FETCH_PARTS)
     {
