@@ -6,19 +6,20 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/KafkaLog.h>
 
-#include <Storages/Kafka/StorageHaKafka.h>
+#include <Storages/Kafka/StorageCloudKafka.h>
 
 namespace DB
 {
 
-class StorageHaKafka;
+class StorageCloudKafka;
 
-class HaKafkaBlockInputStream : public IBlockInputStream
+class CnchKafkaBlockInputStream : public IBlockInputStream
 {
 public:
-    HaKafkaBlockInputStream(StorageHaKafka & storage_, const StorageMetadataPtr & metadata_snapshot_, const std::shared_ptr<Context> & context_,
-                            const Names & column_names_, size_t max_block_size_, size_t consumer_index_, bool need_materialized = false);
-    ~HaKafkaBlockInputStream() override;
+    CnchKafkaBlockInputStream(StorageCloudKafka & storage_, const StorageMetadataPtr & metadata_snapshot_, const std::shared_ptr<Context> & context_,
+                            const Names & column_names_, size_t max_block_size_, size_t consumer_index_, bool need_add_defaults = false);
+
+    ~CnchKafkaBlockInputStream() override;
 
     String getName() const override { return storage.getName(); }
     Block getHeader() const override;
@@ -29,16 +30,14 @@ public:
 
     void forceCommit();
 
-    void writeKafkaLog();
-
 private:
-    StorageHaKafka & storage;
+    StorageCloudKafka & storage;
     StorageMetadataPtr metadata_snapshot;
     ContextPtr context;
     Names column_names;
     UInt64 max_block_size;
     size_t consumer_index;
-    bool need_materialized;
+    [[maybe_unused]] bool need_add_defaults;
 
     static Names default_virtual_column_names;
     Names virtual_column_names;
@@ -46,8 +45,7 @@ private:
     MutableColumns virtual_columns;
 
     BufferPtr delimited_buffer;
-    /// ConsumerBufferPtr buffer;
-    bool broken = true;
+    bool broken = true, claimed = false;
 
     const Block non_virtual_header, virtual_header;
 };

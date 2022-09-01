@@ -1,5 +1,7 @@
 #pragma once
 
+#if 0 /// USE_RDKAFKA
+
 #include <mutex>
 #include <thread>
 #include <Core/NamesAndTypes.h>
@@ -12,8 +14,6 @@
 #include <Storages/Kafka/ReadMemoryTableMode.h>
 #include <Common/ConcurrentBoundedQueue.h>
 #include <common/shared_ptr_helper.h>
-
-#if USE_RDKAFKA
 
 namespace Poco { class Logger; }
 

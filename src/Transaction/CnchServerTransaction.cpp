@@ -156,7 +156,7 @@ void CnchServerTransaction::precommit()
 
 TxnTimestamp CnchServerTransaction::commit()
 {
-    LOG_DEBUG(log, "Transaction {} starts commit\n", txn_record.txnID().toUInt64());
+    LOG_DEBUG(log, "Transaction {} starts commit", txn_record.txnID().toUInt64());
     Stopwatch watch(CLOCK_MONOTONIC_COARSE);
     auto lock = getLock();
     if (isReadOnly() || !txn_record.isPrepared())
@@ -191,12 +191,13 @@ TxnTimestamp CnchServerTransaction::commit()
                 {
                     ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
-                    LOG_DEBUG(log, "Successfully committed Kafka transaction {} at {} with {} offsets {} nuber, elapsed {} ms\n", txn_record.txnID().toUInt64(), commit_ts, tpl.size(), stop_watch.elapsedMilliseconds());
+                    LOG_DEBUG(log, "Successfully committed Kafka transaction {} at {} with {} offsets number, elapsed {} ms",
+                                     txn_record.txnID().toUInt64(), commit_ts, tpl.size(), stop_watch.elapsedMilliseconds());
                     return commit_ts;
                 }
                 else
                 {
-                    LOG_DEBUG(log, "Failed to commit Kafka transaction: {}, abort it directly\n", txn_record.txnID().toUInt64());
+                    LOG_DEBUG(log, "Failed to commit Kafka transaction: {}, abort it directly", txn_record.txnID().toUInt64());
                     setStatus(CnchTransactionStatus::Aborted);
                     retry = 0;
                     throw Exception(

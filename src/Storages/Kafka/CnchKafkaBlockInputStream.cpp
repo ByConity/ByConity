@@ -1,49 +1,50 @@
 #include <Common/config.h>
 #if USE_RDKAFKA
 
-#include <Storages/Kafka/HaKafkaBlockInputStream.h>
+#include <Storages/Kafka/CnchKafkaBlockInputStream.h>
 
 #include <Formats/FormatFactory.h>
-#include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <Storages/Kafka/HaReadBufferFromKafkaConsumer.h>
+#include <Storages/Kafka/CnchReadBufferFromKafkaConsumer.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <Interpreters/addMissingDefaults.h>
+/// #include <Interpreters/CnchSystemLog.h>
 #include <Storages/Kafka/KafkaConsumeInfo.h>
 #include <DataTypes/DataTypeString.h>
-#include <Columns/ColumnString.h>
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/InputStreamFromInputFormat.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const int NO_AVAILABLE_CONSUMER;
+extern const int NO_AVAILABLE_CONSUMER;
 }
 
 /// sorted
-Names HaKafkaBlockInputStream::default_virtual_column_names = {"_content", "_info", "_key", "_offset", "_partition", "_timestamp", "_topic"};
+Names CnchKafkaBlockInputStream::default_virtual_column_names = {"_content", "_info", "_key", "_offset", "_partition", "_topic"};
 
-HaKafkaBlockInputStream::HaKafkaBlockInputStream(
-    StorageHaKafka & storage_,
+CnchKafkaBlockInputStream::CnchKafkaBlockInputStream(
+    StorageCloudKafka & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     const std::shared_ptr<Context> & context_,
     const Names & column_names_,
     size_t max_block_size_,
     size_t consumer_index_,
-    bool need_materialized_)
+    bool need_add_defaults_)
     : storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , context(context_)
     , column_names(column_names_)
     , max_block_size(max_block_size_)
     , consumer_index(consumer_index_)
-    , need_materialized(need_materialized_)
+    , need_add_defaults(need_add_defaults_)
     , virtual_column_names(storage.filterVirtualNames(column_names))
     , used_column(default_virtual_column_names.size(), -1)
     , non_virtual_header(metadata_snapshot->getSampleBlockNonMaterialized())
     , virtual_header(metadata_snapshot->getSampleBlockForColumns(virtual_column_names, storage.getVirtuals(), storage.getStorageID()))
+
 {
     for (size_t i = 0, index = 0; i < default_virtual_column_names.size() && index < virtual_column_names.size(); ++i)
     {
@@ -53,36 +54,18 @@ HaKafkaBlockInputStream::HaKafkaBlockInputStream(
     virtual_columns = virtual_header.cloneEmptyColumns();
 }
 
-HaKafkaBlockInputStream::~HaKafkaBlockInputStream()
+CnchKafkaBlockInputStream::~CnchKafkaBlockInputStream()
 {
-    if (!delimited_buffer)
+    if (!claimed)
         return;
 
-    writeKafkaLog();
-
-    if (broken)
+    /// Some metrics to system.kafka_log
+    if (auto kafka_log = context->getKafkaLog())
     {
+        ///auto cloud_kafka_log = context->getCloudKafkaLog();
         try
         {
-            storage.unsubscribeBuffer(delimited_buffer);
-        }
-        catch (...)
-        {
-            LOG_ERROR(storage.log, "{}(): {}", __func__, getCurrentExceptionMessage(false));
-        }
-    }
-
-    storage.pushBuffer(consumer_index);
-}
-
-void HaKafkaBlockInputStream::writeKafkaLog()
-{
-    try
-    {
-        /// Some metrics to system.kafka_log
-        if (auto kafka_log = context->getKafkaLog())
-        {
-            auto read_buf = delimited_buffer->subBufferAs<HaReadBufferFromKafkaConsumer>();
+            auto *read_buf = delimited_buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
             auto create_time = read_buf->getCreateTime();
             auto duration_ms = (read_buf->getAliveTime() - create_time) * 1000;
 
@@ -93,6 +76,8 @@ void HaKafkaBlockInputStream::writeKafkaLog()
             kafka_poll_log.metric = read_buf->getReadMessages();
             kafka_poll_log.bytes = read_buf->getReadBytes();
             kafka_log->add(kafka_poll_log);
+            ///if (cloud_kafka_log)
+            ///    cloud_kafka_log->add(kafka_poll_log);
 
             if (read_buf->getEmptyMessages() > 0)
             {
@@ -101,12 +86,14 @@ void HaKafkaBlockInputStream::writeKafkaLog()
                 kafka_empty_log.duration_ms = duration_ms;
                 kafka_empty_log.metric = read_buf->getEmptyMessages();
                 kafka_log->add(kafka_empty_log);
+                ///if (cloud_kafka_log)
+                ///    cloud_kafka_log->add(kafka_empty_log);
             }
 
-             IRowInputFormat * row_input = nullptr;
-             if (children.size() > 0)
+            IRowInputFormat * row_input = nullptr;
+             if (!children.empty())
              {
-                 if (auto input_stream = dynamic_cast<InputStreamFromInputFormat *>(children.back().get()))
+                 if (auto *input_stream = dynamic_cast<InputStreamFromInputFormat *>(children.back().get()))
                      row_input = dynamic_cast<IRowInputFormat *>(input_stream->getInputFormatPtr().get());
              }
 
@@ -120,32 +107,50 @@ void HaKafkaBlockInputStream::writeKafkaLog()
                 kafka_parse_log.bytes = row_input->getErrorBytes();
                 kafka_parse_log.has_error = true;
                 kafka_log->add(kafka_parse_log);
+                ///if (cloud_kafka_log)
+                ///    cloud_kafka_log->add(kafka_parse_log);
             }
         }
+        catch (...)
+        {
+            LOG_ERROR(storage.log, "{}(): {}", __func__, getCurrentExceptionMessage(false));
+        }
     }
-    catch (...)
+
+    if (broken)
     {
-        LOG_ERROR(storage.log, "{}(): {}", __func__, getCurrentExceptionMessage(false));
+        try
+        {
+            storage.unsubscribeBuffer(delimited_buffer);
+        }
+        catch (...)
+        {
+            LOG_ERROR(storage.log, "{}(): {}", __func__, getCurrentExceptionMessage(false));
+        }
     }
+
+    /// For releasing lock
+    storage.pushBuffer();
 }
 
-Block HaKafkaBlockInputStream::getHeader() const
+Block CnchKafkaBlockInputStream::getHeader() const
 {
+    /// return storage.getSampleBlockNonMaterializedWithVirtualsForColumns(column_names);
     return metadata_snapshot->getSampleBlockForColumns(column_names, storage.getVirtuals(), storage.getStorageID());
 }
 
-void HaKafkaBlockInputStream::readPrefixImpl()
+void CnchKafkaBlockInputStream::readPrefixImpl()
 {
-    delimited_buffer = storage.tryClaimBuffer(consumer_index, context->getSettingsRef().queue_max_wait_ms.totalMilliseconds());
+    delimited_buffer = storage.tryClaimBuffer(context->getSettingsRef().queue_max_wait_ms.totalMilliseconds());
+    claimed = !!delimited_buffer;
 
     /// 1. The streamThread catch this exception, it will retry at next time;
-    /// 2. `SELECT FROM` HaKafka table, the user will receive this exception.
+    /// 2. `SELECT FROM` CnchKafka table, the user will receive this exception.
     if (!delimited_buffer)
         throw Exception("Failed to claim consumer!", ErrorCodes::NO_AVAILABLE_CONSUMER);
 
-    storage.subscribeBuffer(delimited_buffer, consumer_index);
-
-    const auto *sub_buffer = delimited_buffer->subBufferAs<HaReadBufferFromKafkaConsumer>();
+    storage.subscribeBuffer(delimited_buffer);
+    const auto * sub_buffer = delimited_buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>();
 
     FormatFactory::ReadCallback read_callback;
     if (!virtual_column_names.empty())
@@ -157,42 +162,46 @@ void HaKafkaBlockInputStream::readPrefixImpl()
             if (used_column[2] >= 0) virtual_columns[used_column[2]]->insert(sub_buffer->currentKey());
             if (used_column[3] >= 0) virtual_columns[used_column[3]]->insert(sub_buffer->currentOffset());
             if (used_column[4] >= 0) virtual_columns[used_column[4]]->insert(sub_buffer->currentPartition());
-            if (used_column[5] >= 0) virtual_columns[used_column[5]]->insert(sub_buffer->currentTimeStamp());
-            if (used_column[6] >= 0) virtual_columns[used_column[6]]->insert(sub_buffer->currentTopic());
+            if (used_column[5] >= 0) virtual_columns[used_column[5]]->insert(sub_buffer->currentTopic());
         };
     }
 
-    /// TODO: `input_format_parallel_parsing` is not supported for this logic
-    auto input_format = FormatFactory::instance().getInput(storage.settings.format.value, *delimited_buffer, non_virtual_header,
-            context, max_block_size /*, storage.settings.max_block_bytes_size.value, rows_portion_size, read_callback*/);
+    auto child = FormatFactory::instance().getInput(storage.settings.format.value,
+                                                 *delimited_buffer, non_virtual_header, context, max_block_size);
+    
+    ///FIXME: Add default value if column has `DEFAULT` expression and no data read from topic
+    //if (need_add_defaults)
+    //    addChild(std::make_shared<AddingDefaultsBlockInputStream>(child, storage.getColumns().getDefaults(), context));
+    //else
+    //    addChild(child);
 
-    if (auto row_input = dynamic_cast<IRowInputFormat*>(input_format.get()))
+    if (auto *row_input = dynamic_cast<IRowInputFormat*>(child.get()))
     {
         row_input->setReadCallBack(read_callback);
-        row_input->setCallbackOnError([sub_buffer](Exception & e) {
-            if (sub_buffer->currentMessage())
-            {
-                e.addMessage(
-                    "\ntopic:     " + sub_buffer->currentTopic() + //
-                    "\npartition: " + toString(sub_buffer->currentPartition()) + //
-                    "\noffset:    " + toString(sub_buffer->currentOffset()) + //
-                    "\ncontent:   " + sub_buffer->currentContent() //
-                );
-            }
-        });
+        row_input->setCallbackOnError( [sub_buffer] (auto & e)
+                                       {
+                                          if (sub_buffer->currentMessage())
+                                          {
+                                              e.addMessage(
+                                                  "\ntopic:     " + sub_buffer->currentTopic() +
+                                                  "\npartition: " + toString(sub_buffer->currentPartition()) +
+                                                  "\noffset:    " + toString(sub_buffer->currentOffset()) +
+                                                  "\ncontent:   " + sub_buffer->currentContent()
+                                              );
+                                          }
+                                       });
     }
     else
-        throw Exception("An input format based on IRowInputFormat is expected, but provided: " + input_format->getName(), ErrorCodes::LOGICAL_ERROR);
+        throw Exception("An input format based on IRowInputFormat is expected, but provided: " + child->getName(), ErrorCodes::LOGICAL_ERROR);
 
-    BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(std::move(input_format));
+    BlockInputStreamPtr stream = std::make_shared<InputStreamFromInputFormat>(std::move(child));
     addChild(stream);
 
     broken = true;
 }
 
-Block HaKafkaBlockInputStream::readImpl()
+Block CnchKafkaBlockInputStream::readImpl()
 {
-    /// original HaKafkaBlockInputStream
     Block block = children.back()->read();
     if (!block)
         return block;
@@ -203,40 +212,23 @@ Block HaKafkaBlockInputStream::readImpl()
     for (const auto & column :  virtual_block.getColumnsWithTypeAndName())
         block.insert(column);
 
-    /// Construct column with KafkaConsumeInfo in first row and other row with default value
-    if (storage.enableMemoryTable())
-    {
-        auto read_buf = delimited_buffer->subBufferAs<HaReadBufferFromKafkaConsumer>();
-        if (read_buf->getReadMessages() != 0)
-        {
-            /// Remove original info column replace with new column
-            auto tpl = read_buf->getOffsets();
-            KafkaConsumeInfo consume_info(tpl, consumer_index);
-            String consume_info_str = consume_info.toString();
-            convertBlock<DataTypeString>(block, "_info", consume_info_str);
-        }
-    }
-
-    /// TODO: support default value here
-    if (need_materialized)
-    ///     block = addMissingDefaults(block, getHeader().getNamesAndTypesList(), metadata_snapshot->getColumns().getDefaults(), context);
-        LOG_WARNING(storage.log, "Noting todo for `need_materialized` in HaKafkaBlockInputStream");
+    /// No materialized column supported in Kafka directly, which can be implemented in MaterializedView table
 
     return ConvertingBlockInputStream(
-            std::make_shared<OneBlockInputStream>(block), getHeader(),
-            ConvertingBlockInputStream::MatchColumnsMode::Name).read();
+        std::make_shared<OneBlockInputStream>(block), getHeader(),
+        ConvertingBlockInputStream::MatchColumnsMode::Name).read();
 }
 
-void HaKafkaBlockInputStream::readSuffixImpl()
+void CnchKafkaBlockInputStream::readSuffixImpl()
 {
     broken = false;
 }
 
-void HaKafkaBlockInputStream::forceCommit()
+void CnchKafkaBlockInputStream::forceCommit()
 {
-    delimited_buffer->subBufferAs<HaReadBufferFromKafkaConsumer>()->commit();
+    delimited_buffer->subBufferAs<CnchReadBufferFromKafkaConsumer>()->commit();
 }
 
-}
+} // namespace DB
 
 #endif

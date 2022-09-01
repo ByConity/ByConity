@@ -18,10 +18,6 @@
 #include <Storages/LiveView/StorageLiveView.h>
 #include <Storages/StorageMaterializedView.h>
 #include <common/logger_useful.h>
-#if USE_RDKAFKA
-#include <Storages/Kafka/StorageHaKafka.h>
-#endif
-
 
 namespace DB
 {
@@ -75,10 +71,6 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             insert_context->setSetting("min_insert_block_size_bytes", insert_settings.min_insert_block_size_bytes_for_materialized_views.value);
     }
 
-    #if USE_RDKAFKA
-            auto * kafka_table_ptr = dynamic_cast<StorageHaKafka *>(storage.get());
-    #endif
-
     for (const auto & database_table : dependencies)
     {
         auto dependent_table = DatabaseCatalog::instance().getTable(database_table, getContext());
@@ -121,22 +113,6 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
             InterpreterInsertQuery interpreter(insert_query_ptr, insert_context);
             BlockIO io = interpreter.execute();
             out = io.out;
-
-            #if USE_RDKAFKA
-            if (kafka_table_ptr && kafka_table_ptr->enableMemoryTable())
-            {
-                auto target_storage_id = materialized_view->getTargetTable()->getStorageID();
-                auto memory_table = DatabaseCatalog::instance().tryGetTable(target_storage_id, getContext());
-                if (memory_table)
-                {
-                    implicit_column = "_info";
-                    out = memory_table->write(nullptr, inner_metadata_snapshot, insert_context);
-                }
-                else
-                    out = std::make_shared<PushingToViewsBlockOutputStream>(
-                        dependent_table, dependent_metadata_snapshot, insert_context, ASTPtr());
-            }
-            #endif
         }
         else if (dynamic_cast<const StorageLiveView *>(dependent_table.get()))
             out = std::make_shared<PushingToViewsBlockOutputStream>(
@@ -358,13 +334,6 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
     {
         String implicit_column;
         Block output_header = view.out->getHeader();
-        #if USE_RDKAFKA
-            if (!view.implicit_column.empty())
-            {
-                extractField(block, view.implicit_column, implicit_column, 0);
-                output_header.erase(view.implicit_column);
-            }
-        #endif
         BlockInputStreamPtr in;
 
         /// We need keep InterpreterSelectQuery, until the processing will be finished, since:
@@ -407,10 +376,6 @@ void PushingToViewsBlockOutputStream::process(const Block & block, ViewInfo & vi
         while (Block result_block = in->read())
         {
             Nested::validateArraySizes(result_block);
-            #if USE_RDKAFKA
-                if (!view.implicit_column.empty())
-                    convertBlock<DataTypeString>(result_block, view.implicit_column, implicit_column);            
-            #endif
             view.out->write(result_block);
         }
 

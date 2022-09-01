@@ -291,8 +291,8 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 break;
             }
 
-            // if (!tpl.empty() && !consumer_group.empty())
-            //     txn->setKafkaTpl(consumer_group, tpl);
+            if (!tpl.empty() && !consumer_group.empty())
+                txn->setKafkaTpl(consumer_group, tpl);
 
             /// check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
             // if (storage->isBucketTable())
