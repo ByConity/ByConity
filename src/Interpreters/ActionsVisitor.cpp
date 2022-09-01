@@ -1,5 +1,7 @@
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include "Interpreters/Context_fwd.h"
+#include "Interpreters/trySetVirtualWarehouse.h"
 
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionsMiscellaneous.h>

@@ -120,6 +120,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
 {
     local_store_volume = getContext()->getStoragePolicy(getSettings()->cnch_local_storage_policy.toString());
     relative_local_store_path = fs::path("store");
+    format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
