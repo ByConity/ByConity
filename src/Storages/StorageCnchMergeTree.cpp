@@ -205,8 +205,6 @@ void StorageCnchMergeTree::read(
 
     auto worker_group = local_context->getCurrentWorkerGroup();
     healthCheckForWorkerGroup(local_context, worker_group);
-    auto parts = selectPartsToRead(column_names, local_context, query_info);
-    LOG_INFO(log, "Number of parts to read: {}", parts.size());
 
     /// Return directly (with correct header) if no shard read from
     if (!worker_group || worker_group->getShardsInfo().empty())
@@ -217,6 +215,9 @@ void StorageCnchMergeTree::read(
         query_plan.addStep(std::move(read_from_pipe));
         return;
     }
+
+    auto parts = selectPartsToRead(column_names, local_context, query_info);
+    LOG_INFO(log, "Number of parts to read: {}", parts.size());
 
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
