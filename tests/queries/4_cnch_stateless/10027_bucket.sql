@@ -36,24 +36,23 @@ INSERT INTO test.bucket3 VALUES ('jack', 15);
 SELECT * FROM test.bucket3 ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'bucket3' FORMAT CSV;
 
--- TODO: to uncomment once system tables are fixed
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio 
 INSERT INTO test.bucket_with_split_number VALUES ('vivek', 10);
 SELECT * FROM test.bucket_with_split_number ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'bucket_with_split_number' FORMAT CSV;
--- SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'bucket_with_split_number' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'bucket_with_split_number' FORMAT CSV;
 
 -- Ensure bucket number is assigned to a part in bucket table with shard ratio and range
 INSERT INTO test.bucket_with_split_number_n_range VALUES ('vivek', 20);
 SELECT * FROM test.bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'bucket_with_split_number_n_range' FORMAT CSV;
--- SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'bucket_with_split_number_n_range' FORMAT CSV;
 
 -- Ensure bucket number is assigned using DTSPartition with shard ratio and range
 INSERT INTO test.dts_bucket_with_split_number_n_range VALUES ('vivek', 30);
 SELECT * FROM test.dts_bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = 'test' and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
--- SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
+SELECT split_number, with_range FROM system.cnch_tables where database = 'test' and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 
 
 DROP TABLE test.bucket;
