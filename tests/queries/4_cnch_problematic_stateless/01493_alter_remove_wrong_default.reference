@@ -1,1 +1,0 @@
-CREATE TABLE default_table (`key` UInt64 DEFAULT CAST(42, \'UInt64\'), `value1` UInt64 MATERIALIZED key * key, `value2` UInt64 ALIAS value1 * key) ENGINE = CnchMergeTree() ORDER BY tuple() SETTINGS index_granularity = 8192

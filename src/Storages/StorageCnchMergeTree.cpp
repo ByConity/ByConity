@@ -377,17 +377,17 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
             {
                 VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
                 partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
+                /// Prunning
+                prev_sz = partition_list.size();
+                std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
+                    return partition_ids.find(partition->getID(*this)) == partition_ids.end();
+                });
+                if (partition_list.size() < prev_sz)
+                    LOG_DEBUG(
+                        log,
+                        "Query predicates on `_partition_id` and `_partition_value` droped {} partitions",
+                        prev_sz - partition_list.size());
             }
-            /// Prunning
-            prev_sz = partition_list.size();
-            std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
-                return partition_ids.find(partition->getID(*this)) == partition_ids.end();
-            });
-            if (partition_list.size() < prev_sz)
-                LOG_DEBUG(
-                    log,
-                    "Query predicates on `_partition_id` and `_partition_value` droped {} partitions",
-                    prev_sz - partition_list.size());
         }
     }
     Strings res_partitions;
