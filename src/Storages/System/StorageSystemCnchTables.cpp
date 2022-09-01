@@ -234,9 +234,12 @@ Pipe StorageSystemCnchTables::read(
             if(ast_cluster_by)
             {
                 auto cluster_by = ast_cluster_by->as<ASTClusterByElement>();
-                res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
-                res_columns[col_num++]->insert(cluster_by->split_number);
-                res_columns[col_num++]->insert(cluster_by->is_with_range);
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(cluster_by->split_number);
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(cluster_by->is_with_range);
             }
             else
             {
