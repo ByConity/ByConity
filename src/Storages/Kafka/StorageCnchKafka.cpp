@@ -120,8 +120,9 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto alter_act = txn->createAction<DDLAlterAction>(shared_from_this());
-    alter_act->setMutationCommands(commands.getMutationCommands(
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this());
+    auto & alter_act = action->as<DDLAlterAction &>();
+    alter_act.setMutationCommands(commands.getMutationCommands(
         old_metadata, false, local_context));
 
     bool alter_setting = commands.isSettingsAlter();
@@ -160,8 +161,8 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
             , local_context->getSettingsRef().max_parser_depth);
 
         applyMetadataChangesToCreateQuery(ast, new_metadata);
-        alter_act->setNewSchema(queryToString(ast));
-        txn->appendAction(alter_act);
+        alter_act.setNewSchema(queryToString(ast));
+        txn->appendAction(std::move(action));
     }
 
     auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
