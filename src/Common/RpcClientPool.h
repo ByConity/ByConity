@@ -7,7 +7,7 @@
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <Common/thread_local_rng.h>
-// #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
+#include <Common/ConsistentHashUtils/ConsistentHashRing.h>
 
 #include <boost/noncopyable.hpp>
 #include <common/logger_useful.h>
@@ -106,7 +106,6 @@ public:
         throw Exception(ErrorCodes::NO_SUCH_SERVICE, "No available service for {}", service_name);
     }
 
-    /*
     Ptr getByHashRing(const String & key)
     {
         std::unique_lock lock(state_mutex);
@@ -141,7 +140,6 @@ public:
             rpc_clients_map.emplace(p.first.getRPCAddress(), p.second);
         }
     }
-    */
 
     bool empty()
     {
@@ -237,7 +235,7 @@ private:
     ClientsMap clients_map;
 
     /// for select node by consistent hash
-    /// DB::ConsistentHashRing rpc_ring_map;
+    DB::ConsistentHashRing rpc_ring_map;
     std::unordered_map<String, Ptr> rpc_clients_map;
 };
 

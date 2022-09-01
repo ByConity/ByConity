@@ -3,8 +3,10 @@
 #include <Interpreters/PartLog.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <CloudServices/commitCnchParts.h>
+#include <Transaction/CnchWorkerTransaction.h>
 
 namespace DB
 {
@@ -80,6 +82,25 @@ void CloudMergeTreeBlockOutputStream::writeSuffixImpl()
         txn->commitV2();
         LOG_DEBUG(storage.getLogger(), "Finishing insert values commit in cnch server.");
     }
+    else if (dynamic_pointer_cast<CnchWorkerTransaction>(txn))
+    {
+        txn->setMainTableUUID(storage.getStorageUUID());
+
+        auto kafka_table_id = txn->getKafkaTableID();
+        if (!kafka_table_id.empty())
+        {
+            Stopwatch watch;
+            txn->commitV2();
+            LOG_TRACE(storage.getLogger(), "Committed Kafka transaction {} elapsed {} ms",
+                                            txn->getTransactionID(), watch.elapsedMilliseconds());
+        }
+        else
+        {
+            /// TODO: I thought the multiple branches should be unified.
+            /// And a exception should be threw in the last `else` clause, otherwise there might be some potential bugs.
+        }
+    }
+
     /// TODO: handling commit for worker side
 
     if (!preload_parts.empty())

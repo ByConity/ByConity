@@ -218,4 +218,67 @@ void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
     RPCHelpers::checkResponse(response);
 }
 
+#if USE_RDKAFKA
+CnchConsumerStatus CnchWorkerClient::getConsumerStatus(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::GetConsumerStatusReq request;
+    Protos::GetConsumerStatusResp response;
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+
+    stub->getConsumerStatus(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    CnchConsumerStatus status;
+    status.cluster = response.cluster();
+    for (const auto & topic : response.topics())
+        status.topics.emplace_back(topic);
+    for (const auto & tpl : response.assignments())
+        status.assignment.emplace_back(tpl);
+    status.assigned_consumers = response.consumer_num();
+    status.last_exception = response.last_exception();
+
+    return status;
+}
+
+void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
+{
+    if (!command.rpc_port)
+        throw Exception("Rpc port is not set in KafkaTaskCommand", ErrorCodes::LOGICAL_ERROR);
+
+    brpc::Controller cntl;
+    Protos::SubmitKafkaConsumeTaskReq request;
+    Protos::SubmitKafkaConsumeTaskResp response;
+
+    request.set_type(command.type);
+    request.set_task_id(command.task_id);
+    request.set_rpc_port(command.rpc_port);
+    request.set_database(command.local_database_name);
+    request.set_table(command.local_table_name);
+    request.set_assigned_consumer(command.assigned_consumer);
+    for (const auto & cmd : command.create_table_commands)
+    {
+        request.add_create_table_command(cmd);
+    }
+    for (const auto & tpl : command.tpl)
+    {
+        auto * cur_tpl = request.add_tpl();
+        cur_tpl->set_topic(toString(tpl.get_topic()));
+        cur_tpl->set_partition(tpl.get_partition());
+        cur_tpl->set_offset(tpl.get_offset());
+    }
+    if (command.type == KafkaTaskCommand::START_CONSUME)
+    {
+        request.set_cnch_database(command.cnch_database_name);
+        request.set_cnch_table(command.cnch_table_name);
+    }
+
+    stub->submitKafkaConsumeTask(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+#endif
+
 }

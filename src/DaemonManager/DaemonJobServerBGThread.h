@@ -50,7 +50,7 @@ public:
     BGJobInfos getBGJobInfos() const;
     IBackgroundJobExecutor & getBgJobExecutor() const { return *bg_job_executor; }
     Result executeJobAction(const StorageID & storage_id, CnchBGThreadAction action);
-    virtual bool isTargetTable(const StoragePtr &) const { return true; }
+    virtual bool isTargetTable(const StoragePtr &) const { return false; }
     virtual bool isBGJobStatusStoreInCatalog() const { return false; }
 protected:
     bool executeImpl() override;

@@ -117,6 +117,7 @@ enum class DefaultDatabaseEngine
     Ordinary,
     Atomic,
     Cnch,
+    Memory,
 };
 
 DECLARE_SETTING_ENUM(DefaultDatabaseEngine)

@@ -1,4 +1,5 @@
 #include <Interpreters/InterpreterSystemQuery.h>
+#include <Catalog/Catalog.h>
 #include <Common/DNSResolver.h>
 #include <Common/ActionLock.h>
 #include <Common/typeid_cast.h>
@@ -7,6 +8,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
+#include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
@@ -37,7 +39,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/StorageFactory.h>
-#include <Storages/Kafka/StorageHaKafka.h>
+#include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -48,6 +50,7 @@
 #include <FormaterTool/HDFSDumper.h>
 #include <csignal>
 #include <algorithm>
+#include <unistd.h>
 #include <Interpreters/QueryExchangeLog.h>
 
 #if !defined(ARCADIA_BUILD)
@@ -477,21 +480,28 @@ void InterpreterSystemQuery::startOrStopConsume(const StorageID & table_id, ASTS
         throw Exception("Empty table id for executing START/STOP consume", ErrorCodes::LOGICAL_ERROR);
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, getContext());
-    auto ha_kafka = dynamic_cast<StorageHaKafka *>(storage.get());
-    if (!ha_kafka)
-        throw Exception("HaKafka is supported but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+    auto * cnch_kafka = dynamic_cast<StorageCnchKafka *>(storage.get());
+    if (!cnch_kafka)
+        throw Exception("CnchKafka is supported but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+    
+    auto catalog = getContext()->getCnchCatalog();
     using Type = ASTSystemQuery::Type;
     switch (type)
     {
         case Type::START_CONSUME:
-            ha_kafka->startConsume();
+            catalog->setTableActiveness(storage, true, TxnTimestamp::maxTS());
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Start);
             break;
         case Type::STOP_CONSUME:
-            ha_kafka->stopConsume();
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Stop);
+            catalog->setTableActiveness(storage, false, TxnTimestamp::maxTS());
             break;
         case Type::RESTART_CONSUME:
-            ha_kafka->restartConsume();
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Stop);
+            usleep(500 * 1000);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Start);
             break;
         default:
             throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -549,8 +559,7 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
     /// Detach actions
     if (!table)
         return nullptr;
-    if (!dynamic_cast<const StorageReplicatedMergeTree *>(table.get()) &&
-        !dynamic_cast<const StorageHaKafka *>(table.get()))
+    if (!dynamic_cast<const StorageReplicatedMergeTree *>(table.get()))
         return nullptr;
 
     table->flushAndShutdown();

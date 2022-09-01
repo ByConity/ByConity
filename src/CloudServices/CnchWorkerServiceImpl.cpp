@@ -20,6 +20,11 @@
 #include <condition_variable>
 #include <mutex>
 
+#if USE_RDKAFKA
+#include <Storages/Kafka/StorageCloudKafka.h>
+#include <Storages/Kafka/KafkaTaskCommand.h>
+#endif
+
 namespace DB
 {
 
@@ -495,19 +500,106 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
     google::protobuf::Closure * done)
 {
 }
+
+#if USE_RDKAFKA
 void CnchWorkerServiceImpl::submitKafkaConsumeTask(
     google::protobuf::RpcController * cntl,
     const Protos::SubmitKafkaConsumeTaskReq * request,
     Protos::SubmitKafkaConsumeTaskResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        /// parse command params passed by brpc
+        auto command = std::make_shared<KafkaTaskCommand>();
+        command->type = static_cast<KafkaTaskCommand::Type>(request->type());
+        if (request->task_id().empty())
+            throw Exception("Require non-empty task_id", ErrorCodes::BAD_ARGUMENTS);
+        command->task_id = request->task_id();
+        command->rpc_port = static_cast<UInt16>(request->rpc_port());
+
+        command->local_database_name = request->database();
+        command->local_table_name = request->table();
+
+        if (command->type == KafkaTaskCommand::START_CONSUME)
+        {
+            if (request->cnch_database().empty() || request->cnch_table().empty())
+                throw Exception("cnch_database & cnch_table are required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
+            command->cnch_database_name = request->cnch_database();
+            command->cnch_table_name = request->cnch_table();
+
+            command->assigned_consumer = request->assigned_consumer();
+
+            if (request->create_table_command_size() != 2 && request->create_table_command_size() != 3)
+                throw Exception("The number of tables to be created should be 2/3, but provided with "
+                                + toString(request->create_table_command_size()), ErrorCodes::BAD_ARGUMENTS);
+            for (const auto & cmd : request->create_table_command())
+                command->create_table_commands.push_back(cmd);
+
+            if (request->tpl_size() == 0)
+                throw Exception("TopicPartitionList is required for starting consume", ErrorCodes::BAD_ARGUMENTS);
+            for (const auto & tpl : request->tpl())
+                command->tpl.emplace_back(tpl.topic(), tpl.partition(), tpl.offset());
+        }
+
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->setCurrentQueryId(request->task_id());
+        rpc_context->getClientInfo().rpc_port = static_cast<UInt16>(request->rpc_port());
+        ///rpc_context->setQueryContext(*rpc_context);
+
+        LOG_TRACE(log, "Successfully to parse kafka-consumer command: {}"
+                      , KafkaTaskCommand::typeToString(command->type));
+
+        /// create thread to execute kafka-consume-task
+        ThreadFromGlobalPool([p = std::move(command), c = std::move(rpc_context)] {
+            ///CurrentThread::attachQueryContext(*c);
+            DB::executeKafkaConsumeTask(*p, c);
+        }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+
 }
 void CnchWorkerServiceImpl::getConsumerStatus(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController *  cntl,
     const Protos::GetConsumerStatusReq * request,
     Protos::GetConsumerStatusResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->makeQueryContext();
+        
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto kafka_table = DatabaseCatalog::instance().getTable(storage_id, rpc_context);
+
+        auto * storage = dynamic_cast<StorageCloudKafka *>(kafka_table.get());
+        if (!storage)
+            throw Exception("StorageCloudKafka expected but get " + kafka_table->getTableName(), ErrorCodes::BAD_ARGUMENTS);
+
+        CnchConsumerStatus status;
+        storage->getConsumersStatus(status);
+
+        response->set_cluster(status.cluster);
+        for (auto & topic : status.topics)
+            response->add_topics(topic);
+        for (auto & tpl : status.assignment)
+            response->add_assignments(tpl);
+        response->set_consumer_num(status.assigned_consumers);
+        response->set_last_exception(status.last_exception);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+
 }
 void CnchWorkerServiceImpl::getOffsetsFromMemoryBuffer(
     google::protobuf::RpcController * cntl,
@@ -516,6 +608,8 @@ void CnchWorkerServiceImpl::getOffsetsFromMemoryBuffer(
     google::protobuf::Closure * done)
 {
 }
+#endif
+
 void CnchWorkerServiceImpl::preloadChecksumsAndPrimaryIndex(
     google::protobuf::RpcController * cntl,
     const Protos::PreloadChecksumsAndPrimaryIndexReq * request,

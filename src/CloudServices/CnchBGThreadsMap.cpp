@@ -2,6 +2,7 @@
 
 #include <regex>
 #include <Interpreters/Context.h>
+#include <Storages/Kafka/CnchKafkaConsumeManager.h>
 
 namespace DB
 {
@@ -39,15 +40,15 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread([[maybe_unused]] const StorageID 
     // {
     //     return std::make_shared<MemoryBufferManager>(global_context, storage_id, false /* FIXME */);
     // }
-    // else if (type == CnchBGThreadType::Consumer)
-    // {
-    //     return std::make_shared<KafkaConsumeManager>(global_context, storage_id);
-    // }
+    if (type == CnchBGThreadType::Consumer)
+    {
+        return std::make_shared<CnchKafkaConsumeManager>(getContext(), storage_id);
+    }
     // else if (type == CnchBGThreadType::DedupWorker)
     // {
     //     return std::make_shared<DedupWorkerManager>(global_context, storage_id);
     // }
-    // else
+    else
     {
         throw Exception(String("Not supported background thread ") + toString(type), ErrorCodes::LOGICAL_ERROR);
     }

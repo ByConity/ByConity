@@ -5,10 +5,10 @@
 #include <Core/Names.h>
 #include <Core/Types.h>
 #include <IO/DelimitedReadBuffer.h>
-#include <common/logger_useful.h>
-
-#include <cppkafka/cppkafka.h>
 #include <Storages/Kafka/KafkaConsumer.h>
+
+#include <common/logger_useful.h>
+#include <cppkafka/cppkafka.h>
 
 namespace DB
 {
@@ -16,7 +16,7 @@ namespace DB
 using BufferPtr = std::shared_ptr<DelimitedReadBuffer>;
 using ConsumerPtr = std::shared_ptr<KafkaConsumer>;
 
-struct pair_hash
+struct PairHash
 {
     template <class T1, class T2>
     std::size_t operator() (const std::pair<T1, T2> & p) const
@@ -27,12 +27,12 @@ struct pair_hash
     }
 };
 
-class HaReadBufferFromKafkaConsumer : public ReadBuffer
+class CnchReadBufferFromKafkaConsumer : public ReadBuffer
 {
     using Message = cppkafka::Message;
 
 public:
-    HaReadBufferFromKafkaConsumer(
+    CnchReadBufferFromKafkaConsumer(
         ConsumerPtr consumer_,
         const String & logger_name,
         size_t max_batch_size,
@@ -50,7 +50,7 @@ public:
     {
     }
 
-    ~HaReadBufferFromKafkaConsumer() override;
+    ~CnchReadBufferFromKafkaConsumer() override;
 
     void commit(); // Commit all processed messages.
     void subscribe(const Names & topics); // Subscribe internal consumer to topics.
@@ -65,6 +65,7 @@ public:
     void reset();
 
     cppkafka::TopicPartitionList getOffsets() const;
+    void clearOffsets();
 
     size_t getReadMessages() const { return read_messages; }
     size_t getReadBytes() const { return read_bytes; }
@@ -79,14 +80,6 @@ public:
     auto currentOffset() const { return current.get_offset(); }
     auto currentPartition() const {return current.get_partition();}
     String currentContent() const {return current.get_payload();}
-    UInt64 currentTimeStamp() const
-    {
-        auto ts = current.get_timestamp();
-        if (ts)
-            return ts->get_timestamp().count();
-        else
-            return 0;
-    }
 
 private:
     ConsumerPtr consumer;
@@ -100,10 +93,6 @@ private:
     size_t alive_time {0};
     bool stalled = false;
 
-    std::mutex cancel_mutex;
-    std::condition_variable cancel_cv;
-    std::atomic_bool cancelled{false};
-
     Message current;
 
     size_t read_messages {0};
@@ -113,7 +102,7 @@ private:
     std::unordered_map<
         std::pair<std::string, std::uint64_t>,
         std::int64_t,
-        pair_hash> offsets;
+        PairHash> offsets;
 
     bool nextImpl() override;
     bool hasExpired();

@@ -1,6 +1,7 @@
 #include <Databases/DatabasesCommon.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/Context.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Storages/StorageDictionary.h>
@@ -18,6 +19,32 @@ namespace ErrorCodes
     extern const int TABLE_ALREADY_EXISTS;
     extern const int UNKNOWN_TABLE;
     extern const int UNKNOWN_DATABASE;
+}
+
+String getTableDefinitionFromCreateQuery(const ASTPtr & query, bool attach)
+{
+    ASTPtr query_clone = query->clone();
+    auto & create = query_clone->as<ASTCreateQuery &>();
+
+    /// We remove everything that is not needed for ATTACH from the query.
+    create.attach = attach;
+    create.as_database.clear();
+    create.as_table.clear();
+    create.if_not_exists = false;
+    create.is_populate = false;
+    create.replace_view = false;
+
+    /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+    if (!create.is_ordinary_view && !create.is_materialized_view)
+        create.select = nullptr;
+
+    create.format = nullptr;
+    create.out_file = nullptr;
+
+    WriteBufferFromOwnString statement_stream;
+    formatAST(create, statement_stream, false);
+    statement_stream << '\n';
+    return statement_stream.str();
 }
 
 DatabaseWithOwnTablesBase::DatabaseWithOwnTablesBase(const String & name_, const String & logger, ContextPtr context_)

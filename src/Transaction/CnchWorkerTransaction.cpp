@@ -93,7 +93,7 @@ void CnchWorkerTransaction::precommit()
         throw Exception("Cannot precommit a transaction that is " + String(txnStatusToString(status)), ErrorCodes::LOGICAL_ERROR);
     checkServerClient();
     auto lock = getLock();
-    // server_client->precommitTransaction(getTransactionID(), getMainTableUUID());
+    server_client->precommitTransaction(getTransactionID(), getMainTableUUID());
     txn_record.prepared = true;
     LOG_DEBUG(log, "Transaction {} successfully finished pre commit.");
 }

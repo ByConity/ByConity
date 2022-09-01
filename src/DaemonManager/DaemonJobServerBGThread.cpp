@@ -5,7 +5,7 @@
 #include <DaemonManager/DaemonHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Storages/StorageCnchMergeTree.h>
-//#include <Storages/Kafka/StorageCnchKafka.h>
+#include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/StorageMaterializedView.h>
 
 namespace DB::DaemonManager
@@ -943,10 +943,9 @@ struct DaemonJobForCnchKafka : public DaemonJobServerBGThreadConsumer
 
 struct IsCnchKafka
 {
-    static bool apply(const StoragePtr & /*storage*/)
+    static bool apply(const StoragePtr & storage)
     {
-        //return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
-        return false;
+        return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
     }
 };
 
