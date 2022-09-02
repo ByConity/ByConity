@@ -1164,7 +1164,7 @@ public:
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
-    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
 

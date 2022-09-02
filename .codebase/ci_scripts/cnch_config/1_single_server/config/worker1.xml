@@ -537,9 +537,9 @@
                     <!-- HTTP -->
                     <port><name>PORT2</name><value>8130</value></port>
                     <!-- TCP_SECURE -->
-                    <port><name>PORT3</name><value>9003</value></port>
+                    <port><name>PORT3</name><value>8132</value></port>
                     <!-- HTTPS_PORT -->
-                    <port><name>PORT4</name><value>8126</value></port>
+                    <port><name>PORT4</name><value>8130</value></port>
                     <!-- Exchange Stream Port-->
                     <port><name>PORT5</name><value>8134</value></port>
                     <!-- Exchange Status Port-->

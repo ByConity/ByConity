@@ -590,19 +590,19 @@
                 <hostname>vw_write0</hostname>
                 <ports>
                     <!-- TCP/Primary -->
-                    <port><name>PORT0</name><value>9001</value></port>
+                    <port><name>PORT0</name><value>8132</value></port>
                     <!-- RPC -->
-                    <port><name>PORT1</name><value>8224</value></port>
+                    <port><name>PORT1</name><value>8131</value></port>
                     <!-- HTTP -->
-                    <port><name>PORT2</name><value>8124</value></port>
+                    <port><name>PORT2</name><value>8130</value></port>
                     <!-- TCP_SECURE -->
-                    <port><name>PORT3</name><value>9003</value></port>
+                    <port><name>PORT3</name><value>8132</value></port>
                     <!-- HTTPS_PORT -->
-                    <port><name>PORT4</name><value>8126</value></port>
+                    <port><name>PORT4</name><value>8130</value></port>
                     <!-- Exchange Stream Port-->
-                    <port><name>PORT5</name><value>9410</value></port>
+                    <port><name>PORT5</name><value>8134</value></port>
                     <!-- Exchange Status Port-->
-                    <port><name>PORT6</name><value>9510</value></port>
+                    <port><name>PORT6</name><value>8135</value></port>
                 </ports>
             </node>
         </vw>
