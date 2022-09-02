@@ -1377,7 +1377,7 @@ void TCPHandler::receiveCnchQuery()
     // so we have to apply the changes first.
     query_context->setCurrentQueryId(state.query_id);
 
-    query_context->setTemporaryTransaction(txn_id, txn_id);
+    query_context->setTemporaryTransaction(txn_id);
 
     /// Sync timeouts on client and server during current query to avoid dangling queries on server
     /// NOTE: We use settings.send_timeout for the receive timeout and vice versa (change arguments ordering in TimeoutSetter),
