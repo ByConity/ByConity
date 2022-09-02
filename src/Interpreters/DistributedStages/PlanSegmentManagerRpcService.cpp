@@ -3,6 +3,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/NamedSession.h>
 #include <Processors/Exchange/DataTrans/Brpc/ReadBufferFromBrpcBuf.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
@@ -20,8 +21,19 @@ void PlanSegmentManagerRpcService::executeQuery(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
-        /// Create context.
-        ContextMutablePtr query_context = Context::createCopy(context);
+        ContextMutablePtr query_context;
+        /// Create session context for worker
+        if (context->getServerType() == ServerType::cnch_worker)
+        {
+            UInt64 txn_id = request->txn_id();
+            auto named_session = context->acquireNamedCnchSession(txn_id, {}, true);
+            query_context = Context::createCopy(named_session->context);
+            query_context->setSessionContext(named_session->context);
+        }
+        else
+        {
+            query_context = Context::createCopy(context);
+        }
 
         /// TODO: Authentication supports inter-server cluster secret, see https://github.com/ClickHouse/ClickHouse/commit/0159c74f217ec764060c480819e3ccc9d5a99a63
         Poco::Net::SocketAddress initial_socket_address(request->coordinator_host(), request->coordinator_port());
@@ -62,9 +74,6 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// already normalized on initiator node, or not normalized and should remain unnormalized for
         /// compatibility.
         query_context->setSetting("normalize_function_names", Field(0));
-
-        if (request->has_database())
-            query_context->setCurrentDatabase(request->database());
 
         /// Set quota
         if (!request->has_quota())

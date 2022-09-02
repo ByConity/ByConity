@@ -196,17 +196,11 @@ void StorageCnchMergeTree::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    auto txn = local_context->getCurrentTransaction();
-    if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
-        local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
 
-
-    metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
+    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
     auto worker_group = local_context->getCurrentWorkerGroup();
-    healthCheckForWorkerGroup(local_context, worker_group);
-
     /// Return directly (with correct header) if no shard read from
     if (!worker_group || worker_group->getShardsInfo().empty())
     {
@@ -217,12 +211,9 @@ void StorageCnchMergeTree::read(
         return;
     }
 
-    auto parts = selectPartsToRead(column_names, local_context, query_info);
-    LOG_INFO(log, "Number of parts to read: {}", parts.size());
-
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
-    if (parts.empty())
+    if (prepare_result.parts.empty())
     {
         /// Stage 1: read from source table, just assume we read everything
         const auto & source_columns = query_info.syntax_analyzer_result->required_source_columns;
@@ -234,24 +225,11 @@ void StorageCnchMergeTree::read(
         return;
     }
 
-    if (metadata_snapshot->hasUniqueKey())
-    {
-        // Previous, we need to sort parts since the partial part and base part are not guarantee to be together,
-        // the getDeleteBitmapMetaForParts function needs to handle the partial->base chain.
-        // Now, we can remove sort logic since we don't expand the partial->base part chain after chain construction,
-        // only partial part is useful in getDeleteBitmapMetaForParts for unique table.
-        getDeleteBitmapMetaForParts(parts, local_context, local_context->getCurrentTransactionID());
-    }
-
-
-    String local_table_name = getCloudTableName(local_context);
-    collectResource(local_context, parts, local_table_name);
-
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
-    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), local_table_name);
+    auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
@@ -290,6 +268,36 @@ void StorageCnchMergeTree::read(
 
     if (!query_plan.isInitialized())
         throw Exception("Pipeline is not initialized", ErrorCodes::LOGICAL_ERROR);
+}
+
+PrepareContextResult StorageCnchMergeTree::prepareReadContext(
+    const Names & column_names, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info, ContextPtr & local_context)
+{
+    auto txn = local_context->getCurrentTransaction();
+    if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
+        local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
+    
+    metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
+
+    auto worker_group = local_context->getCurrentWorkerGroup();
+    healthCheckForWorkerGroup(local_context, worker_group);
+
+    auto parts = selectPartsToRead(column_names, local_context, query_info);
+    LOG_INFO(log, "Number of parts to read: {}", parts.size());
+
+    if (metadata_snapshot->hasUniqueKey() && !parts.empty())
+    {
+        // Previous, we need to sort parts since the partial part and base part are not guarantee to be together,
+        // the getDeleteBitmapMetaForParts function needs to handle the partial->base chain.
+        // Now, we can remove sort logic since we don't expand the partial->base part chain after chain construction,
+        // only partial part is useful in getDeleteBitmapMetaForParts for unique table.
+        getDeleteBitmapMetaForParts(parts, local_context, local_context->getCurrentTransactionID());
+    }
+
+    String local_table_name = getCloudTableName(local_context);
+    collectResource(local_context, parts, local_table_name);
+
+    return {std::move(local_table_name), std::move(parts)};
 }
 
 Strings StorageCnchMergeTree::selectPartitionsByPredicate(

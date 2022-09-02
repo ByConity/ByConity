@@ -24,6 +24,7 @@
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <brpc/controller.h>
 #include <butil/endpoint.h>
+#include <common/getFQDNOrHostName.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -152,7 +153,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     }
                     else
                     {
-                        String localhost_address = context->getLocalHost() + ":" + std::to_string(context->getExchangePort());
+                        String localhost_address = getIPOrFQDNOrHostName() + ":" + std::to_string(context->getExchangePort());
                         LOG_DEBUG(logger, "Force local exchange use remote source : {}@{}", data_key->dump(), localhost_address);
                         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
                             std::move(data_key), localhost_address, context, exchange_header, keep_order);

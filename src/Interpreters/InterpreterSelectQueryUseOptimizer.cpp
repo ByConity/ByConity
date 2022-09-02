@@ -8,7 +8,7 @@
 #include <Optimizer/PlanOptimizer.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/StorageDistributed.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -120,15 +120,16 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitPlanNode(PlanNodeBase 
 std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableScanNode & node, ClusterInfoContext & cluster_info_context)
 {
     auto source_step = node.getStep();
-    auto distributed_table = dynamic_cast<StorageDistributed *>(source_step->getStorage().get());
-    if (distributed_table)
+    const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(source_step->getStorage().get());
+    if (cnch_table)
     {
+        const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
         PlanSegmentContext plan_segment_context{
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
-            .shard_number = distributed_table->getShardCount(),
-            .cluster_name = distributed_table->getClusterName(),
+            .shard_number =  worker_group->getShardsInfo().size(),
+            .cluster_name = worker_group->getID(),
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get()};
         return plan_segment_context;
     }
