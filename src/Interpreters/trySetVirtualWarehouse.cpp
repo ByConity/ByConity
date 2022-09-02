@@ -33,6 +33,7 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 
 [[maybe_unused]] static bool trySetVirtualWarehouseFromTable([[maybe_unused]] const String & database, [[maybe_unused]] const String & table, [[maybe_unused]] ContextMutablePtr & context)
 {
+    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Try set virtual warehouse for table `{}.{}`", database, table);
     auto & database_catalog = DatabaseCatalog::instance();
     StorageID table_id(database, table);
     auto storage = database_catalog.tryGetTable(table_id, context);
@@ -75,6 +76,7 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
 
 static bool trySetVirtualWarehouseFromAST([[maybe_unused]] const ASTPtr & ast, [[maybe_unused]] ContextMutablePtr & context)
 {
+    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Trying to set virtual warehouse for expression `{}` ...", ast->formatForErrorMessage());
     do
     {
         auto & database_catalog = DatabaseCatalog::instance();
@@ -152,7 +154,7 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context)
     if (context->tryGetCurrentVW())
         return true;
 
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Trying to set virtual warehouse...");
+    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Trying to set virtual warehouse for query `{}` ...", ast->formatForErrorMessage());
 
     if (const auto & vw_name = context->getSettingsRef().virtual_warehouse.value; !vw_name.empty())
     {
