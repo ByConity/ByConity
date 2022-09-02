@@ -206,8 +206,6 @@ void StorageCnchMergeTree::read(
 
     auto worker_group = local_context->getCurrentWorkerGroup();
     healthCheckForWorkerGroup(local_context, worker_group);
-    auto parts = selectPartsToRead(column_names, local_context, query_info);
-    LOG_INFO(log, "Number of parts to read: {}", parts.size());
 
     /// Return directly (with correct header) if no shard read from
     if (!worker_group || worker_group->getShardsInfo().empty())
@@ -218,6 +216,9 @@ void StorageCnchMergeTree::read(
         query_plan.addStep(std::move(read_from_pipe));
         return;
     }
+
+    auto parts = selectPartsToRead(column_names, local_context, query_info);
+    LOG_INFO(log, "Number of parts to read: {}", parts.size());
 
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
@@ -377,17 +378,17 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
             {
                 VirtualColumnUtils::filterBlockWithQuery(query_info.query, partition_block, local_context, expression_ast);
                 partition_ids = VirtualColumnUtils::extractSingleValueFromBlock<String>(partition_block, "_partition_id");
+                /// Prunning
+                prev_sz = partition_list.size();
+                std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
+                    return partition_ids.find(partition->getID(*this)) == partition_ids.end();
+                });
+                if (partition_list.size() < prev_sz)
+                    LOG_DEBUG(
+                        log,
+                        "Query predicates on `_partition_id` and `_partition_value` droped {} partitions",
+                        prev_sz - partition_list.size());
             }
-            /// Prunning
-            prev_sz = partition_list.size();
-            std::erase_if(partition_list, [this, &partition_ids](const auto & partition) {
-                return partition_ids.find(partition->getID(*this)) == partition_ids.end();
-            });
-            if (partition_list.size() < prev_sz)
-                LOG_DEBUG(
-                    log,
-                    "Query predicates on `_partition_id` and `_partition_value` droped {} partitions",
-                    prev_sz - partition_list.size());
         }
     }
     Strings res_partitions;

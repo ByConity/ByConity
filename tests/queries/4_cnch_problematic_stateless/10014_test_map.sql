@@ -34,6 +34,6 @@ DROP TABLE types;
 
 select map(); -- { serverError 42 }
 select map('a', 'b', 'c'); -- { serverError 42 }
-SELECT map(CAST('key', 'Nullable(String)'), 'yy'); -- { serverError 53 }
-SELECT map('key', CAST('value', 'Nullable(String)')); -- { serverError 53 }
+SELECT map(CAST('key', 'Nullable(String)'), 'yy');
+SELECT map('key', CAST('value', 'Nullable(String)'));
 
