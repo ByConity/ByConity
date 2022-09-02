@@ -137,7 +137,8 @@ struct AggregateFunctionPathCountData
 
             size_t new_size = 0;
             DB::readVarUInt(new_size, buf);
-            nodes.resize(new_size);
+            if (new_size != 0)
+                nodes.resize(new_size);
 
             for (size_t i = 0; i < new_size; ++i)
             {

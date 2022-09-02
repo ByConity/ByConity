@@ -47,6 +47,9 @@ public:
         ExecutableFunctionPtr repartition_func,
         const DataTypePtr & result_type);
 
+    static std::pair<IColumn::Selector, PartitionStartPoints>
+    doDefaultRepartition(size_t partition_num, const Chunk & chunk, const Block & header, const ColumnNumbers & repartition_keys);
+
     static ExecutableFunctionPtr getDefaultRepartitionFunction(const ColumnsWithTypeAndName & arguments, ContextPtr context);
 
 protected:

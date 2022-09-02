@@ -10,7 +10,8 @@
 
 namespace DB
 {
-
+    
+struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
@@ -53,6 +54,9 @@ public:
         QueryProcessingStage::Enum /*processed_stage*/,
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
+
+    PrepareContextResult prepareReadContext(
+        const Names & column_names, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info, ContextPtr & local_context);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context) override;
 
@@ -140,6 +144,12 @@ private:
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
 
+};
+
+struct PrepareContextResult
+{
+    String local_table_name;
+    ServerDataPartsVector parts;
 };
 
 }

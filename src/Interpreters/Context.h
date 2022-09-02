@@ -728,8 +728,6 @@ public:
     void setComplexQueryActive(bool active);
     bool getComplexQueryActive();
 
-    String getLocalHost() const;
-
     /// Credentials which server will use to communicate with others
     void updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config);
     InterserverCredentialsPtr getInterserverCredentials();
