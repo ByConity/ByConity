@@ -12,6 +12,8 @@
 \N	Nullable(Float32)
 0.000000	Decimal(9, 6)
 \N	Nullable(Decimal(9, 6))
+convert_fr	FixedString(10)
+convert_fr	Nullable(FixedString(10))
 16	Nullable(Int32)
 16	Int32
 1970-01-02	Nullable(Date)
