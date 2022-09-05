@@ -663,7 +663,7 @@ void PipelineExecutor::executeStepImpl(size_t thread_num, size_t num_threads, st
                 if (need_processors_profiles)
                     node->processor->elapsed_us += execution_time_watch->elapsedMicroseconds();
 #ifndef NDEBUG
-                context->execution_time_ns += execution_time_watch.elapsed();
+                context->execution_time_ns += execution_time_watch->elapsed();
 #endif
             }
 
