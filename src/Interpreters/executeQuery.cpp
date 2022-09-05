@@ -826,7 +826,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                    status_info_to_query_log,
                    query_id,
                    finish_current_transaction](
-                      IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline & query_pipeline) mutable {
+                      IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline * query_pipeline) mutable {
                       finish_current_transaction(context);
                       QueryStatus * process_list_elem = context->getProcessListElement();
 
