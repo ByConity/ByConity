@@ -915,7 +915,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (log_processors_profiles)
                 {
-                    if (auto processors_profile_log = context->getProcessorsProfileLog())
+                    auto processors_profile_log = context->getProcessorsProfileLog();
+                    if (query_pipeline && processors_profile_log)
                     {
                         ProcessorProfileLogElement processor_elem;
                         processor_elem.event_time = time_in_seconds(finish_time);
@@ -926,7 +927,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         {
                             return reinterpret_cast<std::uintptr_t>(&proc);
                         };
-                        for (const auto & processor : query_pipeline.getProcessors())
+                        for (const auto & processor : query_pipeline->getProcessors())
                         {
                             std::vector<UInt64> parents;
                             for (const auto & port : processor->getOutputs())
