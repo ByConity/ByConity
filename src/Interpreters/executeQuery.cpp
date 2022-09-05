@@ -56,6 +56,16 @@
 
 #include <Interpreters/NamedSession.h>
 #include <Common/SensitiveDataMasker.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Parsers/ASTSystemQuery.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/CnchWorkerTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+
+
+#include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Sources/SinkToOutputStream.h>
 
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
