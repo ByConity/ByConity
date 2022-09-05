@@ -15,7 +15,7 @@ class ASTSetQuery;
 extern String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach);
 
 std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query, const ContextPtr & context);
-std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage);
+std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage, const ContextPtr & context);
 
 StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & context);
 

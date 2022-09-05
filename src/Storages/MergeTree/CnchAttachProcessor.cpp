@@ -271,7 +271,7 @@ void CnchAttachProcessor::exec()
             // Commit transaction
             NameSet staged_parts_name;
             {
-                CnchDataWriter cnch_writer(target_tbl, *query_ctx, ManipulationType::Insert);
+                CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
                 if (is_unique_tbl)
                 {
                     for (const auto& part : parts_to_commit)

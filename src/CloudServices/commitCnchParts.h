@@ -27,7 +27,7 @@ class CnchDataWriter : private boost::noncopyable
 public:
     CnchDataWriter(
         MergeTreeMetaBase & storage_,
-        const Context & context_,
+        ContextPtr context_,
         ManipulationType type_,
         String task_id_ = {},
         String from_buffer_uuid_ = {},
@@ -44,7 +44,11 @@ public:
     // server side only
     TxnTimestamp commitPreparedCnchParts(const DumpedData & data);
 
-private:
+    /// Convert staged parts to visible parts along with the given delete bitmaps.
+    void publishStagedParts(
+        const MergeTreeDataPartsCNCHVector & staged_parts,
+        const LocalDeleteBitmaps & bitmaps_to_dump);
+
     DumpedData dumpCnchParts(
         const IMutableMergeTreeDataPartsVector & temp_parts,
         const LocalDeleteBitmaps & temp_bitmaps = {},
@@ -52,9 +56,10 @@ private:
 
     void commitDumpedParts(const DumpedData & dumped_data);
 
+private:
 
     MergeTreeMetaBase & storage;
-    const Context & context;
+    ContextPtr context;
     ManipulationType type;
     String task_id;
     String from_buffer_uuid;

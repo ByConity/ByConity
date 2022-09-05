@@ -246,7 +246,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
     BlockInputStreamPtr in;
     Block updated_header;
-    DeleteBitmapPtr updated_delete_bitmap;
+    ImmutableDeleteBitmapPtr updated_delete_bitmap;
     std::unique_ptr<MutationsInterpreter> interpreter;
 
     const auto data_settings = data.getSettings();

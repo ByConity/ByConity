@@ -1,4 +1,4 @@
-// #include <IO/ReadBufferFromHDFS.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/IndexFile/Env.h>
 #include <Common/Exception.h>
 #include <Common/Slice.h>
@@ -82,36 +82,38 @@ namespace
             if (fd < 0)
             {
                 /// fallback to remote read
-                // #if USE_HDFS
-                //                 try
-                //                 {
-                //                     ReadBufferFromHDFS buffer(
-                //                         file.path,
-                //                         file.hdfs_user,
-                //                         file.hdfs_nn_proxy,
-                //                         /*buf_size=*/n,
-                //                         /*existing_memory=*/scratch,
-                //                         /*alignment=*/0,
-                //                         /*read_all_once=*/true);
+                try
+                {
+                    ReadBufferFromByteHDFS buffer(
+                        file.path,
+                        /*pread=*/true,
+                        file.hdfs_params,
+                        /*buf_size=*/n,
+                        /*existing_memory=*/scratch,
+                        /*alignment=*/0,
+                        /*read_all_once=*/true);
 
-                //                     auto seek_off = static_cast<off_t>(file.start_offset + offset);
-                //                     auto res_off = buffer.seek(seek_off);
-                //                     if (res_off != seek_off)
-                //                         throw Exception("Seek to " + file.path + " should return " + toString(seek_off)  + " but got " + toString(res_off), ErrorCodes::LOGICAL_ERROR);
+                    auto seek_off = static_cast<off_t>(file.start_offset + offset);
+                    auto res_off = buffer.seek(seek_off);
+                    if (res_off != seek_off)
+                        throw Exception(
+                            "Seek to " + file.path + " should return " + toString(seek_off) + " but got " + toString(res_off),
+                            ErrorCodes::LOGICAL_ERROR);
 
-                //                     auto is_eof = buffer.eof(); /// will trigger reading into scratch
-                //                     if (is_eof)
-                //                         throw Exception("Unexpected EOF when reading " + file.path + ", off=" + toString(seek_off) + ", size=" + toString(n), ErrorCodes::LOGICAL_ERROR);
-                //                     assert(buffer.buffer().size() == n);
+                    auto is_eof = buffer.eof(); /// will trigger reading into scratch
+                    if (is_eof)
+                        throw Exception(
+                            "Unexpected EOF when reading " + file.path + ", off=" + toString(seek_off) + ", size=" + toString(n),
+                            ErrorCodes::LOGICAL_ERROR);
+                    assert(buffer.buffer().size() == n);
 
-                //                     *result = Slice(scratch, n);
-                //                 }
-                //                 catch (...)
-                //                 {
-                //                     *result = Slice(scratch, 0);
-                //                     s = Status::IOError(file.path, getCurrentExceptionMessage(false));
-                //                 }
-                // #endif
+                    *result = Slice(scratch, n);
+                }
+                catch (...)
+                {
+                    *result = Slice(scratch, 0);
+                    s = Status::IOError(file.path, getCurrentExceptionMessage(false));
+                }
             }
             else
             {

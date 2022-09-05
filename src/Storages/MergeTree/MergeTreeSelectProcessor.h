@@ -20,7 +20,7 @@ public:
         const MergeTreeMetaBase & storage,
         const StorageMetadataPtr & metadata_snapshot,
         const MergeTreeMetaBase::DataPartPtr & owned_data_part,
-        DeleteBitmapPtr delete_bitmap,
+        ImmutableDeleteBitmapPtr delete_bitmap,
         UInt64 max_block_size_rows,
         size_t preferred_block_size_bytes,
         size_t preferred_max_column_in_block_size_bytes,
@@ -59,7 +59,7 @@ private:
 
     /// Data part will not be removed if the pointer owns it
     MergeTreeMetaBase::DataPartPtr data_part;
-    DeleteBitmapPtr delete_bitmap;
+    ImmutableDeleteBitmapPtr delete_bitmap;
 
     /// Mark ranges we should read (in ascending order)
     MarkRanges all_mark_ranges;

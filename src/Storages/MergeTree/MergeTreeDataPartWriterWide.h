@@ -2,6 +2,16 @@
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterOnDisk.h>
 
+namespace rocksdb
+{
+    class DB;
+}
+
+namespace IndexFile
+{
+    struct IndexFileInfo;
+}
+
 namespace DB
 {
 
@@ -19,6 +29,8 @@ public:
         const MergeTreeWriterSettings & settings,
         const MergeTreeIndexGranularity & index_granularity);
 
+    ~MergeTreeDataPartWriterWide() override;
+
     void write(const Block & block, const IColumn::Permutation * permutation) override;
 
     void finish(IMergeTreeDataPart::Checksums & checksums, bool sync) final;
@@ -26,6 +38,7 @@ public:
     void updateWriterStream(const NameAndTypePair &pair) override;
 
 private:
+
     /// Finish serialization of data: write final mark if required and compute checksums
     /// Also validate written data in debug mode
     void finishDataSerialization(IMergeTreeDataPart::Checksums & checksums, bool sync);
@@ -60,6 +73,22 @@ private:
     size_t rows_written_in_last_mark = 0;
 
     Poco::Logger * log;
+
+    /** ------------------ Unique Table Only --------------------- **/
+    void writeUniqueKeyIndex(Block & unique_key_block);
+    void writeToTempUniqueKeyIndex(Block & block, size_t first_rid, rocksdb::DB & temp_index);
+    void closeTempUniqueKeyIndex();
+    void writeFinalUniqueKeyIndexFile(IndexFile::IndexFileInfo & file_info);
+
+    size_t rows_count = 0;
+
+    /// If the part contains only one block (normal insert case), we generate the key index file
+    /// directly from the buffered block, avoiding the overhead of "temp_unique_key_index"
+    Block buffered_unique_key_block;
+    /// If the part contains more than one blocks (merge case), we first use "temp_unique_key_index"
+    /// to sort and persist index entries, then generate the key index file from "temp_unique_key_index"
+    String temp_unique_key_index_dir;
+    rocksdb::DB * temp_unique_key_index = nullptr;
 };
 
 }

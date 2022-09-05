@@ -26,7 +26,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     MergeTreeMetaBase::DataPartPtr data_part_,
-    DeleteBitmapPtr delete_bitmap_,
+    ImmutableDeleteBitmapPtr delete_bitmap_,
     Names columns_to_read_,
     bool read_with_direct_io_,
     bool take_column_types_from_storage,

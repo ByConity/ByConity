@@ -1038,6 +1038,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t delete_bitmap_cache_size = config().getUInt64("delete_bitmap_cache_size", 1073741824);
     global_context->setDeleteBitmapCache(delete_bitmap_cache_size);
 
+    /// Meta cache is used for the index and bloom blocks, it should be set to a large number to keep hit rate near 100%.
+    /// Data cache is used for the data blocks, it's ok to have a lower hit cache than meta cache
+    size_t uki_meta_cache_size = config().getUInt64("unique_key_index_meta_cache_size", 1073741824); /// 1GB
+    size_t uki_data_cache_size = config().getUInt64("unique_key_index_data_cache_size", 1073741824); /// 1GB
+    global_context->setUniqueKeyIndexCache(uki_meta_cache_size);
+    global_context->setUniqueKeyIndexBlockCache(uki_data_cache_size);
+
+    /// Disk cache for unique key index
+    size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", 53687091200); /// 50GB
+    global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
+
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
     {
         /// Rely on schedule pool config

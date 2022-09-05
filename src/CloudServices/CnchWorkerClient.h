@@ -23,6 +23,7 @@ class MergeTreeMetaBase;
 struct StorageID;
 struct ManipulationInfo;
 struct ManipulationTaskParams;
+struct DedupWorkerStatus;
 
 class CnchWorkerClient : public RpcClientBase
 {
@@ -62,6 +63,10 @@ public:
         ExceptionHandler & handler);
 
     void removeWorkerResource(TxnTimestamp txn_id);
+
+    void createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports);
+    void dropDedupWorker(const StorageID & storage_id);
+    DedupWorkerStatus getDedupWorkerStatus(const StorageID & storage_id);
 
 #if USE_RDKAFKA
     void submitKafkaConsumeTask(const KafkaTaskCommand & command);

@@ -45,7 +45,7 @@ public:
         IMergeTreeReader * merge_tree_reader_,
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprInfo * prewhere_info_,
-        DeleteBitmapPtr delete_bitmap_,
+        ImmutableDeleteBitmapPtr delete_bitmap_,
         bool last_reader_in_chain_,
         bool has_bitmap_index = false);
 
@@ -242,7 +242,7 @@ private:
     const MergeTreeIndexGranularity * index_granularity = nullptr;
     MergeTreeRangeReader * prev_reader = nullptr; /// If not nullptr, read from prev_reader firstly.
     const PrewhereExprInfo * prewhere_info;
-    DeleteBitmapPtr delete_bitmap = nullptr; /// If not nullptr, rows in delete bitmap are removed
+    ImmutableDeleteBitmapPtr delete_bitmap = nullptr; /// If not nullptr, rows in delete bitmap are removed
 
     Stream stream;
 

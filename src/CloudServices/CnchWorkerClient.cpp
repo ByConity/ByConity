@@ -8,6 +8,7 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <Transaction/ICnchTransaction.h>
+#include <CloudServices/DedupWorkerStatus.h>
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -220,6 +221,67 @@ void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::createDedupWorker(const StorageID & storage_id, const String & create_table_query, const HostWithPorts & host_ports_)
+{
+    brpc::Controller cntl;
+    Protos::CreateDedupWorkerReq request;
+    Protos::CreateDedupWorkerResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+    request.set_create_table_query(create_table_query);
+    RPCHelpers::fillHostWithPorts(host_ports_, *request.mutable_host_ports());
+
+    stub->createDedupWorker(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchWorkerClient::dropDedupWorker(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::DropDedupWorkerReq request;
+    Protos::DropDedupWorkerResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+
+    stub->dropDedupWorker(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+}
+
+DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::GetDedupWorkerStatusReq request;
+    Protos::GetDedupWorkerStatusResp response;
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_table());
+
+    stub->getDedupWorkerStatus(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    DedupWorkerStatus status;
+    status.is_active = response.is_active();
+    if (status.is_active)
+    {
+        status.create_time = response.create_time();
+        status.total_schedule_cnt = response.total_schedule_cnt();
+        status.total_dedup_cnt = response.total_dedup_cnt();
+        status.last_schedule_wait_ms = response.last_schedule_wait_ms();
+        status.last_task_total_cost_ms = response.last_task_total_cost_ms();
+        status.last_task_dedup_cost_ms = response.last_task_dedup_cost_ms();
+        status.last_task_publish_cost_ms = response.last_task_publish_cost_ms();
+        status.last_task_staged_part_cnt = response.last_task_staged_part_cnt();
+        status.last_task_visible_part_cnt = response.last_task_visible_part_cnt();
+        status.last_task_staged_part_total_rows = response.last_task_staged_part_total_rows();
+        status.last_task_visible_part_total_rows = response.last_task_visible_part_total_rows();
+        status.last_exception = response.last_exception();
+        status.last_exception_time = response.last_exception_time();
+    }
+    return status;
 }
 
 #if USE_RDKAFKA

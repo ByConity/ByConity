@@ -137,6 +137,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "METASTORE";
         case Type::CLEAR_BROKEN_TABLES:
             return "CLEAR BROKEN TABLES";
+        case Type::DEDUP:
+            return "DEDUP";
         default:
             throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
     }
@@ -259,6 +261,16 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         print_metastore_options();
         if (meta_ops.operation > MetastoreOperation::STOP_AUTO_SYNC)
             print_database_table();
+    }
+    else if (type == Type::DEDUP)
+    {
+        print_database_table();
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+        settings.ostr << " FOR REPAIR";
     }
 }
 

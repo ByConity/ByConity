@@ -1472,26 +1472,6 @@ void MetastoreProxy::prepareAddDeleteBitmaps(const String & name_space, const St
     }
 }
 
-void MetastoreProxy::addDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps)
-{
-    BatchCommitRequest batch_write;
-    prepareAddDeleteBitmaps(name_space, table_uuid, bitmaps, batch_write);
-    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
-}
-
-void MetastoreProxy::removeDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps)
-{
-    BatchCommitRequest batch_write;
-
-    for (const auto & dlb_ptr : bitmaps)
-    {
-        const Protos::DataModelDeleteBitmap & model = *(dlb_ptr->getModel());
-        batch_write.AddDelete(deleteBitmapKey(name_space, table_uuid, model));
-    }
-
-    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
-}
-
 Strings MetastoreProxy::getDeleteBitmapByKeys(const Strings & keys)
 {
     Strings parts_meta;

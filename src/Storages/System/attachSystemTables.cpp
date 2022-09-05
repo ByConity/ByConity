@@ -7,6 +7,7 @@
 #include <Storages/System/StorageSystemBuildOptions.h>
 #include <Storages/System/StorageSystemCollations.h>
 #include <Storages/System/StorageSystemClusters.h>
+#include <Storages/System/StorageSystemCnchStagedParts.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/System/StorageSystemDataSkippingIndices.h>
@@ -212,6 +213,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemWorkers>(system_database, "workers");
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
     attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
+    attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
