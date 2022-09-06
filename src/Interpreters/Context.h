@@ -96,6 +96,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class ProcessorsProfileLog;
 class ZooKeeperLog;
 struct MergeTreeSettings;
 class StorageS3Settings;
@@ -959,6 +960,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
+    std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
