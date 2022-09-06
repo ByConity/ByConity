@@ -22,7 +22,7 @@ public:
         const IMergeTreeDataPart * parent_part_ = nullptr);
 
     MergeTreeDataPartCNCH(
-        MergeTreeMetaBase & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume_,
         const std::optional<String> & relative_path_ = {},
@@ -62,6 +62,8 @@ public:
 
     void loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency) override;
 
+    void loadFromFileSystem(bool load_hint_mutation = true);
+
     /// Mark counts, need for metastore
     /// TODO @canh: may remove later
     UInt64 marks_count;
@@ -84,6 +86,8 @@ private:
     void loadIndexGranularity() override;
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
+
+    void getMetaInfoPosAndSize(off_t & off, size_t & size);
 };
 
 }

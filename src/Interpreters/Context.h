@@ -1167,6 +1167,7 @@ public:
     TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
+    TxnTimestamp getCurrentCnchStartTime() const;
 
     void initCnchBGThreads();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
