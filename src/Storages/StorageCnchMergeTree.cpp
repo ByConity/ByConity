@@ -1244,11 +1244,16 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 void StorageCnchMergeTree::truncate(
     const ASTPtr & /*query*/,
     const StorageMetadataPtr & /* metadata_snapshot */,
-    ContextPtr /* local_context */,
+    ContextPtr local_context,
     TableExclusiveLockHolder &)
 {
     //if (forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
     //    return;
+    PartitionCommand command;
+    command.type = PartitionCommand::DROP_PARTITION_WHERE;
+    command.partition = std::make_shared<ASTLiteral>(Field(UInt8(1)));
+    command.part = false;
+    dropPartitionOrPart(command, local_context);
 }
 
 ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part)
