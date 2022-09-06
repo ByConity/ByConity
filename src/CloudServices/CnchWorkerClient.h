@@ -6,6 +6,8 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Transaction/TxnTimestamp.h>
+#include <brpc/controller.h>
+#include <Common/Exception.h>
 
 #include <unordered_set>
 
@@ -41,21 +43,23 @@ public:
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);
     std::vector<ManipulationInfo> getManipulationTasksStatus();
 
-    /// send resource to worker
+    /// send resource to worker async
     void sendCreateQueries(const ContextPtr & context, const std::vector<String> & create_queries);
 
-    void sendQueryDataParts(
+    brpc::CallId sendQueryDataParts(
         const ContextPtr & context,
         const StoragePtr & storage,
         const String & local_table_name,
         const ServerDataPartsVector & parts,
-        const std::set<Int64> & required_bucket_numbers);
+        const std::set<Int64> & required_bucket_numbers,
+        ExceptionHandler & handler);
 
-    void sendOffloadingInfo(
+    brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,
         const HostWithPortsVec & read_workers,
         const std::vector<std::pair<StorageID, String>> & worker_table_names,
-        const std::vector<HostWithPortsVec> & buffer_workers_vec);
+        const std::vector<HostWithPortsVec> & buffer_workers_vec,
+        ExceptionHandler & handler);
 
     void removeWorkerResource(TxnTimestamp txn_id);
 

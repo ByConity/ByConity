@@ -12,7 +12,10 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOG_ERROR;
+    extern const int BRPC_TIMEOUT;
     extern const int BRPC_EXCEPTION;
+    extern const int BRPC_HOST_DOWN;
+    extern const int BRPC_CONNECT_ERROR;
 }
 
 namespace RPCHelpers
@@ -54,6 +57,30 @@ namespace RPCHelpers
         client_info.initial_address = client_info.current_address;
 
         return rpc_context;
+    }
+
+    void assertController(const brpc::Controller & cntl)
+    {
+        if (!cntl.Failed())
+            return;
+
+        auto err = cntl.ErrorCode();
+
+        if (err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH)
+        {
+            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_CONNECT_ERROR);
+        }
+        else if (err == EHOSTDOWN)
+        {
+            /// TODO: handle more error codes, temporarily remove EHOSTDOWN error https://github.com/apache/incubator-brpc/issues/936
+            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_HOST_DOWN);
+        }
+        else if (err == brpc::Errno::ERPCTIMEDOUT)
+        {
+            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_TIMEOUT);
+        }
+        else /// Should we throw exception here to cover all other errors?
+            throw Exception(std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);
     }
 }
 

@@ -38,6 +38,7 @@
 #include <QueryPlan/ReadFromPreparedSource.h>
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Transaction/Actions/DDLAlterAction.h>
+#include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
 
@@ -276,7 +277,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     auto txn = local_context->getCurrentTransaction();
     if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
         local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
-    
+
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
 
     auto worker_group = local_context->getCurrentWorkerGroup();
@@ -761,16 +762,17 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
             }
         }
 
-        LOG_DEBUG(log, "Target write worker found: {}", write_shard_ptr->worker_id);
-
-        LOG_DEBUG(log, "Prepare execute create query: {}", create_local_tb_query);
+        LOG_DEBUG(log, "Will send create query: {} to target worker: {}", create_local_tb_query, write_shard_ptr->worker_id);
         auto worker_client = worker_group->getWorkerClients().at(index);
+
         worker_client->sendCreateQueries(local_context, {create_local_tb_query});
 
         auto table_suffix = extractTableSuffix(generated_tb_name);
         Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
-        for (const auto & dependency_create_querie : dependency_create_queries)
-            LOG_DEBUG(log, "{}", dependency_create_querie);
+        for (const auto & dependency_create_query : dependency_create_queries)
+        {
+            LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
+        }
         worker_client->sendCreateQueries(local_context, dependency_create_queries);
 
         /// Ensure worker session local_context rsource could be released

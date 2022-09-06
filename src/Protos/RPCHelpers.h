@@ -115,6 +115,25 @@ namespace DB::RPCHelpers
 
     ContextMutablePtr createSessionContextForRPC(const ContextPtr & context, google::protobuf::RpcController & cntl_base);
 
+    /// throw exception when cntl.Failed
+    void assertController(const brpc::Controller & cntl);
+
+    template <typename Resp>
+    void onAsyncCallDone(Resp * response, brpc::Controller * cntl, ExceptionHandler * handler)
+    {
+        try
+        {
+            std::unique_ptr<Resp> response_guard(response);
+            std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+            RPCHelpers::assertController(*cntl);
+            RPCHelpers::checkResponse(*response);
+        }
+        catch (...)
+        {
+            handler->setException(std::current_exception());
+        }
+    }
+
     template <typename Resp, typename Func>
     void serviceHandler(google::protobuf::Closure * done, Resp * resp, Func && f)
     {

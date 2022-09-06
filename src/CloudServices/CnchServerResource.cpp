@@ -5,6 +5,8 @@
 #include <CloudServices/CnchWorkerClient.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <brpc/controller.h>
+#include <Common/Exception.h>
 
 
 namespace DB
@@ -79,45 +81,86 @@ void CnchServerResource::addBufferWorkers(const UUID & storage_id, const HostWit
     assigned_resource.buffer_workers = buffer_workers;
 }
 
+static std::vector<brpc::CallId> processSend(
+    const ContextPtr & context,
+    CnchWorkerClientPtr & client,
+    std::vector<AssignedResource> resource_to_send,
+    ExceptionHandler & handler)
+{
+    bool is_local = context->getServerType() == ServerType::cnch_server &&
+        client->getHostWithPorts().getRPCAddress() == context->getHostWithPorts().getRPCAddress();
+
+    std::vector<brpc::CallId> call_ids;
+
+    if (!is_local)
+    {
+        Strings create_queries;
+        for (auto & resource: resource_to_send)
+        {
+            if (!resource.sent_create_query)
+                create_queries.emplace_back(resource.create_table_query);
+        }
+        client->sendCreateQueries(context, create_queries);
+    }
+
+    /// send data parts.
+    for (auto & resource: resource_to_send)
+    {
+        auto call_id = client->sendQueryDataParts(
+            context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers, handler);
+        call_ids.emplace_back(std::move(call_id));
+    }
+
+    return call_ids;
+}
+
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
     auto lock = getLock();
     std::vector<AssignedResource> resource_to_send;
     auto worker_client = worker_group->getWorkerClient(worker);
 
+    allocateResource(context, lock);
+
+    auto it = assigned_worker_resource.find(worker);
+    if (it == assigned_worker_resource.end())
+        return;
+
+    resource_to_send = std::move(it->second);
+    assigned_worker_resource.erase(it);
+
+    ExceptionHandler handler;
+    auto call_ids = processSend(context, worker_client, resource_to_send, handler);
+
+    /// TODO: join call_ids without lock.
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+
+    handler.throwIfException();
+    /// TODO: send offloading info.
+}
+
+void CnchServerResource::sendResource(const ContextPtr & context)
+{
+    ExceptionHandler handler;
+    std::vector<brpc::CallId> call_ids;
     {
+        auto lock = getLock();
         allocateResource(context, lock);
 
-        auto it = assigned_worker_resource.find(worker);
-        if (it == assigned_worker_resource.end())
-            return;
-
-        resource_to_send = std::move(it->second);
-        assigned_worker_resource.erase(it);
-
-        bool is_local = context->getServerType() == ServerType::cnch_worker && worker.getRPCAddress() == context->getHostWithPorts().getRPCAddress();
-
-        if (!is_local)
+        for (const auto & [host_ports, resource]: assigned_worker_resource)
         {
-            /// skip send create query to local shard in offloading mode
-            std::vector<String> create_queries;
-            for (auto & resource: resource_to_send)
-            {
-                if (!resource.sent_create_query)
-                    create_queries.emplace_back(resource.create_table_query);
-            }
-            worker_client->sendCreateQueries(context, create_queries);
+            auto worker_client = worker_group->getWorkerClient(host_ports);
+            auto curr_ids = processSend(context, worker_client, resource, handler);
+            call_ids.insert(call_ids.end(), curr_ids.begin(), curr_ids.end());
         }
+        assigned_worker_resource.clear();
     }
 
-    /// send data parts.
-    for (auto & resource: resource_to_send)
-    {
-        worker_client->sendQueryDataParts(
-            context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers);
-    }
+    for (auto & call_id: call_ids)
+        brpc::Join(call_id);
 
-    /// TODO: send offloading info.
+    handler.throwIfException();
 }
 
 void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &)
