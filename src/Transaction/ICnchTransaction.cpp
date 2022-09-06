@@ -41,24 +41,6 @@ void ICnchTransaction::setTransactionRecord(TransactionRecord record)
     txn_record = std::move(record);
 }
 
-MergeTreeDataPartsCNCHVector ICnchTransaction::getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, ContextPtr  /*query_context*/)
-{
-    if (parts.empty())
-        return {};
-
-    // return CnchPartsHelper::calcVisibleParts(parts, false, CnchPartsHelper::getLoggingOption(query_context));
-    return parts;
-}
-
-ServerDataPartsVector ICnchTransaction::getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr  /*query_context*/)
-{
-    if (parts.empty())
-        return {};
-
-    // return CnchPartsHelper::calcVisibleParts(parts, false, CnchPartsHelper::getLoggingOption(query_context));
-    return parts;
-}
-
 // IntentLockPtr ICnchTransaction::createIntentLock(const LockEntity & entity, const Strings & intent_names)
 // {
 //     return std::make_unique<IntentLock>(context, getTransactionRecord(), entity, intent_names);

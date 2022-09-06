@@ -27,6 +27,14 @@ public:
 
     ColumnsDescription getColumnsAndAlias();
 
+    enum PartType
+    {
+        VisiblePart = 1,
+        InvisiblePart = 2,
+        DropRange = 3,
+        DroppedPart = 4,
+    };
+
 protected:
     using IStorageSystemOneBlock::IStorageSystemOneBlock;
     void fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const override;

@@ -31,6 +31,7 @@
 #include <Core/QueryProcessingStage.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTPartition.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
@@ -40,7 +41,7 @@
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
-
+#include <CloudServices/commitCnchParts.h>
 
 namespace ProfileEvents
 {
@@ -58,6 +59,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int INDEX_NOT_USED;
     extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
+    extern const int SUPPORT_IS_DISABLED;
+    extern const int NO_SUCH_DATA_PART;
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -926,8 +929,8 @@ ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
         ServerDataPartsVector all_parts
-            = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), cur_txn->getStartTime(), nullptr);
-        return cur_txn->getLatestCheckpointWithVersionChain(all_parts, local_context);
+                = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), cur_txn->getStartTime(), nullptr);
+        return CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
     }
 
     // TEST_END(testlog, "Get all parts from Catalog Service");
@@ -966,7 +969,7 @@ StorageCnchMergeTree::selectPartsToRead(const Names & column_names_to_return, Co
         }
         // TEST_LOG(testlog, "get dataparts in partitions.");
         LOG_DEBUG(log, "Total number of parts get from bytekv: {}", data_parts.size());
-        data_parts = cur_txn->getLatestCheckpointWithVersionChain(data_parts, local_context);
+        data_parts = CnchPartsHelper::calcVisibleParts(data_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
 
         ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
         ProfileEvents::increment(ProfileEvents::TotalPartitions, partition_list.size());
@@ -1111,6 +1114,93 @@ void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands
     //checkAlterSettings(commands);
 }
 
+void StorageCnchMergeTree::checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & /*metadata_snapshot*/, const Settings & settings) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type == PartitionCommand::DROP_DETACHED_PARTITION
+            && !settings.allow_drop_detached)
+            throw DB::Exception("Cannot execute query: DROP DETACHED PART is disabled "
+                                "(see allow_drop_detached setting)", ErrorCodes::SUPPORT_IS_DISABLED);
+
+        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION
+            && command.type != PartitionCommand::DROP_PARTITION_WHERE && command.type != PartitionCommand::FETCH_PARTITION_WHERE)
+        {
+            if (command.part)
+            {
+                auto part_name = command.partition->as<ASTLiteral &>().value.safeGet<String>();
+                /// We are able to parse it
+                MergeTreePartInfo::fromPartName(part_name, format_version);
+            }
+            else
+            {
+                /// We are able to parse it
+                getPartitionIDFromQuery(command.partition, getContext());
+            }
+        }
+    }
+}
+
+Pipe StorageCnchMergeTree::alterPartition(
+    const StorageMetadataPtr & metadata_snapshot,
+    const PartitionCommands & commands,
+    ContextPtr query_context)
+{
+    if (unlikely(!query_context->getCurrentTransaction()))
+        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
+
+    // if (forwardQueryToServerIfNeeded(query_context, getStorageUUID()))
+    //     return {};
+
+    auto current_query_context = Context::createCopy(query_context);
+
+    for (auto & command : commands)
+    {
+        TransactionCnchPtr new_txn;
+
+        SCOPE_EXIT({
+            if (new_txn)
+                current_query_context->getCnchTransactionCoordinator().finishTransaction(new_txn);
+        });
+
+        /// If previous transaction has been committed, need to set a new transaction
+        /// For the first txn, it is handled by finishCurrentTransaction log in executeQuery to keep the same lifecycle as the query.
+        if (current_query_context->getCurrentTransaction()->getStatus() == CnchTransactionStatus::Finished)
+        {
+            new_txn = current_query_context->getCnchTransactionCoordinator().createTransaction();
+            current_query_context->setCurrentTransaction(new_txn, false);
+        }
+
+        switch (command.type)
+        {
+            case PartitionCommand::ATTACH_PARTITION:
+            //case PartitionCommand::ATTACH_DETACHED_PARTITION:
+            case PartitionCommand::REPLACE_PARTITION:
+            //case PartitionCommand::REPLACE_PARTITION_WHERE:
+            /// attachOrReplacePartition(command, current_query_context);
+                break;
+
+            case PartitionCommand::DROP_PARTITION:
+            case PartitionCommand::DROP_PARTITION_WHERE:
+                dropPartitionOrPart(command, current_query_context);
+                break;
+
+
+            case PartitionCommand::INGEST_PARTITION:
+                // ingestPartition(query, command, query_context);
+                break;
+
+            case PartitionCommand::PREATTACH_PARTITION:
+                // preattachPartition(query, command, query_context);
+                break;
+
+            default:
+                IStorage::alterPartition(metadata_snapshot, commands, current_query_context);
+        }
+    }
+    return {};
+}
+
 void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /*table_lock_holder*/)
 {
     auto table_id = getStorageID();
@@ -1159,6 +1249,219 @@ void StorageCnchMergeTree::truncate(
 {
     //if (forwardQueryToServerIfNeeded(local_context, getStorageUUID()))
     //    return;
+}
+
+ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part)
+{
+    bool filter_by_part = part && ast->as<ASTLiteral>();
+    bool filter_by_partition = !part && ast->as<ASTPartition>();
+
+    if (filter_by_part || filter_by_partition)
+    {
+        String part_name;
+        String partition_id;
+
+        if (part)
+        {
+            /// typeid_cast will throw bad_cast exception if cast fail.
+            part_name = typeid_cast<const ASTLiteral &>(*ast).value.safeGet<String>();
+            partition_id = MergeTreePartInfo::fromPartName(part_name, format_version).partition_id;
+        }
+        else
+            partition_id = getPartitionIDFromQuery(ast, local_context);
+
+        auto all_parts = local_context->getCnchCatalog()->getServerDataPartsInPartitions(
+            shared_from_this(), {partition_id}, local_context->getCurrentTransaction()->getStartTime(), local_context.get());
+
+        auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
+
+        if (!part)
+            return visible_parts;
+        else if (auto it = std::lower_bound(visible_parts.begin(), visible_parts.end(), part_name, [](auto & lhs, auto & rhs) { return lhs->name() < rhs; } );
+                it != visible_parts.end() && (*it)->name() == part_name)
+            return { *it };
+        else
+            return {};
+    }
+    else
+    {
+        return getServerPartsByPredicate(local_context, ast);
+    }
+}
+
+ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_)
+{
+    auto all_parts = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), local_context->getCurrentTransaction()->getStartTime(), nullptr);
+    auto parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
+    parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info().isFakeDropRangePart(); }), parts.end());
+
+    // Do nothing if this table is not partition by key.
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (!metadata_snapshot->hasPartitionKey())
+        return parts;
+
+    const auto & partition_key = metadata_snapshot->getPartitionKey();
+    MutableColumns mutable_columns = partition_key.sample_block.cloneEmptyColumns();
+
+    for (auto & part : parts)
+    {
+        auto & partition_value = part->partition().value;
+        for (size_t c = 0; c < mutable_columns.size(); ++c)
+        {
+            if (c < partition_value.size())
+                mutable_columns[c]->insert(partition_value[c]);
+            else
+                /// When partitions have different partition key insert default value
+                /// TODO: insert default value may cause delete partition with default value
+                mutable_columns[c]->insertDefault();
+        }
+    }
+
+    auto block = partition_key.sample_block.cloneWithColumns(std::move(mutable_columns));
+    auto predicate = predicate_->clone();
+    auto syntax_result = TreeRewriter(getContext()).analyze(predicate, block.getNamesAndTypesList());
+    auto actions = ExpressionAnalyzer(predicate, syntax_result, getContext()).getActions(true);
+    actions->execute(block);
+
+    /// Check the result
+    if (1 != block.columns())
+        throw Exception("Wrong column number of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+    else if (block.getNamesAndTypesList().front().type->getName() != "UInt8")
+        throw Exception("Wrong column type of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
+
+    ServerDataPartsVector candidate_parts;
+    const auto & flag_column = block.getColumnsWithTypeAndName().front().column;
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        if (flag_column->getInt(i))
+            candidate_parts.push_back(parts[i]);
+    }
+
+    return candidate_parts;
+}
+
+void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context)
+{
+    auto parts = getServerPartsByPartitionOrPredicate(local_context, command.partition, command.part);
+    if (parts.empty())
+    {
+        if (command.part)
+            throw Exception(ErrorCodes::NO_SUCH_DATA_PART, "No part found");
+        else
+            return;
+    }
+
+    dropPartsImpl(std::move(parts), command.detach, local_context);
+}
+
+void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector && parts_to_drop, bool detach, ContextPtr local_context)
+{
+    auto txn = local_context->getCurrentTransaction();
+
+    if (detach)
+    {
+        auto metadata_snapshot = getInMemoryMetadataPtr();
+        if (metadata_snapshot->hasUniqueKey())
+            throw Exception("detach partition command is not supported on unique table", ErrorCodes::NOT_IMPLEMENTED);
+
+        /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
+        // VolumePtr hdfs_volume = getStoragePolicy()->local_store_volume();
+
+        auto data_parts = createPartVectorFromServerParts(*this, parts_to_drop);
+        ThreadPool pool(std::min(parts_to_drop.size(), 16UL));
+        auto callback = [&] (const DataPartPtr & part)
+        {
+            pool.scheduleOrThrow([&part, &txn, &local_context, this] {
+                UndoResource ub(txn->getTransactionID(), UndoResourceType::FileSystem, part->getFullRelativePath(), part->getRelativePathForDetachedPart(""));
+                ub.setDiskName(part->volume->getDisk()->getName());
+                local_context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), {ub});
+                part->renameToDetached("");
+            });
+        };
+        for (const auto & data_part : data_parts)
+        {
+            data_part->enumeratePreviousParts(callback);
+        }
+        pool.wait();
+        /// NOTE: we still need create DROP_RANGE part for detached parts,
+    }
+
+    MutableDataPartsVector drop_ranges;
+
+    if (parts_to_drop.size() == 1)
+    {
+        auto part = parts_to_drop.front();
+        auto drop_part_info = part->info();
+        drop_part_info.level += 1;
+        drop_part_info.mutation = txn->getPrimaryTransactionID().toUInt64();
+        auto disk = getStoragePolicy()->getAnyDisk();
+        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
+        String drop_part_name = drop_part_info.getPartName();
+        auto drop_part = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_part_info, single_disk_volume, drop_part_name);
+        drop_part->partition.assign(part->partition());
+        drop_part->deleted = true;
+
+        if (txn->isSecondary())
+        {
+            drop_part->secondary_txn_id = txn->getTransactionID();
+        }
+
+        drop_ranges.emplace_back(std::move(drop_part));
+    }
+    else
+    {
+        // drop_range parts should belong to the primary transaction
+        drop_ranges = createDropRangesFromParts(parts_to_drop, txn);
+    }
+
+    CnchDataWriter cnch_writer(*this, *local_context, ManipulationType::Drop);
+    cnch_writer.dumpAndCommitCnchParts(drop_ranges);
+}
+
+StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn)
+{
+    PartitionDropInfos partition_infos;
+
+    for (const auto & part : parts_to_drop)
+    {
+        auto [iter, inserted] = partition_infos.try_emplace(part->info().partition_id);
+        if (inserted)
+            iter->second.value.assign(part->partition());
+
+        iter->second.max_block = std::max(iter->second.max_block, part->info().max_block);
+        iter->second.rows_count += part->rowsCount();
+        iter->second.size += part->part_model().size();
+        iter->second.parts_count += 1;
+    }
+
+    return createDropRangesFromPartitions(partition_infos, txn);
+}
+
+StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn)
+{
+    MutableDataPartsVector drop_ranges;
+    for (auto && [partition_id, info] : partition_infos)
+    {
+        MergeTreePartInfo drop_range_info(partition_id, 0, info.max_block, MergeTreePartInfo::MAX_LEVEL, txn->getPrimaryTransactionID(), 0 /* must be zero */);
+        auto disk = getStoragePolicy()->getAnyDisk();
+        auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_range_info.getPartName(), disk);
+        String drop_part_name = drop_range_info.getPartName();
+        auto drop_range = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_range_info, single_disk_volume, drop_part_name);
+        drop_range->partition.assign(info.value);
+        drop_range->deleted = true;
+        drop_range->covered_parts_rows = info.rows_count;
+        drop_range->covered_parts_size = info.size;
+        drop_range->covered_parts_count = info.parts_count;
+        /// If we don't have this, drop_range parts are not visible to queries in interactive
+        /// transaction session
+        if (txn->isSecondary())
+        {
+            drop_range->secondary_txn_id = txn->getTransactionID();
+        }
+        drop_ranges.push_back(std::move(drop_range));
+    }
+
+    return drop_ranges;
 }
 
 StoragePolicyPtr StorageCnchMergeTree::getLocalStoragePolicy() const

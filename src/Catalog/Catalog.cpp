@@ -1365,7 +1365,7 @@ namespace Catalog
                 DataPartsVector res;
                 for (const auto & part : parts_from_partitions)
                 {
-                    if (names.find(part->info().getPartName(true)) != names.end())
+                    if (names.find(part->info().getPartNameWithHintMutation()) != names.end())
                         res.push_back(part->toCNCHDataPart(*storage));
                 }
                 outRes = res;
@@ -1398,7 +1398,7 @@ namespace Catalog
                 DataPartsVector res;
                 for (auto & part : parts)
                 {
-                    auto name = part->info.getPartName(true);
+                    auto name = part->info.getPartNameWithHintMutation();
                     if (names.count(name))
                         res.push_back(part);
                 }
