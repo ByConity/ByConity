@@ -463,6 +463,48 @@ void CnchServerClient::cleanTransaction(const TransactionRecord & txn_record)
     RPCHelpers::checkResponse(response);
 }
 
+void CnchServerClient::acquireLock(const LockInfoPtr & lock)
+{
+    brpc::Controller cntl;
+    Protos::AcquireLockReq request;
+    Protos::AcquireLockResp response;
+    // TODO: set a big enough waiting time
+    cntl.set_timeout_ms(10 * lock->timeout);
+    cntl.set_max_retry(0);
+
+    fillLockInfoModel(*lock, *request.mutable_lock());
+    stub->acquireLock(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+    lock->status = static_cast<LockStatus>(response.lock_status());
+}
+
+void CnchServerClient::releaseLock(const LockInfoPtr & lock)
+{
+    brpc::Controller cntl;
+    Protos::ReleaseLockReq request;
+    Protos::ReleaseLockResp response;
+
+    fillLockInfoModel(*lock, *request.mutable_lock());
+    stub->releaseLock(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time)
+{
+    brpc::Controller cntl;
+    Protos::ReportCnchLockHeartBeatReq request;
+    Protos::ReportCnchLockHeartBeatResp response;
+
+    request.set_txn_id(txn_id);
+    request.set_expire_time(expire_time);
+
+    stub->reportCnchLockHeartBeat(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
 {
     brpc::Controller cntl;

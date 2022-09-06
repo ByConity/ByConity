@@ -9,6 +9,7 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <CloudServices/commitCnchParts.h>
 #include <WorkerTasks/ManipulationType.h>
@@ -624,20 +625,65 @@ void CnchServerServiceImpl::acquireLock(
     Protos::AcquireLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, gc = getContext(), logger = log] {
+        brpc::ClosureGuard done_guard(d);
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().lock(info, *gc);
+            resp->set_lock_status(to_underlying(info->status));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::releaseLock(
     google::protobuf::RpcController * cntl,
     const Protos::ReleaseLockReq * request,
     Protos::ReleaseLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log] {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().unlock(info);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::reportCnchLockHeartBeat(
     google::protobuf::RpcController * cntl,
     const Protos::ReportCnchLockHeartBeatReq * request,
     Protos::ReportCnchLockHeartBeatResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log]
+    {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            auto tp = LockManager::Clock::now() + std::chrono::milliseconds(req->expire_time());
+            LockManager::instance().updateExpireTime(req->txn_id(), tp);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
 void CnchServerServiceImpl::getServerStartTime(
     google::protobuf::RpcController * cntl,
