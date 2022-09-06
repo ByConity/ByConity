@@ -571,6 +571,7 @@ class IColumn;
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
     M(UInt64, cnch_part_allocation_algorithm, 0, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing.", 0) \
     M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
+    M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     \

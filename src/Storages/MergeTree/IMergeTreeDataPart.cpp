@@ -1757,6 +1757,14 @@ IMergeTreeDataPartPtr IMergeTreeDataPart::getBasePart() const
     return part;
 }
 
+void IMergeTreeDataPart::enumeratePreviousParts(const std::function<void(const IMergeTreeDataPartPtr &)> & callback) const
+{
+    for (auto curt_part = shared_from_this(); curt_part; curt_part = curt_part->tryGetPreviousPart())
+    {
+        callback(curt_part);
+    }
+}
+
 String IMergeTreeDataPart::getZeroLevelPartBlockID() const
 {
     auto checksums = getChecksums();

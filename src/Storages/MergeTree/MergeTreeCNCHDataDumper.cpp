@@ -108,9 +108,13 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     const DiskPtr & remote_disk)
 {
     /// Load the local part checksum
-    local_part->loadColumnsChecksumsIndexes(true, true);
-    local_part->prepared_checksums = local_part->getChecksums();
-    local_part->prepared_index = local_part->getIndex();
+    if (!local_part->deleted)
+    {
+        local_part->loadColumnsChecksumsIndexes(true, true);
+        local_part->prepared_checksums = local_part->getChecksums();
+        local_part->prepared_index = local_part->getIndex();
+    }
+
     const String TMP_PREFIX = "tmp_dump_";
     String partition_id = local_part->info.partition_id;
     Int64 min_block = local_part->info.min_block;
@@ -124,9 +128,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     String part_name = new_part_info.getPartName();
     String relative_path;
     if(is_temp_prefix)
-        relative_path = TMP_PREFIX + new_part_info.getPartName(true);
+        relative_path = TMP_PREFIX + new_part_info.getPartNameWithHintMutation();
     else
-        relative_path = new_part_info.getPartName(true);
+        relative_path = new_part_info.getPartNameWithHintMutation();
 
     DiskPtr disk = remote_disk == nullptr ? data.getStoragePolicy()->getAnyDisk() : remote_disk;
     VolumeSingleDiskPtr volume = std::make_shared<SingleDiskVolume>("temp_volume", disk);
@@ -158,6 +162,9 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     /// TODO:
     // new_part->setAesEncrypter(local_part->getAesEncrypter());
     new_part->secondary_txn_id = local_part->secondary_txn_id;
+    new_part->covered_parts_count = local_part->covered_parts_count;
+    new_part->covered_parts_size = local_part->covered_parts_size;
+    new_part->covered_parts_rows = local_part->covered_parts_rows;
 
     String new_part_rel_path = new_part->getFullRelativePath();
     if (disk->exists(new_part_rel_path))

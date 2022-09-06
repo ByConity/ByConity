@@ -114,7 +114,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     UndoResources undo_resources;
     for (const auto & part : temp_parts)
     {
-        String part_name = part->info.getPartName(true);
+        String part_name = part->info.getPartNameWithHintMutation();
         undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + "/");
     }
     // for (const auto & bitmap : temp_bitmaps)
@@ -123,7 +123,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     // }
     for (const auto & staged_part : temp_staged_parts)
     {
-        String part_name = staged_part->info.getPartName(true);
+        String part_name = staged_part->info.getPartNameWithHintMutation();
         undo_resources.emplace_back(txn_id, UndoResourceType::StagedPart, part_name, part_name + "/");
     }
 
@@ -234,7 +234,7 @@ void CnchDataWriter::commitDumpedParts(
         for (const auto & part : dumped_parts)
         {
             MergeMutateAction::updatePartData(part, commit_time);
-            part->relative_path = part->info.getPartName(true);
+            part->relative_path = part->info.getPartNameWithHintMutation();
         }
     }
 
