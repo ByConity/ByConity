@@ -478,10 +478,10 @@ bool StorageInMemoryMetadata::hasClusterByKey() const
     return !cluster_by_key.column_names.empty();
 }
 
-Names StorageInMemoryMetadata::getColumnsRequiredForClusterByKey() const
+Names StorageInMemoryMetadata::getColumnsForClusterByKey() const
 {
     if (hasClusterByKey())
-        return cluster_by_key.expression->getRequiredColumns();
+        return cluster_by_key.column_names;
     return {};
 }
 

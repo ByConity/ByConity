@@ -225,8 +225,8 @@ struct StorageInMemoryMetadata
     bool isClusterByKeyDefined() const;
     /// Storage has cluster by key.
     bool hasClusterByKey() const;
-    /// Returns column names that need to be read to calculate partition key.
-    Names getColumnsRequiredForClusterByKey() const;
+    /// Returns column names that need to be read to calculate cluster by key.
+    Names getColumnsForClusterByKey() const;
     Int64 getBucketNumberFromClusterByKey() const;
     Int64 getSplitNumberFromClusterByKey() const;
     bool getWithRangeFromClusterByKey() const;

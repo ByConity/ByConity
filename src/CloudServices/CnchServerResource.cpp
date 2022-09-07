@@ -147,19 +147,30 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
     {
         const auto & storage = resource.storage;
         const auto & server_parts = resource.server_parts;
+        const auto & required_bucket_numbers = resource.bucket_numbers;
         ServerAssignmentMap assigned_map;
+        BucketNumbersAssignmentMap assigned_bucket_numbers_map;
         if (isCnchBucketTable(context, *storage, server_parts))
-            assigned_map = assignCnchPartsForBucketTable(server_parts, worker_group->getWorkerIDVec());
+        {
+            auto assignment = assignCnchPartsForBucketTable(server_parts, worker_group->getWorkerIDVec(), required_bucket_numbers);
+            assigned_map = assignment.parts_assignment_map;
+            assigned_bucket_numbers_map = assignment.bucket_number_assignment_map;
+        }
         else
             assigned_map = assignCnchParts(worker_group, server_parts);
 
         for (const auto & host_ports : host_ports_vec)
         {
             ServerDataPartsVector assigned_parts;
-
             if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
             {
                 assigned_parts = std::move(it->second);
+            }
+
+            std::set<Int64> assigned_bucket_numbers;
+            if (auto it = assigned_bucket_numbers_map.find(host_ports.id); it != assigned_bucket_numbers_map.end())
+            {
+                assigned_bucket_numbers = std::move(it->second);
             }
 
             auto it = assigned_worker_resource.find(host_ports);
@@ -175,6 +186,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             worker_resource.sent_create_query = resource.sent_create_query;
             worker_resource.create_table_query = resource.create_table_query;
             worker_resource.worker_table_name = resource.worker_table_name;
+            worker_resource.bucket_numbers = assigned_bucket_numbers;
         }
     }
 }

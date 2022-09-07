@@ -174,17 +174,22 @@ bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, con
 }
 
 
-ServerAssignmentMap assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers)
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers)
 {
     std::sort(workers.begin(), workers.end());
-    ServerAssignmentMap assignment;
+    BucketNumberAndServerPartsAssignment assignment;
 
     for (auto & part : parts)
     {
         // For bucket tables, the parts with the same bucket number is assigned to the same worker.
         Int64 bucket_number = part->part_model().bucket_number();
-        auto index = bucket_number % workers.size();
-        assignment[workers[index]].emplace_back(part);
+        // if required_bucket_numbers is empty, assign parts as per normal
+        if (required_bucket_numbers.size() == 0 || required_bucket_numbers.find(bucket_number) != required_bucket_numbers.end())
+        {
+            auto index = bucket_number % workers.size();
+            assignment.parts_assignment_map[workers[index]].emplace_back(part);
+            assignment.bucket_number_assignment_map[workers[index]].insert(bucket_number);
+        }
     }
     return assignment;
 }

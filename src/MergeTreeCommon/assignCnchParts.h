@@ -12,10 +12,18 @@ namespace DB
 
 using WorkerList = std::vector<String>;
 using ServerAssignmentMap = std::unordered_map<String, ServerDataPartsVector>;
+using BucketNumbersAssignmentMap = std::unordered_map<String, std::set<Int64>>;
+
+struct BucketNumberAndServerPartsAssignment
+{
+    ServerAssignmentMap parts_assignment_map;
+    BucketNumbersAssignmentMap bucket_number_assignment_map;
+};
+
 
 ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
 
 bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts);
-ServerAssignmentMap assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers);
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {});
 
 }
