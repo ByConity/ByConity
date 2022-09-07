@@ -232,9 +232,7 @@ BackwardCompabilityCertificateTest:
       - *download_scm_binary
       - name: Run BackwardCompabilityCertificateTest
         commands:
-          - cd /
-          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - echo "load tables for certificates done"
+          - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/run.sh
           - python3 /home/code/tests/clickhouse-test --run certificate -q  /home/code/tests/queries --order asc
       - *after_test
       - *upload_artifact
