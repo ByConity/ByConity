@@ -1049,7 +1049,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Rely on schedule pool config
         global_context->initCnchBGThreads();
     }
-
     global_context->setCnchTopologyMaster();
 
     if (global_context->getServerType() == ServerType::cnch_server)
@@ -1058,7 +1057,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initCnchTransactionCoordinator();
 
         /// Initialize table and part cache, only server need part cache manager and storage cache.
-        global_context->setPartCacheManager();
+        if (config().getBool("enable_part_cache", true))
+            global_context->setPartCacheManager();
         if (config().getBool("enable_cnch_storage_cache", true))
         {
             LOG_INFO(log, "Init cnch storage cache.");
@@ -1066,7 +1066,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         /// only server need start up server manager
-        global_context->setCnchServerManager();
+        if (config().getBool("enable_server_manager", true))
+            global_context->setCnchServerManager();
 
         // size_t masking_policy_cache_size = config().getUInt64("mark_cache_size", 128);
         // size_t masking_policy_cache_lifetime = config().getUInt64("mark_cache_size_lifetime", 10000);
