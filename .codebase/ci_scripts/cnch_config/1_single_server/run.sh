@@ -17,7 +17,12 @@ sed -i "s/random_suffix_replace_me/${UNIQUE_VALUE}/"  ${APP_ROOT}/.codebase/ci_s
 HDFS_PATH=${HDFS_PATH:-/user/clickhouse_ci/${UNIQUE_VALUE}/}
 sed -i "s#server_hdfs_disk_replace_me#${HDFS_PATH}#"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config//*.xml
 
-IP_ADDRESS=$(hostname -I | cut -d " " -f 1) # container's ipv4 address
+if [ -n "$ENABLE_IPV6" ]; then
+  IP_ADDRESS=BYTED_HOST_IPV6
+else
+  IP_ADDRESS=$(hostname -I | cut -d " " -f 1) # container's ipv4 address
+fi
+
 sed -i "s#ip_address_replace_me#${IP_ADDRESS}#"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/*.xml
 
 # create log folder
