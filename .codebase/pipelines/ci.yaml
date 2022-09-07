@@ -107,6 +107,7 @@ jobs:
           - python3 /home/code/tests/clickhouse-test --run cnch_stateless -q  /home/code/tests/queries --order asc
         continue-on-error: true
       - *after_test
+      - *upload_artifact
       - name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
@@ -125,6 +126,7 @@ jobs:
           - python3 /home/code/tests/clickhouse-test --run cnch_problematic_stateles -q  /home/code/tests/queries --order asc
         ignore-error: true
       - *after_test
+      - *upload_artifact
       - name: Upload Artifact
         uses: actions/upload-artifact
         inputs:
@@ -220,6 +222,28 @@ jobs:
 #      - *upload_artifact
 #      - *analyse_result
 #
+
+BackwardCompabilityCertificateTest:
+    <<: *default_test
+    name: BackwardCompabilityCertificateTest
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run BackwardCompabilityCertificateTest
+        commands:
+          - cd /
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - echo "load tables for certificates done"
+          - python3 /home/code/tests/clickhouse-test --run certificate -q  /home/code/tests/queries --order asc
+      - *after_test
+      - *upload_artifact
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: Artifacts
+          path: /artifacts
+
 #  StressTest:
 #    <<: *default_test
 #    name: StressTest
