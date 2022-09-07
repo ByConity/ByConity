@@ -1,3 +1,5 @@
+USE test;
+
 DROP TABLE IF EXISTS bucket;
 DROP TABLE IF EXISTS bucket2;
 DROP TABLE IF EXISTS bucket3;
