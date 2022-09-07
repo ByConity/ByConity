@@ -3,404 +3,410 @@
 #include <Catalog/CatalogFactory.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/StringHelper.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/ParserQuery.h>
-#include <Parsers/queryToString.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Databases/DatabaseCnch.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Parsers/ASTCreateQuery.h>
-#include <Databases/DatabaseCnch.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ParserQuery.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/queryToString.h>
 #include <common/logger_useful.h>
 // #include <ext/range.h>
+#include <Core/Types.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
-#include <Common/Status.h>
 #include <Common/RpcClientPool.h>
+#include <Common/Status.h>
 #include <Common/serverLocality.h>
-#include <Core/Types.h>
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Transaction/getCommitted.h>
+#include <Catalog/CatalogMetricHelper.h>
 #include <CloudServices/CnchServerClient.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/PartCacheManager.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Transaction/getCommitted.h>
 #include <brpc/server.h>
-#include <Catalog/CatalogMetricHelper.h>
 
 /// TODO: put all global gflags together in somewhere.
-namespace brpc::policy { DECLARE_string(consul_agent_addr); }
+namespace brpc::policy
+{
+DECLARE_string(consul_agent_addr);
+}
 
-namespace brpc { DECLARE_int32(defer_close_second);}
+namespace brpc
+{
+DECLARE_int32(defer_close_second);
+}
 
 namespace ProfileEvents
 {
-    extern const int CnchTxnAllTransactionRecord;
-    extern const Event CatalogConstructorSuccess;
-    extern const Event CatalogConstructorFailed;
-    extern const Event UpdateTableStatisticsSuccess;
-    extern const Event UpdateTableStatisticsFailed;
-    extern const Event GetTableStatisticsSuccess;
-    extern const Event GetTableStatisticsFailed;
-    extern const Event GetAvailableTableStatisticsTagsSuccess;
-    extern const Event GetAvailableTableStatisticsTagsFailed;
-    extern const Event RemoveTableStatisticsSuccess;
-    extern const Event RemoveTableStatisticsFailed;
-    extern const Event UpdateColumnStatisticsSuccess;
-    extern const Event UpdateColumnStatisticsFailed;
-    extern const Event GetColumnStatisticsSuccess;
-    extern const Event GetColumnStatisticsFailed;
-    extern const Event GetAvailableColumnStatisticsTagsSuccess;
-    extern const Event GetAvailableColumnStatisticsTagsFailed;
-    extern const Event RemoveColumnStatisticsSuccess;
-    extern const Event RemoveColumnStatisticsFailed;
-    extern const Event CreateDatabaseSuccess;
-    extern const Event CreateDatabaseFailed;
-    extern const Event GetDatabaseSuccess;
-    extern const Event GetDatabaseFailed;
-    extern const Event IsDatabaseExistsSuccess;
-    extern const Event IsDatabaseExistsFailed;
-    extern const Event DropDatabaseSuccess;
-    extern const Event DropDatabaseFailed;
-    extern const Event RenameDatabaseSuccess;
-    extern const Event RenameDatabaseFailed;
-    extern const Event CreateTableSuccess;
-    extern const Event CreateTableFailed;
-    extern const Event DropTableSuccess;
-    extern const Event DropTableFailed;
-    extern const Event CreateUDFSuccess;
-    extern const Event CreateUDFFailed;
-    extern const Event DropUDFSuccess;
-    extern const Event DropUDFFailed;
-    extern const Event DetachTableSuccess;
-    extern const Event DetachTableFailed;
-    extern const Event AttachTableSuccess;
-    extern const Event AttachTableFailed;
-    extern const Event IsTableExistsSuccess;
-    extern const Event IsTableExistsFailed;
-    extern const Event AlterTableSuccess;
-    extern const Event AlterTableFailed;
-    extern const Event RenameTableSuccess;
-    extern const Event RenameTableFailed;
-    extern const Event SetWorkerGroupForTableSuccess;
-    extern const Event SetWorkerGroupForTableFailed;
-    extern const Event GetTableSuccess;
-    extern const Event GetTableFailed;
-    extern const Event TryGetTableSuccess;
-    extern const Event TryGetTableFailed;
-    extern const Event TryGetTableByUUIDSuccess;
-    extern const Event TryGetTableByUUIDFailed;
-    extern const Event GetTableByUUIDSuccess;
-    extern const Event GetTableByUUIDFailed;
-    extern const Event GetTablesInDBSuccess;
-    extern const Event GetTablesInDBFailed;
-    extern const Event GetAllViewsOnSuccess;
-    extern const Event GetAllViewsOnFailed;
-    extern const Event SetTableActivenessSuccess;
-    extern const Event SetTableActivenessFailed;
-    extern const Event GetTableActivenessSuccess;
-    extern const Event GetTableActivenessFailed;
-    extern const Event GetServerDataPartsInPartitionsSuccess;
-    extern const Event GetServerDataPartsInPartitionsFailed;
-    extern const Event GetAllServerDataPartsSuccess;
-    extern const Event GetAllServerDataPartsFailed;
-    extern const Event GetDataPartsByNamesSuccess;
-    extern const Event GetDataPartsByNamesFailed;
-    extern const Event GetStagedDataPartsByNamesSuccess;
-    extern const Event GetStagedDataPartsByNamesFailed;
-    extern const Event GetAllDeleteBitmapsSuccess;
-    extern const Event GetAllDeleteBitmapsFailed;
-    extern const Event GetStagedPartsSuccess;
-    extern const Event GetStagedPartsFailed;
-    extern const Event GetDeleteBitmapsInPartitionsSuccess;
-    extern const Event GetDeleteBitmapsInPartitionsFailed;
-    extern const Event GetDeleteBitmapByKeysSuccess;
-    extern const Event GetDeleteBitmapByKeysFailed;
-    extern const Event AddDeleteBitmapsSuccess;
-    extern const Event AddDeleteBitmapsFailed;
-    extern const Event RemoveDeleteBitmapsSuccess;
-    extern const Event RemoveDeleteBitmapsFailed;
-    extern const Event FinishCommitSuccess;
-    extern const Event FinishCommitFailed;
-    extern const Event GetKafkaOffsetsVoidSuccess;
-    extern const Event GetKafkaOffsetsVoidFailed;
-    extern const Event GetKafkaOffsetsTopicPartitionListSuccess;
-    extern const Event GetKafkaOffsetsTopicPartitionListFailed;
-    extern const Event ClearOffsetsForWholeTopicSuccess;
-    extern const Event ClearOffsetsForWholeTopicFailed;
-    extern const Event DropAllPartSuccess;
-    extern const Event DropAllPartFailed;
-    extern const Event GetPartitionListSuccess;
-    extern const Event GetPartitionListFailed;
-    extern const Event GetPartitionsFromMetastoreSuccess;
-    extern const Event GetPartitionsFromMetastoreFailed;
-    extern const Event GetPartitionIDsSuccess;
-    extern const Event GetPartitionIDsFailed;
-    extern const Event CreateDictionarySuccess;
-    extern const Event CreateDictionaryFailed;
-    extern const Event GetCreateDictionarySuccess;
-    extern const Event GetCreateDictionaryFailed;
-    extern const Event DropDictionarySuccess;
-    extern const Event DropDictionaryFailed;
-    extern const Event DetachDictionarySuccess;
-    extern const Event DetachDictionaryFailed;
-    extern const Event AttachDictionarySuccess;
-    extern const Event AttachDictionaryFailed;
-    extern const Event GetDictionariesInDBSuccess;
-    extern const Event GetDictionariesInDBFailed;
-    extern const Event GetDictionarySuccess;
-    extern const Event GetDictionaryFailed;
-    extern const Event IsDictionaryExistsSuccess;
-    extern const Event IsDictionaryExistsFailed;
-    extern const Event CreateTransactionRecordSuccess;
-    extern const Event CreateTransactionRecordFailed;
-    extern const Event RemoveTransactionRecordSuccess;
-    extern const Event RemoveTransactionRecordFailed;
-    extern const Event RemoveTransactionRecordsSuccess;
-    extern const Event RemoveTransactionRecordsFailed;
-    extern const Event GetTransactionRecordSuccess;
-    extern const Event GetTransactionRecordFailed;
-    extern const Event TryGetTransactionRecordSuccess;
-    extern const Event TryGetTransactionRecordFailed;
-    extern const Event SetTransactionRecordSuccess;
-    extern const Event SetTransactionRecordFailed;
-    extern const Event SetTransactionRecordWithRequestsSuccess;
-    extern const Event SetTransactionRecordWithRequestsFailed;
-    extern const Event SetTransactionRecordCleanTimeSuccess;
-    extern const Event SetTransactionRecordCleanTimeFailed;
-    extern const Event SetTransactionRecordStatusWithMemoryBufferSuccess;
-    extern const Event SetTransactionRecordStatusWithMemoryBufferFailed;
-    extern const Event SetTransactionRecordStatusWithOffsetsSuccess;
-    extern const Event SetTransactionRecordStatusWithOffsetsFailed;
-    extern const Event RollbackTransactionSuccess;
-    extern const Event RollbackTransactionFailed;
-    extern const Event WriteIntentsSuccess;
-    extern const Event WriteIntentsFailed;
-    extern const Event TryResetIntentsIntentsToResetSuccess;
-    extern const Event TryResetIntentsIntentsToResetFailed;
-    extern const Event TryResetIntentsOldIntentsSuccess;
-    extern const Event TryResetIntentsOldIntentsFailed;
-    extern const Event ClearIntentsSuccess;
-    extern const Event ClearIntentsFailed;
-    extern const Event WritePartsSuccess;
-    extern const Event WritePartsFailed;
-    extern const Event SetCommitTimeSuccess;
-    extern const Event SetCommitTimeFailed;
-    extern const Event ClearPartsSuccess;
-    extern const Event ClearPartsFailed;
-    extern const Event WriteUndoBufferConstResourceSuccess;
-    extern const Event WriteUndoBufferConstResourceFailed;
-    extern const Event WriteUndoBufferNoConstResourceSuccess;
-    extern const Event WriteUndoBufferNoConstResourceFailed;
-    extern const Event ClearUndoBufferSuccess;
-    extern const Event ClearUndoBufferFailed;
-    extern const Event GetUndoBufferSuccess;
-    extern const Event GetUndoBufferFailed;
-    extern const Event GetAllUndoBufferSuccess;
-    extern const Event GetAllUndoBufferFailed;
-    extern const Event GetTransactionRecordsSuccess;
-    extern const Event GetTransactionRecordsFailed;
-    extern const Event GetTransactionRecordsTxnIdsSuccess;
-    extern const Event GetTransactionRecordsTxnIdsFailed;
-    extern const Event GetTransactionRecordsForGCSuccess;
-    extern const Event GetTransactionRecordsForGCFailed;
-    extern const Event ClearZombieIntentSuccess;
-    extern const Event ClearZombieIntentFailed;
-    extern const Event WriteFilesysLockSuccess;
-    extern const Event WriteFilesysLockFailed;
-    extern const Event GetFilesysLockSuccess;
-    extern const Event GetFilesysLockFailed;
-    extern const Event ClearFilesysLockDirSuccess;
-    extern const Event ClearFilesysLockDirFailed;
-    extern const Event ClearFilesysLockTxnIdSuccess;
-    extern const Event ClearFilesysLockTxnIdFailed;
-    extern const Event GetAllFilesysLockSuccess;
-    extern const Event GetAllFilesysLockFailed;
-    extern const Event InsertTransactionSuccess;
-    extern const Event InsertTransactionFailed;
-    extern const Event RemoveTransactionSuccess;
-    extern const Event RemoveTransactionFailed;
-    extern const Event GetActiveTransactionsSuccess;
-    extern const Event GetActiveTransactionsFailed;
-    extern const Event UpdateServerWorkerGroupSuccess;
-    extern const Event UpdateServerWorkerGroupFailed;
-    extern const Event GetWorkersInWorkerGroupSuccess;
-    extern const Event GetWorkersInWorkerGroupFailed;
-    extern const Event GetTableByIDSuccess;
-    extern const Event GetTableByIDFailed;
-    extern const Event GetTablesByIDSuccess;
-    extern const Event GetTablesByIDFailed;
-    extern const Event GetAllDataBasesSuccess;
-    extern const Event GetAllDataBasesFailed;
-    extern const Event GetAllTablesSuccess;
-    extern const Event GetAllTablesFailed;
-    extern const Event GetTrashTableIDIteratorSuccess;
-    extern const Event GetTrashTableIDIteratorFailed;
-    extern const Event GetAllUDFsSuccess;
-    extern const Event GetAllUDFsFailed;
-    extern const Event GetUDFByNameSuccess;
-    extern const Event GetUDFByNameFailed;
-    extern const Event GetTrashTableIDSuccess;
-    extern const Event GetTrashTableIDFailed;
-    extern const Event GetTablesInTrashSuccess;
-    extern const Event GetTablesInTrashFailed;
-    extern const Event GetDatabaseInTrashSuccess;
-    extern const Event GetDatabaseInTrashFailed;
-    extern const Event GetAllTablesIDSuccess;
-    extern const Event GetAllTablesIDFailed;
-    extern const Event GetTableIDByNameSuccess;
-    extern const Event GetTableIDByNameFailed;
-    extern const Event GetAllWorkerGroupsSuccess;
-    extern const Event GetAllWorkerGroupsFailed;
-    extern const Event GetAllDictionariesSuccess;
-    extern const Event GetAllDictionariesFailed;
-    extern const Event ClearDatabaseMetaSuccess;
-    extern const Event ClearDatabaseMetaFailed;
-    extern const Event ClearTableMetaForGCSuccess;
-    extern const Event ClearTableMetaForGCFailed;
-    extern const Event ClearDataPartsMetaSuccess;
-    extern const Event ClearDataPartsMetaFailed;
-    extern const Event ClearStagePartsMetaSuccess;
-    extern const Event ClearStagePartsMetaFailed;
-    extern const Event ClearDataPartsMetaForTableSuccess;
-    extern const Event ClearDataPartsMetaForTableFailed;
-    extern const Event GetSyncListSuccess;
-    extern const Event GetSyncListFailed;
-    extern const Event ClearSyncListSuccess;
-    extern const Event ClearSyncListFailed;
-    extern const Event GetServerPartsByCommitTimeSuccess;
-    extern const Event GetServerPartsByCommitTimeFailed;
-    extern const Event CreateRootPathSuccess;
-    extern const Event CreateRootPathFailed;
-    extern const Event DeleteRootPathSuccess;
-    extern const Event DeleteRootPathFailed;
-    extern const Event GetAllRootPathSuccess;
-    extern const Event GetAllRootPathFailed;
-    extern const Event CreateMutationSuccess;
-    extern const Event CreateMutationFailed;
-    extern const Event RemoveMutationSuccess;
-    extern const Event RemoveMutationFailed;
-    extern const Event GetAllMutationsStorageIdSuccess;
-    extern const Event GetAllMutationsStorageIdFailed;
-    extern const Event GetAllMutationsSuccess;
-    extern const Event GetAllMutationsFailed;
-    extern const Event SetTableClusterStatusSuccess;
-    extern const Event SetTableClusterStatusFailed;
-    extern const Event GetTableClusterStatusSuccess;
-    extern const Event GetTableClusterStatusFailed;
-    extern const Event IsTableClusteredSuccess;
-    extern const Event IsTableClusteredFailed;
-    extern const Event SetTablePreallocateVWSuccess;
-    extern const Event SetTablePreallocateVWFailed;
-    extern const Event GetTablePreallocateVWSuccess;
-    extern const Event GetTablePreallocateVWFailed;
-    extern const Event GetTablePartitionMetricsSuccess;
-    extern const Event GetTablePartitionMetricsFailed;
-    extern const Event GetTablePartitionMetricsFromMetastoreSuccess;
-    extern const Event GetTablePartitionMetricsFromMetastoreFailed;
-    extern const Event GetOrSetBufferManagerMetadataSuccess;
-    extern const Event GetOrSetBufferManagerMetadataFailed;
-    extern const Event RemoveBufferManagerMetadataSuccess;
-    extern const Event RemoveBufferManagerMetadataFailed;
-    extern const Event GetBufferLogMetadataVecSuccess;
-    extern const Event GetBufferLogMetadataVecFailed;
-    extern const Event SetCnchLogMetadataSuccess;
-    extern const Event SetCnchLogMetadataFailed;
-    extern const Event SetCnchLogMetadataInBatchSuccess;
-    extern const Event SetCnchLogMetadataInBatchFailed;
-    extern const Event GetCnchLogMetadataSuccess;
-    extern const Event GetCnchLogMetadataFailed;
-    extern const Event RemoveCnchLogMetadataSuccess;
-    extern const Event RemoveCnchLogMetadataFailed;
-    extern const Event UpdateTopologiesSuccess;
-    extern const Event UpdateTopologiesFailed;
-    extern const Event GetTopologiesSuccess;
-    extern const Event GetTopologiesFailed;
-    extern const Event GetTrashDBVersionsSuccess;
-    extern const Event GetTrashDBVersionsFailed;
-    extern const Event UndropDatabaseSuccess;
-    extern const Event UndropDatabaseFailed;
-    extern const Event GetTrashTableVersionsSuccess;
-    extern const Event GetTrashTableVersionsFailed;
-    extern const Event UndropTableSuccess;
-    extern const Event UndropTableFailed;
-    extern const Event GetInsertionLabelKeySuccess;
-    extern const Event GetInsertionLabelKeyFailed;
-    extern const Event PrecommitInsertionLabelSuccess;
-    extern const Event PrecommitInsertionLabelFailed;
-    extern const Event CommitInsertionLabelSuccess;
-    extern const Event CommitInsertionLabelFailed;
-    extern const Event TryCommitInsertionLabelSuccess;
-    extern const Event TryCommitInsertionLabelFailed;
-    extern const Event AbortInsertionLabelSuccess;
-    extern const Event AbortInsertionLabelFailed;
-    extern const Event GetInsertionLabelSuccess;
-    extern const Event GetInsertionLabelFailed;
-    extern const Event RemoveInsertionLabelSuccess;
-    extern const Event RemoveInsertionLabelFailed;
-    extern const Event RemoveInsertionLabelsSuccess;
-    extern const Event RemoveInsertionLabelsFailed;
-    extern const Event ScanInsertionLabelsSuccess;
-    extern const Event ScanInsertionLabelsFailed;
-    extern const Event ClearInsertionLabelsSuccess;
-    extern const Event ClearInsertionLabelsFailed;
-    extern const Event CreateVirtualWarehouseSuccess;
-    extern const Event CreateVirtualWarehouseFailed;
-    extern const Event AlterVirtualWarehouseSuccess;
-    extern const Event AlterVirtualWarehouseFailed;
-    extern const Event TryGetVirtualWarehouseSuccess;
-    extern const Event TryGetVirtualWarehouseFailed;
-    extern const Event ScanVirtualWarehousesSuccess;
-    extern const Event ScanVirtualWarehousesFailed;
-    extern const Event DropVirtualWarehouseSuccess;
-    extern const Event DropVirtualWarehouseFailed;
-    extern const Event CreateWorkerGroupSuccess;
-    extern const Event CreateWorkerGroupFailed;
-    extern const Event UpdateWorkerGroupSuccess;
-    extern const Event UpdateWorkerGroupFailed;
-    extern const Event TryGetWorkerGroupSuccess;
-    extern const Event TryGetWorkerGroupFailed;
-    extern const Event ScanWorkerGroupsSuccess;
-    extern const Event ScanWorkerGroupsFailed;
-    extern const Event DropWorkerGroupSuccess;
-    extern const Event DropWorkerGroupFailed;
-    extern const Event GetNonHostUpdateTimestampFromByteKVSuccess;
-    extern const Event GetNonHostUpdateTimestampFromByteKVFailed;
-    extern const Event MaskingPolicyExistsSuccess;
-    extern const Event MaskingPolicyExistsFailed;
-    extern const Event GetMaskingPoliciesSuccess;
-    extern const Event GetMaskingPoliciesFailed;
-    extern const Event PutMaskingPolicySuccess;
-    extern const Event PutMaskingPolicyFailed;
-    extern const Event TryGetMaskingPolicySuccess;
-    extern const Event TryGetMaskingPolicyFailed;
-    extern const Event GetMaskingPolicySuccess;
-    extern const Event GetMaskingPolicyFailed;
-    extern const Event GetAllMaskingPolicySuccess;
-    extern const Event GetAllMaskingPolicyFailed;
-    extern const Event GetMaskingPolicyAppliedTablesSuccess;
-    extern const Event GetMaskingPolicyAppliedTablesFailed;
-    extern const Event GetAllMaskingPolicyAppliedTablesSuccess;
-    extern const Event GetAllMaskingPolicyAppliedTablesFailed;
-    extern const Event DropMaskingPoliciesSuccess;
-    extern const Event DropMaskingPoliciesFailed;
-    extern const Event IsHostServerSuccess;
-    extern const Event IsHostServerFailed;
-    extern const Event SetBGJobStatusSuccess;
-    extern const Event SetBGJobStatusFailed;
-    extern const Event GetBGJobStatusSuccess;
-    extern const Event GetBGJobStatusFailed;
-    extern const Event GetBGJobStatusesSuccess;
-    extern const Event GetBGJobStatusesFailed;
-    extern const Event DropBGJobStatusesSuccess;
-    extern const Event DropBGJobStatusesFailed;
+extern const int CnchTxnAllTransactionRecord;
+extern const Event CatalogConstructorSuccess;
+extern const Event CatalogConstructorFailed;
+extern const Event UpdateTableStatisticsSuccess;
+extern const Event UpdateTableStatisticsFailed;
+extern const Event GetTableStatisticsSuccess;
+extern const Event GetTableStatisticsFailed;
+extern const Event GetAvailableTableStatisticsTagsSuccess;
+extern const Event GetAvailableTableStatisticsTagsFailed;
+extern const Event RemoveTableStatisticsSuccess;
+extern const Event RemoveTableStatisticsFailed;
+extern const Event UpdateColumnStatisticsSuccess;
+extern const Event UpdateColumnStatisticsFailed;
+extern const Event GetColumnStatisticsSuccess;
+extern const Event GetColumnStatisticsFailed;
+extern const Event GetAvailableColumnStatisticsTagsSuccess;
+extern const Event GetAvailableColumnStatisticsTagsFailed;
+extern const Event RemoveColumnStatisticsSuccess;
+extern const Event RemoveColumnStatisticsFailed;
+extern const Event CreateDatabaseSuccess;
+extern const Event CreateDatabaseFailed;
+extern const Event GetDatabaseSuccess;
+extern const Event GetDatabaseFailed;
+extern const Event IsDatabaseExistsSuccess;
+extern const Event IsDatabaseExistsFailed;
+extern const Event DropDatabaseSuccess;
+extern const Event DropDatabaseFailed;
+extern const Event RenameDatabaseSuccess;
+extern const Event RenameDatabaseFailed;
+extern const Event CreateTableSuccess;
+extern const Event CreateTableFailed;
+extern const Event DropTableSuccess;
+extern const Event DropTableFailed;
+extern const Event CreateUDFSuccess;
+extern const Event CreateUDFFailed;
+extern const Event DropUDFSuccess;
+extern const Event DropUDFFailed;
+extern const Event DetachTableSuccess;
+extern const Event DetachTableFailed;
+extern const Event AttachTableSuccess;
+extern const Event AttachTableFailed;
+extern const Event IsTableExistsSuccess;
+extern const Event IsTableExistsFailed;
+extern const Event AlterTableSuccess;
+extern const Event AlterTableFailed;
+extern const Event RenameTableSuccess;
+extern const Event RenameTableFailed;
+extern const Event SetWorkerGroupForTableSuccess;
+extern const Event SetWorkerGroupForTableFailed;
+extern const Event GetTableSuccess;
+extern const Event GetTableFailed;
+extern const Event TryGetTableSuccess;
+extern const Event TryGetTableFailed;
+extern const Event TryGetTableByUUIDSuccess;
+extern const Event TryGetTableByUUIDFailed;
+extern const Event GetTableByUUIDSuccess;
+extern const Event GetTableByUUIDFailed;
+extern const Event GetTablesInDBSuccess;
+extern const Event GetTablesInDBFailed;
+extern const Event GetAllViewsOnSuccess;
+extern const Event GetAllViewsOnFailed;
+extern const Event SetTableActivenessSuccess;
+extern const Event SetTableActivenessFailed;
+extern const Event GetTableActivenessSuccess;
+extern const Event GetTableActivenessFailed;
+extern const Event GetServerDataPartsInPartitionsSuccess;
+extern const Event GetServerDataPartsInPartitionsFailed;
+extern const Event GetAllServerDataPartsSuccess;
+extern const Event GetAllServerDataPartsFailed;
+extern const Event GetDataPartsByNamesSuccess;
+extern const Event GetDataPartsByNamesFailed;
+extern const Event GetStagedDataPartsByNamesSuccess;
+extern const Event GetStagedDataPartsByNamesFailed;
+extern const Event GetAllDeleteBitmapsSuccess;
+extern const Event GetAllDeleteBitmapsFailed;
+extern const Event GetStagedPartsSuccess;
+extern const Event GetStagedPartsFailed;
+extern const Event GetDeleteBitmapsInPartitionsSuccess;
+extern const Event GetDeleteBitmapsInPartitionsFailed;
+extern const Event GetDeleteBitmapByKeysSuccess;
+extern const Event GetDeleteBitmapByKeysFailed;
+extern const Event AddDeleteBitmapsSuccess;
+extern const Event AddDeleteBitmapsFailed;
+extern const Event RemoveDeleteBitmapsSuccess;
+extern const Event RemoveDeleteBitmapsFailed;
+extern const Event FinishCommitSuccess;
+extern const Event FinishCommitFailed;
+extern const Event GetKafkaOffsetsVoidSuccess;
+extern const Event GetKafkaOffsetsVoidFailed;
+extern const Event GetKafkaOffsetsTopicPartitionListSuccess;
+extern const Event GetKafkaOffsetsTopicPartitionListFailed;
+extern const Event ClearOffsetsForWholeTopicSuccess;
+extern const Event ClearOffsetsForWholeTopicFailed;
+extern const Event DropAllPartSuccess;
+extern const Event DropAllPartFailed;
+extern const Event GetPartitionListSuccess;
+extern const Event GetPartitionListFailed;
+extern const Event GetPartitionsFromMetastoreSuccess;
+extern const Event GetPartitionsFromMetastoreFailed;
+extern const Event GetPartitionIDsSuccess;
+extern const Event GetPartitionIDsFailed;
+extern const Event CreateDictionarySuccess;
+extern const Event CreateDictionaryFailed;
+extern const Event GetCreateDictionarySuccess;
+extern const Event GetCreateDictionaryFailed;
+extern const Event DropDictionarySuccess;
+extern const Event DropDictionaryFailed;
+extern const Event DetachDictionarySuccess;
+extern const Event DetachDictionaryFailed;
+extern const Event AttachDictionarySuccess;
+extern const Event AttachDictionaryFailed;
+extern const Event GetDictionariesInDBSuccess;
+extern const Event GetDictionariesInDBFailed;
+extern const Event GetDictionarySuccess;
+extern const Event GetDictionaryFailed;
+extern const Event IsDictionaryExistsSuccess;
+extern const Event IsDictionaryExistsFailed;
+extern const Event CreateTransactionRecordSuccess;
+extern const Event CreateTransactionRecordFailed;
+extern const Event RemoveTransactionRecordSuccess;
+extern const Event RemoveTransactionRecordFailed;
+extern const Event RemoveTransactionRecordsSuccess;
+extern const Event RemoveTransactionRecordsFailed;
+extern const Event GetTransactionRecordSuccess;
+extern const Event GetTransactionRecordFailed;
+extern const Event TryGetTransactionRecordSuccess;
+extern const Event TryGetTransactionRecordFailed;
+extern const Event SetTransactionRecordSuccess;
+extern const Event SetTransactionRecordFailed;
+extern const Event SetTransactionRecordWithRequestsSuccess;
+extern const Event SetTransactionRecordWithRequestsFailed;
+extern const Event SetTransactionRecordCleanTimeSuccess;
+extern const Event SetTransactionRecordCleanTimeFailed;
+extern const Event SetTransactionRecordStatusWithMemoryBufferSuccess;
+extern const Event SetTransactionRecordStatusWithMemoryBufferFailed;
+extern const Event SetTransactionRecordStatusWithOffsetsSuccess;
+extern const Event SetTransactionRecordStatusWithOffsetsFailed;
+extern const Event RollbackTransactionSuccess;
+extern const Event RollbackTransactionFailed;
+extern const Event WriteIntentsSuccess;
+extern const Event WriteIntentsFailed;
+extern const Event TryResetIntentsIntentsToResetSuccess;
+extern const Event TryResetIntentsIntentsToResetFailed;
+extern const Event TryResetIntentsOldIntentsSuccess;
+extern const Event TryResetIntentsOldIntentsFailed;
+extern const Event ClearIntentsSuccess;
+extern const Event ClearIntentsFailed;
+extern const Event WritePartsSuccess;
+extern const Event WritePartsFailed;
+extern const Event SetCommitTimeSuccess;
+extern const Event SetCommitTimeFailed;
+extern const Event ClearPartsSuccess;
+extern const Event ClearPartsFailed;
+extern const Event WriteUndoBufferConstResourceSuccess;
+extern const Event WriteUndoBufferConstResourceFailed;
+extern const Event WriteUndoBufferNoConstResourceSuccess;
+extern const Event WriteUndoBufferNoConstResourceFailed;
+extern const Event ClearUndoBufferSuccess;
+extern const Event ClearUndoBufferFailed;
+extern const Event GetUndoBufferSuccess;
+extern const Event GetUndoBufferFailed;
+extern const Event GetAllUndoBufferSuccess;
+extern const Event GetAllUndoBufferFailed;
+extern const Event GetTransactionRecordsSuccess;
+extern const Event GetTransactionRecordsFailed;
+extern const Event GetTransactionRecordsTxnIdsSuccess;
+extern const Event GetTransactionRecordsTxnIdsFailed;
+extern const Event GetTransactionRecordsForGCSuccess;
+extern const Event GetTransactionRecordsForGCFailed;
+extern const Event ClearZombieIntentSuccess;
+extern const Event ClearZombieIntentFailed;
+extern const Event WriteFilesysLockSuccess;
+extern const Event WriteFilesysLockFailed;
+extern const Event GetFilesysLockSuccess;
+extern const Event GetFilesysLockFailed;
+extern const Event ClearFilesysLockDirSuccess;
+extern const Event ClearFilesysLockDirFailed;
+extern const Event ClearFilesysLockTxnIdSuccess;
+extern const Event ClearFilesysLockTxnIdFailed;
+extern const Event GetAllFilesysLockSuccess;
+extern const Event GetAllFilesysLockFailed;
+extern const Event InsertTransactionSuccess;
+extern const Event InsertTransactionFailed;
+extern const Event RemoveTransactionSuccess;
+extern const Event RemoveTransactionFailed;
+extern const Event GetActiveTransactionsSuccess;
+extern const Event GetActiveTransactionsFailed;
+extern const Event UpdateServerWorkerGroupSuccess;
+extern const Event UpdateServerWorkerGroupFailed;
+extern const Event GetWorkersInWorkerGroupSuccess;
+extern const Event GetWorkersInWorkerGroupFailed;
+extern const Event GetTableByIDSuccess;
+extern const Event GetTableByIDFailed;
+extern const Event GetTablesByIDSuccess;
+extern const Event GetTablesByIDFailed;
+extern const Event GetAllDataBasesSuccess;
+extern const Event GetAllDataBasesFailed;
+extern const Event GetAllTablesSuccess;
+extern const Event GetAllTablesFailed;
+extern const Event GetTrashTableIDIteratorSuccess;
+extern const Event GetTrashTableIDIteratorFailed;
+extern const Event GetAllUDFsSuccess;
+extern const Event GetAllUDFsFailed;
+extern const Event GetUDFByNameSuccess;
+extern const Event GetUDFByNameFailed;
+extern const Event GetTrashTableIDSuccess;
+extern const Event GetTrashTableIDFailed;
+extern const Event GetTablesInTrashSuccess;
+extern const Event GetTablesInTrashFailed;
+extern const Event GetDatabaseInTrashSuccess;
+extern const Event GetDatabaseInTrashFailed;
+extern const Event GetAllTablesIDSuccess;
+extern const Event GetAllTablesIDFailed;
+extern const Event GetTableIDByNameSuccess;
+extern const Event GetTableIDByNameFailed;
+extern const Event GetAllWorkerGroupsSuccess;
+extern const Event GetAllWorkerGroupsFailed;
+extern const Event GetAllDictionariesSuccess;
+extern const Event GetAllDictionariesFailed;
+extern const Event ClearDatabaseMetaSuccess;
+extern const Event ClearDatabaseMetaFailed;
+extern const Event ClearTableMetaForGCSuccess;
+extern const Event ClearTableMetaForGCFailed;
+extern const Event ClearDataPartsMetaSuccess;
+extern const Event ClearDataPartsMetaFailed;
+extern const Event ClearStagePartsMetaSuccess;
+extern const Event ClearStagePartsMetaFailed;
+extern const Event ClearDataPartsMetaForTableSuccess;
+extern const Event ClearDataPartsMetaForTableFailed;
+extern const Event GetSyncListSuccess;
+extern const Event GetSyncListFailed;
+extern const Event ClearSyncListSuccess;
+extern const Event ClearSyncListFailed;
+extern const Event GetServerPartsByCommitTimeSuccess;
+extern const Event GetServerPartsByCommitTimeFailed;
+extern const Event CreateRootPathSuccess;
+extern const Event CreateRootPathFailed;
+extern const Event DeleteRootPathSuccess;
+extern const Event DeleteRootPathFailed;
+extern const Event GetAllRootPathSuccess;
+extern const Event GetAllRootPathFailed;
+extern const Event CreateMutationSuccess;
+extern const Event CreateMutationFailed;
+extern const Event RemoveMutationSuccess;
+extern const Event RemoveMutationFailed;
+extern const Event GetAllMutationsStorageIdSuccess;
+extern const Event GetAllMutationsStorageIdFailed;
+extern const Event GetAllMutationsSuccess;
+extern const Event GetAllMutationsFailed;
+extern const Event SetTableClusterStatusSuccess;
+extern const Event SetTableClusterStatusFailed;
+extern const Event GetTableClusterStatusSuccess;
+extern const Event GetTableClusterStatusFailed;
+extern const Event IsTableClusteredSuccess;
+extern const Event IsTableClusteredFailed;
+extern const Event SetTablePreallocateVWSuccess;
+extern const Event SetTablePreallocateVWFailed;
+extern const Event GetTablePreallocateVWSuccess;
+extern const Event GetTablePreallocateVWFailed;
+extern const Event GetTablePartitionMetricsSuccess;
+extern const Event GetTablePartitionMetricsFailed;
+extern const Event GetTablePartitionMetricsFromMetastoreSuccess;
+extern const Event GetTablePartitionMetricsFromMetastoreFailed;
+extern const Event GetOrSetBufferManagerMetadataSuccess;
+extern const Event GetOrSetBufferManagerMetadataFailed;
+extern const Event RemoveBufferManagerMetadataSuccess;
+extern const Event RemoveBufferManagerMetadataFailed;
+extern const Event GetBufferLogMetadataVecSuccess;
+extern const Event GetBufferLogMetadataVecFailed;
+extern const Event SetCnchLogMetadataSuccess;
+extern const Event SetCnchLogMetadataFailed;
+extern const Event SetCnchLogMetadataInBatchSuccess;
+extern const Event SetCnchLogMetadataInBatchFailed;
+extern const Event GetCnchLogMetadataSuccess;
+extern const Event GetCnchLogMetadataFailed;
+extern const Event RemoveCnchLogMetadataSuccess;
+extern const Event RemoveCnchLogMetadataFailed;
+extern const Event UpdateTopologiesSuccess;
+extern const Event UpdateTopologiesFailed;
+extern const Event GetTopologiesSuccess;
+extern const Event GetTopologiesFailed;
+extern const Event GetTrashDBVersionsSuccess;
+extern const Event GetTrashDBVersionsFailed;
+extern const Event UndropDatabaseSuccess;
+extern const Event UndropDatabaseFailed;
+extern const Event GetTrashTableVersionsSuccess;
+extern const Event GetTrashTableVersionsFailed;
+extern const Event UndropTableSuccess;
+extern const Event UndropTableFailed;
+extern const Event GetInsertionLabelKeySuccess;
+extern const Event GetInsertionLabelKeyFailed;
+extern const Event PrecommitInsertionLabelSuccess;
+extern const Event PrecommitInsertionLabelFailed;
+extern const Event CommitInsertionLabelSuccess;
+extern const Event CommitInsertionLabelFailed;
+extern const Event TryCommitInsertionLabelSuccess;
+extern const Event TryCommitInsertionLabelFailed;
+extern const Event AbortInsertionLabelSuccess;
+extern const Event AbortInsertionLabelFailed;
+extern const Event GetInsertionLabelSuccess;
+extern const Event GetInsertionLabelFailed;
+extern const Event RemoveInsertionLabelSuccess;
+extern const Event RemoveInsertionLabelFailed;
+extern const Event RemoveInsertionLabelsSuccess;
+extern const Event RemoveInsertionLabelsFailed;
+extern const Event ScanInsertionLabelsSuccess;
+extern const Event ScanInsertionLabelsFailed;
+extern const Event ClearInsertionLabelsSuccess;
+extern const Event ClearInsertionLabelsFailed;
+extern const Event CreateVirtualWarehouseSuccess;
+extern const Event CreateVirtualWarehouseFailed;
+extern const Event AlterVirtualWarehouseSuccess;
+extern const Event AlterVirtualWarehouseFailed;
+extern const Event TryGetVirtualWarehouseSuccess;
+extern const Event TryGetVirtualWarehouseFailed;
+extern const Event ScanVirtualWarehousesSuccess;
+extern const Event ScanVirtualWarehousesFailed;
+extern const Event DropVirtualWarehouseSuccess;
+extern const Event DropVirtualWarehouseFailed;
+extern const Event CreateWorkerGroupSuccess;
+extern const Event CreateWorkerGroupFailed;
+extern const Event UpdateWorkerGroupSuccess;
+extern const Event UpdateWorkerGroupFailed;
+extern const Event TryGetWorkerGroupSuccess;
+extern const Event TryGetWorkerGroupFailed;
+extern const Event ScanWorkerGroupsSuccess;
+extern const Event ScanWorkerGroupsFailed;
+extern const Event DropWorkerGroupSuccess;
+extern const Event DropWorkerGroupFailed;
+extern const Event GetNonHostUpdateTimestampFromByteKVSuccess;
+extern const Event GetNonHostUpdateTimestampFromByteKVFailed;
+extern const Event MaskingPolicyExistsSuccess;
+extern const Event MaskingPolicyExistsFailed;
+extern const Event GetMaskingPoliciesSuccess;
+extern const Event GetMaskingPoliciesFailed;
+extern const Event PutMaskingPolicySuccess;
+extern const Event PutMaskingPolicyFailed;
+extern const Event TryGetMaskingPolicySuccess;
+extern const Event TryGetMaskingPolicyFailed;
+extern const Event GetMaskingPolicySuccess;
+extern const Event GetMaskingPolicyFailed;
+extern const Event GetAllMaskingPolicySuccess;
+extern const Event GetAllMaskingPolicyFailed;
+extern const Event GetMaskingPolicyAppliedTablesSuccess;
+extern const Event GetMaskingPolicyAppliedTablesFailed;
+extern const Event GetAllMaskingPolicyAppliedTablesSuccess;
+extern const Event GetAllMaskingPolicyAppliedTablesFailed;
+extern const Event DropMaskingPoliciesSuccess;
+extern const Event DropMaskingPoliciesFailed;
+extern const Event IsHostServerSuccess;
+extern const Event IsHostServerFailed;
+extern const Event SetBGJobStatusSuccess;
+extern const Event SetBGJobStatusFailed;
+extern const Event GetBGJobStatusSuccess;
+extern const Event GetBGJobStatusFailed;
+extern const Event GetBGJobStatusesSuccess;
+extern const Event GetBGJobStatusesFailed;
+extern const Event DropBGJobStatusesSuccess;
+extern const Event DropBGJobStatusesFailed;
 }
 
 namespace DB
@@ -432,8 +438,8 @@ namespace Catalog
     static ASTPtr parseCreateQuery(const String & create_query)
     {
         Strings res;
-        const char *begin = create_query.data();
-        const char *end = begin + create_query.size();
+        const char * begin = create_query.data();
+        const char * end = begin + create_query.size();
         ParserQuery parser(end);
         return parseQuery(parser, begin, end, "", 0, 0);
     }
@@ -568,8 +574,8 @@ namespace Catalog
 
                     for (auto & dic_ptr : dic_ptrs)
                     {
-                        batch_writes.AddPut(
-                            SinglePutRequest(MetastoreProxy::dictionaryTrashKey(name_space, trashBD_name, dic_ptr->name()), dic_ptr->SerializeAsString()));
+                        batch_writes.AddPut(SinglePutRequest(
+                            MetastoreProxy::dictionaryTrashKey(name_space, trashBD_name, dic_ptr->name()), dic_ptr->SerializeAsString()));
                         batch_writes.AddDelete(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()));
                     }
 
@@ -614,7 +620,8 @@ namespace Catalog
                         replace_definition(*table, to_database, table_id_ptr->name());
                         table->set_txnid(txnID.toUInt64());
                         table->set_commit_time(ts.toUInt64());
-                        meta_proxy->renameTable(name_space, *table, from_database, table_id_ptr->name(), table_id_ptr->uuid(), batch_writes);
+                        meta_proxy->renameTable(
+                            name_space, *table, from_database, table_id_ptr->name(), table_id_ptr->uuid(), batch_writes);
                     }
 
                     /// remove old database record;
@@ -624,7 +631,8 @@ namespace Catalog
                     database->set_previous_version(0);
                     database->set_txnid(txnID.toUInt64());
                     database->set_commit_time(ts.toUInt64());
-                    batch_writes.AddPut(SinglePutRequest(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString()));
+                    batch_writes.AddPut(
+                        SinglePutRequest(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString()));
 
                     BatchCommitResponse resp;
                     meta_proxy->batchWrite(batch_writes, resp);
@@ -669,7 +677,8 @@ namespace Catalog
                 meta_proxy->createTable(name_space, tb_data, dependencies, masking_policy_names);
                 meta_proxy->setTableClusterStatus(name_space, uuid_str, true);
 
-                LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
+                LOG_INFO(
+                    log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
             },
             ProfileEvents::CreateTableSuccess,
             ProfileEvents::CreateTableFailed);
@@ -772,7 +781,8 @@ namespace Catalog
             [&] {
                 String table_uuid = meta_proxy->getTableUUID(name_space, db, name);
 
-                if (!table_uuid.empty() && (table = tryGetTableFromMetastore(table_uuid, ts.toUInt64())) && !Status::isDetached(table->status()) && !Status::isDeleted(table->status()))
+                if (!table_uuid.empty() && (table = tryGetTableFromMetastore(table_uuid, ts.toUInt64()))
+                    && !Status::isDetached(table->status()) && !Status::isDeleted(table->status()))
                     res = true;
             },
             ProfileEvents::IsTableExistsSuccess,
@@ -822,8 +832,7 @@ namespace Catalog
                 // auto res = meta_proxy->alterTable(
                 //     name_space, *table, storage->getOutDatedMaskingPolicy(), storage->getColumns().getAllMaskingPolicy());
                 ///FIXME: if masking policy is ready @guanzhe.andy
-                auto res = meta_proxy->alterTable(
-                    name_space, *table, {}, {});
+                auto res = meta_proxy->alterTable(name_space, *table, {}, {});
                 if (!res)
                     throw Exception("Alter table failed.", ErrorCodes::CATALOG_ALTER_TABLE_FAILURE);
 
@@ -1291,28 +1300,28 @@ namespace Catalog
                 {
                     LOG_TRACE(
                         log,
-                        "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}"
-                        ,storage->getStorageID().getNameForLogs()
-                        ,res.size()
-                        ,ts.toString());
+                        "{} Start handle intermediate parts. Total number of parts is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
 
                     getCommittedServerDataParts(res, ts, this);
 
                     LOG_TRACE(
                         log,
-                        "{} Finish handle intermediate parts. Total number of parts is {}, timestamp: {}"
-                        ,storage->getStorageID().getNameForLogs()
-                        ,res.size()
-                        ,ts.toString());
+                        "{} Finish handle intermediate parts. Total number of parts is {}, timestamp: {}",
+                        storage->getStorageID().getNameForLogs(),
+                        res.size(),
+                        ts.toString());
                 }
 
                 LOG_DEBUG(
                     log,
-                    "Elapsed {}ms to get {} parts for table : {} , source : {}"
-                    ,watch.elapsedMilliseconds()
-                    ,res.size()
-                    ,storage->getStorageID().getNameForLogs()
-                    ,source);
+                    "Elapsed {}ms to get {} parts for table : {} , source : {}",
+                    watch.elapsedMilliseconds(),
+                    res.size(),
+                    storage->getStorageID().getNameForLogs(),
+                    source);
                 outRes = res;
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
@@ -1375,8 +1384,7 @@ namespace Catalog
         return outRes;
     }
 
-    DataPartsVector
-    Catalog::getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts)
+    DataPartsVector Catalog::getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts)
     {
         DataPartsVector outRes;
         runWithMetricSupport(
@@ -1487,9 +1495,9 @@ namespace Catalog
                         {
                             LOG_DEBUG(
                                 log,
-                                "Part's table_definition_hash {} is different from target table's table_definition_hash {}"
-                                ,part->table_definition_hash
-                                ,storage->getTableHashForClusterBy());
+                                "Part's table_definition_hash {} is different from target table's table_definition_hash {}",
+                                part->table_definition_hash,
+                                storage->getTableHashForClusterBy());
 
                             throw Exception(
                                 "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
@@ -1670,7 +1678,7 @@ namespace Catalog
         if (!context.getPartCacheManager())
             return false;
         if (session_context)
-            latest_nhut = const_cast<Context *>(session_context )->getNonHostUpdateTime(storage->getStorageID().uuid);
+            latest_nhut = const_cast<Context *>(session_context)->getNonHostUpdateTime(storage->getStorageID().uuid);
         else
             latest_nhut = getNonHostUpdateTimestampFromByteKV(storage->getStorageID().uuid);
         return context.getPartCacheManager()->checkIfCacheValidWithNHUT(storage->getStorageID().uuid, latest_nhut);
@@ -1716,11 +1724,11 @@ namespace Catalog
         {
             LOG_DEBUG(
                 log,
-                "Nothing to do while committing: {} with {} parts, {} delete bitmaps, {} staged parts."
-                ,txnid
-                ,parts.size()
-                ,delete_bitmaps.size()
-                ,staged_parts.size());
+                "Nothing to do while committing: {} with {} parts, {} delete bitmaps, {} staged parts.",
+                txnid,
+                parts.size(),
+                delete_bitmaps.size(),
+                staged_parts.size());
             return;
         }
 
@@ -1728,8 +1736,10 @@ namespace Catalog
         meta_proxy->batchWrite(batch_writes, resp);
         if (resp.puts.size())
         {
-            throw Exception("Commit parts fail with conflicts. First conflict key is : " + batch_writes.puts[resp.puts.begin()->first].key +
-                ", total: " + toString(resp.puts.size()), ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            throw Exception(
+                "Commit parts fail with conflicts. First conflict key is : " + batch_writes.puts[resp.puts.begin()->first].key
+                    + ", total: " + toString(resp.puts.size()),
+                ErrorCodes::CATALOG_COMMIT_PART_ERROR);
         }
     }
 
@@ -2075,7 +2085,8 @@ namespace Catalog
                     {
                         LOG_WARNING(
                             &Poco::Logger::get(__PRETTY_FUNCTION__),
-                            "Failed to update transaction record. Expected record: {}  not exist", expected_record.toString());
+                            "Failed to update transaction record. Expected record: {}  not exist",
+                            expected_record.toString());
                         target_record = expected_record;
                         target_record.setStatus(CnchTransactionStatus::Unknown);
                     }
@@ -2148,12 +2159,18 @@ namespace Catalog
     }
 
     bool Catalog::setTransactionRecordWithRequests(
-        const TransactionRecord & expected_record, TransactionRecord & target_record, BatchCommitRequest & additional_requests, BatchCommitResponse & response)
+        const TransactionRecord & expected_record,
+        TransactionRecord & target_record,
+        BatchCommitRequest & additional_requests,
+        BatchCommitResponse & response)
     {
         bool res;
         runWithMetricSupport(
             [&] {
-                SinglePutRequest txn_request(MetastoreProxy::transactionRecordKey(name_space, expected_record.txnID().toUInt64()), target_record.serialize(), expected_record.serialize());
+                SinglePutRequest txn_request(
+                    MetastoreProxy::transactionRecordKey(name_space, expected_record.txnID().toUInt64()),
+                    target_record.serialize(),
+                    expected_record.serialize());
 
                 auto [success, txn_data] = meta_proxy->updateTransactionRecordWithRequests(txn_request, additional_requests, response);
                 if (success)
@@ -2169,7 +2186,7 @@ namespace Catalog
                 }
                 else
                 {
-                    for (auto it=response.puts.begin(); it!=response.puts.end(); it++)
+                    for (auto it = response.puts.begin(); it != response.puts.end(); it++)
                     {
                         if (additional_requests.puts[it->first].callback)
                             additional_requests.puts[it->first].callback(CAS_FAILED, "");
@@ -2332,11 +2349,11 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Start write {} parts and {} delete_bitmaps and {} staged parts to bytekv for txn {}"
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,txnID);
+                    "Start write {} parts and {} delete_bitmaps and {} staged parts to bytekv for txn {}",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    txnID);
 
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
@@ -2348,10 +2365,10 @@ namespace Catalog
                     {
                         LOG_DEBUG(
                             log,
-                            "Redirect writeParts request to remote host : {} for table {} , txn id : {}"
-                            ,host_port.toDebugString()
-                            ,table->getStorageID().getNameForLogs()
-                            ,txnID);
+                            "Redirect writeParts request to remote host : {} for table {} , txn id : {}",
+                            host_port.toDebugString(),
+                            table->getStorageID().getNameForLogs(),
+                            txnID);
 
                         context.getCnchServerClientPool().get(host_port)->redirectCommitParts(
                             table, commit_data, txnID, is_merged_parts, preallocate_mode);
@@ -2402,9 +2419,9 @@ namespace Catalog
                     std::vector<String>(staged_part_models.parts().size()));
                 LOG_DEBUG(
                     log,
-                    "Finish write parts to bytekv for txn {}, elapsed {}ms, start write part cache."
-                    ,txnID
-                    ,watch.elapsedMilliseconds());
+                    "Finish write parts to bytekv for txn {}, elapsed {}ms, start write part cache.",
+                    txnID,
+                    watch.elapsedMilliseconds());
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager() && !part_models.parts().empty())
@@ -2429,11 +2446,11 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Start set commit time of {} parts and {} delete_bitmaps and {} staged parts for txn {}."
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,txn_id);
+                    "Start set commit time of {} parts and {} delete_bitmaps and {} staged parts for txn {}.",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    txn_id);
 
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), true);
@@ -2445,10 +2462,10 @@ namespace Catalog
                     {
                         LOG_DEBUG(
                             log,
-                            "Redirect setCommitTime request to remote host : {} for table {}, txn id : {}"
-                            ,host_port.toDebugString()
-                            ,table->getStorageID().getNameForLogs()
-                            ,txn_id);
+                            "Redirect setCommitTime request to remote host : {} for table {}, txn id : {}",
+                            host_port.toDebugString(),
+                            table->getStorageID().getNameForLogs(),
+                            txn_id);
 
                         context.getCnchServerClientPool().get(host_port)->redirectSetCommitTime(table, commit_data, ts, txn_id);
                         return;
@@ -2534,8 +2551,10 @@ namespace Catalog
                 {
                     LOG_INFO(
                         log,
-                        "Some parts, bitmaps, staged_parts not found when set commit time, # of parts to remove: {}, # of bitmaps to remove: {}"
-                        ,parts_to_remove.size(), bitmaps_to_remove.size());
+                        "Some parts, bitmaps, staged_parts not found when set commit time, # of parts to remove: {}, # of bitmaps to "
+                        "remove: {}",
+                        parts_to_remove.size(),
+                        bitmaps_to_remove.size());
                     DataPartsVector parts_to_write = commit_data.data_parts;
                     DeleteBitmapMetaPtrVector bitmap_to_write = commit_data.delete_bitmaps;
                     DataPartsVector staged_parts_to_write = commit_data.staged_parts;
@@ -2572,9 +2591,9 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Finish set commit time in bytekv for txn {}, elapsed {} ms, start set commit time in part cache."
-                    ,txn_id
-                    ,watch.elapsedMilliseconds());
+                    "Finish set commit time in bytekv for txn {}, elapsed {} ms, start set commit time in part cache.",
+                    txn_id,
+                    watch.elapsedMilliseconds());
 
                 if (context.getPartCacheManager() && !part_models.parts().empty())
                     context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, false);
@@ -2585,10 +2604,7 @@ namespace Catalog
     }
 
     /// clear garbage parts generated by aborted or failed transaction.
-    void Catalog::clearParts(
-        const StoragePtr & storage,
-        const CommitItems & commit_data,
-        const bool skip_part_cache)
+    void Catalog::clearParts(const StoragePtr & storage, const CommitItems & commit_data, const bool skip_part_cache)
     {
         runWithMetricSupport(
             [&] {
@@ -2598,11 +2614,11 @@ namespace Catalog
                 }
                 LOG_INFO(
                     log,
-                    "Start clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}."
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,storage->getStorageID().getNameForLogs());
+                    "Start clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}.",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    storage->getStorageID().getNameForLogs());
 
                 Strings drop_keys;
                 drop_keys.reserve(commit_data.data_parts.size() + commit_data.delete_bitmaps.size() + commit_data.staged_parts.size());
@@ -2672,11 +2688,11 @@ namespace Catalog
 
                 LOG_INFO(
                     log,
-                    "Finish clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}."
-                    ,commit_data.data_parts.size()
-                    ,commit_data.delete_bitmaps.size()
-                    ,commit_data.staged_parts.size()
-                    ,storage->getStorageID().getNameForLogs());
+                    "Finish clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}.",
+                    commit_data.data_parts.size(),
+                    commit_data.delete_bitmaps.size(),
+                    commit_data.staged_parts.size(),
+                    storage->getStorageID().getNameForLogs());
             },
             ProfileEvents::ClearPartsSuccess,
             ProfileEvents::ClearPartsFailed);
@@ -3585,10 +3601,7 @@ namespace Catalog
     void Catalog::setBGJobStatus(const UUID & table_uuid, CnchBGThreadType type, CnchBGThreadStatus status)
     {
         runWithMetricSupport(
-            [&] {
-                    meta_proxy->setBGJobStatus(
-                        name_space, UUIDHelpers::UUIDToString(table_uuid), type, status);
-                },
+            [&] { meta_proxy->setBGJobStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), type, status); },
             ProfileEvents::SetBGJobStatusSuccess,
             ProfileEvents::SetBGJobStatusFailed);
     }
@@ -3597,10 +3610,7 @@ namespace Catalog
     {
         std::optional<CnchBGThreadStatus> res;
         runWithMetricSupport(
-            [&] {
-                    res = meta_proxy->getBGJobStatus(
-                        name_space, UUIDHelpers::UUIDToString(table_uuid), type);
-                },
+            [&] { res = meta_proxy->getBGJobStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), type); },
             ProfileEvents::GetBGJobStatusSuccess,
             ProfileEvents::GetBGJobStatusFailed);
 
@@ -3611,10 +3621,7 @@ namespace Catalog
     {
         std::unordered_map<UUID, CnchBGThreadStatus> res;
         runWithMetricSupport(
-            [&] {
-                    res = meta_proxy->getBGJobStatuses(
-                        name_space, type);
-                },
+            [&] { res = meta_proxy->getBGJobStatuses(name_space, type); },
             ProfileEvents::GetBGJobStatusesSuccess,
             ProfileEvents::GetBGJobStatusesFailed);
 
@@ -3624,10 +3631,7 @@ namespace Catalog
     void Catalog::dropBGJobStatuses(const UUID & table_uuid)
     {
         runWithMetricSupport(
-            [&] {
-                    meta_proxy->dropBGJobStatuses(
-                        name_space, UUIDHelpers::UUIDToString(table_uuid));
-                },
+            [&] { meta_proxy->dropBGJobStatuses(name_space, UUIDHelpers::UUIDToString(table_uuid)); },
             ProfileEvents::DropBGJobStatusesSuccess,
             ProfileEvents::DropBGJobStatusesFailed);
     }
@@ -3684,10 +3688,8 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
-                SCOPE_EXIT({
-                    LOG_DEBUG(
-                        log, "getTablePartitionMetrics for table {} elapsed: {} ms", table_uuid, watch.elapsedMilliseconds());
-                });
+                SCOPE_EXIT(
+                    { LOG_DEBUG(log, "getTablePartitionMetrics for table {} elapsed: {} ms", table_uuid, watch.elapsedMilliseconds()); });
 
                 IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, "");
                 while (it->next())
@@ -3858,7 +3860,8 @@ namespace Catalog
         return res;
     }
 
-    std::shared_ptr<Protos::DataModelTable> Catalog::tryGetTableFromMetastore(const String & table_uuid, const UInt64 & ts, bool with_prev_versions, bool with_deleted)
+    std::shared_ptr<Protos::DataModelTable>
+    Catalog::tryGetTableFromMetastore(const String & table_uuid, const UInt64 & ts, bool with_prev_versions, bool with_deleted)
     {
         Strings tables_meta;
         meta_proxy->getTableByUUID(name_space, table_uuid, tables_meta);
@@ -4403,15 +4406,16 @@ namespace Catalog
         for (const String & dependency : dependencies)
             batch_write.AddDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
 
-        batch_write.AddPut(SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
+        batch_write.AddPut(
+            SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
         // use database name and table name in table_id is required because it may different with that in table data model.
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString()));
         batch_write.AddDelete(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name()));
     }
 
-    void Catalog::restoreTableFromTrash(
-        std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, BatchCommitRequest & batch_write)
+    void
+    Catalog::restoreTableFromTrash(std::shared_ptr<Protos::TableIdentifier> table_id, const UInt64 & ts, BatchCommitRequest & batch_write)
     {
         auto table_model = tryGetTableFromMetastore(table_id->uuid(), UINT64_MAX, false, true);
 
@@ -4425,13 +4429,13 @@ namespace Catalog
         batch_write.AddDelete(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts));
         batch_write.AddDelete(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time()));
         batch_write.AddPut(SinglePutRequest(
-            MetastoreProxy::tableUUIDMappingKey(name_space, table_id->database(), table_id->name()),
-            table_id->SerializeAsString(), true));
+            MetastoreProxy::tableUUIDMappingKey(name_space, table_id->database(), table_id->name()), table_id->SerializeAsString(), true));
         Strings dependencies = tryGetDependency(parseCreateQuery(table_model->definition()));
         if (!dependencies.empty())
         {
             for (const String & dependency : dependencies)
-                batch_write.AddPut(SinglePutRequest(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id->uuid()), table_id->uuid()));
+                batch_write.AddPut(
+                    SinglePutRequest(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id->uuid()), table_id->uuid()));
         }
     }
 
@@ -4749,80 +4753,80 @@ namespace Catalog
             ProfileEvents::ClearInsertionLabelsFailed);
     }
 
-    // void Catalog::updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
-    // {
-    //     runWithMetricSupport(
-    //         [&] { meta_proxy->updateTableStatistics(name_space, uuid, data); },
-    //         ProfileEvents::UpdateTableStatisticsSuccess,
-    //         ProfileEvents::UpdateTableStatisticsFailed);
-    // }
+    void Catalog::updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updateTableStatistics(name_space, uuid, data); },
+            ProfileEvents::UpdateTableStatisticsSuccess,
+            ProfileEvents::UpdateTableStatisticsFailed);
+    }
 
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    // Catalog::getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
-    // {
-    //     std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
-    //     runWithMetricSupport(
-    //         [&] { res = meta_proxy->getTableStatistics(name_space, uuid, tags); },
-    //         ProfileEvents::GetTableStatisticsSuccess,
-    //         ProfileEvents::GetTableStatisticsFailed);
-    //     return res;
-    // }
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    Catalog::getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
+    {
+        std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getTableStatistics(name_space, uuid, tags); },
+            ProfileEvents::GetTableStatisticsSuccess,
+            ProfileEvents::GetTableStatisticsFailed);
+        return res;
+    }
 
-    // std::unordered_set<StatisticsTag> Catalog::getAvailableTableStatisticsTags(const String & uuid)
-    // {
-    //     std::unordered_set<StatisticsTag> res;
-    //     runWithMetricSupport(
-    //         [&] { res = meta_proxy->getAvailableTableStatisticsTags(name_space, uuid); },
-    //         ProfileEvents::GetAvailableTableStatisticsTagsSuccess,
-    //         ProfileEvents::GetAvailableTableStatisticsTagsFailed);
-    //     return res;
-    // }
+    std::unordered_set<StatisticsTag> Catalog::getAvailableTableStatisticsTags(const String & uuid)
+    {
+        std::unordered_set<StatisticsTag> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getAvailableTableStatisticsTags(name_space, uuid); },
+            ProfileEvents::GetAvailableTableStatisticsTagsSuccess,
+            ProfileEvents::GetAvailableTableStatisticsTagsFailed);
+        return res;
+    }
 
-    // void Catalog::removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
-    // {
-    //     runWithMetricSupport(
-    //         [&] { meta_proxy->removeTableStatistics(name_space, uuid, tags); },
-    //         ProfileEvents::RemoveTableStatisticsSuccess,
-    //         ProfileEvents::RemoveTableStatisticsFailed);
-    // }
+    void Catalog::removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removeTableStatistics(name_space, uuid, tags); },
+            ProfileEvents::RemoveTableStatisticsSuccess,
+            ProfileEvents::RemoveTableStatisticsFailed);
+    }
 
-    // void Catalog::updateColumnStatistics(
-    //     const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
-    // {
-    //     runWithMetricSupport(
-    //         [&] { meta_proxy->updateColumnStatistics(name_space, uuid, column, data); },
-    //         ProfileEvents::UpdateColumnStatisticsSuccess,
-    //         ProfileEvents::UpdateColumnStatisticsFailed);
-    // }
+    void Catalog::updateColumnStatistics(
+        const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->updateColumnStatistics(name_space, uuid, column, data); },
+            ProfileEvents::UpdateColumnStatisticsSuccess,
+            ProfileEvents::UpdateColumnStatisticsFailed);
+    }
 
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    // Catalog::getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
-    // {
-    //     std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
-    //     runWithMetricSupport(
-    //         [&] { res = meta_proxy->getColumnStatistics(name_space, uuid, column, tags); },
-    //         ProfileEvents::GetColumnStatisticsSuccess,
-    //         ProfileEvents::GetColumnStatisticsFailed);
-    //     return res;
-    // }
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    Catalog::getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+    {
+        std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getColumnStatistics(name_space, uuid, column, tags); },
+            ProfileEvents::GetColumnStatisticsSuccess,
+            ProfileEvents::GetColumnStatisticsFailed);
+        return res;
+    }
 
-    // std::unordered_set<StatisticsTag> Catalog::getAvailableColumnStatisticsTags(const String & uuid, const String & column)
-    // {
-    //     std::unordered_set<StatisticsTag> res;
-    //     runWithMetricSupport(
-    //         [&] { res = meta_proxy->getAvailableColumnStatisticsTags(name_space, uuid, column); },
-    //         ProfileEvents::GetAvailableColumnStatisticsTagsSuccess,
-    //         ProfileEvents::GetAvailableColumnStatisticsTagsFailed);
-    //     return res;
-    // }
+    std::unordered_set<StatisticsTag> Catalog::getAvailableColumnStatisticsTags(const String & uuid, const String & column)
+    {
+        std::unordered_set<StatisticsTag> res;
+        runWithMetricSupport(
+            [&] { res = meta_proxy->getAvailableColumnStatisticsTags(name_space, uuid, column); },
+            ProfileEvents::GetAvailableColumnStatisticsTagsSuccess,
+            ProfileEvents::GetAvailableColumnStatisticsTagsFailed);
+        return res;
+    }
 
-    // void Catalog::removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
-    // {
-    //     runWithMetricSupport(
-    //         [&] { meta_proxy->removeColumnStatistics(name_space, uuid, column, tags); },
-    //         ProfileEvents::RemoveColumnStatisticsSuccess,
-    //         ProfileEvents::RemoveColumnStatisticsFailed);
-    // }
+    void Catalog::removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
+    {
+        runWithMetricSupport(
+            [&] { meta_proxy->removeColumnStatistics(name_space, uuid, column, tags); },
+            ProfileEvents::RemoveColumnStatisticsSuccess,
+            ProfileEvents::RemoveColumnStatisticsFailed);
+    }
 
     void Catalog::setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const
     {

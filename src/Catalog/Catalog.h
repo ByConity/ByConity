@@ -10,7 +10,8 @@
 #include <CloudServices/Checkpoint.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
-// #include <Statistics/StatisticsBase.h>
+#include <Statistics/StatisticsBase.h>
+#include <Statistics/ExportSymbols.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TxnTimestamp.h>
 #include <cppkafka/cppkafka.h>
@@ -45,35 +46,33 @@ public:
 
     ~Catalog() = default;
 
-    /// stats for Table
-
     /// update optimizer stats
-    // void updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+    void updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
 
     /// get the latest stats
     /// if tag not exists, don't put it into the map
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    // getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    getTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
     /// get all tags
-    // std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & uuid);
+    std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & uuid);
 
     /// remove tags
-    // void removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    void removeTableStatistics(const String & uuid, const std::unordered_set<StatisticsTag> & tags);
 
     /// stats for Column
 
     /// update optimizer stats
-    // void updateColumnStatistics(
-    //     const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+    void updateColumnStatistics(
+        const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
 
     /// get the latest stats
     /// if tag not exists, don't put it into the map
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr>
-    // getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    getColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     /// get all tags
-    // std::unordered_set<StatisticsTag> getAvailableColumnStatisticsTags(const String & uuid, const String & column);
+    std::unordered_set<StatisticsTag> getAvailableColumnStatisticsTags(const String & uuid, const String & column);
     /// remove tags
-    // void removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    void removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     //////////////
 
     ///database related interface
