@@ -154,13 +154,6 @@
         <!-- Set of variants. Checked in order. Last matching case wins. If nothing matches, lz4 will be used. -->
     </compression>
 
-    <!-- Allow to execute distributed DDL queries (CREATE, DROP, ALTER, RENAME) on cluster.
-         Works only if ZooKeeper is enabled. Comment it if such functionality isn't required. -->
-    <distributed_ddl>
-        <!-- Path in ZooKeeper to queue with DDL queries -->
-        <path>/clickhouse/task_queue/ddl</path>
-    </distributed_ddl>
-
     <!-- Example of parameters for GraphiteMergeTree table engine -->
     <graphite_rollup_example>
         <pattern>
