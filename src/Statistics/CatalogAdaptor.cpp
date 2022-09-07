@@ -1,7 +1,5 @@
-#include <ctime>
 #include <Interpreters/Context.h>
 #include <Statistics/CatalogAdaptor.h>
-
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);

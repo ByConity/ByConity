@@ -26,7 +26,7 @@ void BucketBoundsImpl<T>::deserialize(std::string_view raw_blob)
     auto [num_buckets, blob] = parseBlobWithHeader<decltype(num_buckets_)>(raw_blob_2);
     checkSerdeDataType<T>(serde_data_type);
     num_buckets_ = num_buckets;
-    bounds_ = vector_deserialize<EmbeddedType>(blob);
+    bounds_ = vectorDeserialize<EmbeddedType>(blob);
     checkValid();
 }
 
@@ -141,53 +141,6 @@ void BucketBoundsImpl<T>::checkValid() const
         throw Exception("Buckets too few", ErrorCodes::LOGICAL_ERROR);
     }
 }
-
-template <typename T>
-String BucketBoundsImpl<T>::getSqlForBucketArray() const
-{
-    auto numbers = boost::algorithm::join(
-        bounds_ | boost::adaptors::transformed([](auto x) -> String {
-            if constexpr (std::is_fundamental_v<T>)
-            {
-                return std::to_string(x);
-            }
-            else
-            {
-                WriteBufferFromOwnString out;
-                writeIntText(x, out);
-                return std::move(out.str());
-            }
-        }),
-        ",");
-    String sql = "CAST([";
-    sql += numbers;
-    sql += R"_(], 'Array()_";
-    sql += TypeName<EmbeddedType>;
-    sql += R"_()'))_";
-    return sql;
-}
-
-template <typename T>
-String BucketBoundsImpl<T>::getSqlForBucketId(const String & col_name) const
-{
-    String sql = "arrayNdvBucketsSearch(";
-    sql += getSqlForBucketArray();
-    sql += ", ";
-    /// string column use cityHash64(col) instead
-    if constexpr (std::is_same_v<T, String>)
-    {
-        sql += "cityHash64(";
-        sql += col_name;
-        sql += ")";
-    }
-    else
-    {
-        sql += col_name;
-    }
-    sql += ")";
-    return sql;
-}
-
 
 template <typename T>
 bool BucketBoundsImpl<T>::equals(const BucketBoundsImpl<T> & right) const

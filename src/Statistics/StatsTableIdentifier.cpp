@@ -1,4 +1,5 @@
 #include <Statistics/StatsTableIdentifier.h>
+#include <Storages/IStorage.h>
 
 namespace DB::Statistics
 {

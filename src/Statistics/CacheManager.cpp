@@ -2,7 +2,6 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/Parameters.h>
-#include <common/logger_useful.h>
 
 namespace DB::Statistics
 {

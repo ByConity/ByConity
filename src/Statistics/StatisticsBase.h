@@ -20,6 +20,7 @@ enum class StatisticsTag : UInt64
     NdvBuckets = 4, // including bounds, min/max and ndv(cpc object) for each buckets
     NdvBucketsResult = 5, // including bounds, min/max and ndv(double value) for each buckets
     ColumnBasic = 6, // now put min/max here
+    NdvBucketsExtend = 7, // including bounds, min/max and ndv(cpc object), block_ndv for each buckets
 
     // for test only
     DummyAlpha = 2000,

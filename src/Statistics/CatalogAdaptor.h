@@ -43,11 +43,6 @@ public:
         return false;
     }
 
-    virtual void resetAllStats()
-    {
-        // TODO: do nothing
-    }
-
     virtual ~CatalogAdaptor() = default;
 };
 

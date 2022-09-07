@@ -14,6 +14,13 @@ struct DecayVerboseResult
     bool is_low_cardinality = false;
 };
 
+namespace impl
+{
+    template <class>
+    inline constexpr bool always_false_v = false;
+}
+
+
 inline DecayVerboseResult decayDataTypeVerbose(DataTypePtr type)
 {
     DecayVerboseResult result;

@@ -23,19 +23,19 @@ public:
     StatisticsTag getTag() const override { return tag; }
 
     virtual bool isEmpty() const = 0;
-    virtual std::optional<double> min_as_double() const = 0;
-    virtual std::optional<double> max_as_double() const = 0;
+    virtual std::optional<double> minAsDouble() const = 0;
+    virtual std::optional<double> maxAsDouble() const = 0;
 
     virtual SerdeDataType getSerdeDataType() const = 0;
 
     template <typename T>
     using Impl = StatsKllSketchImpl<T>;
 
-    virtual std::shared_ptr<BucketBounds> get_bounds() const = 0;
+    virtual std::shared_ptr<BucketBounds> getBucketBounds() const = 0;
 
     virtual std::shared_ptr<StatsNdvBucketsResult> generateNdvBucketsResult(double total_ndv) const = 0;
 
-    virtual int64_t get_count() const = 0;
+    virtual int64_t getCount() const = 0;
 
 private:
 };

@@ -13,26 +13,31 @@
 namespace DB::Statistics
 {
 template <typename T>
-class StatsNdvBucketsImpl;
+class StatsNdvBucketsExtendImpl;
 template <typename T>
 class StatsNdvBucketsResultImpl;
 class BucketBounds;
 
-class StatsNdvBuckets : public StatisticsBase
+class StatsNdvBucketsExtend : public StatisticsBase
 {
 public:
-    static constexpr auto tag = StatisticsTag::NdvBuckets;
+    static constexpr auto tag = StatisticsTag::NdvBucketsExtend;
 
     StatisticsTag getTag() const override { return tag; }
 
     virtual SerdeDataType getSerdeDataType() const = 0;
 
     template <typename T>
-    using Impl = StatsNdvBucketsImpl<T>;
+    using Impl = StatsNdvBucketsExtendImpl<T>;
 
     virtual const BucketBounds & getBucketBounds() const = 0;
-    virtual std::shared_ptr<StatsNdvBucketsResult> asResult() const = 0;
+
+    virtual std::vector<UInt64> getCounts() const = 0;
+    virtual std::vector<double> getNdvs() const = 0;
+    virtual std::vector<double> getBlockNdvs() const = 0;
 
 private:
 };
+
+
 }

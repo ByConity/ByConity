@@ -21,7 +21,7 @@ int64_t StatsTableBasic::getRowCount() const
 }
 String StatsTableBasic::serializeToJson() const
 {
-    DB::String json_str;
+    String json_str;
     Json2Pb::pbMsg2JsonStr(table_basic_pb, json_str, false);
     return json_str;
 }

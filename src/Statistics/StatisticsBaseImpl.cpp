@@ -4,10 +4,12 @@
 #include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsDummy.h>
 #include <Statistics/StatsKllSketchImpl.h>
+#include <Statistics/StatsNdvBucketsExtendImpl.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/TypeMacros.h>
 #include <Common/Exception.h>
+
 namespace DB::Statistics
 {
 template <class StatsType>
@@ -92,7 +94,7 @@ std::shared_ptr<StatsType> createStatisticsTypedJsonImpl(StatisticsTag tag, std:
 template <class StatsType>
 std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::string_view blob)
 {
-    if (blob.size() < sizeof(TypeIndex))
+    if (blob.size() < sizeof(SerdeDataType))
     {
         throw Exception("statistics blob corrupted", ErrorCodes::LOGICAL_ERROR);
     }
@@ -105,11 +107,7 @@ std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::str
 
     String type_str = object_bounds_blob.get("type_id").toString();
     SerdeDataType type_index = SerdeDataTypeFromString(type_str);
-    //    auto it_pair = std::find_if(
-    //        STRING_TYPE_INDEX.begin(), STRING_TYPE_INDEX.end(), [type_str](const std::pair<std::string, SerdeDataType> & element) {
-    //            return element.first == type_str;
-    //        });
-    //    SerdeDataType type_index = it_pair->second;
+
     switch (type_index)
     {
 #define ENUM_CASE(TYPE) \
@@ -119,14 +117,17 @@ std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::str
         ALL_TYPE_ITERATE(ENUM_CASE)
 #undef ENUM_CASE
 
+        case SerdeDataType::StringOldVersion:
+            return createStatisticsTypedJsonImpl<StatsType, String>(tag, blob);
         default: {
             throw Exception("unknown type", ErrorCodes::NOT_IMPLEMENTED);
         }
     }
 }
 
-StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
+StatisticsBasePtr createStatisticsBase(StatisticsTag tag, TxnTimestamp ts, std::string_view blob)
 {
+    // TODO: rewrite use macro iteration
     auto ptr = [&]() -> StatisticsBasePtr {
         switch (tag)
         {
@@ -144,6 +145,8 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
                 return createStatisticsTyped<StatsKllSketch>(tag, blob);
             case StatisticsTag::NdvBuckets:
                 return createStatisticsTyped<StatsNdvBuckets>(tag, blob);
+            case StatisticsTag::NdvBucketsExtend:
+                return createStatisticsTyped<StatsNdvBucketsExtend>(tag, blob);
             case StatisticsTag::NdvBucketsResult:
                 return createStatisticsTyped<StatsNdvBucketsResult>(tag, blob);
             default: {
