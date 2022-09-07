@@ -54,6 +54,8 @@ public:
 
     HDFSFSPtr getFS() const;
 
+    static inline String normalizePath(const String& path);
+
 private:
     void reconnect() const;
     void reconnectIfNecessary() const;

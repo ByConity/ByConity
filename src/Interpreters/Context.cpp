@@ -4044,6 +4044,14 @@ TxnTimestamp Context::getCurrentTransactionID() const
     return txn_id;
 }
 
+TxnTimestamp Context::getCurrentCnchStartTime() const
+{
+    if (!current_cnch_txn)
+        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
+
+    return current_cnch_txn->getStartTime();
+}
+
 InterserverCredentialsPtr Context::getCnchInterserverCredentials()
 {
     /// FIXME: any special for cnch ?

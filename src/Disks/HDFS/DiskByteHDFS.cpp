@@ -26,6 +26,50 @@ DiskPtr DiskByteHDFSReservation::getDisk(size_t i) const
     return disk;
 }
 
+class DiskByteHDFSDirectoryIterator: public IDiskDirectoryIterator
+{
+public:
+    DiskByteHDFSDirectoryIterator(HDFSFileSystem& fs, const String& disk_path,
+        const String& dir_path): hdfs_fs(fs), idx(0)
+    {
+        base_path = std::filesystem::path(disk_path) / dir_path;
+
+        hdfs_fs.list(base_path, file_names);
+    }
+
+    virtual void next() override
+    {
+        ++idx;
+    }
+
+    virtual bool isValid() const override
+    {
+        return idx < file_names.size();
+    }
+
+    virtual String path() const override
+    {
+        return base_path / name();
+    }
+
+    virtual String name() const override
+    {
+        if (idx >= file_names.size())
+        {
+            throw Exception("Trying to get file name while iterator reach eof",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        return file_names[idx];
+    }
+
+private:
+    HDFSFileSystem& hdfs_fs;
+
+    std::filesystem::path base_path;
+    size_t idx;
+    std::vector<String> file_names;
+};
+
 DiskByteHDFS::DiskByteHDFS(const String& disk_name_, const String& hdfs_base_path_,
     const HDFSConnectionParams& hdfs_params_):
         disk_name(disk_name_), disk_path(hdfs_base_path_), hdfs_params(hdfs_params_),
@@ -92,10 +136,9 @@ void DiskByteHDFS::moveDirectory(const String& from_path, const String &to_path)
     hdfs_fs.renameTo(absolutePath(from_path), absolutePath(to_path));
 }
 
-DiskDirectoryIteratorPtr DiskByteHDFS::iterateDirectory([[maybe_unused]]const String& path)
+DiskDirectoryIteratorPtr DiskByteHDFS::iterateDirectory(const String& path)
 {
-    throw Exception("iterateDirectory is not supported in DiskByteHDFS",
-        ErrorCodes::NOT_IMPLEMENTED);
+    return std::make_unique<DiskByteHDFSDirectoryIterator>(hdfs_fs, disk_path, path);
 }
 
 void DiskByteHDFS::createFile(const String &path)

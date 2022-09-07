@@ -2,14 +2,15 @@
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Catalog/Catalog.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/formatAST.h>
 #include <Storages/StorageDictionary.h>
 #include <Storages/StorageFactory.h>
+#include <Storages/StorageMaterializedView.h>
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
 #include <TableFunctions/TableFunctionFactory.h>
-
 
 namespace DB
 {
@@ -203,6 +204,28 @@ StoragePtr DatabaseWithOwnTablesBase::getTableUnlocked(const String & table_name
         return it->second;
     throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist",
                     backQuote(database_name), backQuote(table_name));
+}
+
+std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context)
+{
+    std::vector<StoragePtr> views;
+    auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+    auto start_time = context->getTimestamp();
+    auto catalog_client = context->getCnchCatalog();
+    if (!catalog_client)
+        throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+    auto all_views_from_catalog = catalog_client->getAllViewsOn(*context, storage, start_time);
+    for (auto & dependence : all_views_from_catalog)
+    {
+        auto table = DatabaseCatalog::instance().tryGetTable(
+            dependence->getStorageID(), context);
+        if (table)
+        {
+            if (dynamic_cast<StorageMaterializedView*>(table.get()))
+                views.emplace_back(table);
+        }
+    }
+    return views;
 }
 
 }

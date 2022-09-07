@@ -58,9 +58,11 @@ public:
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
         ATTACH_PARTITION,
+        ATTACH_DETACHED_PARTITION,
         MOVE_PARTITION,
         MOVE_PARTITION_FROM,
         REPLACE_PARTITION,
+        REPLACE_PARTITION_WHERE,
         INGEST_PARTITION,
         FETCH_PARTITION,
         FREEZE_PARTITION,
@@ -193,7 +195,11 @@ public:
 
     bool detach = false;        /// true for DETACH PARTITION
 
+    bool attach_from_detached = false;  /// true for ATTACHE DETACHED PARTITION.
+
     bool part = false;          /// true for ATTACH PART, DROP DETACHED PART, REPAIR PART and MOVE
+
+    bool parts = false;         /// true for ATTACH PARTS from hdfs directory
 
     bool clear_column = false;  /// for CLEAR COLUMN (do not drop column from metadata)
 
