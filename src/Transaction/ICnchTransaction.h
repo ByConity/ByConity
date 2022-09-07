@@ -8,7 +8,7 @@
 #include <Transaction/Actions/IAction.h>
 #include <bthread/mutex.h>
 #include <cppkafka/cppkafka.h>
-// #include <Transaction/CnchLock.h>
+#include <Transaction/CnchLock.h>
 // #include <Transaction/IntentLock.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
@@ -84,9 +84,6 @@ public:
 
     void setKafkaTpl(const String & consumer_group, const cppkafka::TopicPartitionList & tpl);
     void getKafkaTpl(String & consumer_group, cppkafka::TopicPartitionList & tpl) const;
-    /// can be used for both preallocate mode and on-demand mode
-    MergeTreeDataPartsCNCHVector getLatestCheckpointWithVersionChain(MergeTreeDataPartsCNCHVector & parts, ContextPtr query_context);
-    ServerDataPartsVector getLatestCheckpointWithVersionChain(ServerDataPartsVector & parts, ContextPtr query_context);
 
     template <typename TAction, typename... Args>
     ActionPtr createAction(Args &&... args) const
@@ -95,8 +92,8 @@ public:
     }
 
     // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
-    // void lock(LockInfoPtr lockInfo);
-    // bool tryLock(LockInfoPtr lockInfo);
+    void lock(LockInfoPtr lockInfo);
+    bool tryLock(LockInfoPtr lockInfo);
 
     // unlock should be invoked after txn commit
     void unlock();
@@ -210,7 +207,7 @@ private:
     String creator;
     mutable bthread::RecursiveMutex mutex;
     mutable std::mutex cnch_lock_mutex;
-    // CnchLockPtrs cnch_locks;
+    CnchLockPtrs cnch_locks;
     BackgroundSchedulePool::TaskHolder report_lock_heartbeat_task;
     static constexpr UInt64 heartbeat_interval = 5000;
     std::chrono::milliseconds lock_expire_duration{default_lock_expire_duration};

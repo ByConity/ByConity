@@ -90,6 +90,10 @@ public:
     void cleanTransaction(const TransactionRecord & txn_record);
     std::set<UUID> getDeletingTablesInGlobalGC();
 
+    void acquireLock(const LockInfoPtr & info);
+    void releaseLock(const LockInfoPtr & info);
+    void reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time = 0);
+
     UInt64 getServerStartTime();
     bool scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables);
     size_t getNumOfTablesCanSendForGlobalGC();

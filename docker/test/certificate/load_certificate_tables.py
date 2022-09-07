@@ -33,7 +33,7 @@ def main(args):
 
         queries[0] = (queries[0])[:-1]
         queries[1] = (queries[1])[:-1]
-        queries[2] = (queries[2])[:-1].replace('`', '\`').replace('[','').replace(']','').replace('ENGINE = CnchMergeTree()','ENGINE = MergeTree()')
+        queries[2] = (queries[2])[:-1].replace('`', '\`').replace('[','').replace(']','')
         queries[3] = f"INSERT INTO {table_name_db_name} FORMAT CSV SETTINGS input_format_skip_unknown_fields = 1"
 
         cmd_list.append(f'{args.client} --query="{queries[0]}"')
@@ -46,7 +46,7 @@ def main(args):
             if return_code != 0 :
                 print('failed sql is:',item)
                 raise f"error !"
-        print('table :', table_name_db_name, 'finished')
+        print('table:', table_name_db_name, 'loaded')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="load csv to table")

@@ -110,6 +110,9 @@ message DataModelPart
     optional uint64 staging_txn_id = 19;
     optional uint64 virtual_part_size = 20;
     optional MetaFilesPos meta_files_pos = 21;
+    optional uint32 covered_parts_count = 22;    /// record how many parts the current part covers. Used by drop range.
+    optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
+    optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
 };
 
 message CnchHivePartInfo

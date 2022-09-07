@@ -5,6 +5,6 @@ select rpad(lpad('abc', 10, 'xy'), 15, 'xyz');
 select lpad('abcdefghijk', 5, 'a');
 select rpad(lpad('abcdefghijk', 5, 'a'), 3, 'c');
 select lpad(materialize('abc'), 10, '123456789000');
-select lpad(materialize('abc'), materialize(10), materialize('123456789000'));
 select lpad(materialize('abc'), materialize(10), '123456789000');
-select lpad(materialize('abc'), 10, materialize('123456789000'));
+select lpad(materialize('abc'), materialize(10), '123456789000');
+select lpad(materialize('abc'), 10, '123456789000');

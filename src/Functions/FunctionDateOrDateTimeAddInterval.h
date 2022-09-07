@@ -498,7 +498,7 @@ public:
         }
         else
         {
-            if (!(WhichDataType(arguments[0].type).isDateTime() && WhichDataType(arguments[0].type).isString())
+            if (!(WhichDataType(arguments[0].type).isDateTime())
                 || !WhichDataType(arguments[2].type).isString())
             {
                 throw Exception(

@@ -33,6 +33,10 @@ jobs:
       CONSUL_HTTP_PORT: "2280"
       PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin"
       LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
+      MY_HOST_IP: "127.0.0.1"
+      MY_HOST_IPV6: "::1"
+      BYTED_HOST_IP: "127.0.0.1"
+      BYTED_HOST_IPV6: "::1"
     runs-on:
       spec: m1.4xlarge
       env: online
@@ -53,6 +57,7 @@ jobs:
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
       - name: Run FuntionalStatelessTest
+        continue-on-error: true
         commands:
           - cd /
           - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_stateless'
@@ -82,6 +87,7 @@ jobs:
       - *action_checkout
       - *download_scm_binary
       - name: Run FuntionalStatelessTest
+        continue-on-error: true
         commands:
           - cd /
           - cp -r /home/code/docker/test/stateless/. .
@@ -91,9 +97,9 @@ jobs:
       - *after_test
       - *upload_artifact
       - name: Analyse Result
+        ignore-error: true
         commands:
           - /bin/bash /home/code/docker/test/result.sh
-        ignore-error: true
 
   CnchFuntionalStatelessTest:
     <<: *default_test
@@ -102,10 +108,29 @@ jobs:
       - *action_checkout
       - *download_scm_binary
       - name: Run Cnch FuntionalStatelessTest
+        continue-on-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
           - python3 /home/code/tests/clickhouse-test --run cnch_stateless -q  /home/code/tests/queries --order asc
-        continue-on-error: true
+      - *after_test
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: Artifacts
+          path: /artifacts
+
+  CnchFuntionalStatelessTestIPV6:
+    <<: *default_test
+    name: CNCH - FuntionalStatelessTest with IPV6 envrionment
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run Cnch FuntionalStatelessTest
+        ignore-error: true
+        commands:
+          - export ENABLE_IPV6=1
+          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
+          - python3 /home/code/tests/clickhouse-test --run cnch_stateless -q  /home/code/tests/queries --order asc || true
       - *after_test
       - *upload_artifact
       - name: Upload Artifact
@@ -121,10 +146,10 @@ jobs:
       - *action_checkout
       - *download_scm_binary
       - name: Run Cnch FuntionalStatelessTest
+        ignore-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
           - python3 /home/code/tests/clickhouse-test --run cnch_problematic_stateles -q  /home/code/tests/queries --order asc
-        ignore-error: true
       - *after_test
       - *upload_artifact
       - name: Upload Artifact
@@ -187,40 +212,72 @@ jobs:
 #      - *upload_artifact
 #      - *analyse_result
 #
-#  CertificateStatefullTest:
-#    <<: *default_test
-#    name: CertificateStatefullTest
-#    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
-#    steps:
-#      - *action_checkout
-#      - *download_scm_binary
-#      - name: Run CertificateStatefullTest
-#        commands:
-#          - cd /
-#          - cp /home/code/docker/test/certificate/run.sh run.sh
-#          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-#          - /bin/bash run.sh
-#      - *after_test
-#      - *upload_artifact
-#      - *analyse_result
-#
-#  CertificateStatefullTestWithOptimizer:
-#    <<: *default_test
-#    name: CertificateStatefullTestWithOptimizer
-#    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
-#    steps:
-#      - *action_checkout
-#      - *download_scm_binary
-#      - name: Run CertificateStatefullTest
-#        commands:
-#          - cd /
-#          - cp /home/code/docker/test/certificate/run.sh run.sh
-#          - export ADDITIONAL_OPTIONS='--client-option enable_optimizer=1'   # enable optimizer for test
-#          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-#          - /bin/bash run.sh
-#      - *after_test
-#      - *upload_artifact
-#      - *analyse_result
+  CertificateStatefullTest:
+    <<: *default_test
+    name: CertificateStatefullTest
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run CertificateStatefullTest
+        continue-on-error: true
+        commands:
+          - cd /
+          - |
+            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
+
+            echo "load tables for certificate"
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx
+            cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+            echo "load tables for certificates done"
+
+            python3 /home/code/tests/clickhouse-test --run certificate -q  /home/code/tests/queries
+
+      - *after_test
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: Artifacts
+          path: /artifacts
+
+  CertificateStatefullTestWithOptimizer:
+    <<: *default_test
+    name: CertificateStatefullTestWithOptimizer
+    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+    steps:
+      - *action_checkout
+      - *download_scm_binary
+      - name: Run CertificateStatefullTest with optimizer
+        ignore-error: true
+        commands:
+          - cd /
+          - |
+            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
+
+            echo "load tables for certificate"
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl
+            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx
+            cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+            echo "load tables for certificates done"
+
+            python3 /home/code/tests/clickhouse-test --run certificate --client-option enable_optimizer=1 -q  /home/code/tests/queries
+      - *after_test
+      - name: Upload Artifact
+        uses: actions/upload-artifact
+        inputs:
+          name: Artifacts
+          path: /artifacts
 #
 
   BackwardCompabilityCertificateTest:
@@ -384,7 +441,7 @@ jobs:
 #      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin"
 #    runs-on:
 #      linux: {}
-####    depends: [scm_build]
+#    depends: [scm_build]
 #    if: ${{ false }}
 #    steps:
 #      - *action_checkout
@@ -409,7 +466,7 @@ jobs:
 #      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/usr/breakpad/bin"
 #    runs-on:
 #      linux: {}
-####    depends: [scm_build]
+#    depends: [scm_build]
 #    if: ${{ false }}
 #    steps:
 #      - *action_checkout

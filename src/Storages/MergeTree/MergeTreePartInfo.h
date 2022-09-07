@@ -104,7 +104,8 @@ struct MergeTreePartInfo
         return level == MergeTreePartInfo::MAX_LEVEL || level == another_max_level;
     }
 
-    String getPartName(bool with_hint_mutation = false) const;
+    String getPartName() const;
+    String getPartNameWithHintMutation() const;
     String getBasicPartName() const;
     String getPartNameV0(DayNum left_date, DayNum right_date) const;
     UInt64 getBlocksCount() const
@@ -132,6 +133,10 @@ struct MergeTreePartInfo
     static constexpr UInt32 MAX_MUTATION = 999999999;
 
     static constexpr UInt32 LEGACY_MAX_LEVEL = std::numeric_limits<decltype(level)>::max();
+
+private:
+    template<bool NameWithHintMutation>
+    String getPartNameImpl() const;
 };
 
 /// Information about detached part, which includes its prefix in

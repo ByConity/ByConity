@@ -11,10 +11,12 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static void OnDispatchRuntimeFilter(Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl)
+static void OnDispatchRuntimeFilter(Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
 {
     std::unique_ptr<Protos::DispatchRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+
+    rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
     {
         LOG_DEBUG(&Poco::Logger::get("RuntimeFilterService"), "dispatch runtime filter to worker failed, message: " + cntl->ErrorText());
@@ -132,7 +134,7 @@ void RuntimeFilterService::transferRuntimeFilter(
                         controller,
                         &dispatch_request,
                         dispatch_response,
-                        google::protobuf::NewCallback(OnDispatchRuntimeFilter, dispatch_response, controller));
+                        brpc::NewCallback(OnDispatchRuntimeFilter, dispatch_response, controller, rpc_client));
                     LOG_DEBUG(
                         log, "dispatch runtime filter query id: {}, segment id: {}, filter id: {}, host: {}", request->query_id(), segment_id, request->filter_id(), host_port);
                 }

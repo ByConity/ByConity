@@ -190,6 +190,7 @@ class IColumn;
     M(Milliseconds, log_queries_min_query_duration_ms, 0, "Minimal time for the query to run, to get to the query_log/query_thread_log.", 0) \
     M(UInt64, log_queries_cut_to_length, 100000, "If query length is greater than specified threshold (in bytes), then cut query when writing to query log. Also limit length of printed query in ordinary text log.", 0) \
     \
+    M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
     M(DistributedProductMode, distributed_product_mode, DistributedProductMode::DENY, "How are distributed subqueries performed inside IN or JOIN sections?", IMPORTANT) \
     \
     M(UInt64, max_concurrent_queries_for_all_users, 0, "The maximum number of concurrent requests for all users.", 0) \
@@ -570,6 +571,7 @@ class IColumn;
     M(String, username_for_internal_communication, "server", "Username to be used by server for authentication on worker side.", 0) \
     M(UInt64, cnch_part_allocation_algorithm, 0, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing.", 0) \
     M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
+    M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     \
