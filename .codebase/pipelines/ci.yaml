@@ -223,9 +223,9 @@ jobs:
 #      - *analyse_result
 #
 
-BackwardCompabilityCertificateTest:
+  BackwardCompabilityCertificateTest:
     <<: *default_test
-    name: BackwardCompabilityCertificateTest
+    name: CNCH - BackwardCompabilityCertificateTest
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
     steps:
       - *action_checkout
