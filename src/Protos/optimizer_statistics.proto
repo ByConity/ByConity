@@ -20,6 +20,13 @@ message StatsNdvBuckets {
   repeated bytes cpc_sketch_blobs = 4; // size = num_buckets
 }
 
+message StatsNdvBucketsExtend {
+  required bytes bounds_blob = 1;
+  repeated int64 counts = 3;           // size = num_buckets
+  repeated bytes cpc_sketch_blobs = 4; // size = num_buckets
+  repeated bytes block_cpc_sketch_blobs = 5; // size = num_buckets
+}
+
 message StatsNdvBucketsResult {
   required bytes bounds_blob = 1;
   repeated int64 counts = 3;    // size = num_buckets
@@ -45,7 +52,6 @@ enum SerdeDataType {
   UInt256 = 17;
   Int256 = 18;
 }
-
 enum StatisticsType {
   Invalid = 0;
   TableBasic = 1;
@@ -57,6 +63,8 @@ enum StatisticsType {
   DummyAlpha = 2000;
   DummyBeta = 2001;
 }
+
+
 message DbStats {
   enum Version {
     Invalid = 0;

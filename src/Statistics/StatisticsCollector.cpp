@@ -73,11 +73,16 @@ void StatisticsCollector::readAllFromCatalog()
 void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
 {
     ColumnDescVector cols_desc;
-    auto storage = catalog->getStorageByTableId(table_info);
-    for (auto & col_name : cols_name)
+    auto full_cols_desc = catalog->getCollectableColumns(table_info);
+    std::unordered_set<String> valid_set(cols_name.begin(), cols_name.end());
+    for (const auto & col_desc : full_cols_desc)
     {
-        cols_desc.emplace_back(storage->getColumn(col_name));
+        if (valid_set.count(col_desc.name))
+        {
+            cols_desc.emplace_back(col_desc);
+        }
     }
+
     this->readFromCatalog(cols_desc);
 }
 

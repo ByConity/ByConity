@@ -189,5 +189,4 @@ void StatsNdvBucketsResultImpl<T>::writeSymbolStatistics(SymbolStatistics & symb
 ALL_TYPE_ITERATE(INITIATE)
 #undef INITIATE
 
-
 }

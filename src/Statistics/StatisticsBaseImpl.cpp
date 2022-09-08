@@ -125,7 +125,7 @@ std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::str
     }
 }
 
-StatisticsBasePtr createStatisticsBase(StatisticsTag tag, TxnTimestamp ts, std::string_view blob)
+StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
 {
     // TODO: rewrite use macro iteration
     auto ptr = [&]() -> StatisticsBasePtr {

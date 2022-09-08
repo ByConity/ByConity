@@ -6,7 +6,7 @@ namespace DB::Statistics
 {
 
 CollectStep::CollectStep(DB::Statistics::StatisticsCollector & core_)
-    : core(core_), table_info(core_.table_info), catalog(core_.catalog), context(core_.context), handler_context(context.getSettingsRef())
+    : core(core_), table_info(core_.table_info), catalog(core_.catalog), context(core_.context), handler_context(context->getSettingsRef())
 {
 }
 
@@ -31,7 +31,7 @@ void CollectStep::writeResult(TableStats & core_table_stats, ColumnStatsMap & co
         {
             throw Exception("must has value", ErrorCodes::LOGICAL_ERROR);
         }
-        auto ndv_value_regulated = std::min<double>((double)std::llround(col_data.nonnull_count), col_data.ndv_value_opt.value());
+        auto ndv_value_regulated = std::min<double>(std::llround(col_data.nonnull_count), col_data.ndv_value_opt.value());
         column_stats.basic->mutableProto().set_ndv_value(ndv_value_regulated);
         column_stats.basic->mutableProto().set_total_length(0);
 

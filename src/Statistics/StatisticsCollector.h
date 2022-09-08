@@ -24,7 +24,7 @@ public:
     using ColumnStatsMap = StatisticsImpl::ColumnStatsMap;
     using ColumnName = String;
 
-    StatisticsCollector(Context & context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, TxnTimestamp timestamp_)
+    StatisticsCollector(ContextPtr context_, CatalogAdaptorPtr catalog_, const StatsTableIdentifier & table_info_, TxnTimestamp timestamp_)
         : context(context_), catalog(catalog_), table_info(table_info_), timestamp(timestamp_)
     {
         String str;

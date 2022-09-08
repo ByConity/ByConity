@@ -43,7 +43,7 @@ public:
         auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
         // to estimate ndv
         LOG_INFO(
-            &Logger::get("FirstSampleColumnHandler"),
+            &Poco::Logger::get("FirstSampleColumnHandler"),
             fmt::format(
                 FMT_STRING("col info: col={} && "
                            "sqls={},{},{},{}"),
@@ -63,7 +63,7 @@ public:
         auto wrapped_col_name = getWrappedColumnName(config, col_name);
 
         // count(col) SAMPLE
-        auto sample_nonnull_count = (double)getSingleValue<UInt64>(block, index_offset + 0);
+        auto sample_nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
         // cpc(col) SAMPLE
         auto ndv_b64 = getSingleValue<std::string_view>(block, index_offset + 1);
         // cpc(cityHash64(col, _mark_id)  SAMPLE
@@ -94,7 +94,7 @@ public:
             // 0.98 is hyperloglog error rate
             auto estimated_ndv_with_error = scaleNdv(full_count, sample_row_count, sample_ndv * 0.98, block_ndv);
 
-            LOG_INFO(&Logger::get("ThirdSampleColumnHandler"),
+            LOG_INFO(&Poco::Logger::get("ThirdSampleColumnHandler"),
                          fmt::format(FMT_STRING("estimated_ndv={}, estimated_ndv_with_error={}"), estimated_ndv, estimated_ndv_with_error));
 
             // ensure error of estimated ndv less than 30% due to HyperLogLog
@@ -116,7 +116,7 @@ public:
                 result.bucket_bounds = histogram->getBucketBounds();
             }
             LOG_INFO(
-                &Logger::get("FirstSampleColumnHandler"),
+                &Poco::Logger::get("FirstSampleColumnHandler"),
                 fmt::format(
                     FMT_STRING("col info: col={} && "
                                "context raw data: full_count={}, sample_row_count={} && "
@@ -222,7 +222,7 @@ public:
             auto sample_block_ndv = block_ndvs[index];
             auto count_estimate = std::llround(scaleCount(full_count, sample_row_count, sample_nonnull_count));
             auto ndv_estimate = scaleNdv(full_count, sample_row_count, sample_ndv, sample_block_ndv);
-            ndv_estimate = std::min(ndv_estimate, (double)count_estimate);
+            ndv_estimate = std::min(ndv_estimate, static_cast<double>(count_estimate));
             counts_estimate.emplace_back(count_estimate);
             ndvs_estimate.emplace_back(ndv_estimate);
         }
@@ -300,7 +300,7 @@ String constructThirdSql(
 class StatisticsCollectorStepSample : public CollectStep
 {
 public:
-    explicit StatisticsCollectorStepSample(StatisticsCollector & core) : CollectStep(core) { }
+    explicit StatisticsCollectorStepSample(StatisticsCollector & core_) : CollectStep(core_) { }
 
     void firstCollectStep(const ColumnDescVector & cols_desc)
     {
@@ -376,7 +376,7 @@ public:
         {
             auto & col_data = handler_context.columns_data.at(col_desc.name);
             auto full_sql = constructThirdSql(catalog->getSettingsRef(), table_info, col_desc, *col_data.bucket_bounds);
-            LOG_INFO(&Logger::get("thirdSampleColumnHandler"), full_sql);
+            LOG_INFO(&Poco::Logger::get("thirdSampleColumnHandler"), full_sql);
             auto helper = SubqueryHelper::create(context, full_sql);
             Block block;
 

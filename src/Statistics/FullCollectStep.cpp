@@ -30,7 +30,7 @@ public:
         auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
         // to estimate ndv
         LOG_INFO(
-            &Logger::get("FirstFullColumnHandler"),
+            &Poco::Logger::get("FirstFullColumnHandler"),
             fmt::format(
                 FMT_STRING("col info: col={} && "
                            "sqls={},{},{}"),
@@ -49,7 +49,7 @@ public:
         auto wrapped_col_name = getWrappedColumnName(config, col_name);
 
         // count(col)
-        auto nonnull_count = (double)getSingleValue<UInt64>(block, index_offset + 0);
+        auto nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
         // cpc(col)
         auto ndv_b64 = getSingleValue<std::string_view>(block, index_offset + 1);
         // kll(col)
@@ -75,7 +75,7 @@ public:
                 result.bucket_bounds = histogram->getBucketBounds();
             }
             LOG_INFO(
-                &Logger::get("FirstFullColumnHandler"),
+                &Poco::Logger::get("FirstFullColumnHandler"),
                 fmt::format(
                     FMT_STRING("col info: col={} && "
                                "context raw data: full_count={} && "
@@ -162,7 +162,7 @@ private:
 class StatisticsCollectorStepFull : public CollectStep
 {
 public:
-    explicit StatisticsCollectorStepFull(StatisticsCollector & core) : CollectStep(core) { }
+    explicit StatisticsCollectorStepFull(StatisticsCollector & core_) : CollectStep(core_) { }
 
     void collectFirstStep(const ColumnDescVector & cols_desc)
     {

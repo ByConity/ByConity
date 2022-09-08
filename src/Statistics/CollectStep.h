@@ -72,7 +72,7 @@ protected:
     StatisticsCollector & core;
     StatsTableIdentifier table_info;
     CatalogAdaptorPtr catalog;
-    Context & context;
+    ContextPtr context;
     HandlerContext handler_context;
 };
 

@@ -35,11 +35,6 @@ BlockIO InterpreterDropStatsQuery::execute()
         }
         tables = catalog->getAllTablesID(db);
     }
-    else if (query->table == "__reset")
-    {
-        catalog->resetAllStats();
-        return {};
-    }
     else
     {
         auto table_info_opt = catalog->getTableIdByName(db, query->table);

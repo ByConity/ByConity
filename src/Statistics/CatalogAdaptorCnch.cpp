@@ -1,10 +1,11 @@
-#include <CatalogService/Catalog.h>
+#include <Catalog/Catalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CommonTools.h>
 #include <Statistics/SubqueryHelper.h>
 #include <boost/algorithm/string.hpp>
+#if 0
 
 namespace DB::Statistics
 {
@@ -31,10 +32,10 @@ public:
     ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const override;
     const Settings & getSettingsRef() const override { return context.getSettingsRef(); }
 
-    CatalogAdaptorCnch(Context & context, CatalogService::CatalogPtr catalog) : context(context), catalog(catalog) { }
+    CatalogAdaptorCnch(ContextPtr context, CatalogService::CatalogPtr catalog) : context(context), catalog(catalog) { }
 
 private:
-    Context & context;
+    ContextPtr context;
     CatalogPtr catalog;
 };
 
@@ -258,7 +259,7 @@ void CatalogAdaptorCnch::invalidateServerStatsCache(const StatsTableIdentifier &
     Statistics::CacheManager::invalidate(context, table);
 }
 
-CatalogAdaptorPtr createCatalogAdaptorCnch(Context & context)
+CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context)
 {
     auto catalog = context.getCnchCatalog();
     if (!catalog)
@@ -269,3 +270,4 @@ CatalogAdaptorPtr createCatalogAdaptorCnch(Context & context)
 }
 
 }
+#endif
