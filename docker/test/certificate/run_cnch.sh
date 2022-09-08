@@ -10,10 +10,10 @@ function run_tests()
     # more idiologically correct.
     read -ra ADDITIONAL_OPTIONS <<< "${ADDITIONAL_OPTIONS:-}"
     ps -aux
-    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 16 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_aeolus_bp_edu 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee /test_output/test_result.txt || true
-    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 16 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_aeolus_delta 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt || true
-    # clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 16 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_datarocks 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt || true
-    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 16 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_motor_dzx 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt || true
+    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 8 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_aeolus_bp_edu 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee /test_output/test_result.txt || true
+    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 8 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_aeolus_delta 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt || true
+    # clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 8 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_datarocks 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt || true
+    clickhouse-test --database default --print-time --use-skip-list --order asc --test-runs 1 --jobs 8 -q /home/code/tests/queries "${ADDITIONAL_OPTIONS[@]}" --run certificate_motor_dzx 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a /test_output/test_result.txt || true
 }
 
 export -f run_tests
