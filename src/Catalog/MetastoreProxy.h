@@ -426,7 +426,7 @@ public:
     static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
     {
         std::stringstream ss;
-        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << (UInt64)tag;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << static_cast<UInt64>(tag);
         return ss.str();
     }
 
@@ -440,7 +440,7 @@ public:
     static String tableStatisticTagKey(const String name_space, const String & uuid, const StatisticsTag & tag)
     {
         std::stringstream ss;
-        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << (UInt64)tag;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << static_cast<UInt64>(tag);
         return ss.str();
     }
 
@@ -451,12 +451,12 @@ public:
         return ss.str();
     }
 
-    // static String columnStatisticKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_' << escapeString(column) << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+     static String columnStatisticKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
+     {
+         std::stringstream ss;
+         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
+         return ss.str();
+     }
 
     static String columnStatisticPrefix(const String name_space, const String & uuid)
     {
@@ -465,12 +465,12 @@ public:
         return ss.str();
     }
 
-    // static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+     static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
+     {
+         std::stringstream ss;
+         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
+         return ss.str();
+     }
 
     static String columnStatisticTagPrefix(const String name_space, const String & uuid, const String & column)
     {
