@@ -158,8 +158,6 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
 
         assertChar('\n', buf);
     }
-
-    assertEOF(buf);
 }
 
 void NamesAndTypesList::writeText(WriteBuffer & buf) const
@@ -257,6 +255,30 @@ size_t NamesAndTypesList::sizeOfDifference(const NamesAndTypesList & rhs) const
     vector.insert(vector.end(), begin(), end());
     std::sort(vector.begin(), vector.end());
     return (std::unique(vector.begin(), vector.end()) - vector.begin()) * 2 - size() - rhs.size();
+}
+
+bool NamesAndTypesList::isCompatableWithKeyColumns(const NamesAndTypesList & rhs, const Names & keys_columns)
+{
+    if (keys_columns.size() > 1)
+    {
+        NameSet keys(keys_columns.begin(), keys_columns.end());
+        NamesAndTypes k1, k2;
+        for (const NameAndTypePair & column : *this) 
+        {
+            if (keys.count(column.name))
+                k1.push_back(column);
+        }
+        for (const NameAndTypePair & column : rhs)
+        {
+            if (keys.count(column.name))
+                k2.push_back(column);
+        }
+
+        if (k1 != k2)
+            return false;
+    }
+
+    return isSubsetOf(rhs) || rhs.isSubsetOf(*this);
 }
 
 void NamesAndTypesList::getDifference(const NamesAndTypesList & rhs, NamesAndTypesList & deleted, NamesAndTypesList & added) const

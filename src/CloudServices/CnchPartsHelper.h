@@ -2,6 +2,7 @@
 
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 namespace DB
 {

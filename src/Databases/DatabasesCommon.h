@@ -55,4 +55,6 @@ protected:
     StoragePtr getTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock) const;
 };
 
+std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context);
+
 }

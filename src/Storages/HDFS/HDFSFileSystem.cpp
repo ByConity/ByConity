@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <filesystem>
 #include <random>
 #include <consul/bridge.h>
 #include <Common/formatIPv6.h>
@@ -12,6 +13,7 @@
 #include <hdfs/hdfs.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
+#include "HDFSFileSystem.h"
 namespace DB
 {
 
@@ -280,7 +282,8 @@ void HDFSFileSystem::reconnectIfNecessary() const
 bool HDFSFileSystem::exists(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsExists(fs_copy.get(), path.c_str());
+    String normalized_path = normalizePath(path);
+    int ret = hdfsExists(fs_copy.get(), normalized_path.c_str());
     if (ret == -1)
     {
         handleError(__PRETTY_FUNCTION__);
@@ -291,7 +294,8 @@ bool HDFSFileSystem::exists(const std::string& path) const
 bool HDFSFileSystem::remove(const std::string& path, bool recursive) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsDelete(fs_copy.get(), path.c_str(), recursive);
+    String normalized_path = normalizePath(path);
+    int ret = hdfsDelete(fs_copy.get(), normalized_path.c_str(), recursive);
     if (ret == -1)
     {
         handleError(__PRETTY_FUNCTION__);
@@ -302,12 +306,13 @@ bool HDFSFileSystem::remove(const std::string& path, bool recursive) const
 ssize_t HDFSFileSystem::getFileSize(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo) {
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info) {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto res = fileInfo->mSize;
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto res = file_info->mSize;
+    hdfsFreeFileInfo(file_info, 1);
     return res;
 }
 
@@ -327,7 +332,8 @@ void HDFSFileSystem::list(const std::string& path,
 {
     HDFSFSPtr fs_copy = getFS();
     int num = 0;
-    hdfsFileInfo* files = hdfsListDirectory(fs_copy.get(), path.c_str(), &num);
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* files = hdfsListDirectory(fs_copy.get(), normalized_path.c_str(), &num);
     if (!files)
     {
         handleError(__PRETTY_FUNCTION__);
@@ -345,13 +351,14 @@ int64_t HDFSFileSystem::getLastModifiedInSeconds(
     const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo)
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info)
     {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto res = fileInfo->mLastMod;
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto res = file_info->mLastMod;
+    hdfsFreeFileInfo(file_info, 1);
     return res;
 }
 
@@ -359,7 +366,10 @@ bool HDFSFileSystem::renameTo(const std::string& path,
     const std::string& rpath) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsRename(fs_copy.get(), path.c_str(), rpath.c_str());
+    String normalized_path = normalizePath(path);
+    String normalized_rpath = normalizePath(rpath);
+    int ret = hdfsRename(fs_copy.get(), normalized_path.c_str(),
+        normalized_rpath.c_str());
     if (ret == -1)
     {
         handleError(__PRETTY_FUNCTION__);
@@ -370,7 +380,8 @@ bool HDFSFileSystem::renameTo(const std::string& path,
 bool HDFSFileSystem::createFile(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFile file = hdfsOpenFile(fs_copy.get(), path.c_str(), O_WRONLY, 0, 0, 0);
+    String normalized_path = normalizePath(path);
+    hdfsFile file = hdfsOpenFile(fs_copy.get(), normalized_path.c_str(), O_WRONLY, 0, 0, 0);
     if (!file)
     {
         handleError(__PRETTY_FUNCTION__);
@@ -385,7 +396,8 @@ bool HDFSFileSystem::createFile(const std::string& path) const
 bool HDFSFileSystem::createDirectory(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsCreateDirectory(fs_copy.get(), path.c_str());
+    String normalized_path = normalizePath(path);
+    int ret = hdfsCreateDirectory(fs_copy.get(), normalized_path.c_str());
     if (ret == -1)
         handleError(__PRETTY_FUNCTION__);
     return !ret;
@@ -395,7 +407,8 @@ bool HDFSFileSystem::createDirectory(const std::string& path) const
 bool HDFSFileSystem::createDirectories(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsCreateDirectoryEx(fs_copy.get(), path.c_str(), 493, 1);
+    String normalized_path = normalizePath(path);
+    int ret = hdfsCreateDirectoryEx(fs_copy.get(), normalized_path.c_str(), 493, 1);
     if (ret == -1)
         handleError(__PRETTY_FUNCTION__);
     return !ret;
@@ -411,6 +424,11 @@ HDFSFSPtr HDFSFileSystem::getFS() const
         fs_copy = fs;
     }
     return fs_copy;
+}
+
+String HDFSFileSystem::normalizePath(const String &path)
+{
+    return Poco::Path(path).toString();
 }
 
 void HDFSFileSystem::handleError(const String & func) const
@@ -466,36 +484,39 @@ void HDFSFileSystem::handleError(const String & func) const
 bool HDFSFileSystem::isFile(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo) {
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info) {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto res = (fileInfo->mKind == kObjectKindFile);
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto res = (file_info->mKind == kObjectKindFile);
+    hdfsFreeFileInfo(file_info, 1);
     return res;
 }
 
 bool HDFSFileSystem::isDirectory(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo) {
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info) {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto res = (fileInfo->mKind == kObjectKindDirectory);
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto res = (file_info->mKind == kObjectKindDirectory);
+    hdfsFreeFileInfo(file_info, 1);
     return res;
 }
 
 bool HDFSFileSystem::setWriteable(const std::string& path, bool flag) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo) {
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info) {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto mode = (fileInfo->mPermissions);
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto mode = (file_info->mPermissions);
+    hdfsFreeFileInfo(file_info, 1);
 
     if (flag)
     {
@@ -518,19 +539,21 @@ bool HDFSFileSystem::setWriteable(const std::string& path, bool flag) const
 bool HDFSFileSystem::canExecute(const std::string& path) const
 {
     HDFSFSPtr fs_copy = getFS();
-    hdfsFileInfo* fileInfo = hdfsGetPathInfo(fs_copy.get(), path.c_str());
-    if (!fileInfo) {
+    String normalized_path = normalizePath(path);
+    hdfsFileInfo* file_info = hdfsGetPathInfo(fs_copy.get(), normalized_path.c_str());
+    if (!file_info) {
         handleError(__PRETTY_FUNCTION__);
     }
-    auto res = (fileInfo->mKind == kObjectKindDirectory);
-    hdfsFreeFileInfo(fileInfo, 1);
+    auto res = (file_info->mKind == kObjectKindDirectory);
+    hdfsFreeFileInfo(file_info, 1);
     return res;
 }
 
 bool HDFSFileSystem::setLastModifiedInSeconds(const std::string& path, uint64_t ts) const
 {
     HDFSFSPtr fs_copy = getFS();
-    int ret = hdfsUtime(fs_copy.get(), path.c_str(), ts, -1);
+    String normalized_path = normalizePath(path);
+    int ret = hdfsUtime(fs_copy.get(), normalized_path.c_str(), ts, -1);
     if (ret == -1)
     {
         handleError(__PRETTY_FUNCTION__);

@@ -83,8 +83,8 @@ bool MergeTreePartInfo::tryParsePartName(const String & part_name, MergeTreePart
     Int64 min_block_num = 0;
     Int64 max_block_num = 0;
     UInt32 level = 0;
-    Int64 mutation = 0;
-    Int64 hint_mutation = 0;
+    UInt64 mutation = 0;
+    UInt64 hint_mutation = 0;
 
     if (!tryReadIntText(min_block_num, in)
         || !checkChar('_', in)

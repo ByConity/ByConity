@@ -91,7 +91,7 @@ public:
         const IMergeTreeDataPart * parent_part_);
 
     IMergeTreeDataPart(
-        MergeTreeMetaBase & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path,
@@ -631,5 +631,6 @@ bool isWidePart(const MergeTreeDataPartPtr & data_part);
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
 bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
+void readPartBinary(IMergeTreeDataPart & part, ReadBuffer& buf, bool read_hint_mutation = true);
 void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
 }
