@@ -64,7 +64,6 @@ enum StatisticsType {
   DummyBeta = 2001;
 }
 
-
 message DbStats {
   enum Version {
     Invalid = 0;
