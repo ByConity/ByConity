@@ -206,7 +206,7 @@
             <job>
                 <name>GLOBAL_GC</name>
                 <interval>5000</interval>
-                <disable>false</disable>
+                <disable>true</disable>
             </job>
             <job>
                 <name>TXN_GC</name>
