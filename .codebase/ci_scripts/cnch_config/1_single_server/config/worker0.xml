@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>/artifacts/vw-default/vw-default.log</log>
-        <errorlog>/artifacts/vw-default/vw-default.err.log</errorlog>
-        <testlog>/artifacts/vw-default/vw-default.test.log</testlog>
+        <log>/test_output/vw-default/vw-default.log</log>
+        <errorlog>/test_output/vw-default/vw-default.err.log</errorlog>
+        <testlog>/test_output/vw-default/vw-default.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -131,7 +131,7 @@
     <keep_alive_timeout>3</keep_alive_timeout>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>200</max_concurrent_queries>
 
     <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
          correct maximum value. -->

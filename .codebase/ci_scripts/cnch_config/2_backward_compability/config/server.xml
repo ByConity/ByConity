@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>trace</level>
-        <log>/artifacts/server/server.log</log>
-        <errorlog>/artifacts/server/server.err.log</errorlog>
-        <testlog>/artifacts/server/server.test.log</testlog>
+        <log>/test_output/server/server.log</log>
+        <errorlog>/test_output/server/server.err.log</errorlog>
+        <testlog>/test_output/server/server.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -126,7 +126,7 @@
     <keep_alive_timeout>3</keep_alive_timeout>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>200</max_concurrent_queries>
 
     <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
          correct maximum value. -->
@@ -806,5 +806,8 @@
         <timeout_ms>10000</timeout_ms>
         <max_retry>1</max_retry>
     </udf_processor>
-
+    <enable_cnch_topology_master>0</enable_cnch_topology_master>
+    <enable_part_cache>0</enable_part_cache>
+    <enable_cnch_storage_cache>0</enable_cnch_storage_cache>
+    <enable_server_manager>0</enable_server_manager>
 </yandex>

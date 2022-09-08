@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>trace</level>
-        <log>/artifacts/daemon-manager/daemon-manager.log</log>
-        <errorlog>/artifacts/daemon-manager/daemon-manager.err.log</errorlog>
-        <testlog>/artifacts/daemon-manager/daemon-manager.test.log</testlog>
+        <log>/test_output/daemon-manager/daemon-manager.log</log>
+        <errorlog>/test_output/daemon-manager/daemon-manager.err.log</errorlog>
+        <testlog>/test_output/daemon-manager/daemon-manager.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
