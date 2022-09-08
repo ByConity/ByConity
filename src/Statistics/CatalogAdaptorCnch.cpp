@@ -5,11 +5,11 @@
 #include <Statistics/CommonTools.h>
 #include <Statistics/SubqueryHelper.h>
 #include <boost/algorithm/string.hpp>
-#if 0
 
+#if 0
 namespace DB::Statistics
 {
-using CatalogService::CatalogPtr;
+using Catalog::CatalogPtr;
 class CatalogAdaptorCnch : public CatalogAdaptor
 {
 public:
@@ -32,7 +32,7 @@ public:
     ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const override;
     const Settings & getSettingsRef() const override { return context.getSettingsRef(); }
 
-    CatalogAdaptorCnch(ContextPtr context, CatalogService::CatalogPtr catalog) : context(context), catalog(catalog) { }
+    CatalogAdaptorCnch(ContextPtr context_, Catalog::CatalogPtr catalog_) : context(context_), catalog(catalog_) { }
 
 private:
     ContextPtr context;
