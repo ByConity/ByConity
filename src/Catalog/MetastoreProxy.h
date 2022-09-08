@@ -423,12 +423,12 @@ public:
         return ss.str();
     }
 
-    // static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+    static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << (UInt64)tag;
+        return ss.str();
+    }
 
     static String tableStatisticPrefix(const String name_space, const String & uuid)
     {
@@ -437,12 +437,12 @@ public:
         return ss.str();
     }
 
-    // static String tableStatisticTagKey(const String name_space, const String & uuid, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+    static String tableStatisticTagKey(const String name_space, const String & uuid, const StatisticsTag & tag)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << (UInt64)tag;
+        return ss.str();
+    }
 
     static String tableStatisticTagPrefix(const String name_space, const String & uuid)
     {
