@@ -1707,51 +1707,47 @@ void MetastoreProxy::clearInsertionLabels(const String & name_space, const Strin
 using Statistics::StatisticsBasePtr;
 using Statistics::StatisticsTag;
 
-#pragma clang diagnostic ignored "-Wunused-parameter"
-#pragma clang diagnostic ignored "-Wmissing-noreturn"
 void MetastoreProxy::updateTableStatistics(
     const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
 {
-    (void)name_space;
-    (void)uuid;
-    (void)data;
-    throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
-    //    auto multi_write = createMultiWrite();
-    //    for (const auto & [tag, statisticPtr] : data)
-    //    {
-    //        Protos::TableStatistic table_statistic;
-    //        table_statistic.set_tag(static_cast<UInt64>(tag));
-    //        table_statistic.set_timestamp(0); // currently this is deprecated
-    //        table_statistic.set_blob(statisticPtr->serialize());
-    //        multi_write->addPut(tableStatisticKey(name_space, uuid, tag), table_statistic.SerializeAsString());
-    //        multi_write->addPut(tableStatisticTagKey(name_space, uuid, tag), std::to_string(static_cast<UInt64>(tag)));
-    //    }
-    //
-    //    multi_write->commit();
+
+    BatchCommitRequest batch_write;
+    for (const auto & [tag, statisticPtr] : data)
+    {
+        Protos::TableStatistic table_statistic;
+        table_statistic.set_tag(static_cast<UInt64>(tag));
+        table_statistic.set_timestamp(0); // currently this is deprecated
+        table_statistic.set_blob(statisticPtr->serialize());
+        batch_write.AddPut(SinglePutRequest(tableStatisticKey(name_space, uuid, tag), table_statistic.SerializeAsString()));
+        batch_write.AddPut(SinglePutRequest(tableStatisticTagKey(name_space, uuid, tag), std::to_string(static_cast<UInt64>(tag))));
+    }
+
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 std::unordered_map<StatisticsTag, StatisticsBasePtr>
 MetastoreProxy::getTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags)
 {
-    // Strings keys;
-    //    keys.reserve(tags.size());
-    //    for (const auto & tag : tags)
-    //    {
-    //        keys.push_back(tableStatisticKey(name_space, uuid, tag));
-    //    }
-    //    auto values = metastore_ptr->multiGet(keys);
-    //    std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
-    //    for (const auto & value : values)
-    //    {
-    //        if (value.first.empty())
-    //            continue;
-    //        Protos::TableStatistic table_statistic;
-    //        table_statistic.ParseFromString(value.first);
-    //        StatisticsTag tag = static_cast<StatisticsTag>(table_statistic.tag());
-    //        TxnTimestamp ts(table_statistic.timestamp());
-    //        auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
-    //        res.emplace(tag, statisticPtr);
-    //    }
+    Strings keys;
+    keys.reserve(tags.size());
+    for (const auto & tag : tags)
+    {
+        keys.push_back(tableStatisticKey(name_space, uuid, tag));
+    }
+    auto values = metastore_ptr->multiGet(keys);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> res;
+    for (const auto & value : values)
+    {
+        if (value.first.empty())
+            continue;
+        Protos::TableStatistic table_statistic;
+        table_statistic.ParseFromString(value.first);
+        StatisticsTag tag = static_cast<StatisticsTag>(table_statistic.tag());
+        TxnTimestamp ts(table_statistic.timestamp());
+        auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
+        res.emplace(tag, statisticPtr);
+    }
 
     throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
 }
@@ -1769,13 +1765,14 @@ std::unordered_set<StatisticsTag> MetastoreProxy::getAvailableTableStatisticsTag
 
 void MetastoreProxy::removeTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags)
 {
-    //    auto multi_write = createMultiWrite();
-    //    for (const auto & tag : tags)
-    //    {
-    //        multi_write->addDelete(tableStatisticKey(name_space, uuid, tag));
-    //        multi_write->addDelete(tableStatisticTagKey(name_space, uuid, tag));
-    //    }
-    //    multi_write->commit();
+    BatchCommitRequest batch_write;
+    for (const auto & tag : tags)
+    {
+        batch_write.AddDelete(tableStatisticKey(name_space, uuid, tag));
+        batch_write.AddDelete(tableStatisticTagKey(name_space, uuid, tag));
+    }
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 void MetastoreProxy::updateColumnStatistics(
@@ -1784,19 +1781,21 @@ void MetastoreProxy::updateColumnStatistics(
     const String & column,
     const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data)
 {
-    //    auto multi_write = createMultiWrite();
-    //    for (const auto & [tag, statisticPtr] : data)
-    //    {
-    //        Protos::ColumnStatistic column_statistic;
-    //        column_statistic.set_tag(static_cast<UInt64>(tag));
-    //        column_statistic.set_timestamp(statisticPtr->getTxnTimestamp().toUInt64());
-    //        column_statistic.set_column(column);
-    //        column_statistic.set_blob(statisticPtr->serialize());
-    //        multi_write->addPut(columnStatisticKey(name_space, uuid, column, tag), column_statistic.SerializeAsString());
-    //        multi_write->addPut(columnStatisticTagKey(name_space, uuid, column, tag), std::to_string(static_cast<UInt64>(tag)));
-    //    }
-    //
-    //    multi_write->commit();
+
+    BatchCommitRequest batch_write;
+    for (const auto & [tag, statisticPtr] : data)
+    {
+        Protos::ColumnStatistic column_statistic;
+        column_statistic.set_tag(static_cast<UInt64>(tag));
+        column_statistic.set_timestamp(0);
+        column_statistic.set_column(column);
+        column_statistic.set_blob(statisticPtr->serialize());
+        batch_write.AddPut(SinglePutRequest(columnStatisticKey(name_space, uuid, column, tag), column_statistic.SerializeAsString()));
+        batch_write.AddPut(SinglePutRequest(columnStatisticTagKey(name_space, uuid, column, tag), std::to_string(static_cast<UInt64>(tag))));
+    }
+
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getColumnStatistics(
@@ -1840,13 +1839,14 @@ MetastoreProxy::getAvailableColumnStatisticsTags(const String & name_space, cons
 void MetastoreProxy::removeColumnStatistics(
     const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags)
 {
-//    auto multi_write = createMultiWrite();
-//    for (const auto & tag : tags)
-//    {
-//        multi_write->addDelete(columnStatisticKey(name_space, uuid, column, tag));
-//        multi_write->addDelete(columnStatisticTagKey(name_space, uuid, column, tag));
-//    }
-//    multi_write->commit();
+    BatchCommitRequest batch_write;
+    for (const auto & tag : tags)
+    {
+        batch_write.AddDelete(columnStatisticKey(name_space, uuid, column, tag));
+        batch_write.AddDelete(columnStatisticTagKey(name_space, uuid, column, tag));
+    }
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 void MetastoreProxy::createVirtualWarehouse(const String & name_space, const String & vw_name, const VirtualWarehouseData & data)
