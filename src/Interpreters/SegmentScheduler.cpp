@@ -699,8 +699,10 @@ AddressInfos SegmentScheduler::sendPlanSegment(
         // set ParallelIndexId and source address
         for (auto i : random_worker_ids)
         {
-            const auto & worker_endpoint = worker_endpoints[i];
             parallel_index_id_index++;
+            if (parallel_index_id_index > plan_segment_ptr->getParallelSize())
+                break;
+            const auto & worker_endpoint = worker_endpoints[i];
             for (const auto& plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
             {
                 if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
