@@ -6,7 +6,6 @@
 #include <Statistics/SubqueryHelper.h>
 #include <boost/algorithm/string.hpp>
 
-#if 0
 namespace DB::Statistics
 {
 using Catalog::CatalogPtr;
@@ -15,24 +14,25 @@ class CatalogAdaptorCnch : public CatalogAdaptor
 public:
     bool hasStatsData(const StatsTableIdentifier & table) override;
     StatsData readStatsData(const StatsTableIdentifier & table) override;
-    void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
     StatsCollection readSingleStats(const StatsTableIdentifier & table, const std::optional<String> & column_name) override;
+    void writeStatsData(const StatsTableIdentifier & table, const StatsData & stats_data) override;
     void dropStatsData(const StatsTableIdentifier & table) override;
     void dropStatsDataAll(const String & database) override;
+
     void invalidateClusterStatsCache(const StatsTableIdentifier & table) override;
     void invalidateServerStatsCache(const StatsTableIdentifier & table) const override;
+
     std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const override;
     std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) const override;
     StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) const override;
     UInt64 getUpdateTime() override;
-    ~CatalogAdaptorCnch() = default;
-    std::vector<String> getPartitionColumns(const StatsTableIdentifier & identifier) const override;
     bool isTableCollectable(const StatsTableIdentifier & identifier) const override;
     bool isTableAutoUpdated(const StatsTableIdentifier & table) const override;
     ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const override;
-    const Settings & getSettingsRef() const override { return context.getSettingsRef(); }
+    const Settings & getSettingsRef() const override { return context->getSettingsRef(); }
 
     CatalogAdaptorCnch(ContextPtr context_, Catalog::CatalogPtr catalog_) : context(context_), catalog(catalog_) { }
+    ~CatalogAdaptorCnch() override = default;
 
 private:
     ContextPtr context;
@@ -144,45 +144,44 @@ void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
         dropStatsData(identifier);
     }
 }
+
 std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const String & database_name) const
 {
     std::vector<StatsTableIdentifier> results;
-    auto tables = catalog->getAllTablesID(database_name);
-    for (auto & table_pb : tables)
+    auto db = DatabaseCatalog::instance().getDatabase(database_name);
+    for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
     {
-        auto table_name = table_pb->name();
-        auto uuid = parseFromString<UUID>(table_pb->uuid());
-        results.emplace_back(database_name, table_name, uuid);
+        auto table = iter->table();
+        StatsTableIdentifier table_id(table->getStorageID());
+        results.emplace_back(table_id);
     }
     return results;
 }
 
 std::optional<StatsTableIdentifier> CatalogAdaptorCnch::getTableIdByName(const String & database_name, const String & table_name) const
 {
-    auto table_pb = catalog->getTableIDByName(database_name, table_name);
-    if (!table_pb)
+    auto & ins = DatabaseCatalog::instance();
+    auto db_storage = ins.getDatabase(database_name);
+    auto table = db_storage->tryGetTable(table_name, context);
+    if (!table)
     {
         return std::nullopt;
     }
-    auto uuid = parseFromString<UUID>(table_pb->uuid());
-    return StatsTableIdentifier(database_name, table_name, uuid);
+    auto result = table->getStorageID();
+
+    return StatsTableIdentifier(result);
 }
 
 StoragePtr CatalogAdaptorCnch::getStorageByTableId(const StatsTableIdentifier & identifier) const
 {
-    auto uuid_str = UUIDHelpers::UUIDToString(identifier.getUUID());
-    return catalog->getTableByUUID(context, uuid_str, TxnTimestamp::maxTS());
+    auto & ins = DatabaseCatalog::instance();
+    return ins.getTable(identifier.getStorageID(), context);
 }
 
 UInt64 CatalogAdaptorCnch::getUpdateTime()
 {
     // TODO: support cache invalidate strategy
     return 0;
-}
-std::vector<String> CatalogAdaptorCnch::getPartitionColumns(const StatsTableIdentifier & identifier) const
-{
-    auto storage = getStorageByTableId(identifier);
-    return storage->getColumnsRequiredForPartitionKey();
 }
 
 bool CatalogAdaptorCnch::isTableCollectable(const StatsTableIdentifier & identifier) const
@@ -231,7 +230,8 @@ ColumnDescVector CatalogAdaptorCnch::getCollectableColumns(const StatsTableIdent
 {
     ColumnDescVector result;
     auto storage = getStorageByTableId(identifier);
-    for (const auto & name_type_pr : storage->getColumns().getAll())
+    auto snapshot = storage->getInMemoryMetadataPtr();
+    for (const auto & name_type_pr : snapshot->getColumns().getAll())
     {
         if (!Statistics::isCollectableType(name_type_pr.type))
         {
@@ -244,14 +244,16 @@ ColumnDescVector CatalogAdaptorCnch::getCollectableColumns(const StatsTableIdent
 
 void CatalogAdaptorCnch::invalidateClusterStatsCache(const StatsTableIdentifier & table)
 {
+#if 0
     auto sql = fmt::format(
         FMT_STRING("select host(), invalidateStatsCache('{}', '{}') from cnch(server, system.one)"),
         table.getDatabaseName(),
         table.getTableName());
     // TODO: remove it when this bug is fixed
     sql += " SETTINGS enable_optimizer=0";
-
     executeSubQuery(context, sql);
+#endif
+    Statistics::CacheManager::invalidate(context, table);
 }
 
 void CatalogAdaptorCnch::invalidateServerStatsCache(const StatsTableIdentifier & table) const
@@ -261,7 +263,7 @@ void CatalogAdaptorCnch::invalidateServerStatsCache(const StatsTableIdentifier &
 
 CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context)
 {
-    auto catalog = context.getCnchCatalog();
+    auto catalog = context->getCnchCatalog();
     if (!catalog)
     {
         throw Exception("getCnchCatalog returns nullptr", ErrorCodes::LOGICAL_ERROR);
@@ -270,4 +272,3 @@ CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context)
 }
 
 }
-#endif

@@ -3,6 +3,7 @@
 namespace DB::Statistics
 {
 CatalogAdaptorPtr createCatalogAdaptorMemory(ContextPtr context);
+CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context);
 
 CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
 {
@@ -10,16 +11,9 @@ CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
     {
         return createCatalogAdaptorMemory(context);
     }
-    /// TODO: revise me
-    return createCatalogAdaptorMemory(context);
+    return createCatalogAdaptorCnch(context);
 }
 
 
-TxnTimestamp fetchTimestamp(ContextPtr context)
-{
-    (void)context;
-
-    return time(nullptr);
-}
 
 }

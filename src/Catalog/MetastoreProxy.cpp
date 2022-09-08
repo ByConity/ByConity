@@ -1700,8 +1700,7 @@ MetastoreProxy::getTableStatistics(const String & name_space, const String & uui
         auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
         res.emplace(tag, statisticPtr);
     }
-
-    throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
+    return res;
 }
 
 std::unordered_set<StatisticsTag> MetastoreProxy::getAvailableTableStatisticsTags(const String & name_space, const String & uuid)
