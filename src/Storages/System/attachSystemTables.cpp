@@ -85,6 +85,7 @@
 #include <Storages/System/StorageSystemStackTrace.h>
 #endif
 
+#include <Storages/System/StorageSystemBGThreads.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
@@ -194,6 +195,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 
     attach<StorageSystemMetastore>(system_database, "metastore");
     attach<StorageSystemBrokenTables>(system_database, "broken_tables");
+    attach<StorageSystemBGThreads>(system_database, "bg_threads");
     attach<StorageSystemCnchParts>(system_database, "cnch_parts");
     attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
     attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");

@@ -99,7 +99,7 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
     switch (input_params.type)
     {
         case ManipulationType::Merge:
-            task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);
+            task = std::make_shared<CloudMergeTreeMergeTask>(*this, input_params, task_context);
             break;
         case ManipulationType::Mutate:
             task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);

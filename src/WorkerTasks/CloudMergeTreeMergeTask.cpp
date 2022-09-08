@@ -1,8 +1,9 @@
 #include <WorkerTasks/CloudMergeTreeMergeTask.h>
 
+#include <CloudServices/commitCnchParts.h>
 #include <Interpreters/Context.h>
-#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <WorkerTasks/MergeTreeDataMerger.h>
 
 namespace DB
@@ -76,7 +77,10 @@ void CloudMergeTreeMergeTask::executeImpl()
     if (isCancelled())
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
-    // auto dumped_data = dumpAndCommitCnchParts(storage, ManipulationType::Merge, temp_parts, context, params.task_id);
+    CnchDataWriter cnch_writer(storage, *getContext(), ManipulationType::Insert);
+    auto dumped = cnch_writer.dumpAndCommitCnchParts(temp_parts);
+
+    /// [[maybe_unused]]auto dumped_data = dumpAndCommitCnchParts(storage, ManipulationType::Merge, temp_parts, context, params.task_id);
     // tryPreloadChecksumsAndPrimaryIndex(storage, dumped_data.parts, ManipulationType::Merge, context);
 }
 

@@ -3,7 +3,7 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
-#include <CloudServices/SelectPartsToMerge.h>
+#include <CloudServices/selectPartsToMerge.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <Common/Configurations.h>
@@ -29,7 +29,7 @@ namespace ErrorCodes
 
 namespace
 {
-    constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
+    constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 10ul;
 
     /// XXX: some settings for MutateTask
     constexpr auto max_mutate_part_num = 100UL;
@@ -38,14 +38,19 @@ namespace
     ServerCanMergeCallback getMergePred(const NameSet & merging_mutating_parts_snapshot)
     {
         return [&](const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) {
-            if (!rhs)
-                return bool(merging_mutating_parts_snapshot.count(lhs->name()));
+            if (!lhs)
+                return (merging_mutating_parts_snapshot.count(rhs->name())) ? false : true;
 
             if (merging_mutating_parts_snapshot.count(lhs->name()) || merging_mutating_parts_snapshot.count(rhs->name()))
                 return false;
 
+            return true;
+
+            /* FIXME
             auto lhs_commit_time = lhs->getColumnsCommitTime();
             auto rhs_commit_time = rhs->getColumnsCommitTime();
+
+            LOG_DEBUG(&Poco::Logger::get("MergeMutateDEBUG"), "lhs_commit_time {} rhs_commit_time {}", lhs_commit_time, rhs_commit_time);
 
             /// We can't find the right table_schema for parts which column_commit_time = 0
             if (!lhs_commit_time || !rhs_commit_time)
@@ -59,6 +64,7 @@ namespace
             /// We can't merge part part_1 and part_2 between T2 and T3, but can merge part_1 and part_2 after T3.
 
             return lhs_commit_time == rhs_commit_time;
+            */
         };
     }
 }
@@ -102,6 +108,12 @@ FutureManipulationTask::~FutureManipulationTask()
 
 FutureManipulationTask & FutureManipulationTask::assignSourceParts(ServerDataPartsVector && parts_)
 {
+    for (auto & part : parts_)
+    {
+        LOG_DEBUG(&Poco::Logger::get("MergeMutateDEBUG"), "assignSourceParts part {} name {}", static_cast<const void*>(part.get()), part->name());
+    }
+
+
     /// flatten the parts
     CnchPartsHelper::flattenPartsVector(parts_);
 
@@ -308,6 +320,8 @@ void CnchMergeMutateThread::runImpl()
     }
     catch (...)
     {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+
         /// If failed to get current ts or fetch start time from catalog, wait for a while and try again.
         scheduled_task->scheduleAfter(1 * 1000);
         return;
@@ -341,6 +355,7 @@ void CnchMergeMutateThread::runImpl()
     {
         last_schedule_time = current_ts;
         scheduled_task->scheduleAfter(DELAY_SCHEDULE_TIME_IN_SECOND * 1000);
+        LOG_DEBUG(log, "Schedule after {}s because of last_schedule_time = 0", DELAY_SCHEDULE_TIME_IN_SECOND);
         return;
     }
     last_schedule_time = current_ts;
@@ -599,10 +614,12 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         false, /// aggressive
         enable_batch_select,
         false, /// merge_with_ttl_allowed
-        nullptr); /// log
+        log); /// log
 
     metrics.elapsed_select_parts = watch.elapsedMicroseconds();
     watch.restart();
+
+    LOG_DEBUG(log, "Selected {} groups candidate", res.size());
 
     if (res.empty())
         return false;
@@ -675,7 +692,9 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
     */
 
     /// get specific version storage
-    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
+    /// TODO: FIXME @yuanquan
+    /// auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
+    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), TxnTimestamp::maxTS());
     auto & cnch_table = checkAndGetCnchTable(istorage);
 
     /// fill task parameters
@@ -685,7 +704,7 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
     params.task_id = toString(transaction_id.toUInt64());
     params.txn_id = transaction_id.toUInt64();
     /// storage info
-    /// TODO: params.create_table_query = cnch_table.genCreateTableQueryForWorker(params.task_id);
+    params.create_table_query = cnch_table.genCreateTableQueryForWorker("");
     /// params.is_bucket_table = cnch_table.isBucketTable();
     /// parts
     params.assignSourceParts(future_task.parts);

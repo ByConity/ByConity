@@ -1,4 +1,4 @@
-#include <CloudServices/SelectPartsToMerge.h>
+#include <CloudServices/selectPartsToMerge.h>
 
 #include <Catalog/DataModelPartWrapper.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -102,7 +102,7 @@ ServerSelectPartsDecision selectPartsToMerge(
         time_t part_commit_time = TxnTimestamp(part->getCommitTime()).toSecond();
         part_info.age = current_time > part_commit_time ? current_time - part_commit_time : 0;
         part_info.level = part->info().level;
-        part_info.data = part.get();
+        part_info.data = &part;
         /// TODO:
         /// part_info.ttl_infos = &part->ttl_infos;
         /// part_info.compression_codec_desc = part->default_codec->getFullCodecDesc();

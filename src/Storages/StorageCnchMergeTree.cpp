@@ -1718,4 +1718,22 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
+
+String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
+{
+    String worker_table_name = getTableName();
+
+    if (!suffix.empty())
+    {
+        worker_table_name += '_';
+        for (const auto & c : suffix)
+        {
+            if (c != '-')
+                worker_table_name += c;
+        }
+    }
+
+    return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
+}
+
 } // end namespace DB
