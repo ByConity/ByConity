@@ -20,8 +20,8 @@
 #include <vector>
 #include <Interpreters/Context.h>
 #include <Processors/Chunk.h>
-#include <Processors/Exchange/DataTrans/DataTransKey.h>
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/stream.h>
 #include <bthread/mtx_cv_base.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
@@ -47,7 +47,7 @@ struct BrpcSendMetric
 class BrpcRemoteBroadcastSender : public IBroadcastSender
 {
 public:
-    BrpcRemoteBroadcastSender(DataTransKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_);
+    BrpcRemoteBroadcastSender(ExchangeDataKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_);
     ~BrpcRemoteBroadcastSender() override;
 
     BroadcastStatus send(Chunk chunk) noexcept override;
@@ -60,7 +60,7 @@ public:
 
 private:
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastSender");
-    DataTransKeyPtrs trans_keys;
+    ExchangeDataKeyPtrs trans_keys;
     ContextPtr context;
     Block header;
     std::vector<brpc::StreamId> sender_stream_ids;

@@ -105,10 +105,10 @@ static Block getHeader(size_t column_num)
 
 void receiver1()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
     receiver->registerToSenders(1000);
     auto packet = receiver->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -120,10 +120,10 @@ void receiver1()
 
 void receiver2()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "localhost:6666");
+    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 2, "localhost:6666");
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
     receiver->registerToSenders(1000);
     auto packet = receiver->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
@@ -135,8 +135,8 @@ void receiver2()
 
 TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
 {
-    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
-    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 1, 2, "localhost:6666");
+    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
+    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 2, "localhost:6666");
 
     auto origin_chunk = createUInt8Chunk(1000, 1, 7);
     auto header = getHeader(1);
@@ -191,7 +191,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
+    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
 
     Chunk chunk = createUInt8Chunk(10, 1, 7);
     auto total_bytes = chunk.bytes();
@@ -201,7 +201,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
     receiver->registerToSenders(1000);
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);
 
@@ -234,7 +234,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, 1, "localhost:6666");
+    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     sender->accept(getContext().context, header);
@@ -250,7 +250,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true);
+        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
     receiver->registerToSenders(1000);
 
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);

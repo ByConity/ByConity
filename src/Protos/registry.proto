@@ -4,12 +4,11 @@ package DB.Protos;
 option cc_generic_services = true;
 
 message RegistryRequest {
-  required string query_id = 1;
-  required uint64 write_segment_id = 2;
-  required uint64 read_segment_id = 3;
-  required uint64 parallel_id = 4;
-  required string coordinator_address = 5;
-  required uint32 wait_timeout_ms = 6;
+  optional string query_id = 1;
+  optional uint64 exchange_id = 2;
+  optional uint64 parallel_id = 3;
+  optional string coordinator_address = 4;
+  optional uint32 wait_timeout_ms = 5;
 };
 
 message RegistryResponse {

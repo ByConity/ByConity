@@ -234,7 +234,7 @@ void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr init
     plan_segment_clone->setCoordinatorAddress(plan_segment.getCoordinatorAddress());
     plan_segment_clone->setCurrentAddress(plan_segment.getCurrentAddress());
     plan_segment_clone->appendPlanSegmentInputs(plan_segment.getPlanSegmentInputs());
-    plan_segment_clone->setPlanSegmentOutput(plan_segment.getPlanSegmentOutput());
+    plan_segment_clone->appendPlanSegmentOutputs(plan_segment.getPlanSegmentOutputs());
     plan_segment_clone->setParallelSize(plan_segment.getParallelSize());
     plan_segment_clone->setExchangeParallelSize(plan_segment.getExchangeParallelSize());
 

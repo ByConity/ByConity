@@ -40,8 +40,9 @@ namespace ErrorCodes
 }
 
 SinglePartitionExchangeSink::SinglePartitionExchangeSink(
-    Block header_, BroadcastSenderPtr sender_, size_t partition_id_, ExchangeOptions options_)
+    Block header_, BroadcastSenderPtr sender_, size_t partition_id_, ExchangeOptions options_, const String &name_)
     : IExchangeSink(std::move(header_))
+    , name(name_)
     , header(getPort().getHeader())
     , sender(sender_)
     , partition_id(partition_id_)

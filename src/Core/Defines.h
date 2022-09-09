@@ -112,6 +112,10 @@
 /// Version of ClickHouse inter server BRPC protocol.
 /// It's not necessary to increase this version number in most cases
 /// unless the serialization of plan segment has changed.
+<<<<<<< HEAD
 #define DBMS_BRPC_PROTOCOL_VERSION 1
 
 #define TEST_KNOB_FORCE_META_REBUILD 0x08ull
+=======
+#define DBMS_BRPC_PROTOCOL_VERSION 2
+>>>>>>> 3cd36486bda... suport shared cte

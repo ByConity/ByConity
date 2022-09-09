@@ -57,6 +57,8 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// Set client info.
         ClientInfo & client_info = query_context->getClientInfo();
         client_info.brpc_protocol_version = request->brpc_protocol_revision();
+        if (client_info.brpc_protocol_version != DBMS_BRPC_PROTOCOL_VERSION)
+            throw Exception("brpc protocol version different - current is " + std::to_string(client_info.brpc_protocol_version) + "remote is " + std::to_string(DBMS_BRPC_PROTOCOL_VERSION) +", plan segment is not compatible", ErrorCodes::LOGICAL_ERROR);
         client_info.query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
         client_info.interface = ClientInfo::Interface::BRPC;
         Decimal64 initial_query_start_time_microseconds {request->initial_query_start_time()};

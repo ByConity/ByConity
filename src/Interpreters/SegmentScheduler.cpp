@@ -388,8 +388,10 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                         "Logical error: can't find the segment which id is " + std::to_string(input_plan_segment_id),
                         ErrorCodes::LOGICAL_ERROR);
                 auto & input_plan_segment_ptr = graph_ptr->id_to_segment.find(input_plan_segment_id)->second;
-                auto plan_segment_output = input_plan_segment_ptr->getPlanSegmentOutput();
+                for (auto & plan_segment_output : input_plan_segment_ptr->getPlanSegmentOutputs())
                 {
+                    if (plan_segment_output->getExchangeId() != plan_segment_input_ptr->getExchangeId())
+                        continue;
                     // if stage out is write to local:
                     // 1.the left table for broadcast join
                     // 2.the left table or right table for local join
@@ -397,9 +399,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                     if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                         || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
                     {
-                        if (input_plan_segment_ptr->getParallelSize() != it->second->getParallelSize()
-                            || (graph_ptr->local_exchange_parallel_size != 0
-                                && (graph_ptr->local_exchange_parallel_size != input_plan_segment_ptr->getParallelSize())))
+                        if (input_plan_segment_ptr->getParallelSize() != it->second->getParallelSize())
                             throw Exception(
                                 "Logical error: the parallel size between local stage is different, input id:"
                                     + std::to_string(input_plan_segment_id)
@@ -628,8 +628,11 @@ AddressInfos SegmentScheduler::sendPlanSegment(
     auto local_address = getLocalAddress(query_context);
     plan_segment_ptr->setCoordinatorAddress(local_address);
     // if stage is relation with local stage
-    if (dag_graph_ptr->local_exchange_ids.find(plan_segment_ptr->getPlanSegmentId()) != dag_graph_ptr->local_exchange_ids.end()
-        && dag_graph_ptr->has_set_local_exchange)
+    if (
+        plan_segment_ptr->getParallelSize() > 1
+        && dag_graph_ptr->local_exchange_ids.find(plan_segment_ptr->getPlanSegmentId()) != dag_graph_ptr->local_exchange_ids.end()
+        && dag_graph_ptr->has_set_local_exchange
+    )
     {
         size_t parallel_index_id_index = 0;
 
@@ -644,8 +647,10 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                     // if input mode is local, set parallel index to 1
                     if (auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input->getPlanSegmentId()); it != dag_graph_ptr->id_to_segment.end())
                     {
-                        auto plan_segment_output = it->second->getPlanSegmentOutput();
+                        for (auto & plan_segment_output : it->second->getPlanSegmentOutputs())
                         {
+                            if (plan_segment_output->getExchangeId() != plan_segment_input->getExchangeId())
+                                continue;
                             // if data is write to local, so no need to shuffle data
                             if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                                 || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
@@ -725,8 +730,10 @@ AddressInfos SegmentScheduler::sendPlanSegment(
 
                 // if input mode is local, set parallel index to 1
                 auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input->getPlanSegmentId());
-                auto plan_segment_output = it->second->getPlanSegmentOutput();
+                for (auto & plan_segment_output : it->second->getPlanSegmentOutputs())
                 {
+                    if (plan_segment_output->getExchangeId() != plan_segment_input->getExchangeId())
+                        continue;
                     // if data is write to local, so no need to shuffle data
                     if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                         || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)

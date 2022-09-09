@@ -31,8 +31,10 @@
 
 namespace DB
 {
-LocalBroadcastChannel::LocalBroadcastChannel(DataTransKeyPtr data_key_, LocalChannelOptions options_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
-    : data_key(std::move(data_key_))
+LocalBroadcastChannel::LocalBroadcastChannel(
+    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String &name_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
+    : name(name_)
+    , data_key(std::move(data_key_))
     , options(std::move(options_))
     , receive_queue(options.queue_size)
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
@@ -149,7 +151,7 @@ void LocalBroadcastChannel::merge(IBroadcastSender &&)
 
 String LocalBroadcastChannel::getName() const
 {
-    return "Local: " + data_key->getKey();
+    return name;
 };
 
 LocalBroadcastChannel::~LocalBroadcastChannel()
@@ -163,8 +165,7 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(data_key))
         {
             element.initial_query_id = key->getQueryId();
-            element.write_segment_id = std::to_string(key->getWriteSegmentId());
-            element.read_segment_id = std::to_string(key->getReadSegmentId());
+            element.exchange_id = std::to_string(key->getExchangeId());
             element.partition_id = std::to_string(key->getParallelIndex());
             element.coordinator_address = key->getCoordinatorAddress();
         }

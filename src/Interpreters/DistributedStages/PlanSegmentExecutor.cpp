@@ -43,6 +43,8 @@
 #include <Processors/Exchange/SinglePartitionExchangeSink.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/Transforms/BufferedCopyTransform.h>
+#include <Processors/Transforms/CopyTransform.h>
+#include <Processors/ResizeProcessor.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/GraphvizPrinter.h>
@@ -69,7 +71,7 @@ namespace ErrorCodes
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_)
     : context(std::move(context_))
     , plan_segment(std::move(plan_segment_))
-    , plan_segment_output(plan_segment->getPlanSegmentOutput())
+    , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
 {
     options = ExchangeUtils::getExchangeOptions(context);
@@ -78,7 +80,7 @@ PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMu
 PlanSegmentExecutor::PlanSegmentExecutor(PlanSegmentPtr plan_segment_, ContextMutablePtr context_, ExchangeOptions options_)
     : context(std::move(context_))
     , plan_segment(std::move(plan_segment_))
-    , plan_segment_output(plan_segment->getPlanSegmentOutput())
+    , plan_segment_outputs(plan_segment->getPlanSegmentOutputs())
     , options(std::move(options_))
     , logger(&Poco::Logger::get("PlanSegmentExecutor"))
 {
@@ -211,70 +213,247 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 
 void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders)
 {
-    if (!plan_segment->getPlanSegmentOutput())
-        throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
-
-    size_t exchange_parallel_size = plan_segment_output->getExchangeParallelSize();
-    size_t parallel_size = plan_segment_output->getParallelSize();
-    ExchangeMode exchange_mode = plan_segment_output->getExchangeMode();
-    size_t write_plan_segment_id = plan_segment->getPlanSegmentId();
-    size_t read_plan_segment_id = plan_segment_output->getPlanSegmentId();
     String coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
 
-    bool keep_order = plan_segment_output->needKeepOrder() || context->getSettingsRef().exchange_enable_force_keep_order;
-
-    if (exchange_mode == ExchangeMode::BROADCAST)
-        exchange_parallel_size = 1;
-
-    /// output partitions num = num of plan_segment * exchange size
-    /// for example, if downstream plansegment size is 2 (parallel_id is 0 and 1) and exchange_parallel_size is 4
-    /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 1 to 8.
-    /// downstream plansegment and consumed partitions table:
-    /// plansegment parallel_id :  partition id
-    /// -----------------------------------------------
-    /// 0                       : 1,2,3,4
-    /// 1                       : 5,6,7,8
-    size_t total_partition_num = exchange_parallel_size == 0 ? parallel_size : parallel_size * exchange_parallel_size;
-
-    if (total_partition_num == 0)
-        throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
-
-    const Block & header = plan_segment_output->getHeader();
-
-    for (size_t i = 0; i < total_partition_num; i++)
+    std::vector<BroadcastSenderPtrs> senders_list;
+    for (const auto &cur_plan_segment_output : plan_segment_outputs)
     {
-        size_t partition_id = i + 1;
-        auto data_key = std::make_shared<ExchangeDataKey>(
-            plan_segment->getQueryId(), write_plan_segment_id, read_plan_segment_id, partition_id, coordinator_address);
-        BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
-        sender->accept(context, header);
-        senders.emplace_back(std::move(sender));
+        size_t exchange_parallel_size = cur_plan_segment_output->getExchangeParallelSize();
+        size_t parallel_size = cur_plan_segment_output->getParallelSize();
+        ExchangeMode exchange_mode = cur_plan_segment_output->getExchangeMode();
+        size_t exchange_id = cur_plan_segment_output->getExchangeId();
+        const Block & header = cur_plan_segment_output->getHeader();
+        BroadcastSenderPtrs current_exchange_senders;
+
+        if (exchange_mode == ExchangeMode::BROADCAST)
+            exchange_parallel_size = 1;
+
+        /// output partitions num = num of plan_segment * exchange size
+        /// for example, if downstream plansegment size is 2 (parallel_id is 0 and 1) and exchange_parallel_size is 4
+        /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 1 to 8.
+        /// downstream plansegment and consumed partitions table:
+        /// plansegment parallel_id :  partition id
+        /// -----------------------------------------------
+        /// 0                       : 1,2,3,4
+        /// 1                       : 5,6,7,8
+        size_t total_partition_num = exchange_parallel_size == 0 ? parallel_size : parallel_size * exchange_parallel_size;
+
+        if (total_partition_num == 0)
+            throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
+
+        for (size_t i = 0; i < total_partition_num; i++)
+        {
+            size_t partition_id = i + 1;
+            auto data_key = std::make_shared<ExchangeDataKey>(
+                plan_segment->getQueryId(), exchange_id, partition_id, coordinator_address);
+            BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+            sender->accept(context, header);
+            current_exchange_senders.emplace_back(std::move(sender));
+        }
+
+        senders_list.emplace_back(std::move(current_exchange_senders));
     }
 
     pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
+        QueryPlanOptimizationSettings::fromContext(context),
+        BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context)
+    );
 
     registerAllExchangeReceivers(*pipeline, options.exhcange_timeout_ms / 3);
 
     pipeline->setMaxThreads(pipeline->getNumThreads());
-    auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
-    if (!keep_order && output_size)
-        pipeline->resize(output_size, false, false);
 
-    LOG_DEBUG(logger, "plan segment {} add {} senders", plan_segment->getPlanSegmentId(), senders.size());
+    if (plan_segment->getPlanSegmentOutputs().empty())
+        throw Exception("PlanSegment has no output", ErrorCodes::LOGICAL_ERROR);
+
+    size_t sink_num = 0;
+    for (size_t i = 0; i < plan_segment_outputs.size(); ++i)
+    {
+        const auto &cur_plan_segment_output = plan_segment_outputs[i];
+        const auto &current_exchange_senders = senders_list[i];
+        ExchangeMode exchange_mode = cur_plan_segment_output->getExchangeMode();
+        bool keep_order = cur_plan_segment_output->needKeepOrder() || context->getSettingsRef().exchange_enable_force_keep_order;
+
+        auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
+
+        switch (exchange_mode)
+        {
+            case ExchangeMode::REPARTITION:
+            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
+            case ExchangeMode::GATHER:
+            {
+                size_t output_num = pipeline->getNumStreams();
+                size_t partition_num = current_exchange_senders.size();
+                bool need_resize =
+                    keep_order 
+                    && context->getSettingsRef().exchange_enable_keep_order_parallel_shuffle
+                    && partition_num > 1;
+                sink_num += (need_resize) ? output_num*partition_num : output_size;
+                break;
+            }
+            case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
+            case ExchangeMode::BROADCAST:
+                sink_num += output_size;
+                break;
+            default:
+                throw Exception(
+                    "Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)),
+                    ErrorCodes::LOGICAL_ERROR
+                );
+        }
+    }
+
+    pipeline->transform(
+        [&](OutputPortRawPtrs ports) -> Processors {
+            Processors new_processors;
+            std::vector<OutputPortRawPtrs> segs_output_ports(plan_segment_outputs.size(), OutputPortRawPtrs());
+
+            /*
+             * 1. initial pipeline state
+             *
+             *  _____     /------ ports[0]
+             * |  T  | ---|------ ports[1]
+             * |_____|    \------ ports[2]
+             */
+
+            if (plan_segment_outputs.size() > 1)
+            {
+                /*
+                 * 2.1. If plan segment has multi outputs, add copyTransfrom to pipeline.
+                 *
+                 *                                     _______________
+                 *            /------ ports[0] -------| CopyTransform1| ------------- ports[0] for plan_segment_outputs[0]
+                 *            |                       |_______________|        \----- ports[1] for plan_segment_outputs[1]
+                 *  _____     |                        _______________
+                 * |  T  | ---|------ ports[1] -------| CopyTransform2| ------------- ports[0] for plan_segment_outputs[0]
+                 * |_____|    |                       |_______________|        \----- ports[1] for plan_segment_outputs[1]
+                 *            |                        _______________
+                 *            \------ ports[2] -------| CopyTransform3| ------------- ports[0] for plan_segment_outputs[0]
+                 *                                    |_______________|        \----- ports[1] for plan_segment_outputs[1]
+                 * 
+                 * Save the ports for plan_segment_outputs[0] in segs_output_ports[0],
+                 * Save the ports for plan_segment_outputs[1] in segs_output_ports[1]...
+                 */
+                for (const auto & port : ports)
+                {
+                    const auto & header = port->getHeader();
+                    auto copy_transform = std::make_shared<CopyTransform>(header, plan_segment_outputs.size());
+                    auto &copy_outputs = copy_transform->getOutputs();
+
+                    connect(*port, copy_transform->getInputs().front());
+
+                    size_t seg_id = 0;
+                    for (auto & copy_output : copy_outputs)
+                    {
+                        segs_output_ports[seg_id].push_back(&copy_output);
+                        ++seg_id;
+                    }
+
+                    new_processors.emplace_back(std::move(copy_transform));
+                }
+            }
+            else
+            {
+                /*
+                 * 2.2. If there is only on plan_segment_output, than there is no need to add copyTransform.
+                 */
+                segs_output_ports[0] = ports;
+            }
+
+            for (size_t i = 0; i < segs_output_ports.size(); ++i)
+            {
+                auto &cur_plan_segment_output = plan_segment_outputs[i];
+                auto &current_exchange_senders = senders_list[i];
+                ExchangeMode exchange_mode = cur_plan_segment_output->getExchangeMode();
+                bool keep_order = cur_plan_segment_output->needKeepOrder() || context->getSettingsRef().exchange_enable_force_keep_order;
+                const auto & header = segs_output_ports[i][0]->getHeader();
+
+                auto output_size = context->getSettingsRef().exchange_unordered_output_parallel_size;
+                if (!keep_order && output_size)
+                {
+                    /*
+                     * 3.1. Add ResizeProcessor to pipeline.
+                     *  _______________
+                     * | CopyTransform1| ------------- ports[0] for plan_segment_outputs[0] -------------------------\
+                     * |_______________|        \----- ports[1] for plan_segment_outputs[1]->ResizeProcessor 2       |
+                     *  _______________                                                                              |
+                     * | CopyTransform2| ------------- ports[0] for plan_segment_outputs[0] -------------------------|-------- ResizeProcessor 1, for seg 1
+                     * |_______________|        \----- ports[1] for plan_segment_outputs[1]->ResizeProcessor 2       |         output ports num is output_size
+                     *  _______________                                                                              |
+                     * | CopyTransform3| ------------- ports[0] for plan_segment_outputs[0] -------------------------/
+                     * |_______________|        \----- ports[1] for plan_segment_outputs[1]->ResizeProcessor 2
+                     * 
+                     * If there is no CopyTransform, than pipeline will be:
+                     *  _____     /------ ports[0] ------\
+                     * |  T  | ---|------ ports[1] ------|-------ResizeProcessor 1, for seg 1
+                     * |_____|    \------ ports[2] ------/       output ports num is output_size
+                     */
+                    auto resize = std::make_shared<ResizeProcessor>(header, segs_output_ports[i].size(), output_size);
+                    auto &resize_inputs = resize->getInputs();
+                    auto &resize_outputs = resize->getOutputs();
+
+                    size_t input_index = 0;
+                    for (auto & input : resize_inputs)
+                    {
+                        connect(*segs_output_ports[i][input_index], input);
+                        ++input_index;
+                    }
+
+                    segs_output_ports[i].clear();
+                    for (auto & output : resize_outputs)
+                    {
+                        segs_output_ports[i].emplace_back(&output);
+                    }
+
+                    new_processors.emplace_back(std::move(resize));
+                }
+                // else 3.2. No need to add ResizeProcessor.
+
+                /* 4. Add ExchangeSink to pipeline. */
+                Processors current_new_processors;
+
+                switch (exchange_mode)
+                {
+                    case ExchangeMode::REPARTITION:
+                    case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
+                    case ExchangeMode::GATHER:
+                        current_new_processors = buildRepartitionExchangeSink(
+                            current_exchange_senders, keep_order, i, header, segs_output_ports[i]);
+                        break;
+                    case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
+                        current_new_processors = buildLoadBalancedExchangeSink(
+                            current_exchange_senders, i, header, segs_output_ports[i]);
+                        break;
+                    case ExchangeMode::BROADCAST:
+                        current_new_processors = buildBroadcastExchangeSink(
+                            current_exchange_senders, i, header, segs_output_ports[i]);
+                        break;
+                    default:
+                        throw Exception(
+                            "Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)),
+                            ErrorCodes::LOGICAL_ERROR
+                        );
+                }
+
+                new_processors.insert(new_processors.end(), current_new_processors.begin(), current_new_processors.end());
+            }
+
+            return new_processors;
+        },
+        sink_num
+    );
+
+    for (size_t i = 0; i < plan_segment_outputs.size(); ++i)
+    {
+        auto &current_exchange_senders = senders_list[i];
+        for (auto &sender:current_exchange_senders)
+        {
+            senders.emplace_back(std::move(sender));
+        }
+    }
 
     if (senders.empty())
         throw Exception("Plan segment has no exchange sender!", ErrorCodes::LOGICAL_ERROR);
-
-    if (exchange_mode == ExchangeMode::REPARTITION || exchange_mode == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
-        || exchange_mode == ExchangeMode::GATHER)
-        addRepartitionExchangeSink(pipeline, senders, keep_order);
-    else if (exchange_mode == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
-        addLoadBalancedExchangeSink(pipeline, senders);
-    else if (exchange_mode == ExchangeMode::BROADCAST)
-        addBroadcastExchangeSink(pipeline, senders);
-    else
-        throw Exception("Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)), ErrorCodes::LOGICAL_ERROR);
 }
 
 void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pipeline, UInt32 register_timeout_ms)
@@ -312,7 +491,6 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         exception = std::current_exception();
     }
 
-
     /// Wait all brpc register rpc done
     for (auto & res : async_results)
         brpc::Join(res.cntl->call_id());
@@ -328,11 +506,10 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         {
             LOG_INFO(
                 &Poco::Logger::get("PlanSegmentExecutor"),
-                "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}_{}",
+                "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}",
                 butil::endpoint2str(res.cntl->remote_side()).c_str(),
                 res.request->query_id(),
-                res.request->write_segment_id(),
-                res.request->read_segment_id(),
+                res.request->exchange_id(),
                 res.request->parallel_id(),
                 res.request->coordinator_address());
             continue;
@@ -340,93 +517,118 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         res.channel->assertController(*res.cntl);
         LOG_TRACE(
             &Poco::Logger::get("PlanSegmentExecutor"),
-            "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}_{}",
+            "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}",
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
             res.request->query_id(),
-            res.request->write_segment_id(),
-            res.request->read_segment_id(),
+            res.request->exchange_id(),
             res.request->parallel_id(),
             res.request->coordinator_address());
     }
 }
 
-
-void PlanSegmentExecutor::addRepartitionExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders, bool keep_order)
+Processors PlanSegmentExecutor::buildRepartitionExchangeSink(
+    BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports)
 {
-    LOG_DEBUG(logger, "plan segment {} add repartition sink", plan_segment->getPlanSegmentId());
+    Processors new_processors;
+
     ColumnsWithTypeAndName arguments;
     ColumnNumbers argument_numbers;
     for (const auto & column_name : plan_segment->getPlanSegmentOutput()->getShufflekeys())
     {
-        arguments.emplace_back(plan_segment_output->getHeader().getByName(column_name));
-        argument_numbers.emplace_back(plan_segment_output->getHeader().getPositionByName(column_name));
+        arguments.emplace_back(plan_segment_outputs[output_index]->getHeader().getByName(column_name));
+        argument_numbers.emplace_back(plan_segment_outputs[output_index]->getHeader().getPositionByName(column_name));
     }
     auto repartition_func = RepartitionTransform::getDefaultRepartitionFunction(arguments, context);
     size_t partition_num = senders.size();
+
     if (keep_order && context->getSettingsRef().exchange_enable_keep_order_parallel_shuffle && partition_num > 1)
     {
-        pipeline->addSimpleTransform([&](const Block & header) {
-            return std::make_shared<RepartitionTransform>(header, partition_num, argument_numbers, repartition_func);
-        });
-
-        size_t output_num = pipeline->getNumStreams();
+        size_t output_num = ports.size();
         size_t sink_num = output_num * partition_num;
-        pipeline->transform(
-            [&](OutputPortRawPtrs ports) -> Processors {
-                Processors new_processors;
-                new_processors.reserve(output_num + sink_num);
-                const auto & header = ports[0]->getHeader();
-                for (size_t i = 0; i < output_num; ++i)
+
+        new_processors.resize(1+output_num+sink_num);
+
+        for (const auto & port : ports)
+        {
+            /* create one repartition transform for per port. */
+            auto repartition_transform = std::make_shared<RepartitionTransform>(header, partition_num, argument_numbers, repartition_func);
+            auto &repartition_outputs = repartition_transform->getOutputs();
+            connect(*port, repartition_transform->getInputs().front());
+
+            for (auto & repartition_output : repartition_outputs)
+            {
+                /* create BufferedCopyTransform, and connect RepartitionTransform(output port i) to BufferedCopyTransform */
+                auto copy_transform = std::make_shared<BufferedCopyTransform>(header, partition_num, 20);
+                connect(repartition_output, copy_transform->getInputPort());
+
+                /* create SinglePartitionExchangeSink, and connect BufferedCopyTransform to SinglePartitionExchangeSink */
+                auto & copy_outputs = copy_transform->getOutputs();
+                size_t partition_id = 0;
+                for (auto & copy_output : copy_outputs)
                 {
-                    auto copy_transform = std::make_shared<BufferedCopyTransform>(header, partition_num, 20);
-                    connect(*ports[i], copy_transform->getInputPort());
-                    auto & copy_outputs = copy_transform->getOutputs();
-                    size_t partition_id = 0;
-                    for (auto & copy_output : copy_outputs)
-                    {
-                        auto exchange_sink
-                            = std::make_shared<SinglePartitionExchangeSink>(header, senders[partition_id], partition_id, options);
-                        connect(copy_output, exchange_sink->getPort());
-                        new_processors.emplace_back(std::move(exchange_sink));
-                        partition_id++;
-                    }
-                    new_processors.emplace_back(std::move(copy_transform));
+                    String name = SinglePartitionExchangeSink::generateName(plan_segment_outputs[output_index]->getExchangeId());
+                    auto exchange_sink =
+                        std::make_shared<SinglePartitionExchangeSink>(header, senders[partition_id], partition_id, options, name);
+                    connect(copy_output, exchange_sink->getPort());
+                    new_processors.emplace_back(std::move(exchange_sink));
+
+                    ++partition_id;
                 }
-                return new_processors;
-            },
-            sink_num);
+
+                new_processors.emplace_back(std::move(copy_transform));
+            }
+
+            new_processors.emplace_back(repartition_transform);
+        }
     }
     else
     {
-        pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-            /// exchange sink only process StreamType::Main
-            if (stream_type != QueryPipeline::StreamType::Main)
-                return nullptr; /// return nullptr means this sink will not be added;
-            return std::make_shared<MultiPartitionExchangeSink>(header, senders, repartition_func, argument_numbers, options);
-        });
+        for (const auto & port : ports)
+        {
+            String name = MultiPartitionExchangeSink::generateName(plan_segment_outputs[output_index]->getExchangeId());
+            auto exchange_sink =
+                std::make_shared<MultiPartitionExchangeSink>(header, senders, repartition_func, argument_numbers, options, name);
+            connect(*port, exchange_sink->getInputs().front());
+
+            new_processors.emplace_back(std::move(exchange_sink));
+        }
     }
+
+    return new_processors;
 }
 
-void PlanSegmentExecutor::addBroadcastExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders) // NOLINT
+Processors PlanSegmentExecutor::buildBroadcastExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports)
 {
-    /// For broadcast exchange, we all 1:1 remote sender to one 1:N remote sender and can avoid duplicated serialization
-    ExchangeUtils::mergeSenders(senders);
-    LOG_DEBUG(logger, "After merge, broadcast sink size {}", senders.size());
-    pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-        if (stream_type != QueryPipeline::StreamType::Main)
-            return nullptr;
-        return std::make_shared<BroadcastExchangeSink>(header, senders, options);
-    });
+    Processors new_processors;
+
+    for (auto &port : ports)
+    {
+        String name = BroadcastExchangeSink::generateName(plan_segment_outputs[output_index]->getExchangeId());
+        auto exchange_sink =
+            std::make_shared<BroadcastExchangeSink>(header, senders, options, name);
+        connect(*port, exchange_sink->getInputs().front());
+        
+        new_processors.emplace_back(std::move(exchange_sink));
+    }
+
+    return new_processors;
 }
 
-void PlanSegmentExecutor::addLoadBalancedExchangeSink(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders) // NOLINT
+Processors PlanSegmentExecutor::buildLoadBalancedExchangeSink(BroadcastSenderPtrs & senders, size_t output_index, const Block &header, OutputPortRawPtrs &ports)
 {
-    LOG_DEBUG(logger, "plan segment {} add loadbalanced sink with {} senders", plan_segment->getPlanSegmentId(), senders.size());
-    pipeline->setSinks([&](const Block & header, QueryPipeline::StreamType stream_type) -> ProcessorPtr {
-        if (stream_type != QueryPipeline::StreamType::Main)
-            return nullptr;
-        return std::make_shared<LoadBalancedExchangeSink>(header, senders);
-    });
+    Processors new_processors;
+
+    for (auto &port : ports)
+    {
+        String name = LoadBalancedExchangeSink::generateName(plan_segment_outputs[output_index]->getExchangeId());
+        auto exchange_sink =
+            std::make_shared<LoadBalancedExchangeSink>(header, senders, name);
+        connect(*port, exchange_sink->getInputs().front());
+
+        new_processors.emplace_back(std::move(exchange_sink));
+    }
+
+    return new_processors;
 }
 
 void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status) noexcept
