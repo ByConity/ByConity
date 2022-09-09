@@ -271,4 +271,43 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
             project->getDynamicFilters()),
         PlanNodes{node->getChildren()[0]});
 }
+
+PatternPtr MergePredicatesUsingDomainTranslator::getPattern() const
+{
+    return Patterns::filter();
+}
+
+TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto & context = rule_context.context;
+    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
+    if (!old_filter_node)
+        return {};
+
+    const auto & step = *old_filter_node->getStep();
+    auto predicate = step.getFilter()->clone();
+
+    using ExtractionReuslt = DB::Predicate::ExtractionResult;
+    using DomainTranslator = DB::Predicate::DomainTranslator;
+
+    DomainTranslator domain_translator = DomainTranslator(context);
+    ExtractionReuslt rewritten = domain_translator.getExtractionResult(predicate, step.getOutputStream().header.getNamesAndTypes());
+
+    if (domain_translator.isIgnored() || predicate->getColumnName() == rewritten.remaining_expression->getColumnName())
+        return {};
+
+    ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts({
+        domain_translator.toPredicate(rewritten.tuple_domain),
+        rewritten.remaining_expression});
+
+    if (combine_extraction_result->getColumnName() == predicate->getColumnName())
+        return {};
+
+    auto filter_step
+        = std::make_shared<FilterStep>(node->getChildren()[0]->getStep()->getOutputStream(), combine_extraction_result, step.removesFilterColumn());
+    auto filter_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(filter_step), PlanNodes{node->getChildren()[0]});
+
+    return filter_node;
+}
+
 }

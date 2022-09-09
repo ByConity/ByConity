@@ -22,7 +22,7 @@ Projection est. 1 rows
                   │              └─ Projection est. 335 rows
                   │                 │     Dynamic Filters Builder: {d_date_sk}
                   │                 └─ Filter est. 335 rows
-                  │                    │     (d_month_seq <= cast(1211, 'UInt32')) AND (d_month_seq >= 1200)
+                  │                    │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                   │                    └─ TableScan tpcds.date_dim est. 73049 rows
                   └─ MergingAggregated est. 258933676 rows
                      └─ Repartition Exchange est. 258933676 rows
@@ -39,6 +39,6 @@ Projection est. 1 rows
                                  └─ Projection est. 335 rows
                                     │     Dynamic Filters Builder: {d_date_sk_1}
                                     └─ Filter est. 335 rows
-                                       │     (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= cast(1211, 'UInt32'))
+                                       │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                        └─ TableScan tpcds.date_dim est. 73049 rows
 note: Dynamic Filter is applied for 4 times.

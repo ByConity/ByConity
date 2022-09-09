@@ -1225,7 +1225,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryProjectWithBetween)
         .ok();
 }
 
-TEST_F(MaterializedViewRewriteComplexTest, testJoinQueryProjectWithBetween)
+TEST_F(MaterializedViewRewriteComplexTest, DISABLED_testJoinQueryProjectWithBetween)
 {
     sql("select *"
             " from foodmart.sales_fact_1997 as s"

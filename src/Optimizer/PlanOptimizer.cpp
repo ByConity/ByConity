@@ -36,6 +36,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
@@ -46,6 +47,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // normalize plan after predicate push down
         std::make_shared<ColumnPruning>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
 
@@ -110,6 +112,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // predicate push down
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<PredicatePushdown>(),
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
@@ -129,6 +132,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // simple join order (primary for large joins reorder)
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
@@ -141,6 +145,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // prepare for cascades
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
+        std::make_shared<IterativeRewriter>(Rules::mergePredicatesRules(), "MergePredicates"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),

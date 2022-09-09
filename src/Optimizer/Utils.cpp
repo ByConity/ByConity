@@ -141,5 +141,37 @@ bool ConstASTPtrOrdering::operator()(const ConstASTPtr & predicate_1, const Cons
     return predicate_1->getColumnName() < predicate_2->getColumnName();
 }
 
+//Determine whether it is NAN
+bool isFloatingPointNaN(const DataTypePtr & type, const Field & value)
+{
+    TypeIndex type_id = type->getTypeId();
+
+    if (type_id == TypeIndex::Float32)
+        return std::isnan(value.get<Float64>());
+
+    if (type_id == TypeIndex::Float64)
+        return std::isnan(value.get<Float64>());
+
+    return false;
+}
+
+String flipOperator(const String & name)
+{
+    if (name == "equals")
+        return name;
+    if (name == "notEquals")
+        return name;
+    if (name == "less")
+        return "greater";
+    if (name == "lessOrEquals")
+        return "greaterOrEquals";
+    if (name == "greater")
+        return "less";
+    if (name == "greaterOrEquals")
+        return "lessOrEquals";
+
+    throw Exception("Unsupported comparison", DB::ErrorCodes::LOGICAL_ERROR);
+}
+
 }
 }

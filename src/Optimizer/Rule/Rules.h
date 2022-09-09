@@ -11,6 +11,7 @@ public:
     static std::vector<RulePtr> implementSetRules();
     static std::vector<RulePtr> normalizeExpressionRules();
     static std::vector<RulePtr> simplifyExpressionRules();
+    static std::vector<RulePtr> mergePredicatesRules();
     static std::vector<RulePtr> inlineProjectionRules();
     static std::vector<RulePtr> pushPartialStepRules();
     static std::vector<RulePtr> pushAggRules();

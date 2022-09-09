@@ -51,6 +51,10 @@ namespace Utils
         bool operator()(const ConstASTPtr & predicate_1, const ConstASTPtr & predicate_2) const;
     };
 
+    //Determine whether it is NAN
+    bool isFloatingPointNaN(const DataTypePtr & type, const Field & value);
+
+    String flipOperator(const String & name);
 }
 
 }

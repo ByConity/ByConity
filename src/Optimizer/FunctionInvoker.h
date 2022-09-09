@@ -10,6 +10,10 @@ struct FieldWithType
 {
     DataTypePtr type;
     Field value;
+    bool operator==(const FieldWithType & other) const
+    {
+        return type->getTypeId() == other.type->getTypeId() && value == other.value;
+    }
 };
 
 using FieldsWithType = std::vector<FieldWithType>;

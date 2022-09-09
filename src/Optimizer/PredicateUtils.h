@@ -65,6 +65,7 @@ public:
 
     static ASTPtr combineConjuncts(const std::vector<ConstASTPtr> & predicates);
     static ASTPtr combineDisjuncts(const std::vector<ConstASTPtr> & predicates);
+    static ASTPtr combineDisjunctsWithDefault(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
     static ASTPtr combinePredicates(const String & fun, std::vector<ConstASTPtr> predicates);
 
     static bool isTruePredicate(const ConstASTPtr & predicate);

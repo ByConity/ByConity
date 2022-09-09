@@ -20,7 +20,7 @@ Projection est. 100 rows
                   │           └─ Repartition Exchange est. ? rows
                   │              │     Partition by: {d_date_sk}
                   │              └─ Filter est. ? rows
-                  │                 │     (d_month_seq <= cast(1211, 'UInt32')) AND (d_month_seq >= 1200)
+                  │                 │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                   │                 └─ TableScan tpcds.date_dim est. ? rows
                   └─ MergingAggregated est. ? rows
                      └─ Repartition Exchange est. ? rows
@@ -35,5 +35,5 @@ Projection est. 100 rows
                               └─ Repartition Exchange est. ? rows
                                  │     Partition by: {d_date_sk_1}
                                  └─ Filter est. ? rows
-                                    │     (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= cast(1211, 'UInt32'))
+                                    │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                     └─ TableScan tpcds.date_dim est. ? rows

@@ -275,14 +275,18 @@ ASTPtr PredicateUtils::combineConjuncts(const std::vector<ConstASTPtr> & predica
 
 ASTPtr PredicateUtils::combineDisjuncts(const std::vector<ConstASTPtr> & predicates)
 {
-    if (predicates.empty())
-        return PredicateConst::FALSE_VALUE;
+    return combineDisjunctsWithDefault(predicates, PredicateConst::FALSE_VALUE);
+}
 
+ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast)
+{
+    if (predicates.empty())
+        return default_ast;
     if (predicates.size() == 1)
         return predicates[0]->clone();
 
     ASTs args;
-    for (const auto & arg : predicates)
+    for (auto & arg : predicates)
     {
         if (isTruePredicate(arg))
             return PredicateConst::TRUE_VALUE;
@@ -292,7 +296,7 @@ ASTPtr PredicateUtils::combineDisjuncts(const std::vector<ConstASTPtr> & predica
     }
 
     if (args.empty())
-        return PredicateConst::FALSE_VALUE;
+        return default_ast;
 
     std::sort(args.begin(), args.end(), compareASTPtr);
 

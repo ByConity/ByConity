@@ -66,3 +66,18 @@ TEST_F(CorrectnessPlanTesting, q2)
 {
     EXPECT_TRUE(equals(explain("q2"), expected("q2")));
 }
+
+TEST_F(CorrectnessPlanTesting, q3)
+{
+    EXPECT_TRUE(equals(explain("q3"), expected("q3")));
+}
+
+TEST_F(CorrectnessPlanTesting, q4)
+{
+    EXPECT_TRUE(equals(explain("q4"), expected("q4")));
+}
+
+TEST_F(CorrectnessPlanTesting, q5)
+{
+    EXPECT_TRUE(equals(explain("q5"), expected("q5")));
+}

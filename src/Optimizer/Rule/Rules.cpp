@@ -40,6 +40,12 @@ std::vector<RulePtr> Rules::simplifyExpressionRules()
         std::make_shared<SimplifyExpressionRewriteRule>()};
 }
 
+std::vector<RulePtr> Rules::mergePredicatesRules()
+{
+    return {
+        std::make_shared<MergePredicatesUsingDomainTranslator>()};
+}
+
 std::vector<RulePtr> Rules::inlineProjectionRules()
 {
     // todo@kaixi: remove InlineProjectionIntoJoin

@@ -1,5 +1,6 @@
 #pragma once
 #include <Optimizer/Rule/Rule.h>
+#include <Optimizer/DomainTranslator.h>
 
 namespace DB {
 
@@ -32,6 +33,18 @@ class SimplifyPredicateRewriteRule : public Rule
 public:
     RuleType getType() const override { return RuleType::SIMPLIFY_PREDICATE_REWRITE; }
     String getName() const override { return "SIMPLIFY_PREDICATE_REWRITE"; }
+
+    PatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
+class MergePredicatesUsingDomainTranslator : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR; }
+    String getName() const override { return "MERGE_PREDICATES_USING_DOMAIN_TRANSLATOR"; }
 
     PatternPtr getPattern() const override;
 

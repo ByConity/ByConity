@@ -433,7 +433,8 @@ TEST_F(MaterializedViewRewriteTest, testAggregate6)
    * There will be a compensating Project added after matching of the Aggregate.
    * This rule targets to test if the Calc can be handled.
    */
-TEST_F(MaterializedViewRewriteTest, testCompensatingCalcWithAggregate0)
+TEST_F(MaterializedViewRewriteTest,
+       DISABLED_testCompensatingCalcWithAggregate0)
 {
     String mv = ""
         "select * from\n"
@@ -454,7 +455,7 @@ TEST_F(MaterializedViewRewriteTest, testCompensatingCalcWithAggregate0)
    * There will be a compensating Project + Filter added after matching of the Aggregate.
    * This rule targets to test if the Calc can be handled.
    */
-TEST_F(MaterializedViewRewriteTest, testCompensatingCalcWithAggregate1)
+TEST_F(MaterializedViewRewriteTest, DISABLED_testCompensatingCalcWithAggregate1)
 {
     String mv = ""
         "select * from\n"
