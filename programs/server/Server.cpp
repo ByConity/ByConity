@@ -699,9 +699,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 #endif
 
-    // Init Brpc
-    BrpcApplication::getInstance().initialize(config());
-
     global_context->setRemoteHostFilter(config());
 
     std::string path = getCanonicalPath(config().getString("path", DBMS_DEFAULT_PATH));
