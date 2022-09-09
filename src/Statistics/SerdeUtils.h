@@ -36,6 +36,8 @@ inline SerdeDataType dataTypeToSerde(const IDataType & data_type)
         CASE(DateTime, UInt32)
         default:
             throw Exception(fmt::format(FMT_STRING("unknown type index {}"), type_index), ErrorCodes::LOGICAL_ERROR);
+#undef CASE
+#undef CASE_SAME
     }
 }
 

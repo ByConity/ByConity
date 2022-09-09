@@ -17,8 +17,8 @@ public:
     void deserialize(std::string_view blob) override;
     StatisticsTag getTag() const override { return tag; }
 
-    Protos::StatsColumnBasic & mutable_proto() { return proto; }
-    const Protos::StatsColumnBasic & get_proto() const { return proto; }
+    Protos::StatsColumnBasic & mutableProto() { return proto; }
+    const Protos::StatsColumnBasic & getProto() const { return proto; }
 
     String serializeToJson() const override;
     void deserializeFromJson(std::string_view json) override;

@@ -20,23 +20,15 @@ public:
     StatsData get(const StatsTableIdentifier & table_id, bool table_info, const ColumnDescVector & columns) override
     {
         StatsData result;
-        auto all_stats = catalog->readStatsData(table_id);
         if (table_info)
         {
-            result.table_stats = all_stats.table_stats;
+            result.table_stats = catalog->readSingleStats(table_id, std::nullopt);
         }
 
-        for (const auto & pr : columns)
+        for (auto & pr : columns)
         {
-            const auto & col_name = pr.name;
-            if (all_stats.column_stats.count(col_name))
-            {
-                result.column_stats.emplace(pr.name, all_stats.column_stats.at(col_name));
-            }
-            else
-            {
-                result.column_stats.emplace(pr.name, StatsCollection{});
-            }
+            auto & col_name = pr.name;
+            result.column_stats.emplace(pr.name, catalog->readSingleStats(table_id, col_name));
         }
         return result;
     }
@@ -79,15 +71,6 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
 {
     StatsData result;
     auto & cache = Statistics::CacheManager::instance();
-    std::optional<StatsData> all_stats_opt;
-
-    auto fetch_data = [&]() {
-        if (!all_stats_opt.has_value())
-        {
-            // read all data once instead of repeatedly read
-            all_stats_opt = catalog->readStatsData(table_id);
-        }
-    };
 
     if (table_info)
     {
@@ -97,8 +80,7 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
         auto item_ptr = cache.get(key);
         if (!item_ptr)
         {
-            fetch_data();
-            item_ptr = makePocoShared<StatsCollection>(all_stats_opt.value().table_stats);
+            item_ptr = makePocoShared<StatsCollection>(catalog->readSingleStats(table_id, std::nullopt));
             cache.update(key, item_ptr);
         }
         result.table_stats = *item_ptr;
@@ -111,15 +93,7 @@ StatsData CachedStatsProxyImpl::get(const StatsTableIdentifier & table_id, bool 
         auto item_ptr = cache.get(key);
         if (!item_ptr)
         {
-            fetch_data();
-            if (all_stats_opt.value().column_stats.count(col_name))
-            {
-                item_ptr = makePocoShared<StatsCollection>(all_stats_opt.value().column_stats.at(col_name));
-            }
-            else
-            {
-                item_ptr = makePocoShared<StatsCollection>();
-            }
+            item_ptr = makePocoShared<StatsCollection>(catalog->readSingleStats(table_id, col_name));
             cache.update(key, item_ptr);
         }
         result.column_stats.emplace(pr.name, *item_ptr);

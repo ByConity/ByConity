@@ -16,15 +16,13 @@
 #include <Protos/RPCHelpers.h>
 #include <cppkafka/cppkafka.h>
 #include <MergeTreeCommon/InsertionLabel.h>
-// #include <Statistics/StatisticsBase.h>
+#include <Statistics/ExportSymbols.h>
+#include <Statistics/StatisticsBase.h>
 #include <ResourceManagement/CommonData.h>
 #include <Catalog/IMetastore.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 
-namespace DB
-{
-
-namespace Catalog
+namespace DB::Catalog
 {
 
 #define DB_STORE_PREFIX "DB_"
@@ -425,12 +423,12 @@ public:
         return ss.str();
     }
 
-    // static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+    static String tableStatisticKey(const String name_space, const String & uuid, const StatisticsTag & tag)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_PREFIX << uuid << '_' << static_cast<UInt64>(tag);
+        return ss.str();
+    }
 
     static String tableStatisticPrefix(const String name_space, const String & uuid)
     {
@@ -439,12 +437,12 @@ public:
         return ss.str();
     }
 
-    // static String tableStatisticTagKey(const String name_space, const String & uuid, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+    static String tableStatisticTagKey(const String name_space, const String & uuid, const StatisticsTag & tag)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_STATISTICS_TAG_PREFIX << uuid << '_' << static_cast<UInt64>(tag);
+        return ss.str();
+    }
 
     static String tableStatisticTagPrefix(const String name_space, const String & uuid)
     {
@@ -453,12 +451,12 @@ public:
         return ss.str();
     }
 
-    // static String columnStatisticKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_' << escapeString(column) << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+     static String columnStatisticKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
+     {
+         std::stringstream ss;
+         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
+         return ss.str();
+     }
 
     static String columnStatisticPrefix(const String name_space, const String & uuid)
     {
@@ -467,12 +465,12 @@ public:
         return ss.str();
     }
 
-    // static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
-    // {
-    //     std::stringstream ss;
-    //     ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << (UInt64)tag;
-    //     return ss.str();
-    // }
+     static String columnStatisticTagKey(const String name_space, const String & uuid, const String & column, const StatisticsTag & tag)
+     {
+         std::stringstream ss;
+         ss << escapeString(name_space) << '_' << COLUMN_STATISTICS_TAG_PREFIX << uuid << '_' << escapeString(column) << '_' << static_cast<UInt64>(tag);
+         return ss.str();
+     }
 
     static String columnStatisticTagPrefix(const String name_space, const String & uuid, const String & column)
     {
@@ -726,15 +724,24 @@ public:
     UInt64 getNonHostUpdateTimeStamp(const String & name_space, const String & table_uuid);
     void setNonHostUpdateTimeStamp(const String & name_space, const String & table_uuid, const UInt64 pts);
 
-    // void updateTableStatistics(const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr> getTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
-    // std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & name_space, const String & uuid);
-    // void removeTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    void updateTableStatistics(
+        const String & name_space, const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr>
+    getTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
+    std::unordered_set<StatisticsTag> getAvailableTableStatisticsTags(const String & name_space, const String & uuid);
+    void removeTableStatistics(const String & name_space, const String & uuid, const std::unordered_set<StatisticsTag> & tags);
 
-    // void updateColumnStatistics(const String & name_space, const String & uuid, const String & column, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
-    // std::unordered_map<StatisticsTag, StatisticsBasePtr> getColumnStatistics(const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
-    // std::unordered_set<StatisticsTag> getAvailableColumnStatisticsTags(const String & name_space, const String & uuid, const String & column);
-    // void removeColumnStatistics(const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    void updateColumnStatistics(
+        const String & name_space,
+        const String & uuid,
+        const String & column,
+        const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);
+    std::unordered_map<StatisticsTag, StatisticsBasePtr> getColumnStatistics(
+        const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
+    std::unordered_set<StatisticsTag>
+    getAvailableColumnStatisticsTags(const String & name_space, const String & uuid, const String & column);
+    void removeColumnStatistics(
+        const String & name_space, const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
 
@@ -743,6 +750,4 @@ private:
     MetastorePtr metastore_ptr;
 };
 
-}
-
-}
+} // namespace DB::Catalog

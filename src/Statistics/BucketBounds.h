@@ -3,6 +3,7 @@
 
 #include <string_view>
 #include <DataTypes/DataTypeString.h>
+#include <Statistics/SerdeDataType.h>
 
 namespace DB::Statistics
 {
@@ -19,6 +20,7 @@ public:
 
     virtual String serialize() const = 0;
     virtual void deserialize(std::string_view blob) = 0;
+
     //serialize as json
     virtual String serializeToJson() const = 0;
 
@@ -32,16 +34,14 @@ public:
     BucketBounds & operator=(const BucketBounds &) = default;
     BucketBounds & operator=(BucketBounds &&) = default;
 
+    virtual SerdeDataType getSerdeDataType() const = 0;
+
     virtual ~BucketBounds() = default;
 
-    virtual String getSqlForBucketId(const String & col_name) const = 0;
-
     virtual size_t numBuckets() const = 0;
-
     virtual String getElementAsString(int64_t index) const = 0;
 
     virtual std::pair<bool, bool> getBoundInclusive(size_t bucket_id) const = 0;
 };
-
 
 }

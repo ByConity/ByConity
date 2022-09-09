@@ -10,6 +10,7 @@
 
 #include <city.h>
 #include <IO/WriteIntText.h>
+#include <Optimizer/Dump/Json2Pb.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/range/adaptor/transformed.hpp>
@@ -33,7 +34,6 @@ public:
     String serialize() const override;
 
     void deserialize(std::string_view raw_blob) override;
-
     //serialize as json
     String serializeToJson() const override;
 
@@ -45,11 +45,7 @@ public:
 
     void checkValid() const;
 
-    // generate sql like CAST([1, 2, 3], 'Array(UInt64)')
-    String getSqlForBucketArray() const;
-
-    // generate sql like arrayNdvBucketsSearch(CAST([1, 2, 3], 'Array(UInt64)'), u64_col)
-    String getSqlForBucketId(const String & col_name) const override;
+    SerdeDataType getSerdeDataType() const override { return SerdeDataTypeFrom<T>; }
 
     // binary search bounds to get bucket id for searched value
     // e.g. for bounds [1, 2, 3, 3, 4, 5], with num_bucket=5
