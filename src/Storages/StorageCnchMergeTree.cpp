@@ -233,20 +233,6 @@ void StorageCnchMergeTree::read(
         return;
     }
 
-    if (metadata_snapshot->hasUniqueKey())
-    {
-        // Previous, we need to sort parts since the partial part and base part are not guarantee to be together,
-        // the getDeleteBitmapMetaForParts function needs to handle the partial->base chain.
-        // Now, we can remove sort logic since we don't expand the partial->base part chain after chain construction,
-        // only partial part is useful in getDeleteBitmapMetaForParts for unique table.
-        getDeleteBitmapMetaForParts(parts, local_context, local_context->getCurrentTransactionID());
-    }
-
-
-    String local_table_name = getCloudTableName(local_context);
-    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
-    collectResource(local_context, parts, local_table_name, bucket_numbers);
-
     // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
     //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
 
@@ -317,7 +303,8 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     }
 
     String local_table_name = getCloudTableName(local_context);
-    collectResource(local_context, parts, local_table_name);
+    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
+    collectResource(local_context, parts, local_table_name, bucket_numbers);
 
     return {std::move(local_table_name), std::move(parts)};
 }

@@ -91,7 +91,7 @@ private:
     Poco::Logger * log;
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
-    void rewriteInForBucketTable(const Context & context) const;
+    void rewriteInForBucketTable(ContextPtr context) const;
     static ASTPtr rewriteDynamicFilter(const ASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
 };
 

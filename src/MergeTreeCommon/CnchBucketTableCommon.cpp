@@ -185,12 +185,21 @@ void ReplacingConstantExpressionsMatcher::visit(ASTPtr & node, Block & block_wit
 
 void RewriteInQueryMatcher::Data::replaceExpressionListChildren(const ASTFunction * fn)
 {
-    const auto * right = fn->arguments->children.back().get(); // contains expression list that contains the values in IN set
-    if (const auto * tuple_func = right->as<ASTFunction>())
-    {
-        auto * tuple_elements = tuple_func->children.front()->as<ASTExpressionList>();
-        if (tuple_elements)
-            tuple_elements->replaceChildren(ast_children_replacement);
+    if (auto * tuple_elements = fn->children.front()->as<ASTExpressionList>(); tuple_elements) {
+        ASTPtr replacement_ast;
+        if (ast_children_replacement.size() == 1)
+        {
+            replacement_ast = ast_children_replacement[0];
+        }
+        else
+        {
+            Tuple tuple;
+            tuple.reserve(ast_children_replacement.size());
+            for (const auto literal : ast_children_replacement)
+                tuple.push_back(literal->as<ASTLiteral>()->value);
+            replacement_ast = std::make_shared<ASTLiteral>(std::move(tuple));
+        }
+        tuple_elements->setOrReplaceAST(tuple_elements->children.back(), replacement_ast);
     }
 }
 

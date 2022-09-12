@@ -285,12 +285,11 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
 
         LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
 
-        // TODO:
-        // std::unordered_set<Int64> required_bucket_numbers;
-        // for (const auto & bucket_number: request->bucket_numbers())
-        //     required_bucket_numbers.insert(bucket_number);
+        std::set<Int64> required_bucket_numbers;
+        for (const auto & bucket_number: request->bucket_numbers())
+            required_bucket_numbers.insert(bucket_number);
 
-        // cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
+        cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
 
         // std::map<String, UInt64> udf_infos;
         // for (const auto & udf_info: request->udf_infos())
