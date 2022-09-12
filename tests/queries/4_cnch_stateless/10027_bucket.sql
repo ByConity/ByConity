@@ -1,3 +1,5 @@
+SET enable_multiple_tables_for_cnch_parts = 1;
+
 DROP TABLE IF EXISTS bucket;
 DROP TABLE IF EXISTS bucket2;
 DROP TABLE IF EXISTS bucket3;
@@ -88,6 +90,7 @@ SET optimize_skip_unused_shards = 1;
 SELECT * FROM test_optimize_with_date_column  WHERE record = '1970-01-02' ORDER BY id LIMIT 2 FORMAT CSV;
 
 SET optimize_skip_unused_shards = 0;
+SET enable_multiple_tables_for_cnch_parts = 0;
 DROP TABLE bucket;
 DROP TABLE bucket2;
 DROP TABLE bucket3;
