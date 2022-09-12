@@ -266,14 +266,16 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
                 async_results.emplace_back(brpc_receiver->registerToSendersAsync(register_timeout_ms));
             }
         }
+        
+        for (auto * local_receiver : local_receivers)
+            local_receiver->registerToSenders(register_timeout_ms);
     }
     catch (...)
     {
         exception = std::current_exception();
     }
 
-    for (auto * local_receiver : local_receivers)
-        local_receiver->registerToSenders(register_timeout_ms);
+
 
     /// Wait all brpc register rpc done
     for (auto & res : async_results)

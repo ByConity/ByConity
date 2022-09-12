@@ -2,9 +2,11 @@
 #include <set>
 #include <time.h>
 #include <Client/Connection.h>
+#include <CloudServices/CnchServerResource.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <IO/MemoryReadWriteBuffer.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
@@ -14,8 +16,10 @@
 #include <Processors/Exchange/DataTrans/RpcClientFactory.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
+#include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
+#include <common/getFQDNOrHostName.h>
 
 namespace DB
 {
@@ -26,6 +30,22 @@ namespace ErrorCodes
     extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int UNKNOWN_EXCEPTION;
+}
+
+AddressInfo getLocalAddress(ContextPtr & query_context)
+{
+    const auto & host = getIPOrFQDNOrHostName();
+    auto port = query_context->getTCPPort();
+    const ClientInfo & info = query_context->getClientInfo();
+    return AddressInfo(
+        host, port, info.current_user, info.current_password, query_context->getExchangePort(), query_context->getExchangeStatusPort());
+}
+
+AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_context)
+{
+    const ClientInfo & info = query_context->getClientInfo();
+    return AddressInfo(
+        host_with_ports.host, host_with_ports.tcp_port, info.current_user, info.current_password, host_with_ports.exchange_port, host_with_ports.exchange_status_port);
 }
 
 PlanSegmentsStatusPtr
@@ -40,13 +60,31 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
             // cancel running query
             if (query_context->getSettingsRef().replace_running_query)
             {
-                //TODO dongyifeng kill query
+                //TODO support replace running query
+                throw Exception("Query with id = " + query_id + " is already running and replace_running_query is not supported now.", ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
             }
             else
                 throw Exception("Query with id = " + query_id + " is already running.", ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
         }
         query_map.emplace(std::make_pair(query_id, dag_ptr));
     }
+    /// send resource to worker before scheduler
+    
+    auto server_resource = query_context->tryGetCnchServerResource();
+    if (server_resource)
+    {
+        const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
+        if (worker_group)
+        {
+            /// TODO: we can skip some worker
+            /// TODO: sendResource should support sending worker in batch
+            for (const auto & host : worker_group->getHostWithPortsVec())
+            {
+                server_resource->sendResource(query_context, host);
+            }
+        }
+    }
+
     scheduler(query_id, query_context, dag_ptr);
 #if defined(TASK_ASSIGN_DEBUG)
     String res;
@@ -71,7 +109,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 CancellationCode
 SegmentScheduler::cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context)
 {
-    String coordinator_host = query_context->getLocalHost();
+    const String & coordinator_host = getIPOrFQDNOrHostName();
     return cancelPlanSegments(query_id, exception, coordinator_host, query_context);
 }
 
@@ -116,9 +154,9 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
 
 void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context)
 {
-    String coordinator_addr =
-        query_context->getLocalHost() + ":" + std::to_string(query_context->getExchangeStatusPort());
-    for (const auto & addr: dag_ptr->plan_send_addresses)
+    String coordinator_addr = getIPOrFQDNOrHostName() + ":" + std::to_string(query_context->getExchangeStatusPort());
+    //TODO: cancel worker in parallel
+    for (const auto & addr : dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
         std::shared_ptr<RpcClient> rpc_client = RpcClientFactory::getInstance().getClient(address, false);
@@ -245,10 +283,6 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
         plan_segment_stack.emplace(&node);
         if (plan_segment_vector_id_list.find(node.getPlanSegment()->getPlanSegmentId()) == plan_segment_vector_id_list.end())
         {
-            // todo dongyifeng for test, should remove later
-//            node.getPlanSegment()->setParallelSize(2);
-//            node.getPlanSegment()->getPlanSegmentInputs()[0]->setStorageID({String("default"), String("test_join_local")});
-
             plan_segment_vector.emplace_back(node.getPlanSegment());
             plan_segment_vector_id_list.emplace(node.getPlanSegment()->getPlanSegmentId());
         }
@@ -262,10 +296,6 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
             plan_segment_stack.emplace(node);
             if (plan_segment_vector_id_list.find(node->getPlanSegment()->getPlanSegmentId()) == plan_segment_vector_id_list.end())
             {
-                // todo dongyifeng for test, should remove later
-//                node->getPlanSegment()->setParallelSize(2);
-//                node->getPlanSegment()->getPlanSegmentInputs()[0]->setStorageID({String("default"), String("test_join_local")});
-
                 plan_segment_vector.emplace_back(node->getPlanSegment());
                 plan_segment_vector_id_list.emplace(node->getPlanSegment()->getPlanSegmentId());
             }
@@ -307,7 +337,6 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
                 graph_ptr->final = plan_segment_ptr->getPlanSegmentId();
             }
         }
-        //        graph_ptr->plan_segment_status_ptr->segment_status_map[plan_segment_ptr->getPlanSegmentId()] = {};
     }
     // set exchangeParallelSize for plan inputs
     for (PlanSegment * plan_segment_ptr : plan_segment_vector)
@@ -397,16 +426,18 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         UInt64 total_send_time_ms = 0;
         Stopwatch watch;
         /// random pick workers
-        std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(dag_graph_ptr->id_to_segment.begin()->second->getClusterName());
+        const auto & worker_group = query_context->tryGetCurrentWorkerGroup();
         std::vector<size_t> random_worker_ids;
 
-        if (cluster)
+        if (worker_group)
         {
-            random_worker_ids.resize(cluster->getShardsInfo().size(), 0);
+            const auto & worker_hosts = worker_group->getHostWithPortsVec();
+            random_worker_ids.resize(worker_hosts.size(), 0);
             std::iota(random_worker_ids.begin(), random_worker_ids.end(), 0);
             thread_local std::random_device rd;
             std::shuffle(random_worker_ids.begin(), random_worker_ids.end(), rd);
         }
+
         // scheduler source
         for (auto segment_id : dag_graph_ptr->sources)
         {
@@ -427,7 +458,6 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
             }
             dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, std::move(address_infos)));
             dag_graph_ptr->scheduler_segments.emplace(segment_id);
-            std::cerr << "finish handle segment: " << segment_id << std::endl;
         }
         total_send_time_ms += watch.elapsedMilliseconds();
 
@@ -497,13 +527,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         if (final_it == dag_graph_ptr->id_to_segment.end())
             throw Exception("Logical error: final stage is not found", ErrorCodes::LOGICAL_ERROR);
 
-        const auto & final_address_info = AddressInfo(
-            query_context->getLocalHost(),
-            query_context->getTCPPort(),
-            query_context->getUserName(),
-            query_context->getClientInfo().current_password,
-            query_context->getExchangePort(),
-            query_context->getExchangeStatusPort());
+        const auto & final_address_info = getLocalAddress(query_context);
         LOG_TRACE(log, "SegmentScheduler set final plansegment with AddressInfo: {}", final_address_info.toString());
         final_it->second->setCurrentAddress(final_address_info);
         final_it->second->setCoordinatorAddress(final_address_info);
@@ -546,220 +570,30 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
     return true;
 }
 
-AddressInfo getLocalAddress(PlanSegment * plan_segment_ptr, ContextPtr query_context)
-{
-    std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(plan_segment_ptr->getClusterName());
-    if (!cluster)
-    {
-        auto host = query_context->getLocalHost();
-        auto port = query_context->getTCPPort();
-        const ClientInfo & info = query_context->getClientInfo();
-        return AddressInfo(
-            host, port, info.current_user, info.current_password, query_context->getExchangePort(), query_context->getExchangeStatusPort());
-    }
-
-    ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
-    for (const auto & shard_info : cluster->getShardsInfo())
-    {
-        if (shard_info.isLocal())
-        {
-            for (size_t i = 0; i < shard_info.local_addresses.size(); i++)
-            {
-                if (shard_info.local_addresses[i].host_name == query_context->getLocalHost()
-                    && shard_info.local_addresses[i].port == query_context->getTCPPort())
-                {
-                    return AddressInfo(
-                        shard_info.local_addresses[i].host_name,
-                        shard_info.local_addresses[i].port,
-                        shard_info.local_addresses[i].user,
-                        shard_info.local_addresses[i].password,
-                        shard_info.local_addresses[i].exchange_port,
-                        shard_info.local_addresses[i].exchange_status_port);
-                }
-            }
-        }
-    }
-    throw Exception("Logical error: can't find local replica in cluster settings", ErrorCodes::LOGICAL_ERROR);
-}
-
-std::unique_ptr<Connection> getQueryLocalAddress(PlanSegment * plan_segment_ptr, ContextPtr query_context)
-{
-    std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(plan_segment_ptr->getClusterName());
-    ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
-    std::unique_ptr<Connection> connection;
-    if (!cluster)
-    {
-        auto address = getLocalAddress(plan_segment_ptr, query_context);
-        connection = std::make_unique<Connection>(
-            address.getHostName(),
-            address.getPort(),
-            "",
-            address.getUser(),
-            address.getPassword(),
-            "",
-            "",
-            "client",
-            Protocol::Compression::Enable,
-            Protocol::Secure::Disable,
-            Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
-            address.getExchangePort(),
-            address.getExchangeStatusPort());
-        return connection;
-        //throw Exception("Logical error: can't find cluster in context which named " + plan_segment_ptr->getClusterName(), ErrorCodes::LOGICAL_ERROR);
-    }
-
-    for (const auto & shard_info : cluster->getShardsInfo())
-    {
-        if (shard_info.isLocal())
-        {
-            for (size_t i = 0; i < shard_info.local_addresses.size(); i++)
-            {
-                if (shard_info.local_addresses[i].host_name == query_context->getLocalHost()
-                    && shard_info.local_addresses[i].port == query_context->getTCPPort())
-                {
-                    connection = std::make_unique<Connection>(
-                        shard_info.local_addresses[i].host_name,
-                        shard_info.local_addresses[i].port,
-                        shard_info.local_addresses[i].default_database,
-                        shard_info.local_addresses[i].user,
-                        shard_info.local_addresses[i].password,
-                        shard_info.local_addresses[i].cluster,
-                        shard_info.local_addresses[i].cluster_secret,
-                        "client",
-                        Protocol::Compression::Enable,
-                        Protocol::Secure::Disable,
-                        Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
-                        shard_info.local_addresses[i].exchange_port,
-                        shard_info.local_addresses[i].exchange_status_port);
-                    return connection;
-                }
-            }
-        }
-    }
-    throw Exception("Logical error: can't find local replica in cluster settings", ErrorCodes::LOGICAL_ERROR);
-}
-
-std::unique_ptr<Connection> getConnectionForAddresses(AddressInfo address, ContextPtr /*query_context*/)
-{
-    return std::make_unique<Connection>(
-        address.getHostName(),
-        address.getPort(),
-        "default",
-        address.getUser(),
-        address.getPassword(),
-        "",
-        "",
-        "client",
-        Protocol::Compression::Enable,
-        Protocol::Secure::Disable,
-        Poco::Timespan(DBMS_DEFAULT_SYNC_REQUEST_TIMEOUT_SEC, 0),
-        address.getExchangePort(),
-        address.getExchangeStatusPort());
-}
-
 void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
-    ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
-    std::unique_ptr<Connection> connection = getQueryLocalAddress(plan_segment_ptr, query_context);
-    // std::cout<<"<<--<< will send local segment " << plan_segment_ptr->getPlanSegmentId() << " to " << connection->getHost() << ":" << connection->getPort() << std::endl;
-    plan_segment_ptr->setCurrentAddress(AddressInfo(
-        connection->getHost(),
-        connection->getPort(),
-        connection->getUser(),
-        connection->getPassword(),
-        connection->getExchangePort(),
-        connection->getExchangeStatusPort()));
-    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
-    {
-        /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
-        // executePlanSegmentLocally(*plan_segment_ptr, query_context);
-        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
-        if (dag_graph_ptr)
-        {
-            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-            dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
-                connection->getHost(),
-                connection->getPort(),
-                connection->getUser(),
-                connection->getPassword(),
-                connection->getExchangePort(),
-                connection->getExchangeStatusPort()));
-        }
-        return;
-    }
-    connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
-    connection->poll(1000);
-    Packet packet = connection->receivePacket();
-    std::cerr << "sendPlanSegmentToLocal finish:" << packet.type << std::endl;
-    switch (packet.type)
-    {
-        case Protocol::Server::Exception:
-            throw *packet.exception;
-        case Protocol::Server::EndOfStream:
-            break;
-        case Protocol::Server::Log:
-            break;
-        default: {
-            connection->disconnect();
-            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
-        }
-    }
-    connection->disconnect();
-    std::cerr << "sendPlanSegmentToLocal disconnect, finish: " << plan_segment_ptr->getPlanSegmentId() << std::endl;
+    const auto local_address = getLocalAddress(query_context);
+    plan_segment_ptr->setCurrentAddress(local_address);
 
+    /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
+    // executePlanSegmentLocally(*plan_segment_ptr, query_context);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
-            connection->getHost(),
-            connection->getPort(),
-            connection->getUser(),
-            connection->getPassword(),
-            connection->getExchangePort(),
-            connection->getExchangeStatusPort()));
+        dag_graph_ptr->plan_send_addresses.emplace(std::move(local_address));
     }
 }
 
 void sendPlanSegmentToRemote(
     AddressInfo & addressinfo,
     ContextPtr query_context,
-    ConnectionTimeouts connection_timeouts,
     PlanSegment * plan_segment_ptr,
     std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
-    // std::cout<<"<<--<< will send remote segment " << plan_segment_ptr->getPlanSegmentId() << " to " << addressinfo.getHostName() << ":" << addressinfo.getPort() << std::endl;
     plan_segment_ptr->setCurrentAddress(addressinfo);
-    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
-    {
-        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
-        if (dag_graph_ptr)
-        {
-            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-            dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
-        }
-        return;
-    }
-    auto connection = getConnectionForAddresses(addressinfo, query_context);
-    connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
-    connection->poll(1000);
-    Packet packet = connection->receivePacket();
-    switch (packet.type)
-    {
-        case Protocol::Server::Exception:
-            throw *packet.exception;
-        case Protocol::Server::EndOfStream:
-            break;
-        case Protocol::Server::Log:
-            break;
-        default: {
-            connection->disconnect();
-            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
-        }
-    }
-    std::cerr << "sendPlanSegmentToRemote finish:" << packet.type << std::endl;
-    connection->disconnect();
-    std::cerr << "sendPlanSegmentToRemote disconnect, finish: " << plan_segment_ptr->getPlanSegmentId() << std::endl;
 
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
@@ -767,88 +601,18 @@ void sendPlanSegmentToRemote(
     }
 }
 
-void sendPlanSegmentToRemote(
-    ConnectionPool::Entry & connection,
-    ContextPtr query_context,
-    ConnectionTimeouts connection_timeouts,
-    PlanSegment * plan_segment_ptr,
-    std::shared_ptr<DAGGraph> dag_graph_ptr)
-{
-    LOG_TRACE(
-        &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
-        "<<--<< will send remote segment {} to {}:{}",
-        std::to_string(plan_segment_ptr->getPlanSegmentId()),
-        connection->getHost(),
-        connection->getPort());
-    plan_segment_ptr->setCurrentAddress(AddressInfo(
-        connection->getHost(),
-        connection->getPort(),
-        connection->getUser(),
-        connection->getPassword(),
-        connection->getExchangePort(),
-        connection->getExchangeStatusPort()));
-    if(query_context->getSettingsRef().send_plan_segment_by_brpc)
-    {
-        executePlanSegmentRemotely(*plan_segment_ptr, query_context, true);
-        if (dag_graph_ptr)
-        {
-            std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-            dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
-                connection->getHost(),
-                connection->getPort(),
-                connection->getUser(),
-                connection->getPassword(),
-                connection->getExchangePort(),
-                connection->getExchangeStatusPort()));
-        }
-        return;
-    }
-    connection->sendPlanSegment(connection_timeouts, plan_segment_ptr, &query_context->getSettingsRef(), &query_context->getClientInfo());
-    connection->poll(1000);
-    Packet packet = connection->receivePacket();
-    switch (packet.type)
-    {
-        case Protocol::Server::Exception:
-            throw *packet.exception;
-        case Protocol::Server::EndOfStream:
-            break;
-        case Protocol::Server::Log:
-            break;
-        default: {
-            connection->disconnect();
-            throw Exception("Unknown packet from server", ErrorCodes::UNKNOWN_PACKET_FROM_SERVER);
-        }
-    }
-    LOG_TRACE(&Poco::Logger::get("SegmentScheduler::sendPlanSegment"), "sendPlanSegmentToRemote finish: {}", packet.type);
-    connection->disconnect();
-    if (dag_graph_ptr)
-    {
-        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(AddressInfo(
-            connection->getHost(),
-            connection->getPort(),
-            connection->getUser(),
-            connection->getPassword(),
-            connection->getExchangePort(),
-            connection->getExchangeStatusPort()));
-    }
-}
-
 AddressInfos SegmentScheduler::sendPlanSegment(
-    PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr, std::vector<size_t> random_worker_ids)
+    PlanSegment * plan_segment_ptr,
+    bool  /*is_source*/,
+    ContextPtr query_context,
+    std::shared_ptr<DAGGraph> dag_graph_ptr,
+    std::vector<size_t> random_worker_ids)
 {
     LOG_TRACE(
         &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
         "begin sendPlanSegment: " + std::to_string(plan_segment_ptr->getPlanSegmentId()));
-    std::unique_ptr<Connection> connection = getQueryLocalAddress(plan_segment_ptr, query_context);
-    ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
-    plan_segment_ptr->setCoordinatorAddress(AddressInfo(
-        connection->getHost(),
-        connection->getPort(),
-        connection->getUser(),
-        connection->getPassword(),
-        connection->getExchangePort(),
-        connection->getExchangeStatusPort()));
+    auto local_address = getLocalAddress(query_context);
+    plan_segment_ptr->setCoordinatorAddress(local_address);
     // if stage is relation with local stage
     if (dag_graph_ptr->local_exchange_ids.find(plan_segment_ptr->getPlanSegmentId()) != dag_graph_ptr->local_exchange_ids.end()
         && dag_graph_ptr->has_set_local_exchange)
@@ -875,7 +639,6 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                                 plan_segment_input->setParallelIndex(1);
                                 plan_segment_input->clearSourceAddresses();
                                 plan_segment_input->insertSourceAddress(AddressInfo("localhost", 0, "", ""));
-                                //                            std::cerr << plan_segment_ptr->getPlanSegmentId() << " plan_segment_input " << plan_segment_input->getPlanSegmentId() << "  change getSourceAddresses to "<< plan_segment_input->getSourceAddresses().size() << std::endl;
                             }
                         }
                     }
@@ -893,24 +656,17 @@ AddressInfos SegmentScheduler::sendPlanSegment(
 #endif
                 }
             }
-            sendPlanSegmentToRemote(address, query_context, connection_timeouts, plan_segment_ptr, dag_graph_ptr);
+            sendPlanSegmentToRemote(address, query_context, plan_segment_ptr, dag_graph_ptr);
         }
         return dag_graph_ptr->first_local_exchange_address;
     }
 
     AddressInfos addresses;
-    std::shared_ptr<Cluster> cluster = query_context->tryGetCluster(plan_segment_ptr->getClusterName());
-    // getParallelSize equals to 1, then is just to send to local
-    if (plan_segment_ptr->getParallelSize() == 1 || !cluster)
+    // getParallelSize equals to 0, then is just to send to local
+    if (plan_segment_ptr->getParallelSize() == 0 || plan_segment_ptr->getClusterName().empty())
     {
         // send to local
-        addresses.emplace_back(AddressInfo(
-            connection->getHost(),
-            connection->getPort(),
-            connection->getUser(),
-            connection->getPassword(),
-            connection->getExchangePort(),
-            connection->getExchangeStatusPort()));
+        addresses.emplace_back(local_address);
         for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
         {
             plan_segment_input->setParallelIndex(1);
@@ -922,73 +678,32 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                     std::make_pair(plan_segment_input->getPlanSegmentId(), std::vector<std::pair<size_t, AddressInfo>>{}));
             }
             dag_graph_ptr->exchange_data_assign_node_mappings.find(plan_segment_input->getPlanSegmentId())
-                ->second.emplace_back(std::make_pair(
-                    plan_segment_input->getParallelIndex(),
-                    AddressInfo(
-                        connection->getHost(),
-                        connection->getPort(),
-                        connection->getUser(),
-                        connection->getPassword(),
-                        connection->getExchangePort(),
-                        connection->getExchangeStatusPort())));
+                ->second.emplace_back(std::make_pair(plan_segment_input->getParallelIndex(), local_address));
 #endif
         }
         sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
     }
     else
     {
-        if (!cluster)
+        if (plan_segment_ptr->getClusterName().empty())
         {
             throw Exception(
-                "Logical error: can't find cluster in context which named " + plan_segment_ptr->getClusterName(),
-                ErrorCodes::LOGICAL_ERROR);
-        }
-        if (plan_segment_ptr->getParallelSize() != cluster->getShardCount())
-        {
-            throw Exception(
-                "Logical error: segment id(" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + ") cluster shard count("
-                    + std::to_string(cluster->getShardCount()) + ") not equal to parallel size("
-                    + std::to_string(plan_segment_ptr->getParallelSize()) + ")",
+                "Logical error: can't find workgroup in context which named " + plan_segment_ptr->getClusterName(),
                 ErrorCodes::LOGICAL_ERROR);
         }
 
-        auto get_try_results = [&](const Cluster::ShardInfo & shard_info,
-                                   StoragePtr main_table_storage) -> std::vector<ConnectionPoolWithFailover::TryResult> {
-            auto current_settings = query_context->getSettingsRef();
-            /// set max_parallel_replicas to 1, so up to one connection would return
-            current_settings.max_parallel_replicas = 1;
 
-            auto timeouts
-                = ConnectionTimeouts::getTCPTimeoutsWithFailover(current_settings).getSaturated(current_settings.max_execution_time);
-            std::vector<ConnectionPoolWithFailover::TryResult> try_results;
-
-            try
-            {
-                try_results = shard_info.pool->getManyChecked(
-                    timeouts, &current_settings, PoolMode::GET_MANY, main_table_storage->getStorageID().getQualifiedName());
-            }
-            catch (const Exception & ex)
-            {
-                if (ex.code() == ErrorCodes::ALL_CONNECTION_TRIES_FAILED)
-                    LOG_WARNING(
-                        &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
-                        "Connections to remote replicas of shard {}  all failed.",
-                        shard_info.shard_num);
-                //else
-                throw;
-            }
-
-            return try_results;
-        };
-
-        auto & settings = query_context->getSettingsRef();
+        const auto & worker_group = query_context->getCurrentWorkerGroup();
+        const auto & worker_endpoints = worker_group->getHostWithPortsVec();
         size_t parallel_index_id_index = 0;
         // set ParallelIndexId and source address
         for (auto i : random_worker_ids)
         {
-            const auto & shard_info = cluster->getShardsInfo()[i];
             parallel_index_id_index++;
-            for (auto plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+            if (parallel_index_id_index > plan_segment_ptr->getParallelSize())
+                break;
+            const auto & worker_endpoint = worker_endpoints[i];
+            for (const auto& plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
             {
                 if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
                     continue;
@@ -1005,257 +720,12 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                         plan_segment_input->setParallelIndex(1);
                         plan_segment_input->clearSourceAddresses();
                         plan_segment_input->insertSourceAddress(AddressInfo("localhost", 0, "", ""));
-                        //std::cerr << plan_segment_ptr->getPlanSegmentId() << " plan_segment_input " << plan_segment_input->getPlanSegmentId() << "  change getSourceAddresses to "<< plan_segment_input->getSourceAddresses().size() << std::endl;
                     }
                 }
             }
-            // if is source, should find the most up-to-date node
-            if (is_source)
-            {
-                auto segment_input_table = plan_segment_ptr->getPlanSegmentInputs()[0];
-                if (segment_input_table->getPlanSegmentType() != PlanSegmentType::SOURCE)
-                    throw Exception(
-                        "Logical error: source segment id(" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + ") input is not source",
-                        ErrorCodes::LOGICAL_ERROR);
-                StoragePtr main_table_storage
-                    = segment_input_table->getStorageID().has_value() ? DatabaseCatalog::instance().tryGetTable(*segment_input_table->getStorageID(), query_context) : nullptr;
-
-                if (settings.prefer_localhost_replica && shard_info.isLocal())
-                {
-                    if (!main_table_storage) /// Table is absent on a local server.
-                    {
-                        //ProfileEvents::increment(ProfileEvents::DistributedConnectionMissingTable);
-                        if (shard_info.hasRemoteConnections())
-                        {
-                            LOG_WARNING(
-                                &Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
-                                "There is no table {} on local replica of shard {}, will try remote replicas.",
-                                segment_input_table->getStorageID().has_value() ? segment_input_table->getStorageID()->getNameForLogs() : "",
-                                shard_info.shard_num);
-
-                            auto try_results = get_try_results(shard_info, main_table_storage);
-                            /// If we didn't get any connections from pool and getMany() did not throw exceptions, this means that
-                            /// `skip_unavailable_shards` was set. Then just skip.
-                            if (try_results.size() == 1)
-                            {
-                                addresses.emplace_back(AddressInfo(
-                                    try_results[0].entry->getHost(),
-                                    try_results[0].entry->getPort(),
-                                    try_results[0].entry->getUser(),
-                                    try_results[0].entry->getPassword(),
-                                    try_results[0].entry->getExchangePort(),
-                                    try_results[0].entry->getExchangeStatusPort()));
-                                //TODO send to remote
-                                sendPlanSegmentToRemote(
-                                    try_results[0].entry, query_context, connection_timeouts, plan_segment_ptr, dag_graph_ptr);
-                            }
-                            else
-                            {
-                                throw Exception(
-                                    "Logical error: can not find available source node for "
-                                        + (segment_input_table->getStorageID().has_value() ? segment_input_table->getStorageID()->getNameForLogs() : ""),
-                                    ErrorCodes::LOGICAL_ERROR);
-                            }
-                        }
-                        else
-                        {
-                            throw Exception("Logical error: main table can not be found", ErrorCodes::LOGICAL_ERROR);
-                        }
-                    }
-                    else
-                    {
-                        const auto * replicated_storage = dynamic_cast<const StorageReplicatedMergeTree *>(main_table_storage.get());
-                        if (!replicated_storage)
-                        {
-                            // send to local
-                            addresses.emplace_back(AddressInfo(
-                                connection->getHost(),
-                                connection->getPort(),
-                                connection->getUser(),
-                                connection->getPassword(),
-                                connection->getExchangePort(),
-                                connection->getExchangeStatusPort()));
-                            sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-                        }
-                        else
-                        {
-                            UInt64 max_allowed_delay = settings.max_replica_delay_for_distributed_queries;
-
-                            if (!max_allowed_delay)
-                            {
-                                // send to local
-                                addresses.emplace_back(AddressInfo(
-                                    connection->getHost(),
-                                    connection->getPort(),
-                                    connection->getUser(),
-                                    connection->getPassword(),
-                                    connection->getExchangePort(),
-                                    connection->getExchangeStatusPort()));
-                                sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-                            }
-                            else
-                            {
-                                UInt32 local_delay = replicated_storage->getAbsoluteDelay();
-
-                                if (local_delay < max_allowed_delay)
-                                {
-                                    // send to local
-                                    addresses.emplace_back(AddressInfo(
-                                        connection->getHost(),
-                                        connection->getPort(),
-                                        connection->getUser(),
-                                        connection->getPassword(),
-                                        connection->getExchangePort(),
-                                        connection->getExchangeStatusPort()));
-                                    sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-
-                                    /// If we reached this point, local replica is stale.
-                                    /// ProfileEvents::increment(ProfileEvents::DistributedConnectionStaleReplica);
-                                    LOG_DEBUG(
-                                        &Poco::Logger::get("ClusterProxy::SelectStreamFactory"),
-                                        "Local replica of shard {} is stale (delay: {}s.)",
-                                        shard_info.shard_num,
-                                        local_delay);
-                                }
-                                else
-                                {
-                                    if (!settings.fallback_to_stale_replicas_for_distributed_queries)
-                                    {
-                                        if (shard_info.hasRemoteConnections())
-                                        {
-                                            /// If we cannot fallback, then we cannot use local replica. Try our luck with remote replicas.
-                                            auto try_results = get_try_results(shard_info, main_table_storage);
-                                            if (try_results.size() == 1)
-                                            {
-                                                addresses.emplace_back(AddressInfo(
-                                                    try_results[0].entry->getHost(),
-                                                    try_results[0].entry->getPort(),
-                                                    try_results[0].entry->getUser(),
-                                                    try_results[0].entry->getPassword(),
-                                                    try_results[0].entry->getExchangePort(),
-                                                    try_results[0].entry->getExchangeStatusPort()));
-                                                try_results[0].entry->sendPlanSegment(
-                                                    connection_timeouts,
-                                                    plan_segment_ptr,
-                                                    &query_context->getSettingsRef(),
-                                                    &query_context->getClientInfo());
-                                            }
-                                            else
-                                                throw Exception(
-                                                    "Local replica of shard " + toString(shard_info.shard_num) + " is stale (delay: "
-                                                        + toString(local_delay) + "s.), but no other replica configured",
-                                                    ErrorCodes::ALL_REPLICAS_ARE_STALE);
-                                        }
-                                        else
-                                            throw Exception(
-                                                "Local replica of shard " + toString(shard_info.shard_num)
-                                                    + " is stale (delay: " + toString(local_delay) + "s.), but no other replica configured",
-                                                ErrorCodes::ALL_REPLICAS_ARE_STALE);
-                                    }
-                                    else
-                                    {
-                                        if (!shard_info.hasRemoteConnections())
-                                        {
-                                            /// There are no remote replicas but we are allowed to fall back to stale local replica.
-                                            // send to local
-                                            addresses.emplace_back(AddressInfo(
-                                                connection->getHost(),
-                                                connection->getPort(),
-                                                connection->getUser(),
-                                                connection->getPassword(),
-                                                connection->getExchangePort(),
-                                                connection->getExchangeStatusPort()));
-                                            sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-                                        }
-                                        else
-                                        {
-                                            /// Try our luck with remote replicas, but if they are stale too, then fallback to local replica.
-                                            auto try_results = get_try_results(shard_info, main_table_storage);
-                                            UInt32 max_remote_delay = 0;
-                                            for (const auto & try_result : try_results)
-                                            {
-                                                if (!try_result.is_up_to_date)
-                                                    max_remote_delay
-                                                        = std::max(static_cast<UInt32>(try_result.staleness), max_remote_delay);
-                                            }
-
-                                            if (try_results.empty() || local_delay < max_remote_delay)
-                                            {
-                                                // send to local
-                                                addresses.emplace_back(AddressInfo(
-                                                    connection->getHost(),
-                                                    connection->getPort(),
-                                                    connection->getUser(),
-                                                    connection->getPassword(),
-                                                    connection->getExchangePort(),
-                                                    connection->getExchangeStatusPort()));
-                                                sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-                                            }
-                                            else
-                                            {
-                                                // send to local
-                                                addresses.emplace_back(AddressInfo(
-                                                    connection->getHost(),
-                                                    connection->getPort(),
-                                                    connection->getUser(),
-                                                    connection->getPassword(),
-                                                    connection->getExchangePort(),
-                                                    connection->getExchangeStatusPort()));
-                                                sendPlanSegmentToRemote(
-                                                    try_results[0].entry,
-                                                    query_context,
-                                                    connection_timeouts,
-                                                    plan_segment_ptr,
-                                                    dag_graph_ptr);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    auto try_results = get_try_results(shard_info, main_table_storage);
-                    if (try_results.size() == 1)
-                    {
-                        addresses.emplace_back(AddressInfo(
-                            try_results[0].entry->getHost(),
-                            try_results[0].entry->getPort(),
-                            try_results[0].entry->getUser(),
-                            try_results[0].entry->getPassword(),
-                            try_results[0].entry->getExchangePort(),
-                            try_results[0].entry->getExchangeStatusPort()));
-                        sendPlanSegmentToRemote(try_results[0].entry, query_context, connection_timeouts, plan_segment_ptr, dag_graph_ptr);
-                    }
-                    else
-                    {
-                        throw Exception(
-                            "Logical error: can not find available source node for " + main_table_storage->getStorageID().getNameForLogs(),
-                            ErrorCodes::LOGICAL_ERROR);
-                    }
-                }
-            }
-            else
-            {
-                auto current_settings = query_context->getSettingsRef();
-                /// set max_parallel_replicas to 1, so up to one connection would return
-                current_settings.max_parallel_replicas = 1;
-
-                auto timeouts
-                    = ConnectionTimeouts::getTCPTimeoutsWithFailover(current_settings).getSaturated(current_settings.max_execution_time);
-
-                auto entry = shard_info.pool->get(timeouts, &current_settings, true);
-                sendPlanSegmentToRemote(entry, query_context, connection_timeouts, plan_segment_ptr, dag_graph_ptr);
-                addresses.emplace_back(AddressInfo(
-                    entry->getHost(),
-                    entry->getPort(),
-                    entry->getUser(),
-                    entry->getPassword(),
-                    entry->getExchangePort(),
-                    entry->getExchangeStatusPort()));
-            }
+            auto worker_address = getRemoteAddress(worker_endpoint, query_context);
+            sendPlanSegmentToRemote(worker_address, query_context, plan_segment_ptr, dag_graph_ptr);
+            addresses.emplace_back(std::move(worker_address));
 
 #if defined(TASK_ASSIGN_DEBUG)
             for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
@@ -1277,7 +747,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
 
 #if defined(TASK_ASSIGN_DEBUG)
     String res_log = "segment id:" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " send planSegment address information:\n";
-    for (auto address_inf : addresses)
+    for (const auto& address_inf : addresses)
     {
         res_log += "  " + address_inf.toString() + "\n";
     }

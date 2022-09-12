@@ -8,7 +8,6 @@
 #include <Common/quoteString.h>
 #include <Storages/StorageMemory.h>
 #include <Storages/LiveView/TemporaryLiveViewCleaner.h>
-#include <Storages/Kafka/StorageHaKafka.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Parsers/formatAST.h>
 #include <IO/ReadHelpers.h>
@@ -660,7 +659,7 @@ std::unique_ptr<DatabaseCatalog> DatabaseCatalog::database_catalog;
 
 DatabaseCatalog::DatabaseCatalog(ContextMutablePtr global_context_)
     : WithMutableContext(global_context_), log(&Poco::Logger::get("DatabaseCatalog"))
-    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server}
+    , use_cnch_catalog{global_context_->getServerType() == ServerType::cnch_server || global_context_->getServerType() == ServerType::cnch_worker}
 {
     TemporaryLiveViewCleaner::init(global_context_);
 }
@@ -756,10 +755,7 @@ std::optional<MemoryTableInfo> DatabaseCatalog::tryGetDependencyMemoryTable(cons
     if (source_table_ptr)
     {
 #if USE_RDKAFKA
-        auto * consumer_table = dynamic_cast<StorageHaKafka *>(source_table_ptr.get());
-        if (consumer_table && consumer_table->enableMemoryTable())
-            return std::make_optional<MemoryTableInfo>(std::make_pair(consumer_table->getMemoryTable({source_db, source_table}), consumer_table->isLeader()));
-        else
+        /// Do nothing for CnchKafka now
 #endif
         {
             return {};

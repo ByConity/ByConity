@@ -1,6 +1,8 @@
 #include <Common/config.h>
 #if USE_RDKAFKA
 
+#include <Catalog/Catalog.h>
+#include <CloudServices/CnchBGThreadsMap.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
 #include <DataTypes/DataTypeEnum.h>
@@ -8,8 +10,12 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <Interpreters/Context.h>
+#include <Storages/Kafka/CnchKafkaConsumeManager.h>
+#include <Storages/Kafka/KafkaCommon.h>
+#include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/System/StorageSystemKafkaTables.h>
-#include <Storages/Kafka/StorageHaKafka.h>
+#include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
 #include <Processors/Sources/SourceFromInputStream.h>
@@ -20,34 +26,21 @@ namespace DB
 StorageSystemKafkaTables::StorageSystemKafkaTables(const StorageID & table_id_)
     : IStorage(table_id_)
 {
-    auto consumer_switch_datatype = std::make_shared<DataTypeEnum8>(
-            DataTypeEnum8::Values {
-            {"OFF",         static_cast<Int8>(StorageHaKafka::Status::OFF)},
-            {"ON",          static_cast<Int8>(StorageHaKafka::Status::ON)},
-            });
-
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(ColumnsDescription({
-        { "database",               std::make_shared<DataTypeString>()  },
-        { "table",                  std::make_shared<DataTypeString>()  },
-        { "is_leader",              std::make_shared<DataTypeUInt8>()   },
-        { "is_readonly",            std::make_shared<DataTypeUInt8>()   },
-        { "is_session_expired",     std::make_shared<DataTypeUInt8>()   },
-        { "zookeeper_path",         std::make_shared<DataTypeString>()  },
-        { "replica_name",           std::make_shared<DataTypeString>()  },
-        { "replica_path",           std::make_shared<DataTypeString>()  },
-        /// TODO:
-        /// { "total_replicas",         std::make_shared<DataTypeUInt8>()   },
-        /// { "active_replicas",        std::make_shared<DataTypeUInt8>()   },
-        { "kafka_cluster",          std::make_shared<DataTypeString>()  },
-        { "topics",                 std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
-        { "group_name",             std::make_shared<DataTypeString>()  },
-        { "assigned_partitions",    std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
-        { "consumer_switch",        consumer_switch_datatype            },
-        { "dependencies",           std::make_shared<DataTypeUInt32>()  },
-        { "num_consumers",          std::make_shared<DataTypeUInt32>()  },
-        { "is_consuming",           std::make_shared<DataTypeUInt8>()   },
-        { "last_exception",         std::make_shared<DataTypeString>()  },
+        { "database",                   std::make_shared<DataTypeString>()  },
+        { "name",                       std::make_shared<DataTypeString>()  },
+        { "uuid",                       std::make_shared<DataTypeString>()  },
+        { "kafka_cluster",              std::make_shared<DataTypeString>()  },
+        { "topics",                     std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
+        { "consumer_group",             std::make_shared<DataTypeString>()  },
+        { "num_consumers",              std::make_shared<DataTypeUInt32>()  },
+        { "consumer_tables",            std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
+        { "consumer_hosts",             std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
+        { "consumer_partitions",        std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
+        { "consumer_offsets",           std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
+        { "last_exception",             std::make_shared<DataTypeString>()  },
+
     }));
     setInMemoryMetadata(storage_metadata);
 }
@@ -61,30 +54,20 @@ Pipe StorageSystemKafkaTables::read(
     const size_t /*max_block_size*/,
     const unsigned /*num_streams*/)
 {
-    /// check(column_names);
+    Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
+    if (context->getServerType() != ServerType::cnch_server || !cnch_catalog)
+        throw Exception("Table system.kafka_tables is only supported on cnch_server side", ErrorCodes::NOT_IMPLEMENTED);
 
-    std::map<String, std::map<String, StoragePtr>> kafka_tables;
-    for (auto & db : DatabaseCatalog::instance().getDatabases())
-    {
-        context->checkAccess(AccessType::SHOW_DATABASES, db.first);
-
-        for (auto iterator = db.second->getTablesIterator(context); iterator->isValid(); iterator->next())
-        {
-            if (dynamic_cast<const StorageHaKafka *>(iterator->table().get()))
-                kafka_tables[db.first][iterator->name()] = iterator->table();
-        }
-    }
+    auto bg_threads = context->getCnchBGThreadsMap(CnchBGThreadType::Consumer)->getAll();
 
     MutableColumnPtr col_database_mut = ColumnString::create();
     MutableColumnPtr col_table_mut = ColumnString::create();
 
-    for (auto & db : kafka_tables)
+    for (const auto & thread : bg_threads)
     {
-        for (auto & table : db.second)
-        {
-            col_database_mut->insert(db.first);
-            col_table_mut->insert(table.first);
-        }
+        const auto & storage_id = thread.second->getStorageID();
+        col_database_mut->insert(storage_id.database_name);
+        col_table_mut->insert(storage_id.table_name);
     }
 
     ColumnPtr col_database(std::move(col_database_mut));
@@ -95,7 +78,7 @@ Pipe StorageSystemKafkaTables::read(
         Block filtered_block
         {
             { col_database, std::make_shared<DataTypeString>(), "database" },
-            { col_table, std::make_shared<DataTypeString>(), "table" },
+            { col_table, std::make_shared<DataTypeString>(), "name" },
         };
 
         VirtualColumnUtils::filterBlockWithQuery(query_info.query, filtered_block, context);
@@ -104,58 +87,89 @@ Pipe StorageSystemKafkaTables::read(
             return Pipe();
 
         col_database = filtered_block.getByName("database").column;
-        col_table = filtered_block.getByName("table").column;
+        col_table = filtered_block.getByName("name").column;
     }
 
     MutableColumns res_columns = getInMemoryMetadataPtr()->getSampleBlock().cloneEmptyColumns();
 
     for (size_t i = 0, size = col_database->size(); i < size; ++i)
     {
-        StorageHaKafka::Status status;
+        String database = (*col_database)[i].safeGet<String>();
+        String table = (*col_table)[i].safeGet<String>();
+        auto storage = cnch_catalog->tryGetTable(*context, database, table, TxnTimestamp::maxTS());
+        auto * kafka_table = dynamic_cast<StorageCnchKafka*>(storage.get());
+        if (!kafka_table)
+            continue;
 
-        auto & explicit_table = kafka_tables[(*col_database)[i].safeGet<const String &>()][(*col_table)[i].safeGet<const String &>()];
-        auto ha_kafka = dynamic_cast<StorageHaKafka*>(explicit_table.get());
-        ha_kafka->getStatus(status);
+        auto thread = bg_threads.find(kafka_table->getStorageUUID());
+        if (thread == bg_threads.end())
+            continue;
 
-        size_t col_num = 2;
-        res_columns[col_num++]->insert(status.is_leader);
-        res_columns[col_num++]->insert(status.is_readonly);
-        res_columns[col_num++]->insert(status.is_session_expired);
-        res_columns[col_num++]->insert(status.zookeeper_path);
-        res_columns[col_num++]->insert(status.replica_name);
-        res_columns[col_num++]->insert(status.replica_path);
-        res_columns[col_num++]->insert(status.kafka_cluster);
+        auto * manager = dynamic_cast<CnchKafkaConsumeManager*>(thread->second.get());
+        if (!manager)
+            continue;
+
+        KafkaTableInfo table_info;
+        kafka_table->getKafkaTableInfo(table_info);
+        const auto consumer_infos = manager->getConsumerInfos();
+
+        size_t col_num = 0;
+        res_columns[col_num++]->insert(table_info.database);
+        res_columns[col_num++]->insert(table_info.table);
+        res_columns[col_num++]->insert(table_info.uuid);
+        res_columns[col_num++]->insert(table_info.cluster);
 
         Array topics;
-        topics.reserve(status.topics.size());
-        for (auto & t : status.topics)
-            topics.push_back(t);
+        for (auto & topic : table_info.topics)
+            topics.emplace_back(topic);
         res_columns[col_num++]->insert(topics);
 
-        res_columns[col_num++]->insert(status.group_name);
+        res_columns[col_num++]->insert(table_info.consumer_group);
+        res_columns[col_num++]->insert(consumer_infos.size());
 
-        Array assigned_partitions;
-        assigned_partitions.reserve(status.assigned_partitions.size());
-        for (auto & p : status.assigned_partitions)
-            assigned_partitions.push_back(p);
-        res_columns[col_num++]->insert(assigned_partitions);
+        /// if the table is not consuming, such as dependencies is not ready, just print common info
+        if (consumer_infos.empty())
+        {
+            res_columns[col_num++]->insertDefault();
+            res_columns[col_num++]->insertDefault();
+            res_columns[col_num++]->insertDefault();
+        }
+        else
+        {
+            Array consumer_tables, consumer_hosts, consumer_assignments, offsets;
+            for (const auto & consumer : consumer_infos)
+            {
+                consumer_tables.emplace_back(table_info.table + consumer.table_suffix);
+                consumer_hosts.emplace_back(consumer.worker_client_info);
+                consumer_assignments.emplace_back(DB::Kafka::toString(consumer.partitions));
+            }
+            res_columns[col_num++]->insert(consumer_tables);
+            res_columns[col_num++]->insert(consumer_hosts);
+            res_columns[col_num++]->insert(consumer_assignments);
+        }
 
-        res_columns[col_num++]->insert(UInt8(status.consumer_switch));
-        res_columns[col_num++]->insert(status.dependencies);
-        res_columns[col_num++]->insert(status.num_consumers);
-        res_columns[col_num++]->insert(status.is_consuming);
-        res_columns[col_num++]->insert(status.last_exception);
+        /// TODO: Avoid access to Catalog if offsets are not required
+        cppkafka::TopicPartitionList tpl;
+        std::for_each(consumer_infos.begin(), consumer_infos.end(), [& tpl] (const auto & c)
+        {
+            tpl.insert(tpl.end(), c.partitions.begin(), c.partitions.end());
+        });
+        cnch_catalog->getKafkaOffsets(kafka_table->getGroupForBytekv(), tpl);
+        res_columns[col_num++]->insert(Array{DB::Kafka::toString(tpl)});
+
+        res_columns[col_num++]->insert(manager->getLastException());
     }
 
     Block res = getInMemoryMetadataPtr()->getSampleBlock().cloneWithoutColumns();
-    size_t col_num = 0;
-    res.getByPosition(col_num++).column = col_database;
-    res.getByPosition(col_num++).column = col_table;
-    size_t num_columns = res.columns();
-    while (col_num < num_columns)
+    if (!res_columns.empty())
     {
-        res.getByPosition(col_num).column = std::move(res_columns[col_num]);
-        ++col_num;
+        size_t col_num = 0;
+        size_t num_columns = res.columns();
+        while (col_num < num_columns)
+        {
+            res.getByPosition(col_num).column = std::move(res_columns[col_num]);
+            ++col_num;
+        }
     }
 
     return Pipe(std::make_shared<SourceFromInputStream>(std::make_shared<OneBlockInputStream>(res)));

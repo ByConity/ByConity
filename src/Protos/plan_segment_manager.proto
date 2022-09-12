@@ -63,6 +63,9 @@ message ExecutePlanSegmentRequest {
 
   // Default database.
   optional string database = 23;
+
+  // Cnch Transaction ID
+  required uint64 txn_id = 24;
 }
 
 message ExecutePlanSegmentResponse {

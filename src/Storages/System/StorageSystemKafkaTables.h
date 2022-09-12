@@ -30,7 +30,7 @@ public:
         unsigned num_streams) override;
 
 protected:
-    StorageSystemKafkaTables(const StorageID & table_id_);
+    explicit StorageSystemKafkaTables(const StorageID & table_id_);
 };
 
 }

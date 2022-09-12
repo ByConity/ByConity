@@ -22,7 +22,8 @@ NamesAndTypesList KafkaLogElement::getNamesAndTypes()
             {"WRITE",           static_cast<Int8>(WRITE)},
             {"EXCEPTION",       static_cast<Int8>(EXCEPTION)},
             {"EMPTY_MESSAGE",   static_cast<Int8>(EMPTY_MESSAGE)},
-            {"FILTER",     static_cast<Int8>(FILTER)},
+            {"FILTER",          static_cast<Int8>(FILTER)},
+            {"COMMIT",          static_cast<Int8>(COMMIT)},
             });
 
     return
@@ -32,6 +33,8 @@ NamesAndTypesList KafkaLogElement::getNamesAndTypes()
         {"event_time",      std::make_shared<DataTypeDateTime>()  },
         {"duration_ms",     std::make_shared<DataTypeUInt64>()    },
 
+        {"cnch_database",   std::make_shared<DataTypeString>()    },
+        {"cnch_table",      std::make_shared<DataTypeString>()    },
         {"database",        std::make_shared<DataTypeString>()    },
         {"table",           std::make_shared<DataTypeString>()    },
         {"consumer",        std::make_shared<DataTypeString>()    },
@@ -53,6 +56,8 @@ void KafkaLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(UInt64(event_time));
     columns[i++]->insert(UInt64(duration_ms));
 
+    columns[i++]->insert(cnch_database);
+    columns[i++]->insert(cnch_table);
     columns[i++]->insert(database);
     columns[i++]->insert(table);
     columns[i++]->insert(consumer);

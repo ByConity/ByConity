@@ -101,10 +101,12 @@ void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr c
     executor->execute();
 }
 
-static void OnSendPlanSegmentCallback(Protos::ExecutePlanSegmentResponse * response, brpc::Controller * cntl)
+static void OnSendPlanSegmentCallback(Protos::ExecutePlanSegmentResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
 {
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
     std::unique_ptr<Protos::ExecutePlanSegmentResponse> response_guard(response);
+
+    rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
         LOG_ERROR(
             &Poco::Logger::get("executePlanSegment"),
@@ -162,6 +164,10 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
         request.set_open_telemetry_tracestate(trace_context.tracestate);
         request.set_open_telemetry_trace_flags(static_cast<uint32_t>(trace_context.trace_flags));
     }
+
+    // Set cnch Transaction id as seesion id
+    request.set_txn_id(context->getCurrentTransactionID().toUInt64());
+
     WriteBufferFromBrpcBuf write_buf;
     plan_segment.serialize(write_buf);
     butil::IOBuf & iobuf = const_cast<butil::IOBuf &>(write_buf.getFinishedBuf());
@@ -172,7 +178,7 @@ void executePlanSegmentRemotely(const PlanSegment & plan_segment, ContextPtr con
         brpc::Controller * cntl = new brpc::Controller();
         Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
         cntl->request_attachment().append(iobuf.movable());
-        google::protobuf::Closure * done = brpc::NewCallback(&OnSendPlanSegmentCallback, response, cntl);
+        google::protobuf::Closure * done = brpc::NewCallback(&OnSendPlanSegmentCallback, response, cntl, rpc_channel);
         manager_stub.executeQuery(cntl, &request, response, done);
     }
     else

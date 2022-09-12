@@ -2367,17 +2367,6 @@ String Context::getInterserverScheme() const
     return shared->interserver_scheme;
 }
 
-String Context::getLocalHost() const
-{
-    auto macros = getMacros()->getMacroMap();
-    auto replica_iter = macros.find("replica");
-    if (replica_iter != macros.end())
-    {
-        return replica_iter->second;
-    }
-    throw Exception("Logical error: there is no macro named replica", ErrorCodes::LOGICAL_ERROR);
-}
-
 void Context::setRemoteHostFilter(const Poco::Util::AbstractConfiguration & config)
 {
     shared->remote_host_filter.setValuesFromConfig(config);
@@ -2685,6 +2674,17 @@ std::shared_ptr<MutationLog> Context::getMutationLog() const
         return {};
 
     return shared->system_logs->mutation_log;
+}
+
+
+std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->processors_profile_log;
 }
 
 
@@ -4042,6 +4042,14 @@ TxnTimestamp Context::getCurrentTransactionID() const
         throw Exception("Transaction is not set (zero)", ErrorCodes::LOGICAL_ERROR);
 
     return txn_id;
+}
+
+TxnTimestamp Context::getCurrentCnchStartTime() const
+{
+    if (!current_cnch_txn)
+        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
+
+    return current_cnch_txn->getStartTime();
 }
 
 InterserverCredentialsPtr Context::getCnchInterserverCredentials()

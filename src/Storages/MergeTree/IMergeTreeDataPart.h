@@ -91,7 +91,7 @@ public:
         const IMergeTreeDataPart * parent_part_);
 
     IMergeTreeDataPart(
-        MergeTreeMetaBase & storage_,
+        const MergeTreeMetaBase & storage_,
         const String & name_,
         const VolumePtr & volume,
         const std::optional<String> & relative_path,
@@ -383,6 +383,7 @@ public:
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
+    String getRelativePathForDetachedPart(const String & prefix) const;
 
     /// Makes checks and move part to new directory
     /// Changes only relative_dir_name, you need to update other metadata (name, is_temp) explicitly
@@ -468,6 +469,7 @@ public:
     void setPreviousPart(IMergeTreeDataPartPtr part) const { prev_part = std::move(part); }
     const IMergeTreeDataPartPtr & tryGetPreviousPart() const { return prev_part; }
     IMergeTreeDataPartPtr getBasePart() const;
+    void enumeratePreviousParts(const std::function<void(const IMergeTreeDataPartPtr &)> &) const;
 
     bool isPartial() const { return info.hint_mutation; }
 
@@ -499,6 +501,9 @@ public:
     mutable TxnTimestamp commit_time {NOT_INITIALIZED_COMMIT_TIME};
 
     bool deleted = false;
+    size_t covered_parts_count = 0; /// only for drop range. used to count how many parts the drop range covers.
+    size_t covered_parts_size = 0; /// only for deleted part. used to record bytes_on_disk before the part is deleted.
+    size_t covered_parts_rows = 0; /// only for deleted part. used to record rows_count before the part is deleted.
 
     Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
@@ -540,8 +545,6 @@ protected:
     /// Fill each_columns_size and total_size with sizes from columns files on
     /// disk using columns and checksums.
     virtual void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const = 0;
-
-    String getRelativePathForDetachedPart(const String & prefix) const;
 
     std::optional<bool> keepSharedDataInDecoupledStorage() const;
 
@@ -628,5 +631,6 @@ bool isWidePart(const MergeTreeDataPartPtr & data_part);
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
 bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
+void readPartBinary(IMergeTreeDataPart & part, ReadBuffer& buf, bool read_hint_mutation = true);
 void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
 }

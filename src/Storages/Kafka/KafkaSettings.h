@@ -23,11 +23,12 @@ class ASTStorage;
     /* default is = max_insert_block_size / kafka_num_consumers  */ \
     M(UInt64, max_block_size, 65536, "Number of row collected by poll(s) for flushing data from Kafka.", 0) \
     /* default is stream_flush_interval_ms */ \
-    M(Milliseconds, flush_interval_ms, 0, "Timeout for flushing data from Kafka.", 0) \
+    M(Milliseconds, max_poll_interval_ms, 8000, "Timeout for flushing data from Kafka.", 0) \
     /* those are mapped to format factory settings */ \
     M(String, format, "", "The message format for Kafka engine.", 0) \
     M(Char, row_delimiter, '\0', "The character to be considered as a delimiter in Kafka message.", 0) \
     M(String, schema, "", "Schema identifier (used by schema-based formats) for Kafka engine", 0) \
+    M(String, format_schema_path, "", "Path for schema (used by schema-based formats) and usually be hdfs path", 0) \
     M(UInt64, skip_broken_messages, 0, "Skip at least this number of broken messages from Kafka topic per block", 0) \
     M(Bool, thread_per_consumer, false, "Provide independent thread for each consumer", 0) \
     M(HandleKafkaErrorMode, kafka_handle_error_mode, HandleKafkaErrorMode::DEFAULT, "How to handle errors for Kafka engine. Passible values: default, stream.", 0) \
@@ -37,6 +38,7 @@ class ASTStorage;
     M(String, bytedance_owner, "", "Owner(user) of bytedance Kafka/BMQ", 0) \
     M(UInt64, max_block_bytes_size, 20ull * 1024 * 1024 * 1024, "The maximum block bytes size per consumer for Kafka engine.", 0) \
     M(UInt64, max_partition_fetch_bytes, 10485760, "Max bytes of each partition read from kafka", 0) \
+    M(String, unique_group_prefix, "", "Only used as prefix for storing offsets in bytekv to ensure uniqueness for tob", 0) \
     M(String, leader_priority, "0", "The priority in leader election", 0) \
     M(Int64, max_delay_to_yield_leadership, 600, "Minimal absolute delay to yield leadership.", 0) \
     M(String, partition_num, "-1", "Kafka partition number", 0) \
@@ -60,6 +62,8 @@ class ASTStorage;
     M(String, auto_offset_reset, "", "Librdkafka config: action to take when there is no initial offset in offset store or the desired offset is out of range", 0) \
     M(String, extra_librdkafka_config, "", "Extra configuration for librdkafka, in JSON format", 0) \
     M(Bool, librdkafka_enable_debug_log, false, "Enable librdkafka debug level logs", 0) \
+    M(String, cnch_vw_write, "vw-write", "VW group name for Kafka consumer task", 0) \
+    M(String, cnch_schedule_mode, "random", "Schedule mode for Kafka comsume manager", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
 

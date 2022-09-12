@@ -9,7 +9,7 @@ set -e -x -a
 # dpkg -i package_folder/clickhouse-server_*.deb
 # dpkg -i package_folder/clickhouse-client_*.deb
 # dpkg -i package_folder/clickhouse-test_*.deb
-sudo clickhouse/bin/clickhouse install
+clickhouse/bin/clickhouse install
 cp clickhouse/bin/clickhouse-test /usr/bin/clickhouse-test
 cp -r clickhouse/share/clickhouse-test /usr/share/
 
@@ -45,7 +45,7 @@ if [ "$NUM_TRIES" -gt "1" ]; then
     # simpliest way to forward env variables to server
     clickhouse /usr/bin/clickhouse-server --config /etc/clickhouse-server/config.xml --daemon
 else
-    sudo clickhouse start
+    clickhouse start
 fi
 
 ps -aux
@@ -109,13 +109,14 @@ function run_tests()
 #    fi
 
     echo "load tables for certificate"
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_1_certificate_aeolus_bp_edu
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_2_certificate_aeolus_delta
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_3_certificate_datarocks
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_4_certificate_deepinsight
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_5_certificate_ecom_data
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_6_certificate_libra_hl
-    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /usr/share/clickhouse-test/queries/3_7_certificate_motor_dzx
+    sleep 2h
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta # error  DB::Exception: Logical error: part spans more than one month. SQLSTATE: HY000.
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl
+    python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx
     echo "load tables for certificates done"
 
     clickhouse-test --hung-check --print-time --run certificate "${ADDITIONAL_OPTIONS[@]}" 2>&1  | ts '%Y-%m-%d %H:%M:%S'   | tee -a test_output/test_result.txt || true

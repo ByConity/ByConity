@@ -30,7 +30,7 @@ public:
     /// During pipeline execution new processors can appear. They will be added to existing set.
     ///
     /// Explicit graph representation is built in constructor. Throws if graph is not correct.
-    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr);
+    explicit PipelineExecutor(Processors & processors_, QueryStatus * elem = nullptr, bool need_processors_profiles_ = false);
     ~PipelineExecutor();
 
     /// Execute pipeline in multiple threads. Must be called once.
@@ -57,6 +57,8 @@ public:
 private:
     Processors & processors;
     std::mutex processors_mutex;
+    
+    bool need_processors_profiles;
 
     ExecutingGraphPtr graph;
 

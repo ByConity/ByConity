@@ -7,7 +7,7 @@
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <Storages/StorageMemory.h>
-#include <Storages/StorageDistributed.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -353,7 +353,7 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPl
 {
     auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
     // check is bucket table instead of cnch table?
-    if (auto cnch_merge_tree = dynamic_pointer_cast<StorageDistributed>(source_step->getStorage()))
+    if (auto cnch_merge_tree = dynamic_pointer_cast<StorageCnchMergeTree>(source_step->getStorage()))
         return Partitioning::Handle::FIXED_HASH;
 
     // hack for unittest

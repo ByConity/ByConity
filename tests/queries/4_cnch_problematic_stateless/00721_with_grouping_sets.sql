@@ -1,5 +1,5 @@
 DROP TABLE IF EXISTS grouping_sets;
-CREATE TABLE grouping_sets(a String, b Int32, s Int32) ENGINE = Memory;
+CREATE TABLE grouping_sets(a String, b Int32, s Int32) Engine = CnchMergeTree ORDER BY tuple();
 
 INSERT INTO grouping_sets VALUES ('a', 1, 10), ('a', 1, 15), ('a', 2, 20);
 INSERT INTO grouping_sets VALUES ('a', 2, 25), ('b', 1, 10), ('b', 1, 5);

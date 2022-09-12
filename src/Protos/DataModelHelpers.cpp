@@ -73,7 +73,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
 
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
-    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info, mock_volume, relative_path);
+    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info, mock_volume, relative_path.value_or(info->getPartNameWithHintMutation()));
 
     if (part_model.has_staging_txn_id())
     {
@@ -81,7 +81,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
         /// this part shares the same relative path with the corresponding staged part
         MergeTreePartInfo staged_part_info = part->info;
         staged_part_info.mutation = part->staging_txn_id;
-        part->relative_path = staged_part_info.getPartName(true);
+        part->relative_path = staged_part_info.getPartNameWithHintMutation();
     }
 
     part->bytes_on_disk = part_model.size();
@@ -117,7 +117,9 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
 
     part->secondary_txn_id = part_model.has_secondary_txn_id() ? TxnTimestamp{part_model.secondary_txn_id()} : TxnTimestamp{0};
     part->virtual_part_size = part_model.has_virtual_part_size() ? part_model.virtual_part_size() : 0;
-
+    part->covered_parts_count = part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 0;
+    part->covered_parts_size = part_model.has_covered_parts_size() ? part_model.covered_parts_size() : 0;
+    part->covered_parts_rows = part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : 0;
     return part;
 }
 
@@ -226,6 +228,21 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     if (part.virtual_part_size)
     {
         part_model.set_virtual_part_size(part.virtual_part_size);
+    }
+
+    if (part.covered_parts_count)
+    {
+        part_model.set_covered_parts_count(part.covered_parts_count);
+    }
+
+    if (part.covered_parts_size)
+    {
+        part_model.set_covered_parts_size(part.covered_parts_size);
+    }
+
+    if (part.covered_parts_rows)
+    {
+        part_model.set_covered_parts_rows(part.covered_parts_rows);
     }
 }
 

@@ -89,4 +89,26 @@ TEST(RepartitionTransform, doRepartitionNullableTest)
     }
 }
 
+TEST(RepartitionTransform, doDefaultRepartitionTest)
+{
+    const size_t partition_num = 6;
+    const size_t rows = 100;
+    Block block = createUInt64Block(rows, 10, 88);
+    Block header = block.cloneEmpty();
+    Chunk chunk(block.mutateColumns(), rows);
+    auto res_pair = RepartitionTransform::doDefaultRepartition(partition_num, chunk, header, ColumnNumbers{1, 2});
+    auto & selector = res_pair.first;
+    auto & startpoints = res_pair.second;
+    ASSERT_TRUE(selector.size() == rows);
+    ASSERT_TRUE(startpoints.size() == partition_num + 1);
+    for (size_t i = 0; i <= partition_num; i++)
+    {
+        if (startpoints[i] > 0)
+        {
+            ASSERT_TRUE(startpoints[i] - startpoints[i-1] == rows);
+            break;
+        }
+    }
+}
+
 }

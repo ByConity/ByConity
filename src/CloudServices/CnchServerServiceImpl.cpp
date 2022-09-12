@@ -9,9 +9,11 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <CloudServices/commitCnchParts.h>
 #include <WorkerTasks/ManipulationType.h>
+#include <Storages/Kafka/CnchKafkaConsumeManager.h>
 
 namespace DB
 {
@@ -225,20 +227,20 @@ void CnchServerServiceImpl::commitTransaction(
             try
             {
                 /// Check validity of consumer before committing parts & offsets in case a new consumer has been scheduled
-                // if (request->has_kafka_storage_id())
-                // {
-                //     auto storage_id = RPCHelpers::createStorageID(request->kafka_storage_id());
-                //     auto bgthread = global_context.getConsumeManager(storage_id);
-                //     auto manager = dynamic_cast<KafkaConsumeManager *>(bgthread.get());
+                if (request->has_kafka_storage_id())
+                {
+                    auto storage_id = RPCHelpers::createStorageID(request->kafka_storage_id());
+                    auto bgthread = global_context.getCnchBGThread(CnchBGThreadType::Consumer, storage_id);
+                    auto *manager = dynamic_cast<CnchKafkaConsumeManager *>(bgthread.get());
 
-                //     if (!manager->checkWorkerClient(storage_id.getTableName(), request->kafka_consumer_index()))
-                //         throw Exception(
-                //             "check validity of worker client for " + storage_id.getFullTableName() + " failed",
-                //             ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
-                //     LOG_TRACE(
-                //         log,
-                //         "Check consumer {} OK. Now commit parts and offsets for Kafka transaction\n",storage_id.getFullTableName());
-                // }
+                    if (!manager->checkWorkerClient(storage_id.getTableName(), request->kafka_consumer_index()))
+                        throw Exception(
+                            "check validity of worker client for " + storage_id.getFullTableName() + " failed",
+                            ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
+                    LOG_TRACE(
+                        log,
+                        "Check consumer {} OK. Now commit parts and offsets for Kafka transaction\n",storage_id.getFullTableName());
+                }
 
                 auto & txn_coordinator = global_context.getCnchTransactionCoordinator();
                 auto txn_id = request->txn_id();
@@ -336,11 +338,11 @@ void CnchServerServiceImpl::createTransactionForKafka(
         {
             auto uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->uuid()));
             auto storage = global_context.getCnchCatalog()->getTableByUUID(global_context, uuid, TxnTimestamp::maxTS());
-            // auto bgthread = global_context.getConsumeManager(storage->getStorageID());
-            // auto manager = dynamic_cast<KafkaConsumeManager *>(bgthread.get());
+            auto bgthread = global_context.getCnchBGThread(CnchBGThreadType::Consumer, storage->getStorageID());
+            auto * manager = dynamic_cast<CnchKafkaConsumeManager *>(bgthread.get());
 
-            // if (!manager->checkWorkerClient(request->table_name(), request->consumer_index()))
-            //     throw Exception("check validity of worker client for " + request->table_name() + " failed", ErrorCodes::LOGICAL_ERROR);
+            if (!manager->checkWorkerClient(request->table_name(), request->consumer_index()))
+                throw Exception("check validity of worker client for " + request->table_name() + " failed", ErrorCodes::LOGICAL_ERROR);
 
             auto transaction = global_context.getCnchTransactionCoordinator().createTransaction(
                 CreateTransactionOption().setInitiator(CnchTransactionInitiator::Kafka));
@@ -533,11 +535,33 @@ void CnchServerServiceImpl::getNumBackgroundThreads(
 {
 }
 void CnchServerServiceImpl::controlCnchBGThread(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController * /*cntl*/,
     const Protos::ControlCnchBGThreadReq * request,
     Protos::ControlCnchBGThreadResp * response,
     google::protobuf::Closure * done)
 {
+    ContextPtr context_ptr = getContext();
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, & global_context = *context_ptr, log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                auto type = CnchBGThreadType(request->type());
+                auto action = CnchBGThreadAction(request->action());
+                global_context.controlCnchBGThread(storage_id, type, action);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
+
 }
 void CnchServerServiceImpl::getTablePartitionInfo(
     google::protobuf::RpcController * cntl,
@@ -601,20 +625,65 @@ void CnchServerServiceImpl::acquireLock(
     Protos::AcquireLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, gc = getContext(), logger = log] {
+        brpc::ClosureGuard done_guard(d);
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().lock(info, *gc);
+            resp->set_lock_status(to_underlying(info->status));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::releaseLock(
     google::protobuf::RpcController * cntl,
     const Protos::ReleaseLockReq * request,
     Protos::ReleaseLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log] {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().unlock(info);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::reportCnchLockHeartBeat(
     google::protobuf::RpcController * cntl,
     const Protos::ReportCnchLockHeartBeatReq * request,
     Protos::ReportCnchLockHeartBeatResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log]
+    {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            auto tp = LockManager::Clock::now() + std::chrono::milliseconds(req->expire_time());
+            LockManager::instance().updateExpireTime(req->txn_id(), tp);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
 void CnchServerServiceImpl::getServerStartTime(
     google::protobuf::RpcController * cntl,

@@ -22,7 +22,9 @@
 #include <algorithm>
 #include <random>
 
-#define TASK_ASSIGN_DEBUG
+#ifndef NDEBUG
+#    define TASK_ASSIGN_DEBUG
+#endif
 
 namespace DB
 {

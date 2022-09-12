@@ -14,6 +14,7 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Parsers/ASTVisitor.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
@@ -378,8 +379,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         full_table_name = storage_id.getFullTableName();
 
         if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const StorageDistributed *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get())))
-            throw Exception("Only distributed tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
+            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get())))
+            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
     }

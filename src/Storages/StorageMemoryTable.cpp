@@ -1,5 +1,5 @@
 #include <Common/config.h>
-#if USE_RDKAFKA
+#if 0 /// NOT need for CnchKafka, maybe can delete
 
 #include <Storages/StorageMemoryTable.h>
 #include <boost/range/algorithm_ext/erase.hpp>

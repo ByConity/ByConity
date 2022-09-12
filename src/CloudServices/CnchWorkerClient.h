@@ -4,6 +4,7 @@
 #include <CloudServices/RpcClientBase.h>
 #include <Interpreters/Context_fwd.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Transaction/TxnTimestamp.h>
 
 #include <unordered_set>
@@ -57,6 +58,11 @@ public:
         const std::vector<HostWithPortsVec> & buffer_workers_vec);
 
     void removeWorkerResource(TxnTimestamp txn_id);
+
+#if USE_RDKAFKA
+    void submitKafkaConsumeTask(const KafkaTaskCommand & command);
+    CnchConsumerStatus getConsumerStatus(const StorageID & storage_id);
+#endif
 
 private:
     std::unique_ptr<Protos::CnchWorkerService_Stub> stub;

@@ -6,6 +6,7 @@
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
@@ -121,7 +122,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
                 return QueryUseOptimizerChecker::check(subquery, context);
             }
 
-            if (!dynamic_cast<const StorageDistributed *>(storage_table.get()))
+            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()))
                 return false;
         }
     }

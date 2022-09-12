@@ -97,10 +97,12 @@ void RuntimeFilterConsumer::addFinishRuntimeFilter(RuntimeFilterPtr runtime_filt
         return transferRuntimeFilter(mergeRuntimeFilter());
 }
 
-static void OnSendRuntimeFilterCallback(Protos::TransferRuntimeFilterResponse * response, brpc::Controller * cntl)
+static void OnSendRuntimeFilterCallback(Protos::TransferRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
 {
     std::unique_ptr<Protos::TransferRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
+        
+    rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
         LOG_DEBUG(&Poco::Logger::get("RuntimeFilterBuild"), "Send to coordinator failed, message: " + cntl->ErrorText());
     else
@@ -123,7 +125,7 @@ void RuntimeFilterConsumer::transferRuntimeFilter(const RuntimeFilterPtr & runti
     request.set_require_parallel_size(parallel);
     request.set_filter_data(write_buffer.str());
     runtime_filter_service.transferRuntimeFilter(
-        controller, &request, response, google::protobuf::NewCallback(OnSendRuntimeFilterCallback, response, controller));
+        controller, &request, response, brpc::NewCallback(OnSendRuntimeFilterCallback, response, controller, rpc_client));
 
     LOG_DEBUG(log, "Build success query id: {}, filter id: {}, stream parallel: {}, plan segment parallel: {}, cost: {} ms",
         query_id, filter_id, local_stream_parallel, parallel, timer.elapsedMilliseconds());

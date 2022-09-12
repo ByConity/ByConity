@@ -57,6 +57,20 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.type = ATTACH_PARTITION;
         res.partition = command_ast->partition;
         res.part = command_ast->part;
+        res.parts = command_ast->parts;
+        res.replace = command_ast->replace;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::ATTACH_DETACHED_PARTITION)
+    {
+        PartitionCommand res;
+        res.type = ATTACH_DETACHED_PARTITION;
+        res.partition = command_ast->partition;
+        res.replace = command_ast->replace;
+        res.attach_from_detached = command_ast->attach_from_detached;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
         return res;
     }
     else if (command_ast->type == ASTAlterCommand::PREATTACH_PARTITION)
@@ -111,6 +125,19 @@ std::optional<PartitionCommand> PartitionCommand::parse(const ASTAlterCommand * 
         res.type = REPLACE_PARTITION;
         res.partition = command_ast->partition;
         res.replace = command_ast->replace;
+        res.cascading = command_ast->cascading;
+        res.from_database = command_ast->from_database;
+        res.from_table = command_ast->from_table;
+        res.from_zookeeper_path = command_ast->from;
+        return res;
+    }
+    else if (command_ast->type == ASTAlterCommand::REPLACE_PARTITION_WHERE)
+    {
+        PartitionCommand res;
+        res.type = REPLACE_PARTITION_WHERE;
+        res.partition = command_ast->predicate;
+        res.replace = command_ast->replace;
+        res.cascading = command_ast->cascading;
         res.from_database = command_ast->from_database;
         res.from_table = command_ast->from_table;
         return res;

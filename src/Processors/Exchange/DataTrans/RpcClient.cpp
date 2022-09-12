@@ -19,6 +19,22 @@ RpcClient::RpcClient(String host_port_, brpc::ChannelOptions * options)
     initChannel(*brpc_channel, host_port, options);
 }
 
+void RpcClient::checkAliveWithController(const brpc::Controller & cntl) noexcept
+{
+    if (cntl.Failed())
+    {
+        auto err = cntl.ErrorCode();
+        if (err == EHOSTDOWN || err == ECONNREFUSED || err == ECONNRESET || err == ENETUNREACH || err == ENOTCONN)
+        {
+            ok_.store(false, std::memory_order_relaxed);
+        }
+    }
+    else
+    {
+        ok_.store(true, std::memory_order_relaxed);
+    }
+}
+
 void RpcClient::assertController(const brpc::Controller & cntl)
 {
     if (cntl.Failed())

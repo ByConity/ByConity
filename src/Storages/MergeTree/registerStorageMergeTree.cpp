@@ -762,7 +762,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         }
 
         // For cnch, if storage_policy is not specified, modify it to cnch's default
-        if (is_cnch)
+        if (is_cnch || is_cloud)
         {
             if (!args.storage_def->settings)
             {
@@ -871,7 +871,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             args.table_id,
             cnch_database_name,
             cnch_table_name,
-            args.relative_data_path,
+            "", /// Do NOT set relative path for CloudMergeTree args.relative_data_path,
             metadata,
             args.getContext(),
             date_column_name,

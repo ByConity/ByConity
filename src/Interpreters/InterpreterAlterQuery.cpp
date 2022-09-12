@@ -308,6 +308,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::ATTACH_PARTITION:
+        case ASTAlterCommand::ATTACH_DETACHED_PARTITION:
         case ASTAlterCommand::PREATTACH_PARTITION:
         case ASTAlterCommand::BITENGINE_RECODE_PARTITION:
         case ASTAlterCommand::BITENGINE_RECODE_PARTITION_WHERE:
@@ -352,6 +353,7 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             break;
         }
         case ASTAlterCommand::REPLACE_PARTITION:
+        case ASTAlterCommand::REPLACE_PARTITION_WHERE:
         {
             required_access.emplace_back(AccessType::SELECT, command.from_database, command.from_table);
             required_access.emplace_back(AccessType::ALTER_DELETE | AccessType::INSERT, database, table);

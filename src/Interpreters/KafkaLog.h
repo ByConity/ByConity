@@ -17,12 +17,15 @@ struct KafkaLogElement
         EXCEPTION = 4,
         EMPTY_MESSAGE = 5,
         FILTER = 6,
+        COMMIT = 7,
     };
     Type event_type = EMPTY;
 
     time_t event_time = 0;
     UInt32 duration_ms = 0;
 
+    String cnch_database;
+    String cnch_table;
     String database;
     String table;
     String consumer;

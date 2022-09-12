@@ -4,7 +4,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageCnchMergeTree.h>
-// #include <Storages/Kafka/StorageCnchKafka.h>
+#include <Storages/Kafka/StorageCnchKafka.h>
 // #include <MergeTreeCommon/CnchServerClientPool.h>
 
 namespace DB
@@ -100,8 +100,7 @@ StoragePtr ICnchBGThread::getStorageFromCatalog()
 {
     try
     {
-        /// auto res = catalog->getTableByUUID(global_context, toString(storage_id.uuid), TxnTimestamp::maxTS(), true /* with delete */);
-        StoragePtr res {};
+        auto res = catalog->getTableByUUID(*getContext(), toString(storage_id.uuid), TxnTimestamp::maxTS(), true /* with delete */);
         failed_storage.store(0, std::memory_order_relaxed);
         return res;
     }
@@ -119,14 +118,12 @@ StorageCnchMergeTree & ICnchBGThread::checkAndGetCnchTable(StoragePtr & storage)
     throw Exception("Table " + storage->getStorageID().getNameForLogs() + " is not StorageCnchMergeTree", ErrorCodes::LOGICAL_ERROR);
 }
 
-/*
 StorageCnchKafka & ICnchBGThread::checkAndGetCnchKafka(StoragePtr & storage)
 {
     if (auto * t = dynamic_cast<StorageCnchKafka *>(storage.get()))
         return *t;
     throw Exception("Table " + storage->getStorageID().getNameForLogs() + " is not StorageCnchKafka", ErrorCodes::LOGICAL_ERROR);
 }
-*/
 
 /*
 TxnTimestamp ICnchBGThread::calculateMinActiveTimestamp() const

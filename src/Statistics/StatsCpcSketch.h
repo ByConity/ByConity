@@ -10,8 +10,9 @@ namespace DB::Statistics
 class StatsCpcSketch : public StatisticsBase
 {
 public:
+    static constexpr auto default_lg_k = 19;
     static constexpr auto tag = StatisticsTag::CpcSketch;
-    StatsCpcSketch() = default;
+    StatsCpcSketch() : data(default_lg_k) { }
 
     String serialize() const override;
     void deserialize(std::string_view blob) override;
@@ -36,7 +37,7 @@ public:
 
     void merge(const StatsCpcSketch & rhs)
     {
-        datasketches::cpc_union un;
+        datasketches::cpc_union un(default_lg_k);
         un.update(data);
         un.update(rhs.data);
         data = un.get_result();

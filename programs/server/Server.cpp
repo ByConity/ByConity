@@ -542,10 +542,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
 
-    // if (config().has("exchange_port") && config().has("exchange_status_port"))
-    // {
-    //     global_context->setComplexQueryActive(true);
-    // }
+    if (config().has("exchange_port") && config().has("exchange_status_port")
+        && (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker))
+    {
+        global_context->setComplexQueryActive(true);
+    }
 
     Catalog::CatalogConfig catalog_conf(config());
 
@@ -697,9 +698,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 #endif
-
-    // Init Brpc
-    BrpcApplication::getInstance().initialize(config());
 
     global_context->setRemoteHostFilter(config());
 
@@ -1271,13 +1269,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->shutdownKeeperDispatcher();
         }
 
-        // if (global_context->getComplexQueryActive())
-        // {
-        //     for (auto & rpc_server : rpc_servers)
-        //         rpc_server->Stop(0);
-        //     LOG_INFO(log, "disconnect with rpc server");
-        // }
-
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
         server_pool.joinAll();
 
@@ -1696,11 +1687,48 @@ int Server::main(const std::vector<std::string> & /*args*/)
                                                                      "distributed_ddl", "DDLWorker", &CurrentMetrics::MaxDDLEntryID));
         }
 
-        // if (global_context->getComplexQueryActive())
-        // {
-        //     global_context->setExchangePort(config().getInt("exchange_port"));
-        //     global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
-        // }
+        if (global_context->getComplexQueryActive())
+        {
+            global_context->setExchangePort(config().getInt("exchange_port"));
+            global_context->setExchangeStatusPort(config().getInt("exchange_status_port"));
+
+            Statistics::CacheManager::initialize(global_context);
+            /// Brpc data trans registry service
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_servers.emplace_back(std::make_unique<brpc::Server>());
+            rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
+            rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
+            rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
+
+            if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
+            }
+            if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
+            }
+            // RuntimeFilterService reuse PlanSegmentManagerRpcService port
+            if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
+                throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
+            }
+            brpc::ServerOptions stream_options;
+            stream_options.idle_timeout_sec = -1;
+            stream_options.name = "stm";
+            if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
+                throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
+            }
+
+            brpc::ServerOptions command_options;
+            command_options.idle_timeout_sec = -1;
+            command_options.name = "cmd";
+            if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &command_options) != 0) {
+                throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
+            }
+            LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
+            LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
+
+        //     /// TODO status service
+
+        }
 
         for (auto & server : *servers)
             server.start();
@@ -1730,6 +1758,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
                 std::string host_port = createHostPortString(listen, rpc_port);
                 brpc::ServerOptions options;
+                options.name = "def";
                 if (0 != rpc_server->Start(host_port.c_str(), &options))
                 {
                     if (listen_try)
@@ -1798,41 +1827,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 forceShutdown();
             }
         });
-
-        // if (global_context->getComplexQueryActive())
-        // {
-        //     Statistics::CacheManager::initialize(global_context);
-        //     /// Brpc data trans registry service
-        //     rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-        //     rpc_servers.emplace_back(std::make_unique<brpc::Server>());
-        //     rpc_services.emplace_back(std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size));
-        //     rpc_services.emplace_back(std::make_unique<PlanSegmentManagerRpcService>(global_context));
-        //     rpc_services.emplace_back(std::make_unique<RuntimeFilterService>(global_context));
-
-        //     if (rpc_servers[0]->AddService(rpc_services[0].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-        //         throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
-        //     }
-        //     if (rpc_servers[1]->AddService(rpc_services[1].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-        //         throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
-        //     }
-        //     // RuntimeFilterService reuse PlanSegmentManagerRpcService port
-        //     if (rpc_servers[1]->AddService(rpc_services[2].get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0) {
-        //         throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
-        //     }
-        //     brpc::ServerOptions stream_options;
-        //     stream_options.idle_timeout_sec = -1;
-        //     if (rpc_servers[0]->Start(global_context->getExchangePort(), &stream_options) != 0) {
-        //         throw Exception("Fail to start BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR) ;
-        //     }
-        //     if (rpc_servers[1]->Start(global_context->getExchangeStatusPort(), &stream_options) != 0) {
-        //         throw Exception("Fail to start PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR) ;
-        //     }
-        //     LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", global_context->getExchangePort());
-        //     LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", global_context->getExchangeStatusPort());
-
-        //     /// TODO status service
-
-        // }
 
         std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
         for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))

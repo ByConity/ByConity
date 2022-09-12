@@ -1,5 +1,6 @@
 #include <QueryPlan/TableScanStep.h>
 
+#include <Formats/FormatSettings.h>
 #include <Functions/FunctionsInBloomFilter.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -21,9 +22,12 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/VirtualColumnUtils.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Common/FieldVisitorToString.h>
-#include <Formats/FormatSettings.h>
 
 
 namespace DB
@@ -220,7 +224,13 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         max_streams *= build_context.context->getSettingsRef().max_streams_to_max_threads_ratio;
 
     auto pipe = storage->read(
-        interpreter->getRequiredColumns(), storage->getInMemoryMetadataPtr(), query_info, build_context.context, processing_stage, max_block_size, max_streams);
+        interpreter->getRequiredColumns(),
+        storage->getInMemoryMetadataPtr(),
+        query_info,
+        build_context.context,
+        processing_stage,
+        max_block_size,
+        max_streams);
 
     QueryPlanStepPtr step;
     if (pipe.empty())
@@ -509,22 +519,39 @@ std::shared_ptr<IStorage> TableScanStep::getStorage() const
     return storage;
 }
 
-void TableScanStep::allocate(ContextPtr)
+void TableScanStep::allocate(ContextPtr context)
 {
     original_table = storage_id.table_name;
-    auto * distributed = dynamic_cast<StorageDistributed *>(storage.get());
+    auto * cnch = dynamic_cast<StorageCnchMergeTree *>(storage.get());
 
-    if (!distributed)
+    if (!cnch)
         return;
 
-    storage_id.database_name = distributed->getRemoteDatabaseName();
-    storage_id.table_name = distributed->getRemoteTableName();
+    storage_id.database_name = cnch->getDatabaseName();
+    auto prepare_res = cnch->prepareReadContext(column_names, cnch->getInMemoryMetadataPtr(),query_info, context);
+    storage_id.table_name = prepare_res.local_table_name;
     storage_id.uuid = UUIDHelpers::Nil;
     if (query_info.query)
     {
-        ASTSelectQuery & select_query = query_info.query->as<ASTSelectQuery &>();
-        select_query.replaceDatabaseAndTable(storage_id.database_name, storage_id.table_name);
+        query_info = fillQueryInfo(context);
+        /// trigger preallocate tables
+        // if (!cnch->isOnDemandMode())
+        // cnch->read(column_names, query_info, context, processed_stage, max_block_size, 1);
+        // cnch->genPlanSegmentQueryAndAllocate(column_names, query_info, context);
+        auto db_table = getDatabaseAndTable(query_info.query->as<ASTSelectQuery &>(), 0);
+        if (!db_table->table.empty())
+        {
+            if (db_table->table != storage_id.table_name)
+            {
+                if (query_info.query) 
+                {
+                    ASTSelectQuery & select_query = query_info.query->as<ASTSelectQuery &>();
+                    select_query.replaceDatabaseAndTable(storage_id.database_name, storage_id.table_name);
+                }
+            }
+        }
     }
+
 }
 
 bool TableScanStep::setFilter(const std::vector<ConstASTPtr> & filters) const

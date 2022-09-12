@@ -61,7 +61,9 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_detach("DETACH");
 
     ParserKeyword s_attach_partition("ATTACH PARTITION");
+    ParserKeyword s_attach_detached_partition("ATTACH DETACHED PARTITION");
     ParserKeyword s_preattach_partition("PREATTACH PARTITION");
+    ParserKeyword s_attach_parts("ATTACH PARTS");
     ParserKeyword s_attach_part("ATTACH PART");
     ParserKeyword s_detach_partition("DETACH PARTITION");
     ParserKeyword s_detach_part("DETACH PART");
@@ -79,6 +81,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_repair_partition("REPAIR PARTITION");
     ParserKeyword s_repair_part("REPAIR PART");
     ParserKeyword s_replace_partition("REPLACE PARTITION");
+    ParserKeyword s_replace_partition_where("REPLACE PARTITION WHERE");
     ParserKeyword s_ingest_partition("INGEST PARTITION");
     ParserKeyword s_freeze("FREEZE");
     ParserKeyword s_unfreeze("UNFREEZE");
@@ -540,6 +543,41 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
             command->detach = true;
         }
+        else if (s_attach_detached_partition.ignore(pos, expected))
+        {
+            if (!parser_partition.parse(pos, command->partition, expected))
+                return false;
+
+            if (s_from.ignore(pos))
+            {
+                ASTPtr ast_from;
+                if (parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                {
+                    command->detach = true;
+                    command->replace = false;
+                    command->type = ASTAlterCommand::ATTACH_DETACHED_PARTITION;
+                    command->attach_from_detached = true;
+                }
+                else
+                    return false;
+            }
+            else
+                return false;
+        }
+        else if (s_attach_parts.ignore(pos, expected))
+        {
+            if (!s_from.ignore(pos, expected))
+                return false;
+
+            ASTPtr ast_from;
+            if (!parser_string_literal.parse(pos, ast_from, expected))
+                return false;
+
+            command->replace = false;
+            command->from = ast_from->as<ASTLiteral &>().value.get<const String &>();
+            command->parts = true;
+            command->type = ASTAlterCommand::ATTACH_PARTITION;
+        }
         else if (s_attach_partition.ignore(pos, expected))
         {
             if (!parser_partition.parse(pos, command->partition, expected))
@@ -564,6 +602,22 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
                 return false;
 
             command->type = ASTAlterCommand::PREATTACH_PARTITION;
+        }
+        else if (s_replace_partition_where.ignore(pos, expected))
+        {
+            if (!parser_exp_elem.parse(pos, command->predicate, expected))
+                return false;
+
+            if (!s_from.ignore(pos, expected))
+                return false;
+
+            if (!parseDatabaseAndTableName(pos, expected, command->from_database, command->from_table))
+                return false;
+
+            command->detach = true;
+            command->replace = true;
+            command->detach = true;
+            command->type = ASTAlterCommand::REPLACE_PARTITION_WHERE;
         }
         else if (s_replace_partition.ignore(pos, expected))
         {

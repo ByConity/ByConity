@@ -30,15 +30,9 @@ public:
     template <typename T>
     using Impl = StatsNdvBucketsImpl<T>;
 
-    virtual void writeSymbolStatistics(SymbolStatistics & symbol) = 0;
-
-    virtual const BucketBounds & get_buckets_bounds() const = 0;
-    virtual UInt64 get_count(size_t bucket_id) const = 0;
-    virtual double get_ndv(size_t bucket_id) const = 0;
+    virtual const BucketBounds & getBucketBounds() const = 0;
     virtual std::shared_ptr<StatsNdvBucketsResult> asResult() const = 0;
 
 private:
 };
-
-
 }

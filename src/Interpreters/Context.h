@@ -96,6 +96,7 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class ProcessorsProfileLog;
 class ZooKeeperLog;
 struct MergeTreeSettings;
 class StorageS3Settings;
@@ -728,8 +729,6 @@ public:
     void setComplexQueryActive(bool active);
     bool getComplexQueryActive();
 
-    String getLocalHost() const;
-
     /// Credentials which server will use to communicate with others
     void updateInterserverCredentials(const Poco::Util::AbstractConfiguration & config);
     InterserverCredentialsPtr getInterserverCredentials();
@@ -961,6 +960,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
+    std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
@@ -1164,9 +1164,10 @@ public:
     void initCnchTransactionCoordinator();
     TransactionCoordinatorRcCnch & getCnchTransactionCoordinator() const;
     void setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn = true);
-    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id);
+    TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
+    TxnTimestamp getCurrentCnchStartTime() const;
 
     void initCnchBGThreads();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;

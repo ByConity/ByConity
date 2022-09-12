@@ -102,6 +102,8 @@ InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, Contex
 BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 {
     String database_name = create.database;
+    if (database_name.empty())
+        throw Exception("Database name is empty while creating database", ErrorCodes::BAD_ARGUMENTS);
 
     auto guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
 
@@ -147,8 +149,10 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             engine->name = "Cnch";
         else if (default_database_engine == DefaultDatabaseEngine::Ordinary)
             engine->name = "Ordinary";
-        else
+        else if (default_database_engine == DefaultDatabaseEngine::Atomic)
             engine->name = "Atomic";
+        else
+            engine->name = "Memory";
 
         engine->no_empty_args = true;
         storage->set(storage->engine, engine);
@@ -808,7 +812,7 @@ static void generateUUIDForTable(ASTCreateQuery & create)
 
 void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const DatabasePtr & database) const
 {
-    const auto * kind = create.is_dictionary ? "Dictionary" : "Table";
+    ///const auto * kind = create.is_dictionary ? "Dictionary" : "Table";
     const auto * kind_upper = create.is_dictionary ? "DICTIONARY" : "TABLE";
 
     if (database->getEngineName() == "Replicated" && getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY
@@ -842,15 +846,19 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
     }
     else
     {
-        bool is_on_cluster = getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY;
-        bool has_uuid = create.uuid != UUIDHelpers::Nil || create.to_inner_uuid != UUIDHelpers::Nil;
-        if (has_uuid && !is_on_cluster)
-            throw Exception(ErrorCodes::INCORRECT_QUERY,
-                            "{} UUID specified, but engine of database {} is not Atomic", kind, create.database);
+        /// As table name is always not the same with it on server side,
+        /// we may need UUID of table on worker side in Memory database engine to find CnchMergeTree when needed
+        /// Anyway, here we may need some more graceful code
+
+        //bool is_on_cluster = getContext()->getClientInfo().query_kind == ClientInfo::QueryKind::SECONDARY_QUERY;
+        //bool has_uuid = create.uuid != UUIDHelpers::Nil || create.to_inner_uuid != UUIDHelpers::Nil;
+        //if (has_uuid && !is_on_cluster)
+         //   throw Exception(ErrorCodes::INCORRECT_QUERY,
+         //                   "{} UUID specified, but engine of database {} is not Atomic", kind, create.database);
 
         /// Ignore UUID if it's ON CLUSTER query
-        create.uuid = UUIDHelpers::Nil;
-        create.to_inner_uuid = UUIDHelpers::Nil;
+        //create.uuid = UUIDHelpers::Nil;
+        //create.to_inner_uuid = UUIDHelpers::Nil;
     }
 
     if (create.replace_table)
@@ -992,7 +1000,21 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
     DatabasePtr database;
     bool need_add_to_database = !create.temporary;
     if (need_add_to_database)
-        database = DatabaseCatalog::instance().getDatabase(database_name);
+    {
+        database = DatabaseCatalog::instance().tryGetDatabase(database_name);
+        if (!database)
+        {
+            if (getContext()->getServerType() != ServerType::cnch_worker)
+                throw Exception("No database " + database_name + " found", ErrorCodes::LOGICAL_ERROR);
+
+            ASTCreateQuery create_database;
+            create_database.database = database_name;
+            create_database.if_not_exists = true;
+
+            createDatabase(create_database);
+            database = DatabaseCatalog::instance().getDatabase(database_name);
+        }
+    }
 
     if (need_add_to_database && database->getEngineName() == "Replicated")
     {

@@ -26,16 +26,20 @@ public:
 
     // TODO: use visitor pattern to hide implementations
     virtual void writeSymbolStatistics(SymbolStatistics & symbol) = 0;
-    virtual const BucketBounds & get_buckets_bounds() const = 0;
+    virtual const BucketBounds & getBucketBounds() const = 0;
 
-    virtual UInt64 get_count(size_t bucket_id) const = 0;
-    virtual double get_ndv(size_t bucket_id) const = 0;
+    virtual UInt64 getCount(size_t bucket_id) const = 0;
+    virtual double getNdv(size_t bucket_id) const = 0;
 
-    virtual void set_count(size_t bucket_id, UInt64 count) = 0;
-    virtual void set_ndv(size_t bucket_id, double ndv) = 0;
-    virtual size_t num_buckets() const = 0;
+    virtual void setCount(size_t bucket_id, UInt64 count) = 0;
+    virtual void setNdv(size_t bucket_id, double ndv) = 0;
+    virtual size_t numBuckets() const = 0;
+
+
+    static std::shared_ptr<StatsNdvBucketsResult> create(const BucketBounds & bounds, std::vector<UInt64> counts, std::vector<double> ndvs);
 
 private:
 };
+
 
 } // namespace DB

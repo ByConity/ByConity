@@ -15,6 +15,8 @@ namespace DB
 
 class Context;
 
+String getTableDefinitionFromCreateQuery(const ASTPtr & query, bool attach);
+
 /// A base class for databases that manage their own list of tables.
 class DatabaseWithOwnTablesBase : public IDatabase, protected WithContext
 {
@@ -52,5 +54,7 @@ protected:
     StoragePtr detachTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock);
     StoragePtr getTableUnlocked(const String & table_name, std::unique_lock<std::mutex> & lock) const;
 };
+
+std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr & context);
 
 }

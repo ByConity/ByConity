@@ -56,8 +56,8 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
-    std::tie(partition_selector, partition_start_points) = RepartitionTransform::doRepartition(
-        partition_num, chunk, header, repartition_keys, repartition_func, RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE);
+    std::tie(partition_selector, partition_start_points)
+        = RepartitionTransform::doDefaultRepartition(partition_num, chunk, header, repartition_keys);
 
     const auto &  columns = chunk.getColumns();
     for (size_t i = 0; i < column_num; i++)
