@@ -12,7 +12,7 @@
 namespace DB
 {
 
-#define BUFFER_SIZE 1048576  // default buffer size 1M
+#define DEFUALT_BUFFER_SIZE 1048576  // default buffer size 1M
 
 /***
  * Helper class to upload and download files from hdfs. 
@@ -21,7 +21,7 @@ class HDFSDumper
 {
 
 public:
-    HDFSDumper(const String & hdfs_user_, const String & hdfs_nnproxy, size_t buffer_size_ = BUFFER_SIZE);
+    HDFSDumper(const String & hdfs_user_, const String & hdfs_nnproxy, size_t buffer_size_ = DEFUALT_BUFFER_SIZE);
 
     // upload local parts to hdfs
     void uploadPartsToRemote(const String & local_path, const String & remote_path, std::vector<String> & parts_to_upload);
