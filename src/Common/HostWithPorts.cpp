@@ -147,13 +147,9 @@ std::string HostWithPorts::toDebugString() const
 HostWithPorts HostWithPorts::fromRPCAddress(const std::string & s)
 {
     std::pair<std::string, UInt16> host_port = parseAddress(s, 0);
-    return HostWithPorts{
-        // cannot get hostname information from RPCAddress
-        // will it be a problem if assign empty string here?
-        "",
-        std::string{removeBracketsIfIpv6(host_port.first)},
-        host_port.second,
-    };
+    HostWithPorts res{std::string{removeBracketsIfIpv6(host_port.first)}};
+    res.rpc_port = host_port.second;
+    return res;
 }
 
 bool HostWithPorts::isExactlySameVec(const HostWithPortsVec & lhs, const HostWithPortsVec & rhs)

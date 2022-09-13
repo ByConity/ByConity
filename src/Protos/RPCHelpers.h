@@ -46,13 +46,13 @@ namespace DB::RPCHelpers
     inline HostWithPorts createHostWithPorts(const Protos::HostWithPorts & hp)
     {
         return HostWithPorts{
-            hp.hostname(),
             hp.host(),
             uint16_t(hp.rpc_port()),
             uint16_t(hp.tcp_port()),
             (hp.has_http_port() ? uint16_t(hp.http_port()) : uint16_t(0)),
             (hp.has_exchange_port() ? uint16_t(hp.exchange_port()) : uint16_t(0)),
             (hp.has_exchange_status_port() ? uint16_t(hp.exchange_status_port()) : uint16_t(0)),
+            hp.hostname(),
         };
     }
 
@@ -79,7 +79,7 @@ namespace DB::RPCHelpers
     inline void fillHostWithPorts(const HostWithPorts & hp, Protos::HostWithPorts & pb_hp)
     {
         pb_hp.set_hostname(hp.id);
-        pb_hp.set_host(hp.host);
+        pb_hp.set_host(hp.getHost());
         pb_hp.set_rpc_port(hp.rpc_port);
         pb_hp.set_tcp_port(hp.tcp_port);
         pb_hp.set_http_port(hp.http_port);

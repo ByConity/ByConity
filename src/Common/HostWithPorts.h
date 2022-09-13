@@ -7,7 +7,7 @@
 
 namespace DB
 {
-struct HostWithPorts;
+class HostWithPorts;
 using HostWithPortsVec = std::vector<HostWithPorts>;
 
 std::string addBracketsIfIpv6(const std::string & host);
@@ -20,15 +20,29 @@ const std::string & getHostIPFromEnv();
 
 const char * getLoopbackIPFromEnv();
 
-struct HostWithPorts
+class HostWithPorts
 {
+public:
+    HostWithPorts() = default;
+    HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, uint16_t exchange_port_ = 0, uint16_t exchange_status_port_ = 0, std::string id_ = {})
+        : id{std::move(id_)},
+          rpc_port{rpc_port_},
+          tcp_port{tcp_port_},
+          http_port{http_port_},
+          exchange_port{exchange_port_},
+          exchange_status_port{exchange_status_port_},
+          host{removeBracketsIfIpv6(host_)}
+    {}
+
     std::string id;
-    std::string host;
     uint16_t rpc_port{0};
     uint16_t tcp_port{0};
     uint16_t http_port{0};
     uint16_t exchange_port{0};
     uint16_t exchange_status_port{0};
+private:
+    std::string host;
+public:
 
     bool empty() const { return host.empty() || (rpc_port == 0 && tcp_port == 0); }
 
@@ -38,6 +52,7 @@ struct HostWithPorts
     std::string getExchangeAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(exchange_port); }
     std::string getExchangeStatusAddress() const { return addBracketsIfIpv6(host) + ':' + std::to_string(exchange_status_port); }
 
+    const std::string & getHost() const { return host; }
     std::string toDebugString() const;
 
     static HostWithPorts fromRPCAddress(const std::string & s);
@@ -83,7 +98,7 @@ struct hash<DB::HostWithPorts>
 {
     std::size_t operator()(const DB::HostWithPorts & hp) const
     {
-        return std::hash<string>()(hp.host) ^ std::hash<uint16_t>()(hp.rpc_port) ^ (std::hash<uint16_t>()(hp.tcp_port) << 16);
+        return std::hash<string>()(DB::addBracketsIfIpv6(hp.getHost())) ^ std::hash<uint16_t>()(hp.rpc_port) ^ (std::hash<uint16_t>()(hp.tcp_port) << 16);
     }
 };
 

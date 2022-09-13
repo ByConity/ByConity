@@ -45,7 +45,7 @@ AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_c
 {
     const ClientInfo & info = query_context->getClientInfo();
     return AddressInfo(
-        host_with_ports.host, host_with_ports.tcp_port, info.current_user, info.current_password, host_with_ports.exchange_port, host_with_ports.exchange_status_port);
+        host_with_ports.getHost(), host_with_ports.tcp_port, info.current_user, info.current_password, host_with_ports.exchange_port, host_with_ports.exchange_status_port);
 }
 
 PlanSegmentsStatusPtr
@@ -69,7 +69,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
         query_map.emplace(std::make_pair(query_id, dag_ptr));
     }
     /// send resource to worker before scheduler
-    
+
     auto server_resource = query_context->tryGetCnchServerResource();
     if (server_resource)
     {
@@ -531,7 +531,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         LOG_TRACE(log, "SegmentScheduler set final plansegment with AddressInfo: {}", final_address_info.toString());
         final_it->second->setCurrentAddress(final_address_info);
         final_it->second->setCoordinatorAddress(final_address_info);
-        
+
         for (const auto & plan_segment_input : final_it->second->getPlanSegmentInputs())
         {
             // segment has more than one input which one is table
