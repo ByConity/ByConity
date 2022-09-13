@@ -52,6 +52,7 @@
 #include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTSetRoleQuery.h>
+#include <Parsers/ASTPartToolKit.h>
 #include <Parsers/ASTSettingsProfileElement.h>
 #include <Parsers/ASTShowAccessEntitiesQuery.h>
 #include <Parsers/ASTShowAccessQuery.h>
