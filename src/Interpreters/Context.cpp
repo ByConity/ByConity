@@ -2379,21 +2379,21 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    // TODO(zuochuang.zema) MERGE dns
-    // bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
-    // bool has_worker_id = !!std::getenv("WORKER_ID");
-    // String id = (use_dns || !has_worker_id) ? DNSResolver::instance().getHostName() : String(std::getenv("WORKER_ID"));
+    bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
+    auto id_cstr = std::getenv("WORKER_ID");
+    auto ip_cstr = getHostIPFromEnv();
+    String id = (use_dns || nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
+    String host = (ip_cstr.empty()) ? DNSResolver::instance().getHostName() : String(ip_cstr);
 
-    // return HostWithPorts{
-    //     std::move(id),
-    //     DNSResolver::instance().getIPOrFQDNOrHostname(),
-    //     getRPCPort(),
-    //     getTCPPort(),
-    //     getHTTPPort(),
-    //     getExchangePort(),
-    //     getExchangeStatusPort(),
-    // };
-    return {};
+    return HostWithPorts{
+        std::move(host),
+        getRPCPort(),
+        getTCPPort(),
+        getHTTPPort(),
+        getExchangePort(),
+        getExchangeStatusPort(),
+        std::move(id)
+    };
 }
 
 UInt16 Context::getTCPPort() const
@@ -4066,7 +4066,7 @@ InterserverCredentialsPtr Context::getCnchInterserverCredentials()
 }
 
 // In CNCH, form a virtual cluster which include all servers.
-std::shared_ptr<Cluster> Context::mockCnchServersCluster()
+std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
 {
     // get CNCH servers by PSM
     String psm_name = this->getCnchServerClientPool().getServiceName();
@@ -4076,19 +4076,19 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster()
 
     std::vector<Cluster::Addresses> addresses;
 
-    auto credential_ptr = getCnchInterserverCredentials();
+    auto user_password = getCnchInterserverCredentials();
 
     // create new cluster from scratch
     for (auto & e : endpoints)
     {
-        Cluster::Address address(e.getTCPAddress(), credential_ptr->getUser(), credential_ptr->getPassword(), this->getTCPPort(), false);
+        Cluster::Address address(e.getTCPAddress(), user_password.first, user_password.second, this->getTCPPort(), false);
         // assume there are only one replica in each shard
         addresses.push_back({address});
     }
 
-    //Context query_context = context;
     // as CNCH server might be out-of-service for unknown reason, it is ok to skip it
-    const_cast<Settings&>(settings).skip_unavailable_shards = true;  //FIXME
+    //auto local_settings = context.getSettings();
+    //local_settings.skip_unavailable_shards = true;
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
 
 }
