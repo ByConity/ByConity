@@ -3766,6 +3766,22 @@ UInt16 Context::getRPCPort() const
     return getRootConfig().rpc_port;
 }
 
+UInt16 Context::getHTTPPort() const
+{
+    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
+    {
+        auto sd_client = this->getServiceDiscoveryClient();
+        if(sd_client->getName() == "consul")
+        {
+            const char * rpcPort = getenv("PORT2");
+            if(rpcPort != NULL)
+                return parse<UInt16>(rpcPort);
+        }
+    }
+
+    return getRootConfig().http_port;
+}
+
 void Context::setServerType(const String & type_str)
 {
     if (type_str == "standalone")

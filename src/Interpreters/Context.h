@@ -1147,6 +1147,7 @@ public:
     ResourceManagerClientPtr getResourceManagerClient() const;
 
     UInt16 getRPCPort() const;
+    UInt16 getHTTPPort() const;
 
     //write ha non host update time
     UInt64 getNonHostUpdateTime(const UUID & uuid);
