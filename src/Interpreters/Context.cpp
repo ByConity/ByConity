@@ -3773,9 +3773,9 @@ UInt16 Context::getHTTPPort() const
         auto sd_client = this->getServiceDiscoveryClient();
         if(sd_client->getName() == "consul")
         {
-            const char * rpcPort = getenv("PORT2");
-            if(rpcPort != NULL)
-                return parse<UInt16>(rpcPort);
+            const char * http_port = getenv("PORT2");
+            if(http_port != nullptr)
+                return parse<UInt16>(http_port);
         }
     }
 
