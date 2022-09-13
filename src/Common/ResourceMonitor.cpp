@@ -4,7 +4,6 @@
 #include <common/getFQDNOrHostName.h>
 #include <common/getMemoryAmount.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
-#include <Common/HostWithPorts.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>

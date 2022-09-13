@@ -63,7 +63,7 @@ bool functionality_test(std::shared_ptr<DB::ServiceDiscoveryDNS> &sd, std::strin
 	   return false;
        }
 
-       if (!isValidHost(endpoints[0].host) || !isValidHostName(endpoints[0].id, vw_name) ||
+       if (!isValidHost(endpoints[0].getHost()) || !isValidHostName(endpoints[0].id, vw_name) ||
             	endpoints[0].tcp_port != PORT0 ||  endpoints[0].rpc_port != PORT1 || endpoints[0].http_port != PORT2){
 		std::cerr << "fakedLookup worker endpoints invalid" << std::endl;
 		return false;

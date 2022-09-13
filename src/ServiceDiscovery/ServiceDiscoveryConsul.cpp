@@ -111,19 +111,22 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW
         String wg_name = ep.tags.count("wg_name") ? ep.tags["wg_name"] : "wg_default";
 
         auto & group = group_map[wg_name];
-        group.emplace_back();
-        group.back().host = ep.host;
-        group.back().tcp_port = ep.port;
+
+        HostWithPorts host_with_ports{ep.host};
+        host_with_ports.tcp_port = static_cast<uint16_t>(ep.port);
+
         if (ep.tags.count("hostname"))
-            group.back().id = ep.tags.at("hostname");
+            host_with_ports.id = ep.tags.at("hostname");
         if (ep.tags.count("PORT1"))
-            group.back().rpc_port = parse<UInt16>(ep.tags.at("PORT1"));
+            host_with_ports.rpc_port = parse<UInt16>(ep.tags.at("PORT1"));
         if (ep.tags.count("PORT2"))
-            group.back().http_port = parse<UInt16>(ep.tags.at("PORT2"));
+            host_with_ports.http_port = parse<UInt16>(ep.tags.at("PORT2"));
         if (ep.tags.count("PORT5"))
-            group.back().exchange_port = parse<UInt16>(ep.tags.at("PORT5"));
+            host_with_ports.exchange_port = parse<UInt16>(ep.tags.at("PORT5"));
         if (ep.tags.count("PORT6"))
-            group.back().exchange_status_port = parse<UInt16>(ep.tags.at("PORT6"));
+            host_with_ports.exchange_status_port = parse<UInt16>(ep.tags.at("PORT6"));
+
+        group.push_back(std::move(host_with_ports));
     }
 
     return group_map;
@@ -208,39 +211,41 @@ HostWithPortsVec ServiceDiscoveryConsul::formatResult(const Endpoints & eps, Com
     {
         for (auto & e : eps)
         {
-            result.emplace_back();
-            result.back().host = e.host;
-            result.back().tcp_port = e.port;
+            HostWithPorts host_with_ports{e.host};
+            host_with_ports.tcp_port = e.port;
             if (e.tags.count("hostname"))
-                result.back().id = e.tags.at("hostname");
+                host_with_ports.id = e.tags.at("hostname");
             if (e.tags.count("PORT1"))
-                result.back().rpc_port = parse<UInt16>(e.tags.at("PORT1"));
+                host_with_ports.rpc_port = parse<UInt16>(e.tags.at("PORT1"));
             if (e.tags.count("PORT2"))
-                result.back().http_port = parse<UInt16>(e.tags.at("PORT2"));
+                host_with_ports.http_port = parse<UInt16>(e.tags.at("PORT2"));
             if (e.tags.count("PORT5"))
-                result.back().exchange_port = parse<UInt16>(e.tags.at("PORT5"));
+                host_with_ports.exchange_port = parse<UInt16>(e.tags.at("PORT5"));
             if (e.tags.count("PORT6"))
-                result.back().exchange_status_port = parse<UInt16>(e.tags.at("PORT6"));
+                host_with_ports.exchange_status_port = parse<UInt16>(e.tags.at("PORT6"));
+
+            result.push_back(std::move(host_with_ports));
         }
     }
     else if (type == ComponentType::TSO || type == ComponentType::DAEMON_MANAGER || type == ComponentType::RESOURCE_MANAGER)
     {
         for (auto & e : eps)
         {
-            result.emplace_back();
-            result.back().host = e.host;
-            result.back().rpc_port = e.port;
+            HostWithPorts host_with_ports{e.host};
+            host_with_ports.rpc_port = e.port;
             if (e.tags.count("hostname"))
-                result.back().id = e.tags.at("hostname");
+                host_with_ports.id = e.tags.at("hostname");
+
+            result.push_back(std::move(host_with_ports));
         }
     }
     else if (type == ComponentType::NNPROXY || type == ComponentType::KMS)
     {
         for (auto & e : eps)
         {
-            result.emplace_back();
-            result.back().host = e.host;
-            result.back().tcp_port = e.port;
+            HostWithPorts host_with_ports{e.host};
+            host_with_ports.tcp_port = e.port;
+            result.push_back(std::move(host_with_ports));
         }
     }
 

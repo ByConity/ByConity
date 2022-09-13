@@ -92,7 +92,7 @@ ProxyTransactionPtr TransactionCoordinatorRcCnch::createProxyTransaction(
     TxnTimestamp primary_txn_id)
     {
         /// Get the rpc client of target server
-        auto server_cli = getContext()->getCnchServerClient(host_ports.host, host_ports.rpc_port);
+        auto server_cli = getContext()->getCnchServerClient(host_ports);
         auto txn = std::make_shared<CnchProxyTransaction>(getContext(), server_cli, primary_txn_id);
         auto txn_id = txn->getTransactionID();
         /// add to active txn list

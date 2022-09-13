@@ -4,6 +4,7 @@
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/MergeTreeDataWriter.h>
 #include <common/logger_useful.h>
+#include <Common/SimpleIncrement.h>
 #include "WorkerTasks/ManipulationType.h"
 // #include <MergeTreeCommon/CnchDedupHelper.h>
 
@@ -32,7 +33,7 @@ public:
     Block getHeader() const override;
 
     void write(const Block & block) override;
-    MergeTreeMutableDataPartsVector convertBlockIntoDataParts(const Block & block);
+    MergeTreeMutableDataPartsVector convertBlockIntoDataParts(const Block & block, bool use_inner_block_id = false);
     void writeSuffix() override;
     void writeSuffixImpl();
 
@@ -58,6 +59,7 @@ private:
     MutableMergeTreeDataPartsCNCHVector preload_parts;
 
     bool disable_transaction_commit{false};
+    SimpleIncrement increment;
 };
 
 }

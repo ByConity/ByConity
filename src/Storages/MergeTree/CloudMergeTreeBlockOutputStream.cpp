@@ -24,19 +24,7 @@ Block CloudMergeTreeBlockOutputStream::getHeader() const
     return metadata_snapshot->getSampleBlock();
 }
 
-
-void CloudMergeTreeBlockOutputStream::write(const Block & block)
-{
-    MergeTreeMutableDataPartsVector temp_parts = convertBlockIntoDataParts(block);
-    CnchDataWriter cnch_writer(storage, *context, ManipulationType::Insert);
-    auto dumped = cnch_writer.dumpAndCommitCnchParts(temp_parts);
-
-    // batch all part to preload_parts for batch preloading in writeSuffix
-    /// LOG_DEBUG(storage.getLogger(), "Pushing {} parts to preload vector.", temp_parts.size());
-    /// std::move(temp_parts.begin(), temp_parts.end(), std::back_inserter(preload_parts));
-}
-
-MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockIntoDataParts(const Block & block)
+MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockIntoDataParts(const Block & block, bool use_inner_block_id)
 {
     auto part_blocks
         = writer.splitBlockIntoParts(block, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
@@ -46,7 +34,7 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     auto part_log = context->getGlobalContext()->getPartLog(storage.getDatabaseName());
     MergeTreeMutableDataPartsVector temp_parts;
     auto txn_id = context->getCurrentTransactionID();
-    auto block_id = context->getTimestamp();
+    auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
     for (auto & block_with_partition : part_blocks)
     {
         Row original_partition{block_with_partition.partition};
@@ -67,8 +55,18 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             temp_parts.push_back(std::move(temp_part));
         }
     }
-
     return temp_parts;
+}
+
+void CloudMergeTreeBlockOutputStream::write(const Block & block)
+{
+    auto temp_parts = convertBlockIntoDataParts(block);
+    CnchDataWriter cnch_writer(storage, *context, ManipulationType::Insert);
+    auto dumped = cnch_writer.dumpAndCommitCnchParts(temp_parts);
+
+    // batch all part to preload_parts for batch preloading in writeSuffix
+    /// LOG_DEBUG(storage.getLogger(), "Pushing {} parts to preload vector.", temp_parts.size());
+    /// std::move(temp_parts.begin(), temp_parts.end(), std::back_inserter(preload_parts));
 }
 
 void CloudMergeTreeBlockOutputStream::writeSuffix()
