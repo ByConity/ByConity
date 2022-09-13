@@ -411,9 +411,22 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
     /// must have one output column
     if (output_header.empty())
     {
-        output_header.emplace_back(step->getOutputStream().header.getByPosition(0));
-        left_require.insert(step->getOutputStream().header.getByPosition(0).name);
-        left = VisitorUtil::accept(node.getChildren()[0], *this, left_require);
+        if (left_header.columns() != 0)
+        {
+            output_header.emplace_back(left_header.getByPosition(0));
+            left_require.insert(left_header.getByPosition(0).name);
+            left = VisitorUtil::accept(node.getChildren()[0], *this, left_require);
+        }
+        else if (right_header.columns() != 0)
+        {
+            output_header.emplace_back(right_header.getByPosition(0));
+            right_require.insert(right_header.getByPosition(0).name);
+            right = VisitorUtil::accept(node.getChildren()[1], *this, right_require);
+        }
+        else
+        {
+            throw Exception("Join no input symbols", ErrorCodes::LOGICAL_ERROR);
+        }
     }
 
     // column pruning can't change the output type of join.
