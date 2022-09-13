@@ -1,18 +1,19 @@
 #include <CloudServices/CnchWorkerServiceImpl.h>
 
-#include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
+#include <CloudServices/CnchWorkerResource.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/NamedSession.h>
-#include <Protos/RPCHelpers.h>
 #include <Protos/DataModelHelpers.h>
-#include <Storages/StorageCloudMergeTree.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Protos/RPCHelpers.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
-#include <IO/ReadBufferFromString.h>
 
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
@@ -61,7 +62,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->setCurrentQueryId(request->task_id());
         rpc_context->getClientInfo().rpc_port = request->rpc_port();
-        // TODO: rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(*rpc_context, TxnTimestamp(request->txn_id())));
+        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, TxnTimestamp(request->txn_id())));
 
         /// const auto & settings = global_context->getSettingsRef();
         /// UInt64 max_running_task = settings.max_ratio_of_cnch_tasks_to_threads * settings.max_threads;
