@@ -68,6 +68,7 @@ void registerFunctionAESDecryptMysql(FunctionFactory & factory);
 #endif
 
 void registerInternalFunctionDynamicFilter(FunctionFactory &);
+void registerFunctionBucketBoundsSearch(FunctionFactory & factory);
 
 void registerFunctions()
 {
@@ -137,6 +138,7 @@ void registerFunctions()
     registerFunctionLogTrace(factory);
     registerFunctionTopoFindDown(factory);
     registerInternalFunctionDynamicFilter(factory);
+    registerFunctionBucketBoundsSearch(factory);
     registerFunctionDtsPartition(factory);
 }
 
