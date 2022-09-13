@@ -3849,6 +3849,13 @@ CnchServerClientPtr Context::getCnchServerClient() const
     return shared->cnch_server_client_pool->get();
 }
 
+CnchServerClientPtr Context::getCnchServerClient(const HostWithPorts & host_with_ports) const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->cnch_server_client_pool->get(host_with_ports);
+}
+
 void Context::initCnchWorkerClientPools()
 {
     shared->cnch_worker_client_pools = std::make_unique<CnchWorkerClientPools>(getServiceDiscoveryClient());

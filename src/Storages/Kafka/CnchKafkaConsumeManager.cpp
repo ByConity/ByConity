@@ -186,7 +186,7 @@ ContextPtr CnchKafkaConsumeManager::createQueryContext()
 
     for (int i = 0; i < static_cast<int>(lhs.size()); ++i)
     {
-        if (lhs[i].host != rhs[i].host)
+        if (!isSameHost(lhs[i].getHost(), rhs[i].getHost()))
             return true;
     }
 
@@ -197,12 +197,12 @@ bool CnchKafkaConsumeManager::checkTargetTable(const StorageCnchMergeTree * targ
 {
     const auto & cnch_table_settings = target_table->getSettings();
     cnch_enable_memory_buffer = cnch_table_settings->cnch_enable_memory_buffer;
-    
+
     cloud_table_has_unique_key = false; /// FIXME: target_table->hasUniqueKey();
     if (cnch_enable_memory_buffer)
     {
         throw Exception("MemoryBuffer is not implemented now", ErrorCodes::NOT_IMPLEMENTED);
-        
+
         /* HostWithPortsVec new_memory_buffers;
 
         auto memory_buffer_manager = getContext()->tryGetMemoryBufferManager(target_table->getStorageID());

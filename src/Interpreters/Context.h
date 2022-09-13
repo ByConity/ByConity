@@ -1155,6 +1155,7 @@ public:
     CnchServerClientPool & getCnchServerClientPool() const;
     CnchServerClientPtr getCnchServerClient(const std::string & host, uint16_t port) const;
     CnchServerClientPtr getCnchServerClient(const std::string & host_port) const;
+    CnchServerClientPtr getCnchServerClient(const HostWithPorts & host_with_ports) const;
     CnchServerClientPtr getCnchServerClient() const;
 
     void initCnchWorkerClientPools();

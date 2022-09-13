@@ -180,7 +180,7 @@ void CnchServerManager::refreshTopology()
 
     /// keep the servers sorted by host address to make it comparable
     std::sort(server_vector.begin(), server_vector.end(), [](auto & lhs, auto & rhs) {
-        return std::forward_as_tuple(lhs.id, lhs.host, lhs.rpc_port) < std::forward_as_tuple(rhs.id, rhs.host, rhs.rpc_port);
+        return std::forward_as_tuple(lhs.id, lhs.getHost(), lhs.rpc_port) < std::forward_as_tuple(rhs.id, rhs.getHost(), rhs.rpc_port);
     });
 
     {

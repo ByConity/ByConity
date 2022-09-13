@@ -120,7 +120,7 @@ inline void fillTopologyVersions(const std::list<CnchServerTopology> & topologie
         {
             auto & server = *topology_version.add_servers();
             server.set_hostname(host_with_port.id);
-            server.set_host(host_with_port.host);
+            server.set_host(host_with_port.getHost());
             server.set_rpc_port(host_with_port.rpc_port);
             server.set_tcp_port(host_with_port.tcp_port);
             server.set_http_port(host_with_port.http_port);
@@ -137,12 +137,11 @@ inline std::list<CnchServerTopology> createTopologyVersionsFromModel(const pb::R
         HostWithPortsVec servers;
         for (const auto & server : model.servers())
         {
-            HostWithPorts host_with_port{};
-            host_with_port.id = server.hostname();
-            host_with_port.host = server.host();
+            HostWithPorts host_with_port{server.host()};
             host_with_port.rpc_port = server.rpc_port();
             host_with_port.tcp_port = server.tcp_port();
             host_with_port.http_port = server.http_port();
+            host_with_port.id = server.hostname();
             servers.push_back(host_with_port);
         }
         res.push_back(CnchServerTopology(expiration, std::move(servers)));

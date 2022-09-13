@@ -155,7 +155,14 @@ public:
     UInt16 getExchangePort() const;
     UInt16 getExchangeStatusPort() const;
 
-    HostWithPorts getHostWithPorts() const { return {"virtual_id", host, rpc_port, port}; }
+    HostWithPorts getHostWithPorts() const
+    {
+        HostWithPorts res{host};
+        res.rpc_port = rpc_port;
+        res.tcp_port = port;
+        res.id = "virtual_id";
+        return res;
+    }
 
     Protocol::Compression getCompression() const { return compression; }
 

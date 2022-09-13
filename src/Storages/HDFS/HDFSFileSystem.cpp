@@ -162,8 +162,8 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user
             String proxies_str;
             for (const auto & host_with_port : nnproxys)
             {
-                proxies_str += host_with_port.host + ":" + std::to_string(host_with_port.tcp_port) + ",";
-                proxies.emplace_back(normalizeHost(host_with_port.host), host_with_port.tcp_port);
+                proxies_str += host_with_port.getTCPAddress() + ",";
+                proxies.emplace_back(normalizeHost(host_with_port.getHost()), host_with_port.tcp_port);
             }
             LOG_INFO(&Poco::Logger::get("HDFSFileSystem"), "Construct ha hdfs nn proxies {}", proxies_str);
 
@@ -659,11 +659,11 @@ void HDFSConnectionParams::lookupOnNeed()
     assert(nnproxys.size() > 0);
     for (auto it : nnproxys)
     {
-        addrs.emplace_back( it.host, it.tcp_port);
+        addrs.emplace_back(it.getHost(), it.tcp_port);
     }
-    // ensure the nnproxy picked is not the same as the broken one. 
+    // ensure the nnproxy picked is not the same as the broken one.
     nnproxy_index = brokenNNs.findOneGoodNN(nnproxys);
-    inited = true; 
+    inited = true;
 }
 
 void HDFSConnectionParams::setNNProxyBroken()

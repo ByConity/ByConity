@@ -62,7 +62,7 @@ void StorageSystemWorkers::fillData(MutableColumns & res_columns, const ContextP
     {
         size_t i = 0;
         res_columns[i++]->insert(node.id);
-        res_columns[i++]->insert(node.host_ports.host);
+        res_columns[i++]->insert(node.host_ports.getHost());
         res_columns[i++]->insert(node.host_ports.tcp_port);
         res_columns[i++]->insert(node.host_ports.rpc_port);
         res_columns[i++]->insert(node.host_ports.http_port);
