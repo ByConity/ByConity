@@ -111,7 +111,7 @@ jobs:
         continue-on-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 6 --run cnch_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -129,7 +129,7 @@ jobs:
         commands:
           - export ENABLE_IPV6=1
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 6 --run cnch_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -146,7 +146,7 @@ jobs:
         ignore-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 6 --run cnch_problematic_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_problematic_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
