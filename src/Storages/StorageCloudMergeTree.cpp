@@ -146,7 +146,7 @@ ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where
         // Delete all columns that are not required
         for (const auto & delete_column : sample_block.getNamesAndTypesList())
         {
-            if (required_source_columns_set.contains(delete_column.name))
+            if (!required_source_columns_set.contains(delete_column.name))
             {
                 sample_block.erase(delete_column.name);
             }
