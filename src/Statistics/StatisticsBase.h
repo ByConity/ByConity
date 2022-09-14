@@ -54,7 +54,6 @@ public:
     StatisticsBase & operator=(StatisticsBase &&) = default;
 
     virtual ~StatisticsBase() = default;
-
 };
 
 using StatisticsBasePtr = std::shared_ptr<StatisticsBase>;
