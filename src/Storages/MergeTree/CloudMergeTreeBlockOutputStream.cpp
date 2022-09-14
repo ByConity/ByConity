@@ -37,15 +37,23 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
     for (auto & block_with_partition : part_blocks)
     {
-        Stopwatch watch;
+        Row original_partition{block_with_partition.partition};
+        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
+        LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
 
-        MergeTreeMutableDataPartPtr temp_part = writer.writeTempPart(block_with_partition, metadata_snapshot, context, block_id, txn_id);
+        for (auto & bucketed_block_with_partition : bucketed_part_blocks)
+        {
+            Stopwatch watch;
 
-        if (part_log)
-            part_log->addNewPart(context, temp_part, watch.elapsed());
-        LOG_TRACE(storage.getLogger(), "Wrote {}, elapsed {} ms", temp_part->name, watch.elapsedMilliseconds());
+            bucketed_block_with_partition.partition = Row(original_partition);
+            MergeTreeMutableDataPartPtr temp_part = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, txn_id);
 
-        temp_parts.push_back(std::move(temp_part));
+            if (part_log)
+                part_log->addNewPart(context, temp_part, watch.elapsed());
+            LOG_TRACE(storage.getLogger(), "Wrote {}, elapsed {} ms", temp_part->name, watch.elapsedMilliseconds());
+
+            temp_parts.push_back(std::move(temp_part));
+        }
     }
     return temp_parts;
 }

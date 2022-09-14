@@ -16,6 +16,8 @@
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
@@ -301,7 +303,8 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     }
 
     String local_table_name = getCloudTableName(local_context);
-    collectResource(local_context, parts, local_table_name);
+    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
+    collectResource(local_context, parts, local_table_name, bucket_numbers);
 
     return {std::move(local_table_name), std::move(parts)};
 }
@@ -1058,7 +1061,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     }
 }
 
-void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name)
+void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers)
 {
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
@@ -1069,7 +1072,7 @@ void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataP
     // if (local_context.getSettingsRef().enable_virtual_part)
     //     setVirtualPartSize(local_context, parts, worker_group->getReadWorkers().size());
 
-    cnch_resource->addDataParts(getStorageUUID(), parts);
+    cnch_resource->addDataParts(getStorageUUID(), parts, required_bucket_numbers);
 }
 
 UInt64 StorageCnchMergeTree::getTimeTravelRetention()
@@ -1526,6 +1529,77 @@ Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(const std::vecto
     return block;
 }
 
+std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
+{
+    std::set<Int64> bucket_numbers;
+    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
+    const Settings & settings = local_context->getSettingsRef();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    // if number of bucket columns of this table > 1, skip optimisation
+    if (settings.optimize_skip_unused_shards && where_expression && isBucketTable() && metadata_snapshot->getColumnsForClusterByKey().size() == 1)
+    {
+        // get constant actions of the expression
+        Block sample_block = metadata_snapshot->getSampleBlock();
+        NamesAndTypesList source_columns = sample_block.getNamesAndTypesList();
+
+        auto syntax_result = TreeRewriter(local_context).analyze(where_expression, source_columns);
+        ExpressionActionsPtr const_actions = ExpressionAnalyzer{where_expression, syntax_result, local_context}.getConstActions();
+        Names required_source_columns = syntax_result->requiredSourceColumns();
+
+        // Delete all unneeded columns
+        for (const auto & delete_column : sample_block.getNamesAndTypesList())
+        {
+            if (std::find(required_source_columns.begin(), required_source_columns.end(), delete_column.name)
+                == required_source_columns.end())
+            {
+                sample_block.erase(delete_column.name);
+            }
+        }
+
+        const_actions->execute(sample_block);
+
+        //replace constant values as literals in AST using visitor
+        if (sample_block)
+        {
+            InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(sample_block);
+            visitor.visit(where_expression);
+        }
+
+        size_t limit = settings.optimize_skip_unused_shards_limit;
+        if (!limit || limit > SSIZE_MAX)
+        {
+            throw Exception(
+                "optimize_skip_unused_shards_limit out of range (0, " + std::to_string(SSIZE_MAX) + "]", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+        }
+        // Increment limit so that when limit reaches 0, it means that the limit has been exceeded
+        ++limit;
+
+        // NOTE: check for cluster by columns in where clause done in evaluateExpressionOverConstantCondition
+        const auto & blocks = evaluateExpressionOverConstantCondition(where_expression, metadata_snapshot->getClusterByKey().expression, limit);
+
+        if (!limit)
+        {
+            LOG_INFO(
+                log,
+                "Number of values for cluster_by key exceeds optimize_skip_unused_shards_limit = "
+                    + std::to_string(settings.optimize_skip_unused_shards_limit)
+                    + ", try to increase it, but note that this may increase query processing time.");
+        }
+
+        if (blocks)
+        {
+            for (const auto & block : *blocks)
+            {
+                // Get bucket number and add to results array
+                Block block_copy = block;
+                prepareBucketColumn(block_copy, metadata_snapshot->getColumnsForClusterByKey(), metadata_snapshot->getSplitNumberFromClusterByKey(), metadata_snapshot->getWithRangeFromClusterByKey(), metadata_snapshot->getBucketNumberFromClusterByKey(), local_context);
+                auto bucket_number = block_copy.getByPosition(block_copy.columns() - 1).column->getInt(0); // this block only contains one row
+                bucket_numbers.insert(bucket_number);
+            }
+        }
+    }
+    return bucket_numbers;
+}
 StorageCnchMergeTree & StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const
 {
     StorageCnchMergeTree * src_data = dynamic_cast<StorageCnchMergeTree *>(source_table.get());

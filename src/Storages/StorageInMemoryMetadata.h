@@ -32,6 +32,8 @@ struct StorageInMemoryMetadata
     mutable const ProjectionDescription * selected_projection{};
     /// PARTITION BY expression. Currently supported for MergeTree only.
     KeyDescription partition_key;
+    /// CLUSTER BY expression. Currently supported for MergeTree only.
+    KeyDescription cluster_by_key;
     /// PRIMARY KEY expression. If absent, than equal to order_by_ast.
     KeyDescription primary_key;
     /// ORDER BY expression. Required field for all MergeTree tables
@@ -214,6 +216,20 @@ struct StorageInMemoryMetadata
     bool hasPartitionKey() const;
     /// Returns column names that need to be read to calculate partition key.
     Names getColumnsRequiredForPartitionKey() const;
+
+    /// Returns structure with cluster by key.
+    const KeyDescription & getClusterByKey() const;
+    /// Returns ASTExpressionList of cluster by key expression for storage or nullptr if there is none.
+    ASTPtr getClusterByKeyAST() const { return cluster_by_key.definition_ast; }
+    /// Storage has user-defined (in CREATE query) cluster by key.
+    bool isClusterByKeyDefined() const;
+    /// Storage has cluster by key.
+    bool hasClusterByKey() const;
+    /// Returns column names that need to be read to calculate cluster by key.
+    Names getColumnsForClusterByKey() const;
+    Int64 getBucketNumberFromClusterByKey() const;
+    Int64 getSplitNumberFromClusterByKey() const;
+    bool getWithRangeFromClusterByKey() const;
 
     /// Returns structure with sorting key.
     const KeyDescription & getSortingKey() const;

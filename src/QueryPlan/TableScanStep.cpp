@@ -8,6 +8,7 @@
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/misc.h>
+#include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Optimizer/DynamicFilters.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTFunction.h>
@@ -22,7 +23,6 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/VirtualColumnUtils.h>
-#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
@@ -192,9 +192,50 @@ ASTs cloneChildrenReplacement(ASTs ast_children_replacement)
     return cloned_replacement;
 }
 
+void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
+{
+    const auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+    if (!cloud_merge_tree)
+        return;
+
+    auto metadata_snapshot = cloud_merge_tree->getInMemoryMetadataPtr();
+    const bool isBucketTableAndNeedOptimise = context->getSettingsRef().optimize_skip_unused_shards && cloud_merge_tree->isBucketTable()
+        && metadata_snapshot->getColumnsForClusterByKey().size() == 1 && !cloud_merge_tree->getRequiredBucketNumbers().empty();
+    if (!isBucketTableAndNeedOptimise)
+        return;
+
+    auto query = query_info.query->as<ASTSelectQuery>();
+
+    // NOTE: Have try-catch for every rewrite_in in order to find the WHERE clause that caused the error
+    RewriteInQueryVisitor::Data data;
+    LOG_TRACE(log, "Before rewriteInForBucketTable:\n: {}", query->dumpTree());
+    if (query->where())
+    {
+        auto ast_children_replacement = cloud_merge_tree->convertBucketNumbersToAstLiterals(query->where(), context);
+        if (!ast_children_replacement.empty())
+        {
+            data.ast_children_replacement = cloneChildrenReplacement(ast_children_replacement);
+            ASTPtr & where = query->refWhere();
+            RewriteInQueryVisitor(data).visit(where);
+        }
+    }
+    if (query->prewhere())
+    {
+        auto ast_children_replacement = cloud_merge_tree->convertBucketNumbersToAstLiterals(query->prewhere(), context);
+        if (!ast_children_replacement.empty())
+        {
+            data.ast_children_replacement = cloneChildrenReplacement(ast_children_replacement);
+            ASTPtr & pre_where = query->refPrewhere();
+            RewriteInQueryVisitor(data).visit(pre_where);
+        }
+    }
+    LOG_TRACE(log, "After rewriteInForBucketTable:\n: {}", query->dumpTree());
+}
+
 void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
+    rewriteInForBucketTable(build_context.context);
     auto * query = query_info.query->as<ASTSelectQuery>();
     if (auto filter = query->getWhere())
         query->setExpression(ASTSelectQuery::Expression::WHERE, rewriteDynamicFilter(filter, pipeline, build_context));
@@ -263,7 +304,6 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             [&](const Block & header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(header, expression); });
     }
 
-    //    rewriteInForBucketTable(build_context.context);
     //
     //    ASTPtr new_prewhere = rewriteDynamicFilter(prewhere, build_context);
     //

@@ -61,14 +61,14 @@ public:
     }
 
     template <typename T>
-    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & bucket_numbers = {})
+    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & required_bucket_numbers = {})
     {
         std::lock_guard lock(mutex);
         auto & assigned_resource = assigned_table_resource.at(storage_id);
 
         assigned_resource.addDataParts(data_parts);
-        if (assigned_resource.bucket_numbers.empty() && !bucket_numbers.empty())
-            assigned_resource.bucket_numbers = bucket_numbers;
+        if (assigned_resource.bucket_numbers.empty() && !required_bucket_numbers.empty())
+            assigned_resource.bucket_numbers = required_bucket_numbers;
     }
 
     void addBufferWorkers(const UUID & storage_id, const HostWithPortsVec & buffer_workers);

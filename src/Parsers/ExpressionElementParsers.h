@@ -503,6 +503,16 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 };
 
+/** Element of CLUSTER BY expression - same as expression element, but in addition, INTO <TOTAL_BUCKET_NUMBER> BUCKETS 
+  * must be specified.
+  */
+class ParserClusterByElement : public IParserBase
+{
+protected:
+    const char * getName() const override { return "element of CLUSTER BY expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+};
+
 
 /** Element of ORDER BY expression - same as expression element, but in addition, ASC[ENDING] | DESC[ENDING] could be specified
   *  and optionally, NULLS LAST|FIRST

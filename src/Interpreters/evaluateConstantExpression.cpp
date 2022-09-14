@@ -226,53 +226,65 @@ namespace
                 return true;
             };
 
-            if (const auto * tuple_func = right->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple")
+            // This function recursively traverses ASTFunction nodes that are children under the ASTExpressionList node in the given ast.
+            // It then adds the ASTLiterals under the ASTFunction nodes to the result
+            std::function<void (const IAST *)> populate_result = [&](const IAST * ast)
             {
-                const auto * tuple_elements = tuple_func->children.front()->as<ASTExpressionList>();
-                for (const auto & child : tuple_elements->children)
+                if (const auto * tuple_func = ast->as<ASTFunction>(); tuple_func && tuple_func->name == "tuple")
                 {
-                    const auto * literal = child->as<ASTLiteral>();
-                    const auto dnf = analyzeEquals(identifier, literal, expr);
-
-                    if (dnf.empty())
+                    const auto * tuple_elements = tuple_func->children.front()->as<ASTExpressionList>();
+                    for (const auto & child : tuple_elements->children)
                     {
-                        return {};
-                    }
-
-                    if (!add_dnf(dnf))
-                    {
-                        return {};
-                    }
-                }
-            }
-            else if (const auto * tuple_literal = right->as<ASTLiteral>(); tuple_literal)
-            {
-                if (tuple_literal->value.getType() == Field::Types::Tuple)
-                {
-                    const auto & tuple = tuple_literal->value.get<const Tuple &>();
-                    for (const auto & child : tuple)
-                    {
-                        const auto dnf = analyzeEquals(identifier, child, expr);
+                        if (const auto * child_tuple_func = child->as<ASTFunction>())
+                        {
+                            // if an ASTFunction is found within an ASTExpressionList, recurse and retrieve ASTLiteral
+                            populate_result(child_tuple_func);
+                            continue;
+                        }
+                        auto * literal = child->as<ASTLiteral>();
+                        const auto dnf = analyzeEquals(identifier, literal, expr);
 
                         if (dnf.empty())
                         {
-                            return {};
+                            return;
                         }
 
                         if (!add_dnf(dnf))
                         {
-                            return {};
+                            return;
                         }
                     }
                 }
-                else
-                    return analyzeEquals(identifier, tuple_literal, expr);
-            }
-            else
-            {
-                return {};
-            }
+                else if (const auto * tuple_literal = ast->as<ASTLiteral>(); tuple_literal)
+                {
+                    if (tuple_literal->value.getType() == Field::Types::Tuple)
+                    {
+                        const auto & tuple = tuple_literal->value.get<const Tuple &>();
+                        for (const auto & child : tuple)
+                        {
+                            const auto dnf = analyzeEquals(identifier, child, expr);
 
+                            if (dnf.empty())
+                            {
+                                return;
+                            }
+
+                            if (!add_dnf(dnf))
+                            {
+                                return;
+                            }
+                        }
+                    }
+                    else
+                        result = analyzeEquals(identifier, tuple_literal, expr);
+                }
+                else
+                {
+                    return;
+                }
+            };
+            
+            populate_result(right);
             return result;
         }
         else if (fn->name == "or")

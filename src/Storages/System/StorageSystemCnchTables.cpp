@@ -2,6 +2,7 @@
 #include <Parsers/queryToString.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
@@ -232,11 +233,13 @@ Pipe StorageSystemCnchTables::read(
 
             if(ast_cluster_by)
             {
-                /// FIXME: complete if we support bucket table.
-                // auto cluster_by = ast_cluster_by->as<ASTClusterByElement>();
-                // res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
-                // res_columns[col_num++]->insert(cluster_by->split_number);
-                // res_columns[col_num++]->insert(cluster_by->is_with_range);
+                auto cluster_by = ast_cluster_by->as<ASTClusterByElement>();
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(queryToString(*ast_cluster_by));
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(cluster_by->split_number);
+                if (columns_mask[src_index++])
+                    res_columns[col_num++]->insert(cluster_by->is_with_range);
             }
             else
             {

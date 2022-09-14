@@ -32,6 +32,11 @@ ASTPtr ASTAlterCommand::clone() const
         res->order_by = order_by->clone();
         res->children.push_back(res->order_by);
     }
+    if (cluster_by)
+    {
+        res->cluster_by = cluster_by->clone();
+        res->children.push_back(res->cluster_by);
+    }
     if (partition)
     {
         res->partition = partition->clone();
@@ -140,6 +145,15 @@ void ASTAlterCommand::formatImpl(
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY ORDER BY " << (settings.hilite ? hilite_none : "");
         order_by->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::MODIFY_CLUSTER_BY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY CLUSTER BY " << (settings.hilite ? hilite_none : "");
+        cluster_by->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::DROP_CLUSTER)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP CLUSTER";
     }
     else if (type == ASTAlterCommand::MODIFY_SAMPLE_BY)
     {

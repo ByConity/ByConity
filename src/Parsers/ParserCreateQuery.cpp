@@ -309,6 +309,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_engine("ENGINE");
     ParserToken s_eq(TokenType::Equals);
     ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_cluster_by("CLUSTER BY");
     ParserKeyword s_primary_key("PRIMARY KEY");
     ParserKeyword s_order_by("ORDER BY");
     ParserKeyword s_unique_key("UNIQUE KEY");
@@ -319,12 +320,14 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     ParserIdentifierWithOptionalParameters ident_with_optional_params_p(dt);
     ParserExpression expression_p(dt);
+    ParserClusterByElement cluster_p;
     ParserSetQuery settings_p(/* parse_only_internals_ = */ true);
     ParserTTLExpressionList parser_ttl_list(dt);
     ParserStringLiteral string_literal_parser;
 
     ASTPtr engine;
     ASTPtr partition_by;
+    ASTPtr cluster_by;
     ASTPtr primary_key;
     ASTPtr order_by;
     ASTPtr unique_key;
@@ -346,6 +349,14 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!partition_by && s_partition_by.ignore(pos, expected))
         {
             if (expression_p.parse(pos, partition_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!cluster_by && s_cluster_by.ignore(pos, expected))
+        {
+            if (cluster_p.parse(pos, cluster_by, expected))
                 continue;
             else
                 return false;
@@ -411,6 +422,7 @@ bool ParserStorage::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     auto storage = std::make_shared<ASTStorage>();
     storage->set(storage->engine, engine);
     storage->set(storage->partition_by, partition_by);
+    storage->set(storage->cluster_by, cluster_by);
     storage->set(storage->primary_key, primary_key);
     storage->set(storage->order_by, order_by);
     storage->set(storage->unique_key, unique_key);

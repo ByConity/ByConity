@@ -20,6 +20,8 @@ ASTPtr ASTStorage::clone() const
         res->set(res->engine, engine->clone());
     if (partition_by)
         res->set(res->partition_by, partition_by->clone());
+    if (cluster_by)
+        res->set(res->cluster_by, cluster_by->clone());
     if (primary_key)
         res->set(res->primary_key, primary_key->clone());
     if (order_by)
@@ -51,6 +53,11 @@ void ASTStorage::formatImpl(const FormatSettings & s, FormatState & state, Forma
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "PARTITION BY " << (s.hilite ? hilite_none : "");
         partition_by->formatImpl(s, state, frame);
+    }
+    if (cluster_by)
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << "CLUSTER BY " << (s.hilite ? hilite_none : "");
+        cluster_by->formatImpl(s, state, frame);
     }
     if (primary_key)
     {

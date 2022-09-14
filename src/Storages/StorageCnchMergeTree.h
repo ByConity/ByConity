@@ -160,7 +160,7 @@ private:
     void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
         IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context);
 
-    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name);
+    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers = {});
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
@@ -170,6 +170,7 @@ private:
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
+    std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
 };
 
