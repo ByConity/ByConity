@@ -345,38 +345,35 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 txn_id.toUInt64(),
                 watch.elapsedMilliseconds());
         }
-        else if (
-            type == ManipulationType::Merge || type == ManipulationType::Clustering
-            || type == ManipulationType::Mutate)
+        else if (type == ManipulationType::Merge || type == ManipulationType::Clustering || type == ManipulationType::Mutate)
         {
-            // auto bg_thread = context.getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
-            // auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+            auto bg_thread = context.getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
+            auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+            if (dumped_data.parts.empty())
+            {
+                LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
+                merge_mutate_thread->tryRemoveTask(task_id);
+            }
+            else
+            {
+                merge_mutate_thread->finishTask(task_id, dumped_data.parts.front(), [&] {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr);
 
-            // if (dumped_data.parts.empty())
-            // {
-            //     LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
-            //     merge_mutate_thread->tryRemoveTask(task_id);
-            // }
-            // else
-            // {
-            //     merge_mutate_thread->finishTask(params.task_id, params.prepared_parts.front(), [&] {
-            //         auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage);
+                    for (auto & part : dumped_data.parts)
+                        action->as<MergeMutateAction &>().appendPart(part);
 
-            //         // for (auto & part : params.prepared_parts)
-            //         //     action->appendPart(part);
+                    action->as<MergeMutateAction &>().setDeleteBitmaps(dumped_data.bitmaps);
+                    txn->appendAction(std::move(action));
+                    commit_time = txn_coordinator.commitV2(txn);
 
-            //         action->setDeleteBitmaps(params.delete_bitmaps);
-            //         txn->appendAction(std::move(action));
-            //         commit_time = txn_coordinator.commitV2(txn);
-
-            //         LOG_TRACE(
-            //             log,
-            //             "Committed {} parts in transaction {}, elapsed {} ms",
-            //             params.prepared_parts.size(),
-            //             txn_id.toUInt64(),
-            //             watch.elapsedMilliseconds());
-            //     });
-            // }
+                    LOG_TRACE(
+                        log,
+                        "Committed {} parts in transaction {}, elapsed {} ms",
+                        dumped_data.parts.size(),
+                        txn_id.toUInt64(),
+                        watch.elapsedMilliseconds());
+                });
+            }
         }
         else
         {

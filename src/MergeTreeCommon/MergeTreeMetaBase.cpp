@@ -1004,9 +1004,11 @@ inline ReservationPtr checkAndReturnReservation(UInt64 expected_size, Reservatio
 
 }
 
-ReservationPtr MergeTreeMetaBase::reserveSpace(UInt64 expected_size) const
+ReservationPtr MergeTreeMetaBase::reserveSpace(UInt64 expected_size, bool local) const
 {
     expected_size = std::max(RESERVATION_MIN_ESTIMATION_SIZE, expected_size);
+    if (local)
+        return getLocalStoragePolicy()->reserveAndCheck(expected_size);
     return getStoragePolicy()->reserveAndCheck(expected_size);
 }
 
