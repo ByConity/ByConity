@@ -54,7 +54,7 @@ void TSOServer::initialize(Poco::Util::Application & self)
     const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
-        brpc::policy::FLAGS_consul_agent_addr = "http://" + String(consul_http_host) + ":" + String(consul_http_port);
+        brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
 
     tso_window = config().getInt("tso_service.tso_window_ms", 3000);  /// 3 seconds
     tso_max_retry_count = config().getInt("tso_service.tso_max_retry_count", 3); // TSOV: see if can keep or remove
@@ -65,8 +65,9 @@ void TSOServer::initialize(Poco::Util::Application & self)
     if(service_disovery->getName() != "local")
     {
         const char * rpc_port = getenv("PORT0");
-        const char * tso_host = getenv("TSO_IP");
-        if(rpc_port != nullptr && tso_host != nullptr)
+        const std::string & tso_host = getHostIPFromEnv();
+
+        if(rpc_port != nullptr && (!tso_host.empty()))
         {
             port = atoi(rpc_port);
             host_port = createHostPortString(tso_host, port);

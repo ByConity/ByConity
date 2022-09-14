@@ -20,9 +20,6 @@
     <exchange_port>8134</exchange_port>
     <exchange_status_port>8135</exchange_status_port>
 
-    <!-- Switch on/off query metrics -->
-    <enable_query_level_profiling>0</enable_query_level_profiling>
-
     <vw_name>vwname_default</vw_name>
     <!-- For HTTPS and SSL over native protocol. -->
     <!--

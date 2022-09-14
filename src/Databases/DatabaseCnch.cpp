@@ -248,8 +248,10 @@ void DatabaseCnch::createEntryInCnchCatalog(ContextPtr local_context) const
 
 StoragePtr DatabaseCnch::tryGetTableImpl(const String & name, ContextPtr local_context) const
 {
-    return getContext()->getCnchCatalog()->getTable(
-        *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+    TransactionCnchPtr cnch_txn = local_context->getCurrentTransaction();
+    const TxnTimestamp & start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{local_context->getTimestamp()};
+
+    return getContext()->getCnchCatalog()->getTable(*local_context, getDatabaseName(), name, start_time);
 }
 
 void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_name)

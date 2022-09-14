@@ -435,6 +435,11 @@ void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
     std::erase_if(executors, [e](PipelineExecutor * x) { return x == e; });
 }
 
+void QueryStatus::dumpPipelineInfo(PipelineExecutor * e)
+{
+    pipeline_info += e->dumpPipeline();
+}
+
 bool QueryStatus::checkCpuTimeLimit(String node_name)
 {
     if (is_killed.load())
@@ -552,13 +557,20 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     res.query_rewrite_by_view = query_rewrite_by_view;
     res.elapsed_seconds   = watch.elapsedSeconds();
     res.is_cancelled      = is_killed.load(std::memory_order_relaxed);
+    /// FIXME: Support it after we have disk cache value in Progress
+    // res.disk_cache_bytes  = progress_in.disk_cache_bytes;
     res.read_rows         = progress_in.read_rows;
     res.read_bytes        = progress_in.read_bytes;
+    res.read_duration     = query_stream_in ? query_stream_in->getProfileInfo().wallMilliseconds() : 0;
+    res.cpu_time          = query_stream_in ? query_stream_in->getProfileInfo().cpuMilliseconds() : 0;
     res.total_rows        = progress_in.total_rows_to_read;
 
     /// TODO: Use written_rows and written_bytes when real time progress is implemented
     res.written_rows      = progress_out.read_rows;
     res.written_bytes     = progress_out.read_bytes;
+    res.written_duration  = progress_out.written_elapsed_milliseconds;
+
+    res.operator_level    = pipeline_info;
 
     if (thread_group)
     {

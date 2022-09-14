@@ -144,9 +144,9 @@ public:
     T get_min_value() { return data.get_min_value(); }
     T get_max_value() { return data.get_max_value(); }
 
-    std::shared_ptr<BucketBounds> get_bounds() const override;
+    std::shared_ptr<BucketBounds> getBucketBounds() const override;
 
-    int64_t get_count() const override { return data.get_n(); }
+    int64_t getCount() const override { return data.get_n(); }
 
     // assuming ndv==count for each bucket
     // generate ndvBucketsResultImpl
@@ -159,7 +159,7 @@ public:
 
 protected:
     // hide since these function won't be used in derived class
-    std::optional<double> min_as_double() const override
+    std::optional<double> minAsDouble() const override
     {
         if (data.is_empty())
         {
@@ -170,7 +170,7 @@ protected:
             return Statistics::toDouble(data.get_min_value());
         }
     }
-    std::optional<double> max_as_double() const override
+    std::optional<double> maxAsDouble() const override
     {
         if (data.is_empty())
         {
@@ -187,7 +187,7 @@ private:
 };
 
 template <typename T>
-inline std::shared_ptr<BucketBounds> StatsKllSketchImpl<T>::get_bounds() const
+inline std::shared_ptr<BucketBounds> StatsKllSketchImpl<T>::getBucketBounds() const
 {
     auto bounds = std::make_shared<BucketBoundsImpl<T>>();
     auto vec = impl::generateBoundsFromKll(data);
@@ -283,7 +283,6 @@ std::shared_ptr<StatsNdvBucketsResultImpl<T>> StatsKllSketchImpl<T>::generateNdv
     counts.push_back(row_count - last_sum);
     assert(num_bucket == counts.size());
 
-    auto result = std::make_shared<StatsNdvBucketsResultImpl<T>>();
     BucketBoundsImpl<T> bounds_obj;
     bounds_obj.setBounds(std::move(output_bounds));
     std::vector<double> ndvs;
@@ -297,8 +296,7 @@ std::shared_ptr<StatsNdvBucketsResultImpl<T>> StatsKllSketchImpl<T>::generateNdv
         }
         ndvs.push_back(ndv);
     }
-    result->init(std::move(bounds_obj), std::move(counts), std::move(ndvs));
-    return result;
+    return StatsNdvBucketsResultImpl<T>::createImpl(bounds_obj, std::move(counts), std::move(ndvs));
 }
 
 }

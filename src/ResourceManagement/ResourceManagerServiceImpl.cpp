@@ -392,7 +392,7 @@ void ResourceManagerServiceImpl::pickWorker(
         if (!host_ports.empty())
         {
             RPCHelpers::fillHostWithPorts(host_ports, *response->mutable_host_ports());
-            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked worker {} from vw {}", host_ports.host, request->vw_name());
+            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked worker {} from vw {}", host_ports.getHost(), request->vw_name());
         }
         else
             throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);

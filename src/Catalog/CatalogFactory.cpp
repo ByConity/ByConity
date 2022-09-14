@@ -27,7 +27,6 @@ namespace Catalog
 
 CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context)
 {
-    DatabasePtr db{nullptr};
     auto uuid = db_model.has_uuid() ? RPCHelpers::createUUID(db_model.uuid()) : UUIDHelpers::Nil;
     return std::make_shared<DatabaseCnch>(db_model.name(), uuid, context);
 }

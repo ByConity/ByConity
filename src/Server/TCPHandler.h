@@ -210,6 +210,7 @@ private:
     void sendPartUUIDs();
     void sendReadTaskRequestAssumeLocked();
     void sendProfileInfo(const BlockStreamProfileInfo & info);
+    void sendQueryWorkerMetrics();
     void sendTotals(const Block & totals);
     void sendExtremes(const Block & extremes);
 

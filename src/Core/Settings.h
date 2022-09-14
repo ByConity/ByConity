@@ -572,6 +572,9 @@ class IColumn;
     M(UInt64, cnch_part_allocation_algorithm, 0, "Part allocation algorithm, 0: jump consistent hashing, 1: bounded hash ring consistent hashing.", 0) \
     M(UInt64, cnch_max_cached_storage, 0, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
+    M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
+    M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
+    M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     \

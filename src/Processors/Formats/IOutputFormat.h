@@ -85,10 +85,16 @@ public:
     size_t getResultRows() const { return result_rows; }
     size_t getResultBytes() const { return result_bytes; }
 
+    size_t getReadDuration() const { return read_elaspsed_milliseconds; }
+    size_t getCPUReadDuration() const { return cpu_read_elaspsed_milliseconds; }
+
 private:
     /// Counters for consumed chunks. Are used for QueryLog.
     size_t result_rows = 0;
     size_t result_bytes = 0;
+
+    size_t cpu_read_elaspsed_milliseconds = 0;
+    size_t read_elaspsed_milliseconds = 0;
 
     bool prefix_written = false;
 };

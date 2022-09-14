@@ -67,7 +67,7 @@ namespace detail
         }
     };
 
-    struct HDFSFsDeleter  
+    struct HDFSFsDeleter
     {
         void operator()(hdfsFS fs_ptr)
         {
@@ -246,7 +246,7 @@ public:
         time_t current_time = time(nullptr);
         return isBrokenNNInternal(namenode, current_time);
     }
-    
+
     size_t findOneGoodNN(const HostWithPortsVec& hosts) {
         std::uniform_int_distribution<size_t> dist(0, hosts.size()-1);
         size_t start_point = dist(generator);
@@ -254,11 +254,11 @@ public:
         time_t current_time = time(nullptr);
         std::unique_lock lock(nnMutex);
         while(current_point != start_point) {
-            if(isBrokenNNInternal(hosts[current_point].host,current_time)) {
-                current_point = (current_point + 1 ) % hosts.size(); 
+            if(isBrokenNNInternal(hosts[current_point].getHost(),current_time)) {
+                current_point = (current_point + 1 ) % hosts.size();
             } else {
                 break;
-            }            
+            }
         }
         return current_point;
     }

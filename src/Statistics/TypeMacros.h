@@ -34,6 +34,7 @@
 #define TYPED_STATS_ITERATE(X_) \
     X_(KllSketch) \
     X_(NdvBuckets) \
+    X_(NdvBucketsExtend) \
     X_(NdvBucketsResult)
 
 #define UNTYPED_STATS_ITERATE(X_) \

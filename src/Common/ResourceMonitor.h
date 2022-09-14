@@ -7,7 +7,6 @@ namespace DB
 {
 
 class Context;
-struct HostWithPorts;
 namespace ResourceManagement
 {
     struct WorkerNodeResourceData;

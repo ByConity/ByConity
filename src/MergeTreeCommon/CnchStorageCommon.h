@@ -57,7 +57,8 @@ public:
     static void sendQueryPerShard(
         ContextPtr context,
         const String & query,
-        const WorkerGroupHandleImpl::ShardInfo & shard_info);
+        const WorkerGroupHandleImpl::ShardInfo & shard_info,
+        bool need_extended_profile_info = false);
 
     String getCloudTableName(ContextPtr context) const;
 

@@ -105,6 +105,8 @@ public:
 
     const Block & getHeader() const { return header; }
 
+    const ExtendedProfileInfo & getExtendedProfileInfo() const { return extended_info; }
+
 private:
     Block header;
     Block totals;
@@ -175,6 +177,9 @@ private:
     PoolMode pool_mode = PoolMode::GET_MANY;
     StorageID main_table = StorageID::createEmpty();
 
+    /// This extended profile info is mainly for INSERT, and metrics are sent from workers
+    ExtendedProfileInfo extended_info;
+
     Poco::Logger * log = nullptr;
 
     /// Send all scalars to remote servers
@@ -207,6 +212,8 @@ private:
 
     /// Reads packet by packet
     Block readPackets();
+
+    void parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements);
 
 };
 

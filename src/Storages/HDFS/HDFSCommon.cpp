@@ -152,7 +152,7 @@ HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::A
 
         hdfsBuilderSetUserName(builder.get(), user.c_str());
     }
-     
+
     // The namenode is already set in hdfs_params.createBuilder();
     // hdfsBuilderSetNameNode(builder.get(), host.c_str());
     // if (port != 0)
@@ -232,7 +232,7 @@ std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
         std::sample(nnproxys.begin(), nnproxys.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
         if (!sample.empty() && num_retry-- > 0)
         {
-            if (brokenNNs.isBrokenNN(sample[0].host)) continue;
+            if (brokenNNs.isBrokenNN(sample[0].getHost())) continue;
         }
         break;
     }
@@ -240,7 +240,7 @@ std::pair<std::string, size_t> getNameNodeNNProxy(const std::string & nnproxy)
     size_t port{};
     for (const auto & service : sample)
     {
-        host = service.host;
+        host = service.getHost();
         port = service.tcp_port;
     }
 

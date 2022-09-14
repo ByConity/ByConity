@@ -3,6 +3,7 @@
 #include <common/types.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Common/Stopwatch.h>
+#include <cmath>
 
 #include <vector>
 
@@ -13,6 +14,9 @@ class Block;
 class ReadBuffer;
 class WriteBuffer;
 
+class Context;
+using ContextPtr = std::shared_ptr<const Context>;
+
 /// Information for profiling. See IBlockInputStream.h
 struct BlockStreamProfileInfo
 {
@@ -21,10 +25,39 @@ struct BlockStreamProfileInfo
 
     bool started = false;
     Stopwatch total_stopwatch {CLOCK_MONOTONIC_COARSE};    /// Time with waiting time
+    Stopwatch cpu_thread_stopwatch {CLOCK_THREAD_CPUTIME_ID};   /// Time with cpu time over thread
 
     size_t rows = 0;
     size_t blocks = 0;
     size_t bytes = 0;
+    /// time stats
+    /// main threads
+    UInt64 cpu_time_ns = 0;
+    UInt64 wall_time_ns = 0;
+    /// async threads
+    // UInt64 extra_wall_time_ns = 0;
+    // UInt64 extra_cpu_time_ns = 0;
+
+    UInt64 wallMilliseconds() const { return wall_time_ns / 1000000UL; }
+    UInt64 cpuMilliseconds() const { return cpu_time_ns / 1000000UL; }
+    double wallSeconds() const { return wall_time_ns / static_cast<double>(1000000000UL); }
+    double cpuSeconds() const { return cpu_time_ns / static_cast<double>(1000000000UL); }
+    UInt64 rowsPerSecond() const
+    {
+        double ms = std::round(wall_time_ns / static_cast<double>(1000000UL));
+        if (ms >= 1)
+            return rows * 1000 / ms;
+        else
+            return rows;
+    }
+    UInt64 bytesPerSecond() const
+    {
+        double ms = std::round(wall_time_ns / static_cast<double>(1000000UL));
+        if (ms >= 1)
+            return bytes * 1000 / ms;
+        else
+            return bytes;
+    }
 
     using BlockStreamProfileInfos = std::vector<const BlockStreamProfileInfo *>;
 
@@ -65,6 +98,21 @@ private:
     mutable bool applied_limit = false;                    /// Whether LIMIT was applied
     mutable size_t rows_before_limit = 0;
     mutable bool calculated_rows_before_limit = false;    /// Whether the field rows_before_limit was calculated
+};
+
+struct ExtendedProfileInfo
+{
+    size_t read_rows = 0;
+    size_t read_bytes = 0;
+    size_t read_cached_bytes = 0;
+    size_t read_duration = 0;  /// ms
+
+    size_t written_rows = 0;
+    size_t written_bytes = 0;
+    size_t written_duration = 0;   /// ms
+
+    void read(ReadBuffer & in);
+    void write(WriteBuffer & out) const;
 };
 
 }
