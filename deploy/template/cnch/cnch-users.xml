@@ -23,6 +23,9 @@
         <readonly>
             <readonly>1</readonly>
         </readonly>
+
+        <!-- Switch on/off query metrics -->
+        <enable_query_level_profiling>0</enable_query_level_profiling>
     </profiles>
 
     <!-- Users and ACL. -->

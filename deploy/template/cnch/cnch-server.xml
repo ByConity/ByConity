@@ -18,9 +18,6 @@
     <exchange_port>9400</exchange_port>
     <exchange_status_port>9500</exchange_status_port>
 
-    <!-- Switch on/off query metrics -->
-    <enable_query_level_profiling>0</enable_query_level_profiling>
-
     <!-- For HTTPS and SSL over native protocol. -->
     <!--
     <https_port>8443</https_port>
