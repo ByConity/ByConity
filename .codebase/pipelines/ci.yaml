@@ -24,8 +24,8 @@ jobs:
           sync_oss: false
           envs: {CUSTOM_CMAKE_BUILD_TYPE: "Release"}
 
-  CeFuntionalStatelessTest: &default_test
-    name: CE - FuntionalStatelessTest
+  CeFuntionalStateless: &default_test
+    name: CE - FuntionalStateless
     image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb12.1v1
     depends: [scm_build]
     envs:
@@ -51,21 +51,21 @@ jobs:
           - echo $(pwd)
           - cd /
           - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
+          # - CLICKHOUSE_VERSION=1.0.0.3469
           - CLICKHOUSE_PREFIX="clickhouse"
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
-      - name: Run FuntionalStatelessTest
+      - name: Run CE FuntionalStateless
         continue-on-error: true
         commands:
           - cd /
           - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_stateless'
-          - cp -r /home/code/docker/test/stateless/. .
-          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run.sh
       - &after_test
-        name: after test
+        name: After test
         commands:
           - bash /home/code/.codebase/ci_scripts/common_component/copy_core_to_shared.sh # copy core to artifact folder
           - bash /home/code/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh # copy stdout to artifact folder
@@ -80,89 +80,86 @@ jobs:
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
-  CeProblematicFuntionalStatelessTest:
+  CeProblematicFuntionalStateless:
     <<: *default_test
-    name: CE - problematic - FuntionalStatelessTest
+    name: CE - Problematic - FuntionalStateless
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run FuntionalStatelessTest
+      - name: Run CE Problematic FuntionalStateless
         continue-on-error: true
         commands:
           - cd /
-          - cp -r /home/code/docker/test/stateless/. .
+          - cp -r /home/code/docker/test/stateless/* .
           - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_problematic_stateless'   # enable optimizer for test
-          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
           - /bin/bash run.sh
       - *after_test
       - *upload_artifact
-      - name: Analyse Result
+      - &analyse_result_ignore_fail
+        name: Analyse Result
         ignore-error: true
         commands:
           - /bin/bash /home/code/docker/test/result.sh
 
-  CnchFuntionalStatelessTest:
+  CnchFuntionalStateless:
     <<: *default_test
-    name: CNCH - FuntionalStatelessTest
+    name: CNCH - FuntionalStateless
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run Cnch FuntionalStatelessTest
+      - name: Run CNCH FuntionalStateless
         continue-on-error: true
         commands:
-          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
-          - python3 /home/code/tests/clickhouse-test --run cnch_stateless -q  /home/code/tests/queries --order asc
+          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - cp -r /home/code/docker/test/stateless/* .
+          - /bin/bash run_cnch.sh
       - *after_test
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: Artifacts
-          path: /artifacts
+      - *upload_artifact
+      - *analyse_result
 
-  CnchFuntionalStatelessTestIPV6:
+  CnchFuntionalStatelessIPV6:
     <<: *default_test
-    name: CNCH - FuntionalStatelessTest with IPV6 envrionment
+    name: CNCH - FuntionalStateless IPV6
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run Cnch FuntionalStatelessTest
+      - name: Run CNCH FuntionalStateless IPv6
         ignore-error: true
         commands:
           - export ENABLE_IPV6=1
-          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
-          - python3 /home/code/tests/clickhouse-test --run cnch_stateless -q  /home/code/tests/queries --order asc || true
+          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - cp -r /home/code/docker/test/stateless/* .
+          - /bin/bash run_cnch.sh
       - *after_test
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: Artifacts
-          path: /artifacts
+      - *upload_artifact
+      - *analyse_result_ignore_fail
 
-  CnchFuntionalStatelessTestProblematic:
+  CnchFuntionalStatelessProblematic:
     <<: *default_test
-    name: CNCH - Problematic - FuntionalStatelessTest
+    name: CNCH - Problematic - FuntionalStateless
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run Cnch FuntionalStatelessTest
+      - name: Run CNCH Problematic FuntionalStateless
         ignore-error: true
         commands:
-          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
-          - python3 /home/code/tests/clickhouse-test --run cnch_problematic_stateles -q  /home/code/tests/queries --order asc
+          - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_problematic_stateless'
+          - cp -r /home/code/docker/test/stateless/* .
+          - /bin/bash run_cnch.sh
       - *after_test
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: Artifacts
-          path: /artifacts
+      - *upload_artifact
+      - *analyse_result_ignore_fail
 
-#  FuntionalStatelessTestWithOptimizer:
+#  FuntionalStatelessWithOptimizer:
 #    <<: *default_test
-#    name: FuntionalStatelessTestWithOptimizer
+#    name: FuntionalStatelessWithOptimizer
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary
-#      - name: Run FuntionalStatelessTest
+#      - name: Run FuntionalStateless
 #        commands:
 #          - cd /
 #          - cp -r /home/code/docker/test/stateless/. .
@@ -173,14 +170,14 @@ jobs:
 #      - *upload_artifact
 #      - *analyse_result
 #
-#  FuntionalStatefulTest:
+#  FuntionalStateful:
 #    <<: *default_test
-#    name: FuntionalStatefulTest
+#    name: FuntionalStateful
 #    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary
-#      - name: Run FuntionalStatefulTest
+#      - name: Run FuntionalStateful
 #        commands:
 #          - export ADDITIONAL_OPTIONS='--jobs 1'
 #          - cd /
@@ -191,14 +188,14 @@ jobs:
 #      - *upload_artifact
 #      - *analyse_result
 #
-#  FuntionalStatefulTestWithOptimizer:
+#  FuntionalStatefulWithOptimizer:
 #    <<: *default_test
-#    name: FuntionalStatefulTestWithOptimizer
+#    name: FuntionalStatefulWithOptimizer
 #    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary
-#      - name: Run FuntionalStatefulTest with Optimizer
+#      - name: Run FuntionalStateful with Optimizer
 #        commands:
 #          - export ADDITIONAL_OPTIONS='--jobs 1'
 #          - cd /
@@ -210,73 +207,95 @@ jobs:
 #      - *upload_artifact
 #      - *analyse_result
 #
-  CertificateStatefullTest:
+  CertificateStateful:
     <<: *default_test
-    name: CertificateStatefullTest
+    name: CNCH - CertificateStateful
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run CertificateStatefullTest
-        continue-on-error: true
+      - name: Run CertificateStateful
+        continue-on-error: false
         commands:
           - cd /
+          - cp -r /home/code/docker/test/certificate/* ./
+          - date
           - |
-            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
+            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
 
-            echo "load tables for certificate"
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx
-            cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-            echo "load tables for certificates done"
+            echo "Load tables for certificate"
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl &
+            python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx &
+            wait
+            echo "Load tables for certificates done"
+          - date
 
-            python3 /home/code/tests/clickhouse-test --run certificate -q  /home/code/tests/queries
-
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - export ADDITIONAL_OPTIONS='--jobs 6'
+          - /bin/bash run_cnch.sh
       - *after_test
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: Artifacts
-          path: /artifacts
+      - *upload_artifact
+      - *analyse_result
 
-  CertificateStatefullTestWithOptimizer:
+  # CertificateStatefulWithOptimizer:
+  #   <<: *default_test
+  #   name: CertificateStatefulWithOptimizer
+  #   image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+  #   steps:
+  #     - *action_checkout
+  #     - *download_scm_binary
+  #     - name: Run CertificateStateful with optimizer
+  #       ignore-error: true
+  #       commands:
+  #         - cd /
+  #         - cp -r /home/code/docker/test/certificate/* ./
+  #         - date
+  #         - |
+  #           bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+
+  #           echo "load tables for certificate"
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl &
+  #           python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx &
+  #           wait
+  #           echo "load tables for certificates done"
+  #         - date
+
+  #         - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+  #         - export ADDITIONAL_OPTIONS='--client-option enable_optimizer=1'
+  #         - /bin/bash run_cnch.sh
+  #     - *after_test
+  #     - *upload_artifact
+  #     - *analyse_result_ignore_fail
+
+  BackwardCompability:
     <<: *default_test
-    name: CertificateStatefullTestWithOptimizer
+    name: CNCH - BackwardCompability
     image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
     steps:
       - *action_checkout
       - *download_scm_binary
-      - name: Run CertificateStatefullTest with optimizer
-        ignore-error: true
+      - name: Run BackwardCompability
         commands:
-          - cd /
-          - |
-            bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/run.sh
+          - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/cluster_up.sh
+          - cp -r /home/code/docker/test/certificate/* ./
+          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
+          - export ADDITIONAL_OPTIONS='--jobs 6'
+          - /bin/bash run_cnch.sh
 
-            echo "load tables for certificate"
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_2_certificate_aeolus_delta
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_3_certificate_datarocks
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_4_certificate_deepinsight
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_5_certificate_ecom_data
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_6_certificate_libra_hl
-            python3 /home/code/docker/test/certificate/load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx
-            cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-            echo "load tables for certificates done"
-
-            python3 /home/code/tests/clickhouse-test --run certificate --client-option enable_optimizer=1 -q  /home/code/tests/queries
       - *after_test
-      - name: Upload Artifact
-        uses: actions/upload-artifact
-        inputs:
-          name: Artifacts
-          path: /artifacts
-#
+      - *upload_artifact
+      - *analyse_result
+
 #  StressTest:
 #    <<: *default_test
 #    name: StressTest
@@ -317,8 +336,8 @@ jobs:
 #            CUSTOM_CMAKE_BUILD_TYPE: "Debug"
 #            CUSTOM_SANITIZE: "address"
 #
-#  FuntionalStatelessTest-ASAN: &default_test_asan #Test will be skipped by default if SCM ASAN build is skipped
-#    name: FuntionalStatelessTest-ASAN
+#  FuntionalStateless-ASAN: &default_test_asan #Test will be skipped by default if SCM ASAN build is skipped
+#    name: FuntionalStateless-ASAN
 #    image: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb12.1v1
 #    depends: [scm_build_ASAN]
 #    runs-on:
@@ -342,7 +361,7 @@ jobs:
 #          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
 #          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
 #          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
-#      - name: Run FuntionalStatelessTest
+#      - name: Run FuntionalStateless
 #        commands:
 #          - cd /
 #          - cp -r /home/code/docker/test/stateless/. .
@@ -357,13 +376,13 @@ jobs:
 #          path: /sanitizer_log_output
 #      - *analyse_result
 #
-#  FuntionalStatefulTest-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
+#  FuntionalStateful-ASAN: #Test will be skipped by default if SCM ASAN build is skipped
 #    <<: *default_test_asan
-#    name: FuntionalStatefulTest-ASAN
+#    name: FuntionalStateful-ASAN
 #    image: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
 #    steps:
 #      - *action_checkout_asan
-#      - name: Run FuntionalStatefulTest
+#      - name: Run FuntionalStateful
 #        commands:
 #          - cp /home/code/docker/test/stateful/run.sh run.sh
 #          - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
@@ -373,13 +392,13 @@ jobs:
 #      - *upload_sanitizer_log
 #      - *analyse_result
 #
-#  FuntionalStatelessTest-ASAN-LocateASANError:
+#  FuntionalStateless-ASAN-LocateASANError:
 #    <<: *default_test_asan
-#    name: FuntionalStatelessTest-ASAN-LocateASANError
+#    name: FuntionalStateless-ASAN-LocateASANError
 #    timeout: 360
 #    steps:
 #      - *action_checkout_asan
-#      - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
+#      - name: Run  FuntionalStateless-ASAN-LocateASANError
 #        commands:
 #          - cd /
 #          - cp -r /home/code/docker/test/stateless/. .
@@ -391,13 +410,13 @@ jobs:
 #      - *upload_sanitizer_log
 #      - *analyse_result
 #
-#  FuntionalStatelessTestWithOptimizer-ASAN-LocateASANError:
+#  FuntionalStatelessWithOptimizer-ASAN-LocateASANError:
 #    <<: *default_test_asan
-#    name: FuntionalStatelessTestWithOptimizer-ASAN-LocateASANError
+#    name: FuntionalStatelessWithOptimizer-ASAN-LocateASANError
 #    timeout: 360
 #    steps:
 #      - *action_checkout_asan
-#      - name: Run  FuntionalStatelessTest-ASAN-LocateASANError
+#      - name: Run  FuntionalStateless-ASAN-LocateASANError
 #        commands:
 #          - cd /
 #          - cp -r /home/code/docker/test/stateless/. .
@@ -480,8 +499,8 @@ jobs:
 #            CUSTOM_CMAKE_BUILD_TYPE: "Debug"
 #            CUSTOM_SANITIZE: "thread"
 #
-#  FuntionalStatelessTest-TSAN0: &default_test_tsan  #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
-#    name: FuntionalStatelessTest-TSAN0
+#  FuntionalStateless-TSAN0: &default_test_tsan  #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+#    name: FuntionalStateless-TSAN0
 #    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
 #    depends: [scm_build_TSAN]
 #    timeout: 360
@@ -507,7 +526,7 @@ jobs:
 #          - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
 #          - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
 #          - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
-#      - name: Run FuntionalStatelessTest
+#      - name: Run FuntionalStateless
 #        continue-on-error: true
 #        commands:
 #          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
@@ -523,14 +542,14 @@ jobs:
 #      - *upload_sanitizer_log
 #      - *analyse_result
 #
-#  FuntionalStatelessTest-TSAN1: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+#  FuntionalStateless-TSAN1: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
 #    <<: *default_test_tsan
-#    name: FuntionalStatelessTest-TSAN1
+#    name: FuntionalStateless-TSAN1
 #    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary_tsan
-#      - name: Run FuntionalStatelessTest
+#      - name: Run FuntionalStateless
 #        continue-on-error: true
 #        commands:
 #          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
@@ -546,14 +565,14 @@ jobs:
 #      - *upload_sanitizer_log
 #      - *analyse_result
 #
-#  FuntionalStatelessTest-TSAN2: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
+#  FuntionalStateless-TSAN2: #TSAN test runs longer time than 2hrs, hence splitted the test to TSAN0,TSAN1,TSAN2. Each test will run approximately 1000+ cases using RUN_BY_HASH_NUM and RUN_BY_HASH_TOTAL definition.
 #    <<: *default_test_tsan
-#    name: FuntionalStatelessTest-TSAN2
+#    name: FuntionalStateless-TSAN2
 #    image: hub.byted.org/bytehouse/clickhouse-stateless-test:stable
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary_tsan
-#      - name: Run FuntionalStatelessTest
+#      - name: Run FuntionalStateless
 #        continue-on-error: true
 #        commands:
 #          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
@@ -569,9 +588,9 @@ jobs:
 #      - *upload_sanitizer_log
 #      - *analyse_result
 #
-#  FuntionalStatefulTest-TSAN:
+#  FuntionalStateful-TSAN:
 #    <<: *default_test_tsan
-#    name: FuntionalStatefulTest-TSAN
+#    name: FuntionalStateful-TSAN
 #    image: hub.byted.org/bytehouse/clickhouse-stateful-test:stable
 #    depends: [scm_build_TSAN]
 #    if: ${{ Jobs.scm_build_TSAN.Conclusion == "success" }}
@@ -583,7 +602,7 @@ jobs:
 #    steps:
 #      - *action_checkout
 #      - *download_scm_binary_tsan
-#      - name: Run FuntionalStatefulTest
+#      - name: Run FuntionalStateful
 #        commands:
 #          - export sanitizer_type=tsan #Used to control ASAN/TSAN logs
 #          - export CLICKHOUSE_WATCHDOG_ENABLE=0

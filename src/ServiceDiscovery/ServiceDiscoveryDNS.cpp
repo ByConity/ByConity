@@ -148,15 +148,16 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
 
     for (auto & host : hosts)
     {
-        res.emplace_back();
-        res.back().id = resolveHostname(client, host);
-        res.back().host = host;
-        res.back().tcp_port = tcp_port > 0 ? tcp_port : 0;
-        res.back().rpc_port = rpc_port;
-        res.back().http_port = http_port > 0 ? http_port : 0;
-        res.back().exchange_port = exchange_port > 0 ? exchange_port : 0;
-        res.back().exchange_status_port = exchange_status_port > 0 ? exchange_status_port : 0;
+        HostWithPorts host_with_ports { host };
+        host_with_ports.id = resolveHostname(client, host);
+        host_with_ports.rpc_port = rpc_port;
+        host_with_ports.tcp_port = tcp_port > 0 ? tcp_port : 0;
+        host_with_ports.http_port = http_port > 0 ? http_port : 0;
+        host_with_ports.exchange_port = exchange_port > 0 ? exchange_port : 0;
+        host_with_ports.exchange_status_port = exchange_status_port > 0 ? exchange_status_port : 0;
+        res.push_back(host_with_ports);
     }
+
 
     /// sequence by virtual part feature.
     std::sort(res.begin(), res.end(), [](const HostWithPorts &x, const HostWithPorts &y) { return (x.id < y.id);} );
@@ -207,7 +208,7 @@ std::vector<String> ServiceDiscoveryDNS::generalLookup(ServicePair & service_pai
 
     for (auto & host : hosts)
         result.emplace_back(makeString(host, portStr));
-    
+
     return result;
 }
 
@@ -234,7 +235,7 @@ std::vector<String> ServiceDiscoveryDNS::resolveHostFromCache(const DNSClientPtr
     // fetch from upstream as cache miss or cache record timeout
     // 1. in normal case, upstream_res size > 0
     // 2. DNS_E_NXDOMAIN: upstream_res size = 0
-    // 3. DNS_E_TEMPFAIL: fallback to tcp, if tcp still fails and is not DNS_E_NXDOMAIN, throw out exception 
+    // 3. DNS_E_TEMPFAIL: fallback to tcp, if tcp still fails and is not DNS_E_NXDOMAIN, throw out exception
     // 4. other exception directly throw out
     std::vector<String> upstream_res = resolveHostFromUpstream(client, a4_query);
     // we will safely update the cache if upstream_res size > 0
@@ -318,7 +319,7 @@ int ServiceDiscoveryDNS::resolvePortFromCache(const DNSClientPtr & client, const
 
     // fetch from upstream as cache miss or cache record timeout
     // 1.in normal case, upstream_res is >0
-    // 2.DNS_E_NXDOMAIN may have -1 returned. 
+    // 2.DNS_E_NXDOMAIN may have -1 returned.
     // 3.DNS_E_TEMPFAIL mat retry 3 times and throw out exception if 3 chances used up.
     // 4.other dns issues may throw out exception.
     int upstream_res = resolvePortFromUpstream(client, srv_query);
@@ -353,7 +354,7 @@ int ServiceDiscoveryDNS::resolvePortFromUpstream(const DNSClientPtr & client, co
             // 1.exception other than DNS_E_TEMPFAIL and DNS_E_NXDOMAIN
             // 2.exception is DNS_E_TEMPFAIL and used up retry
             bool throw_exception = false;
-            if((e.err_code != DNS_E_TEMPFAIL && e.err_code != DNS_E_NXDOMAIN) 
+            if((e.err_code != DNS_E_TEMPFAIL && e.err_code != DNS_E_NXDOMAIN)
             || (e.err_code == DNS_E_TEMPFAIL && retry_count == 2))
                 throw_exception = true;
 
@@ -386,7 +387,7 @@ String ServiceDiscoveryDNS::resolveHostnameFromCache(const DNSClientPtr & client
     {
         return it->second.value;
     }
-    
+
     // fetch from upstream as cache miss or cache record timeout
     // 1.in normal case, upstream_res len is >0
     // 2.DNS_E_NXDOMAIN may have "" returned. (This should not appear in dns mode, as each pod has hostname)
@@ -432,7 +433,7 @@ String ServiceDiscoveryDNS::resolveHostnameFromUpstream(const DNSClientPtr & cli
             // 1.exception other than DNS_E_TEMPFAIL and DNS_E_NXDOMAIN
             // 2.exception is DNS_E_TEMPFAIL and used up retry
             bool throw_exception = false;
-            if((e.err_code != DNS_E_TEMPFAIL && e.err_code != DNS_E_NXDOMAIN) 
+            if((e.err_code != DNS_E_TEMPFAIL && e.err_code != DNS_E_NXDOMAIN)
             || (e.err_code == DNS_E_TEMPFAIL && retry_count == 2))
                 throw_exception = true;
 
@@ -453,7 +454,7 @@ ServicePair ServiceDiscoveryDNS::makeWorkerServicePair(const String & vw_name) c
     {
         name = "wg-default-";
         name.append(cluster);
-    } 
+    }
     else if (vw_name == "vw_write")
     {
         name = "wg-write-";

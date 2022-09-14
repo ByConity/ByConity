@@ -56,6 +56,7 @@ option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper log
 
 option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent timestamps" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -249,6 +250,7 @@ add_subdirectory (install)
 add_subdirectory (git-import)
 add_subdirectory (bash-completion)
 add_subdirectory (tso)
+add_subdirectory (part-toolkit)
 
 if (ENABLE_CLICKHOUSE_KEEPER)
     add_subdirectory (keeper)
@@ -280,7 +282,7 @@ if (CLICKHOUSE_ONE_SHARED)
     ${CLICKHOUSE_GIT_IMPORT_SOURCES}
     ${CLICKHOUSE_ODBC_BRIDGE_SOURCES}
     ${CLICKHOUSE_KEEPER_SOURCES}
-    ${CLICKHOUSE_KEEPER_CONVERTER_SOURCES})
+    ${CLICKHOUSE_PART_TOOLKIT_SOURCES})
 
     target_link_libraries(clickhouse-lib
       ${CLICKHOUSE_SERVER_LINK}
@@ -295,7 +297,8 @@ if (CLICKHOUSE_ONE_SHARED)
       ${CLICKHOUSE_GIT_IMPORT_LINK}
       ${CLICKHOUSE_ODBC_BRIDGE_LINK}
       ${CLICKHOUSE_KEEPER_LINK}
-      ${CLICKHOUSE_KEEPER_CONVERTER_LINK})
+      ${CLICKHOUSE_KEEPER_CONVERTER_LINK}
+      ${CLICKHOUSE_PART_TOOLKIT_LINK})
 
     target_include_directories(clickhouse-lib
       ${CLICKHOUSE_SERVER_INCLUDE}
@@ -328,6 +331,7 @@ if (CLICKHOUSE_SPLIT_BINARY)
         clickhouse-obfuscator
         clickhouse-git-import
         clickhouse-copier
+        clickhouse-part-toolkit
     )
 
     if (ENABLE_CLICKHOUSE_ODBC_BRIDGE)
@@ -402,7 +406,9 @@ else ()
     if (ENABLE_CLICKHOUSE_INSTALL)
         clickhouse_target_link_split_lib(clickhouse install)
     endif ()
-
+    if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
+        clickhouse_target_link_split_lib(clickhouse part-toolkit)
+    endif ()
 
     set (CLICKHOUSE_BUNDLE)
     if (ENABLE_CLICKHOUSE_SERVER)
@@ -481,6 +487,11 @@ else ()
         add_custom_target (daemon-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse daemon-manager DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/daemon-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE daemon-manager)
+    endif ()
+    if (ENABLE_CLICKHOUSE_PART_TOOLKIT)
+        add_custom_target (clickhouse-part-toolkit ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-part-toolkit DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-part-toolkit" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE clickhouse-part-toolkit)
     endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

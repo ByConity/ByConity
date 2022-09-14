@@ -3,6 +3,7 @@
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Interpreters/ProcessList.h>
 
 #include <Core/Block.h>
 
@@ -141,6 +142,30 @@ void BlockStreamProfileInfo::calculateRowsBeforeLimit() const
             }
         }
     }
+}
+
+void ExtendedProfileInfo::read(ReadBuffer & in)
+{
+    readVarUInt(read_rows, in);
+    readVarUInt(read_bytes, in);
+    readVarUInt(read_cached_bytes, in);
+    readVarUInt(read_duration, in);
+
+    readVarUInt(written_rows, in);
+    readVarUInt(written_bytes, in);
+    readVarUInt(written_duration, in);
+}
+
+void ExtendedProfileInfo::write(WriteBuffer & out) const
+{
+    writeVarUInt(read_rows, out);
+    writeVarUInt(read_bytes, out);
+    writeVarUInt(read_cached_bytes, out);
+    writeVarUInt(read_duration, out);
+
+    writeVarUInt(written_rows, out);
+    writeVarUInt(written_bytes, out);
+    writeVarUInt(written_duration, out);
 }
 
 }

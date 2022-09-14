@@ -26,6 +26,7 @@
 #include <Interpreters/OpenTelemetrySpanLog.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageS3Cluster.h>
@@ -323,7 +324,7 @@ void TCPHandler::runImpl()
             after_check_cancelled.restart();
             after_send_progress.restart();
 
-            if (state.io.out)
+            if (state.io.out)  /// `INSERT VALUES` in server side
             {
                 state.need_receive_data_for_insert = true;
                 processInsertQuery(connection_settings);
@@ -334,9 +335,9 @@ void TCPHandler::runImpl()
                 auto executor = state.io.pipeline.execute();
                 executor->execute(state.io.pipeline.getNumThreads());
             }
-            else if (state.io.pipeline.initialized())
+            else if (state.io.pipeline.initialized())  /// `SELECT` in both server and worker sides or `INSERT SELECT` in write worker
                 processOrdinaryQueryWithProcessors();
-            else if (state.io.in)
+            else if (state.io.in)  /// `INSERT INFILE` in worker side
                 processOrdinaryQuery();
 
             state.io.onFinish();
@@ -348,6 +349,7 @@ void TCPHandler::runImpl()
                 break;
 
             sendLogs();
+            sendQueryWorkerMetrics();
             sendEndOfStream();
 
             /// QueryState should be cleared before QueryScope, since otherwise
@@ -422,6 +424,7 @@ void TCPHandler::runImpl()
                     /// Try to send logs to client, but it could be risky too
                     /// Assume that we can't break output here
                     sendLogs();
+                    sendQueryWorkerMetrics();
                 }
                 catch (...)
                 {
@@ -811,6 +814,26 @@ void TCPHandler::sendProfileInfo(const BlockStreamProfileInfo & info)
     out->next();
 }
 
+void TCPHandler::sendQueryWorkerMetrics()
+{
+    /// The 'QueryMetrics' packets are only allowed to be sent to cnch worker or cnch server.
+    /// plan segment cannot receive worker metrics currently
+    if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_QUERY_METRICS
+        && query_context->getSettingsRef().enable_query_level_profiling
+        && query_context->getClientInfo().client_type != ClientInfo::ClientType::UNKNOWN
+        /*&& !state->plan_segment*/)
+    {
+        writeVarUInt(Protocol::Server::QueryMetrics, *out);
+
+        writeVarUInt(query_context->getQueryWorkerMetricElements().size(), *out);
+        for (const auto & query_worker_metric_element : query_context->getQueryWorkerMetricElements())
+        {
+            query_worker_metric_element->write(*out);
+        }
+
+        out->next();
+    }
+}
 
 void TCPHandler::sendTotals(const Block & totals)
 {
@@ -1276,6 +1299,7 @@ void TCPHandler::receiveCnchQuery()
     auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
     query_context = Context::createCopy(named_session->context);
     query_context->setSessionContext(named_session->context);
+    query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
 
     readStringBinary(state.query_id, *in);
     /// Client info

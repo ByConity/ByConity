@@ -16,8 +16,6 @@
     <exchange_port>9410</exchange_port>
     <exchange_status_port>9510</exchange_status_port>
 
-    <enable_query_level_profiling>0</enable_query_level_profiling>
-
     <vw_name>vw_default</vw_name>
 
     <openSSL>

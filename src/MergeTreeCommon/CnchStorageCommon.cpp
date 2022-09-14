@@ -172,7 +172,8 @@ ASTs CnchStorageCommonHelper::getConditions(const ASTPtr & ast)
 void CnchStorageCommonHelper::sendQueryPerShard(
     ContextPtr context,
     const String & query,
-    const WorkerGroupHandleImpl::ShardInfo & shard_info)
+    const WorkerGroupHandleImpl::ShardInfo & shard_info,
+    bool need_extended_profile_info)
 {
     Block empty_header{};
     RemoteBlockInputStream remote_stream(shard_info.pool, query, empty_header, context);
@@ -180,6 +181,10 @@ void CnchStorageCommonHelper::sendQueryPerShard(
     remote_stream.readPrefix();
     while (Block block = remote_stream.read());
     remote_stream.readSuffix();
+
+    /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
+    if (need_extended_profile_info)
+        context->setExtendedProfileInfo(remote_stream.getExtendedProfileInfo());
 }
 
 void CnchStorageCommonHelper::filterCondition(

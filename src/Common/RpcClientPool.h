@@ -58,12 +58,8 @@ public:
 
     Ptr get(const String & host, UInt16 port) { return get(addBracketsIfIpv6(host) + ':' + std::to_string(port)); }
 
-    Ptr get(const HostWithPorts & host_ports) { return get(host_ports.getRPCAddress()); }
-
-    Ptr get(const String & host_port)
+    Ptr get(const HostWithPorts & host_ports)
     {
-        auto host_ports = HostWithPorts::fromRPCAddress(host_port);
-
         std::unique_lock lock(state_mutex);
         if (auto iter = clients_map.find(host_ports); iter != clients_map.end())
         {
@@ -71,6 +67,12 @@ public:
         }
 
         return clients_map.try_emplace(host_ports, creator(host_ports)).first->second;
+    }
+
+    Ptr get(const String & host_port)
+    {
+        auto host_ports = HostWithPorts::fromRPCAddress(host_port);
+        return get(host_ports);
     }
 
     Ptr tryGetByRPCAddress(const String & host_with_rpc_port)

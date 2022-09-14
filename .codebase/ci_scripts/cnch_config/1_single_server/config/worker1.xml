@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>/artifacts/vw-write/vw-default.log</log>
-        <errorlog>/artifacts/vw-write/vw-write.err.log</errorlog>
-        <testlog>/artifacts/vw-write/vw-write.test.log</testlog>
+        <log>/test_output/vw-write/vw-default.log</log>
+        <errorlog>/test_output/vw-write/vw-write.err.log</errorlog>
+        <testlog>/test_output/vw-write/vw-write.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -19,9 +19,6 @@
     <ha_tcp_port>8133</ha_tcp_port>
     <exchange_port>8134</exchange_port>
     <exchange_status_port>8135</exchange_status_port>
-
-    <!-- Switch on/off query metrics -->
-    <enable_query_level_profiling>0</enable_query_level_profiling>
 
     <vw_name>vwname_default</vw_name>
     <!-- For HTTPS and SSL over native protocol. -->
@@ -131,7 +128,7 @@
     <keep_alive_timeout>3</keep_alive_timeout>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>200</max_concurrent_queries>
 
     <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
          correct maximum value. -->

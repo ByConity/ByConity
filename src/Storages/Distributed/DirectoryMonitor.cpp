@@ -609,7 +609,8 @@ void StorageDistributedDirectoryMonitor::processFile(const std::string & file_pa
         RemoteBlockOutputStream remote{*connection, timeouts,
             distributed_header.insert_query,
             distributed_header.insert_settings,
-            distributed_header.client_info};
+            distributed_header.client_info,
+            storage.getContext()};
         remote.writePrefix();
         bool compression_expected = connection->getCompression() == Protocol::Compression::Enable;
         writeRemoteConvert(distributed_header, remote, compression_expected, in, log);
@@ -837,7 +838,8 @@ private:
                 remote = std::make_unique<RemoteBlockOutputStream>(connection, timeouts,
                     distributed_header.insert_query,
                     distributed_header.insert_settings,
-                    distributed_header.client_info);
+                    distributed_header.client_info,
+                    parent.storage.getContext());
                 remote->writePrefix();
             }
             bool compression_expected = connection.getCompression() == Protocol::Compression::Enable;
@@ -870,7 +872,8 @@ private:
                 RemoteBlockOutputStream remote(connection, timeouts,
                     distributed_header.insert_query,
                     distributed_header.insert_settings,
-                    distributed_header.client_info);
+                    distributed_header.client_info,
+                    parent.storage.getContext());
                 remote.writePrefix();
                 bool compression_expected = connection.getCompression() == Protocol::Compression::Enable;
                 writeRemoteConvert(distributed_header, remote, compression_expected, in, parent.log);

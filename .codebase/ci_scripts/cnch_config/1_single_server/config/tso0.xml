@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>/artifacts/tso0/tso0.log</log>
-        <errorlog>/artifacts/tso0/tso0.err.log</errorlog>
-        <testlog>/artifacts/tso0/tso0.test.log</testlog>
+        <log>/test_output/tso0/tso0.log</log>
+        <errorlog>/test_output/tso0/tso0.err.log</errorlog>
+        <testlog>/test_output/tso0/tso0.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
