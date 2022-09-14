@@ -1171,6 +1171,7 @@ public:
     ResourceManagerClientPtr getResourceManagerClient() const;
 
     UInt16 getRPCPort() const;
+    UInt16 getHTTPPort() const;
 
     //write ha non host update time
     UInt64 getNonHostUpdateTime(const UUID & uuid);
@@ -1201,7 +1202,7 @@ public:
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
-    std::shared_ptr<Cluster> mockCnchServersCluster();
+    std::shared_ptr<Cluster> mockCnchServersCluster() const;
 
     /// Part allocation
     // Consistent hash algorithm for part allocation

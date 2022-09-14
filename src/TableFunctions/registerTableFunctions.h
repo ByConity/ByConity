@@ -43,6 +43,7 @@ void registerTableFunctionPostgreSQL(TableFunctionFactory & factory);
 #endif
 
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
+void registerTableFunctionCnch(TableFunctionFactory & factory);
 
 void registerTableFunctions();
 
