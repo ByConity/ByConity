@@ -135,7 +135,6 @@ ColumnPtr createColumnWithSipHash(Block & block, const Names & bucket_columns, c
     return result_column;
 }
 
-// TO ASK: what if we are return a reference (&)?, what is the correct way of returning a refernce?
 ColumnPtr createBucketNumberColumn(Block & block, const Int64 & split_number, const bool is_with_range, const Int64 total_shard_num)
 {
     auto bucket_number_column = ColumnUInt64::create();
