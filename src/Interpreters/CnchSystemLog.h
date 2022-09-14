@@ -202,7 +202,7 @@ void CnchSystemLog<LogElement>::writeToCnchTable(Block & block, StoragePtr & tab
     ASTPtr query_ptr(insert.release());
 
     auto host_with_port = getContext()->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(uuid), false);
-    auto host_address = host_with_port.host;
+    auto host_address = host_with_port.getHost();
     auto host_port = host_with_port.rpc_port;
     auto server_client = query_context->getCnchServerClient(host_address, host_port);
     if (!server_client)
@@ -244,7 +244,7 @@ void CnchSystemLog<LogElement>::writeToCnchTable(Block & block, StoragePtr & tab
 
         // Poco::Net::SocketAddress can't parse ipv6 host with [] for example [::1], so always pass by host_port string created by createHostPortString
         client_info.current_address =
-            Poco::Net::SocketAddress(createHostPortString(host_ports.host, current_addr_port));
+            Poco::Net::SocketAddress(createHostPortString(host_ports.getHost(), current_addr_port));
         client_info.rpc_port = host_ports.rpc_port;
 
         BlockOutputStreamPtr stream = table->write(query_ptr, table->getInMemoryMetadataPtr(), query_context);
