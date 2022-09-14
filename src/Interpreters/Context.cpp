@@ -72,6 +72,9 @@
 #include <Interpreters/InterserverIOHandler.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
+#include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <IO/ReadBufferFromFile.h>
@@ -94,6 +97,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -368,6 +372,8 @@ struct ContextSharedPart
     String remote_format_schema_path;
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
+    std::unique_ptr<CnchSystemLogs> cnch_system_logs;         /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
+
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
 
     RemoteHostFilter remote_host_filter; /// Allowed URL from config.xml
@@ -446,6 +452,8 @@ struct ContextSharedPart
 
         if (system_logs)
             system_logs->shutdown();
+
+        cnch_system_logs.reset();
 
         DatabaseCatalog::shutdown();
 
@@ -692,6 +700,29 @@ CnchWorkerResourcePtr Context::getCnchWorkerResource() const
 CnchWorkerResourcePtr Context::tryGetCnchWorkerResource() const
 {
     return worker_resource;
+}
+
+void Context::setExtendedProfileInfo(const ExtendedProfileInfo & source) const
+{
+    auto lock = getLock();
+    extended_profile_info = source;
+}
+
+ExtendedProfileInfo Context::getExtendedProfileInfo() const
+{
+    auto lock = getLock();
+    return extended_profile_info;
+}
+
+/// Should not be called in concurrent cases
+void Context::addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element)
+{
+    query_worker_metrics.emplace_back(query_worker_metric_element);
+}
+
+QueryWorkerMetricElements Context::getQueryWorkerMetricElements()
+{
+    return query_worker_metrics;
 }
 
 String Context::resolveDatabase(const String & database_name) const
@@ -2600,6 +2631,59 @@ std::shared_ptr<ServerPartLog> Context::getServerPartLog() const
     return shared->system_logs->server_part_log;
 }
 
+void Context::initializeCnchSystemLogs()
+{
+    if (shared->server_type == ServerType::cnch_daemon_manager)
+        return;
+    auto lock = getLock();
+    shared->cnch_system_logs = std::make_unique<CnchSystemLogs>(getGlobalContext());
+}
+
+std::shared_ptr<QueryMetricLog> Context::getQueryMetricsLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return std::atomic_load_explicit(&shared->cnch_system_logs->query_metrics, std::memory_order_relaxed);
+}
+
+void Context::insertQueryMetricsElement(const QueryMetricElement & element)
+{
+    auto query_metrics_log = getQueryMetricsLog();
+    if (query_metrics_log)
+    {
+        query_metrics_log->add(element);
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get("Context"), "Query Metrics Log has not been initialized.");
+    }
+}
+
+std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs || !shared->cnch_system_logs->query_worker_metrics)
+        return {};
+
+    return shared->cnch_system_logs->query_worker_metrics;
+}
+
+void Context::insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element)
+{
+    auto query_worker_metrics_log = getQueryWorkerMetricsLog();
+    if (query_worker_metrics_log)
+    {
+        query_worker_metrics_log->add(element);
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get("Context"), "Query Worker Metrics Log has not been initialized.");
+    }
+}
 
 std::shared_ptr<TraceLog> Context::getTraceLog() const
 {

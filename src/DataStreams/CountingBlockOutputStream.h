@@ -33,8 +33,8 @@ public:
     Block getHeader() const override { return stream->getHeader(); }
     void write(const Block & block) override;
 
-    void writePrefix() override                         { stream->writePrefix(); }
-    void writeSuffix() override                         { stream->writeSuffix(); }
+    void writePrefix() override;
+    void writeSuffix() override;
     void flush() override                               { stream->flush(); }
     void onProgress(const Progress & current_progress) override { stream->onProgress(current_progress); }
     String getContentType() const override              { return stream->getContentType(); }
@@ -44,6 +44,7 @@ protected:
     Progress progress;
     ProgressCallback progress_callback;
     QueryStatus * process_elem = nullptr;
+    Stopwatch stopwatch {CLOCK_MONOTONIC_COARSE};
 };
 
 }

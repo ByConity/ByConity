@@ -290,6 +290,19 @@ std::string Block::dumpNames() const
     return out.str();
 }
 
+std::string Block::dumpForQuery() const
+{
+    WriteBufferFromOwnString out;
+    out << "(";
+    for (auto it = data.begin(); it != data.end(); ++it)
+    {
+        if (it != data.begin())
+            out << ", ";
+        out << it->name << " " << it->type->getName();
+    }
+    out << ")";
+    return out.str();
+}
 
 std::string Block::dumpStructure() const
 {

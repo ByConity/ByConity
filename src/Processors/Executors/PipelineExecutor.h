@@ -54,6 +54,8 @@ public:
     /// Same as checkTimeLimit but it never throws. It returns false on cancellation or time limit reached
     [[nodiscard]] bool checkTimeLimitSoft();
 
+    String dumpPipeline() const;
+
 private:
     Processors & processors;
     std::mutex processors_mutex;
@@ -168,7 +170,6 @@ private:
     void executeSingleThread(size_t thread_num, size_t num_threads);
     void finish();
 
-    String dumpPipeline() const;
     void dumpPipelineToFile(const String & suffix) const;
 };
 

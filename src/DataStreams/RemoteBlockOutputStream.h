@@ -5,6 +5,7 @@
 #include <Common/Throttler.h>
 #include <IO/ConnectionTimeouts.h>
 #include <Interpreters/ClientInfo.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -23,7 +24,8 @@ public:
                             const ConnectionTimeouts & timeouts,
                             const String & query_,
                             const Settings & settings_,
-                            const ClientInfo & client_info_);
+                            const ClientInfo & client_info_,
+                            ContextPtr context_);
 
     Block getHeader() const override { return header; }
 
@@ -35,11 +37,14 @@ public:
 
     ~RemoteBlockOutputStream() override;
 
+    void parseQueryWorkerMetrics(const QueryWorkerMetricElements & elements);
+
 private:
     Connection & connection;
     String query;
     Block header;
     bool finished = false;
+    ContextPtr context;
 };
 
 }

@@ -16,8 +16,6 @@
     <exchange_port>37227</exchange_port>
     <exchange_status_port>51523</exchange_status_port>
 
-    <enable_query_level_profiling>0</enable_query_level_profiling>
-
     <openSSL>
         <server>
 

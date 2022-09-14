@@ -254,28 +254,26 @@ Packet MultiplexedConnections::drain()
     Packet res;
     res.type = Protocol::Server::EndOfStream;
 
-    while (hasActiveConnections())
+    Packet packet = receivePacketUnlocked({});
+
+    switch (packet.type)
     {
-        Packet packet = receivePacketUnlocked({});
+        case Protocol::Server::ReadTaskRequest:
+        case Protocol::Server::PartUUIDs:
+        case Protocol::Server::Data:
+        case Protocol::Server::Progress:
+        case Protocol::Server::Totals:
+        case Protocol::Server::Extremes:
+        case Protocol::Server::EndOfStream:
+            break;
 
-        switch (packet.type)
-        {
-            case Protocol::Server::ReadTaskRequest:
-            case Protocol::Server::PartUUIDs:
-            case Protocol::Server::Data:
-            case Protocol::Server::Progress:
-            case Protocol::Server::ProfileInfo:
-            case Protocol::Server::Totals:
-            case Protocol::Server::Extremes:
-            case Protocol::Server::EndOfStream:
-                break;
-
-            case Protocol::Server::Exception:
-            default:
-                /// If we receive an exception or an unknown packet, we save it.
-                res = std::move(packet);
-                break;
-        }
+        case Protocol::Server::ProfileInfo:
+        case Protocol::Server::QueryMetrics:
+        case Protocol::Server::Exception:
+        default:
+            /// If we receive an exception, metrics related packet or an unknown packet, we save it.
+            res = std::move(packet);
+            break;
     }
 
     return res;
@@ -344,6 +342,7 @@ Packet MultiplexedConnections::receivePacketUnlocked(AsyncCallback async_callbac
         case Protocol::Server::Data:
         case Protocol::Server::Progress:
         case Protocol::Server::ProfileInfo:
+        case Protocol::Server::QueryMetrics:
         case Protocol::Server::Totals:
         case Protocol::Server::Extremes:
         case Protocol::Server::Log:

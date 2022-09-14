@@ -26,6 +26,7 @@
 // #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <DaemonManager/DaemonManagerClient_fwd.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -98,6 +99,12 @@ class MutationLog;
 class KafkaLog;
 class ProcessorsProfileLog;
 class ZooKeeperLog;
+class QueryMetricLog;
+class QueryWorkerMetricLog;
+struct QueryMetricElement;
+struct QueryWorkerMetricElement;
+using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
+using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct MergeTreeSettings;
 class StorageS3Settings;
 class IDatabase;
@@ -444,6 +451,11 @@ private:
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
 
+    QueryWorkerMetricElements query_worker_metrics;
+
+    /// The extended profile info is from workers and mainly for INSERT operations
+    mutable ExtendedProfileInfo extended_profile_info;
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -461,6 +473,12 @@ public:
     void copyFrom(const ContextPtr & other);
 
     ~Context();
+
+    void setExtendedProfileInfo(const ExtendedProfileInfo & source) const;
+    ExtendedProfileInfo getExtendedProfileInfo() const;
+
+    void addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element);
+    QueryWorkerMetricElements getQueryWorkerMetricElements();
 
     String getPath() const;
     String getFlagsPath() const;
@@ -968,6 +986,12 @@ public:
     std::shared_ptr<PartLog> getPartLog(const String & part_database) const;
     std::shared_ptr<PartMergeLog> getPartMergeLog() const;
     std::shared_ptr<ServerPartLog> getServerPartLog() const;
+
+    void initializeCnchSystemLogs();
+    std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
+    void insertQueryMetricsElement(const QueryMetricElement & element);  /// Add the metrics element to the background thread for flushing
+    std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
+    void insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element);  /// Add the metrics element to the background thread for flushing
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
