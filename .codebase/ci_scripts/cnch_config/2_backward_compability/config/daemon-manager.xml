@@ -22,17 +22,17 @@
     <path>/clickhouse/cnch_test/server/</path>
 
     <catalog>
-        <name_space>random_suffix_replace_me</name_space>
+        <name_space>ci_baseline_backward_compability</name_space>
     </catalog>
 
     <catalog_service>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
         <type>bytekv</type>
         <bytekv>
-            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
-            <cluster_name>cnch_meta</cluster_name>
-            <name_space>bytekv_cnch_build</name_space>
-            <table_name>cnch_meta_for_build</table_name>
+            <service_name>bytedance.bytekv.bytekv_default</service_name>
+            <cluster_name>bytekv_default</cluster_name>
+            <name_space>bytekv_cnch_dev</name_space>
+            <table_name>cnch_metastore_hz_dev</table_name>
         </bytekv>
     </catalog_service>
 
@@ -206,7 +206,7 @@
             <job>
                 <name>GLOBAL_GC</name>
                 <interval>5000</interval>
-                <disable>true</disable>
+                <disable>false</disable>
             </job>
             <job>
                 <name>TXN_GC</name>

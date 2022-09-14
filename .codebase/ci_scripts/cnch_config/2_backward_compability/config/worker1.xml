@@ -5,20 +5,20 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>/test_output/vw-default/vw-default.log</log>
-        <errorlog>/test_output/vw-default/vw-default.err.log</errorlog>
-        <testlog>/test_output/vw-default/vw-default.test.log</testlog>
+        <log>/test_output/vw-write/vw-default.log</log>
+        <errorlog>/test_output/vw-write/vw-write.err.log</errorlog>
+        <testlog>/test_output/vw-write/vw-write.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
     </logger>
     <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
-    <http_port>8124</http_port>
-    <rpc_port>8224</rpc_port>
-    <tcp_port>9001</tcp_port>
-    <ha_tcp_port>10010</ha_tcp_port>
-    <exchange_port>9410</exchange_port>
-    <exchange_status_port>9510</exchange_status_port>
+    <http_port>8130</http_port>
+    <rpc_port>8131</rpc_port>
+    <tcp_port>8132</tcp_port>
+    <ha_tcp_port>8133</ha_tcp_port>
+    <exchange_port>8134</exchange_port>
+    <exchange_status_port>8135</exchange_status_port>
 
     <vw_name>vwname_default</vw_name>
     <!-- For HTTPS and SSL over native protocol. -->
@@ -56,14 +56,14 @@
         </client>
     </openSSL>
 
-    <storage_configuration>
+     <storage_configuration>
         <disks>
             <default></default>
             <server_local_disk1>
                 <path>/cnch/cnch_test/server/data/</path>
             </server_local_disk1>
             <server_hdfs_disk0>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
+                <path>/user/ducle.canh/cnch_backward_compability/</path>
                 <type>bytehdfs</type>
             </server_hdfs_disk0>
         </disks>
@@ -94,7 +94,7 @@
     -->
 
     <!-- Port for communication between replicas. Used for data exchange. -->
-    <interserver_http_port>9010</interserver_http_port>
+    <interserver_http_port>9011</interserver_http_port>
 
     <!-- Hostname that is used by other replicas to request this server.
          If not specified, than it is determined analoguous to 'hostname -f' command.
@@ -148,16 +148,16 @@
     <mark_cache_size>5368709120</mark_cache_size>
 
     <!-- Path to data directory, with trailing slash. -->
-    <path>/cnch/cnch_test/worker0/</path>
+    <path>/cnch/cnch_test/worker/</path>
 
     <!-- Path to temporary data for processing hard queries. -->
-    <tmp_path>/cnch/cnch_test/worker0/tmp/</tmp_path>
+    <tmp_path>/cnch/cnch_test/worker/tmp/</tmp_path>
 
     <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
     <users_config>/home/code/.codebase/ci_scripts/cnch_config/1_single_server/config/users.xml</users_config>
 
     <!-- Directory with user provided files that are accessible by 'file' table function. -->
-    <user_files_path>/cnch/cnch_test/worker0/user_files/</user_files_path>
+    <user_files_path>/cnch/cnch_test/worker/user_files/</user_files_path>
 
 
     <!-- Default profile of settings. -->
@@ -445,7 +445,7 @@
     <!-- Directory in <clickhouse-path> containing schema files for various input formats.
          The directory will be created if it doesn't exist.
       -->
-    <format_schema_path>/cnch/cnch_test/server/format_schemas/</format_schema_path>
+    <format_schema_path>/cnch/cnch_test/worker1/format_schemas/</format_schema_path>
 
     <!-- Uncomment to disable ClickHouse internal DNS caching. -->
     <!-- <disable_internal_dns_cache>1</disable_internal_dns_cache> -->
@@ -511,7 +511,7 @@
                     <!-- RPC -->
                     <port><name>PORT1</name><value>8224</value></port>
                     <!-- HTTP -->
-                    <port><name>PORT2</name><value>8124</value></port>
+                    <port><name>PORT2</name><value>8324</value></port>
                     <!-- TCP_SECURE -->
                     <port><name>PORT3</name><value>9003</value></port>
                     <!-- HTTPS_PORT -->
@@ -575,7 +575,7 @@
     <!-- </resource_manager> -->
 
     <catalog>
-        <name_space>random_suffix_replace_me</name_space>
+        <name_space>ci_baseline_backward_compability</name_space>
     </catalog>
     <cnch_type>worker</cnch_type>
 
@@ -583,12 +583,13 @@
         <!--Metastore storage type, support `bytekv` and `fdb`-->
         <type>bytekv</type>
         <bytekv>
-            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
-            <cluster_name>cnch_meta</cluster_name>
-            <name_space>bytekv_cnch_build</name_space>
-            <table_name>cnch_meta_for_build</table_name>
+            <service_name>bytedance.bytekv.bytekv_default</service_name>
+            <cluster_name>bytekv_default</cluster_name>
+            <name_space>bytekv_cnch_dev</name_space>
+            <table_name>cnch_metastore_hz_dev</table_name>
         </bytekv>
     </catalog_service>
+
     <bytepond>
         <port>9381</port>
         <!-- local or remote -->
@@ -609,19 +610,19 @@
         <memory_cache_size>10000000</memory_cache_size>
         <enable>1</enable>
         <profile>0</profile>
-        <hdfs_data_path>/user/cnch_ci/random_suffix_replace_me/</hdfs_data_path>
+        <hdfs_data_path>/user/ducle.canh/cnch_backward_compability/</hdfs_data_path>
         <profile_path>/cnch/enable_profile_path</profile_path>
     </bytepond>
 
     <data_paths>
         <data_path>
             <level>0</level>
-                <path>/cnch/cnch_test/worker/data/</path>
+                <path>/cnch/cnch_test/worker1/data/</path>
                 <type>local</type>
         </data_path>
         <data_path>
                 <level>1</level>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
+                <path>/user/ducle.canh/cnch_backward_compability/</path>
                 <type>hdfs</type>
         </data_path>
     </data_paths>
@@ -639,7 +640,7 @@
         <database>cnch_system</database>
         <table>cnch_kafka_log</table>
         <flush_max_row_count>10000</flush_max_row_count>
-        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+        <flush_interval_milliseconds>4500</flush_interval_milliseconds>
     </cnch_kafka_log>
 
     <kafka_log>
@@ -650,7 +651,7 @@
     </kafka_log>
 
     <bytejournal>
-        <log_dir>/shared/server/logs_bytejournal</log_dir>
+        <log_dir>/cnch/cnch_test/server/log/logs_bytejournal</log_dir>
         <uri>bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&amp;is_consul=false</uri>
         <metrics_prefix>cnch</metrics_prefix>
         <namespace>cnch_test</namespace>
@@ -665,20 +666,24 @@
         <!-- Shared config directory between UDF container and cnch container -->
     <udf_path>/cnch/cnch_test/server/user_defined</udf_path>
 
-<!--    <udf_manager_server>-->
-<!--        <timeout_ms>20000</timeout_ms>-->
-<!--        <max_retry>1</max_retry>-->
-<!--    </udf_manager_server>-->
+    <udf_manager_server>
+        <timeout_ms>20000</timeout_ms>
+        <max_retry>1</max_retry>
+    </udf_manager_server>
 
-<!--    <udf_processor>-->
-<!--        <count>3</count>-->
-<!--        &lt;!&ndash; This config directory is not shared &ndash;&gt;-->
-<!--        &lt;!&ndash; Its used for socket communication between udf manager and udf processors &ndash;&gt;-->
-<!--        <uds_path>/cnch/cnch_test/worker0/udf_processor</uds_path>-->
-<!--        <timeout_ms>10000</timeout_ms>-->
-<!--        <max_retry>1</max_retry>-->
-<!--    </udf_processor>-->
+    <udf_processor>
+        <count>3</count>
+        <!-- This config directory is not shared -->
+        <!-- Its used for socket communication between udf manager and udf processors -->
+        <uds_path>/cnch/cnch_test/worker/udf_processor</uds_path>
+        <timeout_ms>10000</timeout_ms>
+        <max_retry>1</max_retry>
+    </udf_processor>
 
     <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->
     <part_allocator_algorithm>JUMP</part_allocator_algorithm>
+    <enable_cnch_topology_master>0</enable_cnch_topology_master>
+    <enable_part_cache>0</enable_part_cache>
+    <enable_cnch_storage_cache>0</enable_cnch_storage_cache>
+    <enable_server_manager>0</enable_server_manager>
 </yandex>

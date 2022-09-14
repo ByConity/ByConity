@@ -5,22 +5,21 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>debug</level>
-        <log>/test_output/vw-default/vw-default.log</log>
-        <errorlog>/test_output/vw-default/vw-default.err.log</errorlog>
-        <testlog>/test_output/vw-default/vw-default.test.log</testlog>
+        <log>/test_output/tso0/tso0.log</log>
+        <errorlog>/test_output/tso0/tso0.err.log</errorlog>
+        <testlog>/test_output/tso0/tso0.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
     </logger>
     <!--display_name>production</display_name--> <!-- It is the name that will be shown in the client -->
-    <http_port>8124</http_port>
-    <rpc_port>8224</rpc_port>
-    <tcp_port>9001</tcp_port>
-    <ha_tcp_port>10010</ha_tcp_port>
-    <exchange_port>9410</exchange_port>
-    <exchange_status_port>9510</exchange_status_port>
+    <http_port>8123</http_port>
+    <rpc_port>8223</rpc_port>
+    <tcp_port>9000</tcp_port>
+    <ha_tcp_port>10000</ha_tcp_port>
+    <exchange_port>9400</exchange_port>
+    <exchange_status_port>9500</exchange_status_port>
 
-    <vw_name>vwname_default</vw_name>
     <!-- For HTTPS and SSL over native protocol. -->
     <!--
     <https_port>8443</https_port>
@@ -56,37 +55,7 @@
         </client>
     </openSSL>
 
-    <storage_configuration>
-        <disks>
-            <default></default>
-            <server_local_disk1>
-                <path>/cnch/cnch_test/server/data/</path>
-            </server_local_disk1>
-            <server_hdfs_disk0>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
-                <type>bytehdfs</type>
-            </server_hdfs_disk0>
-        </disks>
-        <policies>
-            <default>
-                <volumes>
-                    <local>
-                        <default>default</default>
-                        <disk>default</disk>
-                        <disk>server_local_disk1</disk>
-                    </local>
-                </volumes>
-            </default>
-            <cnch_default_hdfs>
-                <volumes>
-                    <hdfs>
-                        <default>server_hdfs_disk0</default>
-                        <disk>server_hdfs_disk0</disk>
-                    </hdfs>
-                </volumes>
-            </cnch_default_hdfs>
-        </policies>
-    </storage_configuration>
+
 
     <!-- Default root page on http[s] server. For example load UI from https://tabix.io/ when opening http://localhost:8123 -->
     <!--
@@ -94,7 +63,7 @@
     -->
 
     <!-- Port for communication between replicas. Used for data exchange. -->
-    <interserver_http_port>9010</interserver_http_port>
+    <interserver_http_port>9009</interserver_http_port>
 
     <!-- Hostname that is used by other replicas to request this server.
          If not specified, than it is determined analoguous to 'hostname -f' command.
@@ -106,16 +75,12 @@
 
     <!-- Listen specified host. use :: (wildcard IPv6 address), if you want to accept connections both with IPv4 and IPv6 from everywhere. -->
     <listen_host>::</listen_host>
-    <!-- Same for hosts with disabled ipv6: -->
 <!--    <listen_host>0.0.0.0</listen_host>-->
-
     <!-- Default values - try listen localhost on ipv4 and ipv6: -->
-
     <!--
     <listen_host>::1</listen_host>
     <listen_host>127.0.0.1</listen_host>
     -->
-
     <!-- Don't exit if ipv6 or ipv4 unavailable, but listen_host with this protocol specified -->
     <listen_try>1</listen_try>
 
@@ -147,18 +112,19 @@
       -->
     <mark_cache_size>5368709120</mark_cache_size>
 
+    <!-- Interval to sync Virtual Warehouse resource usage from Daemon Manager-->
+    <resource_usage_sync_interval>5</resource_usage_sync_interval>
+
     <!-- Path to data directory, with trailing slash. -->
-    <path>/cnch/cnch_test/worker0/</path>
+    <path>/cnch/cnch_test/server/</path>
 
     <!-- Path to temporary data for processing hard queries. -->
-    <tmp_path>/cnch/cnch_test/worker0/tmp/</tmp_path>
-
-    <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
-    <users_config>/home/code/.codebase/ci_scripts/cnch_config/1_single_server/config/users.xml</users_config>
+    <tmp_path>/cnch/cnch_test/server/tmp/</tmp_path>
 
     <!-- Directory with user provided files that are accessible by 'file' table function. -->
-    <user_files_path>/cnch/cnch_test/worker0/user_files/</user_files_path>
 
+    <!-- Path to configuration file with users, access rights, profiles of settings, quotas. -->
+    <users_config>cnch-users.xml</users_config>
 
     <!-- Default profile of settings. -->
     <default_profile>default</default_profile>
@@ -259,6 +225,13 @@
       -->
    <!-- <zookeeper incl="zookeeper-servers" optional="true" /> -->
 
+   <zookeeper>
+        <node index="1">
+            <host>10.25.182.208</host>
+            <port>2181</port>
+        </node>
+    </zookeeper>
+
     <!-- Substitutions for parameters of replicated tables.
           Optional. If you don't use replicated tables, you could omit that.
 
@@ -276,6 +249,10 @@
 
     <!-- Default session timeout, in seconds. Default: 60. -->
     <default_session_timeout>60</default_session_timeout>
+
+    <resource_usage_sync_interval>5</resource_usage_sync_interval>
+    <!-- Server resource usage entry timeout. Outdated entries are deleted -->
+    <server_resource_usage_timeout_seconds>15</server_resource_usage_timeout_seconds>
 
     <!-- Sending data to Graphite for monitoring. Several sections can be defined. -->
     <!--
@@ -312,13 +289,26 @@
     </graphite>
     -->
 
+    <!-- Query metrics log. Used only for queries with setting enable_query_level_profiling = 1 -->
+    <!-- query_metrics>
+        <database>cnch_system</database>
+        <table>query_metrics</table>
+        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
+    </query_metrics>
+    -->
+
     <!-- Query worker metrics. Database and table name must be identical in cnch-server.xml and cnch-worker.xml -->
     <!-- query_worker_metrics>
         <database>cnch_system</database>
         <table>query_worker_metrics</table>
-        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
     </query_worker_metrics>
     -->
+
+    <!-- Virtual Warehouse Queue related settings -->
+    <!-- Time interval before a server's resource usage is removed on Daemon Manager-->
+    <!-- <server_resource_usage_timeout_seconds>15</server_resource_usage_timeout_seconds> -->
+    <!-- Time interval before a virtual warehouse's resource usages and ResourceGroup object are removed due to inactivity -->
+    <!-- <vw_unused_expiry_seconds>3600</vw_unused_expiry_seconds> -->
 
     <!-- Serve endpoint for Prometheus monitoring. -->
     <!--
@@ -335,11 +325,12 @@
         <metrics>true</metrics>
         <events>true</events>
         <asynchronous_metrics>true</asynchronous_metrics>
+        <part_metrics>false</part_metrics>
     </prometheus>
     -->
 
-    <!-- Query log. Used only for queries with setting log_queries = 1. -->
 
+    <!-- Query log. Used only for queries with setting log_queries = 1. -->
     <!-- Uncomment if use part log.
          Part log contains information about all actions with parts in MergeTree tables (creation, deletion, merges, downloads).
     <part_log>
@@ -498,6 +489,36 @@
                 </ports>
             </node>
         </tso>
+        <daemon_manager>
+            <psm>data.cnch.daemon_manager</psm>
+            <!-- For dns -->
+            <service>cnch-daemonmanager</service>
+            <headless_service>cnch-daemonmanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>dm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8090</value></port>
+                </ports>
+            </node>
+        </daemon_manager>
+        <resource_manager>
+            <psm>data.cnch.resource_manager</psm>
+            <!-- For dns -->
+            <service>cnch-resourcemanager</service>
+            <headless_service>cnch-resourcemanager-headless</headless_service>
+            <!-- For local test -->
+            <node>
+                <host>ip_address_replace_me</host>
+                <hostname>rm0</hostname>
+                <ports>
+                    <!-- RPC/Primary -->
+                    <port><name>PORT0</name><value>8989</value></port>
+                </ports>
+            </node>
+        </resource_manager>
         <vw>
             <psm>data.cnch.vw_default</psm>
             <!-- For local test -->
@@ -528,56 +549,29 @@
                 <hostname>vw_write0</hostname>
                 <ports>
                     <!-- TCP/Primary -->
-                    <port><name>PORT0</name><value>8132</value></port>
+                    <port><name>PORT0</name><value>9001</value></port>
                     <!-- RPC -->
-                    <port><name>PORT1</name><value>8131</value></port>
+                    <port><name>PORT1</name><value>8224</value></port>
                     <!-- HTTP -->
-                    <port><name>PORT2</name><value>8130</value></port>
+                    <port><name>PORT2</name><value>8124</value></port>
                     <!-- TCP_SECURE -->
-                    <port><name>PORT3</name><value>8132</value></port>
+                    <port><name>PORT3</name><value>9003</value></port>
                     <!-- HTTPS_PORT -->
-                    <port><name>PORT4</name><value>8130</value></port>
+                    <port><name>PORT4</name><value>8126</value></port>
                     <!-- Exchange Stream Port-->
-                    <port><name>PORT5</name><value>8134</value></port>
+                    <port><name>PORT5</name><value>9410</value></port>
                     <!-- Exchange Status Port-->
-                    <port><name>PORT6</name><value>8135</value></port>
+                    <port><name>PORT6</name><value>9510</value></port>
                 </ports>
             </node>
         </vw>
-<!--        <resource_manager>-->
-<!--            <psm>data.cnch.resource_manager</psm>-->
-<!--            &lt;!&ndash; For dns &ndash;&gt;-->
-<!--            <service>cnch-resourcemanager</service>-->
-<!--            <headless_service>cnch-resourcemanager-headless</headless_service>-->
-<!--            &lt;!&ndash; For local test &ndash;&gt;-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8989</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--            <node>-->
-<!--                <host>ip_address_replace_me</host>-->
-<!--                <hostname>rm0</hostname>-->
-<!--                <ports>-->
-<!--                    &lt;!&ndash; RPC/Primary &ndash;&gt;-->
-<!--                    <port><name>PORT0</name><value>8990</value></port>-->
-<!--                </ports>-->
-<!--            </node>-->
-<!--        </resource_manager>-->
     </service_discovery>
-
-    <!-- <resource_manager> -->
-    <!--     <init_client_tries>3</init_client_tries> -->
-    <!--     <init_client_retry_interval_ms>3000</init_client_retry_interval_ms> -->
-    <!-- </resource_manager> -->
 
     <catalog>
         <name_space>random_suffix_replace_me</name_space>
     </catalog>
-    <cnch_type>worker</cnch_type>
+
+    <cnch_type>server</cnch_type>
 
     <catalog_service>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
@@ -589,6 +583,88 @@
             <table_name>cnch_meta_for_build</table_name>
         </bytekv>
     </catalog_service>
+
+    <daemon_manager>
+        <port>8090</port>
+        <http>
+            <port>8091</port>
+            <receive_timeout>1800</receive_timeout>
+            <send_timeout>1800</send_timeout>
+        </http>
+        <workload_thread_interval_ms>1000</workload_thread_interval_ms>
+        <daemon_jobs>
+            <job>
+                <name>PART_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>PART_MERGE</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>CONSUMER</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>MEMORY_BUFFER</name>
+                <!-- Interval in millisecond -->
+                <interval>3000</interval>
+            </job>
+            <job>
+                <name>DEDUP_WORKER</name>
+                <!-- Interval in millisecond -->
+                <interval>10000</interval>
+            </job>
+            <job>
+                <name>GLOBAL_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>5000</interval>
+            </job>
+            <job>
+                <name>TXN_GC</name>
+                <!-- Interval in millisecond -->
+                <interval>600000</interval>
+            </job>
+        </daemon_jobs>
+    </daemon_manager>
+
+    <resource_manager>
+        <port>8989</port>
+        <init_client_tries>3</init_client_tries>
+        <init_client_retry_interval_ms>3000</init_client_retry_interval_ms>
+        <check_leader_info_interval_ms>1000</check_leader_info_interval_ms>
+        <wait_before_become_leader_ms>3000</wait_before_become_leader_ms>
+        <max_retry_times>3</max_retry_times>
+        <lost_worker_timeout_seconds>60</lost_worker_timeout_seconds>
+        <vws>
+            <vw>
+                <name>vw_default</name>
+                <type>Default</type>
+                <num_workers>1</num_workers>
+                <worker_groups>
+                    <worker_group>
+                        <name>default</name>
+                        <type>Physical</type>
+                    </worker_group>
+                </worker_groups>
+            </vw>
+            <vw>
+                <name>vw_write</name>
+                <type>Write</type>
+                <num_workers>1</num_workers>
+                <worker_groups>
+                    <worker_group>
+                        <name>write</name>
+                        <type>Physical</type>
+                    </worker_group>
+                </worker_groups>
+            </vw>
+        </vws>
+    </resource_manager>
+
     <bytepond>
         <port>9381</port>
         <!-- local or remote -->
@@ -609,76 +685,33 @@
         <memory_cache_size>10000000</memory_cache_size>
         <enable>1</enable>
         <profile>0</profile>
-        <hdfs_data_path>/user/cnch_ci/random_suffix_replace_me/</hdfs_data_path>
+        <hdfs_data_path>/user/ducle.canh/cnch_backward_compability/</hdfs_data_path>
         <profile_path>/cnch/enable_profile_path</profile_path>
     </bytepond>
+    <tso_service>
+        <port>8080</port>
+        <!--Metastore storage type, support `bytekv` and `fdb`-->
+        <type>bytekv</type>
+        <bytekv>
+            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
+            <cluster_name>cnch_meta</cluster_name>
+            <name_space>bytekv_cnch_build</name_space>
+            <table_name>cnch_tso_build</table_name>
+            <key_name>tso</key_name>
+        </bytekv>
+        <bytejournal>
+            <renewal_interval_ms>1000</renewal_interval_ms>
+            <polling_interval_ms>1000</polling_interval_ms>
+            <error_retry_interval_ms>1000</error_retry_interval_ms>
+            <lease_interval_ms>3000</lease_interval_ms>
+            <failover_interval_ms>4000</failover_interval_ms>
+        </bytejournal>
+        <tso_window_ms>3000</tso_window_ms>
+        <!-- If tso_get_leader_info_interval_ms == 0, then TSO don't need to sleep after being elected as leader -->
+        <tso_get_leader_info_interval_ms>0</tso_get_leader_info_interval_ms>
+        <tso_max_retry_count>3</tso_max_retry_count>
+        <!-- If use_fallback is true, read_only transactions during TSO unavailability will succeed but there is a small risk the returned result is incorrect -->
+        <use_fallback>true</use_fallback>
+    </tso_service>
 
-    <data_paths>
-        <data_path>
-            <level>0</level>
-                <path>/cnch/cnch_test/worker/data/</path>
-                <type>local</type>
-        </data_path>
-        <data_path>
-                <level>1</level>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
-                <type>hdfs</type>
-        </data_path>
-    </data_paths>
-
-    <hdfs_nnproxy>data.bytehouse.nnproxy-hostnetwork.service.lf</hdfs_nnproxy>
-
-    <bytedance_kafka>
-        <owner>renqiang.0429</owner>
-        <prefer_service>dcleader</prefer_service>
-        <psm>aeolus.clickhouse.ch_helper</psm>
-        <team>data-dp-olap</team>
-    </bytedance_kafka>
-
-    <cnch_kafka_log>
-        <database>cnch_system</database>
-        <table>cnch_kafka_log</table>
-        <flush_max_row_count>10000</flush_max_row_count>
-        <flush_interval_milliseconds>7500</flush_interval_milliseconds>
-    </cnch_kafka_log>
-
-    <kafka_log>
-        <database>system</database>
-        <table>kafka_log</table>
-        <!-- shorten interval of flushing kafka_log, which should only be set in CI -->
-        <flush_interval_milliseconds>3500</flush_interval_milliseconds>
-    </kafka_log>
-
-    <bytejournal>
-        <log_dir>/shared/server/logs_bytejournal</log_dir>
-        <uri>bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&amp;is_consul=false</uri>
-        <metrics_prefix>cnch</metrics_prefix>
-        <namespace>cnch_test</namespace>
-        <cnch_prefix>cnch_ci_random_suffix_replace_me_</cnch_prefix> <!-- add a random suffix to avoid same Bytejournal key names-->
-        <retention_ms>14400000</retention_ms>
-        <max_write_throughput_bytes>1073741824</max_write_throughput_bytes>
-        <!-- For bytejournal audit logs . Can be one of following : [none,native,databus]. https://jira.bytedance.com/browse/CNCH-270 -->
-        <metadata_audit_type>none</metadata_audit_type>
-        <max_rollover_size>536870912</max_rollover_size>  <!-- 512MiB -->
-    </bytejournal>
-
-        <!-- Shared config directory between UDF container and cnch container -->
-    <udf_path>/cnch/cnch_test/server/user_defined</udf_path>
-
-<!--    <udf_manager_server>-->
-<!--        <timeout_ms>20000</timeout_ms>-->
-<!--        <max_retry>1</max_retry>-->
-<!--    </udf_manager_server>-->
-
-<!--    <udf_processor>-->
-<!--        <count>3</count>-->
-<!--        &lt;!&ndash; This config directory is not shared &ndash;&gt;-->
-<!--        &lt;!&ndash; Its used for socket communication between udf manager and udf processors &ndash;&gt;-->
-<!--        <uds_path>/cnch/cnch_test/worker0/udf_processor</uds_path>-->
-<!--        <timeout_ms>10000</timeout_ms>-->
-<!--        <max_retry>1</max_retry>-->
-<!--    </udf_processor>-->
-
-    <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->
-    <part_allocator_algorithm>JUMP</part_allocator_algorithm>
 </yandex>

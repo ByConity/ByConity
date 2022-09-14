@@ -63,7 +63,7 @@
                 <path>/cnch/cnch_test/server/data/</path>
             </server_local_disk1>
             <server_hdfs_disk0>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
+                <path>/user/ducle.canh/cnch_backward_compability/</path>
                 <type>bytehdfs</type>
             </server_hdfs_disk0>
         </disks>
@@ -575,7 +575,7 @@
     <!-- </resource_manager> -->
 
     <catalog>
-        <name_space>random_suffix_replace_me</name_space>
+        <name_space>ci_baseline_backward_compability</name_space>
     </catalog>
     <cnch_type>worker</cnch_type>
 
@@ -583,12 +583,13 @@
         <!--Metastore storage type, support `bytekv` and `fdb`-->
         <type>bytekv</type>
         <bytekv>
-            <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
-            <cluster_name>cnch_meta</cluster_name>
-            <name_space>bytekv_cnch_build</name_space>
-            <table_name>cnch_meta_for_build</table_name>
+            <service_name>bytedance.bytekv.bytekv_default</service_name>
+            <cluster_name>bytekv_default</cluster_name>
+            <name_space>bytekv_cnch_dev</name_space>
+            <table_name>cnch_metastore_hz_dev</table_name>
         </bytekv>
     </catalog_service>
+
     <bytepond>
         <port>9381</port>
         <!-- local or remote -->
@@ -609,7 +610,7 @@
         <memory_cache_size>10000000</memory_cache_size>
         <enable>1</enable>
         <profile>0</profile>
-        <hdfs_data_path>/user/cnch_ci/random_suffix_replace_me/</hdfs_data_path>
+        <hdfs_data_path>/user/ducle.canh/cnch_backward_compability/</hdfs_data_path>
         <profile_path>/cnch/enable_profile_path</profile_path>
     </bytepond>
 
@@ -621,7 +622,7 @@
         </data_path>
         <data_path>
                 <level>1</level>
-                <path>/user/cnch_ci/random_suffix_replace_me/</path>
+                <path>/user/ducle.canh/cnch_backward_compability/</path>
                 <type>hdfs</type>
         </data_path>
     </data_paths>
@@ -681,4 +682,8 @@
 
     <!-- JUMP for jump hash, RING for ring hash, MULTI_PROBE for multi probe hash -->
     <part_allocator_algorithm>JUMP</part_allocator_algorithm>
+    <enable_cnch_topology_master>0</enable_cnch_topology_master>
+    <enable_part_cache>0</enable_part_cache>
+    <enable_cnch_storage_cache>0</enable_cnch_storage_cache>
+    <enable_server_manager>0</enable_server_manager>
 </yandex>
