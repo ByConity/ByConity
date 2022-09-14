@@ -94,8 +94,9 @@ public:
             // 0.98 is hyperloglog error rate
             auto estimated_ndv_with_error = scaleNdv(full_count, sample_row_count, sample_ndv * 0.98, block_ndv);
 
-            LOG_INFO(&Poco::Logger::get("ThirdSampleColumnHandler"),
-                         fmt::format(FMT_STRING("estimated_ndv={}, estimated_ndv_with_error={}"), estimated_ndv, estimated_ndv_with_error));
+            LOG_INFO(
+                &Poco::Logger::get("ThirdSampleColumnHandler"),
+                fmt::format(FMT_STRING("estimated_ndv={}, estimated_ndv_with_error={}"), estimated_ndv, estimated_ndv_with_error));
 
             // ensure error of estimated ndv less than 30% due to HyperLogLog
             if (estimated_ndv <= 1.3 * estimated_ndv_with_error)

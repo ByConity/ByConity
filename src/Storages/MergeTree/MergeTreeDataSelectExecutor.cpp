@@ -1005,7 +1005,7 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
             if (use_sampling && (settings.enable_sample_by_range || settings.enable_deterministic_sample_by_range))
             {
-                MarkRanges sampled_ranges = sampleByRange(ranges.ranges, relative_sample_size, settings.enable_deterministic_sample_by_range);
+                MarkRanges sampled_ranges = sampleByRange(part, ranges.ranges, relative_sample_size, settings.enable_deterministic_sample_by_range);
                 ranges.ranges = std::move(sampled_ranges);
             }
 
@@ -1131,10 +1131,14 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
     return parts_with_ranges;
 }
 
-MarkRanges MergeTreeDataSelectExecutor::sampleByRange(const MarkRanges & ranges, const RelativeSize & relative_sample_size, bool deterministic)
+MarkRanges MergeTreeDataSelectExecutor::sampleByRange(
+    const MergeTreeMetaBase::DataPartPtr& part,
+    const MarkRanges & ranges,
+    const RelativeSize & relative_sample_size,
+    bool deterministic)
 {
     MarkRanges new_ranges;
-
+    auto stable_seed = std::hash<String>{}(part->name);
     for (const MarkRange & range : ranges)
     {
         // Compute sampled size
@@ -1149,32 +1153,32 @@ MarkRanges MergeTreeDataSelectExecutor::sampleByRange(const MarkRanges & ranges,
         UInt64 sampled_ranges_size
             = boost::rational_cast<ASTSampleRatio::BigNum>((relative_sample_size * sliced_ranges_size + RelativeSize(1)));
 
+        UInt64 random_seed = 0;
         if (deterministic)
         {
-            size_t sample_step = sliced_ranges.size() / sampled_ranges_size;
-            for (size_t i = 0; i < sliced_ranges.size(); i += sample_step)
-            {
-                new_ranges.push_back(sliced_ranges[i]);
-            }
+            random_seed = stable_seed ^ std::hash<UInt64>{}(range.end);
         }
         else
         {
-            // Sample sliced ranges
-            MarkRanges sampled_ranges;
-            std::sample(
-                sliced_ranges.begin(),
-                sliced_ranges.end(),
-                std::back_inserter(sampled_ranges),
-                sampled_ranges_size,
-                std::mt19937{std::random_device{}()});
-            std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
-                return lhs.begin < rhs.begin;
-            });
-            // Construct new ranges
-            for (const MarkRange & sampled_range : sampled_ranges)
-            {
-                new_ranges.push_back(sampled_range);
-            }
+            // generate from external entropy
+            random_seed = std::random_device{}();
+        }
+
+        // Sample sliced ranges
+        MarkRanges sampled_ranges;
+        std::sample(
+            sliced_ranges.begin(),
+            sliced_ranges.end(),
+            std::back_inserter(sampled_ranges),
+            sampled_ranges_size,
+            std::mt19937{random_seed});
+        std::sort(sampled_ranges.begin(), sampled_ranges.end(), [](const MarkRange & lhs, const MarkRange & rhs) {
+            return lhs.begin < rhs.begin;
+        });
+        // Construct new ranges
+        for (const MarkRange & sampled_range : sampled_ranges)
+        {
+            new_ranges.push_back(sampled_range);
         }
     }
 

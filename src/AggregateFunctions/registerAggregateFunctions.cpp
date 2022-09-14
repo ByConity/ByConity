@@ -83,6 +83,7 @@ void registerAggregateFunctionsBitMapJoinAndCard(AggregateFunctionFactory & fact
 void registerAggregateFunctionCpcSketch(AggregateFunctionFactory & factory);
 void registerAggregateFunctionKllSketch(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
+void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
 
 class AggregateFunctionCombinatorFactory;
@@ -187,6 +188,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionCpcSketch(factory);
         registerAggregateFunctionKllSketch(factory);
         registerAggregateFunctionNdvBuckets(factory);
+        registerAggregateFunctionNdvBucketsExtend(factory);
         registerAggregateFunctionNothing(factory);
     }
 

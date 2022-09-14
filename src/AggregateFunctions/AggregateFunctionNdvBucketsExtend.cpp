@@ -4,7 +4,7 @@
 #include <AggregateFunctions/Helpers.h>
 #include <Statistics/Base64.h>
 #include <Statistics/StatisticsBaseImpl.h>
-#include <Statistics/StatsNdvBucketsImpl.h>
+#include <Statistics/StatsNdvBucketsExtendImpl.h>
 #include <Common/FieldVisitors.h>
 #include <Common/FieldVisitorToString.h>
 
@@ -18,26 +18,31 @@ namespace ErrorCodes
 // This agg fucntion is to calculate Ndvs in Histogram
 // it takes BucketBuckets as a paratmeter
 // and build histogram using StatsNdvBuckets
+
+// extend version will receive two arguments
+// first is <col>
+// second is hash(<col>, _mark_id)
+// detailed algorithm should refer to https://bytedance.feishu.cn/docx/doxcnXtZ9mYK0hzITr2V0ffeOSh
 template <typename T>
-struct NdvBucketsData
+struct NdvBucketsExtendData
 {
     // UUID is in fact UInt128, use UInt128 for calculation
     using EmbeddedType = std::conditional_t<std::is_same_v<T, UUID>, UInt128, T>;
     // Extend version: add block_ndvs
-    Statistics::StatsNdvBucketsImpl<EmbeddedType> data_;
+    Statistics::StatsNdvBucketsExtendImpl<EmbeddedType> data_;
 
-    NdvBucketsData() = default;
+    NdvBucketsExtendData() = default;
 
-    NdvBucketsData(std::string_view blob)
+    NdvBucketsExtendData(std::string_view blob)
     {
         Statistics::BucketBoundsImpl<EmbeddedType> bounds;
         bounds.deserialize(blob);
         data_.initialize(std::move(bounds));
     }
 
-    void add(T value) { data_.update(value); }
+    void add(T value, UInt64 block_value) { data_.update(value, block_value); }
 
-    void merge(const NdvBucketsData & rhs) { data_.merge(rhs.data_); }
+    void merge(const NdvBucketsExtendData & rhs) { data_.merge(rhs.data_); }
 
     using BlobType = String;
     void write(WriteBuffer & buf) const
@@ -53,7 +58,7 @@ struct NdvBucketsData
         data_.deserialize(blob);
     }
 
-    std::string getText() const { return data_.to_string(); }
+    std::string getText() const { return data_.toString(); }
 
     void insertResultInto(IColumn & to) const
     {
@@ -62,20 +67,25 @@ struct NdvBucketsData
         static_cast<ColumnString &>(to).insertData(blob_b64.c_str(), blob_b64.size());
     }
 
-    static String getName() { return "ndv_buckets"; }
+    static String getName() { return "ndv_buckets_extend"; }
 };
 
 
 template <template <typename> class Function>
 AggregateFunctionPtr
-createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings*)
+createAggregateFunctionNdvBucketsExtend(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings*)
 {
-    // assertNoParameters(name, parameters);
-    assertUnary(name, argument_types);
     if (parameters.empty())
     {
         throw Exception("params mismatch", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
+
+    assertBinary(name, argument_types);
+    if (argument_types[1]->getTypeId() != TypeIndex::UInt64)
+    {
+        throw Exception("The second type is required to be UInt64", ErrorCodes::TYPE_MISMATCH);
+    }
+
     auto blob_b64 = applyVisitor(FieldVisitorToString(), parameters[0]);
     blob_b64 = [](std::string_view view) -> std::string_view {
         // trim '\'
@@ -103,7 +113,7 @@ createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & ar
     }
     else if (isStringOrFixedString(data_type))
     {
-        res = std::make_shared<AggregateFunctionCboFamilyForString<NdvBucketsData<String>>>(argument_types, blob);
+        res = std::make_shared<AggregateFunctionCboFamilyForString<NdvBucketsExtendData<String>, true>>(argument_types, blob);
     }
 
     if (!res)
@@ -116,17 +126,17 @@ createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & ar
 template <typename T>
 struct FuncImpl
 {
-    using Func = AggregateFunctionCboFamily<NdvBucketsData, T>;
+    using Func = AggregateFunctionCboFamily<NdvBucketsExtendData, T, true>;
 };
 template <typename T>
 using Func = typename FuncImpl<T>::Func;
 
 
-void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory)
+void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory)
 {
     AggregateFunctionWithProperties functor;
-    functor.creator = createAggregateFunctionNdvBuckets<Func>;
-    factory.registerFunction("ndv_buckets", functor);
+    functor.creator = createAggregateFunctionNdvBucketsExtend<Func>;
+    factory.registerFunction("ndv_buckets_extend", functor);
 }
 
 }
