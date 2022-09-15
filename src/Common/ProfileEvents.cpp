@@ -278,6 +278,8 @@
     M(ReadBufferFromHdfsReadFailed, "")\
     M(ReadBufferFromHdfsReadBytes, "")\
     M(HDFSReadElapsedMilliseconds, "")\
+    M(HDFSSeek, "")\
+    M(HDFSSeekElapsedMicroseconds, "")\
     M(HdfsGetBlkLocMicroseconds, "Total number of millisecons spent to call getBlockLocations") \
     M(HdfsSlowNodeCount, "Total number of millisecons spent to call getBlockLocations") \
     M(HdfsFailedNodeCount, "Total number of millisecons spent to call getBlockLocations")     \

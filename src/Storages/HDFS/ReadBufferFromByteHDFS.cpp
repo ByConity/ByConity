@@ -1,4 +1,5 @@
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include "Common/ProfileEvents.h"
 #include <common/logger_useful.h>
 namespace DB
 {
@@ -244,18 +245,29 @@ void ReadBufferFromByteHDFS::tryConnect()
 
 off_t ReadBufferFromByteHDFS::doSeek(off_t offset, int whence)
 {
-    if (whence != SEEK_SET)
-        throw Exception("ReadBufferFromByteHDFS::seek expects SEEK_SET as whence", ErrorCodes::CANNOT_OPEN_FILE);
+    size_t new_pos;
+    if (whence == SEEK_SET)
+    {
+        assert(offset >= 0);
+        new_pos = offset;
+    }
+    else if (whence == SEEK_CUR)
+    {
+        new_pos = offset_in_current_file - (working_buffer.end() - pos) + offset;
+    }
+    else
+    {
+        throw Exception("ReadBufferFromByteHDFS::seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
+    }
 
     tryConnect();
 
-    off_t new_pos = offset;
-    off_t pos_in_file = offset_in_current_file;
+    size_t pos_in_file = offset_in_current_file;
     // Seek to current position
     if (new_pos + (working_buffer.end() - pos) == pos_in_file)
         return new_pos;
 
-    if (hasPendingData() && new_pos <= pos_in_file && new_pos >= pos_in_file - static_cast<off_t>(working_buffer.size()))
+    if (hasPendingData() && new_pos <= pos_in_file && new_pos >= pos_in_file - working_buffer.size())
     {
         /// Position is still inside buffer.
         pos = working_buffer.begin() + (new_pos - (pos_in_file - working_buffer.size()));
@@ -263,10 +275,14 @@ off_t ReadBufferFromByteHDFS::doSeek(off_t offset, int whence)
     }
     else
     {
+        ProfileEvents::increment(ProfileEvents::HDFSSeek);
+        Stopwatch watch;
+
         pos = working_buffer.end();
         if (!hdfsSeek(fs.get(), fin, new_pos))
         {
             offset_in_current_file = new_pos;
+            ProfileEvents::increment(ProfileEvents::HDFSSeekElapsedMicroseconds, watch.elapsedMicroseconds());
             return new_pos;
         }
         else

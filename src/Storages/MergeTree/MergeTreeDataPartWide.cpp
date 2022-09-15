@@ -116,6 +116,9 @@ ColumnSize MergeTreeDataPartWide::getColumnSizeImpl(
 
 void MergeTreeDataPartWide::loadIndexGranularity()
 {
+    if (index_granularity.isInitialized())
+        return;
+
     String full_path = getFullRelativePath();
     index_granularity_info.changeGranularityIfRequired(volume->getDisk(), full_path);
 

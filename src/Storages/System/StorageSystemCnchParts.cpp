@@ -1,5 +1,6 @@
 #include <Catalog/Catalog.h>
 #include <Common/Status.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
@@ -41,6 +42,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"rows_count", std::make_shared<DataTypeUInt64>()},
         {"columns", std::make_shared<DataTypeString>()},
         {"marks_count", std::make_shared<DataTypeUInt64>()},
+        {"index_granularity", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
         {"commit_time", std::make_shared<DataTypeDateTime>()},
         {"kv_commit_time", std::make_shared<DataTypeDateTime>()},
         {"columns_commit_time", std::make_shared<DataTypeDateTime>()},
@@ -48,8 +50,6 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"previous_version", std::make_shared<DataTypeUInt64>()},
         {"partition_id", std::make_shared<DataTypeString>()},
         {"bucket_number", std::make_shared<DataTypeInt64>()},
-        {"checksums_file_pos", std::make_shared<DataTypeString>()},
-        {"index_file_pos", std::make_shared<DataTypeString>()},
         {"outdated", std::make_shared<DataTypeUInt8>()},
         {"visible", std::make_shared<DataTypeUInt8>()},
         {"part_type", std::move(type_enum)},
@@ -205,6 +205,11 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(curr_part->part_model().rows_count());
                 res_columns[col_num++]->insert(curr_part->part_model().columns());
                 res_columns[col_num++]->insert(curr_part->part_model().marks_count());
+                Array index_granularity;
+                index_granularity.reserve(curr_part->part_model().index_granularities_size());
+                for (const auto & granularity : curr_part->part_model().index_granularities())
+                    index_granularity.push_back(granularity);
+                res_columns[col_num++]->insert(index_granularity);
 
                 res_columns[col_num++]->insert(TxnTimestamp(curr_part->getCommitTime()).toSecond());
                 res_columns[col_num++]->insert(TxnTimestamp(curr_part->part_model().commit_time()).toSecond());
@@ -214,19 +219,6 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                 res_columns[col_num++]->insert(curr_part->info().hint_mutation);
                 res_columns[col_num++]->insert(curr_part->info().partition_id);
                 res_columns[col_num++]->insert(curr_part->part_model().bucket_number());
-
-                off_t checksums_file_offset = 0; size_t checksums_file_size = 0;
-                off_t index_file_offset = 0; size_t index_file_size = 0;
-                if (curr_part->part_model().has_meta_files_pos())
-                {
-                    const auto & meta_files_pos = curr_part->part_model().meta_files_pos();
-                    checksums_file_offset = meta_files_pos.checksums_file_offset();
-                    checksums_file_size = meta_files_pos.checksums_file_size();
-                    index_file_offset = meta_files_pos.index_file_offset();
-                    index_file_offset = meta_files_pos.index_file_size();
-                }
-                res_columns[col_num++]->insert(fmt::format("offset:{}, size:{}", checksums_file_offset, checksums_file_size));
-                res_columns[col_num++]->insert(fmt::format("offset:{}, size:{}", index_file_offset, index_file_size));
 
                 res_columns[col_num++]->insert(outdated);
                 res_columns[col_num++]->insert(visible);
