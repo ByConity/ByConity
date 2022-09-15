@@ -785,7 +785,7 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
         }
         worker_client->sendCreateQueries(local_context, dependency_create_queries);
 
-        /// Ensure worker session local_context rsource could be released
+        /// Ensure worker session local_context resource could be released
         if (auto session_resource = local_context->tryGetCnchServerResource())
         {
             std::vector<size_t> index_values{index};
@@ -1068,7 +1068,6 @@ void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataP
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
-    cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
 
     // if (local_context.getSettingsRef().enable_virtual_part)

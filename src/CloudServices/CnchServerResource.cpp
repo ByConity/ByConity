@@ -84,7 +84,7 @@ void CnchServerResource::addBufferWorkers(const UUID & storage_id, const HostWit
 static std::vector<brpc::CallId> processSend(
     const ContextPtr & context,
     CnchWorkerClientPtr & client,
-    std::vector<AssignedResource> resource_to_send,
+    const std::vector<AssignedResource> & resource_to_send,
     ExceptionHandler & handler)
 {
     bool is_local = context->getServerType() == ServerType::cnch_server &&
@@ -95,7 +95,7 @@ static std::vector<brpc::CallId> processSend(
     if (!is_local)
     {
         Strings create_queries;
-        for (auto & resource: resource_to_send)
+        for (const auto & resource: resource_to_send)
         {
             if (!resource.sent_create_query)
                 create_queries.emplace_back(resource.create_table_query);
@@ -104,7 +104,7 @@ static std::vector<brpc::CallId> processSend(
     }
 
     /// send data parts.
-    for (auto & resource: resource_to_send)
+    for (const auto & resource: resource_to_send)
     {
         auto call_id = client->sendQueryDataParts(
             context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers, handler);
@@ -116,23 +116,31 @@ static std::vector<brpc::CallId> processSend(
 
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
-    auto lock = getLock();
+    /**
+     * send_lock:
+     * For union query, it may send resources to a worker multiple times,
+     * If it is sent concurrently, the data may not be ready when one of the sub-queries is executed
+     * So we need to avoid this situation by taking the send_lock.
+     */
+    auto send_lock = getLockForSend(worker.getRPCAddress());
+
     std::vector<AssignedResource> resource_to_send;
     auto worker_client = worker_group->getWorkerClient(worker);
+    {
+        auto lock = getLock();
+        allocateResource(context, lock);
 
-    allocateResource(context, lock);
+        auto it = assigned_worker_resource.find(worker);
+        if (it == assigned_worker_resource.end())
+            return;
 
-    auto it = assigned_worker_resource.find(worker);
-    if (it == assigned_worker_resource.end())
-        return;
-
-    resource_to_send = std::move(it->second);
-    assigned_worker_resource.erase(it);
+        resource_to_send = std::move(it->second);
+        assigned_worker_resource.erase(it);
+    }
 
     ExceptionHandler handler;
     auto call_ids = processSend(context, worker_client, resource_to_send, handler);
 
-    /// TODO: join call_ids without lock.
     for (auto & call_id : call_ids)
         brpc::Join(call_id);
 
