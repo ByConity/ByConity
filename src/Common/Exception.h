@@ -3,6 +3,7 @@
 #include <cerrno>
 #include <vector>
 #include <memory>
+#include <mutex>
 
 #include <Poco/Version.h>
 #include <Poco/Exception.h>
@@ -219,5 +220,17 @@ std::enable_if_t<std::is_pointer_v<T>, T> exception_cast(std::exception_ptr e)
         return nullptr;
     }
 }
+
+/// Allows to save first catched exception in jobs and postpone its rethrow.
+class ExceptionHandler
+{
+public:
+    void setException(std::exception_ptr && exception);
+    void throwIfException();
+
+private:
+    std::exception_ptr first_exception;
+    std::mutex mutex;
+};
 
 }

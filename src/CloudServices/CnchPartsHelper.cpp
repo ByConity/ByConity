@@ -197,7 +197,7 @@ ServerDataPartsVector calcVisiblePartsForGC(
 {
     return calcVisiblePartsImpl(
         all_parts,
-        /* flattern */ false,
+        /* flatten */ false,
         /* skip_drop_ranges */ false,
         visible_alone_drop_ranges,
         invisible_dropped_parts,
