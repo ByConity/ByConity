@@ -203,6 +203,12 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitMergingSortedStep(const MergingSo
     return child_stats;
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitPartitionTopNStep(const PartitionTopNStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 //PlanNodeStatisticsPtr CardinalityVisitor::visitMaterializingStep(const MaterializingStep &, CardinalityContext &)
 //{
 //    throw Exception("MaterializingNode current not support", ErrorCodes::NOT_IMPLEMENTED);

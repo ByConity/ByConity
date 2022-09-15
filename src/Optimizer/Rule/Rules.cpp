@@ -13,6 +13,7 @@
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SwapAdjacenRules.h>
+#include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 
 namespace DB
 {
@@ -62,6 +63,7 @@ std::vector<RulePtr> Rules::pushPartialStepRules()
         std::make_shared<PushPartialAggThroughExchange>(),
         std::make_shared<PushPartialSortingThroughExchange>(),
         std::make_shared<PushPartialLimitThroughExchange>(),
+        std::make_shared<FilterWindowToPartitionTopN>(),
         std::make_shared<PushDynamicFilterBuilderThroughExchange>()};
 }
 

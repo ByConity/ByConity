@@ -27,7 +27,7 @@ protected:
 
     bool visitAggregatingStep(const AggregatingStep & step, ContextMutablePtr &) override
     {
-        if (step.isRollup() || step.isCube())
+        if (step.isGroupingSet())
             return false;
         return true;
     }

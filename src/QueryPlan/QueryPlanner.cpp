@@ -8,6 +8,7 @@
 #include <Interpreters/WindowDescription.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Optimizer/Utils.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/DistinctStep.h>
@@ -1169,14 +1170,35 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     builder.withNewMappings(visible_fields, complex_expressions);
 
+    if (select_query.group_by_with_rollup)
+    {
+        grouping_sets_params.clear();
+        auto key_size = keys_for_all_group.size();
+        for (size_t set_size = 0; set_size <= key_size; set_size++)
+        {
+            auto end = keys_for_all_group.begin();
+            std::advance(end, set_size);
+            Names keys_for_this_group{keys_for_all_group.begin(), end};
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+        }
+    }
+
+    if (select_query.group_by_with_cube)
+    {
+        grouping_sets_params.clear();
+        for (auto keys_for_this_group : Utils::powerSet(keys_for_all_group))
+        {
+            grouping_sets_params.emplace_back(std::move(keys_for_this_group));        
+        }
+        grouping_sets_params.emplace_back(GroupingSetsParams{});        
+    }
+
     auto agg_step = std::make_shared<AggregatingStep>(
         builder.getCurrentDataStream(),
         std::move(keys_for_all_group),
         std::move(aggregate_descriptions),
-        grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
+        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params) : GroupingSetsParamsList{},
         true,
-        select_query.group_by_with_cube,
-        select_query.group_by_with_rollup,
         grouping_operations_descs,
         select_query.group_by_with_totals);
 

@@ -105,10 +105,10 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
 PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
 {
-   if (/*step.isTotals() || */step.isCube() || step.isRollup())
-   {
-       return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
-   }
+//    if (/*step.isTotals() || */)
+//    {
+//        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
+//    }
 
     auto keys = step.getKeys();
     if (keys.empty())

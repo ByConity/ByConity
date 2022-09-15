@@ -75,6 +75,7 @@ MergingAggregatedStep::MergingAggregatedStep(
 void MergingAggregatedStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
+    output_stream->header = appendGroupingColumns(params->getHeader(), groupings);
 }
 
 void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_settings)
@@ -194,7 +195,7 @@ QueryPlanStepPtr MergingAggregatedStep::deserialize(ReadBuffer & buf, ContextPtr
 std::shared_ptr<IQueryPlanStep> MergingAggregatedStep::copy(ContextPtr) const
 {
     return std::make_shared<MergingAggregatedStep>(
-        input_streams[0], params, memory_efficient_aggregation, max_threads, memory_efficient_merge_threads);
+        input_streams[0], keys, grouping_sets_params, groupings, params, memory_efficient_aggregation, max_threads, memory_efficient_merge_threads);
 }
 
 }

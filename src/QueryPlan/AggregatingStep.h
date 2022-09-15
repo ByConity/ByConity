@@ -78,8 +78,6 @@ public:
         AggregateDescriptions aggregates_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
-        bool cube_ = false,
-        bool rollup_ = false,
         GroupingDescriptions groupings_ = {}, bool /*totals_*/ = false)
         : AggregatingStep(
             input_stream_,
@@ -93,8 +91,6 @@ public:
             false,
             nullptr,
             SortDescription(),
-            cube_,
-            rollup_,
             groupings_)
     {
     }
@@ -112,8 +108,6 @@ public:
         bool storage_has_evenly_distributed_read_,
         InputOrderInfoPtr group_by_info_,
         SortDescription group_by_sort_description_,
-        bool cube_ = false,
-        bool rollup_ = false,
         GroupingDescriptions groupings_ = {},
         bool totals_ = false);
 
@@ -134,12 +128,10 @@ public:
     const Names & getKeys() const { return keys; }
     const GroupingSetsParamsList & getGroupingSetsParams() const { return grouping_sets_params; }
     bool isFinal() const { return final; }
-    bool isCube() const { return cube; }
-    bool isRollup() const { return rollup; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const GroupingDescriptions & getGroupings() const { return groupings; }
 
-    bool isNormal() const { return final && !cube && !rollup && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
+    bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
@@ -164,8 +156,6 @@ private:
     InputOrderInfoPtr group_by_info;
     SortDescription group_by_sort_description;
 
-    bool cube = false;
-    bool rollup = false;
     GroupingDescriptions groupings;
 
     Processors aggregating_in_order;

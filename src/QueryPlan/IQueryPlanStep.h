@@ -111,6 +111,7 @@ public:
         M(MergingAggregated) \
         M(MergingSorted) \
         M(Offset) \
+        M(PartitionTopN) \
         M(PartialSorting) \
         M(PlanSegmentSource) \
         M(Projection) \

@@ -15,7 +15,7 @@ namespace DB
 PatternPtr PushPartialAggThroughExchange::getPattern() const
 {
     return Patterns::aggregating()
-        ->matchingStep<AggregatingStep>([](const AggregatingStep & step) { return /*!step.isTotals() && */!step.isRollup() && !step.isCube() && step.isFinal(); })
+        ->matchingStep<AggregatingStep>([](const AggregatingStep & step) { return /*!step.isTotals() && */step.isFinal(); })
         ->withSingle(
             // todo jp: support push through union
             Patterns::exchange()->matchingStep<ExchangeStep>([](const ExchangeStep & step) { return step.getInputStreams().size() == 1; }));
@@ -58,8 +58,6 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         step->getAggregates(),
         step->getGroupingSetsParams(),
         false,
-        step->isCube(),
-        step->isRollup(),
         step->getGroupings());
 
     auto exchange_step = std::make_unique<ExchangeStep>(

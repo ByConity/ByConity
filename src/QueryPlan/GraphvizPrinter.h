@@ -57,6 +57,7 @@ public:
     Void visitAssignUniqueIdNode(AssignUniqueIdNode & node, PrinterContext & context) override;
     Void visitWindowNode(WindowNode & node, PrinterContext & context) override;
     Void visitCTERefNode(CTERefNode & node, PrinterContext & context) override;
+    Void visitPartitionTopNNode(PartitionTopNNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
@@ -116,6 +117,7 @@ public:
     Void visitEnforceSingleRowNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitAssignUniqueIdNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitWindowNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitPartitionTopNNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -163,6 +165,7 @@ public:
     static String printAssignUniqueIdStep(const AssignUniqueIdStep & step);
     static String printWindowStep(const WindowStep & step);
     static String printCTERefStep(const CTERefStep & node);
+    static String printPartitionTopNStep(const PartitionTopNStep & node);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

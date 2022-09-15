@@ -22,6 +22,7 @@
 #include <QueryPlan/MergingAggregatedStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
+#include <QueryPlan/PartitionTopNStep.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/QueryPlan.h>
@@ -50,6 +51,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Aggregating, "chartreuse3"},
     {IQueryPlanStep::Type::MergingAggregated, "chartreuse3"},
     {IQueryPlanStep::Type::Window, "darkolivegreen4"},
+    {IQueryPlanStep::Type::PartitionTopN, "darkolivegreen4"},
     {IQueryPlanStep::Type::Union, "turquoise4"},
     {IQueryPlanStep::Type::Intersect, "turquoise4"},
     {IQueryPlanStep::Type::Except, "turquoise4"},
@@ -368,6 +370,15 @@ Void PlanNodePrinter::visitWindowNode(WindowNode & node, PrinterContext & contex
     String color{NODE_COLORS[step.getType()]};
     String label{"WindowNode"};
     printNode(node, label, StepPrinter::printWindowStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitPartitionTopNNode(PartitionTopNNode & node, PrinterContext & context)
+{
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    String label{"PartitionTopNNode"};
+    printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -751,6 +762,16 @@ Void PlanSegmentNodePrinter::visitWindowNode(QueryPlan::Node * node, PrinterCont
     return visitChildren(node, context);
 }
 
+Void PlanSegmentNodePrinter::visitPartitionTopNNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & step_ptr = node->step;
+    auto & step = dynamic_cast<const PartitionTopNStep &>(*step_ptr);
+    String label{"PartitionTopNNode"};
+    String color{NODE_COLORS.at(step_ptr->getType())};
+    printNode(node, label, StepPrinter::printPartitionTopNStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 void PlanSegmentNodePrinter::printNode(
     QueryPlan::Node * node, const String & label, const String & details, const String & color, PrinterContext & context)
 {
@@ -1087,6 +1108,37 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
         }
         details << "\\n";
     }
+
+    if (step.isGroupingSet())
+    {
+        details << "|";
+        details << "Grouping Set\\n";
+        for (const auto & set : step.getGroupingSetsParams())
+        {
+            details << "( ";
+            for (const auto & name : set.used_key_names)
+            {
+                details << name << ", ";
+            }
+            details << ") ";
+        }
+    }
+
+    if (!step.getGroupings().empty())
+    {
+        details << "|";
+        details << "Grouping\\n";
+        for (const auto & set : step.getGroupings())
+        {
+            details << set.output_name << ':';
+            for (auto arg : set.argument_names)
+            {
+                details << arg<< ',';
+            }
+            details << "; ";
+        }
+    }
+
     details << "|";
     details << "Output\\n";
     for (const auto & column : step.getOutputStream().header)
@@ -1097,12 +1149,6 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step)
     if (step.isFinal())
         details << "|"
                 << "final";
-    if (step.isCube())
-        details << "|"
-                << "cube";
-    if (step.isRollup())
-        details << "|"
-                << "rollup";
     //    if (step.isTotals())
     //        details << "|"
     //                << "totals";
@@ -1149,6 +1195,22 @@ String StepPrinter::printMergingAggregatedStep(const MergingAggregatedStep & ste
         }
         details << "\\n";
     }
+
+    if (!step.getGroupings().empty())
+    {
+        details << "|";
+        details << "Grouping\\n";
+        for (const auto & set : step.getGroupings())
+        {
+            details << set.output_name << ':';
+            for (auto arg : set.argument_names)
+            {
+                details << arg<< ',';
+            }
+            details << "; ";
+        }
+    }
+
     if (step.getParams()->final)
         details << "|"
                 << "final";
@@ -1594,6 +1656,38 @@ String StepPrinter::printCTERefStep(const CTERefStep & step)
         details << column.type->getName() << "\\n";
     }
 
+    return details.str();
+}
+
+String StepPrinter::printPartitionTopNStep(const PartitionTopNStep & step)
+{
+    std::stringstream details;
+    details << "Partition";
+    for (auto & desc : step.getPartition())
+    {
+        details << desc << ", ";
+    }
+    details << "|";
+
+    details << "Order by";
+    for (auto & desc : step.getOrderBy())
+    {
+        details << desc << ", ";
+    }
+    details << "|";
+
+    details << step.getModel();
+    details << "|";
+
+    details << "Limit: " << step.getLimit();
+    details << "|";
+
+    details << "Output |";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 

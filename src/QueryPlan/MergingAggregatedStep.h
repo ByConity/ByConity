@@ -44,6 +44,7 @@ public:
 
     const Names & getKeys() const { return keys; }
     const AggregateDescriptions & getAggregates() const { return params->params.aggregates; }
+    const GroupingDescriptions & getGroupings() const { return groupings; }
 
     void serialize(WriteBuffer & buf) const override;
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
