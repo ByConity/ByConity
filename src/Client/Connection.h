@@ -36,6 +36,9 @@ namespace DB
 class ClientInfo;
 class Pipe;
 struct Settings;
+struct QueryWorkerMetricElement;
+using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
+using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 
 /// Struct which represents data we are going to send for external table.
 struct ExternalTableData
@@ -71,6 +74,7 @@ struct Packet
     Progress progress;
     BlockStreamProfileInfo profile_info;
     std::vector<UUID> part_uuids;
+    QueryWorkerMetricElements query_worker_metric_elements;
 
     Packet() : type(Protocol::Server::Hello) {}
 };
@@ -155,7 +159,14 @@ public:
     UInt16 getExchangePort() const;
     UInt16 getExchangeStatusPort() const;
 
-    HostWithPorts getHostWithPorts() const { return {"virtual_id", host, rpc_port, port}; }
+    HostWithPorts getHostWithPorts() const
+    {
+        HostWithPorts res{host};
+        res.rpc_port = rpc_port;
+        res.tcp_port = port;
+        res.id = "virtual_id";
+        return res;
+    }
 
     Protocol::Compression getCompression() const { return compression; }
 
@@ -357,6 +368,7 @@ private:
     std::unique_ptr<Exception> receiveException() const;
     Progress receiveProgress() const;
     BlockStreamProfileInfo receiveProfileInfo() const;
+    QueryWorkerMetricElements receiveQueryWorkerMetrics();
 
     void initInputBuffers();
     void initBlockInput();

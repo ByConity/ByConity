@@ -13,7 +13,7 @@ void StatsColumnBasic::deserialize(std::string_view blob)
 }
 String StatsColumnBasic::serializeToJson() const
 {
-    DB::String json_str;
+    String json_str;
     Json2Pb::pbMsg2JsonStr(proto, json_str, false);
     return json_str;
 }

@@ -192,14 +192,6 @@ public:
         return 0;
     }
 
-    std::vector<String> getPartitionColumns(const StatsTableIdentifier & identifier) const override
-    {
-        // Memory table has no partition Columns
-        // so we return an empty vector
-        (void)identifier;
-        return {};
-    }
-
     const Settings & getSettingsRef() const override { return context->getSettingsRef(); }
 
 private:

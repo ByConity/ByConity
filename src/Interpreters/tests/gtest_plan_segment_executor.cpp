@@ -313,7 +313,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
         BroadcastStatus status = source_sender->send(chunk.clone());
         ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
     }
-    
+
     for (int i = 0; i < 2; i++)
     {
         RecvDataPacket recv_res = sink_receiver->recv(5000);
@@ -334,7 +334,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     }
         
     ASSERT_TRUE(code == CancellationCode::CancelSent);
-
+    
     RecvDataPacket recv_res = sink_receiver->recv(5000);
     ASSERT_TRUE(std::holds_alternative<BroadcastStatus>(recv_res));
     ASSERT_TRUE(std::get<BroadcastStatus>(recv_res).code == BroadcastStatusCode::SEND_CANCELLED);

@@ -49,7 +49,7 @@ static std::pair<off_t, size_t> getFileOffsetAndSize(const IMergeTreeDataPart & 
 }
 
 MergeTreeDataPartCNCH::MergeTreeDataPartCNCH(
-    MergeTreeMetaBase & storage_,
+    const MergeTreeMetaBase & storage_,
     const String & name_,
     const VolumePtr & volume_,
     const std::optional<String> & relative_path_,
@@ -152,6 +152,19 @@ void MergeTreeDataPartCNCH::loadIndexGranularity(
 
 void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
 {
+}
+
+void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
+{
+    off_t meta_info_offset = 0;
+    size_t meta_info_size = 0;
+    getMetaInfoPosAndSize(meta_info_offset, meta_info_size);
+
+    DiskPtr disk = volume->getDisk();
+    String rel_path = getFullRelativePath() + "/data";
+    auto reader = openForReading(disk, rel_path, meta_info_size);
+    LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_offset, meta_info_size);
+    readPartBinary(*this, limit_reader, load_hint_mutation);
 }
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
@@ -359,6 +372,17 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const
 {
+}
+
+void MergeTreeDataPartCNCH::getMetaInfoPosAndSize(off_t & off, size_t & size)
+{
+    String data_rel_path = getFullRelativePath() + "/data";
+    DiskPtr disk = volume->getDisk();
+    size_t file_size = disk->getFileSize(data_rel_path);
+    auto reader = openForReading(disk, data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    reader->seek(file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 2 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
+    readIntBinary(off, *reader);
+    readIntBinary(size, *reader);
 }
 
 }

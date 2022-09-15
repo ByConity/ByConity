@@ -43,6 +43,8 @@ public:
         RESET_SETTING,
         MODIFY_QUERY,
         REMOVE_TTL,
+        MODIFY_CLUSTER_BY,
+        DROP_CLUSTER,
 
         ADD_INDEX,
         DROP_INDEX,
@@ -58,9 +60,11 @@ public:
         DROP_PARTITION,
         DROP_DETACHED_PARTITION,
         ATTACH_PARTITION,
+        ATTACH_DETACHED_PARTITION,
         MOVE_PARTITION,
         MOVE_PARTITION_FROM,
         REPLACE_PARTITION,
+        REPLACE_PARTITION_WHERE,
         INGEST_PARTITION,
         FETCH_PARTITION,
         FREEZE_PARTITION,
@@ -115,6 +119,11 @@ public:
     /** For MODIFY ORDER BY
      */
     ASTPtr order_by;
+
+    /** For MODIFY CLUSTER BY
+     */
+    ASTPtr cluster_by;
+
 
     /** For MODIFY SAMPLE BY
      */
@@ -193,7 +202,11 @@ public:
 
     bool detach = false;        /// true for DETACH PARTITION
 
+    bool attach_from_detached = false;  /// true for ATTACHE DETACHED PARTITION.
+
     bool part = false;          /// true for ATTACH PART, DROP DETACHED PART, REPAIR PART and MOVE
+
+    bool parts = false;         /// true for ATTACH PARTS from hdfs directory
 
     bool clear_column = false;  /// for CLEAR COLUMN (do not drop column from metadata)
 

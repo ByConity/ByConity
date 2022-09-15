@@ -360,6 +360,10 @@ public:
     inline bool isBitEngineMode() const { return bitengine_dictionary_manager != nullptr; }
     bool isBitEngineEncodeColumn(const String & name) const;
 
+    bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
+    UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
+
+
 protected:
     friend class IMergeTreeDataPart;
     friend class MergeTreeDataMergerMutator;

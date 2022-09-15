@@ -20,7 +20,7 @@ std::string vector_serialize(const std::vector<T> & data)
 }
 
 template <typename T>
-std::vector<T> vector_deserialize(std::string_view blob)
+std::vector<T> vectorDeserialize(std::string_view blob)
 {
     // TODO: optimize it to use better encoding
     // TODO: support string
@@ -38,7 +38,7 @@ std::vector<T> vector_deserialize(std::string_view blob)
 FIXED_TYPE_ITERATE(INITIALIZE)
 #undef INITIALIZE
 
-#define INITIALIZE(TYPE) template std::vector<TYPE> vector_deserialize<TYPE>(std::string_view blob);
+#define INITIALIZE(TYPE) template std::vector<TYPE> vectorDeserialize<TYPE>(std::string_view blob);
 FIXED_TYPE_ITERATE(INITIALIZE)
 #undef INITIALIZE
 }

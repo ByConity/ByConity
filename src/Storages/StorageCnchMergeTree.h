@@ -4,13 +4,12 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
-#include "IStorage.h"
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 
 namespace DB
 {
-    
+
 struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
@@ -94,13 +93,39 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
     void alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & table_lock_holder) override;
 
+    void checkAlterPartitionIsPossible(
+        const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
+    Pipe alterPartition(
+        const StorageMetadataPtr & metadata_snapshot,
+        const PartitionCommands & commands,
+        ContextPtr query_context) override;
+
     void truncate(
         const ASTPtr & /*query*/,
         const StorageMetadataPtr & /* metadata_snapshot */,
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
+    ServerDataPartsVector getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part);
+    ServerDataPartsVector getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_);
+
+    void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
+        IMergeTreeDataPartsVector* dropped_parts = nullptr);
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
+
+    struct PartitionDropInfo
+    {
+        Int64 max_block{0};
+        size_t rows_count{0}; // rows count in drop range.
+        size_t size{0}; // bytes size in drop range.
+        size_t parts_count{0}; // covered parts in drop range.
+        MergeTreePartition value;
+    };
+    using PartitionDropInfos = std::unordered_map<String, PartitionDropInfo>;
+    MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
+    MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
+
+    StorageCnchMergeTree & checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 protected:
@@ -132,8 +157,10 @@ private:
         const SelectQueryInfo & query_info,
         const Names & column_names_to_return) const;
 
+    void dropPartsImpl(ServerDataPartsVector& svr_parts_to_drop,
+        IMergeTreeDataPartsVector& parts_to_drop, bool detach, ContextPtr local_context);
 
-    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name);
+    void collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers = {});
 
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
@@ -143,6 +170,7 @@ private:
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
     String extractTableSuffix(const String & gen_table_name);
+    std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
 };
 

@@ -57,8 +57,8 @@ StorageCloudKafka::StorageCloudKafka
        ////check_staged_area_task(context_->getCheckStagedAreaSchedulePool().createTask(log->name(), [this] { checkStagedArea(); })),
        check_staged_area_reschedule_ms(CHECK_STAGED_AREA_RESCHEDULE_MIN_MS)
 {
-    if (server_client_address.host.empty() || server_client_address.rpc_port == 0)
-        throw Exception("Invalid server client " + server_client_address.host + ':' + toString(server_client_address.rpc_port)
+    if (server_client_address.getHost().empty() || server_client_address.rpc_port == 0)
+        throw Exception("Invalid server client " + server_client_address.getRPCAddress()
                         + " for kafka consumer " + getStorageID().getNameForLogs(), ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -479,7 +479,7 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
 
     consume_context->setSessionContext(consume_context);
 
-    auto server_client = consume_context->getCnchServerClient(server_client_address.host, server_client_address.rpc_port);
+    auto server_client = consume_context->getCnchServerClient(server_client_address);
     if (!server_client)
         throw Exception("Cannot get server client while copy data to server", ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
 
@@ -503,7 +503,7 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
         // Poco::Net::SocketAddress can't parse ipv6 host with [] for example [::1], so always pass by host_port string created by createHostPortString
         client_info.current_address =
             Poco::Net::SocketAddress(
-                createHostPortString(server_client_address.host, server_client_address.rpc_port)
+                server_client_address.getRPCAddress()
             );
 
         client_info.rpc_port = server_client_address.rpc_port;
@@ -699,7 +699,7 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
 
     if (!settings.schema.value.empty())
         result.emplace_back("format_schema", settings.schema.value);
-    
+
     if (!settings.format_schema_path.value.empty())
         result.emplace_back("format_schema_path", settings.format_schema_path.value);
 

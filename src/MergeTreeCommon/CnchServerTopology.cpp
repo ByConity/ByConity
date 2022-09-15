@@ -38,7 +38,7 @@ String CnchServerTopology::format() const
     {
         if (i>0)
             ss << ", ";
-        ss << servers[i].host;
+        ss << servers[i].getHost();
     }
     ss << "]}";
 

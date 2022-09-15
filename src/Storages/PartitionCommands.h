@@ -24,6 +24,7 @@ struct PartitionCommand
         UNKNOWN,
 
         ATTACH_PARTITION,
+        ATTACH_DETACHED_PARTITION,
         MOVE_PARTITION,
         MOVE_PARTITION_FROM,
         DROP_PARTITION,
@@ -37,6 +38,7 @@ struct PartitionCommand
         UNFREEZE_ALL_PARTITIONS,
         UNFREEZE_PARTITION,
         REPLACE_PARTITION,
+        REPLACE_PARTITION_WHERE,
         PREATTACH_PARTITION,
         BITENGINE_RECODE_PARTITION,
         BITENGINE_RECODE_PARTITION_WHERE,
@@ -51,8 +53,13 @@ struct PartitionCommand
     /// true for DETACH PARTITION.
     bool detach = false;
 
+    bool attach_from_detached = false;
+
     /// true for ATTACH PART and DROP DETACHED PART (and false for PARTITION)
     bool part = false;
+
+    /// true for ATTACH PARTS from hdfs directory
+    bool parts = false;
 
     /// true for DROP/DETACH PARTITION [WHERE]
     bool cascading = false;

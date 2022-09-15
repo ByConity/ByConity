@@ -24,4 +24,24 @@ private:
 // if don't care about result, use this
 void executeSubQuery(ContextPtr context, const String & sql);
 
+inline Block getOnlyRowFrom(SubqueryHelper & helper)
+{
+    Block block;
+    do
+    {
+        block = helper.getNextBlock();
+    } while (block && block.rows() == 0);
+
+    if (!block)
+    {
+        throw Exception("Not a Valid Block", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (block.rows() > 1)
+    {
+        throw Exception("Too much rows", ErrorCodes::LOGICAL_ERROR);
+    }
+    return block;
+}
+
 }

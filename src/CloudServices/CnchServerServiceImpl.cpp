@@ -5,10 +5,12 @@
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Protos/RPCHelpers.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <CloudServices/commitCnchParts.h>
 #include <WorkerTasks/ManipulationType.h>
@@ -624,20 +626,65 @@ void CnchServerServiceImpl::acquireLock(
     Protos::AcquireLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, gc = getContext(), logger = log] {
+        brpc::ClosureGuard done_guard(d);
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().lock(info, *gc);
+            resp->set_lock_status(to_underlying(info->status));
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::releaseLock(
     google::protobuf::RpcController * cntl,
     const Protos::ReleaseLockReq * request,
     Protos::ReleaseLockResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log] {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            LockInfoPtr info = createLockInfoFromModel(req->lock());
+            LockManager::instance().unlock(info);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
+
 void CnchServerServiceImpl::reportCnchLockHeartBeat(
     google::protobuf::RpcController * cntl,
     const Protos::ReportCnchLockHeartBeatReq * request,
     Protos::ReportCnchLockHeartBeatResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [req = request, resp = response, d = done, logger = log]
+    {
+        brpc::ClosureGuard done_guard(d);
+
+        try
+        {
+            auto tp = LockManager::Clock::now() + std::chrono::milliseconds(req->expire_time());
+            LockManager::instance().updateExpireTime(req->txn_id(), tp);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(logger, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(resp->mutable_exception());
+        }
+    });
 }
 void CnchServerServiceImpl::getServerStartTime(
     google::protobuf::RpcController * cntl,
@@ -745,11 +792,32 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartition(
 {
 }
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController * /*cntl*/,
     const Protos::SubmitQueryWorkerMetricsReq * request,
     Protos::SubmitQueryWorkerMetricsResp * response,
     google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, gc = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto query_worker_metric_element = createQueryWorkerMetricElement(request->element());
+                gc->insertQueryWorkerMetricsElement(query_worker_metric_element);
+
+                LOG_TRACE(log, "Submit query worker metrics [{}] from {}: {}", query_worker_metric_element.current_query_id,
+                    query_worker_metric_element.worker_id, query_worker_metric_element.query);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 
 #if defined(__clang__)

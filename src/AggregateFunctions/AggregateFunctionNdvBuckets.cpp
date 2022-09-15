@@ -2,14 +2,11 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
+#include <Statistics/Base64.h>
 #include <Statistics/StatisticsBaseImpl.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Common/FieldVisitors.h>
 #include <Common/FieldVisitorToString.h>
-#include <Statistics/Base64.h>
-
-// TODO: use datasketches
-
 
 namespace DB
 {
@@ -18,13 +15,17 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 }
 
+// This agg fucntion is to calculate Ndvs in Histogram
+// it takes BucketBuckets as a paratmeter
+// and build histogram using StatsNdvBuckets
 template <typename T>
 struct NdvBucketsData
 {
+    // UUID is in fact UInt128, use UInt128 for calculation
     using EmbeddedType = std::conditional_t<std::is_same_v<T, UUID>, UInt128, T>;
+    // Extend version: add block_ndvs
     Statistics::StatsNdvBucketsImpl<EmbeddedType> data_;
-    // TODO: use statistics object
-    // datasketches::kll_sketch<T> data_{};
+
     NdvBucketsData() = default;
 
     NdvBucketsData(std::string_view blob)
@@ -66,7 +67,8 @@ struct NdvBucketsData
 
 
 template <template <typename> class Function>
-AggregateFunctionPtr createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings*)
+AggregateFunctionPtr
+createAggregateFunctionNdvBuckets(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings*)
 {
     // assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -88,7 +90,7 @@ AggregateFunctionPtr createAggregateFunctionNdvBuckets(const std::string & name,
             return view;
         }
     }(blob_b64);
-    auto blob = Statistics::base64Decode(std::string(blob_b64));
+    auto blob = Statistics::base64Decode(blob_b64);
 
     AggregateFunctionPtr res;
     DataTypePtr data_type = argument_types[0];

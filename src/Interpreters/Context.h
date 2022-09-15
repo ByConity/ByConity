@@ -26,6 +26,7 @@
 // #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <DaemonManager/DaemonManagerClient_fwd.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -96,7 +97,14 @@ class AsynchronousMetricLog;
 class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
+class ProcessorsProfileLog;
 class ZooKeeperLog;
+class QueryMetricLog;
+class QueryWorkerMetricLog;
+struct QueryMetricElement;
+struct QueryWorkerMetricElement;
+using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
+using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct MergeTreeSettings;
 class StorageS3Settings;
 class IDatabase;
@@ -443,6 +451,11 @@ private:
     /// Transaction for each query, query level
     TransactionCnchPtr current_cnch_txn;
 
+    QueryWorkerMetricElements query_worker_metrics;
+
+    /// The extended profile info is from workers and mainly for INSERT operations
+    mutable ExtendedProfileInfo extended_profile_info;
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -460,6 +473,12 @@ public:
     void copyFrom(const ContextPtr & other);
 
     ~Context();
+
+    void setExtendedProfileInfo(const ExtendedProfileInfo & source) const;
+    ExtendedProfileInfo getExtendedProfileInfo() const;
+
+    void addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element);
+    QueryWorkerMetricElements getQueryWorkerMetricElements();
 
     String getPath() const;
     String getFlagsPath() const;
@@ -959,6 +978,7 @@ public:
     std::shared_ptr<OpenTelemetrySpanLog> getOpenTelemetrySpanLog() const;
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
+    std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
     /// Returns an object used to log operations with parts if it possible.
@@ -966,6 +986,12 @@ public:
     std::shared_ptr<PartLog> getPartLog(const String & part_database) const;
     std::shared_ptr<PartMergeLog> getPartMergeLog() const;
     std::shared_ptr<ServerPartLog> getServerPartLog() const;
+
+    void initializeCnchSystemLogs();
+    std::shared_ptr<QueryMetricLog> getQueryMetricsLog() const;
+    void insertQueryMetricsElement(const QueryMetricElement & element);  /// Add the metrics element to the background thread for flushing
+    std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
+    void insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element);  /// Add the metrics element to the background thread for flushing
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
@@ -1145,6 +1171,7 @@ public:
     ResourceManagerClientPtr getResourceManagerClient() const;
 
     UInt16 getRPCPort() const;
+    UInt16 getHTTPPort() const;
 
     //write ha non host update time
     UInt64 getNonHostUpdateTime(const UUID & uuid);
@@ -1153,6 +1180,7 @@ public:
     CnchServerClientPool & getCnchServerClientPool() const;
     CnchServerClientPtr getCnchServerClient(const std::string & host, uint16_t port) const;
     CnchServerClientPtr getCnchServerClient(const std::string & host_port) const;
+    CnchServerClientPtr getCnchServerClient(const HostWithPorts & host_with_ports) const;
     CnchServerClientPtr getCnchServerClient() const;
 
     void initCnchWorkerClientPools();
@@ -1165,6 +1193,7 @@ public:
     TransactionCnchPtr setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
     TransactionCnchPtr getCurrentTransaction() const;
     TxnTimestamp getCurrentTransactionID() const;
+    TxnTimestamp getCurrentCnchStartTime() const;
 
     void initCnchBGThreads();
     CnchBGThreadsMap * getCnchBGThreadsMap(CnchBGThreadType type) const;
@@ -1173,7 +1202,7 @@ public:
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
-    std::shared_ptr<Cluster> mockCnchServersCluster();
+    std::shared_ptr<Cluster> mockCnchServersCluster() const;
 
     /// Part allocation
     // Consistent hash algorithm for part allocation

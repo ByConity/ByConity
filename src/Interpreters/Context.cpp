@@ -72,6 +72,9 @@
 #include <Interpreters/InterserverIOHandler.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Interpreters/SystemLog.h>
+#include <Interpreters/CnchSystemLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
+#include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <IO/ReadBufferFromFile.h>
@@ -94,6 +97,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <DataStreams/BlockStreamProfileInfo.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/parseQuery.h>
@@ -368,6 +372,8 @@ struct ContextSharedPart
     String remote_format_schema_path;
     ActionLocksManagerPtr action_locks_manager;             /// Set of storages' action lockers
     std::unique_ptr<SystemLogs> system_logs;                /// Used to log queries and operations on parts
+    std::unique_ptr<CnchSystemLogs> cnch_system_logs;         /// Used to log queries, kafka etc. Stores data in CnchMergeTree table
+
     std::optional<StorageS3Settings> storage_s3_settings;   /// Settings of S3 storage
 
     RemoteHostFilter remote_host_filter; /// Allowed URL from config.xml
@@ -446,6 +452,8 @@ struct ContextSharedPart
 
         if (system_logs)
             system_logs->shutdown();
+
+        cnch_system_logs.reset();
 
         DatabaseCatalog::shutdown();
 
@@ -692,6 +700,29 @@ CnchWorkerResourcePtr Context::getCnchWorkerResource() const
 CnchWorkerResourcePtr Context::tryGetCnchWorkerResource() const
 {
     return worker_resource;
+}
+
+void Context::setExtendedProfileInfo(const ExtendedProfileInfo & source) const
+{
+    auto lock = getLock();
+    extended_profile_info = source;
+}
+
+ExtendedProfileInfo Context::getExtendedProfileInfo() const
+{
+    auto lock = getLock();
+    return extended_profile_info;
+}
+
+/// Should not be called in concurrent cases
+void Context::addQueryWorkerMetricElements(QueryWorkerMetricElementPtr query_worker_metric_element)
+{
+    query_worker_metrics.emplace_back(query_worker_metric_element);
+}
+
+QueryWorkerMetricElements Context::getQueryWorkerMetricElements()
+{
+    return query_worker_metrics;
 }
 
 String Context::resolveDatabase(const String & database_name) const
@@ -2379,21 +2410,21 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 
 HostWithPorts Context::getHostWithPorts() const
 {
-    // TODO(zuochuang.zema) MERGE dns
-    // bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
-    // bool has_worker_id = !!std::getenv("WORKER_ID");
-    // String id = (use_dns || !has_worker_id) ? DNSResolver::instance().getHostName() : String(std::getenv("WORKER_ID"));
+    bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
+    auto id_cstr = std::getenv("WORKER_ID");
+    auto ip_cstr = getHostIPFromEnv();
+    String id = (use_dns || nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
+    String host = (ip_cstr.empty()) ? DNSResolver::instance().getHostName() : String(ip_cstr);
 
-    // return HostWithPorts{
-    //     std::move(id),
-    //     DNSResolver::instance().getIPOrFQDNOrHostname(),
-    //     getRPCPort(),
-    //     getTCPPort(),
-    //     getHTTPPort(),
-    //     getExchangePort(),
-    //     getExchangeStatusPort(),
-    // };
-    return {};
+    return HostWithPorts{
+        std::move(host),
+        getRPCPort(),
+        getTCPPort(),
+        getHTTPPort(),
+        getExchangePort(),
+        getExchangeStatusPort(),
+        std::move(id)
+    };
 }
 
 UInt16 Context::getTCPPort() const
@@ -2600,6 +2631,59 @@ std::shared_ptr<ServerPartLog> Context::getServerPartLog() const
     return shared->system_logs->server_part_log;
 }
 
+void Context::initializeCnchSystemLogs()
+{
+    if (shared->server_type == ServerType::cnch_daemon_manager)
+        return;
+    auto lock = getLock();
+    shared->cnch_system_logs = std::make_unique<CnchSystemLogs>(getGlobalContext());
+}
+
+std::shared_ptr<QueryMetricLog> Context::getQueryMetricsLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return std::atomic_load_explicit(&shared->cnch_system_logs->query_metrics, std::memory_order_relaxed);
+}
+
+void Context::insertQueryMetricsElement(const QueryMetricElement & element)
+{
+    auto query_metrics_log = getQueryMetricsLog();
+    if (query_metrics_log)
+    {
+        query_metrics_log->add(element);
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get("Context"), "Query Metrics Log has not been initialized.");
+    }
+}
+
+std::shared_ptr<QueryWorkerMetricLog> Context::getQueryWorkerMetricsLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs || !shared->cnch_system_logs->query_worker_metrics)
+        return {};
+
+    return shared->cnch_system_logs->query_worker_metrics;
+}
+
+void Context::insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & element)
+{
+    auto query_worker_metrics_log = getQueryWorkerMetricsLog();
+    if (query_worker_metrics_log)
+    {
+        query_worker_metrics_log->add(element);
+    }
+    else
+    {
+        LOG_WARNING(&Poco::Logger::get("Context"), "Query Worker Metrics Log has not been initialized.");
+    }
+}
 
 std::shared_ptr<TraceLog> Context::getTraceLog() const
 {
@@ -2674,6 +2758,17 @@ std::shared_ptr<MutationLog> Context::getMutationLog() const
         return {};
 
     return shared->system_logs->mutation_log;
+}
+
+
+std::shared_ptr<ProcessorsProfileLog> Context::getProcessorsProfileLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->processors_profile_log;
 }
 
 
@@ -3755,6 +3850,22 @@ UInt16 Context::getRPCPort() const
     return getRootConfig().rpc_port;
 }
 
+UInt16 Context::getHTTPPort() const
+{
+    if(shared->server_type == ServerType::cnch_server || shared->server_type == ServerType::cnch_worker)
+    {
+        auto sd_client = this->getServiceDiscoveryClient();
+        if(sd_client->getName() == "consul")
+        {
+            const char * http_port = getenv("PORT2");
+            if(http_port != nullptr)
+                return parse<UInt16>(http_port);
+        }
+    }
+
+    return getRootConfig().http_port;
+}
+
 void Context::setServerType(const String & type_str)
 {
     if (type_str == "standalone")
@@ -3836,6 +3947,13 @@ CnchServerClientPtr Context::getCnchServerClient() const
     if (!shared->cnch_server_client_pool)
         throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
     return shared->cnch_server_client_pool->get();
+}
+
+CnchServerClientPtr Context::getCnchServerClient(const HostWithPorts & host_with_ports) const
+{
+    if (!shared->cnch_server_client_pool)
+        throw Exception("Cnch server client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
+    return shared->cnch_server_client_pool->get(host_with_ports);
 }
 
 void Context::initCnchWorkerClientPools()
@@ -4033,6 +4151,14 @@ TxnTimestamp Context::getCurrentTransactionID() const
     return txn_id;
 }
 
+TxnTimestamp Context::getCurrentCnchStartTime() const
+{
+    if (!current_cnch_txn)
+        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
+
+    return current_cnch_txn->getStartTime();
+}
+
 InterserverCredentialsPtr Context::getCnchInterserverCredentials()
 {
     /// FIXME: any special for cnch ?
@@ -4040,7 +4166,7 @@ InterserverCredentialsPtr Context::getCnchInterserverCredentials()
 }
 
 // In CNCH, form a virtual cluster which include all servers.
-std::shared_ptr<Cluster> Context::mockCnchServersCluster()
+std::shared_ptr<Cluster> Context::mockCnchServersCluster() const
 {
     // get CNCH servers by PSM
     String psm_name = this->getCnchServerClientPool().getServiceName();
@@ -4050,19 +4176,19 @@ std::shared_ptr<Cluster> Context::mockCnchServersCluster()
 
     std::vector<Cluster::Addresses> addresses;
 
-    auto credential_ptr = getCnchInterserverCredentials();
+    auto user_password = getCnchInterserverCredentials();
 
     // create new cluster from scratch
     for (auto & e : endpoints)
     {
-        Cluster::Address address(e.getTCPAddress(), credential_ptr->getUser(), credential_ptr->getPassword(), this->getTCPPort(), false);
+        Cluster::Address address(e.getTCPAddress(), user_password.first, user_password.second, this->getTCPPort(), false);
         // assume there are only one replica in each shard
         addresses.push_back({address});
     }
 
-    //Context query_context = context;
     // as CNCH server might be out-of-service for unknown reason, it is ok to skip it
-    const_cast<Settings&>(settings).skip_unavailable_shards = true;  //FIXME
+    //auto local_settings = context.getSettings();
+    //local_settings.skip_unavailable_shards = true;
     return std::make_shared<Cluster>(this->getSettings(), addresses, false);
 
 }

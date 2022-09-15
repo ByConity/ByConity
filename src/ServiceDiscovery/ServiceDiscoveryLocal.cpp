@@ -48,30 +48,30 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
             if (type == ComponentType::WORKER && !vw_name.empty() && ep.virtual_warehouse != vw_name)
                 continue;
 
-            res.emplace_back();
-            res.back().id = ep.hostname;
-            res.back().host = ep.host;
+            HostWithPorts host_with_ports{ep.host};
+            host_with_ports.id = ep.hostname;
             if (ep.ports.count("PORT0"))
-                res.back().tcp_port = parse<UInt16>(ep.ports["PORT0"]);
+                host_with_ports.tcp_port = parse<UInt16>(ep.ports["PORT0"]);
             if (ep.ports.count("PORT1"))
-                res.back().rpc_port = parse<UInt16>(ep.ports["PORT1"]);
+                host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
             if (ep.ports.count("PORT2"))
-                res.back().http_port = parse<UInt16>(ep.ports["PORT2"]);
+                host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);
             if (ep.ports.count("PORT5"))
-                res.back().exchange_port = parse<UInt16>(ep.ports["PORT5"]);
+                host_with_ports.exchange_port = parse<UInt16>(ep.ports["PORT5"]);
             if (ep.ports.count("PORT6"))
-                res.back().exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
+                host_with_ports.exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
+            res.push_back(std::move(host_with_ports));
         }
     }
     else if (type == ComponentType::TSO || type == ComponentType::DAEMON_MANAGER)
     {
         for (auto & ep : endpoints)
         {
-            res.emplace_back();
-            res.back().id = ep.hostname;
-            res.back().host = ep.host;
+            HostWithPorts host_with_ports{ep.host};
+            host_with_ports.id = ep.hostname;
             if (ep.ports.count("PORT0"))
-                res.back().rpc_port = parse<UInt16>(ep.ports["PORT0"]);
+                host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT0"]);
+            res.push_back(std::move(host_with_ports));
         }
     }
 
@@ -92,19 +92,20 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryLocal::lookupWorkerGroupsInVW(
             continue;
 
         auto & group = group_map[ep.worker_group];
-        group.emplace_back();
-        group.back().id = ep.hostname;
-        group.back().host = ep.host;
+        HostWithPorts host_with_ports{ep.host};
+        host_with_ports.id = ep.hostname;
         if (ep.ports.count("PORT0"))
-            group.back().tcp_port = parse<UInt16>(ep.ports["PORT0"]);
+            host_with_ports.tcp_port = parse<UInt16>(ep.ports["PORT0"]);
         if (ep.ports.count("PORT1"))
-            group.back().rpc_port = parse<UInt16>(ep.ports["PORT1"]);
+            host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
         if (ep.ports.count("PORT2"))
-            group.back().http_port = parse<UInt16>(ep.ports["PORT2"]);
+            host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);
         if (ep.ports.count("PORT5"))
-            group.back().exchange_port = parse<UInt16>(ep.ports["PORT5"]);
+            host_with_ports.exchange_port = parse<UInt16>(ep.ports["PORT5"]);
         if (ep.ports.count("PORT6"))
-            group.back().exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
+            host_with_ports.exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
+
+        group.push_back(host_with_ports);
     }
 
     return group_map;

@@ -357,7 +357,7 @@ DistributedBlockOutputStream::runWritingJob(DistributedBlockOutputStream::JobRep
                     job.connection_entry->setThrottler(throttler);
 
                 job.stream = std::make_shared<RemoteBlockOutputStream>(
-                    *job.connection_entry, timeouts, query_string, settings, context->getClientInfo());
+                    *job.connection_entry, timeouts, query_string, settings, context->getClientInfo(), context);
                 job.stream->writePrefix();
             }
 

@@ -1,6 +1,7 @@
 #include <Storages/KeyDescription.h>
 
 #include <Functions/IFunction.h>
+#include <Parsers/ASTClusterByElement.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
 #include <Interpreters/ExpressionActions.h>
@@ -72,6 +73,14 @@ void KeyDescription::recalculateWithNewAST(
     *this = getSortingKeyFromAST(new_ast, columns, context, additional_column);
 }
 
+void KeyDescription::recalculateClusterByKeyWithNewAST(
+    const ASTPtr & new_ast,
+    const ColumnsDescription & columns,
+    ContextPtr context)
+{
+    *this = getClusterByKeyFromAST(new_ast, columns, context);
+}
+
 void KeyDescription::recalculateWithNewColumns(
     const ColumnsDescription & new_columns,
     ContextPtr context)
@@ -85,6 +94,16 @@ KeyDescription KeyDescription::getKeyFromAST(
     ContextPtr context)
 {
     return getSortingKeyFromAST(definition_ast, columns, context, {});
+}
+
+KeyDescription KeyDescription::getClusterByKeyFromAST(
+    const ASTPtr & definition_ast,
+    const ColumnsDescription & columns,
+    ContextPtr context)
+{
+    auto result = getSortingKeyFromAST(definition_ast->as<ASTClusterByElement>()->getColumns(), columns, context, {});
+    result.definition_ast = definition_ast;
+    return result;
 }
 
 bool KeyDescription::moduloToModuloLegacyRecursive(ASTPtr node_expr)

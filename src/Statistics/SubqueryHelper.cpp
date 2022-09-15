@@ -17,6 +17,7 @@ static ContextMutablePtr createQueryContext(ContextPtr context)
     settings.enable_optimizer = false;
     settings.dialect_type = DialectType::CLICKHOUSE;
     settings.database_atomic_wait_for_drop_and_detach_synchronously = true;
+    settings.enable_deterministic_sample_by_range = true;
     query_context->setSettings(settings);
     return query_context;
 }

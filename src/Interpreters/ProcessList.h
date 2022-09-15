@@ -51,13 +51,18 @@ struct QueryStatusInfo
 {
     String query;
     double elapsed_seconds;
+    size_t disk_cache_bytes;
     size_t read_rows;
     size_t read_bytes;
+    size_t read_duration;
+    size_t cpu_time;
     size_t total_rows;
     size_t written_rows;
     size_t written_bytes;
+    size_t written_duration;
     Int64 memory_usage;
     Int64 peak_memory_usage;
+    String operator_level;
     ClientInfo client_info;
     bool is_cancelled;
 
@@ -134,6 +139,8 @@ protected:
 
     String query_rewrite_by_view;
 
+    String pipeline_info;
+
 public:
 
     QueryStatus(
@@ -206,6 +213,9 @@ public:
 
     /// Removes a pipeline to the QueryStatus
     void removePipelineExecutor(PipelineExecutor * e);
+
+    /// Dump pipeline info to `opeator_level` of QueryStatusInfo
+    void dumpPipelineInfo(PipelineExecutor * e);
 
     bool checkCpuTimeLimit(String node_name);
     /// Checks the query time limits (cancelled or timeout)
