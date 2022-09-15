@@ -53,7 +53,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
     auto create_query = query->as<ASTCreateQuery &>();
     if (create_query.isView())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views");
     if (!startsWith(create_query.storage->engine->name, "Cnch"))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
@@ -303,8 +303,7 @@ void DatabaseCnch::renameTable(
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
     }
 
-    for (const auto & lock : locks)
-        lock->lock();
+    std::lock(*locks[0], *locks[1]);
 
     RenameActionParams params;
     params.table_params = RenameActionParams::RenameTableParams{database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};

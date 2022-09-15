@@ -98,8 +98,8 @@ public:
     }
 
     // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
-    // void lock(LockInfoPtr lockInfo);
-    // bool tryLock(LockInfoPtr lockInfo);
+    void lock(LockInfoPtr lockInfo);
+    bool tryLock(LockInfoPtr lockInfo);
 
     // unlock should be invoked after txn commit
     void unlock();

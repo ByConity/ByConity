@@ -17,6 +17,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 InterpreterRenameQuery::InterpreterRenameQuery(const ASTPtr & query_ptr_, ContextPtr context_)
@@ -120,8 +121,19 @@ BlockIO InterpreterRenameQuery::executeToDatabase(const ASTRenameQuery &, const 
     const auto & old_name = descriptions.front().from_database_name;
     const auto & new_name = descriptions.back().to_database_name;
     auto & catalog = DatabaseCatalog::instance();
+    IntentLockPtr old_db_lock;
+    IntentLockPtr new_db_lock;
 
     auto db = catalog.getDatabase(old_name);
+    if (db->getEngineName().starts_with("Cnch"))
+    {
+        auto txn = getContext()->getCurrentTransaction();
+        if (!txn)
+            throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+        old_db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, old_name);
+        new_db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, new_name);
+        std::lock(*old_db_lock, *new_db_lock);
+    }
     catalog.assertDatabaseDoesntExist(new_name);
     db->renameDatabase(getContext(), new_name);
     return {};

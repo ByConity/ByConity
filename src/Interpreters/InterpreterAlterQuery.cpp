@@ -112,23 +112,6 @@ BlockIO InterpreterAlterQuery::execute()
             throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (database->getEngineName() == "Cnch")
-    {
-        if (!partition_commands.empty())
-                    if (std::any_of(partition_commands.begin(), partition_commands.end(), [](auto & command) {
-                    return command.type != PartitionCommand::ATTACH_PARTITION
-                        && command.type != PartitionCommand::ATTACH_DETACHED_PARTITION
-                        && command.type != PartitionCommand::DROP_PARTITION
-                        && command.type != PartitionCommand::DROP_PARTITION_WHERE
-                        && command.type != PartitionCommand::INGEST_PARTITION
-                        && command.type != PartitionCommand::PREATTACH_PARTITION;
-                         }))
-            {
-                cnch_table_lock->lock();
-            }
-            cnch_table_lock->lock();
-    }
-
     if (typeid_cast<DatabaseReplicated *>(database.get()))
     {
         int command_types_count = !mutation_commands.empty() + !partition_commands.empty() + !live_view_commands.empty() + !alter_commands.empty();
@@ -140,6 +123,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!mutation_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Mutation is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());
@@ -148,6 +133,15 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!partition_commands.empty())
     {
+        if (cnch_table_lock && !partition_commands.empty()
+            && std::any_of(partition_commands.begin(), partition_commands.end(), [](auto & command) {
+                   return command.type != PartitionCommand::ATTACH_PARTITION && command.type != PartitionCommand::ATTACH_DETACHED_PARTITION
+                       && command.type != PartitionCommand::DROP_PARTITION && command.type != PartitionCommand::DROP_PARTITION_WHERE
+                       && command.type != PartitionCommand::INGEST_PARTITION && command.type != PartitionCommand::PREATTACH_PARTITION;
+               }))
+        {
+            cnch_table_lock->lock();
+        }
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())
@@ -157,6 +151,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!live_view_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Live view is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         live_view_commands.validate(*table);
         for (const LiveViewCommand & command : live_view_commands)
         {
@@ -173,6 +169,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!alter_commands.empty())
     {
+        if (!cnch_table_lock->isLocked())
+            cnch_table_lock->lock();
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
         alter_commands.validate(table->getStorageID(), metadata, getContext());
         alter_commands.prepare(metadata);

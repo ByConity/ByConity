@@ -18,7 +18,7 @@ class Context;
 class IntentLock;
 using IntentLockPtr = std::unique_ptr<IntentLock>;
 
-/// Provide kv intent lock for a single object
+/// Provide kv intent lock for a single object, sastify Lockable concept https://en.cppreference.com/w/cpp/named_req/Lockable
 class IntentLock : boost::noncopyable
 {
 public:
@@ -45,10 +45,11 @@ public:
             DB::tryLogCurrentException(__PRETTY_FUNCTION__);
         }
     }
-
     bool tryLock();
+    bool isLocked() const { return locked; }
     void lock();
     void unlock();
+    bool try_lock() { return tryLock(); } /// To provide std::lock compatible interface
 
 private:
     static constexpr size_t lock_retry = 3;
