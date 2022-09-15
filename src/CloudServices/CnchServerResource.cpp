@@ -125,7 +125,6 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     auto send_lock = getLockForSend(worker.getRPCAddress());
 
     std::vector<AssignedResource> resource_to_send;
-    auto worker_client = worker_group->getWorkerClient(worker);
     {
         auto lock = getLock();
         allocateResource(context, lock);
@@ -139,6 +138,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     }
 
     ExceptionHandler handler;
+    auto worker_client = worker_group->getWorkerClient(worker);
     auto call_ids = processSend(context, worker_client, resource_to_send, handler);
 
     for (auto & call_id : call_ids)
