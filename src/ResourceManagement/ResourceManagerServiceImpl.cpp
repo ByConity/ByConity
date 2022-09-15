@@ -32,15 +32,20 @@ ResourceManagerServiceImpl::ResourceManagerServiceImpl(ResourceManagerController
 template <typename T>
 bool ResourceManagerServiceImpl::checkForLeader(T & response)
 {
-    auto & election_controller = rm_controller.getElectionController();
-    auto election_res = election_controller.getLeaderElectionResult();
-    auto is_leader = election_res.is_leader;
-    response->set_is_leader(is_leader);
-    if (!is_leader)
-    {
-        response->set_leader_host_port(election_res.leader_host_port);
-    }
-    return is_leader;
+    // FIXME: (zuochuang.zema) RM-LeaderElection
+
+    // auto & election_controller = rm_controller.getElectionController();
+    // auto election_res = election_controller.getLeaderElectionResult();
+    // auto is_leader = election_res.is_leader;
+    // response->set_is_leader(is_leader);
+    // if (!is_leader)
+    // {
+    //     response->set_leader_host_port(election_res.leader_host_port);
+    // }
+    // return is_leader;
+
+    response->set_is_leader(true);
+    return true;
 }
 
 void ResourceManagerServiceImpl::syncResourceUsage(
