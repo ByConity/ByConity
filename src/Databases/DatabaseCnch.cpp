@@ -73,8 +73,6 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-    auto table_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, table_name);
-    table_lock->lock();
 
     StoragePtr storage = local_context->getCnchCatalog()->getTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
     if (!storage)
