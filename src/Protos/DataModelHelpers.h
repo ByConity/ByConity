@@ -7,7 +7,7 @@
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 // #include <Transaction/ICnchTransaction.h>
-// #include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Transaction/LockRequest.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
@@ -243,7 +243,7 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
     const ServerDataPartsVector & parts,
     const std::optional<std::string> & relative_path = std::nullopt);
 
-// void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
-// HiveDataPartsCNCHVector createCnchHiveDataParts(const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
+void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
+HiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
 
 }

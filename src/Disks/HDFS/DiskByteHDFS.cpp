@@ -70,10 +70,11 @@ private:
     std::vector<String> file_names;
 };
 
+/// TODO: use HDFSCommon replace HDFSFileSystem
 DiskByteHDFS::DiskByteHDFS(const String& disk_name_, const String& hdfs_base_path_,
     const HDFSConnectionParams& hdfs_params_):
         disk_name(disk_name_), disk_path(hdfs_base_path_), hdfs_params(hdfs_params_),
-        hdfs_fs(hdfs_params_, 0) {}
+        hdfs_fs(hdfs_params_, 10000, 100, 0) {}
 
 const String& DiskByteHDFS::getName() const
 {

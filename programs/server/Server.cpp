@@ -277,6 +277,7 @@ namespace ErrorCodes
     extern const int NETWORK_ERROR;
     extern const int CORRUPTED_DATA;
     extern const int UNKNOWN_POLICY;
+    extern const int PATH_ACCESS_DENIED;
 }
 
 
@@ -1075,21 +1076,37 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// TODO: @rmq
     /// set the value of has_hdfs_disk as cnch-dev.
     bool has_hdfs_disk = false;
-    if( has_hdfs_disk )
     {
-        const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
-        registerDefaultHdfsFileSystem(hdfs_params, hdfs_io_error_num_to_reconnect);
+        /// Create directories for 'path' and for default database, if not exist.
+        for (auto& [name, disk] : global_context->getDisksMap())
+        {
+            if (disk->getType() == DiskType::Type::Local)
+            {
+                Poco::File disk_path(disk->getPath());
+                if (!disk_path.canRead() || !disk_path.canWrite())
+                    throw Exception("There is no RW access to disk " + name + " (" + disk->getPath() + ")", ErrorCodes::PATH_ACCESS_DENIED);
+                disk->createDirectories("disk_cache/");
+                disk->createDirectories("data/" + default_database);
+            }
+            else if (disk->getType() == DiskType::Type::ByteHDFS)
+            {
+                has_hdfs_disk = true;
+            }
+        }
+        // Only create directory for metadata in default disk
+        /// TODO: need siyuan check. @wangsiyuan
+        // global_context->getStoragePolicy("default")->getVolumeByName(
+        //     VolumeType::typeToString(VolumeType::LOCAL_VOLUME))
+        //     ->getDefaultDisk()->createDirectories("metadata/" + default_database);
     }
 
-    /// TODO: @pengxindong @rmq
-    /// register default hdfs file system
-    // if (has_hdfs_path)
-    // {
-    //     const int hdfs_max_fd_num = config().getint("hdfs_max_fd_num", 100000);
-    //     const int hdfs_skip_fd_num = config().getint("hdfs_skip_fd_num", 100);
-    //     const int hdfs_io_error_num_to_reconnect = config().getint("hdfs_io_error_num_to_reconnect", 10);
-    //     registerdefaulthdfsfilesystem(hdfs_user, hdfs_nnproxy, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
-    // }
+    if( has_hdfs_disk )
+    {
+        const int hdfs_max_fd_num = config().getInt("hdfs_max_fd_num", 100000);
+        const int hdfs_skip_fd_num = config().getInt("hdfs_skip_fd_num", 100);
+        const int hdfs_io_error_num_to_reconnect = config().getInt("hdfs_io_error_num_to_reconnect", 10);
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
 
 #endif
 

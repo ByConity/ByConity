@@ -25,6 +25,9 @@
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
+#include "common/logger_useful.h"
+#include <DataTypes/NestedUtils.h>
+#include <Common/escapeForFileName.h>
 
 
 namespace DB
@@ -563,7 +566,11 @@ namespace DB
             };
     }
 
-    ArrowColumnToCHColumn::ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_) : header(header_), format_name(format_name_)
+    ArrowColumnToCHColumn::ArrowColumnToCHColumn(
+        const Block & header_,
+        std::shared_ptr<arrow::Schema> schema_,
+        const std::string & format_name_,
+        const std::map<String, String> partition_kv_) : header(header_), format_name(format_name_), partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -587,19 +594,54 @@ namespace DB
         NameToColumnPtr name_to_column_ptr;
         for (const auto& column_name : table->ColumnNames())
         {
+            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), " CnchHiveThreadSelectBlockInputProcessor arrow table name = {}", column_name);
             std::shared_ptr<arrow::ChunkedArray> arrow_column = table->GetColumnByName(column_name);
             name_to_column_ptr[column_name] = arrow_column;
         }
 
+        LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor header col size = {}", header.columns());
         for (size_t column_i = 0, columns = header.columns(); column_i < columns; ++column_i)
         {
             const ColumnWithTypeAndName & header_column = header.getByPosition(column_i);
 
-            if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
-                // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
-                throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
-                                ErrorCodes::THERE_IS_NO_COLUMN};
+            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor col name = {}", header_column.name);
 
+            String column_name = header_column.name;
+            String nested_table_name = Nested::extractTableName(header_column.name);
+            if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
+            {
+                // // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
+                // throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
+                //                 ErrorCodes::THERE_IS_NO_COLUMN};
+
+                auto partition_column = partition_kv.find(column_name);
+                if (partition_column != partition_kv.end())
+                {
+                    auto column_type = header_column.type;
+                    ColumnWithTypeAndName column;
+                    column.name = column_name;
+                    column.type = column_type;
+                    Field value = partition_column->second;
+                    if (!isString(column_type))
+                        value = column_type->stringToVisitorField(partition_column->second);
+                    MutableColumnPtr col = column.type->createColumn();
+                    for(int i = 0; i < table->num_rows(); ++i)
+                        col->insert(value);
+                    column.column = std::move(col);
+                    columns_list.push_back(std::move(column.column));
+                    continue;
+                }
+                else if (name_to_column_ptr.contains(nested_table_name))
+                {
+                    column_name = nested_table_name;
+                }
+                else
+                {
+                    column_name = escapeForFileName(column_name);
+                    if (name_to_column_ptr.find(column_name) == name_to_column_ptr.end())
+                        continue;
+                }
+            }
             std::shared_ptr<arrow::ChunkedArray> arrow_column = name_to_column_ptr[header_column.name];
 
             DataTypePtr & internal_type = name_to_internal_type[header_column.name];
@@ -614,6 +656,9 @@ namespace DB
             column.column = castColumn(column, header_column.type);
             column.type = header_column.type;
             num_rows = column.column->size();
+
+            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor col rows = {}", num_rows);
+
             columns_list.push_back(std::move(column.column));
         }
 

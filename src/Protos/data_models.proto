@@ -125,6 +125,8 @@ message CnchHivePartModel
 {
     required CnchHivePartInfo part_info = 1;
     required string relative_path = 2;
+    required int64 skip_lists = 3;
+    repeated int64 skip_numbers = 4;
 }
 
 enum TransactionStatus
@@ -517,14 +519,14 @@ message ResourceRequirement
     /// This ensure RM not assign too many tasks to workers with low workload when handling high concurrent requests.
     optional uint32 task_cold_startup_sec = 8;
 
-    /// Block list. 
+    /// Block list.
     /// Worker group id for picking a worker group.
     /// Worker id for picking workers.
     repeated string blocklist = 9;
 
     /// Forbid returning random result when there is not enough available candidates.
     optional bool forbid_random_result = 10;
-    
+
     /// No repeated workers in the response.
     optional bool no_repeat = 11;
 }

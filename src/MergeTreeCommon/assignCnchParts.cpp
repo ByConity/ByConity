@@ -2,6 +2,8 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <common/logger_useful.h>
+#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 #include <sstream>
 
@@ -137,6 +139,21 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
              "Finish allocate part with bounded ring based hash policy, # of overloaded parts {}.", exceed_parts.size());
     return ret;
 }
+
+
+std::unordered_map<String, HiveDataPartsCNCHVector> assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts)
+{
+    auto workers = worker_group->getWorkerIDVec();
+    auto num_workers = workers.size();
+    std::unordered_map<String, HiveDataPartsCNCHVector> ret;
+    for (size_t i = 0 ; i < parts.size(); i++)
+    {
+        auto index = i % num_workers;
+        ret[workers[index]].emplace_back(parts[i]);
+    }
+    return ret;
+}
+
 
 ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts)
 {

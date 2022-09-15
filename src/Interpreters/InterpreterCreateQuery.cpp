@@ -731,6 +731,10 @@ void InterpreterCreateQuery::setEngine(ASTCreateQuery & create) const
                 "Temporary tables can only be created with ENGINE = Memory, not " + create.storage->engine->name,
                 ErrorCodes::INCORRECT_QUERY);
 
+        /// CnchHive only when create table need to check hive schema.
+        if(create.storage->engine->name == "CnchHive")
+            create.create = true;
+
         return;
     }
 

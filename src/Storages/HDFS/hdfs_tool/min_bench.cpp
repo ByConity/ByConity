@@ -579,7 +579,7 @@ int main(int argc, char** argv) {
         String nnproxy = options["nnproxy"].as<String>();
         String path = options["path"].as<String>();
         HDFSConnectionParams params(HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy);
-        registerDefaultHdfsFileSystem(params, 1);
+        registerDefaultHdfsFileSystem(params, 100000, 100, 1);
 
         int file_num = options["file_num"].as<int>();
         int read_num = options["read_num"].as<int>();
@@ -608,5 +608,3 @@ int main(int argc, char** argv) {
 
     return 0;
 }
-
-
