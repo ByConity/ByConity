@@ -478,7 +478,6 @@ int TSOServer::main(const std::vector<std::string> &)
     }
 
     bool enable_leader_election = global_context->hasZooKeeper();  /// TODO: check there is only one tso-server instance
-    LOG_DEBUG(&Poco::Logger::get("TEST"), "enable_leader_election: {}", enable_leader_election);
     if (enable_leader_election)
     {
         enterLeaderElection();
