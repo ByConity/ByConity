@@ -312,18 +312,19 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
     const auto & database_name = query.database;
     auto ddl_guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
     IntentLockPtr db_lock;
-    if (database->getEngineName().starts_with("Cnch"))
-    {
-        auto txn = getContext()->getCurrentTransaction();
-        if (!txn)
-            throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-        db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database_name);
-        db_lock->lock();
-    }
 
     database = tryGetDatabase(database_name, query.if_exists);
+
     if (database)
     {
+        if (database->getEngineName().starts_with("Cnch"))
+        {
+            auto txn = getContext()->getCurrentTransaction();
+            if (!txn)
+                throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+            db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database_name);
+            db_lock->lock();
+        }
         if (query.kind == ASTDropQuery::Kind::Truncate)
         {
             throw Exception("Unable to truncate database", ErrorCodes::SYNTAX_ERROR);
