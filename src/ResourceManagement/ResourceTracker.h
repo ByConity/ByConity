@@ -28,6 +28,7 @@ public:
     std::pair<bool, WorkerNodePtr> registerNode(const WorkerNodeResourceData & data);
     bool updateNode(const WorkerNodeResourceData & data);
     void removeNode(const String & worker_id);
+    void clearWorkers();
 
     std::unordered_map<std::string, WorkerNodePtr> getAllWorkers();
 

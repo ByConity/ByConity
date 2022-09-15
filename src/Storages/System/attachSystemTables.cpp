@@ -97,6 +97,9 @@
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
 #include <Storages/System/StorageSystemPersistentBGJobStatus.h>
+#include <Storages/System/StorageSystemWorkers.h>
+#include <Storages/System/StorageSystemWorkerGroups.h>
+#include <Storages/System/StorageSystemVirtualWarehouses.h>
 
 namespace DB
 {
@@ -202,6 +205,9 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
     attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");
+    attach<StorageSystemWorkers>(system_database, "workers");
+    attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
+    attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

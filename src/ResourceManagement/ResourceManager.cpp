@@ -19,6 +19,14 @@
 
 #include <ResourceManagement/CommonData.h>
 
+namespace brpc
+{
+namespace policy
+{
+    DECLARE_string(consul_agent_addr);
+}
+}
+
 namespace DB
 {
 
@@ -73,19 +81,23 @@ int ResourceManager::main(const std::vector<std::string> &)
 {
     namespace RM = DB::ResourceManagement;
 
-    Poco::Logger * log = &logger();
 
     registerServiceDiscovery();
+    const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
+    const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
+    if (consul_http_host != nullptr && consul_http_port != nullptr)
+        brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
 
+    Poco::Logger * log = &logger();
     LOG_INFO(log, "Resource Manager is starting up...");
 
-
-    auto global_context = Context::createGlobal(Context::createShared().get());
+    auto shared_context = Context::createShared();
+    global_context = Context::createGlobal(shared_context.get());
     global_context->makeGlobalContext();
+    global_context->setServerType(config().getString("cnch_type", "resource_manager"));
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->initRootConfig(config());
 
-    global_context->setServerType(config().getString("cnch_type", "resource_manager"));
 
     global_context->initServiceDiscoveryClient();
 
@@ -99,6 +111,9 @@ int ResourceManager::main(const std::vector<std::string> &)
     auto rm_controller = std::make_shared<RM::ResourceManagerController>(global_context);
 
     rm_controller->setConfig(loaded_config.configuration);
+
+    // FIXME: (zuochuang.zema) RM-LeaderElection
+    rm_controller->initialize();
 
     SCOPE_EXIT({
         rm_controller.reset();

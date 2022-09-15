@@ -2,7 +2,7 @@
 
 #include <Catalog/Catalog.h>
 #include <ResourceManagement/CommonData.h>
-#include <ResourceManagement/ResourceManagerClientPool.h>
+#include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Common/thread_local_rng.h>
 
@@ -62,7 +62,7 @@ bool VirtualWarehousePool::tryGetVWFromRM(const String & vw_name, VirtualWarehou
     auto rm_client = getContext()->getResourceManagerClient();
     if (!rm_client)
     {
-        LOG_TRACE(log, "ResourceManagerClientPool is not initialized");
+        LOG_TRACE(log, "ResourceManagerClient is not initialized");
         return false;
     }
 
