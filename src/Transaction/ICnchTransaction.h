@@ -8,8 +8,8 @@
 #include <Transaction/Actions/IAction.h>
 #include <bthread/mutex.h>
 #include <cppkafka/cppkafka.h>
-// #include <Transaction/CnchLock.h>
-// #include <Transaction/IntentLock.h>
+#include <Transaction/CnchLock.h>
+#include <Transaction/IntentLock.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/InsertionLabel.h>
@@ -93,8 +93,13 @@ public:
     {
         return std::make_shared<TAction>(getContext(), txn_record.txnID(), std::forward<Args>(args)...);
     }
+    template <typename... Args>
+    IntentLockPtr createIntentLock(const String & lock_prefix, Args &&... args) const
+    {
+        String intent = fmt::format("{}", fmt::join(Strings{std::forward<Args>(args)...}, "-"));
+        return std::make_unique<IntentLock>(global_context, getTransactionRecord(), lock_prefix, Strings{intent});
+    }
 
-    // IntentLockPtr createIntentLock(const LockEntity & entity, const Strings & intent_names = {});
     // void lock(LockInfoPtr lockInfo);
     // bool tryLock(LockInfoPtr lockInfo);
 

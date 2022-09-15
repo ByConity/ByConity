@@ -15,7 +15,10 @@
 namespace DB
 {
 class Context;
+class IntentLock;
+using IntentLockPtr = std::unique_ptr<IntentLock>;
 
+/// Provide kv intent lock for a single object
 class IntentLock : boost::noncopyable
 {
 public:
@@ -65,8 +68,5 @@ private:
     std::optional<TransactionRecord> tryGetTransactionRecord(const TxnTimestamp & txnID);
     std::vector<WriteIntent> createWriteIntents();
 };
-
-using IntentLockPtr = std::unique_ptr<IntentLock>;
-using IntentLockPtrs = std::vector<IntentLockPtr>;
 
 }

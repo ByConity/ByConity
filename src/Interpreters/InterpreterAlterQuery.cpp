@@ -66,6 +66,7 @@ BlockIO InterpreterAlterQuery::execute()
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
 
     auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+    IntentLockPtr cnch_table_lock;
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
     if (database->getEngineName() == "Cnch")
@@ -76,7 +77,7 @@ BlockIO InterpreterAlterQuery::execute()
             throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
         LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
-        //cnch_table_lock = cnch_txn->createIntentLock(table->getStorageID());
+        cnch_table_lock = cnch_txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, table->getStorageID().database_name, table->getStorageID().table_name);
     }
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
@@ -111,13 +112,22 @@ BlockIO InterpreterAlterQuery::execute()
             throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
     }
 
-#if 0
     if (database->getEngineName() == "Cnch")
     {
         if (!partition_commands.empty())
+                    if (std::any_of(partition_commands.begin(), partition_commands.end(), [](auto & command) {
+                    return command.type != PartitionCommand::ATTACH_PARTITION
+                        && command.type != PartitionCommand::ATTACH_DETACHED_PARTITION
+                        && command.type != PartitionCommand::DROP_PARTITION
+                        && command.type != PartitionCommand::DROP_PARTITION_WHERE
+                        && command.type != PartitionCommand::INGEST_PARTITION
+                        && command.type != PartitionCommand::PREATTACH_PARTITION;
+                         }))
+            {
+                cnch_table_lock->lock();
+            }
             cnch_table_lock->lock();
     }
-#endif
 
     if (typeid_cast<DatabaseReplicated *>(database.get()))
     {

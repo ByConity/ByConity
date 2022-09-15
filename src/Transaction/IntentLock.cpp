@@ -213,24 +213,7 @@ void IntentLock::lockImpl()
 {
     Stopwatch watch;
     SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::IntentLockElapsedMilliseconds, watch.elapsedMilliseconds());});
-    // auto & coordinator = context.getCnchTransactionCoordinator();
-    // auto & tsCacheManager = coordinator.getTsCacheManager();
-
-    // auto table_guard = tsCacheManager.getTimestampCacheTableGuard(lock_entity.uuid);
-    // auto & tsCache = tsCacheManager.getTimestampCacheUnlocked(lock_entity.uuid);
-
-    // if (auto last_updated_ts = tsCache->lookup(intent_names); last_updated_ts > txn_record.txnID())
-    // {
-    //     ProfileEvents::increment(ProfileEvents::TsCacheCheckFailed);
-    //     throw Exception(
-    //         "TsCache check failed. Intents has been updated by a later transaction: " + last_updated_ts.toString()
-    //             + ". Current txn_id: " + txn_record.txnID().toString(),
-    //         ErrorCodes::CNCH_TRANSACTION_TSCACHE_CHECK_FAILED);
-    // }
-
-    // ProfileEvents::increment(ProfileEvents::TsCacheCheckSuccess);
     writeIntents();
-
 }
 
 void IntentLock::unlock()
