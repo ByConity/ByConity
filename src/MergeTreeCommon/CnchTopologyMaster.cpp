@@ -24,7 +24,14 @@ CnchTopologyMaster::CnchTopologyMaster(ContextPtr context_)
 
 CnchTopologyMaster::~CnchTopologyMaster()
 {
-    shutDown();
+    try
+    {
+        shutDown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 void CnchTopologyMaster::fetchTopologies()
@@ -170,15 +177,7 @@ HostWithPorts CnchTopologyMaster::getTargetServer(const String & table_uuid, con
 
 void CnchTopologyMaster::shutDown()
 {
-    try
-    {
-        if (topology_fetcher)
-            topology_fetcher->deactivate();
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "Exception while shutting down");
-    }
+    topology_fetcher->deactivate();
 }
 
 }

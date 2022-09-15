@@ -3741,17 +3741,16 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
     if (!shared->tso_client_pool)
         throw Exception("Cnch tso client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
 
+    /// There should be no zookeeper
+    if (!hasZooKeeper())
+        return shared->tso_client_pool->get();
+
     auto host_port = getTSOLeaderHostPort();
 
     if (!host_port.empty())
-    {
-        return shared->tso_client_pool->get(host_port);
-    }
-    else
-    {
         updateTSOLeaderHostPort();
-        return shared->tso_client_pool->get(getTSOLeaderHostPort());
-    }
+
+    return shared->tso_client_pool->get(host_port);
 }
 
 String Context::getTSOLeaderHostPort() const
@@ -3770,7 +3769,7 @@ void Context::updateTSOLeaderHostPort() const
 
     if (!current_zookeeper->exists(tso_election_path))
     {
-        /// leader election maybe disabled, if there only one tso-server.
+        /// leader election maybe disabled, there should be one tso-server
         std::lock_guard lock(shared->tso_mutex);
         shared->tso_leader_host_port = "";
         return;
@@ -3811,7 +3810,9 @@ UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
     }
     catch (...)
     {
-        tryLogCurrentException(pretty_func_name.c_str(), "Unable to reach TSO during call to tryGetTimestamp");
+        tryLogCurrentException(
+            pretty_func_name.c_str(),
+            fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", getTSOLeaderHostPort()));
         return TxnTimestamp::fallbackTS();
     }
 }
