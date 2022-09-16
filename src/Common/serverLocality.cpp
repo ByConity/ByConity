@@ -34,8 +34,7 @@ bool isLocalServer(const std::string & target, const std::string & port)
     }
     catch (...)
     {
-        LOG_ERROR(&Poco::Logger::get(__PRETTY_FUNCTION__), "Parse isLocalServer failed for {}" , target);
+        DB::tryLogCurrentException(__PRETTY_FUNCTION__, fmt::format("Parse isLocalServer failed for {}" , target));
     }
     return false;
 }
-

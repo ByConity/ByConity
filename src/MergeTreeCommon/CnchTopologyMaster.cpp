@@ -152,7 +152,6 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
             throw Exception("No available topology for current commit time : " + std::to_string(commit_time_ms) + ". Available topology : " + dumpTopologies(current_topology), ErrorCodes::CNCH_NO_AVAILABLE_TOPOLOGY);
         else
             LOG_INFO(log, "No available topology for current commit time : {}. Available topology : {}", std::to_string(commit_time_ms), dumpTopologies(current_topology));
-
     }
 
     return target_server;

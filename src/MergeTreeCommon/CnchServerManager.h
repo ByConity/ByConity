@@ -37,6 +37,7 @@ public:
     void partialShutdown();
 
 private:
+    void onLeader();
     void enterLeaderElection();
     void checkLeaderInfo(const UInt64 & check_interval);
 

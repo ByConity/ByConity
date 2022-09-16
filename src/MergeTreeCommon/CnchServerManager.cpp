@@ -18,11 +18,12 @@ CnchServerManager::CnchServerManager(ContextPtr context_)
     , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
     , current_zookeeper(getContext()->hasZooKeeper() ? getContext()->getZooKeeper(): nullptr)
 {
-    /// TODO:
     if (!getContext()->hasZooKeeper())
     {
         // throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't start server manage due to lack of zookeeper");
         LOG_ERROR(log, "There is no zookeeper, skip start background task for serverManager");
+
+        onLeader();
         return;
     }
 
@@ -38,30 +39,31 @@ CnchServerManager::~CnchServerManager()
     shutDown();
 }
 
+void CnchServerManager::onLeader()
+{
+    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
+
+    try
+    {
+        is_leader = true;
+        setLeaderStatus();
+        lease_renew_task->activateAndSchedule();
+        topology_refresh_task->activateAndSchedule();
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "Failed to set leader status when current node becoming leader.");
+    }
+
+    LOG_DEBUG(log, "Current node {} become leader", current_address);
+}
+
+
 void CnchServerManager::enterLeaderElection()
 {
     try
     {
         auto current_address = getContext()->getHostWithPorts().getRPCAddress();
-
-        auto on_leader_callback = [&]()
-        {
-            try
-            {
-                /// TODO:
-                setLeaderStatus();
-                lease_renew_task->activateAndSchedule();
-                topology_refresh_task->activateAndSchedule();
-            }
-            catch (...)
-            {
-                LOG_ERROR(log, "Failed to set leader status when current node becoming leader.");
-            }
-
-            is_leader = true;
-            LOG_DEBUG(log, "Current node {} become leader", current_address);
-        };
-
         String election_path = SERVER_MASTER_ELECTION_DEFAULT_PATH; // TODO: support read from config.
 
         current_zookeeper = getContext()->getZooKeeper();
@@ -71,7 +73,7 @@ void CnchServerManager::enterLeaderElection()
             getContext()->getTopologySchedulePool(),
             election_path,
             *current_zookeeper,
-            on_leader_callback,
+            [&]() { onLeader(); },
             current_address,
             false
         );
@@ -107,6 +109,7 @@ void CnchServerManager::refreshTopology()
 {
     try
     {
+        /// Stop and wait for next leader-election
         if (!is_leader || !leader_initialized)
             return;
 
@@ -118,10 +121,11 @@ void CnchServerManager::refreshTopology()
             LOG_ERROR(log, "Failed to get any server from service discovery, psm: {}", psm);
             return;
         }
-        /// FIXME: since no leader election available, we now only support one server in cluster, remove this logic later.
-        else if (server_vector.size() > 1)
+        /// zookeeper is nullptr means there is no leader election available,
+        /// in this case, we now only support one server in cluster.
+        else if (!current_zookeeper && server_vector.size() > 1)
         {
-            LOG_ERROR(log, "More than one server in cluster is not supported now, psm: {}", psm);
+            LOG_ERROR(log, "More than one server in cluster without leader-election is not supported now, psm: {}", psm);
             return;
         }
 
