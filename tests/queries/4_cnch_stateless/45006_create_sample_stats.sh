@@ -4,12 +4,12 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
 
-${CLICKHOUSE_CLIENT} --query="drop table if exists test.test_stats"
-${CLICKHOUSE_CLIENT} --query="CREATE TABLE test.test_stats(x UInt64, id UInt64) Engine=CnchMergeTree order by id;"
-${CLICKHOUSE_CLIENT} --query="insert into test.test_stats select cityHash64(intDiv(number, 10)), number from system.numbers limit 10000000"
+${CLICKHOUSE_CLIENT} --query="drop table if exists test_stats"
+${CLICKHOUSE_CLIENT} --query="CREATE TABLE test_stats(x UInt64, id UInt64) Engine=CnchMergeTree order by id;"
+${CLICKHOUSE_CLIENT} --query="insert into test_stats select cityHash64(intDiv(number, 10)), number from system.numbers limit 10000000"
 echo "create stats2"
-${CLICKHOUSE_CLIENT} --query="create stats test.test_stats settings statistics_enable_sample=1, create_stats_time_output=0, statistics_sample_row_count=1000000"
-INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test.test_stats"`
+${CLICKHOUSE_CLIENT} --query="create stats test_stats settings statistics_enable_sample=1, create_stats_time_output=0, statistics_sample_row_count=1000000"
+INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
 
 # echo identifier, <NOTHING>, full_count
 echo "$INPUT" | grep "test_stats\.\*"
@@ -34,3 +34,6 @@ echo "GOOD NDV for id"
 else
 echo "BAD NDV ${DATA[4]} for id"
 fi
+
+${CLICKHOUSE_CLIENT} --query="drop stats test_stats"
+${CLICKHOUSE_CLIENT} --query="drop table test_stats"
