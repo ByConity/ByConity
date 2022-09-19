@@ -34,17 +34,16 @@ NamesAndTypesList QueryMetricElement::getNamesAndTypes()
         {"server_id", std::make_shared<DataTypeString>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"latency", std::make_shared<DataTypeUInt32>()},
+        {"runtime_latency", std::make_shared<DataTypeUInt32>()},
         {"init_time", std::make_shared<DataTypeUInt32>()},
         {"catalog_time", std::make_shared<DataTypeUInt32>()},
         {"total_partitions", std::make_shared<DataTypeUInt32>()},
         {"pruned_partitions", std::make_shared<DataTypeUInt32>()},
         {"selected_parts", std::make_shared<DataTypeUInt32>()},
-        {"cpu_time", std::make_shared<DataTypeUInt32>()},
         {"peak_memory", std::make_shared<DataTypeUInt64>()},
         {"read_rows", std::make_shared<DataTypeUInt32>()},
         {"read_bytes", std::make_shared<DataTypeUInt64>()},
         {"read_cached_bytes", std::make_shared<DataTypeUInt64>()},
-        {"read_duration", std::make_shared<DataTypeUInt64>()},
         {"write_rows", std::make_shared<DataTypeUInt32>()},
         {"write_bytes", std::make_shared<DataTypeUInt64>()},
         {"write_duration", std::make_shared<DataTypeUInt64>()},
@@ -92,17 +91,16 @@ void QueryMetricElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(server_id);
     columns[i++]->insert(event_time);
     columns[i++]->insert(latency);
+    columns[i++]->insert(runtime_latency);
     columns[i++]->insert(init_time);
     columns[i++]->insert(catalog_time);
     columns[i++]->insert(total_partitions);
     columns[i++]->insert(pruned_partitions);
     columns[i++]->insert(selected_parts);
-    columns[i++]->insert(cpu_time);
     columns[i++]->insert(peak_memory);
     columns[i++]->insert(read_rows);
     columns[i++]->insert(read_bytes);
     columns[i++]->insert(read_cached_bytes);
-    columns[i++]->insert(read_duration);
     columns[i++]->insert(write_rows);
     columns[i++]->insert(write_bytes);
     columns[i++]->insert(write_duration);

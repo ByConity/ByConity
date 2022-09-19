@@ -561,8 +561,6 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
     // res.disk_cache_bytes  = progress_in.disk_cache_bytes;
     res.read_rows         = progress_in.read_rows;
     res.read_bytes        = progress_in.read_bytes;
-    res.read_duration     = query_stream_in ? query_stream_in->getProfileInfo().wallMilliseconds() : 0;
-    res.cpu_time          = query_stream_in ? query_stream_in->getProfileInfo().cpuMilliseconds() : 0;
     res.total_rows        = progress_in.total_rows_to_read;
 
     /// TODO: Use written_rows and written_bytes when real time progress is implemented

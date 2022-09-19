@@ -324,6 +324,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
             false,
             0,
             0,
+            0,
             elem.exception,
             elem.stack_trace);
     }
@@ -827,6 +828,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     false,
                     complex_query,
                     init_time,
+                    0,
                     "",
                     "");
             }
@@ -874,7 +876,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     finish_current_transaction,
                     complex_query,
                     init_time](
-                        IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline * query_pipeline) mutable {
+                        IBlockInputStream * stream_in, IBlockOutputStream * stream_out, QueryPipeline * query_pipeline,
+                            UInt64 runtime_latency) mutable {
                         finish_current_transaction(context);
                         QueryStatus * process_list_elem = context->getProcessListElement();
 
@@ -925,10 +928,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                             {
                                 elem.result_rows = output_format->getResultRows();
                                 elem.result_bytes = output_format->getResultBytes();
-
-                                /// TODO: This is only for SELECT query, need to figure out the read duration of `INSERT SELECT`
-                                info.read_duration = output_format->getReadDuration();
-                                info.cpu_time = output_format->getCPUReadDuration();
                             }
                         }
 
@@ -960,6 +959,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     false,
                                     complex_query,
                                     init_time,
+                                    runtime_latency,
                                     "",
                                     "");
                             }
@@ -977,6 +977,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     false,
                                     complex_query,
                                     init_time,
+                                    runtime_latency,
                                     "",
                                     "");
                             }
@@ -994,6 +995,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     false,
                                     complex_query,
                                     init_time,
+                                    runtime_latency,
                                     "",
                                     "");
                             }
@@ -1011,6 +1013,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     true,
                                     complex_query,
                                     init_time,
+                                    runtime_latency,
                                     "",
                                     "");
                             }
@@ -1124,7 +1127,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                        query_id,
                                        finish_current_transaction,
                                        complex_query,
-                                       init_time]() mutable {
+                                       init_time](UInt64 runtime_latency) mutable {
                 finish_current_transaction(context);
                 if (quota)
                     quota->used(Quota::ERRORS, 1, /* check_exceeded = */ false);
@@ -1179,6 +1182,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         false,
                         complex_query,
                         init_time,
+                        runtime_latency,
                         elem.exception,
                         elem.stack_trace);
                 }
