@@ -71,6 +71,9 @@
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 
+#include <Processors/Transforms/LimitsCheckingTransform.h>
+#include <Processors/Transforms/MaterializingTransform.h>
+
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 #include <Transaction/ICnchTransaction.h>
