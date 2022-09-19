@@ -75,6 +75,8 @@ public:
 
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
+    /// allocate and send resource to worker_group
+    void sendResource(const ContextPtr & context);
 
     /// remove all resource in server
     void removeAll();

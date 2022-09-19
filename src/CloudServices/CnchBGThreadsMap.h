@@ -39,12 +39,12 @@ public:
      */
     void stopThread(const StorageID & storage_id);
     /**
-     *  Remove the backgronud thread from server. Won't throw exception if thread not found.
+     *  Remove the background thread from server. Won't throw exception if thread not found.
      */
     void tryRemoveThread(const StorageID & storage_id);
 
     /**
-     *  Rmove the background thread from server and drop related data if neccessary
+     *  Remove the background thread from server and drop related data if necessary
      */
     void tryDropThread(const StorageID & storage_id);
 
@@ -89,7 +89,7 @@ public:
 private:
     std::array<std::unique_ptr<CnchBGThreadsMap>, CnchBGThread::NumType> threads_array;
 
-    /// std::unique_ptr<ResourceReporterTask> resource_reporter_task;
+    std::unique_ptr<ResourceReporterTask> resource_reporter_task;
 
     /// std::atomic_bool shutdown{false};
     /// ThreadFromGlobalPool cleaner;

@@ -1,7 +1,7 @@
 set create_stats_time_output=0;
-drop database if exists test_stats;
-create database test_stats;
-use test_stats;
+drop database if exists test_stats_45005_memory;
+create database test_stats_45005_memory;
+use test_stats_45005_memory;
 
 create table memory_test (
                              `id` UInt64,
@@ -51,5 +51,5 @@ show stats all;
 
 drop table memory_test;
 drop table cnch_test;
-drop database test_stats;
+drop database test_stats_45005_memory;
 

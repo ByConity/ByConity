@@ -7,10 +7,10 @@
 #include <Storages/IStorage.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/ManipulationList.h>
+#include <Transaction/ICnchTransaction.h>
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
-#include <Transaction/ICnchTransaction.h>
 
 namespace DB
 {
@@ -153,21 +153,20 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
         *request.mutable_create_queries()->Add() = create_query;
 
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
+
     assertController(cntl);
     RPCHelpers::checkResponse(response);
 }
 
-void CnchWorkerClient::sendQueryDataParts(
+brpc::CallId CnchWorkerClient::sendQueryDataParts(
     const ContextPtr & context,
     const StoragePtr & storage,
     const String & local_table_name,
     const ServerDataPartsVector & data_parts,
-    const std::set<Int64> & required_bucket_numbers)
+    const std::set<Int64> & required_bucket_numbers,
+    ExceptionHandler & handler)
 {
-    brpc::Controller cntl;
     Protos::SendDataPartsReq request;
-    Protos::SendDataPartsResp response;
-
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_database_name(storage->getDatabaseName());
     request.set_table_name(local_table_name);
@@ -185,24 +184,29 @@ void CnchWorkerClient::sendQueryDataParts(
     //     new_info.set_version(version);
     // }
 
+
+    auto * cntl = new brpc::Controller();
+    auto * response = new Protos::SendDataPartsResp();
     /// adjust the timeout to prevent timeout if there are too many parts to send,
     const auto & settings = context->getSettingsRef();
     auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
-    cntl.set_timeout_ms(send_timeout);
+    cntl->set_timeout_ms(send_timeout);
 
-    stub->sendQueryDataParts(&cntl, &request, &response, nullptr);
+    auto call_id = cntl->call_id();
+    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
 
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
+    return call_id;
 }
 
-void CnchWorkerClient::sendOffloadingInfo(
+brpc::CallId CnchWorkerClient::sendOffloadingInfo(
     [[maybe_unused]]const ContextPtr & context,
     [[maybe_unused]]const HostWithPortsVec & read_workers,
     [[maybe_unused]]const std::vector<std::pair<StorageID, String>> & worker_table_names,
-    [[maybe_unused]]const std::vector<HostWithPortsVec> & buffer_workers_vec)
+    [[maybe_unused]]const std::vector<HostWithPortsVec> & buffer_workers_vec,
+    [[maybe_unused]]ExceptionHandler & handler)
 {
     /// TODO:
+    return {};
 }
 
 void CnchWorkerClient::removeWorkerResource(TxnTimestamp txn_id)

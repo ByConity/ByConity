@@ -172,6 +172,8 @@ bool ElectionController::pullState()
             vw_manager.clearVirtualWarehouses();
             auto & group_manager = rm_controller.getWorkerGroupManager();
             group_manager.clearWorkerGroups();
+            auto & resource_tracker = rm_controller.getResourceTracker();
+            resource_tracker.clearWorkers();
             rm_controller.initialize();
             success = true;
         }

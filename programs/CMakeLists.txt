@@ -57,6 +57,7 @@ option (ENABLE_CLICKHOUSE_KEEPER_CONVERTER "Util allows to convert ZooKeeper log
 option (ENABLE_CLICKHOUSE_TSO_SERVER "Service that produces globally consistent timestamps" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_DAEMON_MANAGER "Service that manage background jobs in clickhouse" ${ENABLE_CLICKHOUSE_ALL})
 option (ENABLE_CLICKHOUSE_PART_TOOLKIT "Enable part_toolkit" ${ENABLE_CLICKHOUSE_ALL})
+option (ENABLE_CLICKHOUSE_RESOURCE_MANAGER "Service that manage worker resources" ${ENABLE_CLICKHOUSE_ALL})
 
 if (NOT USE_NURAFT)
     # RECONFIGURE_MESSAGE_LEVEL should not be used here,
@@ -169,6 +170,12 @@ if (ENABLE_CLICKHOUSE_DAEMON_MANAGER)
     message(STATUS "ClickHouse daemon-manager mode: ON")
 else()
     message(STATUS "ClickHouse daemon-manager mode: OFF")
+endif()
+
+if (ENABLE_CLICKHOUSE_RESOURCE_MANAGER)
+    message(STATUS "ClickHouse resource-manager mode: ON")
+else()
+    message(STATUS "ClickHouse resource-manager mode: OFF")
 endif()
 
 if (ENABLE_CLICKHOUSE_TSO_SERVER)
@@ -492,6 +499,11 @@ else ()
         add_custom_target (clickhouse-part-toolkit ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse clickhouse-part-toolkit DEPENDS clickhouse)
         install (FILES "${CMAKE_CURRENT_BINARY_DIR}/clickhouse-part-toolkit" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
         list(APPEND CLICKHOUSE_BUNDLE clickhouse-part-toolkit)
+    endif ()
+    if (ENABLE_CLICKHOUSE_RESOURCE_MANAGER)
+        add_custom_target (resource-manager ALL COMMAND ${CMAKE_COMMAND} -E create_symlink clickhouse resource-manager DEPENDS clickhouse)
+        install (FILES "${CMAKE_CURRENT_BINARY_DIR}/resource-manager" DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)
+        list(APPEND CLICKHOUSE_BUNDLE daemon-manager)
     endif ()
 
     install (TARGETS clickhouse RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT clickhouse)

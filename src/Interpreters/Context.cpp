@@ -4049,6 +4049,8 @@ void Context::initResourceManagerClient()
         }
         catch (...)
         {
+            tryLogCurrentException(&Poco::Logger::get("Context"), __PRETTY_FUNCTION__);
+
             LOG_DEBUG(&Poco::Logger::get("Context"), "Failed to initialise Resource Manager Client on try: {}", retry_count);
             usleep(retry_interval_ms * 1000);
         }
