@@ -7,7 +7,7 @@
 namespace DB::Statistics
 {
 template <typename T>
-std::string vector_serialize(const std::vector<T> & data)
+std::string vectorSerialize(const std::vector<T> & data)
 {
     // TODO: optimize it to use better encoding
     static_assert(std::is_integral_v<T> || std::is_floating_point_v<T> || IsWideInteger<T>);
@@ -34,7 +34,7 @@ std::vector<T> vectorDeserialize(std::string_view blob)
     return vec;
 }
 
-#define INITIALIZE(TYPE) template std::string vector_serialize<TYPE>(const std::vector<TYPE> & data);
+#define INITIALIZE(TYPE) template std::string vectorSerialize<TYPE>(const std::vector<TYPE> & data);
 FIXED_TYPE_ITERATE(INITIALIZE)
 #undef INITIALIZE
 

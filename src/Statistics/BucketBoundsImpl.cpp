@@ -14,7 +14,7 @@ String BucketBoundsImpl<T>::serialize() const
     auto serde_data_type = SerdeDataTypeFrom<T>;
     ss.write(reinterpret_cast<const char *>(&serde_data_type), sizeof(serde_data_type));
     ss.write(reinterpret_cast<const char *>(&num_buckets_), sizeof(num_buckets_));
-    auto blob = vector_serialize(bounds_);
+    auto blob = vectorSerialize(bounds_);
     ss.write(blob.data(), blob.size());
     return ss.str();
 }
