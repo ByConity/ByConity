@@ -23,13 +23,13 @@
 namespace DB
 {
 
-static ITransformingStep::Traits getTraits()
+static ITransformingStep::Traits getTraits(bool should_produce_results_in_order_of_bucket_number)
 {
     return ITransformingStep::Traits
     {
         {
             .preserves_distinct_columns = false,
-            .returns_single_stream = true,
+            .returns_single_stream = should_produce_results_in_order_of_bucket_number,
             .preserves_number_of_streams = false,
             .preserves_sorting = false,
         },
@@ -73,7 +73,7 @@ MergingAggregatedStep::MergingAggregatedStep(
     bool memory_efficient_aggregation_,
     size_t max_threads_,
     size_t memory_efficient_merge_threads_)
-    : ITransformingStep(input_stream_, appendGroupingColumns(params_->getHeader(), groupings_), getTraits())
+    : ITransformingStep(input_stream_, appendGroupingColumns(params_->getHeader(), groupings_), getTraits(!(params_->final) && memory_efficient_aggregation_))
     , keys(std::move(keys_))
     , grouping_sets_params(std::move(grouping_sets_params_))
     , groupings(std::move(groupings_))
@@ -81,6 +81,7 @@ MergingAggregatedStep::MergingAggregatedStep(
     , memory_efficient_aggregation(memory_efficient_aggregation_)
     , max_threads(max_threads_)
     , memory_efficient_merge_threads(memory_efficient_merge_threads_)
+    , should_produce_results_in_order_of_bucket_number (!(params->final) && memory_efficient_aggregation)
 {
     /// Aggregation keys are distinct
     for (auto key : params->params.keys)
@@ -117,6 +118,8 @@ void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const Bu
     }
 
     computeGroupingFunctions(pipeline, groupings, keys, grouping_sets_params, build_settings);
+
+    pipeline.resize(should_produce_results_in_order_of_bucket_number ? 1 : max_threads);
 }
 
 void MergingAggregatedStep::describeActions(FormatSettings & settings) const

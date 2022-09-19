@@ -1229,7 +1229,7 @@ protected:
 
             plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(),
-                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), keys, agg_rewriter.aggregates, GroupingSetsParamsList{}, true),
+                std::make_shared<AggregatingStep>(plan->getCurrentDataStream(), keys, agg_rewriter.aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false),
                 {plan});
         }
         return std::make_pair(plan, rewrite_arguments);

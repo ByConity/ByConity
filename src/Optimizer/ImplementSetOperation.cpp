@@ -65,7 +65,7 @@ TranslationResult SetOperationNodeTranslator::makeSetContainmentPlanForDistinct(
         aggregates.push_back(aggregate_desc);
     }
 
-    auto agg_step = std::make_shared<AggregatingStep>(union_node->getStep()->getOutputStream(), group_by_keys, aggregates, GroupingSetsParamsList{}, true);
+    auto agg_step = std::make_shared<AggregatingStep>(union_node->getStep()->getOutputStream(), group_by_keys, aggregates, GroupingSetsParamsList{}, true, GroupingDescriptions{}, false, false);
     PlanNodes children{union_node};
     PlanNodePtr agg_node = std::make_shared<AggregatingNode>(context.nextNodeId(), std::move(agg_step), children);
 

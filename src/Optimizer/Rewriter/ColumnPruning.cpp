@@ -321,9 +321,9 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
         return node;
     }
 
-
     auto agg_step = std::make_shared<AggregatingStep>(
         child->getStep()->getOutputStream(), step->getKeys(), aggs, step->getGroupingSetsParams(), step->isFinal(), step->getGroupings()
+        , false, !(step->isFinal()) && context->getSettingsRef().distributed_aggregation_memory_efficient 
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
     );

@@ -73,7 +73,10 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         step->getAggregates(),
         step->getGroupingSetsParams(),
         false,
-        step->getGroupings());
+        step->getGroupings(),
+        false,
+        context.context->getSettingsRef().distributed_aggregation_memory_efficient
+        );
 
     auto exchange_step = std::make_unique<ExchangeStep>(
         DataStreams{partial_agg->getOutputStream()},
