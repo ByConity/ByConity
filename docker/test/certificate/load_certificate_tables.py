@@ -53,12 +53,11 @@ def main(args):
     # TODO: import in parallel
     procs = []
     for item in import_cmd_list:
-        print('Executing ', item)
         return_code = os.system(item)
         if return_code != 0:
             print('Failed sql is:', item)
             raise f"error !"
-    print('Data for suite:', args.suite_path, 'loaded')
+    print('Data for suite:', args.suite_path, ' has been loaded')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="load csv to table")

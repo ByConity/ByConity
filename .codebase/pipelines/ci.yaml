@@ -31,7 +31,7 @@ jobs:
     envs:
       CONSUL_HTTP_HOST: "10.8.156.215"
       CONSUL_HTTP_PORT: "2280"
-      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin"
+      PATH: "$PATH:/opt/tiger/yarn_deploy/hadoop/bin:/opt/tiger/consul_deploy/bin/go:/clickhouse/bin:/clickhouse/usr/breakpad/bin:/opt/tiger/bvc/bin:/opt/tiger/foundationdb/bin"
       LD_LIBRARY_PATH: "/clickhouse/lib/:$LD_LIBRARY_PATH"
       MY_HOST_IP: "127.0.0.1"
       MY_HOST_IPV6: "::1"
@@ -51,12 +51,12 @@ jobs:
           - echo $(pwd)
           - cd /
           - CLICKHOUSE_VERSION=${{ Jobs["scm_build"].Steps["scm_build"].Outputs["version"] }}
-          # - CLICKHOUSE_VERSION=1.0.0.3469
           - CLICKHOUSE_PREFIX="clickhouse"
           - mkdir -p $CLICKHOUSE_PREFIX
           - wget -q -O $CLICKHOUSE_PREFIX/clickhouse.tar.gz http://d.scm.byted.org/api/v2/download/ceph:dp.clickhouse.ch_vanilla_clang_ci_$CLICKHOUSE_VERSION.tar.gz
           - tar zxf $CLICKHOUSE_PREFIX/clickhouse.tar.gz  --directory clickhouse
           - rm $CLICKHOUSE_PREFIX/clickhouse.tar.gz
+          - bash /home/code/docker/test/foundationdb/start_fdb.sh
       - name: Run CE FuntionalStateless
         continue-on-error: true
         commands:
@@ -66,9 +66,12 @@ jobs:
           - /bin/bash run.sh
       - &after_test
         name: After test
+        continue-on-error: true
         commands:
-          - bash /home/code/.codebase/ci_scripts/common_component/copy_core_to_shared.sh # copy core to artifact folder
-          - bash /home/code/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh # copy stdout to artifact folder
+          - mkdir /test_output/foundationdb && cp /opt/tiger/foundationdb/logs/* /test_output/foundationdb/. || true
+          - bash /home/code/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
+          - bash /home/code/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
+          - bash /home/code/.codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
       - &upload_artifact
         name: Upload Artifact
         uses: actions/upload-artifact
@@ -87,7 +90,7 @@ jobs:
       - *action_checkout
       - *download_scm_binary
       - name: Run CE Problematic FuntionalStateless
-        continue-on-error: true
+        ignore-error: true
         commands:
           - cd /
           - cp -r /home/code/docker/test/stateless/* .
@@ -111,7 +114,8 @@ jobs:
         continue-on-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - bash /home/code/docker/test/foundationdb/show_fdb.sh
+          - export ADDITIONAL_OPTIONS='--jobs 8 --run cnch_stateless  --testname'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -129,7 +133,8 @@ jobs:
         commands:
           - export ENABLE_IPV6=1
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - bash /home/code/docker/test/foundationdb/show_fdb.sh
+          - export ADDITIONAL_OPTIONS='--jobs 8 --run cnch_stateless  --testname'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -146,7 +151,7 @@ jobs:
         ignore-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_problematic_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 8 --run cnch_problematic_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -219,9 +224,9 @@ jobs:
         commands:
           - cd /
           - cp -r /home/code/docker/test/certificate/* ./
-          - date
           - |
             bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
+            bash /home/code/docker/test/foundationdb/show_fdb.sh
 
             echo "Load tables for certificate"
             python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_1_certificate_aeolus_bp_edu &
@@ -233,10 +238,9 @@ jobs:
             python3 load_certificate_tables.py --suite-path /home/code/tests/queries/3_7_certificate_motor_dzx &
             wait
             echo "Load tables for certificates done"
-          - date
 
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - export ADDITIONAL_OPTIONS='--jobs 6'
+          - export ADDITIONAL_OPTIONS='--jobs 6 --testname'
           - /bin/bash run_cnch.sh
       - *after_test
       - *upload_artifact
@@ -289,7 +293,7 @@ jobs:
           - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/cluster_up.sh
           - cp -r /home/code/docker/test/certificate/* ./
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - export ADDITIONAL_OPTIONS='--jobs 6'
+          - export ADDITIONAL_OPTIONS='--jobs 6 --testname'
           - /bin/bash run_cnch.sh
 
       - *after_test
