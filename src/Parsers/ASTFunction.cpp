@@ -110,30 +110,42 @@ void ASTFunction::updateTreeHashImpl(SipHash & hash_state) const
 }
 
 
-ASTPtr ASTFunction::toLiteral() const
+template <typename Container>
+static ASTPtr createLiteral(const ASTs & arguments)
 {
-    if (!arguments) return {};
+    Container container;
 
-    if (name == "array")
+    for (const auto & arg : arguments)
     {
-        Array array;
-
-        for (const auto & arg : arguments->children)
+        if (const auto * literal = arg->as<ASTLiteral>())
         {
-            if (auto * literal = arg->as<ASTLiteral>())
-                array.push_back(literal->value);
-            else if (auto * func = arg->as<ASTFunction>())
-            {
-                if (auto func_literal = func->toLiteral())
-                    array.push_back(func_literal->as<ASTLiteral>()->value);
-            }
+            container.push_back(literal->value);
+        }
+        else if (auto * func = arg->as<ASTFunction>())
+        {
+            if (auto func_literal = func->toLiteral())
+                container.push_back(func_literal->as<ASTLiteral>()->value);
             else
-                /// Some of the Array arguments is not literal
                 return {};
         }
-
-        return std::make_shared<ASTLiteral>(array);
+        else
+            /// Some of the Array or Tuple arguments is not literal
+            return {};
     }
+
+    return std::make_shared<ASTLiteral>(container);
+}
+
+ASTPtr ASTFunction::toLiteral() const
+{
+    if (!arguments)
+        return {};
+
+    if (name == "array")
+        return createLiteral<Array>(arguments->children);
+
+    if (name == "tuple")
+        return createLiteral<Tuple>(arguments->children);
 
     return {};
 }
