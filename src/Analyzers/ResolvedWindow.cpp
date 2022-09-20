@@ -95,7 +95,7 @@ ResolvedWindowPtr resolveWindow(const ASTPtr & node,
 
     if (definition.frame_begin_type == WindowFrame::BoundaryType::Offset)
     {
-        auto value = tryEvaluateConstantExpression(definition.frame_end_offset, context);
+        auto value = tryEvaluateConstantExpression(definition.frame_begin_offset, context);
         if (!value)
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Window boundary offset should be a constant.");
