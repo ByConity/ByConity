@@ -147,7 +147,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
     std::map<String, String> column_to_value;
 
-    collectWhereClausePredicate(where_expression, column_to_value);
+    collectWhereClausePredicate(where_expression, column_to_value, context);
     // check for required structure of WHERE clause for cnch_parts
     auto database_it = column_to_value.find("database");
     auto table_it = column_to_value.find("table");
