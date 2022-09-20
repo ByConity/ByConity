@@ -1746,6 +1746,13 @@ DeleteBitmapPtr IMergeTreeDataPart::getDeleteBitmap() const
     return nullptr;
 }
 
+const IMergeTreeDataPartPtr & IMergeTreeDataPart::getPreviousPart() const
+{
+    if (!prev_part)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "No previous part of {}", name);
+    return prev_part;
+}
+
 IMergeTreeDataPartPtr IMergeTreeDataPart::getBasePart() const
 {
     IMergeTreeDataPartPtr part = shared_from_this();
@@ -2054,6 +2061,7 @@ void IMergeTreeDataPart::serializePartitionAndMinMaxIndex(WriteBuffer & buf) con
     }
 }
 
+/// TODO: move to cnch part
 void readPartBinary(IMergeTreeDataPart & part, ReadBuffer & buf, bool read_hint_mutation)
 {
     assertString("CHPT", buf);
@@ -2067,7 +2075,11 @@ void readPartBinary(IMergeTreeDataPart & part, ReadBuffer & buf, bool read_hint_
     readVarUInt(part.bytes_on_disk, buf);
     readVarUInt(part.rows_count, buf);
     if (MergeTreeDataPartCNCH* cnch_part = dynamic_cast<MergeTreeDataPartCNCH*>(&part))
-        readVarUInt(cnch_part->marks_count, buf);
+    {
+        size_t marks_count = 0;
+        readVarUInt(marks_count, buf);
+        cnch_part->loadIndexGranularity(marks_count, {});
+    }
     Int64 hint_mutation = 0;
     readVarUInt(hint_mutation, buf);
     if (read_hint_mutation)
@@ -2092,7 +2104,7 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
     writeVarUInt(part.bytes_on_disk, buf);
     writeVarUInt(part.rows_count, buf);
     if (auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this()))
-        writeVarUInt(cnch_part->marks_count, buf);
+        writeVarUInt(cnch_part->getMarksCount(), buf);
     writeVarUInt(part.info.hint_mutation, buf);
 
     part.columns_ptr->writeText(buf);
