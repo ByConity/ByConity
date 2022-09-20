@@ -133,15 +133,6 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!partition_commands.empty())
     {
-        if (cnch_table_lock && !partition_commands.empty()
-            && std::any_of(partition_commands.begin(), partition_commands.end(), [](auto & command) {
-                   return command.type != PartitionCommand::ATTACH_PARTITION && command.type != PartitionCommand::ATTACH_DETACHED_PARTITION
-                       && command.type != PartitionCommand::DROP_PARTITION && command.type != PartitionCommand::DROP_PARTITION_WHERE
-                       && command.type != PartitionCommand::INGEST_PARTITION && command.type != PartitionCommand::PREATTACH_PARTITION;
-               }))
-        {
-            cnch_table_lock->lock();
-        }
         table->checkAlterPartitionIsPossible(partition_commands, metadata_snapshot, getContext()->getSettingsRef());
         auto partition_commands_pipe = table->alterPartition(metadata_snapshot, partition_commands, getContext());
         if (!partition_commands_pipe.empty())

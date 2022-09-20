@@ -721,8 +721,20 @@ class IColumn;
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
-    /** The section above is for obsolete settings. Do not add anything there. */\
+    \
+    /* Attach part*/ \
+    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
+    M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
+    M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
+    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
+    M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
+    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
+    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
+    \
+    /* Transaction */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
+    M(Bool, bypass_ddl_db_lock, false, "Bypass locking database while creating tables", 0) \
+    /** The section above is for obsolete settings. Do not add anything there. */\
 
 
 // End of COMMON_SETTINGS
@@ -801,14 +813,6 @@ class IColumn;
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     M(Bool, enable_low_cardinality_merge_new_algo, true, "Whether use the new merge algorithm during part merge for low cardinality column", 0) \
     M(UInt64, low_cardinality_distinct_threshold, 100000, "Threshold for fallback to native column from low cardinality column, 0 disable", 0) \
-    \
-    M(UInt64, cnch_part_attach_limit, 3000, "Maximum number of part for ATTACH PARTITION/PARTS command", 0)\
-    M(UInt64, cnch_part_attach_drill_down, 1, "Maximum levels of path to find cnch data parts, 0 means no drill down", 0) \
-    M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
-    M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
-    M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
-    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
-    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

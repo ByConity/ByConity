@@ -1099,9 +1099,17 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             auto txn = getContext()->getCurrentTransaction();
             if (!txn)
                 throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-            db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database->getDatabaseName());
-            tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
-            std::lock(*db_lock, *tb_lock);
+                        /// May need to acquire kv lock before creating entry
+            if (getContext()->getSettingsRef().bypass_ddl_db_lock)
+            {
+                tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
+                tb_lock->lock();
+            }
+            else
+            {
+                db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database->getDatabaseName());
+                tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
+            }
         }
         assertOrSetUUID(create, database);
 
