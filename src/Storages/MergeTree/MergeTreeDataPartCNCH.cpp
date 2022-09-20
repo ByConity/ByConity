@@ -1,12 +1,12 @@
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include "MergeTreeDataPartCNCH.h"
 
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <IO/LimitReadBuffer.h>
-#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
-#include "Storages/MergeTree/MergeTreeReaderCNCH.h"
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
-#include "Common/Exception.h"
+#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
+#include <Storages/MergeTree/MergeTreeReaderCNCH.h>
+#include <Common/Exception.h>
 
 namespace ProfileEvents
 {
@@ -20,6 +20,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
 }
+
+static constexpr auto DATA_FILE = "data";
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size)
 {
@@ -129,7 +131,7 @@ bool MergeTreeDataPartCNCH::operator > (const MergeTreeDataPartCNCH & r) const
 
 String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair &) const
 {
-    return DATA_FILE_NAME;
+    return DATA_FILE;
 }
 
 bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
@@ -137,39 +139,52 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
     return true;
 };
 
-void MergeTreeDataPartCNCH::loadIndexGranularity(
-    [[maybe_unused]] size_t /*marks_count*/, [[maybe_unused]] const std::vector<size_t> & index_granularities)
+void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
-    // if (index_granularities.empty())
-    //     throw Exception("MergeTreeDataPartCNCH cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
+    /// init once
+    if (index_granularity.isInitialized())
+        return;
 
-    // for (size_t granularity : index_granularities)
-    //     index_granularity.appendMark(granularity);
+    if (index_granularity_info.is_adaptive)
+    {
+        /// support fixed index granularity now
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CNCH part only supports fixed index granularity now");
+        // if (index_granularities.empty())
+        //     loadIndexGranularity();
+    }
+    else
+    {
+        index_granularity.resizeWithFixedGranularity(marks_count, index_granularity_info.fixed_index_granularity);
+    }
 
-    // index_granularity.setInitialized();
-    loadIndexGranularity();
+    index_granularity.setInitialized();
 };
 
 void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
 {
+    /// only load necessary staff here
+    assertOnDisk();
+    MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+    loadIndexGranularity();
+    getChecksums();
+    // getIndex();
 }
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
 {
-    off_t meta_info_offset = 0;
-    size_t meta_info_size = 0;
-    getMetaInfoPosAndSize(meta_info_offset, meta_info_size);
+    auto footer = loadPartDataFooter();
+    const auto & meta_info_pos = footer["metainfo.txt"];
 
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     DiskPtr disk = volume->getDisk();
-    String rel_path = getFullRelativePath() + "/data";
-    auto reader = openForReading(disk, rel_path, meta_info_size);
-    LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_offset, meta_info_size);
+    auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size);
+    LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
     readPartBinary(*this, limit_reader, load_hint_mutation);
 }
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
 {
-    const String data_file_path = getFullRelativeDataPath();
+    const String data_file_path = fs::path(getFullRelativePath()) / DATA_FILE;
     size_t data_file_size = volume->getDisk()->getFileSize(data_file_path);
     if (!volume->getDisk()->exists(data_file_path))
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "No data file of part {} under path {}", name, data_file_path);
@@ -201,32 +216,22 @@ bool MergeTreeDataPartCNCH::isDeleted() const
     return deleted;
 }
 
-String MergeTreeDataPartCNCH::getFullDataPath() const
-{
-    return fs::path(getFullPath()) / "data";
-}
-
-String MergeTreeDataPartCNCH::getFullRelativeDataPath() const
-{
-    return fs::path(getFullPath()) / "data";
-}
-
 void MergeTreeDataPartCNCH::checkConsistency([[maybe_unused]] bool require_part_metadata) const
 {
 }
 
 void MergeTreeDataPartCNCH::loadIndex()
 {
-    /// It can be empty in case of mutations
-    if (!index_granularity.isInitialized())
-        throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
-
     if (isPartial())
     {
         auto base_part = getBasePart();
         index = base_part->getIndex();
         return;
     }
+
+    /// It can be empty in case of mutations
+    if (!index_granularity.isInitialized())
+        throw Exception("Index granularity is not loaded before index loading", ErrorCodes::LOGICAL_ERROR);
 
     auto metadata_snapshot = storage.getInMemoryMetadataPtr();
     const auto & primary_key = metadata_snapshot->getPrimaryKey();
@@ -258,7 +263,8 @@ void MergeTreeDataPartCNCH::loadIndex()
 
     auto checksums = getChecksums();
     auto [file_offset, file_size] = getFileOffsetAndSize(*this, "primary.idx");
-    auto data_file = openForReading(volume->getDisk(), getFullRelativeDataPath(), file_size);
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, file_size);
     LimitReadBuffer buf = readPartFile(*data_file, file_offset, file_size);
     index = loadIndexFromBuffer(buf, primary_key);
 
@@ -299,14 +305,14 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         }
     }
 
-    String data_path = getFullRelativeDataPath();
+    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
     auto data_footer = loadPartDataFooter();
     const auto & checksum_file = data_footer["checksums.txt"];
 
     if (checksum_file.file_size == 0/* && isDeleted() */)
-        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_path);
+        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_path, checksum_file.file_size);
+    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
     LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
 
     if (checksums->read(buf))
@@ -323,10 +329,18 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     data_footer.merge(checksums->files);
     checksums->files.swap(data_footer);
 
+    // Update checksums base on current part's mutation, the mutation in hdfs's file
+    // is not reliable, since when attach, part will have new mutation, but the mutation
+    // and hint_mutation within part's checksums is untouched, so update it here
+    for (auto& file : checksums->files)
+    {
+        file.second.mutation = info.mutation;
+    }
+
     if (isPartial())
     {
         /// merge with previous checksums with current checksums
-        const auto & prev_part = tryGetPreviousPart();
+        const auto & prev_part = getPreviousPart();
         auto prev_checksums = prev_part->getChecksums();
 
         /// insert checksum files from previous part if it's not in current checksums
@@ -365,24 +379,15 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
 void MergeTreeDataPartCNCH::loadIndexGranularity()
 {
-    index_granularity.resizeWithFixedGranularity(marks_count, storage.getSettings()->index_granularity);
-    index_granularity.setInitialized();
+    if (index_granularity.isInitialized())
+        return;
+
+    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Index granularity of cnch part cannot be loaded from disk");
 }
 
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const
 {
-}
-
-void MergeTreeDataPartCNCH::getMetaInfoPosAndSize(off_t & off, size_t & size)
-{
-    String data_rel_path = getFullRelativePath() + "/data";
-    DiskPtr disk = volume->getDisk();
-    size_t file_size = disk->getFileSize(data_rel_path);
-    auto reader = openForReading(disk, data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
-    reader->seek(file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 2 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
-    readIntBinary(off, *reader);
-    readIntBinary(size, *reader);
 }
 
 }

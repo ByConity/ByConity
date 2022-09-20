@@ -172,17 +172,13 @@ void MergeTreeCloudData::loadDataParts(MutableDataPartsVector & parts, UInt64)
 
         if (!data_parts_indexes.insert(part).second)
             throw Exception("Part " + part->name + " already exists", ErrorCodes::DUPLICATE_DATA_PART);
-
-        /// For CNCH data part, it has its own mark count and can construct index_granularity from
-        /// marks_count, so don't pass anything here. 
-        part->loadIndexGranularity(0,{});
     }
 
     deactivateOutdatedParts();
 
     LOG_TRACE(log, "Loading {} parts, prepared part multi-index, elapsed {} ms", parts.size(), stopwatch.elapsedMicroseconds() / 1000.0);
 
-    prefetchChecksums(parts);
+    loadDataPartsInParallel(parts);
 
     calculateColumnSizesImpl();
 
@@ -231,7 +227,7 @@ void MergeTreeCloudData::unloadOldPartsByTimestamp(Int64 expired_ts)
     /// removePartsFinally(parts_to_delete);
 }
 
-void MergeTreeCloudData::prefetchChecksums(MutableDataPartsVector & parts)
+void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 {
     auto cnch_parallel_prefetching = getSettings()->cnch_parallel_prefetching;
     if (cnch_parallel_prefetching == 1 || parts.size() < 4)
@@ -250,7 +246,7 @@ void MergeTreeCloudData::prefetchChecksums(MutableDataPartsVector & parts)
     size_t pool_size = std::min(parts_without_cache.size(), UInt64(cnch_parallel_prefetching));
     /// load checksums and index_granularity in parallel
     runOverPartsInParallel(parts_without_cache, pool_size, [](auto & part) {
-        part->getChecksums();
+        part->loadColumnsChecksumsIndexes(false, false);
     });
 }
 
@@ -265,15 +261,8 @@ void MergeTreeCloudData::runOverPartsInParallel(
     {
         size_t end = start + num_per_thread + (i < remain ? 1 : 0);
         thread_pool.scheduleOrThrowOnError([&parts, start, end, op] {
-            try
-            {
-                for (size_t p = start; p < end; ++p)
-                    op(parts[p]);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(__PRETTY_FUNCTION__);
-            }
+            for (size_t p = start; p < end; ++p)
+                op(parts[p]);
         });
         start = end;
     }

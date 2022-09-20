@@ -146,7 +146,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     new_part->minmax_idx = local_part->minmax_idx;
     new_part->rows_count = local_part->rows_count;
     /// TODO:
-    new_part->marks_count = local_part->getMarksCount();
+    new_part->loadIndexGranularity(local_part->getMarksCount(), local_part->index_granularity.getIndexGranularities());
     new_part->columns_ptr = std::make_shared<NamesAndTypesList>(*(local_part->columns_ptr));
     new_part->setPreparedIndex(local_part->getPreparedIndex());
     new_part->has_bitmap = local_part->has_bitmap.load();

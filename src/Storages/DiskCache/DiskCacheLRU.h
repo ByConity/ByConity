@@ -19,17 +19,11 @@ enum class DiskCacheState
 
 struct DiskCacheMeta
 {
-    DiskCacheMeta(DiskCacheState state_, size_t size_) : state(state_), size(size_) { }
+    DiskCacheMeta(DiskCacheState state_, size_t size_, const DiskPtr & disk_ = {}) : state(state_), size(size_), disk(disk_) { }
 
     DiskCacheState state;
     size_t size;
-    mutable std::mutex mutex;
-
-    void setDisk(const DiskPtr & disk) { disk_wp = disk; }
-    DiskPtr getDisk() const { return disk_wp.lock(); }
-
-private:
-    std::weak_ptr<IDisk> disk_wp;
+    DiskPtr disk;
 };
 
 struct DiskCacheWeightFunction

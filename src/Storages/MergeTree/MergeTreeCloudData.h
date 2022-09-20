@@ -32,8 +32,6 @@ public:
     /// DO NOT check reference count of parts.
     void unloadOldPartsByTimestamp(Int64 expired_ts);
 
-    void prefetchChecksums(MutableDataPartsVector & parts);
-
 protected:
     void addPreparedPart(MutableDataPartPtr & part, DataPartsLock &);
 
@@ -46,6 +44,8 @@ protected:
         DataPartsLock & /* data_parts_lock */);
 
     void deactivateOutdatedParts();
+
+    void loadDataPartsInParallel(MutableDataPartsVector & parts);
 
     static void runOverPartsInParallel(MutableDataPartsVector & parts, size_t threads, const std::function<void(MutableDataPartPtr &)> & op);
 
