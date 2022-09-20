@@ -83,7 +83,7 @@ public:
 
     void add(T first, T second)
     {
-        map.release();
+        map.reset();
         union_find.add(std::move(first), std::move(second));
     }
 
