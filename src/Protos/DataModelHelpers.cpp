@@ -114,6 +114,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     /// Partition and Minmax index
     ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
     part->loadPartitionAndMinMaxIndex(partition_minmax_buf);
+    part->loadIndexGranularity(0, {});
 
     part->secondary_txn_id = part_model.has_secondary_txn_id() ? TxnTimestamp{part_model.secondary_txn_id()} : TxnTimestamp{0};
     part->virtual_part_size = part_model.has_virtual_part_size() ? part_model.virtual_part_size() : 0;

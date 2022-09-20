@@ -37,9 +37,9 @@ namespace
 
     ServerCanMergeCallback getMergePred(const NameSet & merging_mutating_parts_snapshot)
     {
-        return [&](const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) {
+        return [&](const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) -> bool {
             if (!lhs)
-                return (merging_mutating_parts_snapshot.count(rhs->name())) ? false : true;
+                return !merging_mutating_parts_snapshot.count(rhs->name());
 
             if (merging_mutating_parts_snapshot.count(lhs->name()) || merging_mutating_parts_snapshot.count(rhs->name()))
                 return false;
@@ -842,7 +842,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         std::lock_guard lock(task_records_mutex);
         removeTaskImpl(task_id, &curr_task, lock);
         if (!curr_task)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Task {} not found in this node.", task_id);
+            throw Exception(ErrorCodes::ABORTED, "Task {} not found in this node.", task_id);
     }
 
     if (local_context->getRootConfig().debug_disable_merge_commit.safeGet())
@@ -850,7 +850,7 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
 
     if (curr_task->try_execute)
     {
-        LOG_DEBUG(log, "Ingored the `try_execute` task {}", task_id);
+        LOG_DEBUG(log, "Ignored the `try_execute` task {}", task_id);
         return;
     }
 
@@ -862,9 +862,9 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         UInt64 fetched_start_time = catalog->getMergeMutateThreadStartTime(storage_id);
         if (thread_start_time != fetched_start_time)
             throw Exception(
-                "Task " + task_id + " cannot be committed because current MergeMutateThread for " + storage_id.getFullTableName()
-                    + " is stale. Drop this task.",
-                ErrorCodes::ABORTED);
+                ErrorCodes::ABORTED,
+                "Task {} cannot be committed because current MergeMutateThread for {} is stale. Drop this task.",
+                task_id, storage_id.getFullTableName());
     }
 
     commit_parts();

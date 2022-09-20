@@ -162,8 +162,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     return result;
 }
 
-void CnchDataWriter::commitDumpedParts(
-    const DumpedData & dumped_data)
+void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 {
     Stopwatch watch;
     const auto & settings = context.getSettingsRef();
@@ -273,7 +272,6 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     if (!storage_ptr)
         throw Exception("storage_ptr is nullptr and invalid for use", ErrorCodes::NULL_POINTER_DEREFERENCE);
 
-
     if (!from_buffer_uuid.empty())
     {
         txn->setFromBufferUUID(from_buffer_uuid);
@@ -359,7 +357,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 merge_mutate_thread->finishTask(task_id, dumped_data.parts.front(), [&] {
                     auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr);
 
-                    for (auto & part : dumped_data.parts)
+                    for (const auto & part : dumped_data.parts)
                         action->as<MergeMutateAction &>().appendPart(part);
 
                     action->as<MergeMutateAction &>().setDeleteBitmaps(dumped_data.bitmaps);

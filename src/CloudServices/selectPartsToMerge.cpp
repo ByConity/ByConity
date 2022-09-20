@@ -26,7 +26,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     {
         if (log)
             LOG_DEBUG(log, "There are no parts in the table");
-        return ServerSelectPartsDecision::CANNOT_SELECT;
+        return ServerSelectPartsDecision::NOTHING_TO_MERGE;
     }
 
     time_t current_time = std::time(nullptr);
@@ -113,13 +113,6 @@ ServerSelectPartsDecision selectPartsToMerge(
 
         parts_ranges.back().emplace_back(part_info);
 
-        /// Check for consistency of data parts. If assertion is failed, it requires immediate investigation.
-        if (prev_part && part->info().partition_id == (*prev_part)->info().partition_id
-            && part->info().min_block <= (*prev_part)->info().max_block)
-        {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Part {} intersects previous part {}", part->name(), (*prev_part)->name());
-        }
-
         prev_part = &part;
     }
 
@@ -171,7 +164,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     */
 
     std::unique_ptr<IMergeSelector> merge_selector;
-    auto & config = data.getContext()->getConfigRef();
+    const auto & config = data.getContext()->getConfigRef();
     auto merge_selector_str = config.getString("merge_selector", "simple");
     if (merge_selector_str == "dance")
     {

@@ -21,7 +21,6 @@ CloudMergeTreeMutateTask::CloudMergeTreeMutateTask(
 void CloudMergeTreeMutateTask::executeImpl()
 {
     auto lock_holder = storage.lockForShare(RWLockImpl::NO_QUERY, storage.getSettings()->lock_acquire_timeout_for_background_operations);
-    auto visible_parts = CnchPartsHelper::calcVisibleParts(params.all_parts, false);
 
     MergeTreeDataMutator mutate_executor(storage, getContext()->getSettingsRef().background_pool_size);
     auto temp_parts = mutate_executor.mutatePartsToTemporaryParts(params, *manipulation_entry, getContext(), lock_holder);

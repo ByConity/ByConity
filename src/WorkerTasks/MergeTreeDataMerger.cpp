@@ -339,7 +339,7 @@ void MergeTreeDataMerger::createSources()
             merging_column_names,
             false, // read_with_direct_io: We believe source parts will be mostly in page cache
             true, /// take_column_types_from_storage
-            false /// queit
+            false /// quiet
         );
         input->setProgressCallback(ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, *horizontal_stage_progress));
 
@@ -706,6 +706,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 
     createSources();
     createMergedStream();
+    copyMergedData();
 
     if (merge_alg == MergeAlgorithm::Vertical)
         gatherColumns();
@@ -726,7 +727,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
     }
 
     /// TODO: support project
-
     finalizePart();
 
     return new_data_part;

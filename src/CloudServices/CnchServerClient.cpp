@@ -239,7 +239,7 @@ TxnTimestamp CnchServerClient::commitParts(
     const DeleteBitmapMetaPtrVector & delete_bitmaps,
     const MutableMergeTreeDataPartsCNCHVector & staged_parts,
     const String & task_id,
-    const bool from_server,
+    [[maybe_unused]]const bool from_server,
     const String & consumer_group,
     const cppkafka::TopicPartitionList & tpl,
     const String & from_buffer_uuid)
@@ -251,20 +251,24 @@ TxnTimestamp CnchServerClient::commitParts(
     Protos::CommitPartsReq request;
     Protos::CommitPartsResp response;
 
-    if (from_server)
-    {
-        StorageCnchMergeTree & cnch_storage = dynamic_cast<StorageCnchMergeTree &>(storage);
-        request.set_database(cnch_storage.getDatabaseName());
-        request.set_table(cnch_storage.getTableName());
-        RPCHelpers::fillUUID(cnch_storage.getStorageUUID(), *request.mutable_uuid());
-    }
-    else
-    {
-        StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
-        request.set_database(cloud_storage.getCnchDatabase());
-        request.set_table(cloud_storage.getCnchTable());
-        RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
-    }
+    request.set_database(storage.getDatabaseName());
+    request.set_table(storage.getTableName());
+    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
+
+    // if (from_server)
+    // {
+    //     StorageCnchMergeTree & cnch_storage = dynamic_cast<StorageCnchMergeTree &>(storage);
+    //     request.set_database(cnch_storage.getDatabaseName());
+    //     request.set_table(cnch_storage.getTableName());
+    //     RPCHelpers::fillUUID(cnch_storage.getStorageUUID(), *request.mutable_uuid());
+    // }
+    // else
+    // {
+    //     StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
+    //     request.set_database(cloud_storage.getCnchDatabase());
+    //     request.set_table(cloud_storage.getCnchTable());
+    //     RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
+    // }
 
     request.set_type(UInt32(type));
     for (const auto & part : parts)
@@ -287,7 +291,8 @@ TxnTimestamp CnchServerClient::commitParts(
         request.set_from_buffer_uuid(from_buffer_uuid);
 
     /// add tpl for kafka commit
-    if (!consumer_group.empty()) {
+    if (!consumer_group.empty())
+    {
         if (tpl.empty())
             throw Exception("No tpl get while committing kafka data", ErrorCodes::LOGICAL_ERROR);
         request.set_consumer_group(consumer_group);

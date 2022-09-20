@@ -2,6 +2,7 @@
 
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/NamedSession.h>
@@ -81,7 +82,10 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.txn_id = request->txn_id();
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
-        params.source_data_parts = createPartVectorFromModelsForSend<IMergeTreeDataPartPtr>(*data, request->source_parts());
+        // auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
+        // data->loadDataParts(all_parts, false);
+        params.all_parts = createPartVectorFromModelsForSend<IMergeTreeDataPartPtr>(*data, request->source_parts());
+        params.source_data_parts = CnchPartsHelper::calcVisibleParts(params.all_parts, false);
 
         if (params.type == ManipulationType::Mutate)
         {
@@ -575,7 +579,7 @@ void CnchWorkerServiceImpl::getConsumerStatus(
     {
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->makeQueryContext();
-        
+
         auto storage_id = RPCHelpers::createStorageID(request->table());
         auto kafka_table = DatabaseCatalog::instance().getTable(storage_id, rpc_context);
 

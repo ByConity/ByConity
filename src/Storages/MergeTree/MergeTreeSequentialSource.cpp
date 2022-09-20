@@ -81,14 +81,8 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
         .read_source_bitmap = true,
     };
 
-    size_t marks_count = data_part->getMarksCount();
-    if (auto part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(data_part); part != nullptr)
-    {
-        marks_count = part->marks_count;
-    }
-
     reader = data_part->getReader(columns_for_reader, metadata_snapshot,
-        MarkRanges{MarkRange(0, marks_count)},
+        MarkRanges{MarkRange(0, data_part->getMarksCount())},
         /* uncompressed_cache = */ nullptr, mark_cache.get(), reader_settings);
 }
 
@@ -97,12 +91,8 @@ try
 {
     if (delete_bitmap)
     {
-        size_t marks_count = data_part->getMarksCount();
-        if (auto part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(data_part); part != nullptr)
-        {
-            marks_count = part->marks_count;
-        }
         /// skip deleted mark
+        size_t marks_count = data_part->index_granularity.getMarksCount();
         while (current_mark < marks_count && delete_bitmap->containsRange(currentMarkStart(), currentMarkEnd()))
         {
             current_row += data_part->index_granularity.getMarkRows(current_mark);
