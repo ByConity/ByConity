@@ -915,8 +915,7 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
 
 void CnchAttachProcessor::genPartsDeleteMark([[maybe_unused]]MutableMergeTreeDataPartsCNCHVector& parts_to_write)
 {
-    auto parts_to_drop = target_tbl.getServerPartsByPartitionOrPredicate(query_ctx,
-        command.partition, command.part);
+    auto parts_to_drop = target_tbl.selectPartsByPartitionCommand(query_ctx, command);
     if (!parts_to_drop.empty())
     {
         if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)

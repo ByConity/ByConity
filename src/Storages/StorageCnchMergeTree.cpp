@@ -45,6 +45,10 @@
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Storages/SelectQueryInfo.h>
 #include <CloudServices/commitCnchParts.h>
 
 namespace ProfileEvents
@@ -1266,99 +1270,10 @@ void StorageCnchMergeTree::truncate(
     dropPartitionOrPart(command, local_context);
 }
 
-ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part)
-{
-    bool filter_by_part = part && ast->as<ASTLiteral>();
-    bool filter_by_partition = !part && ast->as<ASTPartition>();
-
-    if (filter_by_part || filter_by_partition)
-    {
-        String part_name;
-        String partition_id;
-
-        if (part)
-        {
-            /// typeid_cast will throw bad_cast exception if cast fail.
-            part_name = typeid_cast<const ASTLiteral &>(*ast).value.safeGet<String>();
-            partition_id = MergeTreePartInfo::fromPartName(part_name, format_version).partition_id;
-        }
-        else
-            partition_id = getPartitionIDFromQuery(ast, local_context);
-
-        auto all_parts = local_context->getCnchCatalog()->getServerDataPartsInPartitions(
-            shared_from_this(), {partition_id}, local_context->getCurrentTransaction()->getStartTime(), local_context.get());
-
-        auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
-
-        if (!part)
-            return visible_parts;
-        else if (auto it = std::lower_bound(visible_parts.begin(), visible_parts.end(), part_name, [](auto & lhs, auto & rhs) { return lhs->name() < rhs; } );
-                it != visible_parts.end() && (*it)->name() == part_name)
-            return { *it };
-        else
-            return {};
-    }
-    else
-    {
-        return getServerPartsByPredicate(local_context, ast);
-    }
-}
-
-ServerDataPartsVector StorageCnchMergeTree::getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_)
-{
-    auto all_parts = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), local_context->getCurrentTransaction()->getStartTime(), nullptr);
-    auto parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
-    parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info().isFakeDropRangePart(); }), parts.end());
-
-    // Do nothing if this table is not partition by key.
-    auto metadata_snapshot = getInMemoryMetadataPtr();
-    if (!metadata_snapshot->hasPartitionKey())
-        return parts;
-
-    const auto & partition_key = metadata_snapshot->getPartitionKey();
-    MutableColumns mutable_columns = partition_key.sample_block.cloneEmptyColumns();
-
-    for (auto & part : parts)
-    {
-        auto & partition_value = part->partition().value;
-        for (size_t c = 0; c < mutable_columns.size(); ++c)
-        {
-            if (c < partition_value.size())
-                mutable_columns[c]->insert(partition_value[c]);
-            else
-                /// When partitions have different partition key insert default value
-                /// TODO: insert default value may cause delete partition with default value
-                mutable_columns[c]->insertDefault();
-        }
-    }
-
-    auto block = partition_key.sample_block.cloneWithColumns(std::move(mutable_columns));
-    auto predicate = predicate_->clone();
-    auto syntax_result = TreeRewriter(getContext()).analyze(predicate, block.getNamesAndTypesList());
-    auto actions = ExpressionAnalyzer(predicate, syntax_result, getContext()).getActions(true);
-    actions->execute(block);
-
-    /// Check the result
-    if (1 != block.columns())
-        throw Exception("Wrong column number of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
-    else if (block.getNamesAndTypesList().front().type->getName() != "UInt8")
-        throw Exception("Wrong column type of WHERE clause's calculation result", ErrorCodes::LOGICAL_ERROR);
-
-    ServerDataPartsVector candidate_parts;
-    const auto & flag_column = block.getColumnsWithTypeAndName().front().column;
-    for (size_t i = 0; i < parts.size(); ++i)
-    {
-        if (flag_column->getInt(i))
-            candidate_parts.push_back(parts[i]);
-    }
-
-    return candidate_parts;
-}
-
 void StorageCnchMergeTree::dropPartitionOrPart(const PartitionCommand & command,
     ContextPtr local_context, IMergeTreeDataPartsVector* dropped_parts)
 {
-    auto svr_parts = getServerPartsByPartitionOrPredicate(local_context, command.partition, command.part);
+    auto svr_parts = selectPartsByPartitionCommand(local_context, command);
     if (svr_parts.empty())
     {
         if (command.part)
@@ -1669,4 +1584,68 @@ StorageCnchMergeTree & StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
     return *src_data;
 }
 
+ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command)
+{
+    /// The members of `command` have different meaning depending on the types of partition command:
+    /// 1. DROP / DETACH PART:
+    ///    - command.part = true
+    ///    - command.partition is ASTLiteral of part name
+    /// 2. DROP / DETACH PARTITION:
+    ///    - command.part = false
+    ///    - command.partition is partition expression
+    /// 3. DROP / DETACH PARTHTION WHERE:
+    ///    - command.part = false;
+    ///    - command.partition is the WHERE predicate (should only includes partition column)
+
+    /// Implementation: reuse selectPartsToRead(). Actually, this is an overkill, because the predicates is usually not too complicated.
+    /// Howerver, this is the only way to avoid repeating same code in StorageCnchMergeTree.
+    SelectQueryInfo query_info;
+    Names column_names_to_return;
+    auto select = std::make_shared<ASTSelectQuery>();
+    select->setExpression(ASTSelectQuery::Expression::SELECT, makeASTFunction(" count"));
+    select->replaceDatabaseAndTable(getStorageID());
+    /// create a fake query: SELECT () FROM TBL WHERE ... as following
+    ASTPtr where;
+    if (command.part)
+    {
+        /// Predicate: WHERE _part = value, with value from command.partition
+        auto lhs = std::make_shared<ASTIdentifier>("_part");
+        auto rhs = command.partition->clone();
+        where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
+        column_names_to_return.push_back("_part");
+    }
+    else if (command.type == PartitionCommand::Type::DROP_PARTITION)
+    {
+        const auto & partition = command.partition->as<const ASTPartition &>();
+        if (!partition.id.empty())
+        {
+            /// Predicate: WHERE _partition_id = value, with value is partition.id
+            auto lhs = std::make_shared<ASTIdntifier>("_partition_id");
+            auto rhs = std::make_shared<ASTLiteral>(Field(partition.id));
+            where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
+            column_names_to_return.push_back("_partition_id");
+        }
+        else
+        {
+            /// Predicate: WHERE _partition_value = value, with value is partition.value
+            auto lhs = std::make_shared<ASTIdntifier>("_partition_value");
+            auto rhs = partition.value->clone();
+            where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
+            column_names_to_return.push_back("_partition_value");
+        }
+    }
+    else if (command.type == PartitionCommand::Type::DROP_PARTITION_WHERE)
+    {
+        /// TODO @canh: Verify that there's only partition column (or no column at all) in WHERE; this is critical
+        /// Predicate: WHERE xxx with xxx is command.partition
+        where = command.partition->clone();
+    }
+    select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
+    auto metadata_snapshot = getInMemoryDataSnapshot();
+    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(metadata_snapshot->partition_key.sample_block.getColumnsWithTypeAndName(), shared_from_this(), true);
+    syntac_analyzer_result = TreeRewriter(local_context).analyzeSelect(select, std::move(syntax_analyzer_result));
+    query_info.query = std::move(select);
+    query_info.syntax_analyzer_result = std::move(syntax_analyzer_result);
+    return selectPartsToRead(column_names_to_return, ContextPtr local_context, query_info);
+}
 } // end namespace DB
