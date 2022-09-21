@@ -29,7 +29,7 @@ namespace ErrorCodes
 
 namespace
 {
-    constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 10ul;
+    constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
 
     /// XXX: some settings for MutateTask
     constexpr auto max_mutate_part_num = 100UL;
