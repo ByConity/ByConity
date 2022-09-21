@@ -515,8 +515,9 @@ template <typename Name> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime, N
 template <typename Name> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime, Name>
     : DateTimeTransformImpl<DataTypeFloat64, DataTypeDateTime, ToDateTimeTransform64Signed<Float64, UInt32>> {};
 
-const time_t LUT_MIN_TIME = -1420070400l;       // 1925-01-01 UTC
-const time_t LUT_MAX_TIME = 9877248000l;        // 2282-12-31 UTC
+const time_t LUT_MIN_TIME = -2208988800l;           //  1900-01-01 UTC
+
+const time_t LUT_MAX_TIME = 10413791999l;           // 2299-12-31 UTC
 
 /** Conversion of numeric to DateTime64
   */
@@ -1851,6 +1852,107 @@ public:
     }
 };
 
+/** Conversion to fixed string is implemented only for strings.
+ * The function toFixedStringOrNull and toFixedStringOrZero is a special case,
+ * when the source string is too long, we choose to truncate instead of filling the default value
+  */
+template<typename Name, ConvertFromStringExceptionMode exception_mode>
+class FunctionToFixedStringImpl : public IFunction
+{
+public:
+    static constexpr auto name = Name::name;
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToFixedStringImpl>(); }
+
+    String getName() const override
+    {
+        return name;
+    }
+
+    size_t getNumberOfArguments() const override { return 2; }
+    bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+
+    DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
+    {
+        if (!isUnsignedInteger(arguments[1].type))
+            throw Exception("Second argument for function " + getName() + " must be unsigned integer", ErrorCodes::ILLEGAL_COLUMN);
+        if (!arguments[1].column || arguments[1].column->empty())
+            throw Exception("Second argument for function " + getName() + " must be constant", ErrorCodes::ILLEGAL_COLUMN);
+        if (!isStringOrFixedString(arguments[0].type))
+            throw Exception(getName() + " is only implemented for types String and FixedString", ErrorCodes::NOT_IMPLEMENTED);
+
+        const size_t n = arguments[1].column->getUInt(0);
+        if constexpr (exception_mode != ConvertFromStringExceptionMode::Null)
+            return std::make_shared<DataTypeFixedString>(n);
+        return std::make_shared<DataTypeNullable>(std::make_shared<DataTypeFixedString>(n));
+    }
+
+    bool useDefaultImplementationForConstants() const override { return true; }
+    ColumnNumbers getArgumentsThatAreAlwaysConstant() const override { return {1}; }
+
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
+    {
+        const auto n = arguments[1].column->getUInt(0);
+        return executeForN(arguments, n);
+    }
+
+    static ColumnPtr executeForN(const ColumnsWithTypeAndName & arguments, const size_t n)
+    {
+        const auto & column = arguments[0].column;
+
+        ColumnUInt8::MutablePtr col_null_map_to;
+        ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
+        if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
+        {
+            col_null_map_to = ColumnUInt8::create(column->size(), false);
+            vec_null_map_to = &col_null_map_to->getData();
+        }
+
+        if (const auto column_string = checkAndGetColumn<ColumnString>(column.get()))
+        {
+            auto column_fixed = ColumnFixedString::create(n);
+
+            auto & out_chars = column_fixed->getChars();
+            const auto & in_chars = column_string->getChars();
+            const auto & in_offsets = column_string->getOffsets();
+
+            out_chars.resize_fill(in_offsets.size() * n);
+
+            for (size_t i = 0; i < in_offsets.size(); ++i)
+            {
+                const size_t off = i ? in_offsets[i - 1] : 0;
+                const size_t len = in_offsets[i] - off - 1;
+                if (len > n && exception_mode == ConvertFromStringExceptionMode::Throw)
+                    throw Exception("String too long for type FixedString(" + toString(n) + ")", ErrorCodes::TOO_LARGE_STRING_SIZE);
+                memcpy(&out_chars[i * n], &in_chars[off], std::min(len, n));
+            }
+
+            if constexpr (exception_mode == ConvertFromStringExceptionMode::Null)
+                return ColumnNullable::create(std::move(column_fixed), std::move(col_null_map_to));
+            else
+                return column_fixed;
+        }
+        else if (const auto column_fixed_string = checkAndGetColumn<ColumnFixedString>(column.get()))
+        {
+            auto src_n = column_fixed_string->getN();
+            if (src_n > n && exception_mode == ConvertFromStringExceptionMode::Throw)
+                throw Exception{"String too long for type FixedString(" + toString(n) + ")", ErrorCodes::TOO_LARGE_STRING_SIZE};
+
+            auto column_fixed = ColumnFixedString::create(n);
+
+            auto & out_chars = column_fixed->getChars();
+            const auto & in_chars = column_fixed_string->getChars();
+            const auto size = column_fixed_string->size();
+            out_chars.resize_fill(size * n);
+
+            for (const auto i : collections::range(0, size))
+                memcpy(&out_chars[i * n], &in_chars[i * src_n], std::min(n, src_n));
+
+            return column_fixed;
+        }
+        else
+            throw Exception("Unexpected column: " + column->getName(), ErrorCodes::ILLEGAL_COLUMN);
+    }
+};
 
 /// Monotonicity.
 
@@ -2162,6 +2264,7 @@ struct NameToDecimal64OrZero { static constexpr auto name = "toDecimal64OrZero";
 struct NameToDecimal128OrZero { static constexpr auto name = "toDecimal128OrZero"; };
 struct NameToDecimal256OrZero { static constexpr auto name = "toDecimal256OrZero"; };
 struct NameToUUIDOrZero { static constexpr auto name = "toUUIDOrZero"; };
+struct NameToFixedStringOrZero { static constexpr auto name = "toFixedStringOrZero"; };
 
 using FunctionToUInt8OrZero = FunctionConvertFromString<DataTypeUInt8, NameToUInt8OrZero, ConvertFromStringExceptionMode::Zero>;
 using FunctionToUInt16OrZero = FunctionConvertFromString<DataTypeUInt16, NameToUInt16OrZero, ConvertFromStringExceptionMode::Zero>;
@@ -2185,6 +2288,7 @@ using FunctionToDecimal64OrZero = FunctionConvertFromString<DataTypeDecimal<Deci
 using FunctionToDecimal128OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal128>, NameToDecimal128OrZero, ConvertFromStringExceptionMode::Zero>;
 using FunctionToDecimal256OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal256>, NameToDecimal256OrZero, ConvertFromStringExceptionMode::Zero>;
 using FunctionToUUIDOrZero = FunctionConvertFromString<DataTypeUUID, NameToUUIDOrZero, ConvertFromStringExceptionMode::Zero>;
+using FunctionToFixedStringOrZero = FunctionToFixedStringImpl<NameToFixedStringOrZero, ConvertFromStringExceptionMode::Zero>;
 
 struct NameToUInt8OrNull { static constexpr auto name = "toUInt8OrNull"; };
 struct NameToUInt16OrNull { static constexpr auto name = "toUInt16OrNull"; };
@@ -2208,6 +2312,7 @@ struct NameToDecimal64OrNull { static constexpr auto name = "toDecimal64OrNull";
 struct NameToDecimal128OrNull { static constexpr auto name = "toDecimal128OrNull"; };
 struct NameToDecimal256OrNull { static constexpr auto name = "toDecimal256OrNull"; };
 struct NameToUUIDOrNull { static constexpr auto name = "toUUIDOrNull"; };
+struct NameToFixedStringOrNull { static constexpr auto name = "toFixedStringOrNull"; };
 
 using FunctionToUInt8OrNull = FunctionConvertFromString<DataTypeUInt8, NameToUInt8OrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToUInt16OrNull = FunctionConvertFromString<DataTypeUInt16, NameToUInt16OrNull, ConvertFromStringExceptionMode::Null>;
@@ -2231,6 +2336,7 @@ using FunctionToDecimal64OrNull = FunctionConvertFromString<DataTypeDecimal<Deci
 using FunctionToDecimal128OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal128>, NameToDecimal128OrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToDecimal256OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal256>, NameToDecimal256OrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToUUIDOrNull = FunctionConvertFromString<DataTypeUUID, NameToUUIDOrNull, ConvertFromStringExceptionMode::Null>;
+using FunctionToFixedStringOrNull = FunctionToFixedStringImpl<NameToFixedStringOrNull, ConvertFromStringExceptionMode::Null>;
 
 struct NameParseDateTimeBestEffort { static constexpr auto name = "parseDateTimeBestEffort"; };
 struct NameParseDateTimeBestEffortOrZero { static constexpr auto name = "parseDateTimeBestEffortOrZero"; };
