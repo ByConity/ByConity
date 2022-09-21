@@ -239,7 +239,7 @@ TxnTimestamp CnchServerClient::commitParts(
     const DeleteBitmapMetaPtrVector & delete_bitmaps,
     const MutableMergeTreeDataPartsCNCHVector & staged_parts,
     const String & task_id,
-    [[maybe_unused]]const bool from_server,
+    const bool from_server,
     const String & consumer_group,
     const cppkafka::TopicPartitionList & tpl,
     const String & from_buffer_uuid)
@@ -251,24 +251,20 @@ TxnTimestamp CnchServerClient::commitParts(
     Protos::CommitPartsReq request;
     Protos::CommitPartsResp response;
 
-    request.set_database(storage.getDatabaseName());
-    request.set_table(storage.getTableName());
-    RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
-
-    // if (from_server)
-    // {
-    //     StorageCnchMergeTree & cnch_storage = dynamic_cast<StorageCnchMergeTree &>(storage);
-    //     request.set_database(cnch_storage.getDatabaseName());
-    //     request.set_table(cnch_storage.getTableName());
-    //     RPCHelpers::fillUUID(cnch_storage.getStorageUUID(), *request.mutable_uuid());
-    // }
-    // else
-    // {
-    //     StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
-    //     request.set_database(cloud_storage.getCnchDatabase());
-    //     request.set_table(cloud_storage.getCnchTable());
-    //     RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
-    // }
+    if (from_server)
+    {
+        StorageCnchMergeTree & cnch_storage = dynamic_cast<StorageCnchMergeTree &>(storage);
+        request.set_database(cnch_storage.getDatabaseName());
+        request.set_table(cnch_storage.getTableName());
+        RPCHelpers::fillUUID(cnch_storage.getStorageUUID(), *request.mutable_uuid());
+    }
+    else
+    {
+        StorageCloudMergeTree & cloud_storage = dynamic_cast<StorageCloudMergeTree &>(storage);
+        request.set_database(cloud_storage.getCnchDatabase());
+        request.set_table(cloud_storage.getCnchTable());
+        RPCHelpers::fillUUID(cloud_storage.getStorageUUID(), *request.mutable_uuid());
+    }
 
     request.set_type(UInt32(type));
     for (const auto & part : parts)
