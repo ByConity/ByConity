@@ -428,18 +428,19 @@ static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
 
 time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & partition) const
 {
-    TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    TTLTableDescription table_ttl =  metadata_snapshot->getTableTTLs();
     if (!table_ttl.definition_ast)
         return 0;
 
     /// Construct a block consists of partition keys then compute ttl values according to this block
-    const auto & partition_key_sample = getInMemoryMetadata().getPartitionKey().sample_block;
+    const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     const auto & partition_key = partition.value;
     /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
     if (columns.size() != partition_key.size())
         throw Exception(
-            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition missmatch between inmemory and metastore, this is a bug");
+            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition missmatch between inmemory and metastore, this is a bug, expect block ({}), got values ({})\n", partition_key_sample.dumpNames(), fmt::join(partition_key, ", "));
     for (size_t i = 0; i < partition_key.size(); ++i)
         columns[i]->insert(partition_key[i]);
 
@@ -1669,4 +1670,16 @@ StorageCnchMergeTree & StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
     return *src_data;
 }
 
+bool StorageCnchMergeTree::optimize(
+    const ASTPtr & /*query*/,
+    const StorageMetadataPtr & /*metadata_snapshot*/,
+    const ASTPtr & /*partition*/,
+    bool /*final*/,
+    bool /*deduplicate*/,
+    const Names & /* deduplicate_by_columns */,
+    ContextPtr /*context*/)
+{
+    /// TODO @canh: trigger background task when merge mutate is done
+    return true;
+}
 } // end namespace DB

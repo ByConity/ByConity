@@ -106,6 +106,15 @@ public:
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
+    bool optimize(
+        const ASTPtr & /*query*/,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const ASTPtr & /*partition*/,
+        bool /*final*/,
+        bool /*deduplicate*/,
+        const Names & /* deduplicate_by_columns */,
+        ContextPtr /*context*/) override;
+
     ServerDataPartsVector getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part);
     ServerDataPartsVector getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_);
 
