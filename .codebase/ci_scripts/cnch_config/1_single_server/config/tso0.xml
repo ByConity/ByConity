@@ -578,13 +578,16 @@
 
     <catalog_service>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
-        <type>bytekv</type>
+        <type>fdb</type>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>
             <name_space>bytekv_cnch_build</name_space>
             <table_name>cnch_meta_for_build</table_name>
         </bytekv>
+        <fdb>
+            <cluster_file>fdb_cluster_config_path_replace_me</cluster_file>>
+        </fdb>
     </catalog_service>
 
     <daemon_manager>
