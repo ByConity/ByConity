@@ -1590,15 +1590,15 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     /// 1. DROP / DETACH PART:
     ///    - command.part = true
     ///    - command.partition is ASTLiteral of part name
-    /// 2. DROP / DETACH PARTITION:
+    /// 2. DROP / DETACH PARTITION <ID>:
     ///    - command.part = false
     ///    - command.partition is partition expression
     /// 3. DROP / DETACH PARTHTION WHERE:
     ///    - command.part = false;
     ///    - command.partition is the WHERE predicate (should only includes partition column)
 
-    /// Implementation: reuse selectPartsToRead(). Actually, this is an overkill, because the predicates is usually not too complicated.
-    /// Howerver, this is the only way to avoid repeating same code in StorageCnchMergeTree.
+    /// Implementation: reuse selectPartsToRead(). Actually, this is an overkill, because the predicates is usually not
+    /// too complicated. Howerver, this is the only way to avoid repeating same code in StorageCnchMergeTree.
     SelectQueryInfo query_info;
     Names column_names_to_return;
     ASTPtr query = std::make_shared<ASTSelectQuery>();
@@ -1616,7 +1616,10 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
         where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
         column_names_to_return.push_back("_part");
     }
-    else if (command.type == PartitionCommand::Type::DROP_PARTITION || command.type == PartitionCommand::Type::ATTACH_PARTITION)
+    else if (
+        command.type == PartitionCommand::Type::DROP_PARTITION
+        || ((command.type == PartitionCommand::Type::ATTACH_PARTITION || command.type == PartitionCommand::Type::ATTACH_DETACHED_PARTITION)
+            && command.replace))
     {
         const auto & partition = command.partition->as<const ASTPartition &>();
         if (!partition.id.empty())
@@ -1649,7 +1652,6 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     TreeRewriterResult syntax_analyzer_result(metadata_snapshot->partition_key.sample_block.getNamesAndTypesList(), shared_from_this(), metadata_snapshot, true);
     auto analyzed_result = TreeRewriter(local_context).analyzeSelect(query, std::move(syntax_analyzer_result));
     query_info.query = std::move(query);
-    fmt::print(stderr, "Query from partition command: {}\n", query_info.query->formatForErrorMessage());
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
