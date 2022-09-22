@@ -370,7 +370,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     {
         String database = command.from_database.empty() ?
             query_ctx->getCurrentDatabase() : command.from_database;
-        auto from_storage = DatabaseCatalog::instance().getTable(
+        from_storage = DatabaseCatalog::instance().getTable(
             StorageID(database, command.from_table), query_ctx);
         auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
 
