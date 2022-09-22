@@ -71,9 +71,6 @@
 #include <Processors/Transforms/LimitsCheckingTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 
-#include <Processors/Transforms/LimitsCheckingTransform.h>
-#include <Processors/Transforms/MaterializingTransform.h>
-
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 #include <Transaction/ICnchTransaction.h>
@@ -1049,6 +1046,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                 processor_elem.event_time = time_in_seconds(finish_time);
                                 processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
                                 processor_elem.query_id = elem.client_info.current_query_id;
+                                processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
+                                processor_elem.plan_group = processor->getQueryPlanStepGroup();
 
                                 auto get_proc_id = [](const IProcessor & proc) -> UInt64
                                 {
@@ -1073,7 +1072,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     processor_elem.elapsed_us = processor->getElapsedUs();
                                     processor_elem.input_wait_elapsed_us = processor->getInputWaitElapsedUs();
                                     processor_elem.output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
-
+                                    auto stats = processor->getProcessorDataStats();
+                                    processor_elem.input_rows = stats.input_rows;
+                                    processor_elem.input_bytes = stats.input_bytes;
+                                    processor_elem.output_rows = stats.output_rows;
+                                    processor_elem.output_bytes = stats.output_bytes;
+                                    
                                     processors_profile_log->add(processor_elem);
                                 }
                             }
