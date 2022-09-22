@@ -1516,7 +1516,7 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
     }
     return bucket_numbers;
 }
-StorageCnchMergeTree & StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const
+StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const
 {
     StorageCnchMergeTree * src_data = dynamic_cast<StorageCnchMergeTree *>(source_table.get());
     if (!src_data)
@@ -1581,7 +1581,7 @@ StorageCnchMergeTree & StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
         throw Exception("Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ", ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
     }
 
-    return *src_data;
+    return src_data;
 }
 
 ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command)
@@ -1601,10 +1601,12 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     /// Howerver, this is the only way to avoid repeating same code in StorageCnchMergeTree.
     SelectQueryInfo query_info;
     Names column_names_to_return;
-    auto select = std::make_shared<ASTSelectQuery>();
-    select->setExpression(ASTSelectQuery::Expression::SELECT, makeASTFunction(" count"));
+    ASTPtr query = std::make_shared<ASTSelectQuery>();
+    auto * select = query->as<ASTSelectQuery>();
+    select->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
+    select->select()->children.push_back(std::make_shared<ASTLiteral>(1));
     select->replaceDatabaseAndTable(getStorageID());
-    /// create a fake query: SELECT () FROM TBL WHERE ... as following
+    /// create a fake query: SELECT 1 FROM TBL WHERE ... as following
     ASTPtr where;
     if (command.part)
     {
@@ -1614,13 +1616,13 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
         where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
         column_names_to_return.push_back("_part");
     }
-    else if (command.type == PartitionCommand::Type::DROP_PARTITION)
+    else if (command.type == PartitionCommand::Type::DROP_PARTITION || command.type == PartitionCommand::Type::ATTACH_PARTITION)
     {
         const auto & partition = command.partition->as<const ASTPartition &>();
         if (!partition.id.empty())
         {
             /// Predicate: WHERE _partition_id = value, with value is partition.id
-            auto lhs = std::make_shared<ASTIdntifier>("_partition_id");
+            auto lhs = std::make_shared<ASTIdentifier>("_partition_id");
             auto rhs = std::make_shared<ASTLiteral>(Field(partition.id));
             where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
             column_names_to_return.push_back("_partition_id");
@@ -1628,24 +1630,27 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
         else
         {
             /// Predicate: WHERE _partition_value = value, with value is partition.value
-            auto lhs = std::make_shared<ASTIdntifier>("_partition_value");
+            auto lhs = std::make_shared<ASTIdentifier>("_partition_value");
             auto rhs = partition.value->clone();
+            if (partition.fields_count == 1)
+                rhs = makeASTFunction("tuple", std::move(rhs));
             where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
             column_names_to_return.push_back("_partition_value");
         }
     }
     else if (command.type == PartitionCommand::Type::DROP_PARTITION_WHERE)
     {
-        /// TODO @canh: Verify that there's only partition column (or no column at all) in WHERE; this is critical
         /// Predicate: WHERE xxx with xxx is command.partition
         where = command.partition->clone();
     }
     select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
-    auto metadata_snapshot = getInMemoryDataSnapshot();
-    auto syntax_analyzer_result = std::make_shared<TreeRewriterResult>(metadata_snapshot->partition_key.sample_block.getColumnsWithTypeAndName(), shared_from_this(), true);
-    syntac_analyzer_result = TreeRewriter(local_context).analyzeSelect(select, std::move(syntax_analyzer_result));
-    query_info.query = std::move(select);
-    query_info.syntax_analyzer_result = std::move(syntax_analyzer_result);
-    return selectPartsToRead(column_names_to_return, ContextPtr local_context, query_info);
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    /// So this step will throws if WHERE expression contains columns not in partition key, and it's a good thing
+    TreeRewriterResult syntax_analyzer_result(metadata_snapshot->partition_key.sample_block.getNamesAndTypesList(), shared_from_this(), metadata_snapshot, true);
+    auto analyzed_result = TreeRewriter(local_context).analyzeSelect(query, std::move(syntax_analyzer_result));
+    query_info.query = std::move(query);
+    fmt::print(stderr, "Query from partition command: {}\n", query_info.query->formatForErrorMessage());
+    query_info.syntax_analyzer_result = std::move(analyzed_result);
+    return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
 } // end namespace DB

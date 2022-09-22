@@ -174,6 +174,7 @@ private:
     void refreshView();
 
     StorageCnchMergeTree& target_tbl;
+    // StoragePtr from_storage; /// If attach.from_table is not empty
     const bool is_unique_tbl;
     const PartitionCommand& command;
     ContextMutablePtr query_ctx;

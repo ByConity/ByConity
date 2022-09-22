@@ -125,7 +125,7 @@ public:
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
     MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
 
-    StorageCnchMergeTree & checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
+    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 protected:
