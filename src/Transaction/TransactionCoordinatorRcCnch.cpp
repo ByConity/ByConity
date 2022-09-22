@@ -39,14 +39,13 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     /// fallbackTS is only returned in case of exceptions, thus TSO succeeded if the txn_id is not this value
     bool tso_get_timestamp_succeeded = txn_id != TxnTimestamp::fallbackTS();
 
-    String location = addBracketsIfIpv6(getIPOrFQDNOrHostName()) + ':' + std::to_string(getContext()->getRPCPort());
     TransactionRecord txn_record;
     txn_record.setID(txn_id)
         .setType(opt.type)
         .setPrimaryID(opt.primary_txn_id)
         .setStatus(CnchTransactionStatus::Running)
         .setPriority(opt.priority)
-        .setLocation(location)
+        .setLocation(getContext()->getHostWithPorts().getRPCAddress())
         .setInitiator(txnInitiatorToString(opt.initiator));
 
     txn_record.read_only = opt.read_only;

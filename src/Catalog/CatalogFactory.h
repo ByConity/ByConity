@@ -24,7 +24,7 @@ public:
 
     static StoragePtr getTableByDefinition(ContextMutablePtr context, const String & db, const String & table, const String & create);
 
-    static ASTPtr getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary * dict_model);
+    static ASTPtr getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary & dict_model);
 };
 
 }

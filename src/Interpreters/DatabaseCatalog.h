@@ -151,6 +151,7 @@ public:
 
     /// database_name must be not empty
     DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name, ContextPtr local_context) const;
     DatabasePtr tryGetDatabase(const String & database_name) const;
     DatabasePtr getDatabase(const UUID & uuid) const;
     DatabasePtr tryGetDatabase(const UUID & uuid) const;
@@ -221,9 +222,9 @@ private:
     void assertDatabaseExistsUnlocked(const String & database_name) const;
     void assertDatabaseDoesntExistUnlocked(const String & database_name) const;
 
-    DatabasePtr getDatabaseCnch(const String & database_name) const;
     DatabasePtr tryGetDatabaseCnch(const String & database_name) const;
-    DatabasePtr getDatabaseCnch(const UUID & uuid) const;
+    DatabasePtr tryGetDatabaseCnch(const String & database_name, ContextPtr context) const;
+    DatabasePtr tryGetDatabaseCnch(const UUID & uuid) const;
     Databases getDatabaseCnchs() const;
 
     void shutdownImpl();

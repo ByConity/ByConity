@@ -5,6 +5,7 @@
 #include <Dictionaries/DictionaryStructure.h>
 #include <Databases/IDatabase.h>
 #include <Storages/IStorage.h>
+#include <Interpreters/ExternalLoaderCnchCatalogRepository.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -84,6 +85,12 @@ std::string ExternalDictionariesLoader::resolveDictionaryName(const std::string 
     bool has_dictionary = has(dictionary_name);
     if (has_dictionary)
         return dictionary_name;
+
+    {
+        std::optional<UUID> uuid = ExternalLoaderCnchCatalogRepository::resolveDictionaryName(dictionary_name, getContext());
+        if (uuid.has_value())
+            return toString(uuid.value());
+    }
 
     std::string resolved_name = resolveDictionaryNameFromDatabaseCatalog(dictionary_name);
     has_dictionary = has(resolved_name);

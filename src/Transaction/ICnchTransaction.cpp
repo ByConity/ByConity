@@ -144,4 +144,20 @@ void ICnchTransaction::getKafkaTpl(String & consumer_group_, cppkafka::TopicPart
     tpl_ = this->tpl;
 }
 
+DatabasePtr ICnchTransaction::tryGetDatabaseViaCache(const String & database_name)
+{
+    std::lock_guard lock(database_cache_mutex);
+    auto it = database_cache.find(database_name);
+    if (database_cache.end() != it)
+        return it->second;
+    else
+        return nullptr;
+}
+
+void ICnchTransaction::addDatabaseIntoCache(DatabasePtr db)
+{
+    std::lock_guard lock(database_cache_mutex);
+    database_cache.insert(std::make_pair(db->getDatabaseName(), std::move(db)));
+}
+
 }
