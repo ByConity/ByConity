@@ -10,6 +10,7 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
+#include "Storages/PartitionCommands.h"
 
 namespace DB
 {
@@ -370,13 +371,13 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     {
         String database = command.from_database.empty() ?
             query_ctx->getCurrentDatabase() : command.from_database;
-        auto from_storage = DatabaseCatalog::instance().getTable(
+        from_storage = DatabaseCatalog::instance().getTable(
             StorageID(database, command.from_table), query_ctx);
-        auto& from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
+        auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
 
         if (command.attach_from_detached)
         {
-            auto partition_id = from_cnch_table.getPartitionIDFromQuery(command.partition, query_ctx);
+            auto partition_id = from_cnch_table->getPartitionIDFromQuery(command.partition, query_ctx);
 
             if (is_unique_tbl && partition_id.empty())
             {
@@ -385,9 +386,8 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
                 throw Exception("Unique table try to attach from a empty partition",
                    ErrorCodes::NOT_IMPLEMENTED);
             }
-
             filter = AttachFilter::createPartitionFilter(partition_id);
-            chained_parts_from_sources = collectPartsFromTableDetached(from_cnch_table,
+            chained_parts_from_sources = collectPartsFromTableDetached(*from_cnch_table,
                 filter, attach_ctx);
         }
         else
@@ -398,7 +398,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
                     ErrorCodes::NOT_IMPLEMENTED);
             }
 
-            chained_parts_from_sources = collectPartsFromActivePartition(from_cnch_table,
+            chained_parts_from_sources = collectPartsFromActivePartition(*from_cnch_table,
                 attach_ctx);
         }
     }
@@ -703,7 +703,10 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromActiv
         tbl.getLogName()));
 
     IMergeTreeDataPartsVector parts;
-    tbl.dropPartitionOrPart(command, query_ctx, &parts);
+    PartitionCommand drop_command;
+    drop_command.type = PartitionCommand::Type::DROP_PARTITION;
+    drop_command.partition = command.partition->clone();
+    tbl.dropPartitionOrPart(drop_command, query_ctx, &parts);
 
     // dropPartition will commit old transaction, we need to create a
     // new transaction here
@@ -896,9 +899,7 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
                 String part_name = part_info.getPartNameWithHintMutation();
                 String target_path = std::filesystem::path(target_tbl.getRelativeDataPath())
                     / part_name / "";
-
-                part->volume->getDisk()->moveDirectory(part->getFullRelativePath(),
-                    target_path);
+                part->volume->getDisk()->moveDirectory(part->getFullRelativePath(), target_path);
 
                 prepared_parts[offset] = std::make_shared<MergeTreeDataPartCNCH>(
                     target_tbl, part_name, part->volume, part_name);
@@ -913,10 +914,9 @@ MutableMergeTreeDataPartsCNCHVector CnchAttachProcessor::prepareParts(
     return prepared_parts;
 }
 
-void CnchAttachProcessor::genPartsDeleteMark([[maybe_unused]]MutableMergeTreeDataPartsCNCHVector& parts_to_write)
+void CnchAttachProcessor::genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write)
 {
-    auto parts_to_drop = target_tbl.getServerPartsByPartitionOrPredicate(query_ctx,
-        command.partition, command.part);
+    auto parts_to_drop = target_tbl.selectPartsByPartitionCommand(query_ctx, command);
     if (!parts_to_drop.empty())
     {
         if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)
