@@ -8,6 +8,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
@@ -1028,9 +1029,9 @@ void QueryAnalyzerVisitor::analyzeWhere(ASTSelectQuery & select_query, ScopePtr 
         .subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
     auto filter_type = ExprAnalyzer::analyze(select_query.where(), source_scope, context, analysis, expr_options);
 
-    if (auto nonnull_type = removeNullable(filter_type))
+    if (auto inner_type = removeNullable(removeLowCardinality(filter_type)))
     {
-        if (!nonnull_type->equals(DataTypeUInt8()) && !nonnull_type->equals(DataTypeNothing()))
+        if (!inner_type->equals(DataTypeUInt8()) && !inner_type->equals(DataTypeNothing()))
             throw Exception("Illegal type " + filter_type->getName() + " for WHERE. Must be UInt8 or Nullable(UInt8).",
                             ErrorCodes::ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER);
     }

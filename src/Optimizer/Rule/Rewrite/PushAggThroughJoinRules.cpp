@@ -5,6 +5,7 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Interpreters/join_common.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
@@ -70,9 +71,9 @@ static MappedAggregationInfo createAggregationOverNull(const AggregatingStep * r
     for (const auto & col : reference_aggregation->getInputStreams()[0].header)
     {
         auto type = col.type;
-        if (!type->isNullable())
+        if (JoinCommon::canBecomeNullable(type))
         {
-            type = std::make_shared<DataTypeNullable>(type);
+            type = JoinCommon::convertTypeToNullable(type);
         }
         null_literals.emplace_back(Field());
         auto null_symbol = context.getSymbolAllocator()->newSymbol("null");
@@ -228,6 +229,8 @@ PatternPtr PushAggThroughOuterJoin::getPattern() const
  *            avg(null_literal)
  *              - Values (null_literal)
  */
+ // @jingpeng TODO: wrong answer
+ // select a, groupArray(s) from (select distinct 1 as a) left join (select 2 as b, 'foo' as s) on a=b group by a SETTINGS join_use_nulls=0;
 TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, const Captures &, RuleContext & context)
 {
     const auto * agg_step = dynamic_cast<const AggregatingStep *>(aggregation->getStep().get());

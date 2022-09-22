@@ -7,6 +7,7 @@
 #include <Core/NamesAndTypes.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Interpreters/join_common.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/JoinStep.h>
@@ -110,8 +111,8 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
                     return symbol;
 
                 const auto & type = type_provider.at(symbol.name);
-                if (make_nullable && type->canBeInsideNullable())
-                    return {symbol.name, makeNullable(type_provider.at(symbol.name))};
+                if (make_nullable && JoinCommon::canBecomeNullable(type))
+                    return {symbol.name, JoinCommon::convertTypeToNullable(type_provider.at(symbol.name))};
                 else
                     return {symbol.name, type_provider.at(symbol.name)};
             });
