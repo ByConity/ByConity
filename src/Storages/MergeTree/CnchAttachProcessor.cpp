@@ -10,6 +10,7 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
+#include "Storages/PartitionCommands.h"
 
 namespace DB
 {
@@ -702,7 +703,10 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromActiv
         tbl.getLogName()));
 
     IMergeTreeDataPartsVector parts;
-    tbl.dropPartitionOrPart(command, query_ctx, &parts);
+    PartitionCommand drop_command;
+    drop_command.type = PartitionCommand::Type::DROP_PARTITION;
+    drop_command.partition = command.partition->clone();
+    tbl.dropPartitionOrPart(drop_command, query_ctx, &parts);
 
     // dropPartition will commit old transaction, we need to create a
     // new transaction here

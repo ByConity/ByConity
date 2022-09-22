@@ -1617,9 +1617,9 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
         column_names_to_return.push_back("_part");
     }
     else if (
-        command.type == PartitionCommand::Type::DROP_PARTITION
-        || ((command.type == PartitionCommand::Type::ATTACH_PARTITION || command.type == PartitionCommand::Type::ATTACH_DETACHED_PARTITION)
-            && command.replace))
+        command.type != PartitionCommand::Type::DROP_PARTITION_WHERE && command.type != PartitionCommand::Type::FETCH_PARTITION_WHERE
+        && command.type != PartitionCommand::Type::REPLACE_PARTITION_WHERE && command.type != PartitionCommand::Type::SAMPLE_PARTITION_WHERE
+        && command.type != PartitionCommand::Type::BITENGINE_RECODE_PARTITION_WHERE)
     {
         const auto & partition = command.partition->as<const ASTPartition &>();
         if (!partition.id.empty())
@@ -1641,11 +1641,12 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
             column_names_to_return.push_back("_partition_value");
         }
     }
-    else if (command.type == PartitionCommand::Type::DROP_PARTITION_WHERE)
+    else
     {
         /// Predicate: WHERE xxx with xxx is command.partition
         where = command.partition->clone();
     }
+
     select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
     auto metadata_snapshot = getInMemoryMetadataPtr();
     /// So this step will throws if WHERE expression contains columns not in partition key, and it's a good thing
