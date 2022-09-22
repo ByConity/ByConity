@@ -1046,8 +1046,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                 processor_elem.event_time = time_in_seconds(finish_time);
                                 processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
                                 processor_elem.query_id = elem.client_info.current_query_id;
-                                processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
-                                processor_elem.plan_group = processor->getQueryPlanStepGroup();
 
                                 auto get_proc_id = [](const IProcessor & proc) -> UInt64
                                 {
@@ -1066,6 +1064,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                                     processor_elem.id = get_proc_id(*processor);
                                     processor_elem.parent_ids = std::move(parents);
+                                    processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
+                                    /// plan_group is set differently to community CH,
+                                    /// which is processor->getQueryPlanStepGroup();
+                                    /// here, it is combined with the segment_id
+                                    /// for visualizing processors in the profiling website
+                                    processor_elem.plan_group = processor->getQueryPlanStepGroup() | (segment_id << 16);
 
                                     processor_elem.processor_name = processor->getName();
 
