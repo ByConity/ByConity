@@ -1069,7 +1069,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                                     /// which is processor->getQueryPlanStepGroup();
                                     /// here, it is combined with the segment_id
                                     /// for visualizing processors in the profiling website
-                                    processor_elem.plan_group = processor->getQueryPlanStepGroup() | (segment_id << 16);
+                                    processor_elem.plan_group = processor->getQueryPlanStepGroup();
 
                                     processor_elem.processor_name = processor->getName();
 
