@@ -16,7 +16,7 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
         assert(!params.attach);
         cnch_catalog->createDatabase(params.database, params.uuid, txn_id, commit_time);
     }
-    else
+    else if (!params.is_dictionary)
     {
         /// create table
         updateTsCache(params.uuid, commit_time);
@@ -24,6 +24,11 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
             cnch_catalog->attachTable(params.database, params.table, commit_time);
         else
             cnch_catalog->createTable(StorageID{params.database, params.table, params.uuid}, params.statement, "", txn_id, commit_time);
+    }
+    else
+    {
+        /// create dictionary
+        cnch_catalog->createDictionary(StorageID{params.database, params.table, params.uuid}, params.statement);
     }
 }
 

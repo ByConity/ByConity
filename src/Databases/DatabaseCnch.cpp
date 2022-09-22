@@ -54,11 +54,12 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     auto create_query = query->as<ASTCreateQuery &>();
     if (create_query.isView())
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
-    if (!startsWith(create_query.storage->engine->name, "Cnch"))
+    if ((!create_query.is_dictionary) &&
+        (!startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
     String statement = serializeAST(*query);
-    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach};
+    CreateActionParams params = {getDatabaseName(), table_name, table->getStorageUUID(), statement, create_query.attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -76,11 +77,22 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     //auto table_lock = txn->createIntentLock({database_name, table_name});
     //table_lock->lock();
 
-    StoragePtr storage = local_context->getCnchCatalog()->getTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    bool is_dictionary = false;
+    TxnTimestamp previous_version = 0;
     if (!storage)
-        throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
+    {
+        if (!local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
+            throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
+        else
+            is_dictionary = true;
+    }
+    else
+    {
+        previous_version = storage->commit_time;
+    }
 
-    DropActionParams params{getDatabaseName(), table_name, storage->commit_time, ASTDropQuery::Kind::Drop};
+    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Drop, is_dictionary};
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{std::move(storage)});
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
@@ -251,7 +263,11 @@ StoragePtr DatabaseCnch::tryGetTableImpl(const String & name, ContextPtr local_c
     TransactionCnchPtr cnch_txn = local_context->getCurrentTransaction();
     const TxnTimestamp & start_time = cnch_txn ? cnch_txn->getStartTime() : TxnTimestamp{local_context->getTimestamp()};
 
-    return getContext()->getCnchCatalog()->getTable(*local_context, getDatabaseName(), name, start_time);
+    StoragePtr storage_ptr = getContext()->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), name, start_time);
+    if (!storage_ptr)
+        storage_ptr = getContext()->getCnchCatalog()->tryGetDictionary(database_name, name, local_context);
+
+    return storage_ptr;
 }
 
 void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_name)
