@@ -91,6 +91,7 @@
 #include <Storages/System/StorageSystemCnchTableInfo.h>
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
 #include <Storages/System/StorageSystemCnchDatabases.h>
+#include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchDatabasesHistory.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
@@ -199,6 +200,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
     attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
     attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
+    attach<StorageSystemCnchDictionaries>(system_database, "cnch_dictionaries");
     attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
     attach<StorageSystemCnchTables>(system_database, "cnch_tables");
     attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");

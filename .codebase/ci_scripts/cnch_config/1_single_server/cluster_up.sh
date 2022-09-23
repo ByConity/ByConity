@@ -10,12 +10,14 @@ UNIQUE_VALUE_TSO=$(cat /proc/sys/kernel/random/uuid)
 BYTEJOURNAL_CNCH_PREFIX=cnch_ci_${UNIQUE_VALUE}_
 SERVER_ELECTION_POINT=server_point_${UNIQUE_VALUE}
 CATALOG_NAMESPACE=${UNIQUE_VALUE}
+fdb_cluster_config_path="/opt/tiger/foundationdb/config/fdb.cluster"
 
 sed -i "s/clickhouse_ci_random_suffix_replace_me_/clickhouse_ci_random_suffix_${UNIQUE_VALUE}_/"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/*.xml
 sed -i "s/random_suffix_replace_me/${UNIQUE_VALUE_TSO}/"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/tso*.xml
 sed -i "s/random_suffix_replace_me/${UNIQUE_VALUE}/"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config/*.xml
 HDFS_PATH=${HDFS_PATH:-/user/clickhouse_ci/${UNIQUE_VALUE}/}
 sed -i "s#server_hdfs_disk_replace_me#${HDFS_PATH}#"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config//*.xml
+sed -i "s#fdb_cluster_config_path_replace_me#${fdb_cluster_config_path}#"  ${APP_ROOT}/.codebase/ci_scripts/cnch_config/1_single_server/config//*.xml
 
 if [ -n "$ENABLE_IPV6" ]; then
   IP_ADDRESS=BYTED_HOST_IPV6
@@ -30,7 +32,7 @@ SERVICES=("tso0" "server" "vw-default" "vw-write" "daemon-manager" "resource-man
 for service in "${SERVICES[@]}"; do
       mkdir -p "${ARTIFACT_FOLDER_PATH}/${service}"
 done
-echo 'test'
+
 # create folder to store data as local disk
 for ((i=0; i<10; i++))
 do

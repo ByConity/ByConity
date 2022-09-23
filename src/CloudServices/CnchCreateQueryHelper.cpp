@@ -29,7 +29,9 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
         "",
         context,
         context->getGlobalContext(),
-        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context, false),
+        // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
+        // should NOT affect existing tables.
+        InterpreterCreateQuery::getColumnsDescription(*ast->columns_list->columns, context, true /*attach*/),
         InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints),
         false /*has_force_restore_data_flag*/);
 }

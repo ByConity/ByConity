@@ -4,6 +4,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
+#include "Catalog/DataModelPartWrapper_fwd.h"
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 
@@ -115,9 +116,7 @@ public:
         const Names & /* deduplicate_by_columns */,
         ContextPtr /*context*/) override;
 
-    ServerDataPartsVector getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part);
-    ServerDataPartsVector getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_);
-
+    ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
         IMergeTreeDataPartsVector* dropped_parts = nullptr);
     Block getBlockWithVirtualPartitionColumns(const std::vector<std::shared_ptr<MergeTreePartition>> & partition_list) const;
@@ -134,7 +133,7 @@ public:
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
     MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
 
-    StorageCnchMergeTree & checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
+    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 protected:

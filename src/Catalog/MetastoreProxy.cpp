@@ -990,9 +990,9 @@ std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordW
 
 void MetastoreProxy::setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 ttl)
 {
-    if (ttl && static_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    if (ttl && dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
     {
-        return static_cast<MetastoreByteKVImpl *>(metastore_ptr.get())->putTTL(transactionRecordKey(name_space, txn_id), txn_data, ttl);
+        return dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get())->putTTL(transactionRecordKey(name_space, txn_id), txn_data, ttl);
     }
     return metastore_ptr->put(transactionRecordKey(name_space, txn_id), txn_data);
 }

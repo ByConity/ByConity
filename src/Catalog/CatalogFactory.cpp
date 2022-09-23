@@ -66,9 +66,9 @@ StoragePtr CatalogFactory::getTableByDefinition(
     return res;
 }
 
-ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary * dict_model)
+ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary & dict_model)
 {
-    const auto & create_query = dict_model->definition();
+    const auto & create_query = dict_model.definition();
     const char *begin = create_query.data();
     const char *end = begin + create_query.size();
     ParserQuery parser(end);

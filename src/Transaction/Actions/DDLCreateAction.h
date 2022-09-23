@@ -13,6 +13,7 @@ struct CreateActionParams
     UUID uuid;
     String statement;
     bool attach = false;
+    bool is_dictionary = false;
 };
 
 class DDLCreateAction : public IAction
