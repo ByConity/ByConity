@@ -93,7 +93,7 @@ TransformResult SimplifyPredicateRewriteRule::transformImpl(PlanNodePtr node, co
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter();
 
-    ConstASTPtr rewritten = ExpressionInterpreter::optimizePredicate(predicate, context, step.getOutputStream().header.getNamesAndTypes());
+    ConstASTPtr rewritten = ExpressionInterpreter::optimizePredicate(predicate, step.getOutputStream().header.getNamesToTypes(), context);
 
     if (PredicateUtils::isTruePredicate(rewritten))
         return node->getChildren()[0];
@@ -127,7 +127,7 @@ TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter();
 
-    NamesAndTypes column_types = step.getOutputStream().header.getNamesAndTypes();
+    auto column_types = step.getOutputStream().header.getNamesToTypes();
     ASTPtr rewritten = unwrapCastInComparison(predicate, context, column_types);
     if (!rewritten)
     {
@@ -193,7 +193,11 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
     type_with_nullable(make_nullable_for_left, step.getInputStreams()[0].header.getNamesAndTypes());
     type_with_nullable(make_nullable_for_right, step.getInputStreams()[1].header.getNamesAndTypes());
 
-    ASTPtr rewritten = ExpressionInterpreter::optimizePredicate(filter, context, column_types);
+    NameToType name_to_type;
+    for (const auto & item: column_types)
+        name_to_type.emplace(item.name, item.type);
+
+    ASTPtr rewritten = ExpressionInterpreter::optimizePredicate(filter, name_to_type, context);
 
     if (rewritten->getColumnName() == filter->getColumnName())
     {
@@ -232,29 +236,16 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
 
     Assignments assignments;
     NameToType name_to_type;
-    ExpressionInterpreterSettings settings{.identifier_resolver = ExpressionInterpreter::no_op_resolver};
-    auto column_types = node->getChildren()[0]->getCurrentDataStream().header.getNamesAndTypes();
-    auto type_analyzer = TypeAnalyzer::create(rule_context.context, column_types);
-
+    auto column_types = node->getChildren()[0]->getCurrentDataStream().header.getNamesToTypes();
+    auto interpreter = ExpressionInterpreter::basicInterpreter(std::move(column_types), context);
     bool rewrite = false;
     for (const auto & assignment : project->getAssignments())
     {
-        auto res = ExpressionInterpreter::evaluate(
-            assignment.second, rule_context.context, type_analyzer, settings);
-        if (!res.first)
-        {
-            assignments.emplace_back(assignment);
-            name_to_type.emplace(assignment.first, project->getNameToType().at(assignment.first));
-            continue;
-        }
+        auto res = interpreter.optimizeExpression(assignment.second);
+        assignments.emplace_back(assignment.first, res.second);
         name_to_type.emplace(assignment.first, res.first);
-        if (std::holds_alternative<ASTPtr>(res.second))
-            assignments.emplace_back(assignment.first, std::get<ASTPtr>(res.second));
-        else if (std::holds_alternative<Field>(res.second))
-            assignments.emplace_back(assignment.first,  LiteralEncoder::encode(std::get<Field>(res.second), res.first, context));
-        else
-            throw Exception("Unexpected result of ExpressionInterpreter::evaluate", ErrorCodes::LOGICAL_ERROR);
-
+        // auto output_types = project->getOutputStream().header.getNamesToTypes();
+        // assert(res.first->equals(*output_types.at(assignment.first)));
         if (!ASTEquality::compareTree(assignments.back().second, assignment.second))
             rewrite = true;
     }

@@ -49,7 +49,11 @@ ASTPtr DomainTranslator::toPredicate(const ASTPtr & symbol, const Domain & domai
 ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NamesAndTypes types)
 {
     TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, types);
-    return DomainVisitor(context, type_analyzer, types, is_ignored).process(predicate, false);
+    NameToType column_types;
+    for (const auto & type: types)
+        column_types.emplace(type.name, type.type);
+
+    return DomainVisitor(context, type_analyzer, std::move(column_types), is_ignored).process(predicate, false);
 }
 
 //Note: ranges should be sorted before!
@@ -221,15 +225,7 @@ Ranges DomainTranslator::pickOutSingleValueRanges(const SortedRangeSet & sorted_
 
 DataTypePtr DomainVisitor::checkedTypeLookup(const String & symbol) const
 {
-    DataTypePtr type; //TODO:need to be confirm
-    for (auto & temp : names_and_types)
-    {
-        if (temp.name == symbol)
-        {
-            type = temp.type;
-            break;
-        }
-    }
+    DataTypePtr type = column_types.at(symbol); //TODO:need to be confirm
     if (!type)
         throw Exception("Types is missing info for symbol", DB::ErrorCodes::LOGICAL_ERROR);
     return type;
@@ -425,11 +421,8 @@ std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleCompa
 {
     auto * ast_fun = comparison->as<ASTFunction>();
 
-    std::optional<Field> left = ExpressionInterpreter::calculateConstantExpression(ast_fun->arguments->children[0], context, type_analyzer);
-    std::optional<Field> right = ExpressionInterpreter::calculateConstantExpression(ast_fun->arguments->children[1], context, type_analyzer);
-
-    DataTypePtr left_type = type_analyzer.getType(ast_fun->arguments->children[0]);
-    DataTypePtr right_type = type_analyzer.getType(ast_fun->arguments->children[1]);
+    auto left = ExpressionInterpreter::evaluateConstantExpression(ast_fun->arguments->children[0], column_types, context);
+    auto right = ExpressionInterpreter::evaluateConstantExpression(ast_fun->arguments->children[1], column_types, context);
 
     // TODO: re-enable this check once we fix the type coercions in the optimizers
     // checkArgument(leftType.equals(rightType), "left and right type do not match in comparison expression (%s)", comparison);
@@ -437,6 +430,8 @@ std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleCompa
     if (left.has_value() == right.has_value())
         return std::nullopt;
 
+    DataTypePtr left_type = left.has_value() ? left->first : type_analyzer.getType(ast_fun->arguments->children[0]);
+    DataTypePtr right_type = right.has_value() ? right->first : type_analyzer.getType(ast_fun->arguments->children[1]);
     //TODO: not support float32(symbol) comparator float32(value)
     /** get the superType for leftType and right Type,
      * if the identifier's type is narrow type, then return std::nullopt;
@@ -448,8 +443,10 @@ std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleCompa
 
     if (right.has_value())
     {
-        auto coerce_field = canImplicitCoerceValue(right.value(), right_type, left_type);
-        if (!right.value().isNull() && !coerce_field.has_value())
+        auto & right_value = right->second;
+
+        auto coerce_field = canImplicitCoerceValue(right_value, right_type, left_type);
+        if (!right_value.isNull() && !coerce_field.has_value())
             return std::nullopt;
 
         symbol_ast = ast_fun->arguments->children[0];
@@ -458,8 +455,10 @@ std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleCompa
     }
     else if (left.has_value())
     {
-        auto coerce_field = canImplicitCoerceValue(left.value(), left_type, right_type);
-        if (!left.value().isNull() && !coerce_field.has_value())
+        auto & left_value = left->second;
+
+        auto coerce_field = canImplicitCoerceValue(left_value, left_type, right_type);
+        if (!left_value.isNull() && !coerce_field.has_value())
             return std::nullopt;
 
         symbol_ast = ast_fun->arguments->children[1];
@@ -769,17 +768,18 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
     const ASTs & value_list = fun_right->arguments->children;
     Array in_values;
     ASTs excluded_expressions;
-    DataTypePtr super_type, value_type;
+    DataTypePtr super_type;
     in_values.reserve(value_list.size());
 
     for (auto & value : value_list)
     {
-        std::optional<Field> field_temp = ExpressionInterpreter::calculateConstantExpression(value, context, type_analyzer);
+        auto field_temp = ExpressionInterpreter::evaluateConstantExpression(value, column_types, context);
         if (!field_temp.has_value())
             return visitNode(node, complement);
 
-        value_type = type_analyzer.getType(value);
-        auto coerce_field_opt = canImplicitCoerceValue(field_temp.value(), value_type, sym_type);
+        auto & field_type = field_temp->first;
+        auto & field_value = field_temp->second;
+        auto coerce_field_opt = canImplicitCoerceValue(field_value, field_type, sym_type);
 
         if (!coerce_field_opt.has_value())
             return visitNode(node, complement);

@@ -20,9 +20,8 @@ TransformResult RemoveRedundantFilter::transformImpl(PlanNodePtr node, const Cap
     if (const auto * literal = expr->as<ASTLiteral>())
     {
         const auto & input_columns = step->getInputStreams()[0].header;
-        auto type_analyzer = TypeAnalyzer::create(context, input_columns.getNamesAndTypes());
-        std::optional<Field> result = ExpressionInterpreter::calculateConstantExpression(expr, context, type_analyzer);
-        if (result.has_value() && result->isNull())
+        auto result = ExpressionInterpreter::evaluateConstantExpression(expr, input_columns.getNamesToTypes(), context);
+        if (result.has_value() && result->second.isNull())
         {
             auto null_step = std::make_unique<ReadNothingStep>(step->getOutputStream().header);
             auto null_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(null_step));

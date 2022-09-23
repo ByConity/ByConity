@@ -57,7 +57,7 @@ Projection est. 100 rows
                   │              └─ Projection est. ? rows
                   │                 │     Expressions: [i_manufact_id_1]
                   │                 └─ Filter est. ? rows
-                  │                    │     Condition: (i_category_1 IN ('Electronics')) AND isNotNull(i_manufact_id_1)
+                  │                    │     Condition: (i_category_1 = 'Electronics') AND isNotNull(i_manufact_id_1)
                   │                    └─ TableScan tpcds.item est. ? rows
                   │                             Outputs: i_category_1:=i_category, i_manufact_id_1:=i_manufact_id
                   ├─ Aggregating est. ? rows
@@ -107,7 +107,7 @@ Projection est. 100 rows
                   │              └─ Projection est. ? rows
                   │                 │     Expressions: [i_manufact_id_3]
                   │                 └─ Filter est. ? rows
-                  │                    │     Condition: isNotNull(i_manufact_id_3) AND (i_category_3 IN ('Electronics'))
+                  │                    │     Condition: (i_category_3 = 'Electronics') AND isNotNull(i_manufact_id_3)
                   │                    └─ TableScan tpcds.item est. ? rows
                   │                             Outputs: i_category_3:=i_category, i_manufact_id_3:=i_manufact_id
                   └─ Aggregating est. ? rows
@@ -157,6 +157,6 @@ Projection est. 100 rows
                                  └─ Projection est. ? rows
                                     │     Expressions: [i_manufact_id_5]
                                     └─ Filter est. ? rows
-                                       │     Condition: isNotNull(i_manufact_id_5) AND (i_category_5 IN ('Electronics'))
+                                       │     Condition: isNotNull(i_manufact_id_5) AND (i_category_5 = 'Electronics')
                                        └─ TableScan tpcds.item est. ? rows
                                                 Outputs: i_category_5:=i_category, i_manufact_id_5:=i_manufact_id

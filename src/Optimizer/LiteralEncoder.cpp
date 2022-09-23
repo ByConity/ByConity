@@ -12,12 +12,9 @@
 namespace DB
 {
 
-ASTPtr LiteralEncoder::encode(const Field & field, const DataTypePtr & type, ContextMutablePtr context)
+ASTPtr LiteralEncoder::encode(Field field, const DataTypePtr & type, ContextMutablePtr context)
 {
-    auto literal_ast = std::make_shared<ASTLiteral>(field);
-
-    if (type->getTypeId() == TypeIndex::ByteMap)
-        return literal_ast;
+    auto literal_ast = std::make_shared<ASTLiteral>(std::move(field));
 
     if (context->getSettingsRef().legacy_column_name_of_tuple_literal)
     {
@@ -37,4 +34,13 @@ ASTPtr LiteralEncoder::encode(const Field & field, const DataTypePtr & type, Con
     return makeCastFunction(literal_ast, type);
 }
 
+ASTPtr LiteralEncoder::encodeForComparisonExpr(Field field, const DataTypePtr & type, ContextMutablePtr context)
+{
+    // do not add cast for NULL & simple types
+    auto base_type = removeNullable(removeLowCardinality(type));
+    if (field.isNull() || isNumber(base_type) || isStringOrFixedString(base_type))
+        return std::make_shared<ASTLiteral>(std::move(field));
+
+    return encode(std::move(field), base_type, context);
+}
 }

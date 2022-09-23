@@ -59,7 +59,7 @@ Projection est. 100 rows
                            │     │     └─ Repartition Exchange est. ? rows
                            │     │        │     Partition by: {ca_address_sk}
                            │     │        └─ Filter est. ? rows
-                           │     │           │     Condition: ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA', 'MS')
+                           │     │           │     Condition: ca_state IN ('MS', 'IN', 'ND', 'OK', 'NM', 'VA')
                            │     │           └─ TableScan tpcds.customer_address est. ? rows
                            │     │                    Outputs: [ca_address_sk, ca_country, ca_county, ca_state]
                            │     └─ Repartition Exchange est. ? rows

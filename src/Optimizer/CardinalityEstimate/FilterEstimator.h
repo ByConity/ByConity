@@ -12,10 +12,14 @@ using FilterEstimateResults = std::vector<FilterEstimateResult>;
 struct FilterEstimatorContext
 {
     ContextMutablePtr & context;
-    const TypeAnalyzer& type_analyzer;
+    const ExpressionInterpreter & interpreter;
     std::optional<Field> calculateConstantExpression(const ConstASTPtr & node)
     {
-        return ExpressionInterpreter::calculateConstantExpression(node, context, type_analyzer);
+        auto field_with_type = interpreter.evaluateConstantExpression(node);
+        if (field_with_type.has_value())
+            return field_with_type->second;
+        else
+            return std::nullopt;
     }
 };
 

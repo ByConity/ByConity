@@ -83,8 +83,8 @@ Names Scope::getOriginColumns() const
 
 ScopePtr ScopeFactory::createScope(Scope::ScopeType type, ScopePtr parent, bool query_boundary, FieldDescriptions field_descriptions)
 {
-    scopes.emplace_back(std::make_unique<Scope>(type, parent, query_boundary, std::move(field_descriptions)));
-    return scopes.back().get();
+    scopes.emplace_back(type, parent, query_boundary, std::move(field_descriptions));
+    return &scopes.back();
 }
 
 ScopePtr ScopeFactory::createLambdaScope(ScopePtr parent, FieldDescriptions field_descriptions)

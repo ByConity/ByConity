@@ -38,8 +38,8 @@ FilterEstimator::estimate(PlanNodeStatisticsPtr & opt_child_stats, const FilterS
     }
 
     auto predicate = step.getFilter();
-    auto type_analyzer = TypeAnalyzer::create(context, step.getInputStreams()[0].header.getNamesAndTypes());
-    FilterEstimatorContext estimator_context{.context = context, .type_analyzer = type_analyzer};
+    auto interpreter = ExpressionInterpreter::basicInterpreter(step.getInputStreams()[0].header.getNamesToTypes(), context);
+    FilterEstimatorContext estimator_context{.context = context, .interpreter = interpreter};
     FilterEstimateResult result = estimateFilter(*filter_stats, predicate, estimator_context);
 
     double selectivity = result.first;
@@ -100,8 +100,11 @@ std::optional<Field> castStringType(SymbolStatistics & symbol_statistics, Field 
 double FilterEstimator::estimateFilterSelectivity(
     PlanNodeStatisticsPtr & child_stats, ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
 {
-    auto type_analyzer = TypeAnalyzer::create(context, column_types);
-    FilterEstimatorContext estimator_context{.context = context, .type_analyzer = type_analyzer};
+    NameToType name_to_type;
+    for (const auto & item: column_types)
+        name_to_type.emplace(item.name, item.type);
+    auto interpreter = ExpressionInterpreter::basicInterpreter(name_to_type, context);
+    FilterEstimatorContext estimator_context{.context = context, .interpreter = interpreter};
     return estimateFilter(*child_stats, predicate, estimator_context).first;
 }
 

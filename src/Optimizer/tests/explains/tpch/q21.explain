@@ -20,7 +20,7 @@ Projection est. 100 rows
                               │     Group by: {_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
                               │     Aggregates: count_non_null_value_1:=AggNull(countIf)(build_side_non_null_symbol_1)
                               └─ Projection est. 1675307 rows
-                                 │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((build_side_non_null_symbol_1 = 1) AND (l_suppkey_2 != l_suppkey), 1, NULL) = 1, 1, NULL, 0, 0), 'UInt8')
+                                 │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((build_side_non_null_symbol_1 = 1) AND (l_suppkey_2 != l_suppkey), 1, NULL) = 1, 1, if((build_side_non_null_symbol_1 = 1) AND (l_suppkey_2 != l_suppkey), 1, NULL) = NULL, 0, 0), 'UInt8')
                                  └─ Left Join est. 1675307 rows
                                     │     Condition: l_orderkey == l_orderkey_2
                                     ├─ AssignUniqueId est. 419264 rows
@@ -32,7 +32,7 @@ Projection est. 100 rows
                                     │           │     Group by: {assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
                                     │           │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
                                     │           └─ Projection est. 465849 rows
-                                    │              │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, NULL, 0, 0), 'UInt8')
+                                    │              │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
                                     │              └─ Left Join est. 465849 rows
                                     │                 │     Condition: l_orderkey == l_orderkey_1
                                     │                 ├─ Repartition Exchange est. 116584 rows

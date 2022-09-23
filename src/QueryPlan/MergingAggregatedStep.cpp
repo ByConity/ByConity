@@ -74,6 +74,7 @@ MergingAggregatedStep::MergingAggregatedStep(
 
 void MergingAggregatedStep::setInputStreams(const DataStreams & input_streams_)
 {
+    // TODO: what if input_streams and params->getHeader() are inconsistent
     input_streams = input_streams_;
     output_stream->header = appendGroupingColumns(params->getHeader(), groupings);
 }

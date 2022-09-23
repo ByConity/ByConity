@@ -33,19 +33,18 @@ TransformResult FilterWindowToPartitionTopN::transformImpl(PlanNodePtr node, con
     }
 
 
-    auto type_analyzer = TypeAnalyzer::create(context.context, step.getInputStreams()[0].header.getNamesAndTypes());
     if (const auto * func = predicate->as<ASTFunction>())
     {
         if (func->name == "less" || func->name == "lessOrEquals")
         {
             auto symbol = func->arguments->getChildren()[0];
-            std::optional<Field> field
-                = ExpressionInterpreter::calculateConstantExpression(func->arguments->getChildren()[1], context.context, type_analyzer);
+            auto field_with_type
+                = ExpressionInterpreter::evaluateConstantExpression(func->arguments->getChildren()[1], step.getInputStreams()[0].header.getNamesToTypes(), context.context);
 
-            if (symbol->as<ASTIdentifier>() && field.has_value())
+            if (symbol->as<ASTIdentifier>() && field_with_type.has_value())
             {
                 UInt64 limit;
-                if (field->tryGet(limit))
+                if (field_with_type->second.tryGet(limit))
                 {
                     const auto & window_desc = window_step.getWindow();
                     if (window_desc.window_functions.size() == 1)

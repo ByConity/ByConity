@@ -816,7 +816,7 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
         if (PredicateUtils::isTruePredicate(cte_step->getFilter()))
         {
             auto optimized_expression = ExpressionInterpreter::optimizePredicate(
-                PredicateUtils::combineDisjuncts(common_filters), context, cte_def->getStep()->getOutputStream().header.getNamesAndTypes());
+                PredicateUtils::combineDisjuncts(common_filters), cte_def->getStep()->getOutputStream().header.getNamesToTypes(), context);
             PredicateContext cte_predicate_context{
                 .predicate = optimized_expression, .extra_predicate_for_simplify_outer_join = PredicateConst::TRUE_VALUE};
             cte_def = VisitorUtil::accept(cte_def, *this, cte_predicate_context);
@@ -1192,19 +1192,21 @@ void PredicateVisitor::tryNormalizeOuterToInnerJoin(JoinNode & node, const Const
     if (strictness != Strictness::All && strictness != Strictness::Any)
         return;
 
-    auto build_symbols = [](const PlanNodePtr & source) {
-        NameSet result;
-        auto source_output = source->getStep()->getOutputStream().header.getNamesAndTypes();
-        std::transform(
-            source_output.begin(), source_output.end(), std::inserter(result, result.begin()), std::mem_fn(&NameAndTypePair::name));
+    auto column_types = step.getOutputStream().header.getNamesToTypes();
+
+    auto build_symbols = [&](const PlanNodePtr & source) {
+        std::unordered_map<String, Field> result;
+
+        // note we cannot use type information of `source` node as outer join will change the column types of non-outer side
+        for (const auto & name: source->getStep()->getOutputStream().header.getNames())
+            if (column_types.count(name))
+                result.emplace(name, column_types.at(name)->getDefault());
 
         return result;
     };
 
-    NameSet left_symbols = build_symbols(node.getChildren()[0]);
-    NameSet right_symbols = build_symbols(node.getChildren()[1]);
-
-    auto column_types = step.getOutputStream().header.getNamesAndTypes();
+    std::unordered_map<String, Field> left_symbols = build_symbols(node.getChildren()[0]);
+    std::unordered_map<String, Field> right_symbols = build_symbols(node.getChildren()[1]);
 
     if (isRightOrFull(kind) && canConvertOuterToInner(left_symbols, inherited_predicate, context, column_types))
     {
@@ -1222,26 +1224,18 @@ void PredicateVisitor::tryNormalizeOuterToInnerJoin(JoinNode & node, const Const
 }
 
 bool PredicateVisitor::canConvertOuterToInner(
-    const NameSet & inner_symbols_for_outer_join,
+    const std::unordered_map<String, Field> & inner_symbols_for_outer_join,
     const ConstASTPtr & inherited_predicate,
     ContextMutablePtr context,
-    const NamesAndTypes & column_types)
+    const NameToType & column_types)
 {
-    IdentifierResolver inner_symbols_resolver
-        = [&inner_symbols_for_outer_join](const ASTIdentifier & ast, const IDataType & type) -> std::optional<Field> {
-        if (inner_symbols_for_outer_join.contains(ast.name()))
-            return type.getDefault();
-        else
-            return std::nullopt;
-    };
-
+    auto interpreter = ExpressionInterpreter::optimizedInterpreter(column_types, inner_symbols_for_outer_join, context);
     for (auto & conjunct : PredicateUtils::extractConjuncts(inherited_predicate))
     {
-        auto result = ExpressionInterpreter::optimizePredicate(conjunct, context, column_types, inner_symbols_resolver);
-
-        if (auto * lit = result->as<ASTLiteral>())
+        auto result = interpreter.evaluateConstantExpression(conjunct);
+        if (result.has_value())
         {
-            auto & val = lit->value;
+            auto & val = result->second;
             if (val.isNull() || !applyVisitor(FieldVisitorConvertToNumber<bool>(), val))
                 return true;
         }

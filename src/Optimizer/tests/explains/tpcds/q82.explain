@@ -1,27 +1,27 @@
 Projection est. 100 rows
 └─ Limit est. 100 rows
    │     Limit: 100
-   └─ Sorting est. 11904400512 rows
+   └─ Sorting est. 256496 rows
       │     Order by: {i_item_id asc}
-      └─ Gather Exchange est. 11904400512 rows
-         └─ Sorting est. 11904400512 rows
+      └─ Gather Exchange est. 256496 rows
+         └─ Sorting est. 256496 rows
             │     Order by: {i_item_id asc}
-            └─ MergingAggregated est. 11904400512 rows
-               └─ Repartition Exchange est. 11904400512 rows
+            └─ MergingAggregated est. 256496 rows
+               └─ Repartition Exchange est. 256496 rows
                   │     Partition by: {i_current_price, i_item_desc, i_item_id}
-                  └─ Aggregating est. 11904400512 rows
+                  └─ Aggregating est. 256496 rows
                      │     Group by: {i_current_price, i_item_desc, i_item_id}
-                     └─ Inner Join est. 146342768589 rows
+                     └─ Inner Join est. 1110033180 rows
                         │     Condition: ss_item_sk == i_item_sk
                         ├─ Local Exchange est. 2879987999 rows
                         │  └─ Filter est. 2879987999 rows
                         │     │     Dynamic Filters: {ss_item_sk:range}
                         │     └─ TableScan tpcds.store_sales est. 2879987999 rows
                         │              Outputs: [ss_item_sk]
-                        └─ Broadcast Exchange est. 15210915 rows
-                           └─ Inner Join est. 15210915 rows
+                        └─ Broadcast Exchange est. 70867 rows
+                           └─ Inner Join est. 70867 rows
                               │     Condition: inv_date_sk == d_date_sk
-                              ├─ Inner Join est. 26365587 rows
+                              ├─ Inner Join est. 122837 rows
                               │  │     Condition: inv_item_sk == i_item_sk
                               │  ├─ Local Exchange est. 312895332 rows
                               │  │  └─ Filter est. 312895332 rows
@@ -29,11 +29,11 @@ Projection est. 100 rows
                               │  │     │     Dynamic Filters: {inv_date_sk:bloomfilter,inv_date_sk:range,inv_item_sk:bloomfilter,inv_item_sk:range}
                               │  │     └─ TableScan tpcds.inventory est. 783000000 rows
                               │  │              Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
-                              │  └─ Broadcast Exchange est. 10102 rows
-                              │     └─ Projection est. 10102 rows
+                              │  └─ Broadcast Exchange est. 47 rows
+                              │     └─ Projection est. 47 rows
                               │        │     Expressions: [i_current_price, i_item_desc, i_item_id, i_item_sk, i_manufact_id]
                               │        │     Dynamic Filters Builder: {i_item_sk}
-                              │        └─ Filter est. 10102 rows
+                              │        └─ Filter est. 47 rows
                               │           │     Condition: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 821, 423))
                               │           └─ TableScan tpcds.item est. 300000 rows
                               │                    Outputs: [i_current_price, i_item_desc, i_item_id, i_item_sk, i_manufact_id]

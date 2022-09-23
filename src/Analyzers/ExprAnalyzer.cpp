@@ -331,6 +331,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
             exitLambda();
 
             auto resolved_lambda_type = std::make_shared<DataTypeFunction>(lambda_type->getArgumentTypes(), lambda_ret_type);
+            // since we don't call `process` for lambda argument, register its type manually
+            analysis.setExpressionType(arguments[index], resolved_lambda_type);
             processed_arguments[index] = {nullptr, resolved_lambda_type,""};
         }
     }

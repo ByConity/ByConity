@@ -40,7 +40,7 @@ Projection est. ? rows
             │                 │     └─ Repartition Exchange est. ? rows
             │                 │        │     Partition by: {s_store_sk}
             │                 │        └─ Filter est. ? rows
-            │                 │           │     Condition: s_county IN ('Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County', 'Williamson County')
+            │                 │           │     Condition: s_county = 'Williamson County'
             │                 │           └─ TableScan tpcds.store est. ? rows
             │                 │                    Outputs: [s_county, s_store_sk]
             │                 └─ Repartition Exchange est. ? rows

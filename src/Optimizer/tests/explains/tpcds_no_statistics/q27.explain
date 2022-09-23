@@ -45,7 +45,7 @@ Projection est. 100 rows
                         │     └─ Repartition Exchange est. ? rows
                         │        │     Partition by: {s_store_sk}
                         │        └─ Filter est. ? rows
-                        │           │     Condition: s_state IN ('TN', 'TN', 'TN', 'TN', 'TN', 'TN')
+                        │           │     Condition: s_state = 'TN'
                         │           └─ TableScan tpcds.store est. ? rows
                         │                    Outputs: [s_state, s_store_sk]
                         └─ Repartition Exchange est. ? rows

@@ -62,10 +62,10 @@ Projection est. 100 rows
                   │                          │     Partition by: {i_manufact_id_1}
                   │                          └─ Aggregating est. 995 rows
                   │                             │     Group by: {i_manufact_id_1}
-                  │                             └─ Projection est. 299239 rows
+                  │                             └─ Projection est. 29881 rows
                   │                                │     Expressions: [i_manufact_id_1]
-                  │                                └─ Filter est. 299239 rows
-                  │                                   │     Condition: (i_category_1 IN ('Electronics')) AND isNotNull(i_manufact_id_1)
+                  │                                └─ Filter est. 29881 rows
+                  │                                   │     Condition: (i_category_1 = 'Electronics') AND isNotNull(i_manufact_id_1)
                   │                                   └─ TableScan tpcds.item est. 300000 rows
                   │                                            Outputs: i_category_1:=i_category, i_manufact_id_1:=i_manufact_id
                   ├─ MergingAggregated est. 995 rows
@@ -120,10 +120,10 @@ Projection est. 100 rows
                   │                          │     Partition by: {i_manufact_id_3}
                   │                          └─ Aggregating est. 995 rows
                   │                             │     Group by: {i_manufact_id_3}
-                  │                             └─ Projection est. 299239 rows
+                  │                             └─ Projection est. 29881 rows
                   │                                │     Expressions: [i_manufact_id_3]
-                  │                                └─ Filter est. 299239 rows
-                  │                                   │     Condition: isNotNull(i_manufact_id_3) AND (i_category_3 IN ('Electronics'))
+                  │                                └─ Filter est. 29881 rows
+                  │                                   │     Condition: (i_category_3 = 'Electronics') AND isNotNull(i_manufact_id_3)
                   │                                   └─ TableScan tpcds.item est. 300000 rows
                   │                                            Outputs: i_category_3:=i_category, i_manufact_id_3:=i_manufact_id
                   └─ MergingAggregated est. 995 rows
@@ -178,10 +178,10 @@ Projection est. 100 rows
                                              │     Partition by: {i_manufact_id_5}
                                              └─ Aggregating est. 995 rows
                                                 │     Group by: {i_manufact_id_5}
-                                                └─ Projection est. 299239 rows
+                                                └─ Projection est. 29881 rows
                                                    │     Expressions: [i_manufact_id_5]
-                                                   └─ Filter est. 299239 rows
-                                                      │     Condition: isNotNull(i_manufact_id_5) AND (i_category_5 IN ('Electronics'))
+                                                   └─ Filter est. 29881 rows
+                                                      │     Condition: isNotNull(i_manufact_id_5) AND (i_category_5 = 'Electronics')
                                                       └─ TableScan tpcds.item est. 300000 rows
                                                                Outputs: i_category_5:=i_category, i_manufact_id_5:=i_manufact_id
 note: Dynamic Filter is applied for 12 times.

@@ -41,7 +41,7 @@ struct ExtractionResult
 class DomainVisitor : public ASTVisitor<ExtractionResult, const bool>
 {
 public:
-    DomainVisitor(ContextMutablePtr context_, TypeAnalyzer & type_analyzer_, NamesAndTypes & names_and_types_, bool & is_ignored_) : context(context_), type_analyzer(type_analyzer_), names_and_types(names_and_types_), is_ignored(is_ignored_){}
+    DomainVisitor(ContextMutablePtr context_, TypeAnalyzer & type_analyzer_, NameToType column_types_, bool & is_ignored_) : context(context_), type_analyzer(type_analyzer_), column_types(std::move(column_types_)), is_ignored(is_ignored_){}
     ExtractionResult process(ASTPtr & node, const bool & complement);
     ExtractionResult visitASTFunction(ASTPtr & node, const bool & complement) override;
     ExtractionResult visitNode(ASTPtr & node, const bool & complement) override;
@@ -58,7 +58,7 @@ public:
 private:
     ContextMutablePtr context;
     TypeAnalyzer & type_analyzer;
-    NamesAndTypes & names_and_types;
+    NameToType column_types;
     bool & is_ignored;
     DataTypePtr checkedTypeLookup(const String & symbol) const;
     ASTPtr complementIfNecessary(const ASTPtr & ast, bool complement) const;

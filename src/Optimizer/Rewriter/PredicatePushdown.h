@@ -93,10 +93,10 @@ private:
     // utils of outer join to inner join
     static void tryNormalizeOuterToInnerJoin(JoinNode & node, const ConstASTPtr & inherited_predicate, ContextMutablePtr context);
     static bool canConvertOuterToInner(
-        const NameSet & inner_symbols_for_outer_join,
+        const std::unordered_map<String, Field> & inner_symbols_for_outer_join,
         const ConstASTPtr & inherited_predicate,
         ContextMutablePtr context,
-        const NamesAndTypes & column_types);
+        const NameToType & column_types);
     static ASTTableJoin::Kind useInnerForLeftSide(ASTTableJoin::Kind kind);
     static ASTTableJoin::Kind useInnerForRightSide(ASTTableJoin::Kind kind);
     static bool isRegularJoin(const JoinStep & step);

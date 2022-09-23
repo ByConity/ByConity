@@ -57,7 +57,7 @@ Projection est. 100 rows
                   │              └─ Projection est. ? rows
                   │                 │     Expressions: [i_item_id_1]
                   │                 └─ Filter est. ? rows
-                  │                    │     Condition: isNotNull(i_item_id_1) AND (i_color_1 IN ('slate', 'blanched', 'burnished'))
+                  │                    │     Condition: (i_color_1 IN ('slate', 'blanched', 'burnished')) AND isNotNull(i_item_id_1)
                   │                    └─ TableScan tpcds.item est. ? rows
                   │                             Outputs: i_color_1:=i_color, i_item_id_1:=i_item_id
                   ├─ Aggregating est. ? rows

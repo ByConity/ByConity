@@ -105,7 +105,7 @@ TEST(OptimizerUnwrapCastInComparisonTest, Compare)
 
 static void testCase(const String & expr_in, const String & expr_out, ContextMutablePtr context)
 {
-    static NamesAndTypes column_types{
+    static NameToType column_types{
         {"uint8", type_uint8},
         {"nullable_uint8", type_nullable_uint8},
         {"uint32", type_uint32},
@@ -371,7 +371,7 @@ void prepareDB(ContextMutablePtr & context)
 
 void testExecutionCase(const String & expr, const String & table, ContextMutablePtr context)
 {
-    static NamesAndTypes column_types{
+    static NameToType column_types{
         {"uint8", type_uint8},
         {"nullable_uint8", type_nullable_uint8},
         {"uint32", type_uint32},

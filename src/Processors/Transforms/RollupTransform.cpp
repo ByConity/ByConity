@@ -5,10 +5,12 @@
 namespace DB
 {
 
-RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_)
-    : IAccumulatingTransform(std::move(header), appendGroupingSetColumn(params_->getHeader()))
+RollupTransform::RollupTransform(Block header, AggregatingTransformParamsPtr params_, bool add_grouping_set_column_)
+    : IAccumulatingTransform(std::move(header),
+                             add_grouping_set_column_ ? appendGroupingSetColumn(params_->getHeader()) : params_->getHeader())
     , params(std::move(params_))
     , keys(params->params.keys)
+    , add_grouping_set_column(add_grouping_set_column_)
 {
 }
 
@@ -58,7 +60,7 @@ Chunk RollupTransform::generate()
     }
 
     finalizeChunk(gen_chunk);
-    if (!gen_chunk.empty())
+    if (add_grouping_set_column && !gen_chunk.empty())
         gen_chunk.addColumn(0, ColumnUInt64::create(gen_chunk.getNumRows(), set_counter++));
     return gen_chunk;
 }
