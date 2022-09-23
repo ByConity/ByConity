@@ -1,6 +1,8 @@
 
+
+
 DROP TABLE IF EXISTS max_avg_parition_by;
-CREATE TABLE max_avg_parition_by (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;
+CREATE TABLE max_avg_parition_by (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() ORDER BY tuple();
 
 INSERT INTO max_avg_parition_by VALUES('1', 'data', '2019-01-01', '20');
 INSERT INTO max_avg_parition_by VALUES('2', 'data', '2019-03-01', '21');

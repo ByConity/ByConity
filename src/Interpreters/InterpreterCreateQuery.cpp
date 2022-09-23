@@ -64,6 +64,7 @@
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
+#include "Interpreters/join_common.h"
 
 #include <Catalog/Catalog.h>
 
@@ -462,13 +463,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
             }
             else if (make_columns_nullable)
             {
-                if (column_type->lowCardinality())
-                {
-                    const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(column_type.get());
-                    column_type = std::make_shared<DataTypeLowCardinality>(makeNullable(low_cardinality_type->getDictionaryType()));
-                }
-                else
-                    column_type = makeNullable(column_type);
+                column_type = JoinCommon::convertTypeToNullable(column_type);
             }
 
             column_names_and_types.emplace_back(col_decl.name, column_type);

@@ -1,7 +1,7 @@
-CREATE DATABASE IF NOT EXISTS test;
+
 
 DROP TABLE IF EXISTS people;
-CREATE TABLE people (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;
+CREATE TABLE people (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() ORDER BY tuple();
 
 INSERT INTO people VALUES('1', 'data', '2019-01-01', '20');
 INSERT INTO people VALUES('2', 'data', '2019-03-01', '21');
