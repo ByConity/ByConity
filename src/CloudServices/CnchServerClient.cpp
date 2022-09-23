@@ -517,6 +517,20 @@ std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
     return res;
 }
 
+bool CnchServerClient::removeMergeMutateTasksOnPartition(const StorageID & storage_id, const String & partition_id)
+{
+    brpc::Controller cntl;
+    Protos::RemoveMergeMutateTasksOnPartitionReq request;
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+    request.set_partition_id(partition_id);
+    Protos::RemoveMergeMutateTasksOnPartitionResp response;
+
+    stub->removeMergeMutateTasksOnPartition(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    return response.ret();
+}
+
 std::optional<TxnTimestamp> CnchServerClient::getMinActiveTimestamp(const StorageID & storage_id)
 {
     brpc::Controller cntl;

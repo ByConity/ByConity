@@ -15,11 +15,6 @@ SELECT sleep(1.1) format Null;
 
 SELECT * FROM test_ingest_partition_target order by id;
 
-
-TRUNCATE TABLE test_ingest_partition_source;
-INSERT INTO test_ingest_partition_source SELECT '2021-01-01', number, 'g', 'h' FROM numbers(11);
-ALTER TABLE test_ingest_partition_target ingest partition '2021-01-01' columns c1 key id from test_ingest_partition_source;
-SELECT * FROM test_ingest_partition_target ORDER BY id;
 DROP TABLE IF EXISTS test_ingest_partition_target;
 DROP TABLE IF EXISTS test_ingest_partition_source;
 
@@ -63,7 +58,6 @@ SYSTEM START MERGES test_ingest_partition_target;
 INSERT INTO test_ingest_partition_source VALUES ('2020-01-01', 1, {'key1': 'val1', 'key2': 'val2', 'key3': 'val3'}), ('2020-01-01', 2, {'key4': 'val4', 'key5': 'val5', 'key6': 'val6'}), ('2020-01-01', 3, {'key7': 'val7', 'key8': 'val8', 'key9': 'val9'}), ('2020-01-01', 4, {'key10': 'val10', 'key11': 'val11', 'key12': 'val12'});
 
 INSERT INTO test_ingest_partition_target VALUES ('2020-01-01', 1, {'key13': 'val13'});
-ALTER TABLE test_ingest_partition_target INGEST PARTITION '2020-01-01'  COLUMNS name{'key1'}, name{'key2'}, name{'key3'}, name{'key4'}, name{'key5'}, name{'key6'}, name{'key7'}, name{'key8'}, name{'key9'}, name{'key10'}, name{'key11'}, name{'key12'} FROM test_ingest_partition_source; -- { serverError 49 }
 ALTER TABLE test_ingest_partition_target INGEST PARTITION '2020-01-01'  COLUMNS name{'key1'}, name{'key2'}, name{'key3'}, name{'key4'}, name{'key5'}, name{'key6'}, name{'key7'}, name{'key8'}, name{'key9'}, name{'key10'} FROM test_ingest_partition_source;
 SELECT sleep(1.1) format Null;
 SELECT * FROM test_ingest_partition_target ORDER BY id;

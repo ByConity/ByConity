@@ -170,12 +170,6 @@ public:
         Protos::SendOffloadingResp * response,
         google::protobuf::Closure * done) override;
 
-    void submitIngestPartitionTask(
-        google::protobuf::RpcController * cntl,
-        const Protos::SubmitIngestPartitionTaskReq * request,
-        Protos::SubmitIngestPartitionTaskResp * response,
-        google::protobuf::Closure * done) override;
-
 private:
     Poco::Logger * log;
 

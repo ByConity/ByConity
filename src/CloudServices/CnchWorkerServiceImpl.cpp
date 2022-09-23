@@ -243,7 +243,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
     brpc::ClosureGuard done_guard(done);
     try
     {
-        LOG_TRACE(log, "Receiving create queries for Session: ", request->txn_id());
+        LOG_TRACE(log, "Receiving create queries for Session: {}", request->txn_id());
         /// set client_info.
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
@@ -747,14 +747,6 @@ void CnchWorkerServiceImpl::getCloudMergeTreeStatus(
     google::protobuf::RpcController * cntl,
     const Protos::GetCloudMergeTreeStatusReq * request,
     Protos::GetCloudMergeTreeStatusResp * response,
-    google::protobuf::Closure * done)
-{
-}
-
-void CnchWorkerServiceImpl::submitIngestPartitionTask(
-    google::protobuf::RpcController * cntl,
-    const Protos::SubmitIngestPartitionTaskReq * request,
-    Protos::SubmitIngestPartitionTaskResp * response,
     google::protobuf::Closure * done)
 {
 }

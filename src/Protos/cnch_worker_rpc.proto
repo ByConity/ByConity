@@ -294,8 +294,8 @@ message SubmitIngestPartitionTaskReq
   required uint32 rpc_port = 3;
   optional string query_id = 4;
   optional string partition_id = 5;
-  repeated string column_names = 6;
-  repeated string key_names = 7;
+  repeated string ingest_column_names = 6;
+  repeated string ordered_key_names = 7;
   optional string create_target_table_query = 8;
   optional string create_source_table_query = 9;
   repeated DataModelPart source_parts = 10;

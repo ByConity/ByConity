@@ -1320,7 +1320,7 @@ Pipe StorageCnchMergeTree::alterPartition(
                 break;
 
             case PartitionCommand::INGEST_PARTITION:
-                // ingestPartition(query, command, query_context);
+                ingestPartition(command, current_query_context);
                 break;
 
             case PartitionCommand::PREATTACH_PARTITION:

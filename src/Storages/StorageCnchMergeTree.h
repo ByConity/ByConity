@@ -193,6 +193,8 @@ private:
     String extractTableSuffix(const String & gen_table_name);
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
+    void ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);
+
 };
 
 struct PrepareContextResult

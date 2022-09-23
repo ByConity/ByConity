@@ -23,10 +23,6 @@ using DataModelPartPtr = std::shared_ptr<Protos::DataModelPart>;
 using DataModelPartPtrVector = std::vector<DataModelPartPtr>;
 
 namespace pb = google::protobuf;
-namespace CatalogService
-{
-    class DataModelPart;
-}
 
 MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model, std::optional<std::string> relative_path = std::nullopt);

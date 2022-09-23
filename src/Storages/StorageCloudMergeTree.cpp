@@ -21,6 +21,7 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
 #include <CloudServices/CnchPartsHelper.h>
+#include <Storages/IngestColumnCnch/IngestColumnCnchHelper.h>
 
 namespace DB
 {
@@ -148,6 +149,35 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
         if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute MATERIALIZE_TTL commands");
     }
+}
+
+void StorageCloudMergeTree::checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr &, const Settings &) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != PartitionCommand::Type::INGEST_PARTITION)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute any PARTITION commands except INGEST_PARTITON");
+    }
+}
+
+Pipe StorageCloudMergeTree::alterPartition(
+    const StorageMetadataPtr & metadata_snapshot,
+    const PartitionCommands & commands,
+    ContextPtr local_context)
+{
+    for (auto & command : commands)
+    {
+        switch (command.type)
+        {
+            case PartitionCommand::INGEST_PARTITION:
+                ingestPartition(metadata_snapshot, command, local_context);
+                break;
+            default:
+                throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute any PARTITION commands except INGEST_PARTITON");
+        }
+    }
+
+    return {};
 }
 
 bool StorageCloudMergeTree::checkStagedParts()
@@ -281,5 +311,6 @@ ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where
     }
     return result;
 }
+
 
 }

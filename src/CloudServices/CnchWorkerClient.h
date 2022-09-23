@@ -20,6 +20,11 @@ namespace Protos
     class CnchWorkerService_Stub;
 }
 
+namespace IngestColumnCnch
+{
+    struct IngestPartitionParam;
+}
+
 class MergeTreeMetaBase;
 struct StorageID;
 struct ManipulationInfo;
