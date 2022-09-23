@@ -6,6 +6,7 @@
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Common/Status.h>
+#include "Core/UUID.h"
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 
@@ -26,16 +27,8 @@ namespace Catalog
 
 CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context)
 {
-    DatabasePtr db{nullptr};
-    if (db_model.has_uuid())
-    {
-        db = std::make_shared<DatabaseCnch>(db_model.name(), RPCHelpers::createUUID(db_model.uuid()), context);
-    }
-    else
-    {
-        throw Exception("DataModelDB " + db_model.name() + " has no uuid", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
-    }
-    return db;
+    auto uuid = db_model.has_uuid() ? RPCHelpers::createUUID(db_model.uuid()) : UUIDHelpers::Nil;
+    return std::make_shared<DatabaseCnch>(db_model.name(), uuid, context);
 }
 
 StoragePtr CatalogFactory::getTableByDataModel(
@@ -73,9 +66,9 @@ StoragePtr CatalogFactory::getTableByDefinition(
     return res;
 }
 
-ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary * dict_model)
+ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataModelDictionary & dict_model)
 {
-    const auto & create_query = dict_model->definition();
+    const auto & create_query = dict_model.definition();
     const char *begin = create_query.data();
     const char *end = begin + create_query.size();
     ParserQuery parser(end);

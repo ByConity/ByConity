@@ -71,7 +71,7 @@ struct SetData
         std::string res;
         for (auto x : sum_)
         {
-            res += x;
+            res += fmt::format("{}", x);
         }
         return res;
     }
@@ -86,7 +86,7 @@ struct SetData
 };
 #endif
 
-template <template <typename> typename DataTypeCtor, typename T>
+template <template <typename> typename DataTypeCtor, typename T, bool second_param = false>
 class AggregateFunctionCboFamily;
 
 template <typename T>
@@ -94,18 +94,13 @@ struct type_utils
 {
     using EmbededType = T;
     using ColVecType = ColumnVector<T>;
-    EmbededType fetchSingle(const IColumn & col, int64_t index)
-    {
-        const auto & column = static_cast<const ColVecType &>(col);
-        auto value = column.getData()[index];
-    }
 };
 
 /// statistics collector for cbo
 /// for simplicity, convert all stats to base64 string as output
-template <template <typename> typename DataTypeCtor, typename T>
+template <template <typename> typename DataTypeCtor, typename T, bool second_param>
 class AggregateFunctionCboFamily final
-    : public IAggregateFunctionDataHelper<DataTypeCtor<typename type_utils<T>::EmbededType>, AggregateFunctionCboFamily<DataTypeCtor, T>>
+    : public IAggregateFunctionDataHelper<DataTypeCtor<typename type_utils<T>::EmbededType>, AggregateFunctionCboFamily<DataTypeCtor, T, second_param>>
 {
 public:
     using Utils = type_utils<T>;
@@ -145,7 +140,17 @@ public:
     {
         const auto & column = static_cast<const ColVecType &>(*columns[0]);
         auto value = column.getData()[row_num];
-        this->data(place).add(value);
+        if constexpr (!second_param)
+        {
+            this->data(place).add(value);
+        }
+        else
+        {
+            using SecondType = ColumnVector<UInt64>;
+            const auto& column_second = static_cast<const SecondType&>(*columns[1]);
+            auto value_second = column_second.getData()[row_num];
+            this->data(place).add(value, value_second);
+        }
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override { this->data(place).merge(this->data(rhs)); }
@@ -168,8 +173,8 @@ private:
 
 /// statistics collector for cbo
 /// for simplicity, convert all stats to base64 string as output
-template <typename Data>
-class AggregateFunctionCboFamilyForString final : public IAggregateFunctionDataHelper<Data, AggregateFunctionCboFamilyForString<Data>>
+template <typename Data, bool second_param=false>
+class AggregateFunctionCboFamilyForString final : public IAggregateFunctionDataHelper<Data, AggregateFunctionCboFamilyForString<Data, second_param>>
 {
 public:
     using Self = AggregateFunctionCboFamilyForString;
@@ -205,7 +210,17 @@ public:
     void add(AggregateDataPtr place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         auto str = columns[0]->getDataAt(row_num).toString();
-        this->data(place).add(str);
+        if constexpr (!second_param)
+        {
+            this->data(place).add(str);
+        }
+        else
+        {
+            using SecondType = ColumnVector<UInt64>;
+            const auto& column_second = static_cast<const SecondType&>(*columns[1]);
+            auto value_second = column_second.getData()[row_num];
+            this->data(place).add(str, value_second);
+        }
     }
 
     void merge(AggregateDataPtr place, ConstAggregateDataPtr rhs, Arena *) const override { this->data(place).merge(this->data(rhs)); }

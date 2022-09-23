@@ -2,6 +2,7 @@
 
 #include <regex>
 #include <Interpreters/Context.h>
+#include <ResourceManagement/ResourceReporter.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 
 namespace DB
@@ -182,10 +183,10 @@ CnchBGThreadsMapArray::CnchBGThreadsMapArray(ContextPtr global_context_) : WithC
     for (auto i = size_t(CnchBGThreadType::ServerMinType); i <= size_t(CnchBGThreadType::ServerMaxType); ++i)
         threads_array[i] = std::make_unique<CnchBGThreadsMap>(global_context_, CnchBGThreadType(i));
 
-    /// if (global_context.getServerType() == ServerType::cnch_worker && global_context.getResourceManagerClient())
-    /// {
-    ///     resource_reporter_task = std::make_unique<ResourceReporterTask>(global_context);
-    /// }
+    if (global_context_->getServerType() == ServerType::cnch_worker && global_context_->getResourceManagerClient())
+    {
+        resource_reporter_task = std::make_unique<ResourceReporterTask>(global_context_);
+    }
 
     cleaner = global_context_->getSchedulePool().createTask("CnchBGThreadsCleaner", [this] { cleanThread(); });
     cleaner->activateAndSchedule();

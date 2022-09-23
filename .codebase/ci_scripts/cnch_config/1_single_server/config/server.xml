@@ -5,9 +5,9 @@
     <logger>
         <!-- Possible levels: https://github.com/pocoproject/poco/blob/develop/Foundation/include/Poco/Logger.h#L105 -->
         <level>trace</level>
-        <log>/artifacts/server/server.log</log>
-        <errorlog>/artifacts/server/server.err.log</errorlog>
-        <testlog>/artifacts/server/server.test.log</testlog>
+        <log>/test_output/server/server.log</log>
+        <errorlog>/test_output/server/server.err.log</errorlog>
+        <testlog>/test_output/server/server.test.log</testlog>
         <size>1000M</size>
         <count>10</count>
         <!-- <console>1</console> --> <!-- Default behavior is autodetection (log to console if not daemon mode and is tty) -->
@@ -123,7 +123,7 @@
     <keep_alive_timeout>3</keep_alive_timeout>
 
     <!-- Maximum number of concurrent queries. -->
-    <max_concurrent_queries>100</max_concurrent_queries>
+    <max_concurrent_queries>200</max_concurrent_queries>
 
     <!-- Set limit on number of open files (default: maximum). This setting makes sense on Mac OS X because getrlimit() fails to retrieve
          correct maximum value. -->
@@ -613,13 +613,16 @@
 
     <catalog_service>
         <!--Metastore storage type, support `bytekv` and `fdb`-->
-        <type>bytekv</type>
+        <type>fdb</type>
         <bytekv>
             <service_name>bytedance.bytekv.cnch_meta.service.lf</service_name>
             <cluster_name>cnch_meta</cluster_name>
             <name_space>bytekv_cnch_build</name_space>
             <table_name>cnch_meta_for_build</table_name>
         </bytekv>
+        <fdb>
+            <cluster_file>fdb_cluster_config_path_replace_me</cluster_file>>
+        </fdb>
     </catalog_service>
 
     <daemon_manager>

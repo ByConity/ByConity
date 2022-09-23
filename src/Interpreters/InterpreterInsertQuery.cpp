@@ -179,7 +179,7 @@ BlockIO InterpreterInsertQuery::execute()
 
     bool is_distributed_insert_select = false;
 
-    if (query.select && table->isRemote() && 
+    if (query.select && table->isRemote() &&
         (settings.parallel_distributed_insert_select || settings.distributed_perfect_shard))
     {
         // Distributed INSERT SELECT
@@ -227,8 +227,6 @@ BlockIO InterpreterInsertQuery::execute()
                 insert_select_context->setCurrentWorkerGroup(worker_group);
                 /// set worker group for select query
                 insert_select_context->initCnchServerResource(insert_select_context->getCurrentTransactionID());
-                if (auto session_resource = insert_select_context->getCnchServerResource())
-                    session_resource->setWorkerGroup(worker_group);
                 LOG_DEBUG(
                     &Logger::get("VirtualWarehouse"),
                     "Set worker group {} for table {}", worker_group->getQualifiedName(), cloud_table->getStorageID().getNameForLogs());

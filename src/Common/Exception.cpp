@@ -589,5 +589,18 @@ std::string ParsingException::displayText() const
     }
 }
 
+void ExceptionHandler::setException(std::exception_ptr && exception)
+{
+    std::unique_lock lock(mutex);
+    if (!first_exception)
+        first_exception = std::move(exception);
+}
+
+void ExceptionHandler::throwIfException()
+{
+    std::unique_lock lock(mutex);
+    if (first_exception)
+        std::rethrow_exception(first_exception);
+}
 
 }

@@ -41,7 +41,7 @@ String fetchByteJournalLeader([[maybe_unused]] ContextPtr context, [[maybe_unuse
     return leader_addr;
     #endif
 
-    return "";
+    return "127.0.0.1:18989";
 }
 
 String ResourceManagerClient::fetchByteJournalLeader() const

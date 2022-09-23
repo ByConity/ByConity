@@ -88,7 +88,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     part->rows_count = part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
-    part->marks_count = part_model.marks_count();
+    part->loadIndexGranularity(part_model.marks_count(), {});
     part->deleted = part_model.has_deleted() && part_model.deleted();
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();
@@ -181,7 +181,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     ///TODO: if we need marks_count in ce?
     const auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this());
     if (cnch_part)
-        part_model.set_marks_count(cnch_part->marks_count);
+        part_model.set_marks_count(cnch_part->getMarksCount());
     part_model.set_txnid(part.info.mutation);
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);

@@ -1,12 +1,17 @@
 #include <Storages/System/CollectWhereClausePredicate.h>
+#include <Columns/ColumnConst.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTWithAlias.h>
 
 namespace DB
 {
     // collects columns and values for WHERE condition with AND and EQUALS (case insesitive)
     // e.g for query "select ... where db = 'x' ", method will return {'db' : 'x'} map
-    void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columnToValue)
+    void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columns_to_values, const ContextPtr & context)
     {
-        static String columnName;
+        static String column_name;
         if (!ast)
             return;
 
@@ -16,19 +21,24 @@ namespace DB
             {
                 for (auto & arg : func->arguments->children)
                 {
-                    collectWhereClausePredicate(arg, columnToValue); // recurse in a depth first fashion
+                    collectWhereClausePredicate(arg, columns_to_values, context); // recurse in a depth first fashion
                 }
+            }
+            else if (func->name == "currentDatabase")
+            {
+                auto db = evaluateConstantExpressionForDatabaseName(ast, context);
+                columns_to_values.emplace(column_name, db->as<const ASTLiteral &>().value.get<String>());
             }
         }
         else if (ASTIdentifier * identifier = ast->as<ASTIdentifier>())
         {
-            columnName = identifier->name();
+            column_name = identifier->name();
         }
         else if (ASTLiteral * literal = ast->as<ASTLiteral>())
         {
             if (literal->value.getType() == Field::Types::String)
             {
-                columnToValue.emplace(columnName,literal->value.get<String>());
+                columns_to_values.emplace(column_name,literal->value.get<String>());
             }
         }
     }

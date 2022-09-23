@@ -85,11 +85,8 @@
 #include <Interpreters/DDLTask.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DatabaseCatalog.h>
-#include <Interpreters/EmbeddedDictionaries.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Interpreters/ExternalDictionariesLoader.h>
 #include <Interpreters/ExternalLoaderXMLConfigRepository.h>
-#include <Interpreters/ExternalModelsLoader.h>
+#include <Interpreters/ExternalLoaderCnchCatalogRepository.h>
 #include <Interpreters/InterserverCredentials.h>
 #include <Interpreters/InterserverIOHandler.h>
 #include <Interpreters/NamedSession.h>
@@ -297,6 +294,7 @@ struct ContextSharedPart
     scope_guard models_repository_guard;
 
     scope_guard dictionaries_xmls;
+    scope_guard dictionaries_cnch_catalog;
 
     String default_profile_name;                            /// Default profile name used for default values.
     String system_profile_name;                             /// Profile used by system processes
@@ -493,6 +491,8 @@ struct ContextSharedPart
             /// But they cannot be created before storages since they may required table as a source,
             /// but at least they can be preserved for storage termination.
             dictionaries_xmls.reset();
+            dictionaries_cnch_catalog.reset();
+
             cnch_txn_coordinator.reset();
 
             cnch_bg_threads_array.reset();
@@ -1663,6 +1663,10 @@ void Context::loadDictionaries(const Poco::Util::AbstractConfiguration & config)
     }
     shared->dictionaries_xmls = getExternalDictionariesLoader().addConfigRepository(
         std::make_unique<ExternalLoaderXMLConfigRepository>(config, "dictionaries_config"));
+
+    if ((getServerType() == ServerType::cnch_worker) || (getServerType() == ServerType::cnch_server))
+        shared->dictionaries_cnch_catalog = getExternalDictionariesLoader().addConfigRepository(
+            std::make_unique<ExternalLoaderCnchCatalogRepository>(shared_from_this()));
 }
 
 void Context::setProgressCallback(ProgressCallback callback)
@@ -3354,7 +3358,7 @@ StorageID Context::resolveStorageID(StorageID storage_id, StorageNamespace where
     if (exc)
         throw Exception(*exc);
     if (!resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE)
-        resolved.uuid = DatabaseCatalog::instance().getDatabase(resolved.database_name)->tryGetTableUUID(resolved.table_name);
+        resolved.uuid = DatabaseCatalog::instance().getDatabase(resolved.database_name, shared_from_this())->tryGetTableUUID(resolved.table_name);
     return resolved;
 }
 
@@ -3370,7 +3374,7 @@ StorageID Context::tryResolveStorageID(StorageID storage_id, StorageNamespace wh
     }
     if (resolved && !resolved.hasUUID() && resolved.database_name != DatabaseCatalog::TEMPORARY_DATABASE)
     {
-        auto db = DatabaseCatalog::instance().tryGetDatabase(resolved.database_name);
+        auto db = DatabaseCatalog::instance().tryGetDatabase(resolved.database_name, shared_from_this());
         if (db)
             resolved.uuid = db->tryGetTableUUID(resolved.table_name);
     }
@@ -4049,6 +4053,8 @@ void Context::initResourceManagerClient()
         }
         catch (...)
         {
+            tryLogCurrentException(&Poco::Logger::get("Context"), __PRETTY_FUNCTION__);
+
             LOG_DEBUG(&Poco::Logger::get("Context"), "Failed to initialise Resource Manager Client on try: {}", retry_count);
             usleep(retry_interval_ms * 1000);
         }

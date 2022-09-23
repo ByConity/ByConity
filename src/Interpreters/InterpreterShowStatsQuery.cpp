@@ -3,6 +3,7 @@
 #include <map>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
+#include <Optimizer/Dump/PlanDump.h>
 #include <Parsers/ASTStatsQuery.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
@@ -11,7 +12,6 @@
 #include <Statistics/serde_extend.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
-#include <Optimizer/Dump/PlanDump.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -409,11 +409,11 @@ BlockIO InterpreterShowStatsQuery::execute()
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
-        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name +".json";
-        writeDbStatsToJson(context,db_name,path);
+        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
+        writeDbStatsToJson(context, db_name, path);
         return {};
     }
-    else if(!query->target_all && boost::starts_with(query->table, "__jsonload"))
+    else if (!query->target_all && boost::starts_with(query->table, "__jsonload"))
     {
         auto db_name = query->database;
         if (db_name.empty())

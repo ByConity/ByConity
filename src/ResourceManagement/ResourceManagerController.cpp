@@ -271,8 +271,8 @@ void ResourceManagerController::registerWorkerNode(const WorkerNodeResourceData 
             worker_group_data.id = worker_group_id;
             worker_group_data.vw_name = vw_name;
             group = createWorkerGroup(worker_group_id, false, vw_name, worker_group_data, &vw_lock, &wg_lock);
-            vw->addWorkerGroup(group);
-            group->setVWName(vw->getName());
+            // vw->addWorkerGroup(group);
+            // group->setVWName(vw->getName());
         }
     }
 
@@ -300,10 +300,12 @@ void ResourceManagerController::removeWorkerNode(const std::string & worker_id, 
     if (group_id.empty() || vw_name.empty())
         throw Exception("The vw_name and group_id must not be empty.", ErrorCodes::LOGICAL_ERROR);
 
-    auto group = group_manager->getWorkerGroup(group_id);
+    auto vw_lock = vw_manager->getLock();
+    auto wg_lock = group_manager->getLock();
+    auto group = group_manager->tryGetWorkerGroupImpl(group_id, &vw_lock, &wg_lock);
+    if (!group)
+        throw Exception("The worker group " + group_id + " not exists!", ErrorCodes::LOGICAL_ERROR);
     group->removeNode(worker_id);
-
-    resource_tracker->removeNode(worker_id);
 }
 
 WorkerGroupPtr ResourceManagerController::createWorkerGroup(

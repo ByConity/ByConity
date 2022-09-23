@@ -1,4 +1,5 @@
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <common/logger_useful.h>
 
@@ -159,6 +160,38 @@ ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, cons
             return ret;
         }
     }
+}
+
+bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts)
+{
+    if (!storage.isBucketTable())
+        return false;
+    if (context->getCnchCatalog()->isTableClustered(storage.getStorageUUID()))
+        return true;
+    
+    return std::all_of(parts.begin(), parts.end(), [&](auto part) 
+        { return part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1; });
+}
+
+
+BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers)
+{
+    std::sort(workers.begin(), workers.end());
+    BucketNumberAndServerPartsAssignment assignment;
+
+    for (auto & part : parts)
+    {
+        // For bucket tables, the parts with the same bucket number is assigned to the same worker.
+        Int64 bucket_number = part->part_model().bucket_number();
+        // if required_bucket_numbers is empty, assign parts as per normal
+        if (required_bucket_numbers.size() == 0 || required_bucket_numbers.find(bucket_number) != required_bucket_numbers.end())
+        {
+            auto index = bucket_number % workers.size();
+            assignment.parts_assignment_map[workers[index]].emplace_back(part);
+            assignment.bucket_number_assignment_map[workers[index]].insert(bucket_number);
+        }
+    }
+    return assignment;
 }
 
 }

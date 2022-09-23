@@ -3,6 +3,10 @@
 #include <Common/Exception.h>
 #include "Core/UUID.h"
 #include "Storages/IStorage.h"
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Interpreters/TreeRewriter.h>
+#include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Processors/Pipe.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -118,6 +122,84 @@ MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(con
 StoragePolicyPtr StorageCloudMergeTree::getLocalStoragePolicy() const
 {
     return local_store_volume;
+}
+
+ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr local_context) const
+{
+    ASTs result;
+    ASTPtr where_expression_copy = where_expression->clone();
+    const Settings & settings = local_context->getSettingsRef();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    if (settings.optimize_skip_unused_shards && where_expression && isBucketTable() && metadata_snapshot->getColumnsForClusterByKey().size() == 1 && !required_bucket_numbers.empty())
+    {
+
+        Block sample_block = metadata_snapshot->getSampleBlock();
+        NamesAndTypesList source_columns = sample_block.getNamesAndTypesList();
+
+        auto syntax_result = TreeRewriter(local_context).analyze(where_expression_copy, source_columns);
+        ExpressionActionsPtr const_actions = ExpressionAnalyzer{where_expression_copy, syntax_result, local_context}.getConstActions();
+
+        // get required source columns
+        Names required_source_columns = syntax_result->requiredSourceColumns();
+        NameSet required_source_columns_set = NameSet(required_source_columns.begin(), required_source_columns.end());
+
+        // Delete all columns that are not required
+        for (const auto & delete_column : sample_block.getNamesAndTypesList())
+        {
+            if (!required_source_columns_set.contains(delete_column.name))
+            {
+                sample_block.erase(delete_column.name);
+            }
+        }
+
+        const_actions->execute(sample_block);
+
+        //replace constant values as literals in AST using visitor
+        if (sample_block)
+        {
+            InDepthNodeVisitor<ReplacingConstantExpressionsMatcher, true> visitor(sample_block);
+            visitor.visit(where_expression_copy);
+        }
+
+        // Increment limit so that when limit reaches 0, it means that the limit has been exceeded
+        size_t limit = settings.optimize_skip_unused_shards_limit + 1;
+
+        const auto & blocks = evaluateExpressionOverConstantCondition(where_expression_copy, metadata_snapshot->getClusterByKey().expression, limit);
+
+        if (!limit)
+        {
+            LOG_INFO(
+                log,
+                "Number of values for cluster_by key exceeds optimize_skip_unused_shards_limit = "
+                    + std::to_string(settings.optimize_skip_unused_shards_limit)
+                    + ", try to increase it, but note that this may increase query processing time.");
+        }
+        LOG_TRACE(
+                log,
+                "StorageCloudMergeTree::convertBucketNumbersToAstLiterals blocks.size() = "
+                    + std::to_string(blocks->size()));
+        if (blocks)
+        {
+            for (const auto & block : *blocks)
+            {
+                // Get bucket number of this single value from the IN set
+                Block block_copy = block;
+                prepareBucketColumn(block_copy, metadata_snapshot->getColumnsForClusterByKey(), metadata_snapshot->getSplitNumberFromClusterByKey(), metadata_snapshot->getWithRangeFromClusterByKey(), metadata_snapshot->getBucketNumberFromClusterByKey(), local_context);
+                auto bucket_number = block_copy.getByPosition(block_copy.columns() - 1).column->getInt(0); // this block only contains one row
+
+                // Create ASTLiteral using the bucket column in the block if it can be found in required_bucket_numbers
+                if (settings.optimize_skip_unused_shards_rewrite_in && required_bucket_numbers.contains(bucket_number))
+                {
+                    const ColumnWithTypeAndName & col = block_copy.getByName(metadata_snapshot->getColumnsForClusterByKey()[0]);
+                    Field field;
+                    col.column->get(0, field);
+                    auto ast = std::make_shared<ASTLiteral>(field);
+                    result.push_back(ast);
+                }
+            }
+        }
+    }
+    return result;
 }
 
 }

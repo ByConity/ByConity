@@ -13,7 +13,7 @@ SET constraint_skip_violate=1;
 INSERT INTO test_constraints VALUES (1, 2);
 SELECT * FROM test_constraints ORDER BY a;
 
-INSERT INTO test_constraints VALUES (3, 4), (1, 0);
+INSERT INTO test_constraints VALUES (3, 4), (1, 0); -- {serverError 469}
 SELECT * FROM test_constraints ORDER BY a;
 
 DROP TABLE test_constraints;
@@ -27,7 +27,7 @@ CREATE TABLE test_constraints
 )
 ENGINE = CnchMergeTree ORDER BY (a);
 
-INSERT INTO test_constraints VALUES (1, 2);
+INSERT INTO test_constraints VALUES (1, 2); -- {serverError 469}
 SELECT * FROM test_constraints ORDER BY a;
 
 INSERT INTO test_constraints VALUES (5, 16), (10, 11);
@@ -48,7 +48,7 @@ CREATE TABLE test_constraints
 )
 ENGINE = CnchMergeTree ORDER BY (a);
 
-INSERT INTO test_constraints VALUES (5, 11), (6, 12), (6, 10), (10, 12);
+INSERT INTO test_constraints VALUES (5, 11), (6, 12), (6, 10), (10, 12); -- {serverError 469}
 SELECT * FROM test_constraints ORDER BY a;
 
 DROP TABLE test_constraints;

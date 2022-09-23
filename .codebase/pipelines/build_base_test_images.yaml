@@ -1,0 +1,56 @@
+name: BUILD_IMAGE
+trigger:
+  change:
+    types: ["create", "push"]
+    paths:
+      - "docker/test/base/Dockerfile"
+      - "docker/test/stateless/Dockerfile"
+      - "docker/test/stateful/Dockerfile"
+      - "docker/test/stress/Dockerfile"
+      - "docker/test/certificate/Dockerfile"
+jobs:
+  build_test_base_image:
+    name: Build base, stateless, stateful, stress images
+    image: hub.byted.org/data-ci-debian:latest
+    retry: 3
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - id: clickhouse-test-base
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/base
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-test-base:gdb12.1v1
+      - id: clickhouse-stateless-test
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/stateless
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateless-test:gdb12.1v1
+          build-args:
+            - TAG=gdb12.1v1
+      - id: clickhouse-stateful-test
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/stateful
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-stateful-test:gdb12.1v1
+          build-args:
+            - TAG=gdb12.1v1
+      - id: clickhouse-stress-test
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/stress
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-stress-test:gdb12.1v1
+          build-args:
+            - TAG=gdb12.1v1
+    services:
+      - id: buildkit
+        image: hub.byted.org/pipeline/buildkit

@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
+#include <Transaction/ICnchTransaction.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <CloudServices/CnchWorkerResource.h>
@@ -216,7 +217,7 @@ DatabaseAndTable DatabaseCatalog::tryGetByUUID(const UUID & uuid, const ContextP
         StoragePtr storage = getContext()->getCnchCatalog()->tryGetTableByUUID(*local_context, UUIDHelpers::UUIDToString(uuid), local_context->getCurrentTransactionID().toUInt64(), false);
         if (storage && !storage->is_dropped && !storage->is_detached)
         {
-            DatabasePtr database_cnch = getDatabaseCnch(storage->getDatabaseName());
+            DatabasePtr database_cnch = tryGetDatabaseCnch(storage->getDatabaseName(), local_context);
             if (!database_cnch)
                 throw Exception("Database " + backQuoteIfNeed(storage->getDatabaseName()) + " is not exists as DatabaseCnch.", ErrorCodes::UNKNOWN_DATABASE);
             return std::make_pair(std::move(database_cnch), std::move(storage));
@@ -305,7 +306,7 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     DatabasePtr database{};
 
     if (use_cnch_catalog)
-        database = tryGetDatabaseCnch(table_id.getDatabaseName());
+        database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 
     if (!database)
     {
@@ -333,7 +334,7 @@ void DatabaseCatalog::assertDatabaseExists(const String & database_name) const
 {
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(database_name);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
         if (database_cnch)
             return;
     }
@@ -353,7 +354,7 @@ void DatabaseCatalog::assertDatabaseDoesntExist(const String & database_name) co
 
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(database_name);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
         if (database_cnch)
             throw Exception("Database " + backQuoteIfNeed(database_name) + " already exists as DatabaseCnch.", ErrorCodes::DATABASE_ALREADY_EXISTS);
     }
@@ -395,7 +396,7 @@ DatabasePtr DatabaseCatalog::detachDatabase(ContextPtr local_context, const Stri
     DatabasePtr db{};
 
     if (use_cnch_catalog)
-        db = getDatabaseCnch(database_name);
+        db = tryGetDatabaseCnch(database_name, local_context);
 
     if (!db)
     {
@@ -454,7 +455,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const String & database_name) const
 {
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(database_name);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
         if (database_cnch)
             return database_cnch;
     }
@@ -464,13 +465,31 @@ DatabasePtr DatabaseCatalog::getDatabase(const String & database_name) const
     return databases.find(database_name)->second;
 }
 
+DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name, ContextPtr local_context) const
+{
+    assert(!database_name.empty());
+
+    if (use_cnch_catalog)
+    {
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name, local_context);
+        if (database_cnch)
+            return database_cnch;
+    }
+
+    std::lock_guard lock{databases_mutex};
+    auto it = databases.find(database_name);
+    if (it == databases.end())
+        return {};
+    return it->second;
+}
+
 DatabasePtr DatabaseCatalog::tryGetDatabase(const String & database_name) const
 {
     assert(!database_name.empty());
 
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(database_name);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(database_name);
         if (database_cnch)
             return database_cnch;
     }
@@ -486,7 +505,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const UUID & uuid) const
 {
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(uuid);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
         if (database_cnch)
             return database_cnch;
     }
@@ -502,7 +521,7 @@ DatabasePtr DatabaseCatalog::tryGetDatabase(const UUID & uuid) const
 {
     if (use_cnch_catalog)
     {
-        DatabasePtr database_cnch = getDatabaseCnch(uuid);
+        DatabasePtr database_cnch = tryGetDatabaseCnch(uuid);
         if (database_cnch)
             return database_cnch;
     }
@@ -521,7 +540,7 @@ bool DatabaseCatalog::isDatabaseExist(const String & database_name) const
 
     if (use_cnch_catalog)
     {
-        DatabasePtr cnch_database = getDatabaseCnch(database_name);
+        DatabasePtr cnch_database = tryGetDatabaseCnch(database_name);
         if (cnch_database)
             return true;
     }
@@ -701,6 +720,10 @@ void DatabaseCatalog::shutdown()
 DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPtr local_context) const
 {
     String resolved_database = local_context->resolveDatabase(database_name);
+    DatabasePtr res = tryGetDatabaseCnch(database_name, local_context);
+    if (res)
+        return res;
+
     return getDatabase(resolved_database);
 }
 
@@ -1093,23 +1116,29 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     });
 }
 
-DatabasePtr DatabaseCatalog::getDatabaseCnch(const String & database_name) const
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name) const
 {
     DatabasePtr cnch_database = getContext()->getCnchCatalog()->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
     return cnch_database;
 }
 
-DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name) const
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name, ContextPtr local_context) const
 {
+    auto txn = local_context->getCurrentTransaction();
+    DatabasePtr res;
+    if (txn)
+        res = txn->tryGetDatabaseViaCache(database_name);
+    if (res)
+        return res;
     auto catalog = getContext()->tryGetCnchCatalog();
     if (catalog)
-    {
-        return catalog->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
-    }
-    return nullptr;
+        res = catalog->getDatabase(database_name, getContext(), TxnTimestamp::maxTS());
+    if (res && txn)
+        txn->addDatabaseIntoCache(res);
+    return res;
 }
 
-DatabasePtr DatabaseCatalog::getDatabaseCnch(const UUID & uuid) const
+DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const UUID & uuid) const
 {
     Catalog::Catalog::DataModelDBs all_db_models =
         getContext()->getCnchCatalog()->getAllDataBases();

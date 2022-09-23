@@ -13,6 +13,7 @@ struct DropActionParams
     String table;
     TxnTimestamp prev_version;
     ASTDropQuery::Kind kind;
+    bool is_dictionary = false;
 };
 
 class DDLDropAction : public IAction

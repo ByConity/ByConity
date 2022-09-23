@@ -16,6 +16,7 @@
 #include <Interpreters/ConvertStringsToEnumVisitor.h>
 #include <Interpreters/PredicateExpressionsOptimizer.h>
 #include <Interpreters/RewriteFunctionToSubcolumnVisitor.h>
+#include <Interpreters/RewriteFunctionToLiteralsVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 
@@ -593,6 +594,12 @@ void TreeOptimizer::optimizeIf(ASTPtr & query, Aliases & aliases, bool if_chain_
         OptimizeIfChainsVisitor().visit(query);
 }
 
+void optimizeRewriteFunctionsToLiterals(ASTPtr & query, ContextPtr context)
+{
+    RewriteFunctionToLiteralsVisitor::Data data(context);
+    RewriteFunctionToLiteralsVisitor(data).visit(query);
+}
+
 void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
                           const std::vector<TableWithColumnNamesAndTypes> & tables_with_columns, ContextPtr context,
                           bool push_predicate_to_subquery)
@@ -682,6 +689,9 @@ void TreeOptimizer::apply(ASTPtr & query, TreeRewriterResult & result,
 
     /// Remove duplicated columns from USING(...).
     optimizeUsing(select_query);
+
+    /// Rewrite simple functions to literal
+    optimizeRewriteFunctionsToLiterals(query, context);
 }
 
 }

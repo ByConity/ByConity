@@ -15,5 +15,4 @@ CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context)
 }
 
 
-
 }

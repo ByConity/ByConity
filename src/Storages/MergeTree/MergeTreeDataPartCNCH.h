@@ -11,8 +11,6 @@ class MergeTreeMetaBase;
 class MergeTreeDataPartCNCH : public IMergeTreeDataPart
 {
 public:
-    static constexpr auto DATA_FILE_NAME = "data";
-
     MergeTreeDataPartCNCH(
         const MergeTreeMetaBase & storage_,
         const String & name_,
@@ -64,15 +62,9 @@ public:
 
     void loadFromFileSystem(bool load_hint_mutation = true);
 
-    /// Mark counts, need for metastore
-    /// TODO @canh: may remove later
-    UInt64 marks_count;
-
 private:
 
     bool isDeleted() const;
-    String getFullDataPath() const;
-    String getFullRelativeDataPath() const;
 
     void checkConsistency(bool require_part_metadata) const override;
 
@@ -86,8 +78,6 @@ private:
     void loadIndexGranularity() override;
 
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
-
-    void getMetaInfoPosAndSize(off_t & off, size_t & size);
 };
 
 }

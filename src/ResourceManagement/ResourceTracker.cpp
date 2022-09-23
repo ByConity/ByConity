@@ -167,6 +167,12 @@ void ResourceTracker::removeNode(const String & worker_id)
     worker_nodes.erase(worker_id);
 }
 
+void ResourceTracker::clearWorkers()
+{
+    std::lock_guard lock(node_mutex);
+    worker_nodes.clear();
+}
+
 std::unordered_map<std::string, WorkerNodePtr> ResourceTracker::getAllWorkers()
 {
     std::lock_guard lock(node_mutex);

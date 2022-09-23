@@ -6,6 +6,7 @@ from requests import HTTPError
 import pytz
 import os
 import sys
+import argparse
 
 CUR_DIR = sys.path[0]
 
@@ -97,33 +98,51 @@ def send_dump_message_card(data):
     with open(CUR_DIR + "/lark_template_coredump.json", 'r', encoding='utf-8') as lark_message_card:
         lark_message_card = json.load(lark_message_card)
 
-    # update header
+    # API will validates recipient
+    if "@bytedance.com" in recipient:
+        content_at = f"<at email={recipient}></at>"
+    else:
+        content_at = f"***{recipient}***"  # cron job has no recipient
+
     if corefile_list and minidump_file_list:
-        lark_message_card['header']['title']['content'] = "  📢 cordedump and minidump detected in MR"
-        lark_message_card['i18n_elements']['zh_cn'][0]['text']['content'] = f"Hi <at email={recipient}></at>, please take action for below files generated from your MR \n📄 ***corefile***：{str(corefile_list)}\n📄 ***minidump_file***：{str(minidump_file_list)}\n\n{peek_gdb_info}"
+        message_title = "  📢 cordedump and minidump detected in MR"
+        content_core = f"***corefile***：{str(corefile_list)}\n📄 ***minidump_file***：{str(minidump_file_list)}"
 
     elif corefile_list:
-        lark_message_card['header']['title']['content'] = "  📢 cordedump detected in MR"
-        lark_message_card['i18n_elements']['zh_cn'][0]['text']['content'] = f"Hi <at email={recipient}></at>, please take action for below files generated from your MR \n📄 ***corefile***：{str(corefile_list)}\n\n{peek_gdb_info}"
+        message_title = "  📢 cordedump detected in MR"
+        content_core = f"***corefile***：{str(corefile_list)}"
     else:
-        lark_message_card['header']['title']['content'] = "  📢 minidump detected in MR"
-        lark_message_card['i18n_elements']['zh_cn'][0]['text']['content'] = f"Hi <at email={recipient}></at>, please take action for below files generated from your MR \n📄 ***minidump_file***：{str(minidump_file_list)}\n\n{peek_gdb_info}"
+        message_title = "  📢 minidump detected in MR"
+        content_core = f"***minidump_file***：{str(minidump_file_list)}"
 
     # update body
+    lark_message_card['header']['title']['content'] = message_title
+    lark_message_card['i18n_elements']['zh_cn'][0]['text'][
+        'content'] = f"Hi {content_at}, please take action for below files generated from your MR \n{content_core}\n\n{peek_gdb_info}"
     lark_message_card['i18n_elements']['zh_cn'][1]['fields'][0]['text']['content'] = f"**🗂️ Test Name**：{test_name}"
     lark_message_card['i18n_elements']['zh_cn'][1]['fields'][1]['text']['content'] = f"**📅 Datetime**：{date_time}"
-    lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['url'] = mr_link
+
+    if mr_link:
+        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['url'] = mr_link
+    else:
+        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['text']['content'] = 'Check Cron Jobs'
+        lark_message_card['i18n_elements']['zh_cn'][2]['actions'][0]['url'] = "https://code.byted.org/dp/ClickHouse/+/pipelines?trigger=cron"
 
     print("lark_message_card dict is:", lark_message_card)
 
     # send to user
-    send_message_card(tenant_token=TENANT_TOKEN, card=lark_message_card, receive_id=recipient)
+    if '@bytedance.com' in recipient:
+        send_message_card(tenant_token=TENANT_TOKEN, card=lark_message_card, receive_id=recipient)
 
     # send to group
-    send_message_card(tenant_token=TENANT_TOKEN, card=lark_message_card, receive_id_type='chat_id',
-                      receive_id=LARK_GROUP_CHAT_ID['cnch_debug'])
+    send_message_card(tenant_token=TENANT_TOKEN, card=lark_message_card, receive_id_type='chat_id',receive_id=LARK_GROUP_CHAT_ID['cnch_debug'])
+
 
 def get_mr_owner():
+    ci_event_name = os.environ.get('CI_EVENT_NAME', None)
+    if ci_event_name == 'cron':
+        return 'CI_cron_job'
+
     owner = os.environ.get('CI_ACTOR', None)
     if owner:
         return owner + "@bytedance.com"
@@ -139,15 +158,16 @@ def get_mr_test_name():
         raise Exception('No Test Name found in env!')
 
 
-def get_corefile_list():
-    names = os.listdir("/")  # the path of saving core. file
+def get_corefile_list(base_dir):
+    names = os.listdir(base_dir)  # the path of saving core. file
     result = []
     for name in names:
         if name.startswith('core.'):
             result.append(name)
     return result
 
-def get_minidump_file_list(base_dir='/var/log/'):
+
+def get_minidump_file_list(base_dir):
     result = []
     for filepath, dirnames, filenames in os.walk(base_dir):
         for filename in filenames:
@@ -157,15 +177,12 @@ def get_minidump_file_list(base_dir='/var/log/'):
 
 
 def get_mr_link():
-    mr_link = os.environ.get('CI_EVENT_CHANGE_URL', None)
-    if mr_link:
-        return mr_link
-    else:
-        raise Exception('No Merge Request Link found in env!')
+    return os.environ.get('CI_EVENT_CHANGE_URL', None)
 
-def peek_gdb_info(base_dir='/test_output/'):
+
+def peek_gdb_info(base_dir='/shared/'):
     lst = []
-    max_number_of_file = 5
+    max_number_of_file = 3
     counter = 0
     for filepath, dirnames, filenames in os.walk(base_dir):
         for filename in filenames:
@@ -187,13 +204,20 @@ def get_current_datetime():
     # ci is using moscow time zone, we need to convert it to UTC+8
     return str(datetime.datetime.now(pytz.timezone('Asia/Shanghai')).strftime("%d-%b-%Y %H:%M:%S"))
 
-if __name__ == "__main__":
 
-    corefile_list = get_corefile_list()
-    minidump_file_list = get_minidump_file_list()
-    data = get_mr_owner(), get_mr_test_name(), get_current_datetime(), corefile_list, minidump_file_list, get_mr_link(), peek_gdb_info()
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="lark message bot for CI")
+    parser.add_argument("--minidump-path", default='/shared/', help='the path of saving minidump')
+    parser.add_argument("--coredump-path", default='/', help='the path of saving coredump')
+    args = parser.parse_args()
+
+    corefile_list = get_corefile_list(args.coredump_path)
+    minidump_file_list = get_minidump_file_list(args.minidump_path)
+
     if not corefile_list and not minidump_file_list:
         print('no alert will be sent to user due to no coredump or minidump file')
         exit(0)
+
+    data = get_mr_owner(), get_mr_test_name(), get_current_datetime(), corefile_list, minidump_file_list, get_mr_link(), peek_gdb_info()
 
     send_dump_message_card(data)

@@ -13,6 +13,46 @@
 namespace DB
 {
 
+class LockManager
+{
+public:
+    void remove(const String & address)
+    {
+        std::lock_guard lock(mutex);
+        hosts.erase(address);
+        cv.notify_one();
+    }
+
+    void add(const String & address)
+    {
+        std::unique_lock lock(mutex);
+        cv.wait(lock, [&]() { return !hosts.count(address); });
+        hosts.emplace(address);
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::unordered_set<std::string> hosts;
+};
+
+struct SendLock
+{
+    SendLock(const std::string & address_, LockManager & manager_)
+        : address(address_), manager(manager_)
+    {
+        manager.add(address);
+    }
+
+    ~SendLock()
+    {
+        manager.remove(address);
+    }
+
+    std::string address;
+    LockManager & manager;
+};
+
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
@@ -41,9 +81,9 @@ struct AssignedResource
 class CnchServerResource
 {
 public:
-    explicit CnchServerResource(TxnTimestamp curr_txn_id):
-        txn_id(curr_txn_id),
-        log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
+    explicit CnchServerResource(TxnTimestamp curr_txn_id)
+        : txn_id(curr_txn_id)
+        , log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
     {}
 
     ~CnchServerResource();
@@ -61,26 +101,29 @@ public:
     }
 
     template <typename T>
-    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & bucket_numbers = {})
+    void addDataParts(const UUID & storage_id, const std::vector<T> & data_parts, const std::set<Int64> & required_bucket_numbers = {})
     {
         std::lock_guard lock(mutex);
         auto & assigned_resource = assigned_table_resource.at(storage_id);
 
         assigned_resource.addDataParts(data_parts);
-        if (assigned_resource.bucket_numbers.empty() && !bucket_numbers.empty())
-            assigned_resource.bucket_numbers = bucket_numbers;
+        if (assigned_resource.bucket_numbers.empty() && !required_bucket_numbers.empty())
+            assigned_resource.bucket_numbers = required_bucket_numbers;
     }
 
     void addBufferWorkers(const UUID & storage_id, const HostWithPortsVec & buffer_workers);
 
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
+    /// allocate and send resource to worker_group
+    void sendResource(const ContextPtr & context);
 
     /// remove all resource in server
     void removeAll();
 
 private:
     auto getLock() const { return std::lock_guard(mutex); }
+    auto getLockForSend(const String & address) const { return SendLock{address, lock_manager}; }
     void cleanTaskInWorker(bool clean_resource = false) const;
 
     /// move resource from assigned_table_resource to assigned_worker_resource
@@ -101,6 +144,7 @@ private:
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
     Poco::Logger * log;
+    mutable LockManager lock_manager;
 };
 
 }

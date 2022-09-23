@@ -36,6 +36,8 @@
 #include <Catalog/CatalogMetricHelper.h>
 #include <Statistics/ExportSymbols.h>
 #include <Statistics/StatisticsBase.h>
+#include <Storages/StorageDictionary.h>
+#include <Dictionaries/getDictionaryConfigurationFromAST.h>
 
 /// TODO: put all global gflags together in somewhere.
 namespace brpc::policy { DECLARE_string(consul_agent_addr); }
@@ -1855,18 +1857,20 @@ namespace Catalog
         return partitions_id;
     }
 
-    void Catalog::createDictionary(const Context &, const String & database, const String & name, const String & create_qeury)
+    void Catalog::createDictionary(const StorageID & storage_id, const String & create_query)
     {
         runWithMetricSupport(
             [&] {
                 Protos::DataModelDictionary dic_model;
 
-                dic_model.set_database(database);
-                dic_model.set_name(name);
-                dic_model.set_definition(create_qeury);
+                dic_model.set_database(storage_id.getDatabaseName());
+                dic_model.set_name(storage_id.getTableName());
+
+                RPCHelpers::fillUUID(storage_id.uuid, *(dic_model.mutable_uuid()));
+                dic_model.set_definition(create_query);
                 dic_model.set_last_modification_time(Poco::Timestamp().raw());
 
-                meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
+                meta_proxy->createDictionary(name_space, storage_id.getDatabaseName(), storage_id.getTableName(), dic_model.SerializeAsString());
             },
             ProfileEvents::CreateDictionarySuccess,
             ProfileEvents::CreateDictionaryFailed);
@@ -1885,7 +1889,7 @@ namespace Catalog
 
                 Protos::DataModelDictionary dic_model;
                 dic_model.ParseFromString(dic_meta);
-                auto res = CatalogFactory::getCreateDictionaryByDataModel(&dic_model);
+                auto res = CatalogFactory::getCreateDictionaryByDataModel(dic_model);
                 outRes = res;
             },
             ProfileEvents::GetCreateDictionarySuccess,
@@ -1897,7 +1901,18 @@ namespace Catalog
     void Catalog::dropDictionary(const String & database, const String & name)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->dropDictionary(name_space, database, name); },
+            [&] {
+                String dic_meta;
+                meta_proxy->getDictionary(name_space, database, name, dic_meta);
+                if (dic_meta.empty())
+                    throw Exception("Dictionary " + database + "." + name + " doesn't  exists.", ErrorCodes::DICTIONARY_NOT_EXIST);
+
+                Protos::DataModelDictionary dic_model;
+                dic_model.ParseFromString(dic_meta);
+                dic_model.set_status(Status::setDelete(dic_model.status()));
+                dic_model.set_last_modification_time(Poco::Timestamp().raw());
+                meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
+            },
             ProfileEvents::DropDictionarySuccess,
             ProfileEvents::DropDictionaryFailed);
     }
@@ -1950,9 +1965,40 @@ namespace Catalog
         return res;
     }
 
+    StoragePtr Catalog::tryGetDictionary(const String & database, const String & name, ContextPtr local_context)
+    {
+        StoragePtr res;
+        runWithMetricSupport(
+            [&] {
+                String dic_meta;
+                meta_proxy->getDictionary(name_space, database, name, dic_meta);
+                if (dic_meta.empty())
+                    return;
+                DB::Protos::DataModelDictionary dict_data;
+                dict_data.ParseFromString(dic_meta);
+
+                const UInt64 & status = dict_data.status();
+                if (Status::isDeleted(status) || Status::isDetached(status))
+                    return;
+                ASTPtr ast = CatalogFactory::getCreateDictionaryByDataModel(dict_data);
+                const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
+                DictionaryConfigurationPtr abstract_dictionary_configuration =
+                    getDictionaryConfigurationFromAST(create_query, local_context, dict_data.database());
+                abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
+                StorageID storage_id{database, name, RPCHelpers::createUUID(dict_data.uuid())};
+                res = StorageDictionary::create(
+                    storage_id,
+                    std::move(abstract_dictionary_configuration),
+                    local_context);
+            },
+            ProfileEvents::GetDictionarySuccess,
+            ProfileEvents::GetDictionaryFailed);
+        return res;
+    }
+
     bool Catalog::isDictionaryExists(const String & database, const String & name)
     {
-        bool res;
+        bool res = false;
         runWithMetricSupport(
             [&] {
                 String dic_meta;
@@ -1963,7 +2009,14 @@ namespace Catalog
                     res = false;
                     return;
                 }
-                res = true;
+
+                DB::Protos::DataModelDictionary dict_data;
+                dict_data.ParseFromString(dic_meta);
+                const UInt64 & status = dict_data.status();
+                if (Status::isDeleted(status) || Status::isDetached(status))
+                    res = false;
+                else
+                    res = true;
             },
             ProfileEvents::IsDictionaryExistsSuccess,
             ProfileEvents::IsDictionaryExistsFailed);

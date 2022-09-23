@@ -1,0 +1,115 @@
+name: BUILD_IMAGE
+trigger:
+  change:
+    types: ["create", "push"]
+    paths:
+      - "docker/test/integration/runner/Dockerfile"
+      - "docker/test/integration/base/Dockerfile"
+      - "docker/test/integration/helper_container/Dockerfile"
+      - "docker/test/integration/kerberos_kdc/Dockerfile"
+      - "docker/test/integration/mysql_golang_client/Dockerfile"
+      - "docker/test/integration/mysql_java_client/Dockerfile"
+      - "docker/test/integration/mysql_js_client/Dockerfile"
+      - "docker/test/integration/mysql_php_client/Dockerfile"
+      - "docker/test/integration/postgresql_java_client/Dockerfile"
+jobs:
+  build_integration_image:
+    name: Build Integration Images
+    image: hub.byted.org/data-ci-debian:latest
+    steps:
+      - uses: actions/checkout
+        inputs:
+          depth: 1
+      - id: clickhouse-integration-tests-runner
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/runner
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-tests-runner:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-mysql-golang-client
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/mysql_golang_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-golang-client:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-mysql-java-client
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/mysql_java_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-java-client:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-mysql-js-client
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/mysql_js_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-js-client:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-mysql-php-client
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/mysql_php_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-mysql-php-client:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-postgresql-java-client
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/postgresql_java_client
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-postgresql-java-client:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-integration-test-base
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/base
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-test-base:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-kerberos-kdc
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/kerberos_kdc
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-kerberos-kdc:stable
+          build-args:
+            - TAG=stable
+      - id: clickhouse-integration-helper
+        parallel-with-next-step: true
+        uses: actions/buildkit
+        inputs:
+          context: docker/test/integration/helper_container
+          dockerfile: Dockerfile
+          output: registry
+          image-ref: hub.byted.org/bytehouse/clickhouse-integration-helper:stable
+          build-args:
+            - TAG=stable
+    services:
+      - id: buildkit
+        image: hub.byted.org/pipeline/buildkit
