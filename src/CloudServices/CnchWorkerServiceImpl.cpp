@@ -82,10 +82,10 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         params.txn_id = request->txn_id();
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
-        // auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
-        // data->loadDataParts(all_parts, false);
-        params.all_parts = createPartVectorFromModelsForSend<IMergeTreeDataPartPtr>(*data, request->source_parts());
-        params.source_data_parts = CnchPartsHelper::calcVisibleParts(params.all_parts, false);
+        auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
+
+        data->loadDataParts(all_parts, false);
+        params.assignParts(std::move(all_parts));
 
         if (params.type == ManipulationType::Mutate)
         {

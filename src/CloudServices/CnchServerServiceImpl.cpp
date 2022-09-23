@@ -57,9 +57,7 @@ void CnchServerServiceImpl::commitParts(
                 if (req->parts_size() != req->paths_size())
                     throw Exception("Incorrect arguments", ErrorCodes::BAD_ARGUMENTS);
 
-                TransactionCnchPtr cnch_txn;
-                cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
-
+                auto cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
                 /// Create new rpc context and bind the previous created txn to this rpc context.
                 auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
                 rpc_context->setCurrentTransaction(cnch_txn, false);

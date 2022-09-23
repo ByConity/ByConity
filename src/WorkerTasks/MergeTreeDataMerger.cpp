@@ -683,7 +683,7 @@ void MergeTreeDataMerger::finalizePart()
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 {
     const auto & parts = params.source_data_parts;
-    space_reservation = data.reserveSpace(estimateNeededDiskSpace(parts), true); /// true for local
+    space_reservation = data.reserveSpaceOnLocal(estimateNeededDiskSpace(parts));
 
     /// TODO: do we need to support (1) TTL merge ? (2) deduplicate
 

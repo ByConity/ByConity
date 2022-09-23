@@ -168,6 +168,9 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     loadIndexGranularity();
     getChecksums();
     // getIndex();
+
+    /// FIXME:
+    default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)

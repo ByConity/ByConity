@@ -1,9 +1,10 @@
 #pragma once
 
-#include <Storages/MergeTree/MergeTreeCloudData.h>
 #include <common/shared_ptr_helper.h>
-#include "Disks/IDisk.h"
-#include "Storages/MergeTree/MergeTreeDataPartType.h"
+#include <Disks/IDisk.h>
+#include <Storages/MergeTree/MergeTreeCloudData.h>
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
+#include <Storages/MutationCommands.h>
 
 namespace DB
 {
@@ -57,7 +58,8 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
     ManipulationTaskPtr manipulate(const ManipulationTaskParams & params, ContextPtr task_context) override;
-    
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+
     std::set<Int64> getRequiredBucketNumbers() const { return required_bucket_numbers; }
     void setRequiredBucketNumbers(std::set<Int64> & required_bucket_numbers_) { required_bucket_numbers = required_bucket_numbers_; }
     ASTs convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr context) const;

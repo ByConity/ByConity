@@ -165,15 +165,15 @@ inline std::vector<T> createPartVectorFromModelsForSend(
         part->columns_commit_time = part_model.columns_commit_time();
         if (part_model.has_columns())
         {
-            *(part->columns_ptr) = NamesAndTypesList::parse(part_model.columns());
+            part->setColumns(NamesAndTypesList::parse(part_model.columns()));
             if (part_model.has_columns_commit_time())
             {
-                columns_versions[part_model.columns_commit_time()] = part->columns_ptr;
+                columns_versions[part_model.columns_commit_time()] = part->getColumnsPtr();
             }
         }
         else
         {
-            part->columns_ptr = columns_versions[part_model.columns_commit_time()];
+            part->setColumns(columns_versions[part_model.columns_commit_time()]);
         }
         res.emplace_back(std::move(part));
     }

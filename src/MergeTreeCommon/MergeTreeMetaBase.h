@@ -255,7 +255,8 @@ public:
     ReservationPtr reserveSpace(UInt64 expected_size, VolumePtr & volume) const;
 
     /// Reserves space at least 1MB.
-    ReservationPtr reserveSpace(UInt64 expected_size, bool local = false) const;
+    ReservationPtr reserveSpace(UInt64 expected_size) const;
+    ReservationPtr reserveSpaceOnLocal(UInt64 expected_size) const;
 
     /// Reserves space at least 1MB on specific disk or volume.
     static ReservationPtr reserveSpace(UInt64 expected_size, SpacePtr space);

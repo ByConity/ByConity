@@ -48,6 +48,8 @@ struct ManipulationTaskParams
     void assignSourceParts(ServerDataPartsVector parts);
     void assignSourceParts(MergeTreeDataPartsVector parts);
 
+    void assignParts(MergeTreeMutableDataPartsVector parts);
+
 private:
     template <class Vec>
     void assignSourcePartsImpl(const Vec & parts);

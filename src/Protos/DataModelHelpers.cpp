@@ -5,7 +5,7 @@
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include "Common/Exception.h"
+#include <Common/Exception.h>
 #include <common/JSON.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper.h>
@@ -114,7 +114,6 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     /// Partition and Minmax index
     ReadBufferFromString partition_minmax_buf(part_model.partition_minmax());
     part->loadPartitionAndMinMaxIndex(partition_minmax_buf);
-    part->loadIndexGranularity(0, {});
 
     part->secondary_txn_id = part_model.has_secondary_txn_id() ? TxnTimestamp{part_model.secondary_txn_id()} : TxnTimestamp{0};
     part->virtual_part_size = part_model.has_virtual_part_size() ? part_model.virtual_part_size() : 0;
@@ -145,13 +144,13 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     /// Columns, required
     if (part_model.has_columns())
     {
-        *(part->columns_ptr) = NamesAndTypesList::parse(part_model.columns());
-        part->columns_commit_time = storage.getPartColumnsCommitTime(*(part->columns_ptr));
+        part->setColumns(NamesAndTypesList::parse(part_model.columns()));
+        part->columns_commit_time = storage.getPartColumnsCommitTime(part->getColumns());
     }
     else
     {
         part->columns_commit_time = part_model.columns_commit_time();
-        part->columns_ptr = storage.getPartColumns(part_model.columns_commit_time());
+        part->setColumns(storage.getPartColumns(part_model.columns_commit_time()));
     }
 
     // if (!id_full_paths.empty())
@@ -198,14 +197,14 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     {
         part_model.set_columns_commit_time(part.columns_commit_time);
     }
-    else if (auto columns_commit_time = storage.getPartColumnsCommitTime(*(part.columns_ptr)))
+    else if (auto columns_commit_time = storage.getPartColumnsCommitTime(*(part.getColumnsPtr())))
     {
         part_model.set_columns_commit_time(columns_commit_time);
     }
     else
     {
         /// If the parts columns not match any storage version. Store it instead of columns_commit_time
-        part_model.set_columns(part.columns_ptr->toString());
+        part_model.set_columns(part.getColumns().toString());
     }
 
     if (!part.min_unique_key.empty())

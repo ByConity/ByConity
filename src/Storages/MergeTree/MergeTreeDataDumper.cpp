@@ -160,7 +160,7 @@ MergeTreeDataDumper::dumpTempPart(MergeTreeMetaBase::DataPartPtr staled_part, St
     /// TODO: FIX marks_count
     // new_part->marks_count = staled_part->marks_count;
     // new_part->columns = staled_part->columns;
-    new_part->setPreparedIndex(staled_part->getIndex());
+    // new_part->setPreparedIndex(staled_part->getIndex());
     new_part->has_bitmap = staled_part->has_bitmap.load();
     new_part->is_temp = true;
 

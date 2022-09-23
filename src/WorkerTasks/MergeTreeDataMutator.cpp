@@ -184,9 +184,9 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     for (const auto & part : params.source_data_parts)
     {
         auto estimated_space_for_result = static_cast<size_t>(part->getBytesOnDisk() * DISK_USAGE_COEFFICIENT_TO_RESERVE);
-        ReservationPtr reserved_space = table->reserveSpace(estimated_space_for_result, part->volume);
+        ReservationPtr reserved_space = table->reserveSpaceOnLocal(estimated_space_for_result);  // TODO: calc estimated_space_for_result
         new_partial_parts.push_back(
-            mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, {}, holder));
+            mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, reserved_space, holder));
     }
 
     return new_partial_parts;
@@ -282,9 +282,13 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
         updated_delete_bitmap = interpreter->getUpdatedDeleteBitmap();
     }
 
+    auto new_part_info = source_part->info;
+    new_part_info.level += 1;
+    new_part_info.hint_mutation = new_part_info.mutation;
+    new_part_info.mutation = context->getTimestamp();
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + source_part->name, space_reservation->getDisk(), 0);
     auto new_data_part = data.createPart(
-        source_part->name, MergeTreeDataPartType::CNCH, source_part->info, single_disk_volume, "tmp_mut_" + source_part->name);
+        source_part->name, MergeTreeDataPartType::WIDE, new_part_info, single_disk_volume, "tmp_mut_" + source_part->name);
 
     new_data_part->uuid = source_part->uuid;
     new_data_part->is_temp = true;
@@ -307,55 +311,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     auto mrk_extension = source_part->index_granularity_info.is_adaptive ? getAdaptiveMrkExtension(new_data_part->getType()) : getNonAdaptiveMrkExtension();
     bool need_sync = needSyncPart(source_part->rows_count, source_part->getBytesOnDisk(), *data_settings);
 
-    /// All columns from part are changed and may be some more that were missing before in part
-    /// TODO We can materialize compact part without copying data
-    if ((!isWidePart(source_part) && !isCnchPart(source_part))  /// TODO: remove me?
-        || (mutation_kind == MutationsInterpreter::MutationKind::MUTATE_OTHER && interpreter && interpreter->isAffectingAllColumns()))
-    {
-        disk->createDirectories(new_part_tmp_path);
-
-        /// Note: this is done before creating input streams, because otherwise data.data_parts_mutex
-        /// (which is locked in data.getTotalActiveSizeInBytes())
-        /// (which is locked in shared mode when input streams are created) and when inserting new data
-        /// the order is reverse. This annoys TSan even though one lock is locked in shared mode and thus
-        /// deadlock is impossible.
-        auto compression_codec = data.getCompressionCodecForPart(source_part->getBytesOnDisk(), source_part->ttl_infos, time_of_mutation);
-
-        auto part_indices = getIndicesForNewDataPart(metadata_snapshot->getSecondaryIndices(), for_file_renames);
-        auto part_projections = getProjectionsForNewDataPart(metadata_snapshot->getProjections(), for_file_renames);
-
-        mutateAllPartColumns(
-            new_data_part,
-            metadata_snapshot,
-            part_indices,
-            part_projections,
-            for_file_renames,
-            in,
-            time_of_mutation,
-            compression_codec,
-            manipulation_entry,
-            need_sync,
-            space_reservation,
-            holder,
-            context);
-
-        /// no finalization required, because mutateAllPartColumns use
-        /// MergedBlockOutputStream which finalize all part fields itself
-
-        /// handle clear map key command for part whose type is not in-memory
-        if (!isInMemoryPart(new_data_part))
-        {
-            auto clear_map_key_files = collectFilesForClearMapKey(new_data_part, for_file_renames);
-            for (const auto & file : clear_map_key_files)
-            {
-                if (new_data_part->getChecksums()->files.count(file))
-                    new_data_part->getChecksums()->files.erase(file);
-                String destination = new_part_tmp_path + file;
-                disk->removeFileIfExists(destination);
-            }
-        }
-    }
-    else /// TODO: check that we modify only non-key columns in this case.
+    /// TODO: check that we modify only non-key columns in this case.
     {
         /// We will modify only some of the columns. Other columns and key values can be copied as-is.
         NameSet updated_columns;
@@ -384,6 +340,9 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
         new_data_part->checksums_ptr = std::make_shared<MergeTreeData::DataPart::Checksums>();
 
         auto compression_codec = source_part->default_codec;
+
+        if (!compression_codec)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unknown codec for mutate part: {}", source_part->name);
 
         if (in)
         {
@@ -1241,8 +1200,10 @@ void MergeTreeDataMutator::finalizeMutatedPart(
     new_data_part->setBytesOnDisk(
         MergeTreeData::DataPart::calculateTotalSizeOnDisk(new_data_part->volume->getDisk(), new_data_part->getFullRelativePath()));
     new_data_part->default_codec = codec;
-    new_data_part->calculateColumnsSizesOnDisk();
-    new_data_part->storage.lockSharedData(*new_data_part);
+    // TODO:
+    // new_data_part->mutation_commit_time = manipulation_entry.
+    // new_data_part->calculateColumnsSizesOnDisk();
+    // new_data_part->storage.lockSharedData(*new_data_part);
 }
 
 bool MergeTreeDataMutator::checkOperationIsNotCanceled(const ManipulationListEntry & manipulation_entry) const

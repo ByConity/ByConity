@@ -80,7 +80,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
 {
     if (!continue_reading)
         next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Start reading from mark {}, row {}\n", from_mark, next_row_number_to_read);
+    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Start reading from mark {}, row {}", from_mark, next_row_number_to_read);
 
     size_t read_rows = 0;
     try
@@ -141,7 +141,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
                 ///  if offsets are not empty and were already read, but elements are empty.
                 if (!column->empty())
                     read_rows = std::max(read_rows, column->size() - column_size_before_reading);
-                LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Read {} rows for column {} - {}\n", read_rows, name, type->getName());
+                LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Read {} rows for column {} - {}", read_rows, name, type->getName());
             }
             catch (Exception & e)
             {
@@ -252,7 +252,7 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(const NameAndTypeP
     clockid_t clock_type, FileStreamBuilders* stream_builders)
 {
     auto column_from_part = getColumnFromPart(column);
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Initilize stream for columns {}\n", column_from_part.name);
+    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Initialize stream for columns {}", column_from_part.name);
     if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
     {
         // Scan the directory to get all implicit columns(stream) for the map type
@@ -383,7 +383,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
             return;
 
         String file_name = file_name_getter(stream_name, substream_path);
-        LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "File name is: {}\n", file_name);
+        LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "File name is: {}", file_name);
         bool data_file_exists = data_part->getChecksums()->files.count(file_name + DATA_FILE_EXTENSION);
 
         if (!data_file_exists)
@@ -401,10 +401,10 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
             }
 
             String source_data_rel_path = data_part->getFullRelativePath() + "data";
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "Adding stream for reading {}\n", source_data_rel_path);
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "The disk is {}\n", data_part->volume->getDisk()->getName()); 
+            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "Adding stream for reading {}", source_data_rel_path);
+            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "The disk is {}", data_part->volume->getDisk()->getName());
             String mark_file_name = data_part->index_granularity_info.getMarksFilePath(stream_name);
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), mark_file_name); 
+            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), mark_file_name);
             return std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
                 data_part->storage.getStorageID(), data_part->get_name(),
                 stream_name, data_part->volume->getDisk(), data_part->getMarksCount(),

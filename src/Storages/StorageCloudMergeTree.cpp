@@ -114,6 +114,17 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
     return task;
 }
 
+void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type == MutationCommand::Type::FAST_DELETE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE commands");
+        if (command.type == MutationCommand::Type::DELETE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute DELETE commands");
+    }
+}
+
 MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & /*part*/) const
 {
     return {};
