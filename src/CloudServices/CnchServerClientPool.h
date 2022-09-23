@@ -1,9 +1,9 @@
 #pragma once
 
-// #include <MergeTreeCommon/CnchServerClient.h>
+#include <CloudServices/CnchServerClient.h>
 #include <Common/RpcClientPool.h>
 
 namespace DB
 {
-// template class RpcClientPool<CnchServerClient>;
+template class RpcClientPool<CnchServerClient>;
 }
