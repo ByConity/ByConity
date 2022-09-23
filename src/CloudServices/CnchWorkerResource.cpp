@@ -57,7 +57,11 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     if (ast_create_query.columns_list)
     {
         if (ast_create_query.columns_list->columns)
-            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, false);
+        {
+            // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
+            // should NOT affect existing tables.
+            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, /* attach= */ true);
+        }
 
         if (ast_create_query.columns_list->indices)
             for (const auto & index : ast_create_query.columns_list->indices->children)
