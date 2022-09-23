@@ -85,6 +85,12 @@ PartWriter::PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     applySettings();
 }
 
+PartWriter::~PartWriter()
+{
+    if (fs::exists(working_path))
+        fs::remove_all(working_path);
+}
+
 void PartWriter::execute()
 {
     LOG_INFO(log, "PartWriter start to dump part.");
