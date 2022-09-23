@@ -1,11 +1,11 @@
 #include <CloudServices/ICnchBGThread.h>
+#include <CloudServices/CnchServerClientPool.h>
 
 #include <Catalog/Catalog.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
-// #include <MergeTreeCommon/CnchServerClientPool.h>
 
 namespace DB
 {
@@ -125,15 +125,13 @@ StorageCnchKafka & ICnchBGThread::checkAndGetCnchKafka(StoragePtr & storage)
     throw Exception("Table " + storage->getStorageID().getNameForLogs() + " is not StorageCnchKafka", ErrorCodes::LOGICAL_ERROR);
 }
 
-/*
 TxnTimestamp ICnchBGThread::calculateMinActiveTimestamp() const
 {
     /// TODO: P3 opt this: use query timestamp with parts set in task
 
-    TxnTimestamp min_active_ts = global_context.getTimestamp();
+    TxnTimestamp min_active_ts = getContext()->getTimestamp();
 
-    auto server_clients = global_context.getCnchServerClientPool().getAll();
-
+    auto server_clients = getContext()->getCnchServerClientPool().getAll();
     for (auto & c : server_clients)
     {
         try
@@ -149,6 +147,5 @@ TxnTimestamp ICnchBGThread::calculateMinActiveTimestamp() const
 
     return min_active_ts;
 }
-*/
 
 }

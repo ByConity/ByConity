@@ -765,6 +765,8 @@ public:
 
     /// The port that the server listens for executing SQL queries.
     UInt16 getTCPPort() const;
+    /// Get the tcp_port of other server.
+    UInt16 getTCPPort(const String & host, UInt16 rpc_port) const;
 
     std::optional<UInt16> getTCPPortSecure() const;
 

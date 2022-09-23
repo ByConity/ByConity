@@ -125,15 +125,14 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
     [[maybe_unused]] Protos::GetMinActiveTimestampResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    /*
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, &global_context = global_context, log = log] {
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
             brpc::ClosureGuard done_guard(done);
             try
             {
-                auto & txn_coordinator = global_context.getCnchTransactionCoordinator();
+                auto & txn_coordinator = global_context->getCnchTransactionCoordinator();
                 auto storage_id = RPCHelpers::createStorageID(request->storage_id());
                 if (auto timestamp = txn_coordinator.getMinActiveTimestamp(storage_id))
                     response->set_timestamp(*timestamp);
@@ -145,7 +144,6 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
             }
         }
     );
-    */
 }
 
 

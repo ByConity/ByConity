@@ -228,6 +228,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
+    extern const int CNCH_SERVER_NOT_FOUND;
 
 }
 
@@ -2437,6 +2438,20 @@ UInt16 Context::getTCPPort() const
 
     const auto & config = getConfigRef();
     return config.getInt("tcp_port", DBMS_DEFAULT_PORT);
+}
+
+UInt16 Context::getTCPPort(const String & host, UInt16 rpc_port) const
+{
+    String psm = getConfigRef().getString("service_discovery.server.psm", "data.cnch.server");
+    HostWithPortsVec server_vector = getServiceDiscoveryClient()->lookup(psm, ComponentType::SERVER);
+
+    for (auto & server: server_vector)
+    {
+        if (isSameHost(server.getHost(), host) && rpc_port == server.rpc_port)
+            return server.tcp_port;
+    }
+
+    throw Exception("Can't get tcp_port by host: " + host + " and rpc_port: " + std::to_string(rpc_port), ErrorCodes::CNCH_SERVER_NOT_FOUND);
 }
 
 std::optional<UInt16> Context::getTCPPortSecure() const
