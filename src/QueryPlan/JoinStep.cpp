@@ -219,6 +219,11 @@ void JoinStep::describePipeline(FormatSettings & settings) const
 
 void JoinStep::serialize(WriteBuffer & buf) const
 {
+    serialize(buf, true);
+}
+
+void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
+{
     writeBinary(step_description, buf);
 
     if (input_streams.size() < 2)
@@ -237,7 +242,8 @@ void JoinStep::serialize(WriteBuffer & buf) const
     else
     {
         writeBinary(false, buf);
-        serializeDataStream(output_stream.value(), buf);
+        if (with_output)
+            serializeDataStream(output_stream.value(), buf);
         SERIALIZE_ENUM(kind, buf)
         SERIALIZE_ENUM(strictness, buf)
 
@@ -261,6 +267,13 @@ void JoinStep::serialize(WriteBuffer & buf) const
 
         writeBinary(is_magic, buf);
     }
+}
+
+String JoinStep::serializeToString() const
+{
+    WriteBufferFromOwnString buffer;
+    serialize(buffer, false);
+    return buffer.str();
 }
 
 QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
