@@ -33,7 +33,7 @@ select toDecimal32OrZero('1', 6), toTypeName(toDecimal32OrZero('1', 6));
 select toDecimal32OrNull('1', 6), toTypeName(toDecimal32OrNull('1', 6));
 
 -- string convert to fixedString
--- select toFixedString('test_fixed_string', 10); -- { serverError 131 }
+select toFixedString('test_fixed_string', 10); -- { serverError 131 }
 select toFixedStringOrZero('test_fixed_zero', 10);
 select toFixedStringOrNull('test_fixed_null', 10);
 
