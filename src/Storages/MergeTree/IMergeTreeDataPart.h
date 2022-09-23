@@ -468,6 +468,7 @@ public:
 
     void setPreviousPart(IMergeTreeDataPartPtr part) const { prev_part = std::move(part); }
     const IMergeTreeDataPartPtr & tryGetPreviousPart() const { return prev_part; }
+    const IMergeTreeDataPartPtr & getPreviousPart() const;
     IMergeTreeDataPartPtr getBasePart() const;
     void enumeratePreviousParts(const std::function<void(const IMergeTreeDataPartPtr &)> &) const;
 

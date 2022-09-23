@@ -15,12 +15,11 @@
 #include <MergeTreeCommon/InsertionLabel.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Databases/IDatabase.h>
 #include <cppkafka/topic_partition_list.h>
 #include <Common/TypePromotion.h>
 #include <Common/serverLocality.h>
-#include <common/getFQDNOrHostName.h>
 #include <common/logger_useful.h>
-#include <Interpreters/Context_fwd.h>
 
 #include <memory>
 #include <string>
@@ -184,6 +183,8 @@ public:
 
     bool force_clean_by_dm = false;
 
+    DatabasePtr tryGetDatabaseViaCache(const String & database_name);
+    void addDatabaseIntoCache(DatabasePtr db);
 protected:
     void setStatus(CnchTransactionStatus status);
     void setTransactionRecord(TransactionRecord record);
@@ -208,7 +209,6 @@ protected:
 
     InsertionLabelPtr insertion_label;
 
-
 private:
     String creator;
     mutable bthread::RecursiveMutex mutex;
@@ -218,6 +218,8 @@ private:
     static constexpr UInt64 heartbeat_interval = 5000;
     std::chrono::milliseconds lock_expire_duration{default_lock_expire_duration};
     Poco::Logger * log{&Poco::Logger::get("ICnchTransaction")};
+    mutable std::mutex database_cache_mutex;
+    std::map<String, DatabasePtr> database_cache;
 };
 
 using TransactionCnchPtr = std::shared_ptr<ICnchTransaction>;

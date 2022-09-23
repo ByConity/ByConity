@@ -13,6 +13,46 @@
 namespace DB
 {
 
+class LockManager
+{
+public:
+    void remove(const String & address)
+    {
+        std::lock_guard lock(mutex);
+        hosts.erase(address);
+        cv.notify_one();
+    }
+
+    void add(const String & address)
+    {
+        std::unique_lock lock(mutex);
+        cv.wait(lock, [&]() { return !hosts.count(address); });
+        hosts.emplace(address);
+    }
+
+private:
+    std::mutex mutex;
+    std::condition_variable cv;
+    std::unordered_set<std::string> hosts;
+};
+
+struct SendLock
+{
+    SendLock(const std::string & address_, LockManager & manager_)
+        : address(address_), manager(manager_)
+    {
+        manager.add(address);
+    }
+
+    ~SendLock()
+    {
+        manager.remove(address);
+    }
+
+    std::string address;
+    LockManager & manager;
+};
+
 struct AssignedResource
 {
     explicit AssignedResource(const StoragePtr & storage);
@@ -41,9 +81,9 @@ struct AssignedResource
 class CnchServerResource
 {
 public:
-    explicit CnchServerResource(TxnTimestamp curr_txn_id):
-        txn_id(curr_txn_id),
-        log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
+    explicit CnchServerResource(TxnTimestamp curr_txn_id)
+        : txn_id(curr_txn_id)
+        , log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
     {}
 
     ~CnchServerResource();
@@ -83,6 +123,7 @@ public:
 
 private:
     auto getLock() const { return std::lock_guard(mutex); }
+    auto getLockForSend(const String & address) const { return SendLock{address, lock_manager}; }
     void cleanTaskInWorker(bool clean_resource = false) const;
 
     /// move resource from assigned_table_resource to assigned_worker_resource
@@ -103,6 +144,7 @@ private:
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
     Poco::Logger * log;
+    mutable LockManager lock_manager;
 };
 
 }

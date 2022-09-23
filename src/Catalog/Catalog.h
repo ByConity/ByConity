@@ -185,7 +185,8 @@ public:
     Strings getPartitionIDs(const StoragePtr & storage, const Context * session_context);
 
     /// dictionary related APIs
-    void createDictionary(const Context & query_context, const String & database, const String & name, const String & create_qeury);
+
+    void createDictionary(const StorageID & storage_id, const String & create_query);
 
     ASTPtr getCreateDictionary(const String & database, const String & name);
 
@@ -198,6 +199,8 @@ public:
     Strings getDictionariesInDB(const String & database);
 
     Protos::DataModelDictionary getDictionary(const String & database, const String & name);
+
+    StoragePtr tryGetDictionary(const String & database, const String & name, ContextPtr context);
 
     bool isDictionaryExists(const String & db, const String & name);
 

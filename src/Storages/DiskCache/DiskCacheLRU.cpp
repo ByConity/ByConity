@@ -57,11 +57,7 @@ void DiskCacheLRU::set(const String & key, ReadBuffer & value, size_t weight_hin
             // NOTE(wsy) potenial race condition, lru cache may evict caching entry
             // Maybe let lrucache skip evict entry with 0 weight
             auto disk = writeSegment(key, value, weight_hint);
-            {
-                std::lock_guard lock(cache_meta->mutex);
-                cache_meta->state = DiskCacheState::Cached;
-                cache_meta->setDisk(disk);
-            }
+            Base::set(key, std::make_shared<DiskCacheMeta>(DiskCacheState::Cached, weight_hint, disk));
         }
         catch (...)
         {
@@ -114,7 +110,7 @@ std::pair<DiskPtr, String> DiskCacheLRU::get(const String & key)
 
     try
     {
-        auto disk = meta->getDisk();
+        const auto & disk = meta->disk;
         if (!disk)
             throw Exception(ErrorCodes::LOGICAL_ERROR, "No disk for {}", key);
         String path = fs::path(base_path) / key;
@@ -183,7 +179,7 @@ bool DiskCacheLRU::loadSegmentFromFile(const DiskPtr & disk, const String & segm
     {
         // Only remove temp file if it didn't appear in cache, otherwise we may delete
         // caching entry
-        if (!isExist(segment_name))
+        if (!isExist(segment_name.substr(0, segment_name.size() - 5)))
         {
             disk->removeFile(segment_rel_path);
         }
@@ -211,8 +207,7 @@ bool DiskCacheLRU::loadSegment(const DiskPtr & disk, const String & segment_rel_
     // So the code about old key format compatability is removed
 
     size_t file_size = disk->getFileSize(segment_rel_path);
-    auto meta = std::make_shared<DiskCacheMeta>(DiskCacheState::Cached, file_size);
-    meta->setDisk(disk);
+    auto meta = std::make_shared<DiskCacheMeta>(DiskCacheState::Cached, file_size, disk);
     Base::set(segment_name, meta);
 
     return true;
@@ -228,7 +223,7 @@ void DiskCacheLRU::removeExternal(const Key & key, const std::shared_ptr<DiskCac
 {
     auto & thread_pool = context.getLocalDiskCacheEvictThreadPool();
 
-    auto remove_impl = [this, key, disk = value->getDisk(), &thread_pool]() {
+    auto remove_impl = [this, key, disk = value->disk, &thread_pool]() {
         std::shared_lock<std::shared_mutex> lock(evict_mutex);
         /// isExist need to lock lru mutex, there is a dead lock case:
         /// DiskCacheMetaSyncThread holds mutex lock to wait the task is scheduled by DiskCacheEvictThreadPool,

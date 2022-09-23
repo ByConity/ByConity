@@ -4,6 +4,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <common/shared_ptr_helper.h>
+#include "Catalog/DataModelPartWrapper_fwd.h"
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
 
@@ -106,8 +107,7 @@ public:
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
-    ServerDataPartsVector getServerPartsByPartitionOrPredicate(ContextPtr local_context, const ASTPtr & ast, bool part);
-    ServerDataPartsVector getServerPartsByPredicate(ContextPtr local_context, const ASTPtr & predicate_);
+    ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
 
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
         IMergeTreeDataPartsVector* dropped_parts = nullptr);
@@ -125,7 +125,7 @@ public:
     MutableDataPartsVector createDropRangesFromPartitions(const PartitionDropInfos & partition_infos, const TransactionCnchPtr & txn);
     MutableDataPartsVector createDropRangesFromParts(const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
 
-    StorageCnchMergeTree & checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
+    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 protected:

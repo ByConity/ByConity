@@ -18,9 +18,6 @@
     <exchange_port>9410</exchange_port>
     <exchange_status_port>9510</exchange_status_port>
 
-    <!-- Switch on/off query metrics -->
-    <enable_query_level_profiling>0</enable_query_level_profiling>
-
     <vw_name>vwname_default</vw_name>
 
     <!-- Used with https_port and tcp_port_secure. Full ssl options list: https://github.com/ClickHouse-Extras/poco/blob/master/NetSSL_OpenSSL/include/Poco/Net/SSLManager.h#L71 -->
@@ -153,13 +150,6 @@
     <compression incl="clickhouse_compression">
         <!-- Set of variants. Checked in order. Last matching case wins. If nothing matches, lz4 will be used. -->
     </compression>
-
-    <!-- Allow to execute distributed DDL queries (CREATE, DROP, ALTER, RENAME) on cluster.
-         Works only if ZooKeeper is enabled. Comment it if such functionality isn't required. -->
-    <distributed_ddl>
-        <!-- Path in ZooKeeper to queue with DDL queries -->
-        <path>/clickhouse/task_queue/ddl</path>
-    </distributed_ddl>
 
     <!-- Example of parameters for GraphiteMergeTree table engine -->
     <graphite_rollup_example>

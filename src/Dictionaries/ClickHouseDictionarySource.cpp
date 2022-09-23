@@ -14,6 +14,7 @@
 #include "writeParenthesisedString.h"
 #include "DictionaryFactory.h"
 #include "DictionarySourceHelpers.h"
+#include "MergeTreeCommon/CnchTopologyMaster.h"
 
 namespace DB
 {
@@ -21,6 +22,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int SYSTEM_ERROR;
 }
 
 namespace
@@ -32,24 +34,63 @@ namespace
         return secure ? context->getTCPPortSecure().value_or(0) : context->getTCPPort();
     }
 
-    ConnectionPoolWithFailoverPtr createPool(const ClickHouseDictionarySource::Configuration & configuration)
+    ConnectionPoolPtrs createPoolsToCnchServer(ContextPtr context, const ClickHouseDictionarySource::Configuration & configuration)
+    {
+        std::shared_ptr<CnchTopologyMaster> topology_master = context->getCnchTopologyMaster();
+        if (!topology_master)
+            throw Exception("Failed to get topology master", ErrorCodes::SYSTEM_ERROR);
+        std::list<CnchServerTopology> server_topologies = topology_master->getCurrentTopology();
+        if (server_topologies.empty() || server_topologies.back().getServerList().empty())
+            throw Exception("Server topology is empty, something wrong with topology", ErrorCodes::SYSTEM_ERROR);
+
+        HostWithPortsVec endpoints = server_topologies.back().getServerList();
+
+        ConnectionPoolPtrs res;
+        std::for_each(endpoints.begin(), endpoints.end(),
+            [& res, & configuration] (const HostWithPorts & host_with_port)
+            {
+                res.emplace_back(std::make_shared<ConnectionPool>(
+                    MAX_CONNECTIONS,
+                    host_with_port.getHost(),
+                    host_with_port.tcp_port,
+                    configuration.db,
+                    configuration.user,
+                    configuration.password,
+                    "", /* cluster */
+                    "", /* cluster_secret */
+                    "ClickHouseDictionarySource",
+                    Protocol::Compression::Enable,
+                    configuration.secure ? Protocol::Secure::Enable : Protocol::Secure::Disable));
+            }
+        );
+        return res;
+    }
+
+    ConnectionPoolWithFailoverPtr createPool(ContextPtr context, const ClickHouseDictionarySource::Configuration & configuration)
     {
         if (configuration.is_local)
             return nullptr;
 
         ConnectionPoolPtrs pools;
-        pools.emplace_back(std::make_shared<ConnectionPool>(
-            MAX_CONNECTIONS,
-            configuration.host,
-            configuration.port,
-            configuration.db,
-            configuration.user,
-            configuration.password,
-            "", /* cluster */
-            "", /* cluster_secret */
-            "ClickHouseDictionarySource",
-            Protocol::Compression::Enable,
-            configuration.secure ? Protocol::Secure::Enable : Protocol::Secure::Disable));
+        if (configuration.host.empty())
+        {
+            pools = createPoolsToCnchServer(context, configuration);
+        }
+        else
+        {
+            pools.emplace_back(std::make_shared<ConnectionPool>(
+                MAX_CONNECTIONS,
+                configuration.host,
+                configuration.port,
+                configuration.db,
+                configuration.user,
+                configuration.password,
+                "", /* cluster */
+                "", /* cluster_secret */
+                "ClickHouseDictionarySource",
+                Protocol::Compression::Enable,
+                configuration.secure ? Protocol::Secure::Enable : Protocol::Secure::Disable));
+        }
 
         return std::make_shared<ConnectionPoolWithFailover>(pools, LoadBalancing::RANDOM);
     }
@@ -67,7 +108,7 @@ ClickHouseDictionarySource::ClickHouseDictionarySource(
     , query_builder{dict_struct, configuration.db, "", configuration.table, configuration.where, IdentifierQuotingStyle::Backticks}
     , sample_block{sample_block_}
     , context(Context::createCopy(context_))
-    , pool{createPool(configuration)}
+    , pool{createPool(context, configuration)}
     , load_all_query{query_builder.composeLoadAllQuery()}
 {
     /// Query context is needed because some code in executeQuery function may assume it exists.
@@ -83,7 +124,7 @@ ClickHouseDictionarySource::ClickHouseDictionarySource(const ClickHouseDictionar
     , query_builder{dict_struct, configuration.db, "", configuration.table, configuration.where, IdentifierQuotingStyle::Backticks}
     , sample_block{other.sample_block}
     , context(Context::createCopy(other.context))
-    , pool{createPool(configuration)}
+    , pool{createPool(context, configuration)}
     , load_all_query{other.load_all_query}
 {
     context->makeQueryContext();
@@ -219,8 +260,8 @@ void registerDictionarySourceClickHouse(DictionarySourceFactory & factory)
         UInt16 default_port = getPortFromContext(context_copy, secure);
 
         std::string settings_config_prefix = config_prefix + ".clickhouse";
-        std::string host = config.getString(settings_config_prefix + ".host", "localhost");
-        UInt16 port = static_cast<UInt16>(config.getUInt(settings_config_prefix + ".port", default_port));
+        std::string host = config.getString(settings_config_prefix + ".host", "");
+        UInt16 port = static_cast<UInt16>(config.getUInt(settings_config_prefix + ".port", 0));
 
         ClickHouseDictionarySource::Configuration configuration
         {
@@ -234,7 +275,7 @@ void registerDictionarySourceClickHouse(DictionarySourceFactory & factory)
             .update_field = config.getString(settings_config_prefix + ".update_field", ""),
             .update_lag = config.getUInt64(settings_config_prefix + ".update_lag", 1),
             .port = port,
-            .is_local = isLocalAddress({host, port}, default_port),
+            .is_local = host.empty() ? (context->getServerType() == ServerType::cnch_server) : isLocalAddress({host, port}, default_port),
             .secure = config.getBool(settings_config_prefix + ".secure", false)
         };
 

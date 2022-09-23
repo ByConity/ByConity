@@ -133,7 +133,8 @@ StorageDictionary::StorageDictionary(
     configuration = dictionary_configuration;
 
     auto repository = std::make_unique<ExternalLoaderDictionaryStorageConfigRepository>(*this);
-    remove_repository_callback = context_->getExternalDictionariesLoader().addConfigRepository(std::move(repository));
+    if (!configuration->has("is_cnch_dictionary"))
+        remove_repository_callback = context_->getExternalDictionariesLoader().addConfigRepository(std::move(repository));
 }
 
 StorageDictionary::~StorageDictionary()
