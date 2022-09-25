@@ -51,6 +51,7 @@ add_subdirectory (nanodbc-cmake)
 add_subdirectory (jsonc-cmake)
 add_subdirectory (ipdb-cmake)
 add_subdirectory (maxminddb-cmake)
+add_subdirectory (morton-nd-cmake)
 
 if (USE_YAML_CPP)
     add_subdirectory (yaml-cpp-cmake)

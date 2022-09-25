@@ -24,6 +24,8 @@ target_link_libraries(clickhouse_functions
         metrohash
         murmurhash
         biginteger
+        morton_nd
+)
 
     PRIVATE
         ${ZLIB_LIBRARIES}
