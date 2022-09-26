@@ -120,7 +120,7 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    StoragePtr storage = tryGetTable(table_name, local_context);
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
     bool is_dictionary = false;
     TxnTimestamp previous_version = 0;
     if (!storage)
