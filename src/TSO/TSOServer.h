@@ -2,6 +2,7 @@
 
 #include <Common/Config/ConfigProcessor.h>
 #include <Coordination/LeaderElection.h>
+#include <Coordination/LeaderElectionBase.h>
 #include <daemon/BaseDaemon.h>
 #include <Server/IServer.h>
 #include <TSO/TSOProxy.h>
@@ -26,18 +27,16 @@ namespace TSO
 
 class TSOImpl;
 
-class TSOServer : public BaseDaemon, public IServer
+class TSOServer : public BaseDaemon, public IServer, public LeaderElectionBase
 {
 
 public:
     using ServerApplication::run;
-
     using TSOProxyPtr = std::shared_ptr<TSOProxy>;
     using TSOServicePtr = std::shared_ptr<TSOImpl>;
 
-    TSOServer(); //: timer(0, TSO_UPDATE_INTERVAL), callback(*this, &TSOServer::updateTSO) {} // declare updateTSO thread
-
-    ~TSOServer() override; //= default;
+    TSOServer();
+    ~TSOServer() override;
 
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
@@ -102,19 +101,13 @@ private:
     /// keep tcp servers for clickhouse-keeper
     std::vector<ProtocolServerAdapterPtr> keeper_servers;
 
-    zkutil::ZooKeeperPtr current_zookeeper;
-    zkutil::LeaderElectionPtr leader_election;
-    BackgroundSchedulePool::TaskHolder election_restart_task;
+    void onLeader() override;
+    void exitLeaderElection() override;
+    void enterLeaderElection() override;
 
-    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
-
-    void exitLeaderElection();
-    bool enterLeaderElection();
-    void restartLeaderElection();
     using CreateServerFunc = std::function<std::shared_ptr<ProtocolServerAdapter>(UInt16)>;
     void createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func);
-
-    void startKeeperServer();
+    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
 };
 
 }

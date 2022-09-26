@@ -2105,6 +2105,8 @@ zkutil::ZooKeeperPtr Context::getZooKeeper() const
         ServiceEndpoints endpoints;
         if (getConfigRef().has("service_discovery.keeper"))
             endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.keeper.psm");
+        else if (getConfigRef().has("service_discovery.tso"))
+            endpoints = getServiceDiscoveryClient()->lookupEndpoints("service_discovery.tso.psm");
 
         if (!shared->zookeeper)
             shared->zookeeper = std::make_shared<zkutil::ZooKeeper>(config, "zookeeper", getZooKeeperLog(), endpoints);
@@ -2318,9 +2320,22 @@ void Context::reloadAuxiliaryZooKeepersConfigIfChanged(const ConfigurationPtr & 
     }
 }
 
-
 bool Context::hasZooKeeper() const
 {
+    /**
+     * Now, we support some methods for configuring zookeeper.
+     * The first method is to add all nodes and settings into <zookeeper> label.
+     * <zookeeper>
+     *     <nodes>
+     *       ...
+     *     </nodes>
+     *     ... <!-- some settings -->
+     * </zookeeper>
+     * The second method is to add settings to the <zookeeper> and obtain nodes from service discovery
+     * If all settings of zookeeper use the default value,
+     *   1. if you obtain nodes from `service_discovery.keeper`, the <zookeeper> label could be omitted.
+     *   2. otherwise, please keep empty <zookeeper> label in configuration file to avoid ambiguity.
+     */
     return getConfigRef().has("zookeeper") || getConfigRef().has("service_discovery.keeper");
 }
 
@@ -2435,8 +2450,8 @@ const RemoteHostFilter & Context::getRemoteHostFilter() const
 HostWithPorts Context::getHostWithPorts() const
 {
     bool use_dns = (getServiceDiscoveryClient()->getName() == "dns");
-    auto id_cstr = std::getenv("WORKER_ID");
-    auto ip_cstr = getHostIPFromEnv();
+    auto * id_cstr = std::getenv("WORKER_ID");
+    const auto & ip_cstr = getHostIPFromEnv();
     String id = (use_dns || nullptr == id_cstr) ? DNSResolver::instance().getHostName() : String(id_cstr);
     String host = (ip_cstr.empty()) ? DNSResolver::instance().getHostName() : String(ip_cstr);
 
@@ -3747,7 +3762,7 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
 
     auto host_port = getTSOLeaderHostPort();
 
-    if (!host_port.empty())
+    if (host_port.empty())
         updateTSOLeaderHostPort();
 
     return shared->tso_client_pool->get(host_port);
@@ -3799,7 +3814,7 @@ void Context::setTSOLeaderHostPort(String host_port) const
 
 UInt64 Context::getTimestamp() const
 {
-    return TSO::getTSOResponse(shared_from_this(), TSO::TSORequestType::GetTimestamp);
+    return TSO::getTSOResponse(*this, TSO::TSORequestType::GetTimestamp);
 }
 
 UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
@@ -3819,7 +3834,7 @@ UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
 
 UInt64 Context::getTimestamps(UInt32 size) const
 {
-    return TSO::getTSOResponse(shared_from_this(), TSO::TSORequestType::GetTimestamps, size);
+    return TSO::getTSOResponse(*this, TSO::TSORequestType::GetTimestamps, size);
 }
 
 UInt64 Context::getPhysicalTimestamp() const

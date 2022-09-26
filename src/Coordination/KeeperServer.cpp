@@ -476,12 +476,6 @@ uint64_t KeeperServer::getFollowerCount() const
     return raft_instance->get_peer_info_all().size();
 }
 
-String KeeperServer::tryGetLeader() const
-{
-    auto leader_id = raft_instance->get_leader();
-    return state_manager->tryGetServerEndpoint(leader_id);
-}
-
 uint64_t KeeperServer::getSyncedFollowerCount() const
 {
     uint64_t last_log_idx = raft_instance->get_last_log_idx();

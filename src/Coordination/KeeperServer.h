@@ -105,8 +105,6 @@ public:
 
     bool isLeaderAlive() const;
 
-    String tryGetLeader() const;
-
     /// @return follower count if node is not leader return 0
     uint64_t getFollowerCount() const;
 

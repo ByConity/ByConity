@@ -13,10 +13,9 @@ namespace DB
 
 CnchServerManager::CnchServerManager(ContextPtr context_)
     : WithContext(context_)
+    , LeaderElectionBase(getContext()->getConfigRef().getUInt64("server_master.election_check_ms", 100))
     , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); } ))
-    , session_restart_task(getContext()->getTopologySchedulePool().createTask("SessionRestart", [&]() { sessionRestart(); }))
     , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
-    , current_zookeeper(getContext()->hasZooKeeper() ? getContext()->getZooKeeper(): nullptr)
 {
     if (!getContext()->hasZooKeeper())
     {
@@ -27,11 +26,7 @@ CnchServerManager::CnchServerManager(ContextPtr context_)
         return;
     }
 
-    /// start leader election
-    enterLeaderElection();
-
-    /// try to recovery leader election and background task when zookeeper is expired
-    session_restart_task->activateAndSchedule();
+    startLeaderElection(getContext()->getTopologySchedulePool());
 }
 
 CnchServerManager::~CnchServerManager()
@@ -41,6 +36,9 @@ CnchServerManager::~CnchServerManager()
 
 void CnchServerManager::onLeader()
 {
+    /// sleep to prevent multiple leaders from appearing at the same time
+    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
+
     auto current_address = getContext()->getHostWithPorts().getRPCAddress();
 
     try
@@ -64,7 +62,7 @@ void CnchServerManager::enterLeaderElection()
     try
     {
         auto current_address = getContext()->getHostWithPorts().getRPCAddress();
-        String election_path = SERVER_MASTER_ELECTION_DEFAULT_PATH; // TODO: support read from config.
+        auto election_path = getContext()->getConfigRef().getString("server_master.election_path", SERVER_MASTER_ELECTION_DEFAULT_PATH);
 
         current_zookeeper = getContext()->getZooKeeper();
         current_zookeeper->createAncestors(election_path + "/");
@@ -84,25 +82,9 @@ void CnchServerManager::enterLeaderElection()
     }
 }
 
-void CnchServerManager::sessionRestart()
+void CnchServerManager::exitLeaderElection()
 {
-    try
-    {
-        if (!current_zookeeper || current_zookeeper->expired())
-        {
-            /// shutdown background task due to this node may not be leader.
-            partialShutdown();
-            enterLeaderElection();
-
-            LOG_INFO(log, "Reset new ZooKeeper due to old session is expired.");
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-    }
-
-    session_restart_task->scheduleAfter(getContext()->getSettings().topology_session_restart_check_ms.totalMilliseconds());
+    partialShutdown();
 }
 
 void CnchServerManager::refreshTopology()
@@ -116,28 +98,31 @@ void CnchServerManager::refreshTopology()
         auto service_discovery_client = getContext()->getServiceDiscoveryClient();
         String psm = getContext()->getConfigRef().getString("service_discovery.server.psm", "data.cnch.server");
         HostWithPortsVec server_vector = service_discovery_client->lookup(psm, ComponentType::SERVER);
-        if (server_vector.empty())
-        {
-            LOG_ERROR(log, "Failed to get any server from service discovery, psm: {}", psm);
-            return;
-        }
+
         /// zookeeper is nullptr means there is no leader election available,
         /// in this case, we now only support one server in cluster.
-        else if (!current_zookeeper && server_vector.size() > 1)
+        if (!current_zookeeper && server_vector.size() > 1)
         {
-            LOG_ERROR(log, "More than one server in cluster without leader-election is not supported now, psm: {}", psm);
+            LOG_ERROR(log, "More than one server in cluster without leader-election is not supported now, stop refreshTopology, psm: {}", psm);
             return;
         }
 
-        /// keep the servers sorted by host address to make it comparable
-        std::sort(server_vector.begin(), server_vector.end(), [](auto & lhs, auto & rhs) {
-            return std::forward_as_tuple(lhs.id, lhs.getHost(), lhs.rpc_port) < std::forward_as_tuple(rhs.id, rhs.getHost(), rhs.rpc_port);
-        });
-
+        if (!server_vector.empty())
         {
-            std::unique_lock<std::mutex> lock(topology_mutex);
-            if (cached_topologies.empty() || !HostWithPorts::isExactlySameVec(cached_topologies.back().getServerList(), server_vector))
-                next_version_topology = Topology(UInt64{0}, std::move(server_vector));
+            /// keep the servers sorted by host address to make it comparable
+            std::sort(server_vector.begin(), server_vector.end(), [](auto & lhs, auto & rhs) {
+                return std::forward_as_tuple(lhs.id, lhs.getHost(), lhs.rpc_port) < std::forward_as_tuple(rhs.id, rhs.getHost(), rhs.rpc_port);
+            });
+
+            {
+                std::unique_lock<std::mutex> lock(topology_mutex);
+                if (cached_topologies.empty() || !HostWithPorts::isExactlySameVec(cached_topologies.back().getServerList(), server_vector))
+                    next_version_topology = Topology(UInt64{0}, std::move(server_vector));
+            }
+        }
+        else
+        {
+            LOG_ERROR(log, "Failed to get any server from service discovery, psm: {}", psm);
         }
     }
     catch (...)
@@ -241,7 +226,6 @@ void CnchServerManager::shutDown()
     try
     {
         need_stop = true;
-        session_restart_task->deactivate();
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
         leader_election.reset();

@@ -62,9 +62,9 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
     return resp;
 }
 
-UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size)
+UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 {
-    const auto & config = context->getConfigRef();
+    const auto & config = context.getConfigRef();
     int tos_max_retry = config.getInt("tso_service.tso_max_retry_count", 3);
     bool use_tso_fallback = config.getBool("tso_service.use_fallback", true);
 
@@ -75,7 +75,7 @@ UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size)
     {
         try
         {
-            auto tso_client = context->getCnchTSOClient();
+            auto tso_client = context.getCnchTSOClient();
 
             switch (type)
             {
@@ -95,14 +95,14 @@ UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size)
                 }
             }
 
-            context->updateTSOLeaderHostPort();
+            context.updateTSOLeaderHostPort();
         }
         catch (Exception & e)
         {
             if (use_tso_fallback && e.code() != ErrorCodes::BRPC_TIMEOUT)
             {
                 /// old leader may be unavailable
-                context->updateTSOLeaderHostPort();
+                context.updateTSOLeaderHostPort();
                 throw;
             }
 
@@ -113,11 +113,13 @@ UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size)
                     std::to_string(tos_max_retry),
                     e.displayText());
 
-            tryLogCurrentException("getTSOResponse", error_string);
+            tryLogCurrentException(__PRETTY_FUNCTION__, error_string);
         }
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(30));
     }
 
-    context->updateTSOLeaderHostPort();
+    context.updateTSOLeaderHostPort();
     throw Exception(ErrorCodes::TSO_OPERATION_ERROR, "Can't get process TSO request, type: {}", typeToString(type));
 }
 

@@ -154,11 +154,6 @@ public:
         return server->isLeader();
     }
 
-    String getLeader() const
-    {
-        return server->tryGetLeader();
-    }
-
     bool hasLeader() const
     {
         return server->isLeaderAlive();

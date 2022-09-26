@@ -3,6 +3,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
+#include <Coordination/LeaderElectionBase.h>
 
 namespace zkutil
 {
@@ -22,14 +23,14 @@ namespace DB
  *
  * Leader election is required to make sure only one CnchServerManager can update server topology at a time.
  */
-class CnchServerManager: public WithContext
+class CnchServerManager: public WithContext, public LeaderElectionBase
 {
 using Topology = CnchServerTopology;
 
 public:
     explicit CnchServerManager(ContextPtr context_);
 
-    ~CnchServerManager();
+    ~CnchServerManager() override;
 
     void dumpServerStatus();
 
@@ -37,12 +38,11 @@ public:
     void partialShutdown();
 
 private:
-    void onLeader();
-    void enterLeaderElection();
-    void checkLeaderInfo(const UInt64 & check_interval);
+    void onLeader() override;
+    void exitLeaderElection() override;
+    void enterLeaderElection() override;
 
     void refreshTopology();
-    void sessionRestart();
     void renewLease();
 
     /// set topology status when becoming leader. may runs in background tasks.
@@ -50,17 +50,12 @@ private:
 
     Poco::Logger * log = &Poco::Logger::get("CnchServerManager");
 
-    std::unique_ptr<zkutil::LeaderElection> leader_election;
-
     BackgroundSchedulePool::TaskHolder topology_refresh_task;
-    BackgroundSchedulePool::TaskHolder session_restart_task;
     BackgroundSchedulePool::TaskHolder lease_renew_task;
 
     std::optional<Topology> next_version_topology;
     std::list<Topology> cached_topologies;
     mutable std::mutex topology_mutex;
-
-    zkutil::ZooKeeperPtr current_zookeeper;
 
     std::atomic_bool need_stop{false};
     std::atomic_bool is_leader{false};

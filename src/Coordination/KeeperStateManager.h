@@ -118,15 +118,6 @@ public:
         return configuration_wrapper.cluster_config->get_servers().size();
     }
 
-    String tryGetServerEndpoint(int server_id) const
-    {
-        std::lock_guard lock(configuration_wrapper_mutex);
-        auto server = configuration_wrapper.cluster_config->get_server(server_id);
-        if (!server)
-            return "";
-        return server->get_endpoint();
-    }
-
     /// Read all log entries in log store from the begging and return latest config (with largest log_index)
     ClusterConfigPtr getLatestConfigFromLogStore() const;
 

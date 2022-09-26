@@ -53,7 +53,7 @@ void TSOImpl::GetTimestamp(
 
     try
     {
-        if (!is_leader.load(std::memory_order_relaxed))
+        if (!is_leader.load(std::memory_order_acquire))
         {
             response->set_is_leader(false);
             return;
@@ -82,7 +82,7 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
 
     try
     {
-        if (!is_leader.load(std::memory_order_relaxed))
+        if (!is_leader.load(std::memory_order_acquire))
         {
             response->set_is_leader(false);
             return;

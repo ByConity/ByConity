@@ -45,6 +45,6 @@ inline std::string typeToString(TSORequestType type)
     __builtin_unreachable();
 }
 
-UInt64 getTSOResponse(ContextPtr context, TSORequestType type, size_t size = 1);
+UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size = 1);
 
 }

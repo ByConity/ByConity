@@ -11,6 +11,7 @@
 #include <gflags/gflags.h>
 #include <chrono>
 #include <memory>
+#include <thread>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <boost/exception/diagnostic_information.hpp>
@@ -87,7 +88,8 @@ namespace TSO
 {
 
 TSOServer::TSOServer()
-    : timer(0, TSO_UPDATE_INTERVAL)
+    : LeaderElectionBase(config().getInt64("tos_server.election_check_ms"))
+    , timer(0, TSO_UPDATE_INTERVAL)
     , callback(*this, &TSOServer::updateTSO)
 {
 }
@@ -193,9 +195,10 @@ void TSOServer::syncTSO()
         /// sync to tso service
         tso_service->setPhysicalTime(t_next);
     }
-    catch(Exception & e)
+    catch (...)
     {
-        LOG_ERROR(log, e.message());
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw; /// TODO: call exitLeaderElection?
     }
 }
 
@@ -300,6 +303,20 @@ Poco::Net::SocketAddress TSOServer::socketBindListen(Poco::Net::ServerSocket & s
     return address;
 }
 
+void TSOServer::onLeader()
+{
+    syncTSO();
+    timer.start(callback);
+
+    /// wait for exit old leader
+    auto sleep_time = config().getInt64("tos_server.election_check_ms", 100);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+
+    LOG_INFO(log, "Current node {} become leader", host_port);
+    tso_service->setIsLeader(true);
+};
+
+
 void TSOServer::exitLeaderElection()
 {
     LOG_DEBUG(log, "Exit leader election");
@@ -310,34 +327,22 @@ void TSOServer::exitLeaderElection()
     timer.stop();
 }
 
-bool TSOServer::enterLeaderElection()
+void TSOServer::enterLeaderElection()
 {
-    if (!global_context->hasZooKeeper())
-        return false;
-
     try
     {
         LOG_DEBUG(log, "Enter leader election");
 
-        current_zookeeper = global_context->getZooKeeper();
-
-        auto on_leader_callback = [&]()
-        {
-            LOG_INFO(log, "Current node {} become leader", host_port);
-
-            syncTSO();
-            timer.start(callback);
-            tso_service->setIsLeader(true);
-        };
-
         auto election_path = config().getString("tso_service.election_path", TSO_ELECTION_DEFAULT_PATH);
+
+        current_zookeeper = global_context->getZooKeeper();
         current_zookeeper->createAncestors(election_path + "/");
 
         leader_election = std::make_shared<zkutil::LeaderElection>(
             global_context->getSchedulePool(),
             election_path,
             *current_zookeeper,
-            on_leader_callback,
+            [&]() { return onLeader(); },
             host_port,
             false
         );
@@ -347,26 +352,6 @@ bool TSOServer::enterLeaderElection()
         /// Zookeeper maybe not ready now
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
-
-    return true;
-}
-
-void TSOServer::restartLeaderElection()
-{
-    try
-    {
-        if (!current_zookeeper || current_zookeeper->expired())
-        {
-            exitLeaderElection();
-            enterLeaderElection();
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log);
-    }
-
-    election_restart_task->scheduleAfter(config().getInt64("tos_server.election_check_ms", 100));
 }
 
 void TSOServer::createServer(
@@ -477,12 +462,10 @@ int TSOServer::main(const std::vector<std::string> &)
         }
     }
 
-    bool enable_leader_election = global_context->hasZooKeeper();  /// TODO: check there is only one tso-server instance
+    bool enable_leader_election = global_context->hasZooKeeper();
     if (enable_leader_election)
     {
-        enterLeaderElection();
-        election_restart_task = global_context->getSchedulePool().createTask("LeaderElectionRestart", [&]() { restartLeaderElection(); });
-        election_restart_task->activateAndSchedule();
+        startLeaderElection(global_context->getSchedulePool());
     }
     else
     {
