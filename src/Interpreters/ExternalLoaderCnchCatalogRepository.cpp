@@ -15,9 +15,86 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+CnchCatalogDictionaryCache::CnchCatalogDictionaryCache(ContextPtr context)
+    : catalog{context->getCnchCatalog()}
+{
+    loadFromCatalog();
+}
+
+std::unordered_map<String, DB::Protos::DataModelDictionary> fetchCacheDataFromCatalog(Catalog::Catalog * catalog)
+{
+    Catalog::Catalog::DataModelDictionaries dictionary_model = catalog->getAllDictionaries();
+    std::unordered_map<String, DB::Protos::DataModelDictionary> res;
+    std::for_each(dictionary_model.begin(), dictionary_model.end(),
+        [& this] (Protos::DataModelDictionary && d)
+        {
+            const UInt64 & status = d.status();
+            if (Status::isDeleted(status) || Status::isDetached(status))
+                return;
+            UUID uuid_str = toString(RPCHelpers::createUUID(d.uuid()));
+            res.insert(std::make_pair(uuid_str, std::move(d)))
+        });
+    return res;
+}
+
+void CnchCatalogDictionaryCache::loadFromCatalog();
+{
+    std::unordered_map<String, DB::Protos::DataModelDictionary> new_data =
+        fetchCacheDataFromCatalog(catalog.get());
+    std::lock_guard lock{data_mutex};
+    std::swap(new_data, data);
+}
+
+std::set<std::string> CnchCatalogDictionaryCache::getAllUUIDString() const
+{
+    std::set<std::string> res;
+    std::lock_guard lock{data_mutex};
+    std::transform(data.begin(), data.end(), std::inserter(res, res.end()),
+        [] (const std::pair<String, DB::Protos::DataModelDictionary> & p)
+        {
+            return p.first;
+        }
+    );
+    return res;
+}
+
+bool CnchCatalogDictionaryCache::exists(const String & uuid_str) const
+{
+    std::lock_guard lock{data_mutex};
+    return data.contains(uuid_str);
+}
+
+DB::Protos::DataModelDictionary CnchCatalogDictionaryCache::getDataModel(const String & uuid_str) const
+{
+    {
+        std::lock_guard lock{data_mutex};
+        auto it = data.find(uuid_str);
+        if (it != data.end())
+            return it->second;
+    }
+    throw Exception("dictionary with uuid not found : " + uuid_str, ErrorCodes::LOGICAL_ERROR);
+}
+
+std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & storage_id) const
+{
+    std::lock_guard lock{data_mutex};
+    for (const std::pair<String, DB::Protos::DataModelDictionary> & p : data)
+    {
+        const DB::Protos::DataModelDictionary & d = p.second();
+        if ((d.database() != storage_id.getDatabaseName()) ||
+            (d.name() != storage_id.getTableName()))
+            continue;
+
+        return RPCHelpers::createUUID(d.uuid());
+    }
+
+    return {};
+}
+
 ExternalLoaderCnchCatalogRepository::ExternalLoaderCnchCatalogRepository(ContextPtr context_)
     : context{std::move(context_)},
-      catalog{context->getCnchCatalog()}
+      catalog{context->getCnchCatalog()},
+      cache{context->getCnchCatalogDictionaryCache()}
 {}
 
 std::string ExternalLoaderCnchCatalogRepository::getName() const
@@ -27,73 +104,30 @@ std::string ExternalLoaderCnchCatalogRepository::getName() const
 
 std::set<std::string> ExternalLoaderCnchCatalogRepository::getAllLoadablesDefinitionNames()
 {
-    std::set<std::string> res;
-    Catalog::Catalog::DataModelDictionaries dictionary_model = catalog->getAllDictionaries();
-    std::for_each(dictionary_model.begin(), dictionary_model.end(),
-        [& res] (const Protos::DataModelDictionary & d)
-        {
-            const UInt64 & status = d.status();
-            if (Status::isDeleted(status) || Status::isDetached(status))
-                return;
-            res.insert(toString(RPCHelpers::createUUID(d.uuid())));
-        });
-
-    return res;
+    cache.loadFromCatalog();
+    return cache.getAllUUIDString();
 }
 
 bool ExternalLoaderCnchCatalogRepository::exists(const std::string & loadable_definition_name)
 {
-    Catalog::Catalog::DataModelDictionaries dictionary_models = catalog->getAllDictionaries();
-    for (const Protos::DataModelDictionary & d : dictionary_models)
-    {
-        const UInt64 & status = d.status();
-        if (Status::isDeleted(status) || Status::isDetached(status))
-            continue;
-
-        if (toString(RPCHelpers::createUUID(d.uuid())) == loadable_definition_name)
-            return true;
-    }
-
-    return false;
+    return cache.exists(loadable_definition_name);
 }
 
 Poco::Timestamp ExternalLoaderCnchCatalogRepository::getUpdateTime(const std::string & loadable_definition_name)
 {
-    Catalog::Catalog::DataModelDictionaries dictionary_models = catalog->getAllDictionaries();
-    for (const Protos::DataModelDictionary & d : dictionary_models)
-    {
-        const UInt64 & status = d.status();
-        if (Status::isDeleted(status) || Status::isDetached(status))
-            continue;
-
-        if (toString(RPCHelpers::createUUID(d.uuid())) == loadable_definition_name)
-            return d.last_modification_time();
-    }
-
-    throw Exception("dictionary uuid not found : " + loadable_definition_name, ErrorCodes::LOGICAL_ERROR);
+    const DB::Protos::DataModelDictionary d = cache.getDataModel(loadable_definition_name);
+    return d.last_modification_time();
 }
 
 LoadablesConfigurationPtr ExternalLoaderCnchCatalogRepository::load(const std::string & loadable_definition_name)
 {
-    Catalog::Catalog::DataModelDictionaries dictionary_models = catalog->getAllDictionaries();
-    for (const Protos::DataModelDictionary & d : dictionary_models)
-    {
-        const UInt64 & status = d.status();
-        if (Status::isDeleted(status) || Status::isDetached(status))
-            continue;
+    DB::Protos::DataModelDictionary d = cache.getDataModel(loadable_definition_name);
+    ASTPtr ast = Catalog::CatalogFactory::getCreateDictionaryByDataModel(d);
+    const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
+    DictionaryConfigurationPtr abstract_dictionary_configuration = getDictionaryConfigurationFromAST(create_query, context, d.database());
+    abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
 
-        if (toString(RPCHelpers::createUUID(d.uuid())) == loadable_definition_name)
-        {
-            ASTPtr ast = Catalog::CatalogFactory::getCreateDictionaryByDataModel(d);
-            const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
-            DictionaryConfigurationPtr abstract_dictionary_configuration = getDictionaryConfigurationFromAST(create_query, context, d.database());
-            abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
-
-            return abstract_dictionary_configuration;
-        }
-    }
-
-    throw Exception("dictionary uuid not found : " + loadable_definition_name, ErrorCodes::LOGICAL_ERROR);
+    return abstract_dictionary_configuration;
 }
 
 StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string & loadable_definition_name)
@@ -126,14 +160,7 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
 std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, ContextPtr context)
 {
     StorageID storage_id = ExternalLoaderCnchCatalogRepository::parseStorageID(name);
-    if (context->getCnchCatalog()->isDictionaryExists(storage_id.getDatabaseName(), storage_id.getTableName()))
-    {
-        Protos::DataModelDictionary d =
-            context->getCnchCatalog()->getDictionary(storage_id.getDatabaseName(), storage_id.getTableName());
-
-        return RPCHelpers::createUUID(d.uuid());
-    }
-    else
-        return {};
+    const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionariesCache();
+    return cache.resolveDictionaryName(storage_id);
 }
 }

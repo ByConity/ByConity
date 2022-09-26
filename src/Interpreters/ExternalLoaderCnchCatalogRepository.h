@@ -12,6 +12,21 @@ namespace Catalog
 class Catalog;
 }
 
+class CnchCatalogDictionaryCache
+{
+public:
+    CnchCatalogDictionaryCache(ContextPtr context);
+    void loadFromCatalog();
+    std::set<std::string> getAllUUIDString() const;
+    bool exists(const String & uuid_str) const;
+    DB::Protos::DataModelDictionary getDataModel(const String & uuid_str) const;
+    std::optional<UUID> findUUID(const StorageID & storage_id) const
+private:
+    mutable std::mutex data_mutex;
+    std::unordered_map<String, DB::Protos::DataModelDictionary> data;
+    std::shared_ptr<Catalog::Catalog> catalog;
+};
+
 /// Cnch Catalog repository used by ExternalLoader
 class ExternalLoaderCnchCatalogRepository : public IExternalLoaderConfigRepository
 {
@@ -32,6 +47,8 @@ public:
     static std::optional<UUID> resolveDictionaryName(const std::string & name, ContextPtr context);
 private:
     ContextPtr context;
+    /// cache data from catalog
+    CnchCatalogDictionaryCache & cache;
     std::shared_ptr<Catalog::Catalog> catalog;
 };
 
