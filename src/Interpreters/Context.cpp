@@ -1601,9 +1601,9 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoader()
     return *shared->external_dictionaries_loader;
 }
 
-const CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache() const
+CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache() const
 {
-    return const_cast<Context *>(this)->getCnchCatalogDictionaryCache();
+    return const_cast<Context *>(this)->getCnchCatalogDictionariesCache();
 }
 
 CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache()

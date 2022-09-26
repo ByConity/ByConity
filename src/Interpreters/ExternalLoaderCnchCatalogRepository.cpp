@@ -174,7 +174,7 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
 std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, ContextPtr context)
 {
     StorageID storage_id = ExternalLoaderCnchCatalogRepository::parseStorageID(name);
-    const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionariesCache();
+    const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
     return cache.findUUID(storage_id);
 }
 }
