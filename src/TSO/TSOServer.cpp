@@ -88,7 +88,7 @@ namespace TSO
 {
 
 TSOServer::TSOServer()
-    : LeaderElectionBase(config().getInt64("tos_server.election_check_ms"))
+    : LeaderElectionBase(config().getInt64("tos_server.election_check_ms", 100))
     , timer(0, TSO_UPDATE_INTERVAL)
     , callback(*this, &TSOServer::updateTSO)
 {
