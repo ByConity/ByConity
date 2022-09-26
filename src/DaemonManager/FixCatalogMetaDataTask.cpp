@@ -1,5 +1,6 @@
 #include <DaemonManager/FixCatalogMetaDataTask.h>
 #include <Catalog/Catalog.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {

@@ -309,7 +309,7 @@ int DaemonManager::main(const std::vector<std::string> &)
         }
     );
 
-    global_context->getSchedulePool().createTask("Fix catalog metadata", [& log, & global_context] () { fixCatalogMetaData(global_context, log)});
+    global_context->getSchedulePool().createTask("Fix catalog metadata", [& log, & global_context] () { fixCatalogMetaData(global_context, log); });
     waitForTerminationRequest();
 
     LOG_INFO(log, "Shutting down!");
