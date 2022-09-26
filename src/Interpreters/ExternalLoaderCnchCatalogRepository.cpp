@@ -15,8 +15,9 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-CnchCatalogDictionaryCache::CnchCatalogDictionaryCache(ContextPtr context)
-    : catalog{context->getCnchCatalog()}
+CnchCatalogDictionaryCache::CnchCatalogDictionaryCache(ContextPtr context_)
+    : context{context_},
+      catalog{context->getCnchCatalog()}
 {
     loadFromCatalog();
 }
@@ -64,15 +65,37 @@ bool CnchCatalogDictionaryCache::exists(const String & uuid_str) const
     return data.contains(uuid_str);
 }
 
-DB::Protos::DataModelDictionary CnchCatalogDictionaryCache::getDataModel(const String & uuid_str) const
+Poco::Timestamp CnchCatalogDictionaryCache::getUpdateTime(const String & uuid_str) const
 {
     {
         std::lock_guard lock{data_mutex};
         auto it = data.find(uuid_str);
         if (it != data.end())
-            return it->second;
+            return it->second.last_modification_time();
     }
     throw Exception("dictionary with uuid not found : " + uuid_str, ErrorCodes::LOGICAL_ERROR);
+}
+
+LoadablesConfigurationPtr CnchCatalogDictionaryCache::load(const String & uuid_str) const
+{
+    std::optional<DB::Protos::DataModelDictionary> d;
+    {
+        std::lock_guard lock{data_mutex};
+        auto it = data.find(uuid_str);
+        if (it != data.end())
+            d = it->second;
+    }
+
+    if (!d)
+        throw Exception("dictionary with uuid not found : " + uuid_str, ErrorCodes::LOGICAL_ERROR);
+
+    ASTPtr ast = Catalog::CatalogFactory::getCreateDictionaryByDataModel(*d);
+    const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
+    DictionaryConfigurationPtr abstract_dictionary_configuration =
+        getDictionaryConfigurationFromAST(create_query, context, d->database());
+    abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
+
+    return abstract_dictionary_configuration;
 }
 
 std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & storage_id) const
@@ -92,7 +115,7 @@ std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & stora
 }
 
 ExternalLoaderCnchCatalogRepository::ExternalLoaderCnchCatalogRepository(ContextPtr context_)
-    : context{std::move(context_)},
+    :
       catalog{context->getCnchCatalog()},
       cache{context->getCnchCatalogDictionaryCache()}
 {}
@@ -115,19 +138,12 @@ bool ExternalLoaderCnchCatalogRepository::exists(const std::string & loadable_de
 
 Poco::Timestamp ExternalLoaderCnchCatalogRepository::getUpdateTime(const std::string & loadable_definition_name)
 {
-    const DB::Protos::DataModelDictionary d = cache.getDataModel(loadable_definition_name);
-    return d.last_modification_time();
+    return cache.getUpdateTime(loadable_definition_name);
 }
 
 LoadablesConfigurationPtr ExternalLoaderCnchCatalogRepository::load(const std::string & loadable_definition_name)
 {
-    DB::Protos::DataModelDictionary d = cache.getDataModel(loadable_definition_name);
-    ASTPtr ast = Catalog::CatalogFactory::getCreateDictionaryByDataModel(d);
-    const ASTCreateQuery & create_query = ast->as<ASTCreateQuery &>();
-    DictionaryConfigurationPtr abstract_dictionary_configuration = getDictionaryConfigurationFromAST(create_query, context, d.database());
-    abstract_dictionary_configuration->setBool("is_cnch_dictionary", true);
-
-    return abstract_dictionary_configuration;
+    return cache.load(loadable_definition_name);
 }
 
 StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string & loadable_definition_name)

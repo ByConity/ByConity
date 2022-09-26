@@ -19,12 +19,14 @@ public:
     void loadFromCatalog();
     std::set<std::string> getAllUUIDString() const;
     bool exists(const String & uuid_str) const;
-    DB::Protos::DataModelDictionary getDataModel(const String & uuid_str) const;
+    Poco::Timestamp getUpdateTime(const String & uuid_str) const;
+    LoadablesConfigurationPtr load(const String & uuid_str, ContextPtr local_context) const;
     std::optional<UUID> findUUID(const StorageID & storage_id) const;
 private:
-    mutable std::mutex data_mutex;
-    std::unordered_map<String, DB::Protos::DataModelDictionary> data;
+    ContextPtr context;
     std::shared_ptr<Catalog::Catalog> catalog;
+    std::unordered_map<String, DB::Protos::DataModelDictionary> data;
+    mutable std::mutex data_mutex;
 };
 
 /// Cnch Catalog repository used by ExternalLoader
@@ -46,7 +48,6 @@ public:
     static StorageID parseStorageID(const std::string & loadable_definition_name);
     static std::optional<UUID> resolveDictionaryName(const std::string & name, ContextPtr context);
 private:
-    ContextPtr context;
     /// cache data from catalog
     CnchCatalogDictionaryCache & cache;
     std::shared_ptr<Catalog::Catalog> catalog;
