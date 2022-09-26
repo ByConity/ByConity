@@ -1,20 +1,14 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <DaemonManager/FixCatalogMetaDataTask.h>
 #include <gtest/gtest.h>
 
 namespace
 {
 
 using namespace DB;
-UUID getUUIDFromCreateQuery(const DB::Protos::DataModelDictionary & d)
-{
-    ASTPtr ast = Catalog::CatalogFactory::getCreateDictionaryByDataModel(d);
-    ASTCreateQuery * create_ast = ast->as<ASTCreateQuery>();
-    UUID uuid_in_create_query = create_ast->uuid;
-    return uuid_in_create_query;
-}
-
+using DB::DaemonManager::getUUIDFromCreateQuery;
 TEST(CatalogMeta, fillUUIDForDictionaryTest)
 {
     const String expected_uuid_str{"1c3f0f76-e616-4195-9c7a-fdf8ce23c8b9"};

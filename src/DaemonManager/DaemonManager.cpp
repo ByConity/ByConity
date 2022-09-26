@@ -24,6 +24,7 @@
 #include <DaemonManager/DMDefines.h>
 #include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/DaemonManagerServiceImpl.h>
+#include <DaemonManager/FixCatalogMetaDataTask.h>
 #include <chrono>
 
 using namespace std::chrono_literals;
@@ -308,6 +309,7 @@ int DaemonManager::main(const std::vector<std::string> &)
         }
     );
 
+    global_context->getSchedulePool().createTask("Fix catalog metadata", [& log, & global_context] () { fixCatalogMetaData(global_context, log)});
     waitForTerminationRequest();
 
     LOG_INFO(log, "Shutting down!");
