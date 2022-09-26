@@ -1933,6 +1933,16 @@ namespace Catalog
             ProfileEvents::DetachDictionaryFailed);
     }
 
+    void Catalog::fixDictionary(const String & database, const String & name)
+    {
+        String dic_meta;
+        meta_proxy->getDictionary(name_space, database, name, dic_meta);
+        DB::Protos::DataModelDictionary dict_data;
+        dict_data.ParseFromString(dic_meta);
+        fillUUIDForDictionary(dict_data)
+        meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
+    }
+
     Strings Catalog::getDictionariesInDB(const String & database)
     {
         Strings res;
@@ -4887,6 +4897,27 @@ namespace Catalog
     UInt64 Catalog::getMergeMutateThreadStartTime(const StorageID & storage_id) const
     {
         return meta_proxy->getMergeMutateThreadStartTime(name_space, UUIDHelpers::UUIDToString(storage_id.uuid));
+    }
+
+    void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)
+    {
+        UUID final_uuid = UUIDHelpers::Nil
+        UUID uuid = RPCHelpers::createUUID(d.uuid());
+        ASTPtr ast = CatalogFactory::getCreateDictionaryByDataModel(d);
+        ASTCreateQuery * create_ast = ast->as<ASTCreateQuery>();
+        UUID uuid_in_create_query = create_ast->uuid;
+        if (uuid != UUIDHelpers::Nil)
+            final_uuid = uuid;
+
+        if (final_uuid == UUIDHelpers::Nil)
+            final_uuid = uuid_in_create_query;
+
+        if (final_uuid == UUIDHelpers::Nil)
+            final_uuid = UUIDHelpers::generateV4();
+
+        RPCHelpers::fillUUID(final_uuid, *(d.mutable_uuid()));
+        String create_query = serializeAST(*ast);
+        d.set_definition(create_query);
     }
 }
 }

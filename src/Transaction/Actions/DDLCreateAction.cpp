@@ -27,8 +27,11 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
     }
     else
     {
-        /// create dictionary
-        cnch_catalog->createDictionary(StorageID{params.database, params.table, params.uuid}, params.statement);
+        /// for dictionary
+        if (params.attach)
+            cnch_catalog->attachDictionary(params.database, params.table);
+        else
+            cnch_catalog->createDictionary(StorageID{params.database, params.table, params.uuid}, params.statement);
     }
 }
 

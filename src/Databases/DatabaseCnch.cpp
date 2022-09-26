@@ -113,21 +113,29 @@ void DatabaseCnch::drop(ContextPtr local_context)
     txn->commitV1();
 }
 
-void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String & name)
+void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String & table_name)
 {
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    auto table = tryGetTable(name, local_context);
-
-    if (!table)
-        throw Exception("Table " + name + "." + name + " doesn't exists.", ErrorCodes::UNKNOWN_TABLE);
+    StoragePtr storage = tryGetTable(table_name, local_context);
+    bool is_dictionary = false;
+    TxnTimestamp previous_version = 0;
+    if (!storage)
+    {
+        if (!local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
+            throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
+        else
+            is_dictionary = true;
+    }
+    else
+        previous_version = storage->commit_time;
 
     /// detach table action
-    DropActionParams params{getDatabaseName(), name, table->commit_time, ASTDropQuery::Kind::Detach};
-    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{table});
+    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Detach};
+    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
 }
