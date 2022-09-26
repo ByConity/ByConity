@@ -24,10 +24,10 @@ CnchCatalogDictionaryCache::CnchCatalogDictionaryCache(ContextPtr context_)
 
 std::unordered_map<String, DB::Protos::DataModelDictionary> fetchCacheDataFromCatalog(Catalog::Catalog * catalog)
 {
-    Catalog::Catalog::DataModelDictionaries dictionary_model = catalog->getAllDictionaries();
+    Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::unordered_map<String, DB::Protos::DataModelDictionary> res;
-    std::for_each(dictionary_model.begin(), dictionary_model.end(),
-        [& this] (Protos::DataModelDictionary && d)
+    std::for_each(all.begin(), all.end(),
+        [& res] (Protos::DataModelDictionary && d)
         {
             const UInt64 & status = d.status();
             if (Status::isDeleted(status) || Status::isDetached(status))
@@ -38,7 +38,7 @@ std::unordered_map<String, DB::Protos::DataModelDictionary> fetchCacheDataFromCa
     return res;
 }
 
-void CnchCatalogDictionaryCache::loadFromCatalog();
+void CnchCatalogDictionaryCache::loadFromCatalog()
 {
     std::unordered_map<String, DB::Protos::DataModelDictionary> new_data =
         fetchCacheDataFromCatalog(catalog.get());
@@ -115,9 +115,8 @@ std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & stora
 }
 
 ExternalLoaderCnchCatalogRepository::ExternalLoaderCnchCatalogRepository(ContextPtr context_)
-    :
-      catalog{context->getCnchCatalog()},
-      cache{context->getCnchCatalogDictionaryCache()}
+    : catalog{context_->getCnchCatalog()},
+      cache{context_->getCnchCatalogDictionaryCache()}
 {}
 
 std::string ExternalLoaderCnchCatalogRepository::getName() const
@@ -177,6 +176,6 @@ std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(c
 {
     StorageID storage_id = ExternalLoaderCnchCatalogRepository::parseStorageID(name);
     const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionariesCache();
-    return cache.resolveDictionaryName(storage_id);
+    return cache.findUUID(storage_id);
 }
 }

@@ -3,6 +3,8 @@
 #include <Interpreters/IExternalLoaderConfigRepository.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
+#include <Protos/data_models.pb.h>
+#include <unordered_map>
 
 namespace DB
 {
@@ -20,7 +22,7 @@ public:
     std::set<std::string> getAllUUIDString() const;
     bool exists(const String & uuid_str) const;
     Poco::Timestamp getUpdateTime(const String & uuid_str) const;
-    LoadablesConfigurationPtr load(const String & uuid_str, ContextPtr local_context) const;
+    LoadablesConfigurationPtr load(const String & uuid_str) const;
     std::optional<UUID> findUUID(const StorageID & storage_id) const;
 private:
     ContextPtr context;
