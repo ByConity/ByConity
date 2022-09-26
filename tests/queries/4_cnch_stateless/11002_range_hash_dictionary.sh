@@ -13,7 +13,7 @@ $CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
 $CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
 $CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
 
-$CLICKHOUSE_CLIENT --query="SELECT dictGetFloat33('test.dict_range_hash', 'price', toUInt64(1), toDate('2016-01-02'));"
+$CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('test.dict_range_hash', 'price', toUInt64(1), toDate('2016-01-02'));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('test.dict_range_hash', 'price', toUInt64(2), toDate('2016-02-02'));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('test.dict_range_hash', 'price', toUInt64(3), toDate('2016-03-02'));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('test.dict_range_hash', 'price', toUInt64(4), toDate('2016-04-02'));"
