@@ -32,7 +32,7 @@ void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
     LOG_INFO(log, "execute fixing Catalog Metadata task");
     std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
 
-    DataModelDictionaries all = catalog->getAllDictionaries();
+    Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::for_each(all.begin(), all.end(),
         [& catalog] (const DB::Protos::DataModelDictionary & model)
         {
