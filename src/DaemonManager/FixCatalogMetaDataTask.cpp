@@ -41,8 +41,8 @@ void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
             if ((uuid_field == UUIDHelpers::Nil) ||
                 (uuid_in_create_query == UUIDHelpers::Nil))
             {
-                LOG_INFO(log, "fix Catalog metadata for dictionary {}.{} because missing uuid", dic_model.database(), dic_model.name());
-                catalog->fixDictionary(dic_model.database(), dic_model.name());
+                LOG_INFO(log, "fix Catalog metadata for dictionary {}.{} because missing uuid", model.database(), model.name());
+                catalog->fixDictionary(model.database(), model.name());
             }
         });
 }
