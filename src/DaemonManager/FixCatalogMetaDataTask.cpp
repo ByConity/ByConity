@@ -34,7 +34,7 @@ void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
 
     Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::for_each(all.begin(), all.end(),
-        [& catalog] (const DB::Protos::DataModelDictionary & model)
+        [& catalog, log] (const DB::Protos::DataModelDictionary & model)
         {
             UUID uuid_field = RPCHelpers::createUUID(model.uuid());
             UUID uuid_in_create_query =  getUUIDFromCreateQuery(model);
