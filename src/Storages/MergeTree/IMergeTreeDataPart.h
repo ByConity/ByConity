@@ -140,8 +140,8 @@ public:
 
     String getTypeName() const { return getType().toString(); }
 
-    virtual void setColumns(const NamesAndTypesList & new_columns);
-    virtual void setColumns(const NamesAndTypesListPtr & new_columns_ptr);
+    void setColumns(const NamesAndTypesList & new_columns);
+    virtual void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr);
 
     const NamesAndTypesList & getColumns() const { return *columns_ptr; }
     NamesAndTypesListPtr getColumnsPtr() const { return columns_ptr; }

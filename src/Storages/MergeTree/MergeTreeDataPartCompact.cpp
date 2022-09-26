@@ -207,9 +207,9 @@ bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) co
         return check_stream_exists(DATA_FILE_NAME_WITH_EXTENSION, DATA_FILE_NAME + index_granularity_info.marks_file_extension);
 }
 
-void MergeTreeDataPartCompact::setColumns(const NamesAndTypesListPtr & new_columns_ptr)
+void MergeTreeDataPartCompact::setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr)
 {
-    IMergeTreeDataPart::setColumns(new_columns_ptr);
+    IMergeTreeDataPart::setColumnsPtr(new_columns_ptr);
     columns_without_bytemap_col_size = 0;
     column_name_to_position_without_map.clear();
     column_name_to_position_without_map.reserve(new_columns_ptr->size());

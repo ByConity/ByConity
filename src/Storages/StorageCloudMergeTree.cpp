@@ -122,6 +122,10 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE commands");
         if (command.type == MutationCommand::Type::DELETE)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute DELETE commands");
+        if (command.type == MutationCommand::Type::UPDATE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute UPDATE commands");
+        if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute MATERIALIZE_TTL commands");
     }
 }
 

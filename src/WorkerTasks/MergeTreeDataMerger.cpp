@@ -193,7 +193,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + new_part_name, disk, 0);
     auto part_info = MergeTreePartInfo::fromPartName(new_part_name, data.format_version);
-    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path, nullptr);
+    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path);
 
     /// Common fields
     /// TODO uuid

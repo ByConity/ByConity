@@ -57,7 +57,6 @@ namespace ErrorCodes
     extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
     extern const int BAD_TTL_FILE;
     extern const int NOT_IMPLEMENTED;
-    extern const int UNKNOWN_FORMAT_VERSION;
     extern const int FORMAT_VERSION_TOO_OLD;
 }
 
@@ -484,11 +483,14 @@ std::pair<time_t, time_t> IMergeTreeDataPart::getMinMaxTime() const
 
 void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns)
 {
-    setColumns(std::make_shared<NamesAndTypesList>(new_columns));
+    setColumnsPtr(std::make_shared<NamesAndTypesList>(new_columns));
 }
 
-void IMergeTreeDataPart::setColumns(const NamesAndTypesListPtr & new_columns_ptr)
+void IMergeTreeDataPart::setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr)
 {
+    if (!new_columns_ptr)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Columns should be not nullptr");
+
     columns_ptr = new_columns_ptr;
     column_name_to_position.clear();
     column_name_to_position.reserve(columns_ptr->size());

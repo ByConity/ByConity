@@ -173,7 +173,7 @@ inline std::vector<T> createPartVectorFromModelsForSend(
         }
         else
         {
-            part->setColumns(columns_versions[part_model.columns_commit_time()]);
+            part->setColumnsPtr(columns_versions[part_model.columns_commit_time()]);
         }
         res.emplace_back(std::move(part));
     }

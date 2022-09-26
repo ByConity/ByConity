@@ -150,7 +150,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     else
     {
         part->columns_commit_time = part_model.columns_commit_time();
-        part->setColumns(storage.getPartColumns(part_model.columns_commit_time()));
+        part->setColumnsPtr(storage.getPartColumns(part_model.columns_commit_time()));
     }
 
     // if (!id_full_paths.empty())

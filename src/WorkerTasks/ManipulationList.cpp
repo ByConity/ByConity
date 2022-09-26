@@ -20,7 +20,7 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
     : type(params.type)
     , task_id(params.task_id)
     , last_touch_time(time(nullptr))
-    , storage_id(params.storage->getStorageID())  /// Will update later.
+    , storage_id(params.storage->getStorageID())
     , result_part_names(params.new_part_names)
     , thread_id{getThreadId()}
 {
