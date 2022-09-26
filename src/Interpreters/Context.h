@@ -209,6 +209,7 @@ class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+class CnchCatalogDictionaryCache;
 
 enum class ServerType
 {
