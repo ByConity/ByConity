@@ -1908,11 +1908,7 @@ namespace Catalog
                 if (dic_meta.empty())
                     throw Exception("Dictionary " + database + "." + name + " doesn't  exists.", ErrorCodes::DICTIONARY_NOT_EXIST);
 
-                Protos::DataModelDictionary dic_model;
-                dic_model.ParseFromString(dic_meta);
-                dic_model.set_status(Status::setDelete(dic_model.status()));
-                dic_model.set_last_modification_time(Poco::Timestamp().raw());
-                meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
+                meta_proxy->dropDictionary(name_space, database, name);
             },
             ProfileEvents::DropDictionarySuccess,
             ProfileEvents::DropDictionaryFailed);
