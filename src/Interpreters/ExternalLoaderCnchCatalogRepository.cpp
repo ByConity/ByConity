@@ -1,5 +1,4 @@
 #include "ExternalLoaderCnchCatalogRepository.h"
-
 #include <Interpreters/Context.h>
 #include <Catalog/Catalog.h>
 #include <Common/Status.h>
@@ -32,8 +31,8 @@ std::unordered_map<String, DB::Protos::DataModelDictionary> fetchCacheDataFromCa
             const UInt64 & status = d.status();
             if (Status::isDeleted(status) || Status::isDetached(status))
                 return;
-            UUID uuid_str = toString(RPCHelpers::createUUID(d.uuid()));
-            res.insert(std::make_pair(uuid_str, std::move(d)))
+            String uuid_str = toString(RPCHelpers::createUUID(d.uuid()));
+            res.insert(std::make_pair(uuid_str, std::move(d)));
         });
     return res;
 }
