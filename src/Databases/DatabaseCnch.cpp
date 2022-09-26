@@ -211,17 +211,31 @@ bool DatabaseCnch::empty() const
 
 ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const
 {
-    StoragePtr storage{};
-    if (throw_on_error)
-    {
-        storage = getContext()->getCnchCatalog()->getTable(
+    StoragePtr storage = getContext()->getCnchCatalog()->tryGetTable(
             *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
-    }
-    else
+
+    if (!storage)
     {
-        storage = getContext()->getCnchCatalog()->tryGetTable(
-            *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+        try
+        {
+            return getContext()->getCnchCatalog()->getCreateDictionary(getDatabaseName(), name);
+        }
+        catch (...)
+        {
+            if (throw_on_error)
+                throw;
+            else
+                LOG_DEBUG(
+                    log,
+                    "Fail to get create query for dictionary {} in datase {} query id {}",
+                    name,
+                    getDatabaseName(),
+                    local_context->getCurrentQueryId());
+        }
     }
+
+    if ((!storage) && throw_on_error)
+        throw Exception("Table " + getDatabaseName() + "." + name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
 
     if (!storage)
         return {};
