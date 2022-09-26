@@ -4917,6 +4917,7 @@ namespace Catalog
             final_uuid = UUIDHelpers::generateV4();
 
         RPCHelpers::fillUUID(final_uuid, *(d.mutable_uuid()));
+        create_ast->uuid = final_uuid;
         String create_query = serializeAST(*ast);
         d.set_definition(create_query);
     }
