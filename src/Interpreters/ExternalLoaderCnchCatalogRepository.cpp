@@ -100,7 +100,7 @@ LoadablesConfigurationPtr CnchCatalogDictionaryCache::load(const String & uuid_s
 std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & storage_id) const
 {
     std::lock_guard lock{data_mutex};
-    for (const std::pair<String, DB::Protos::DataModelDictionary> & p : data)
+    for (const auto & p : data)
     {
         const DB::Protos::DataModelDictionary & d = p.second;
         if ((d.database() != storage_id.getDatabaseName()) ||
