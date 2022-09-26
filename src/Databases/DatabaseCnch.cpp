@@ -151,7 +151,8 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 
 bool DatabaseCnch::isTableExist(const String & name, ContextPtr local_context) const
 {
-    return local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+    return (local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64())) ||
+        (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), name));
 }
 
 StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context) const
