@@ -1,4 +1,5 @@
 #include <Catalog/Catalog.h>
+#include <Catalog/CatalogFactory.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <gtest/gtest.h>
 
@@ -17,7 +18,7 @@ UUID getUUIDFromCreateQuery(const DB::Protos::DataModelDictionary & d)
 TEST(CatalogMeta, fillUUIDForDictionaryTest)
 {
     const String expected_uuid_str{"1c3f0f76-e616-4195-9c7a-fdf8ce23c8b9"};
-    const UUID expected_uuid = toUUID(expected_uuid_str);
+    const UUID expected_uuid = UUIDHelpers::toUUID(expected_uuid_str);
     EXPECT_EQ(toString(UUIDHelpers::Nil) , "00000000-0000-0000-0000-000000000000");
 
     {
@@ -29,7 +30,7 @@ TEST(CatalogMeta, fillUUIDForDictionaryTest)
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), expected_uuid);
         EXPECT_EQ(RPCHelpers::createUUID(dic_model.uuid()), UUIDHelpers::Nil);
 
-        fillUUIDForDictionary(dic_model);
+        DB::Catalog::fillUUIDForDictionary(dic_model);
 
         EXPECT_EQ(RPCHelpers::createUUID(dic_model.uuid()), expected_uuid);
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), expected_uuid);
@@ -45,7 +46,7 @@ TEST(CatalogMeta, fillUUIDForDictionaryTest)
         EXPECT_EQ(RPCHelpers::createUUID(dic_model.uuid()), expected_uuid);
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), UUIDHelpers::Nil);
 
-        fillUUIDForDictionary(dic_model);
+        DB::Catalog::fillUUIDForDictionary(dic_model);
 
         EXPECT_EQ(RPCHelpers::createUUID(dic_model.uuid()), expected_uuid);
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), expected_uuid);
@@ -59,7 +60,7 @@ TEST(CatalogMeta, fillUUIDForDictionaryTest)
         EXPECT_EQ(RPCHelpers::createUUID(dic_model.uuid()), UUIDHelpers::Nil);
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), UUIDHelpers::Nil);
 
-        fillUUIDForDictionary(dic_model);
+        DB::Catalog::fillUUIDForDictionary(dic_model);
 
         EXPECT_EQ(getUUIDFromCreateQuery(dic_model), RPCHelpers::createUUID(dic_model.uuid()));
     }
