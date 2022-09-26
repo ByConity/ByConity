@@ -38,6 +38,7 @@
 #include <Statistics/StatisticsBase.h>
 #include <Storages/StorageDictionary.h>
 #include <Dictionaries/getDictionaryConfigurationFromAST.h>
+#include <Parsers/formatAST.h>
 
 /// TODO: put all global gflags together in somewhere.
 namespace brpc::policy { DECLARE_string(consul_agent_addr); }
@@ -1937,9 +1938,9 @@ namespace Catalog
     {
         String dic_meta;
         meta_proxy->getDictionary(name_space, database, name, dic_meta);
-        DB::Protos::DataModelDictionary dict_data;
-        dict_data.ParseFromString(dic_meta);
-        fillUUIDForDictionary(dict_data)
+        DB::Protos::DataModelDictionary dic_model;
+        dic_model.ParseFromString(dic_meta);
+        fillUUIDForDictionary(dic_model);
         meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
     }
 
@@ -4901,7 +4902,7 @@ namespace Catalog
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)
     {
-        UUID final_uuid = UUIDHelpers::Nil
+        UUID final_uuid = UUIDHelpers::Nil;
         UUID uuid = RPCHelpers::createUUID(d.uuid());
         ASTPtr ast = CatalogFactory::getCreateDictionaryByDataModel(d);
         ASTCreateQuery * create_ast = ast->as<ASTCreateQuery>();
