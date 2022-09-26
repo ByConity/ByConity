@@ -1603,7 +1603,7 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoader()
 
 CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache() const
 {
-    return const_cast<Context *>(this)->getCnchCatalogDictionariesCache();
+    return const_cast<Context *>(this)->getCnchCatalogDictionaryCache();
 }
 
 CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache()

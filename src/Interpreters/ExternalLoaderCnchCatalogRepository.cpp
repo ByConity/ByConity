@@ -26,13 +26,13 @@ std::unordered_map<String, DB::Protos::DataModelDictionary> fetchCacheDataFromCa
     Catalog::Catalog::DataModelDictionaries all = catalog->getAllDictionaries();
     std::unordered_map<String, DB::Protos::DataModelDictionary> res;
     std::for_each(all.begin(), all.end(),
-        [& res] (Protos::DataModelDictionary && d)
+        [& res] (const Protos::DataModelDictionary & d)
         {
             const UInt64 & status = d.status();
             if (Status::isDeleted(status) || Status::isDetached(status))
                 return;
             String uuid_str = toString(RPCHelpers::createUUID(d.uuid()));
-            res.insert(std::make_pair(uuid_str, std::move(d)));
+            res.insert(std::make_pair(uuid_str, d));
         });
     return res;
 }
@@ -102,7 +102,7 @@ std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & stora
     std::lock_guard lock{data_mutex};
     for (const std::pair<String, DB::Protos::DataModelDictionary> & p : data)
     {
-        const DB::Protos::DataModelDictionary & d = p.second();
+        const DB::Protos::DataModelDictionary & d = p.second;
         if ((d.database() != storage_id.getDatabaseName()) ||
             (d.name() != storage_id.getTableName()))
             continue;
@@ -114,8 +114,8 @@ std::optional<UUID> CnchCatalogDictionaryCache::findUUID(const StorageID & stora
 }
 
 ExternalLoaderCnchCatalogRepository::ExternalLoaderCnchCatalogRepository(ContextPtr context_)
-    : catalog{context_->getCnchCatalog()},
-      cache{context_->getCnchCatalogDictionaryCache()}
+    : cache{context_->getCnchCatalogDictionaryCache()},
+      catalog{context_->getCnchCatalog()}
 {}
 
 std::string ExternalLoaderCnchCatalogRepository::getName() const
