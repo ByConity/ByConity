@@ -171,9 +171,9 @@ StorageID ExternalLoaderCnchCatalogRepository::parseStorageID(const std::string 
     return StorageID{getIdentifierName(database), getIdentifierName(table)};
 }
 
-std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, ContextPtr context)
+std::optional<UUID> ExternalLoaderCnchCatalogRepository::resolveDictionaryName(const std::string & name, const std::string & current_database_name, ContextPtr context)
 {
-    StorageID storage_id = ExternalLoaderCnchCatalogRepository::parseStorageID(name);
+    StorageID storage_id = (name.find('.') == std::string::npos) ? StorageID{current_database_name, name} : ExternalLoaderCnchCatalogRepository::parseStorageID(name);
     const CnchCatalogDictionaryCache & cache = context->getCnchCatalogDictionaryCache();
     return cache.findUUID(storage_id);
 }

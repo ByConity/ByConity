@@ -87,7 +87,7 @@ std::string ExternalDictionariesLoader::resolveDictionaryName(const std::string 
         return dictionary_name;
 
     {
-        std::optional<UUID> uuid = ExternalLoaderCnchCatalogRepository::resolveDictionaryName(dictionary_name, getContext());
+        std::optional<UUID> uuid = ExternalLoaderCnchCatalogRepository::resolveDictionaryName(dictionary_name, current_database_name, getContext());
         if (uuid.has_value())
             return toString(uuid.value());
     }
