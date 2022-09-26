@@ -27,7 +27,7 @@ void createMissingUUIDDictionaryModel(ContextPtr context)
     catalog->createDictionary(StorageID{database, table}, create_query);
 }
 
-void fixCatalogMetaData(ContextPtr context, Logger * log)
+void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
 {
     LOG_INFO(log, "execute fixing Catalog Metadata task");
     createMissingUUIDDictionaryModel(context);
