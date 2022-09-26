@@ -1,4 +1,5 @@
 #include <DaemonManager/FixCatalogMetaDataTask.h>
+#include <Catalog/CatalogFactory.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Catalog/Catalog.h>
 #include <common/logger_useful.h>
