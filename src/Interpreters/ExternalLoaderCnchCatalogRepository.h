@@ -20,7 +20,7 @@ public:
     std::set<std::string> getAllUUIDString() const;
     bool exists(const String & uuid_str) const;
     DB::Protos::DataModelDictionary getDataModel(const String & uuid_str) const;
-    std::optional<UUID> findUUID(const StorageID & storage_id) const
+    std::optional<UUID> findUUID(const StorageID & storage_id) const;
 private:
     mutable std::mutex data_mutex;
     std::unordered_map<String, DB::Protos::DataModelDictionary> data;
