@@ -140,7 +140,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
 #if ENABLE_CLICKHOUSE_PART_TOOLKIT
     {"part-toolkit", mainEntryClickhousePartToolkit},
     {"part-writer", mainEntryClickhousePartToolkit},
-    {"part-convertor", mainEntryClickhousePartToolkit},
+    {"part-converter", mainEntryClickhousePartToolkit},
 #endif
 #if ENABLE_CLICKHOUSE_INSTALL
     {"install", mainEntryClickHouseInstall},
