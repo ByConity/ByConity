@@ -105,7 +105,7 @@ function run_tests()
     fi
 
     ps -aux
-    clickhouse-test --testname --shard --zookeeper --hung-check --print-time \
+    clickhouse-test --shard --zookeeper --hung-check --print-time \
            --use-skip-list --order asc --test-runs "$NUM_TRIES" "${ADDITIONAL_OPTIONS[@]}" 2>&1 \
         | ts '%Y-%m-%d %H:%M:%S' \
         | tee -a test_output/test_result.txt || true
