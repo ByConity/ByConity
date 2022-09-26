@@ -134,7 +134,7 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
         previous_version = storage->commit_time;
 
     /// detach table action
-    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Detach};
+    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Detach, is_dictionary};
     auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
