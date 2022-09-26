@@ -3,6 +3,7 @@
 namespace
 {
 
+using namespace DB;
 UUID getUUIDFromCreateQuery(const DB::Protos::DataModelDictionary & d)
 {
     ASTPtr ast = CatalogFactory::getCreateDictionaryByDataModel(d);
