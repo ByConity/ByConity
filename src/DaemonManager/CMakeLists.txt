@@ -13,6 +13,7 @@ set(CLICKHOUSE_DAEMONMANAGER_SOURCE
         ${CMAKE_CURRENT_SOURCE_DIR}/BGJobStatusInCatalog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/DaemonJobServerBGThread.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/DaemonJobGlobalGC.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/FixCatalogMetaDataTask.cpp
         )
 
 add_library(daemon_manager_lib ${CLICKHOUSE_DAEMONMANAGER_SOURCE})
