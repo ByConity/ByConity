@@ -30,8 +30,6 @@ void createMissingUUIDDictionaryModel(ContextPtr context)
 void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
 {
     LOG_INFO(log, "execute fixing Catalog Metadata task");
-    createMissingUUIDDictionaryModel(context);
-#if 0
     std::shared_ptr<Catalog::Catalog> catalog = context->getCnchCatalog();
 
     DataModelDictionaries all = catalog->getAllDictionaries();
@@ -47,7 +45,6 @@ void fixCatalogMetaData(ContextPtr context, Poco::Logger * log)
                 catalog->fixDictionary(dic_model.database(), dic_model.name());
             }
         });
-#endif
 }
 
 } /// end namespace DaemonManager
