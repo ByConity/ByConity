@@ -8,6 +8,8 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO table_for_range_hash_dict VALUES (1, toD
 
 $CLICKHOUSE_CLIENT --query="DROP DICTIONARY IF EXISTS dict_range_hash;"
 $CLICKHOUSE_CLIENT --query="CREATE DICTIONARY dict_range_hash(id UInt64, start Date, end Date, price Float32) PRIMARY KEY id SOURCE(CLICKHOUSE(HOST '$CLICKHOUSE_HOST' PORT '$CLICKHOUSE_PORT_TCP' USER 'default' TABLE 'table_for_range_hash_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(RANGE_HASHED()) RANGE(MIN start MAX end);"
+$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
+$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
 
 $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('dict_range_hash', 'price', toUInt64(1), toDate('2016-01-02'));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetFloat32('dict_range_hash', 'price', toUInt64(2), toDate('2016-02-02'));"

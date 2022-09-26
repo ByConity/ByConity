@@ -13,6 +13,9 @@ $CLICKHOUSE_CLIENT --query="INSERT INTO table_for_complex_hash_dict SELECT toStr
 $CLICKHOUSE_CLIENT --query="DROP DICTIONARY IF EXISTS dict_complex_hash;"
 $CLICKHOUSE_CLIENT --query="CREATE DICTIONARY dict_complex_hash(k1 String, k2 Int32, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY k1, k2 SOURCE(CLICKHOUSE(HOST '$CLICKHOUSE_HOST' PORT '$CLICKHOUSE_PORT_TCP' USER 'default' TABLE 'table_for_complex_hash_dict' PASSWORD '' DB 'test')) LIFETIME(MIN 1000 MAX 2000) LAYOUT(COMPLEX_KEY_HASHED());"
 
+$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
+$CLICKHOUSE_CLIENT --query="SELECT sleep(3) FORMAT Null;"
+
 $CLICKHOUSE_CLIENT --query="SELECT dictGetUInt64('dict_complex_hash', 'a', tuple('1', toInt32(3)));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetInt32('dict_complex_hash', 'b', tuple('1', toInt32(3)));"
 $CLICKHOUSE_CLIENT --query="SELECT dictGetString('dict_complex_hash', 'c', tuple('1', toInt32(3)));"
