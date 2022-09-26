@@ -6,12 +6,8 @@ CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '') PRIMARY KEY k LAYOUT(FL
 CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '' ) PRIMARY KEY a LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 489 }
 CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '' ) PRIMARY KEY k,s LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 489 }
 
-CREATE DICTIONARY dict1 ( k abc, s String DEFAULT '' ) PRIMARY KEY k,s LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 50 }
-CREATE DICTIONARY dict1 ( k UInt64, s abc ) PRIMARY KEY k,s LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 50 }
-
-CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '') PRIMARY KEY k LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 1000 }
-CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '') PRIMARY KEY k LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE1233(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 137 }
-CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '') PRIMARY KEY k LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1'  PORT 1234)); -- { serverError 1000 }
+CREATE DICTIONARY dict1 ( k abc, s String DEFAULT '' ) PRIMARY KEY k,s LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 489 }
+CREATE DICTIONARY dict1 ( k UInt64, s abc ) PRIMARY KEY k,s LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 'port' USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test')); -- { serverError 489 }
 
 CREATE DICTIONARY dict1 ( k UInt64, s String DEFAULT '') PRIMARY KEY k LAYOUT(FLAT()) LIFETIME(MIN 10 MAX 20) SOURCE(CLICKHOUSE(HOST '127.0.0.1' PORT 1234 USER 'default' TABLE 'dictionary_name' PASSWORD '' DB 'test'));
 DROP DICTIONARY IF EXISTS dict1;
