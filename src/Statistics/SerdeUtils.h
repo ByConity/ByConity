@@ -22,25 +22,6 @@ inline std::tuple<HeaderType, std::string_view> parseBlobWithHeader(std::string_
     return {header, blob};
 }
 
-inline SerdeDataType dataTypeToSerde(const IDataType & data_type)
-{
-    auto type_index = data_type.getTypeId();
-    switch (type_index)
-    {
-#define CASE(RAW_TYPE, SERDE_TYPE) \
-    case TypeIndex::RAW_TYPE: \
-        return SerdeDataType::SERDE_TYPE;
-#define CASE_SAME(TYPE) CASE(TYPE, TYPE)
-        ALL_TYPE_ITERATE(CASE_SAME)
-        CASE(Date, UInt16)
-        CASE(DateTime, UInt32)
-        default:
-            throw Exception(fmt::format(FMT_STRING("unknown type index {}"), type_index), ErrorCodes::LOGICAL_ERROR);
-#undef CASE
-#undef CASE_SAME
-    }
-}
-
 template <typename T>
 constexpr bool IsWideInteger = wide::IsWideInteger<T>::value;
 template <typename T>

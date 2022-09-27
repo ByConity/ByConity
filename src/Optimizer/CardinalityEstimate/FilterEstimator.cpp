@@ -6,8 +6,8 @@
 
 namespace DB
 {
-PlanNodeStatisticsPtr
-FilterEstimator::estimate(PlanNodeStatisticsPtr & opt_child_stats, const FilterStep & step, ContextMutablePtr & context, bool is_on_base_table)
+PlanNodeStatisticsPtr FilterEstimator::estimate(
+    PlanNodeStatisticsPtr & opt_child_stats, const FilterStep & step, ContextMutablePtr & context, bool is_on_base_table)
 {
     if (!opt_child_stats)
     {
@@ -79,29 +79,23 @@ FilterEstimator::estimate(PlanNodeStatisticsPtr & opt_child_stats, const FilterS
 std::optional<Field> castStringType(SymbolStatistics & symbol_statistics, Field literal, FilterEstimatorContext & context)
 {
     DataTypePtr type = applyVisitor(FieldToDataType(), literal);
-    ASTPtr cast;
-    std::optional<Field> eval_res;
+    // if not string, just return
 
-    if (symbol_statistics.isDate() && type->getTypeId() == TypeIndex::String)
+    if (type->getTypeId() == TypeIndex::String && symbol_statistics.isImplicitConvertableFromString())
     {
-        cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("date"));
-        eval_res = context.calculateConstantExpression(cast);
+        auto target_type_name = symbol_statistics.getType()->getName();
+        auto cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>(target_type_name));
+        return context.calculateConstantExpression(cast);
     }
 
-    if (symbol_statistics.isDatetime() && type->getTypeId() == TypeIndex::String)
-    {
-        cast = makeASTFunction("cast", std::make_shared<ASTLiteral>(literal), std::make_shared<ASTLiteral>("datetime"));
-        eval_res = context.calculateConstantExpression(cast);
-    }
-
-    return eval_res;
+    return std::nullopt;
 }
 
 double FilterEstimator::estimateFilterSelectivity(
     PlanNodeStatisticsPtr & child_stats, ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
 {
     NameToType name_to_type;
-    for (const auto & item: column_types)
+    for (const auto & item : column_types)
         name_to_type.emplace(item.name, item.type);
     auto interpreter = ExpressionInterpreter::basicInterpreter(name_to_type, context);
     FilterEstimatorContext estimator_context{.context = context, .interpreter = interpreter};
@@ -517,7 +511,7 @@ FilterEstimator::estimateRangeFilter(PlanNodeStatistics & stats, ConstASTPtr & p
         try
         {
             auto eval_res = castStringType(symbol_statistics, literal, context);
-            if(eval_res.has_value() && !eval_res->isNull())
+            if (eval_res.has_value() && !eval_res->isNull())
             {
                 literal = *eval_res;
             }
@@ -598,8 +592,8 @@ FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
                 {
                     try
                     {
-                        auto cast_result = castStringType(symbol_statistics,*eval_res,context);
-                        if(cast_result.has_value() && !cast_result->isNull())
+                        auto cast_result = castStringType(symbol_statistics, *eval_res, context);
+                        if (cast_result.has_value() && !cast_result->isNull())
                         {
                             eval_res = cast_result;
                         }
@@ -690,8 +684,8 @@ FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & p
                 {
                     try
                     {
-                        auto cast_result = castStringType(symbol_statistics,*eval_res,context);
-                        if(cast_result.has_value() && !cast_result->isNull())
+                        auto cast_result = castStringType(symbol_statistics, *eval_res, context);
+                        if (cast_result.has_value() && !cast_result->isNull())
                         {
                             eval_res = cast_result;
                         }
@@ -831,4 +825,3 @@ FilterEstimateResult FilterEstimator::estimateNotLikeFilter(PlanNodeStatistics &
 }
 
 }
-

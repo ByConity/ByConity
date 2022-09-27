@@ -51,16 +51,12 @@ bool SymbolStatistics::isString() const
     return tmp_type->getTypeId() == TypeIndex::String || tmp_type->getTypeId() == TypeIndex::FixedString;
 }
 
-bool SymbolStatistics::isDate() const
+bool SymbolStatistics::isImplicitConvertableFromString()
 {
     auto tmp_type = Statistics::decayDataType(type);
-    return tmp_type->getTypeId() == TypeIndex::Date;
-}
-
-bool SymbolStatistics::isDatetime() const
-{
-    auto temp_type = Statistics::decayDataType(type);
-    return temp_type->getTypeId() == TypeIndex::DateTime;
+    // currently support date, date32, datetime32/64
+    // TODO(gouguilin): support bool, ipv4/v6
+    return isDateOrDateTime(tmp_type);
 }
 
 double SymbolStatistics::toDouble(const Field & literal)
@@ -370,5 +366,4 @@ Poco::JSON::Object::Ptr SymbolStatistics::toJson() const
     }
     return json;
 }
-
 }

@@ -406,7 +406,7 @@ struct WhichDataType
     constexpr bool isDateTime() const { return idx == TypeIndex::DateTime; }
     constexpr bool isDateTime64() const { return idx == TypeIndex::DateTime64; }
     constexpr bool isDateOrDate32() const { return isDate() || isDate32(); }
-    constexpr bool isDateOrDateTime() const { return isDate() || isDateTime() || isDateTime64(); }
+    constexpr bool isDateOrDateTime() const { return isDate() || isDate32() || isDateTime() || isDateTime64(); }
 
     constexpr bool isString() const { return idx == TypeIndex::String; }
     constexpr bool isFixedString() const { return idx == TypeIndex::FixedString; }
@@ -507,7 +507,7 @@ inline bool isColumnedAsNumber(const T & data_type)
 {
     WhichDataType which(data_type);
     return which.isInt() || which.isUInt() || which.isFloat()
-          || which.isDate() || which.isDateTime()
+          || which.isDate() || which.isDate32() || which.isDateTime()
           || which.isDateTime64() || which.isUUID()
           || which.isTime();
 }

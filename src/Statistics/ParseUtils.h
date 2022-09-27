@@ -52,7 +52,7 @@ inline ColumnCollectConfig get_column_config(const Settings & settings, const Da
     {
         config.wrapper_kind = WrapperKind::StringToHash64;
     }
-    else if (isDecimal(type) || isDateTime64(type) || isTime(type))
+    else if (isColumnedAsDecimal(type))
     {
         // Note: DateTime64 is a Decimal, convert it to float64
         config.wrapper_kind = WrapperKind::DecimalToFloat64;
