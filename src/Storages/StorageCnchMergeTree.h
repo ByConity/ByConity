@@ -116,15 +116,6 @@ public:
         ContextPtr /* local_context */,
         TableExclusiveLockHolder &) override;
 
-    bool optimize(
-        const ASTPtr & /*query*/,
-        const StorageMetadataPtr & /*metadata_snapshot*/,
-        const ASTPtr & /*partition*/,
-        bool /*final*/,
-        bool /*deduplicate*/,
-        const Names & /* deduplicate_by_columns */,
-        ContextPtr /*context*/) override;
-
     ServerDataPartsVector selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command);
     void dropPartitionOrPart(const PartitionCommand & command, ContextPtr local_context,
         IMergeTreeDataPartsVector* dropped_parts = nullptr);

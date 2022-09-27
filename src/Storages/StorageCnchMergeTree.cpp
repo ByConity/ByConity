@@ -1647,29 +1647,16 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
     return src_data;
 }
 
-bool StorageCnchMergeTree::optimize(
-    const ASTPtr & /*query*/,
-    const StorageMetadataPtr & /*metadata_snapshot*/,
-    const ASTPtr & /*partition*/,
-    bool /*final*/,
-    bool /*deduplicate*/,
-    const Names & /* deduplicate_by_columns */,
-    ContextPtr /*context*/)
-{
-    /// @TODO: trigger background task when merge mutate is done
-    return true;
-}
-
 ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command)
 {
     /// The members of `command` have different meaning depending on the types of partition command:
-    /// 1. DROP / DETACH PART:
+    /// 1. <COMMAND> PART:
     ///    - command.part = true
     ///    - command.partition is ASTLiteral of part name
-    /// 2. DROP / DETACH PARTITION <ID>:
+    /// 2. <COMMAND> PARTITION <ID>:
     ///    - command.part = false
     ///    - command.partition is partition expression
-    /// 3. DROP / DETACH PARTHTION WHERE:
+    /// 3. <COMMAND> PARTHTION WHERE:
     ///    - command.part = false;
     ///    - command.partition is the WHERE predicate (should only includes partition column)
 
