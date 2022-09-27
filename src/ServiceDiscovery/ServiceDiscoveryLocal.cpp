@@ -1,10 +1,11 @@
 #include <ServiceDiscovery/ServiceDiscoveryLocal.h>
 
 #include <IO/ReadHelpers.h>
-#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 
 #include <sstream>
 #include <consul/discovery.h>
@@ -78,6 +79,24 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
     return res;
 }
 
+ServiceEndpoints ServiceDiscoveryLocal::lookupEndpoints(const String & psm_name)
+{
+    if (!exists(psm_name))
+        throw Exception("psm:" + psm_name + " not exists in service registry.", ErrorCodes::SD_PSM_NOT_EXISTS);
+
+    auto endpoints = table.at(psm_name);
+    ServiceEndpoints res;
+    for (const auto & endpoint: endpoints)
+    {
+        res.emplace_back(ServiceEndpoint{endpoint.host, 0, endpoint.tags});
+        res.back().port = std::stoi(endpoint.ports.at("PORT0"));
+        for (const auto & [name, port]: endpoint.tags)
+            res.back().tags.emplace(name, port);
+        res.back().tags.emplace("hostname", endpoint.hostname);
+    }
+    return res;
+}
+
 IServiceDiscovery::WorkerGroupMap ServiceDiscoveryLocal::lookupWorkerGroupsInVW(const String & psm_name, const String & vw_name)
 {
     if (!exists(psm_name))
@@ -113,9 +132,7 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryLocal::lookupWorkerGroupsInVW(
 
 bool ServiceDiscoveryLocal::exists(const String & name)
 {
-    if (table.find(name) == table.end())
-        return false;
-    return true;
+    return table.find(name) != table.end();
 }
 
 void ServiceDiscoveryLocal::loadConfig(const Poco::Util::AbstractConfiguration & config)
@@ -156,6 +173,7 @@ void ServiceDiscoveryLocal::initService(const Poco::Util::AbstractConfiguration 
                 initPortsMap(config, name + "." + key + ".ports"),
                 config.getString(name + "." + key + ".vw_name", "vw_default"),
                 config.getString(name + "." + key + ".wg_name", "wg_default"),
+                getTagsMap(config, name + "." + key)
             };
             endpoints.push_back(endpoint);
         }
@@ -169,7 +187,7 @@ void ServiceDiscoveryLocal::initService(const Poco::Util::AbstractConfiguration 
 
 std::map<String, String> ServiceDiscoveryLocal::initPortsMap(const Poco::Util::AbstractConfiguration & config, const String & name)
 {
-    std::map<String, String> parts_map;
+    std::map<String, String> ports_map;
 
     if (config.has(name))
     {
@@ -182,12 +200,27 @@ std::map<String, String> ServiceDiscoveryLocal::initPortsMap(const Poco::Util::A
             {
                 String tag = config.getString(name + "." + key + ".name");
                 String port = config.getString(name + "." + key + ".value");
-                parts_map[tag] = port;
+                ports_map[tag] = port;
             }
         }
     }
 
-    return parts_map;
+    return ports_map;
+}
+
+std::map<String, String> ServiceDiscoveryLocal::getTagsMap(const Poco::Util::AbstractConfiguration & config, const String & name)
+{
+    std::map<String, String> tags_map;
+    if (config.has(name))
+    {
+        Poco::Util::AbstractConfiguration::Keys keys;
+        config.keys(name, keys);
+        for (auto & key: keys)
+        {
+            tags_map.emplace(key, config.getString(name + "." + key));
+        }
+    }
+    return tags_map;
 }
 
 void registerServiceDiscoveryLocal(ServiceDiscoveryFactory & factory)

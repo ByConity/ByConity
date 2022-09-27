@@ -1,4 +1,4 @@
-#include <FormaterTool/PartConvertor.h>
+#include <FormaterTool/PartConverter.h>
 #include <FormaterTool/ZipHelper.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTLiteral.h>
@@ -39,11 +39,11 @@ namespace ErrorCodes
 using BlockPtr = std::shared_ptr<Block>;
 using BlockVector = std::vector<BlockPtr>;
 
-PartConvertor::PartConvertor(const ASTPtr & query_ptr_, ContextMutablePtr context_)
+PartConverter::PartConverter(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : PartToolkitBase(query_ptr_, context_)
 {
     const ASTPartToolKit & pc_query = query_ptr->as<ASTPartToolKit &>();
-    if (pc_query.type != PartToolType::CONVERTOR)
+    if (pc_query.type != PartToolType::CONVERTER)
         throw Exception("Wrong input query.", ErrorCodes::INCORRECT_QUERY);
 
     source_path = pc_query.source_path->as<ASTLiteral &>().value.safeGet<String>();
@@ -91,7 +91,13 @@ PartConvertor::PartConvertor(const ASTPtr & query_ptr_, ContextMutablePtr contex
     applySettings();
 }
 
-void PartConvertor::execute()
+PartConverter::~PartConverter()
+{
+    if (fs::exists(working_path))
+        fs::remove_all(working_path);
+}
+
+void PartConverter::execute()
 {
     StoragePtr table = getTable();
     StorageCloudMergeTree * storage = static_cast<StorageCloudMergeTree *>(table.get());
@@ -149,6 +155,7 @@ void PartConvertor::execute()
     size_t max_threads = user_settings.count("max_convert_threads") ? user_settings["max_convert_threads"].safeGet<UInt64>() : DEFAULT_MAX_CONVERT_THREADS;
     size_t max_split_file_size = user_settings.count("max_split_file_size") ? user_settings["max_split_file_size"].safeGet<UInt64>() : DEFAULT_MAX_SPLIT_FILE_SIZE;
 
+    ExceptionHandler exception_handler;
     ThreadPool pool(max_threads);
 
     auto metadata_snapshot = storage->getInMemoryMetadataPtr();
@@ -191,23 +198,25 @@ void PartConvertor::execute()
                 String new_file_name = target_path + part->name + "_" + toString(serial++) + ".gz";
                 BlockVector batch {};
                 batch.swap(blocks);
-                pool.scheduleOrThrow(
-                    [&, batch, header, new_file_name]()
+                pool.scheduleOrThrowOnError(
+                    createExceptionHandledJob([&, batch, header, new_file_name]()
                     {
                         convert(batch, new_file_name, header);
-                    }
+                    }, exception_handler)
                 );
+
+                total_bytes = 0;
             }
         }
 
         if (!blocks.empty())
         {
             String new_file_name = target_path + part->name + "_" + toString(serial++) + ".gz";
-            pool.scheduleOrThrow(
-                [&, blocks, header, new_file_name]()
+            pool.scheduleOrThrowOnError(
+                createExceptionHandledJob([&, blocks, header, new_file_name]()
                 {
                     convert(blocks, new_file_name, header);
-                }
+                }, exception_handler)
             );
         }
 
@@ -215,6 +224,9 @@ void PartConvertor::execute()
     }
 
     pool.wait();
+
+    /// throw if exception during converting parts.
+    exception_handler.throwIfException();
 
     LOG_INFO(log, "Finish to convert all data parts.");
 }

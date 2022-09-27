@@ -9,6 +9,7 @@ class PartWriter : public PartToolkitBase
 {
 public:
     PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_);
+    ~PartWriter() override;
     void execute() override;
 
 private:

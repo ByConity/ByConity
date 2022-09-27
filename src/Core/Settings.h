@@ -21,11 +21,9 @@ namespace DB
 {
 class IColumn;
 
-#define TEST_KNOB_FORCE_META_REBUILD 0x08ull
-
 /** List of settings: type, name, default value, description, flags
   *
-  * This looks rather unconvenient. It is done that way to avoid repeating settings in different places.
+  * This looks rather inconvenient. It is done that way to avoid repeating settings in different places.
   * Note: as an alternative, we could implement settings to be completely dynamic in form of map: String -> Field,
   *  but we are not going to do it, because settings is used everywhere as static struct fields.
   *
@@ -561,6 +559,7 @@ class IColumn;
     M(Milliseconds, topology_lease_renew_interval_ms, 1000, "Interval of background task to renew topology lease.", 0) \
     M(Milliseconds, topology_refresh_interval_ms, 500, "Interval of background task to sync topology from consul.", 0) \
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
+    M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
     M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
     M(Bool, server_write_ha, true, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
