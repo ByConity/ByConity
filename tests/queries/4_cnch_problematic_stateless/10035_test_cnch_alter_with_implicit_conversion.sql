@@ -1,4 +1,4 @@
--- SET allow_alter_with_unfinished_task = 1;
+SET allow_alter_with_unfinished_task = 1;
 
 DROP TABLE IF EXISTS alter;
 
