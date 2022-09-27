@@ -30,6 +30,7 @@
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/MergeTree/ChecksumsCache.h>

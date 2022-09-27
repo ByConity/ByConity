@@ -1,24 +1,23 @@
 #pragma once
 
-#include <Common/config.h>
-#include <Common/HostWithPorts.h>
-#include <Common/PoolBase.h>
-#include <Poco/Logger.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
+#include <Poco/Logger.h>
+#include <Common/HostWithPorts.h>
+#include <Common/PoolBase.h>
+#include <Common/config.h>
 
+#include <Storages/ColumnsDescription.h>
+#include <Storages/Hive/HiveDataPart.h>
+#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/Hive/HivePartition.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <hivemetastore/ThriftHiveMetastore.h>
 #include <hivemetastore/hive_metastore_types.h>
-#include <Storages/Hive/HiveDataPart.h>
-#include <Storages/Hive/HivePartition.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
-#include <Storages/ColumnsDescription.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
 
 namespace DB
 {
-
 using HivePartitionPtr = std::shared_ptr<HivePartition>;
 using HivePartitionVector = std::vector<HivePartitionPtr>;
 using HivePartitionInfoPtr = std::shared_ptr<HivePartitionInfo>;
@@ -43,12 +42,8 @@ public:
     explicit ThriftHiveMetastoreClientPool(ThriftHiveMetastoreClientBuilder builder_, int max_hive_metastore_client_connections);
 
 protected:
-    ObjectPtr allocObject() override
-    {
-        return builder();
-    }
+    ObjectPtr allocObject() override { return builder(); }
 
-protected:
     ThriftHiveMetastoreClientBuilder builder;
 };
 
@@ -56,26 +51,31 @@ class HiveMetastoreClient
 {
 public:
     HiveMetastoreClient(ThriftHiveMetastoreClientBuilder builder_, const CnchHiveSettings & settings_)
-    : client_pool(builder_, settings_.max_hive_metastore_client_connections)
-    , settings(settings_)
+        : client_pool(builder_, settings_.max_hive_metastore_client_connections), settings(settings_)
     {
     }
-    ~HiveMetastoreClient()
-    {
-    }
-public:
-    const String normalizeHdfsSchema(const String& path);
-    const String escapeHiveTablePrefix(const String & fullpath, const String & path);
+    ~HiveMetastoreClient() = default;
 
-    const Strings getBucketColNames(const String & db_name, const String & table_name);
-    const Strings getSortColNames(const String & db_name, const String & table_name);
+    String normalizeHdfsSchema(const String & path);
+    String escapeHiveTablePrefix(const String & fullpath, const String & path);
+
+    Strings getBucketColNames(const String & db_name, const String & table_name);
+    Strings getSortColNames(const String & db_name, const String & table_name);
     void getTable(Table & table, const String & db_name, const String & table_name);
 
     //partition related insterface
-    const Strings getPartitionKeyList(const String & db_name, const String & table_name);
-    const Strings getPartitionValues(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & name);
-    HivePartitionVector getPartitionList(const StoragePtr & storage,const String & db_name, const String & table_name, const String & table_path, int16_t max_parts = -1);
-    HivePartitionVector getPartitionsByFilter(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & filter, int16_t max_parts = -1);
+    Strings getPartitionKeyList(const String & db_name, const String & table_name);
+    Strings getPartitionValues(
+        const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & name);
+    HivePartitionVector getPartitionList(
+        const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts = -1);
+    HivePartitionVector getPartitionsByFilter(
+        const StoragePtr & storage,
+        const String & db_name,
+        const String & table_name,
+        const String & table_path,
+        const String & filter,
+        int16_t max_parts = -1);
 
     //data parts related interface
     // MutableHiveDataPartsCNCHVector getDataPartsInPartition(
@@ -91,13 +91,14 @@ public:
         const HDFSConnectionParams & hdfs_paras,
         const std::set<Int64> & required_bucket_numbers = {});
 
-    const std::vector<String> getPartsNameInPartition(const StoragePtr & storage, const String & partitionID);
+    Strings getPartsNameInPartition(const StoragePtr & storage, const String & location);
 
     //schema check
-    void check(const ColumnsDescription & columns,const String & db_name, const String & table_name);
+    void check(const ColumnsDescription & columns, const String & db_name, const String & table_name);
 
     //Stroage Format check
     void checkStorageFormat(const String & db_name, const String & table_name);
+
 private:
     /// get part index
     bool getDataPartIndex(const String & part_name, Int64 & index);
@@ -105,26 +106,32 @@ private:
     void tryCallHiveClient(std::function<void(ThriftHiveMetastoreClientPool::Entry &)> func);
 
     //Hive type convert
-    const Strings ConvertMapTypeToCnch(const String & hive_type);
-    const String ConvertArrayTypeToCnch(const String & hive_type);
-    const String ConvertStructTypeToCnch(const String & hive_type);
+    Strings convertMapTypeToCnch(const String & hive_type);
+    String convertArrayTypeToCnch(const String & hive_type);
+    String convertStructTypeToCnch(const String & hive_type);
     size_t getVcharLength(const String & hive_type);
     size_t getCharLength(const String & hive_type);
     std::vector<UInt32> getDecimalPrecisionScale(const String & hive_type);
 
-    HivePartitionVector getPartitionsFromMetastore(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts = -1);
-    const Strings getPartitionIDsFromMetastore([[maybe_unused]]const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts = -1);
-    const Strings getPartitionIDs(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path);
+    HivePartitionVector getPartitionsFromMetastore(
+        const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts = -1);
+    Strings getPartitionIDsFromMetastore(
+        [[maybe_unused]] const StoragePtr & storage,
+        const String & db_name,
+        const String & table_name,
+        const String & table_path,
+        int16_t max_parts = -1);
+    Strings getPartitionIDs(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path);
 
     void getColumns(std::vector<FieldSchema> & result, const String & db_name, const String & table_name);
-    bool CheckColumnType(DataTypePtr & base, DataTypePtr & internal);
-    DataTypePtr parseColumnType(const std::unordered_map<String, std::shared_ptr<IDataType>> & hive_type_to_internal_type, const String & hive_type);
-private:
+    bool checkColumnType(DataTypePtr & base, DataTypePtr & internal);
+    DataTypePtr
+    parseColumnType(const std::unordered_map<String, std::shared_ptr<IDataType>> & hive_type_to_internal_type, const String & hive_type);
+
     ThriftHiveMetastoreClientPool client_pool;
     const CnchHiveSettings settings;
     mutable std::mutex mutex;
     // Poco::Logger * log{};
-
 };
 
 using HiveMetastoreClientPtr = std::shared_ptr<HiveMetastoreClient>;
@@ -136,12 +143,12 @@ public:
     HiveMetastoreClientPtr getOrCreate(const String & name, const CnchHiveSettings & settings);
 
 private:
-    static std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> createThriftHiveMetastoreClient(const String & name, const CnchHiveSettings & settings);
+    static std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient>
+    createThriftHiveMetastoreClient(const String & name, const CnchHiveSettings & settings);
 
     /// mutex to protect clients structure
     std::mutex mutex;
     std::map<String, HiveMetastoreClientPtr> clients;
-
 };
 
 }

@@ -2,14 +2,14 @@
 
 #include <Core/Types.h>
 #include <Interpreters/Context.h>
-#include <Storages/IStorage.h>
-#include <Storages/SelectQueryInfo.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/Hive/HiveDataPart.h>
+#include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
 // #include <Disks/IDisk.h>
-#include <common/shared_ptr_helper.h>
 #include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Storages/MergeTree/CnchHiveSettings.h>
+#include <common/shared_ptr_helper.h>
 
 namespace DB
 {
@@ -86,7 +86,7 @@ public:
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints_,
         ContextMutablePtr context_,
-        const CnchHiveSettings settings_);
+        const CnchHiveSettings & settings_);
 };
 
 } /// EOF

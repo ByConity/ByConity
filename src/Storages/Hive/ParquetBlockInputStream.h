@@ -16,8 +16,7 @@ class ParquetBlockInputStream : public IBlockInputStream
 {
 public:
     explicit ParquetBlockInputStream(InputFormatPtr input_format_)
-        : input_format(std::move(input_format_))
-        , port(input_format->getPort().getHeader(), input_format.get())
+        : input_format(std::move(input_format_)), port(input_format->getPort().getHeader(), input_format.get())
     {
         connect(input_format->getPort(), port);
         port.setNeeded();
@@ -66,7 +65,6 @@ protected:
 private:
     InputFormatPtr input_format;
     InputPort port;
-
 };
 
 }

@@ -3,21 +3,20 @@
 // #include <Disks/DiskHdfs.h>
 #include <Parsers/parseQuery.h>
 #include <Storages/AlterCommands.h>
-#include <Storages/StorageFactory.h>
 #include <Storages/Hive/HiveDataSelectExecutor.h>
+#include <Storages/StorageFactory.h>
 // #include <Common/getFQDNOrHostName.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTLiteral.h>
-#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeTuple.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
 // #include <Core/UUIDHelpers.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     const extern int ABORTED;
@@ -34,7 +33,7 @@ StorageCloudHive::StorageCloudHive(
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
     ContextMutablePtr context_,
-    const CnchHiveSettings settings_)
+    const CnchHiveSettings & settings_)
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
     , cnch_database_name(cnch_database_name_)
@@ -51,9 +50,7 @@ StorageCloudHive::StorageCloudHive(
     // disk = std::make_shared<DiskHdfs>("hdfs", "/");
 }
 
-StorageCloudHive::~StorageCloudHive()
-{
-}
+StorageCloudHive::~StorageCloudHive() = default;
 
 Pipe StorageCloudHive::read(
     const Names & column_names,
@@ -82,8 +79,8 @@ void StorageCloudHive::read(
     unsigned num_streams)
 {
     LOG_TRACE(log, " CloudHive read ");
-    if (auto plan = HiveDataSelectExecutor(*this).read(
-            column_names, metadata_snapshot, query_info, local_context, max_block_size, num_streams))
+    if (auto plan
+        = HiveDataSelectExecutor(*this).read(column_names, metadata_snapshot, query_info, local_context, max_block_size, num_streams))
         query_plan = std::move(*plan);
 }
 
@@ -125,27 +122,23 @@ void registerStorageCloudHive(StorageFactory & factory)
         .supports_sort_order = true,
     };
 
-    factory.registerStorage("CloudHive", [](const StorageFactory::Arguments & args)
-    {
-        ASTs & engine_args = args.engine_args;
+    factory.registerStorage(
+        "CloudHive",
+        [](const StorageFactory::Arguments & args) {
+            ASTs & engine_args = args.engine_args;
 
-        engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.getLocalContext());
-        engine_args[1] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[1], args.getLocalContext());
+            engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.getLocalContext());
+            engine_args[1] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[1], args.getLocalContext());
 
-        String remote_database = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
-        String remote_table = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
-        CnchHiveSettings storage_settings = args.getContext()->getCnchHiveSettings();
-        storage_settings.loadFromQuery(*args.storage_def);
+            String remote_database = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
+            String remote_table = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
+            CnchHiveSettings storage_settings = args.getContext()->getCnchHiveSettings();
+            storage_settings.loadFromQuery(*args.storage_def);
 
-        return StorageCloudHive::create(
-            args.table_id,
-            remote_database,
-            remote_table,
-            args.columns,
-            args.constraints,
-            args.getContext(),
-            storage_settings);
-    }, features);
+            return StorageCloudHive::create(
+                args.table_id, remote_database, remote_table, args.columns, args.constraints, args.getContext(), storage_settings);
+        },
+        features);
 }
 
 } /// EOF

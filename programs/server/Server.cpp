@@ -1078,7 +1078,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     bool has_hdfs_disk = false;
     {
         /// Create directories for 'path' and for default database, if not exist.
-        for (auto& [name, disk] : global_context->getDisksMap())
+        for (const auto & [name, disk] : global_context->getDisksMap())
         {
             if (disk->getType() == DiskType::Type::Local)
             {

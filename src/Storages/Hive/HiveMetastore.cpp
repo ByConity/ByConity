@@ -1,45 +1,44 @@
+#include <algorithm>
+#include <random>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeDate.h>
+#include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeFixedString.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesDecimal.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/Hive/HiveMetastore.h>
+#include <Storages/StorageCnchHive.h>
+#include <boost/algorithm/string.hpp>
 #include <consul/bridge.h>
+#include <hivemetastore/hive_metastore_types.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
-#include <hivemetastore/hive_metastore_types.h>
+#include <Poco/DirectoryIterator.h>
 #include <Common/Exception.h>
+#include <Common/SipHash.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadPool.h>
 #include <Common/formatIPv6.h>
-#include <common/logger_useful.h>
-#include <Common/SipHash.h>
-#include <Common/typeid_cast.h>
-#include <Common/hex.h>
-#include <Common/StringUtils/StringUtils.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
-#include <Poco/DirectoryIterator.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <DataTypes/DataTypeFactory.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypesDecimal.h>
-#include <DataTypes/DataTypeString.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeByteMap.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeFixedString.h>
-#include <DataTypes/DataTypeDate.h>
-#include <DataTypes/DataTypeDateTime.h>
-#include <Storages/StorageCnchHive.h>
-#include <boost/algorithm/string.hpp>
-#include <random>
-#include <algorithm>
+#include <Common/hex.h>
+#include <Common/typeid_cast.h>
+#include <common/logger_useful.h>
 
 #include <iostream>
 
 namespace ProfileEvents
 {
-    extern const Event CatalogTime;
+extern const Event CatalogTime;
 }
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -54,28 +53,29 @@ namespace ErrorCodes
 //hive partition path : /home/tiger/warehouse/test_tiger.db/testDB/date=20210916/hour=10/
 //partition ID        : /date=20210916/hour=10/
 //so, getPatitionValues need to parse partitionID.
-const Strings HiveMetastoreClient::getPartitionValues(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & name)
+Strings HiveMetastoreClient::getPartitionValues(
+    const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & name)
 {
-    const Strings partitionIDs = getPartitionIDs(storage, db_name, table_name, table_path);
+    const Strings partitionids = getPartitionIDs(storage, db_name, table_name, table_path);
     Strings res;
-    for(auto partitionID : partitionIDs)
+    for (const auto & partitionid : partitionids)
     {
-        String temp = partitionID;
-        if(startsWith(temp, "/"))
+        String temp = partitionid;
+        if (startsWith(temp, "/"))
         {
             temp = temp.substr(1, temp.size());
         }
 
-        if(endsWith(temp,"/"))
+        if (endsWith(temp, "/"))
         {
-            temp  = temp.substr(0, temp.size() - 1);
+            temp = temp.substr(0, temp.size() - 1);
         }
 
         std::vector<String> values;
         boost::split(values, temp, boost::is_any_of("/"), boost::token_compress_on);
-        for(auto elem : values)
+        for (auto elem : values)
         {
-            if(elem.find(name) != String::npos)
+            if (elem.find(name) != String::npos)
             {
                 std::vector<String> key_value;
                 boost::split(key_value, elem, boost::is_any_of("="), boost::token_compress_on);
@@ -87,54 +87,42 @@ const Strings HiveMetastoreClient::getPartitionValues(const StoragePtr & storage
     return res;
 }
 
-const Strings HiveMetastoreClient::getBucketColNames(const String & db_name, const String & table_name)
+Strings HiveMetastoreClient::getBucketColNames(const String & db_name, const String & table_name)
 {
     Table table;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_table(table, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_table(table, db_name, table_name); };
     tryCallHiveClient(client_call);
 
     return table.sd.bucketCols;
 }
 
-void HiveMetastoreClient::getTable(Table & table , const String & db_name, const String & table_name)
+void HiveMetastoreClient::getTable(Table & table, const String & db_name, const String & table_name)
 {
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_table(table, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_table(table, db_name, table_name); };
     tryCallHiveClient(client_call);
 }
 
-const Strings HiveMetastoreClient::getSortColNames(const String & db_name, const String & table_name)
+Strings HiveMetastoreClient::getSortColNames(const String & db_name, const String & table_name)
 {
     Table table;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_table(table, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_table(table, db_name, table_name); };
     tryCallHiveClient(client_call);
 
     Strings res;
-    for(auto sortcol : table.sd.sortCols)
+    for (auto sortcol : table.sd.sortCols)
         res.emplace_back(sortcol.col);
 
     return res;
 }
 
-const Strings HiveMetastoreClient::getPartitionKeyList(const String & db_name, const String & table_name)
+Strings HiveMetastoreClient::getPartitionKeyList(const String & db_name, const String & table_name)
 {
     Table table;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_table(table, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_table(table, db_name, table_name); };
     tryCallHiveClient(client_call);
 
     Strings res;
-    for(auto & key : table.partitionKeys)
+    for (auto & key : table.partitionKeys)
     {
         res.push_back(key.name);
     }
@@ -142,48 +130,50 @@ const Strings HiveMetastoreClient::getPartitionKeyList(const String & db_name, c
     return res;
 }
 
-const String HiveMetastoreClient::escapeHiveTablePrefix(const String & fullpath, const String & path)
+String HiveMetastoreClient::escapeHiveTablePrefix(const String & fullpath, const String & path)
 {
-    String result = path.substr(fullpath.size(), path.size());
-
-    return result;
+    return path.substr(fullpath.size(), path.size());
 }
 
-const Strings HiveMetastoreClient::getPartitionIDsFromMetastore([[maybe_unused]]const StoragePtr& storage, const String & db_name,
-       const String & table_name, const String & table_path , int16_t max_parts)
+Strings HiveMetastoreClient::getPartitionIDsFromMetastore(
+    [[maybe_unused]] const StoragePtr & storage,
+    const String & db_name,
+    const String & table_name,
+    const String & table_path,
+    int16_t max_parts)
 {
     std::vector<Partition> partitions;
     Strings res;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_partitions(partitions, db_name, table_name, max_parts);
-    };
+    auto client_call
+        = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_partitions(partitions, db_name, table_name, max_parts); };
     tryCallHiveClient(client_call);
 
-    for(auto partition : partitions)
+    for (const auto & partition : partitions)
     {
-        String partition_path = normalizeHdfsSchema(partition.sd.location);
-        String partitionID = escapeHiveTablePrefix(table_path, partition_path);
-        res.push_back(partitionID);
+        String partitionid = escapeHiveTablePrefix(table_path, normalizeHdfsSchema(partition.sd.location));
+        res.push_back(partitionid);
     }
 
     return res;
 }
 
-HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore([[maybe_unused]]const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts)
+HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore(
+    [[maybe_unused]] const StoragePtr & storage,
+    const String & db_name,
+    const String & table_name,
+    const String & table_path,
+    int16_t max_parts)
 {
     std::vector<Partition> partitions;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_partitions(partitions, db_name, table_name, max_parts);
-    };
+    auto client_call
+        = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_partitions(partitions, db_name, table_name, max_parts); };
     tryCallHiveClient(client_call);
 
-    if(partitions.size() == 0)
+    if (partitions.empty())
         return {};
 
-    size_t numThreads = 2 * getNumberOfPhysicalCPUCores();
-    size_t pool_size = std::min(partitions.size(), numThreads);
+    size_t num_threads = 2 * getNumberOfPhysicalCPUCores();
+    size_t pool_size = std::min(partitions.size(), num_threads);
     size_t num_per_thread = partitions.size() / pool_size;
     size_t remain = partitions.size() % pool_size;
     HivePartitionVector res(partitions.size());
@@ -197,26 +187,25 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore([[maybe_unus
     {
         size_t end = start + num_per_thread + (cnt < remain ? 1 : 0);
 
-        thread_pool.scheduleOrThrow([&, partitions, start, end]
+        thread_pool.scheduleOrThrow([&, partitions, start, end] {
+            for (size_t i = start; i < end; ++i)
             {
-                for (size_t i = start; i < end; ++i)
-                {
-                    auto info = std::make_shared<HivePartitionInfo>();
-                    info->partition_path = normalizeHdfsSchema(partitions[i].sd.location);
-                    info->table_path = table_path;
-                    info->dbName = partitions[i].dbName;
-                    info->tableName = partitions[i].tableName;
-                    info->createTime = partitions[i].createTime;
-                    info->lastAccessTime = partitions[i].lastAccessTime;
-                    info->values = partitions[i].values;
-                    info->cols = partitions[i].sd.cols;
-                    std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
-                    String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
-                    info->parts_name = std::move(parts_name);
+                auto info = std::make_shared<HivePartitionInfo>();
+                info->partition_path = normalizeHdfsSchema(partitions[i].sd.location);
+                info->table_path = table_path;
+                info->db_name = partitions[i].dbName;
+                info->table_name = partitions[i].tableName;
+                info->create_time = partitions[i].createTime;
+                info->last_access_time = partitions[i].lastAccessTime;
+                info->values = partitions[i].values;
+                info->cols = partitions[i].sd.cols;
+                std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
+                String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
+                info->parts_name = std::move(parts_name);
 
-                    res[i] = std::make_shared<HivePartition>(partition_id, *info);
-                }
-            });
+                res[i] = std::make_shared<HivePartition>(partition_id, *info);
+            }
+        });
 
         start = end;
     }
@@ -227,20 +216,25 @@ HivePartitionVector HiveMetastoreClient::getPartitionsFromMetastore([[maybe_unus
     return res;
 }
 
-HivePartitionVector HiveMetastoreClient::getPartitionsByFilter([[maybe_unused]]const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, const String & filter, int16_t max_parts)
+HivePartitionVector HiveMetastoreClient::getPartitionsByFilter(
+    [[maybe_unused]] const StoragePtr & storage,
+    const String & db_name,
+    const String & table_name,
+    const String & table_path,
+    const String & filter,
+    int16_t max_parts)
 {
     std::vector<Partition> partitions;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) {
         client->get_partitions_by_filter(partitions, db_name, table_name, filter, max_parts);
     };
     tryCallHiveClient(client_call);
 
-    if(partitions.size() == 0)
+    if (partitions.empty())
         return {};
 
-    size_t numThreads = 2 * getNumberOfPhysicalCPUCores();
-    size_t pool_size = std::min(partitions.size(), numThreads);
+    size_t num_threads = 2 * getNumberOfPhysicalCPUCores();
+    size_t pool_size = std::min(partitions.size(), num_threads);
     size_t num_per_thread = partitions.size() / pool_size;
     size_t remain = partitions.size() % pool_size;
     HivePartitionVector res(partitions.size());
@@ -254,26 +248,25 @@ HivePartitionVector HiveMetastoreClient::getPartitionsByFilter([[maybe_unused]]c
     {
         size_t end = start + num_per_thread + (cnt < remain ? 1 : 0);
 
-        thread_pool.scheduleOrThrow([&, partitions, start, end]
+        thread_pool.scheduleOrThrow([&, partitions, start, end] {
+            for (size_t i = start; i < end; ++i)
             {
-                for (size_t i = start; i < end; ++i)
-                {
-                    auto info = std::make_shared<HivePartitionInfo>();
-                    info->partition_path = normalizeHdfsSchema(partitions[i].sd.location);
-                    info->table_path = table_path;
-                    info->dbName = partitions[i].dbName;
-                    info->tableName = partitions[i].tableName;
-                    info->createTime = partitions[i].createTime;
-                    info->lastAccessTime = partitions[i].lastAccessTime;
-                    info->values = partitions[i].values;
-                    info->cols = partitions[i].sd.cols;
-                    std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
-                    String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
-                    info->parts_name = std::move(parts_name);
+                auto info = std::make_shared<HivePartitionInfo>();
+                info->partition_path = normalizeHdfsSchema(partitions[i].sd.location);
+                info->table_path = table_path;
+                info->db_name = partitions[i].dbName;
+                info->table_name = partitions[i].tableName;
+                info->create_time = partitions[i].createTime;
+                info->last_access_time = partitions[i].lastAccessTime;
+                info->values = partitions[i].values;
+                info->cols = partitions[i].sd.cols;
+                std::vector<String> parts_name = getPartsNameInPartition(storage, info->partition_path);
+                String partition_id = escapeHiveTablePrefix(table_path, info->partition_path);
+                info->parts_name = std::move(parts_name);
 
-                    res[i] = std::make_shared<HivePartition>(partition_id, *info);
-                }
-            });
+                res[i] = std::make_shared<HivePartition>(partition_id, *info);
+            }
+        });
 
         start = end;
     }
@@ -283,7 +276,8 @@ HivePartitionVector HiveMetastoreClient::getPartitionsByFilter([[maybe_unused]]c
     return res;
 }
 
-HivePartitionVector HiveMetastoreClient::getPartitionList(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts)
+HivePartitionVector HiveMetastoreClient::getPartitionList(
+    const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path, int16_t max_parts)
 {
     //if no cache
     return getPartitionsFromMetastore(storage, db_name, table_name, table_path, max_parts);
@@ -291,21 +285,21 @@ HivePartitionVector HiveMetastoreClient::getPartitionList(const StoragePtr & sto
 
 bool HiveMetastoreClient::getDataPartIndex(const String & part_name, Int64 & index)
 {
-    if(!startsWith(part_name, "part-"))
+    if (!startsWith(part_name, "part-"))
         return false;
 
     /// part-00000-5cf7580f-a3f6-4beb-90a6-e9f4de61c887_00003.c000
     /// 00003 : part index
     std::vector<String> para;
     boost::split(para, part_name, boost::is_any_of("_"), boost::token_compress_on);
-    if(para.size() != 2)
+    if (para.size() != 2)
         return false;
 
     /// split_part_name: 00003.c000
     auto split_part_name = para[1];
     para.clear();
     boost::split(para, split_part_name, boost::is_any_of("."), boost::token_compress_on);
-    if(para.size() != 2)
+    if (para.size() != 2)
         return false;
 
     index = std::atoi(para[0].c_str());
@@ -313,9 +307,12 @@ bool HiveMetastoreClient::getDataPartIndex(const String & part_name, Int64 & ind
     return true;
 }
 
-HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(const StoragePtr & /*storage*/, HivePartitionPtr & partition, const HDFSConnectionParams & hdfs_paras, const std::set<Int64> & required_bucket_numbers)
+HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(
+    const StoragePtr & /*storage*/,
+    HivePartitionPtr & partition,
+    const HDFSConnectionParams & hdfs_paras,
+    const std::set<Int64> & required_bucket_numbers)
 {
-    LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " getDataPartsInPartitions ");
     //if no cache
     HiveDataPartsCNCHVector res;
     std::vector<String> parts_name = partition->getPartsName();
@@ -323,19 +320,16 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(const Stora
     const String table_path = partition->getTablePath();
     std::unordered_set<Int64> skip_list = {};
 
-    LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " parts_name size = {}", parts_name.size());
-
-    for(auto & part_name : parts_name)
+    for (auto & part_name : parts_name)
     {
         Int64 index = 0;
-        if(!required_bucket_numbers.empty() && getDataPartIndex(part_name, index))
+        if (!required_bucket_numbers.empty() && getDataPartIndex(part_name, index))
         {
-            if(std::find(required_bucket_numbers.begin(), required_bucket_numbers.end(), index) == required_bucket_numbers.end())
+            if (std::find(required_bucket_numbers.begin(), required_bucket_numbers.end(), index) == required_bucket_numbers.end())
                 continue;
         }
 
         part_name = partition_id + '/' + part_name;
-        LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " part name = {}", part_name);
         auto info = std::make_shared<HivePartInfo>(part_name, partition_id);
 
         res.push_back(std::make_shared<HiveDataPart>(part_name, table_path, nullptr, *info, hdfs_paras, skip_list));
@@ -377,10 +371,10 @@ HiveDataPartsCNCHVector HiveMetastoreClient::getDataPartsInPartition(const Stora
 //     return res;
 // }
 
-const String HiveMetastoreClient::normalizeHdfsSchema(const String& path)
+String HiveMetastoreClient::normalizeHdfsSchema(const String & path)
 {
     Poco::URI uri(path);
-    if(uri.getScheme() == "hdfs")
+    if (uri.getScheme() == "hdfs")
     {
         return uri.getPath();
     }
@@ -391,29 +385,25 @@ const String HiveMetastoreClient::normalizeHdfsSchema(const String& path)
     }
 }
 
-const Strings HiveMetastoreClient::getPartitionIDs(const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path)
+Strings HiveMetastoreClient::getPartitionIDs(
+    const StoragePtr & storage, const String & db_name, const String & table_name, const String & table_path)
 {
     //if no cache
-    Strings partitionIDs = getPartitionIDsFromMetastore(storage, db_name, table_name, table_path);
-
-    return partitionIDs;
+    return getPartitionIDsFromMetastore(storage, db_name, table_name, table_path);
 }
 
-void HiveMetastoreClient::getColumns(std::vector<FieldSchema>& result, const String & db_name, const String & table_name)
+void HiveMetastoreClient::getColumns(std::vector<FieldSchema> & result, const String & db_name, const String & table_name)
 {
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_schema(result, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_schema(result, db_name, table_name); };
     tryCallHiveClient(client_call);
 }
 
-const std::vector<String> HiveMetastoreClient::getPartsNameInPartition([[maybe_unused]]const StoragePtr & storage, [[maybe_unused]]const String & location)
+Strings HiveMetastoreClient::getPartsNameInPartition(const StoragePtr & /*storage*/, const String & location)
 {
-    std::vector<String> part_names;
+    Strings part_names;
     for (HDFSCommon::DirectoryIterator it = HDFSCommon::DirectoryIterator(location); it != HDFSCommon::DirectoryIterator(); ++it)
     {
-        if(startsWith(it.name(), "_") || startsWith(it.name(), "."))
+        if (startsWith(it.name(), "_") || startsWith(it.name(), "."))
             continue;
 
         part_names.push_back(it.name());
@@ -422,10 +412,10 @@ const std::vector<String> HiveMetastoreClient::getPartsNameInPartition([[maybe_u
     return part_names;
 }
 
-const String HiveMetastoreClient::ConvertArrayTypeToCnch(const String & hive_type)
+String HiveMetastoreClient::convertArrayTypeToCnch(const String & hive_type)
 {
     auto start = strlen("array<");
-    auto length  = hive_type.size() - start - 1;
+    auto length = hive_type.size() - start - 1;
     String value = hive_type.substr(start, length);
     boost::trim(value);
 
@@ -455,13 +445,13 @@ size_t HiveMetastoreClient::getCharLength(const String & hive_type)
     String value = hive_type.substr(start, length);
     boost::trim(value);
 
-    auto N = std::stoi(value);
-    if (N == 0)
+    auto cnt = std::stoi(value);
+    if (cnt == 0)
         throw Exception("FixedString size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-    if (N > MAX_FIXEDSTRING_SIZE)
+    if (cnt > MAX_FIXEDSTRING_SIZE)
         throw Exception("FixedString size is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
-    return N;
+    return cnt;
 }
 
 size_t HiveMetastoreClient::getVcharLength(const String & hive_type)
@@ -471,16 +461,16 @@ size_t HiveMetastoreClient::getVcharLength(const String & hive_type)
     String value = hive_type.substr(start, length);
     boost::trim(value);
 
-    auto N = std::stoi(value);
-    if (N == 0)
+    auto cnt = std::stoi(value);
+    if (cnt == 0)
         throw Exception("FixedString size must be positive", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
-    if (N > MAX_FIXEDSTRING_SIZE)
+    if (cnt > MAX_FIXEDSTRING_SIZE)
         throw Exception("FixedString size is too large", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
 
-    return N;
+    return cnt;
 }
 
-const Strings HiveMetastoreClient::ConvertMapTypeToCnch(const String & hive_type)
+Strings HiveMetastoreClient::convertMapTypeToCnch(const String & hive_type)
 {
     auto start = strlen("map<");
     auto length = hive_type.size() - start - 1;
@@ -492,74 +482,61 @@ const Strings HiveMetastoreClient::ConvertMapTypeToCnch(const String & hive_type
     return res;
 }
 
-bool HiveMetastoreClient::CheckColumnType(DataTypePtr & base, DataTypePtr & internal)
+bool HiveMetastoreClient::checkColumnType(DataTypePtr & base, DataTypePtr & internal)
 {
     DataTypePtr nested_type = base;
-    if(base->isNullable())
-    {
+    if (base->isNullable())
         nested_type = static_cast<const DataTypeNullable *>(base.get())->getNestedType();
-    }
 
-    if(nested_type->getName() == internal->getName())
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    return nested_type->getName() == internal->getName();
 }
 
 //convert hive type to cnch data type
-DataTypePtr HiveMetastoreClient::parseColumnType(const std::unordered_map<String, std::shared_ptr<IDataType>> & hive_type_to_internal_type, const String & hive_type)
+DataTypePtr HiveMetastoreClient::parseColumnType(
+    const std::unordered_map<String, std::shared_ptr<IDataType>> & hive_type_to_internal_type, const String & hive_type)
 {
     DataTypePtr column_type;
-    if(startsWith(hive_type,"map"))
+    if (startsWith(hive_type, "map"))
     {
-        Strings key_value = ConvertMapTypeToCnch(hive_type);
+        Strings key_value = convertMapTypeToCnch(hive_type);
         String key_type = key_value[0];
         String value_type = key_value[1];
-        boost::trim(key_type);
-        boost::trim(value_type);
 
-        LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " key_type={},value_type={}", key_type, value_type);
-
-        column_type = std::make_shared<DataTypeByteMap>(parseColumnType(hive_type_to_internal_type, key_type), parseColumnType(hive_type_to_internal_type, value_type));
+        column_type = std::make_shared<DataTypeByteMap>(
+            parseColumnType(hive_type_to_internal_type, key_type), parseColumnType(hive_type_to_internal_type, value_type));
     }
-    else if(startsWith(hive_type,"array"))
+    else if (startsWith(hive_type, "array"))
     {
-        String type = ConvertArrayTypeToCnch(hive_type);
-
+        String type = convertArrayTypeToCnch(hive_type);
         column_type = std::make_shared<DataTypeArray>(parseColumnType(hive_type_to_internal_type, type));
     }
-    else if(startsWith(hive_type,"varchar"))
+    else if (startsWith(hive_type, "varchar"))
     {
         //get vchar length
-        size_t N = getVcharLength(hive_type);
-
-        column_type = std::make_shared<DataTypeFixedString>(N);
+        size_t cnt = getVcharLength(hive_type);
+        column_type = std::make_shared<DataTypeFixedString>(cnt);
     }
-    else if(startsWith(hive_type, "char"))
+    else if (startsWith(hive_type, "char"))
     {
         //get char length
-        size_t N = getCharLength(hive_type);
+        size_t cnt = getCharLength(hive_type);
 
-        column_type = std::make_shared<DataTypeFixedString>(N);
+        column_type = std::make_shared<DataTypeFixedString>(cnt);
     }
-    else if(startsWith(hive_type, "decimal"))
+    else if (startsWith(hive_type, "decimal"))
     {
         std::vector<UInt32> parameters = getDecimalPrecisionScale(hive_type);
 
         UInt32 precision = parameters[0];
-        if(precision >= 1 && precision <= 9)
+        if (precision >= 1 && precision <= 9)
         {
             column_type = std::make_shared<DataTypeDecimal<Decimal32>>(parameters[0], parameters[1]);
         }
-        else if(precision >= 10 && precision <= 18)
+        else if (precision >= 10 && precision <= 18)
         {
             column_type = std::make_shared<DataTypeDecimal<Decimal64>>(parameters[0], parameters[1]);
         }
-        else if(precision >= 19 && precision <= 38)
+        else if (precision >= 19 && precision <= 38)
         {
             column_type = std::make_shared<DataTypeDecimal<Decimal128>>(parameters[0], parameters[1]);
         }
@@ -568,7 +545,7 @@ DataTypePtr HiveMetastoreClient::parseColumnType(const std::unordered_map<String
             throw Exception("CnchHive not support " + std::to_string(precision) + " current.", ErrorCodes::ARGUMENT_OUT_OF_BOUND);
         }
     }
-    else if(hive_type_to_internal_type.find(hive_type) != hive_type_to_internal_type.end())
+    else if (hive_type_to_internal_type.find(hive_type) != hive_type_to_internal_type.end())
     {
         column_type = hive_type_to_internal_type.at(hive_type);
     }
@@ -584,27 +561,23 @@ DataTypePtr HiveMetastoreClient::parseColumnType(const std::unordered_map<String
 /// current only support parquet format
 void HiveMetastoreClient::checkStorageFormat(const String & db_name, const String & table_name)
 {
-
     Apache::Hadoop::Hive::Table table;
-    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client)
-    {
-        client->get_table(table, db_name, table_name);
-    };
+    auto client_call = [&](ThriftHiveMetastoreClientPool::Entry & client) { client->get_table(table, db_name, table_name); };
     tryCallHiveClient(client_call);
 
     String format = table.sd.outputFormat;
 
-    if(format.find("parquet") == String::npos)
+    if (format.find("parquet") == String::npos)
     {
         throw Exception("CnchHive only support parquet format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
 //schema check
-void HiveMetastoreClient::check(const ColumnsDescription& columns,const String & db_name, const String & table_name)
+void HiveMetastoreClient::check(const ColumnsDescription & columns, const String & db_name, const String & table_name)
 {
     static const std::unordered_map<String, std::shared_ptr<IDataType>> hive_type_to_internal_type = {
-        {"tinyint",  std::make_shared<DataTypeInt8>()},
+        {"tinyint", std::make_shared<DataTypeInt8>()},
         {"smallint", std::make_shared<DataTypeInt16>()},
         {"bigint", std::make_shared<DataTypeInt64>()},
         {"int", std::make_shared<DataTypeInt32>()},
@@ -627,19 +600,19 @@ void HiveMetastoreClient::check(const ColumnsDescription& columns,const String &
     std::vector<FieldSchema> real_columns;
     HiveNameToType name_to_typename;
     getColumns(real_columns, db_name, table_name);
-    for(auto elem : real_columns)
+    for (const auto & elem : real_columns)
     {
         name_to_typename[elem.name] = elem.type;
     }
 
-    NamesAndTypesList nameAndTypes = columns.getAll();
-    for(NameAndTypePair column : nameAndTypes)
+    NamesAndTypesList name_and_types = columns.getAll();
+    for (NameAndTypePair column : name_and_types)
     {
         //cnch internal name
         String column_name = column.name;
 
         //column name doesn't match
-        if(name_to_typename.find(column_name) == name_to_typename.end())
+        if (name_to_typename.find(column_name) == name_to_typename.end())
         {
             throw Exception("column name " + column_name + " doesn't match", ErrorCodes::CANNOT_CONVERT_TYPE);
         }
@@ -650,10 +623,15 @@ void HiveMetastoreClient::check(const ColumnsDescription& columns,const String &
         //parse hive type
         DataTypePtr internal_nested_type = parseColumnType(hive_type_to_internal_type, hive_type);
 
-        LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), " col name = {}, type = {}, hive type = {}", column_name, column.type->getName(), internal_nested_type->getName());
+        LOG_TRACE(
+            &Poco::Logger::get("HiveMetastoreClient"),
+            " col name = {}, type = {}, hive type = {}",
+            column_name,
+            column.type->getName(),
+            internal_nested_type->getName());
 
         //get internal type
-        if(!CheckColumnType(column.type, internal_nested_type))
+        if (!checkColumnType(column.type, internal_nested_type))
         {
             throw Exception("The column name " + column_name + " type is not match in cnch.", ErrorCodes::CANNOT_CONVERT_TYPE);
         }
@@ -665,20 +643,20 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
     size_t i = 0;
     String err_msg;
 
-    for(; i < settings.max_hive_metastore_client_retry; ++i)
+    for (; i < settings.max_hive_metastore_client_retry; ++i)
     {
         auto client = client_pool.get(settings.get_hive_metastore_client_timeout);
         try
         {
             func(client);
         }
-        catch(apache::thrift::transport::TTransportException & e)
+        catch (apache::thrift::transport::TTransportException & e)
         {
             // client.expire();
             err_msg = e.what();
             continue;
         }
-        catch(...)
+        catch (...)
         {
             // err_msg = e.what;
             LOG_TRACE(&Poco::Logger::get("HiveMetastoreClient"), "try call hive metastore occur unexcepted excetion. ");
@@ -687,7 +665,7 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
         break;
     }
 
-    if(i > settings.max_hive_metastore_client_retry)
+    if (i > settings.max_hive_metastore_client_retry)
         throw Exception("Hive Metastore expired because " + err_msg, ErrorCodes::NETWORK_ERROR);
 }
 
@@ -701,12 +679,9 @@ HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & na
 {
     std::lock_guard lock(mutex);
     auto it = clients.find(name);
-    if(it == clients.end())
+    if (it == clients.end())
     {
-        auto builder = [name, settings]()
-        {
-            return createThriftHiveMetastoreClient(name, settings);
-        };
+        auto builder = [name, settings]() { return createThriftHiveMetastoreClient(name, settings); };
 
         auto client = std::make_shared<HiveMetastoreClient>(builder, settings);
         clients.emplace(name, client);
@@ -721,7 +696,8 @@ HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & na
     return it->second;
 }
 
-std::shared_ptr<ThriftHiveMetastoreClient> HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name, const CnchHiveSettings & settings)
+std::shared_ptr<ThriftHiveMetastoreClient>
+HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name, const CnchHiveSettings & settings)
 {
     LOG_TRACE(&Poco::Logger::get("HiveMetastoreClientFactory"), "CnchHive createThriftHiveMetastoreClient hivemetastore psm: {}", name);
     /// connect to hive metastore
@@ -738,11 +714,11 @@ std::shared_ptr<ThriftHiveMetastoreClient> HiveMetastoreClientFactory::createThr
             if (retry++ > 2)
                 throw Exception("No available hivemetatsore psm " + name, ErrorCodes::NETWORK_ERROR);
             hms_endpoints = cpputil::consul::lookup_name(name);
-        } while(hms_endpoints.size() == 0);
+        } while (hms_endpoints.empty());
 
         std::vector<cpputil::consul::ServiceEndpoint> sample;
         std::sample(hms_endpoints.begin(), hms_endpoints.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
-        for (auto service : sample)
+        for (const auto & service : sample)
         {
             host = service.host;
             port = service.port;
@@ -763,11 +739,11 @@ std::shared_ptr<ThriftHiveMetastoreClient> HiveMetastoreClientFactory::createThr
     {
         transport->open();
     }
-    catch(TException & tx)
+    catch (TException & tx)
     {
         throw Exception(" connect to hive metastore: " + name + " failed." + tx.what(), ErrorCodes::BAD_ARGUMENTS);
     }
-    catch(...)
+    catch (...)
     {
         throw;
     }
@@ -776,9 +752,9 @@ std::shared_ptr<ThriftHiveMetastoreClient> HiveMetastoreClientFactory::createThr
     return client;
 }
 
-ThriftHiveMetastoreClientPool::ThriftHiveMetastoreClientPool(ThriftHiveMetastoreClientBuilder builder_, int max_hive_metastore_client_connections)
-    : PoolBase<Object>(max_hive_metastore_client_connections, &Poco::Logger::get("ThriftHiveMetastoreClientPool"))
-    , builder(builder_)
+ThriftHiveMetastoreClientPool::ThriftHiveMetastoreClientPool(
+    ThriftHiveMetastoreClientBuilder builder_, int max_hive_metastore_client_connections)
+    : PoolBase<Object>(max_hive_metastore_client_connections, &Poco::Logger::get("ThriftHiveMetastoreClientPool")), builder(builder_)
 {
 }
 

@@ -1,29 +1,28 @@
-#include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
+#include <algorithm>
 #include <optional>
 #include <random>
-#include <algorithm>
+#include <boost/rational.hpp> /// For calculations related to sampling coefficients.
 
 #include <Poco/File.h>
 
-#include <Storages/Hive/HiveDataSelectExecutor.h>
-#include <Common/FieldVisitors.h>
-#include <common/scope_guard.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
-#include <Processors/Formats/Impl/ParquetBlockInputFormat.h>
-#include <Interpreters/Context.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
 #include <Formats/FormatFactory.h>
-#include <Storages/StorageCloudHive.h>
+#include <Interpreters/Context.h>
+#include <Processors/Formats/Impl/ParquetBlockInputFormat.h>
+#include <QueryPlan/ReadFromCnchHive.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/Hive/HiveDataSelectExecutor.h>
 #include <Storages/MergeTree/CnchHiveReadPool.h>
 #include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
-#include <QueryPlan/ReadFromCnchHive.h>
+#include <Storages/StorageCloudHive.h>
+#include <Common/FieldVisitors.h>
+#include <common/scope_guard.h>
 
 
 namespace DB
 {
-
 HiveDataSelectExecutor::HiveDataSelectExecutor(const StorageCloudHive & data_)
     : data(data_), log(&Poco::Logger::get("HiveDataSelectExecutor"))
 {
@@ -37,7 +36,6 @@ QueryPlanPtr HiveDataSelectExecutor::read(
     UInt64 max_block_size,
     size_t num_streams) const
 {
-
     LOG_TRACE(log, " HiveDataSelectExecutor::read ");
     // Stopwatch stopwatch;
     // SCOPE_EXIT({
@@ -51,7 +49,7 @@ QueryPlanPtr HiveDataSelectExecutor::read(
 
     LOG_DEBUG(log, "CloudHive Loaded  {} parts ", data_parts.size());
 
-    if(data_parts.empty())
+    if (data_parts.empty())
         return {};
 
     Names real_column_names = column_names_to_return;
@@ -62,16 +60,7 @@ QueryPlanPtr HiveDataSelectExecutor::read(
     metadata_snapshot->check(real_column_names, data.getVirtuals(), data.getStorageID());
 
     auto read_from_cnch_hive = std::make_unique<ReadFromCnchHive>(
-        data_parts,
-        real_column_names,
-        data,
-        query_info,
-        metadata_snapshot,
-        context,
-        max_block_size,
-        num_streams,
-        log
-    );
+        data_parts, real_column_names, data, query_info, metadata_snapshot, context, max_block_size, num_streams, log);
 
 
     QueryPlanPtr plan = std::make_unique<QueryPlan>();

@@ -2,15 +2,14 @@
 #pragma once
 
 #include <memory>
-#include <unordered_map>
 #include <set>
-#include <boost/noncopyable.hpp>
-#include <Storages/SelectQueryInfo.h>
+#include <unordered_map>
 #include <Storages/IStorage.h>
+#include <Storages/SelectQueryInfo.h>
+#include <boost/noncopyable.hpp>
 
 namespace DB
 {
-
 class ASTSelectQuery;
 class StorageCnchHive;
 using StoragePtr = std::shared_ptr<IStorage>;
@@ -18,10 +17,7 @@ using StoragePtr = std::shared_ptr<IStorage>;
 class HiveWhereOptimizer : private boost::noncopyable
 {
 public:
-    HiveWhereOptimizer(
-        const SelectQueryInfo & query_info_,
-        ContextPtr & /*context_*/,
-        const StoragePtr & storage_);
+    HiveWhereOptimizer(const SelectQueryInfo & query_info_, ContextPtr & /*context_*/, const StoragePtr & storage_);
 
     void implicitwhereOptimize() const;
 
@@ -29,18 +25,12 @@ public:
     {
         ASTPtr node;
         NameSet identifiers;
-        bool viable = false;    //is partitionkey condition
+        bool viable = false; //is partitionkey condition
         bool good = false;
 
-        auto tuple() const
-        {
-            return std::make_tuple(!viable, !good);
-        }
+        auto tuple() const { return std::make_tuple(!viable, !good); }
 
-        bool operator< (const Condition & rhs) const
-        {
-            return tuple() < rhs.tuple();
-        }
+        bool operator<(const Condition & rhs) const { return tuple() < rhs.tuple(); }
 
         Condition clone() const
         {
@@ -76,11 +66,10 @@ public:
     // bool isInTableColumns(const ASTPtr & node) const;
 
     bool getUsefullFilter(String & filter);
-    bool ConvertImplicitWhereToUsefullFilter(String & filter);
-    bool ConvertWhereToUsefullFilter(ASTs & conditions, String & filter);
+    bool convertImplicitWhereToUsefullFilter(String & filter);
+    bool convertWhereToUsefullFilter(ASTs & conditions, String & filter);
 
 private:
-
     using StringSet = std::unordered_set<String>;
 
     StringSet table_columns;

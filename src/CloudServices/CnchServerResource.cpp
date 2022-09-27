@@ -33,7 +33,7 @@ void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
 
 void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
 {
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         if (!part_names.count(part->name))
         {
@@ -232,9 +232,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             const auto & required_bucket_numbers = resource.bucket_numbers;
             ServerAssignmentMap assigned_map;
             HivePartsAssignMap assigned_hive_map;
-            bool use_simple_hash = false;
             BucketNumbersAssignmentMap assigned_bucket_numbers_map;
-
             if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
             {
                 if (isCnchBucketTable(context, *storage, server_parts))
@@ -248,9 +246,9 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             }
             else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
             {
-                use_simple_hash = cnchhive->settings.use_simple_hash;
-                LOG_TRACE(&Poco::Logger::get("CnchSessionResource"), "CnchSessionResource use_simple_hash is: {}", use_simple_hash);
-                assigned_hive_map = assignCnchParts(worker_group, resource.hive_parts);
+                bool use_simple_hash = cnchhive->settings.use_simple_hash;
+                LOG_TRACE(log, "CnchSessionResource use_simple_hash is: {}", use_simple_hash);
+                assigned_hive_map = assignCnchParts(worker_group, resource.hive_parts, use_simple_hash);
             }
 
             for (const auto & host_ports : host_ports_vec)

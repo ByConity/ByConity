@@ -1,22 +1,20 @@
 #pragma once
 
 #include <QueryPlan/ISourceStep.h>
-#include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/StorageCloudHive.h>
 
 namespace DB
 {
-
 class Pipe;
 
 class ReadFromCnchHive final : public ISourceStep
 {
-
 public:
     ReadFromCnchHive(
         HiveDataPartsCNCHVector parts_,
-        Names read_column_name_,
+        Names real_column_names_,
         const StorageCloudHive & data_,
         const SelectQueryInfo & query_info_,
         StorageMetadataPtr metadata_snapshot_,
@@ -50,10 +48,6 @@ private:
     Poco::Logger * log;
 
     Pipe spreadRowGroupsAmongStreams(
-        ContextPtr & context,
-        RowGroupsInDataParts && parts,
-        size_t num_streams,
-        const Names & column_names,
-        const UInt64 max_block_size);
+        ContextPtr & context, RowGroupsInDataParts && parts, size_t num_streams, const Names & column_names, const UInt64 & max_block_size);
 };
 }

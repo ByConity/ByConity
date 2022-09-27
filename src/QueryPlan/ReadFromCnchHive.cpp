@@ -1,5 +1,5 @@
-#include <QueryPlan/ReadFromCnchHive.h>
 #include <Processors/Sources/NullSource.h>
+#include <QueryPlan/ReadFromCnchHive.h>
 #include <Storages/Hive/HiveDataSelectExecutor.h>
 #include <Storages/MergeTree/CnchHiveReadPool.h>
 #include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
@@ -22,8 +22,8 @@ ReadFromCnchHive::ReadFromCnchHive(
     size_t max_block_size_,
     size_t num_streams_,
     Poco::Logger * log_)
-    : ISourceStep(DataStream{.header =
-        metadata_snapshot_->getSampleBlockForColumns(real_column_names_, data_.getVirtuals(), data_.getStorageID())})
+    : ISourceStep(
+        DataStream{.header = metadata_snapshot_->getSampleBlockForColumns(real_column_names_, data_.getVirtuals(), data_.getStorageID())})
     , data_parts(parts_)
     , real_column_names(std::move(real_column_names_))
     , data(data_)
@@ -38,7 +38,7 @@ ReadFromCnchHive::ReadFromCnchHive(
 
 void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
 {
-    if(data_parts.empty())
+    if (data_parts.empty())
     {
         pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
         return;
@@ -50,8 +50,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
     RowGroupsInDataParts parts_with_row_groups{data_parts.begin(), data_parts.end()};
 
-    auto process = [&](int part_index)
-    {
+    auto process = [&](int part_index) {
         const auto & part = data_parts[part_index];
         parts_with_row_groups[part_index].total_row_groups = part->getTotalRowGroups();
     };
@@ -68,8 +67,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
         ThreadPool pool(num_threads);
         // ExceptionHandler handler;
         for (size_t part_index = 0; part_index < data_parts.size(); ++part_index)
-            pool.scheduleOrThrow([&, part_index, thread_group = CurrentThread::getGroup()]
-            {
+            pool.scheduleOrThrow([&, part_index, thread_group = CurrentThread::getGroup()] {
                 SCOPE_EXIT(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
                 if (thread_group)
                     CurrentThread::attachTo(thread_group);
@@ -81,7 +79,7 @@ void ReadFromCnchHive::initializePipeline(QueryPipeline & pipeline, const BuildQ
 
     pipe = spreadRowGroupsAmongStreams(context, std::move(parts_with_row_groups), num_streams, real_column_names, max_block_size);
 
-    if(pipe.empty())
+    if (pipe.empty())
     {
         pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
         return;
@@ -98,11 +96,11 @@ Pipe ReadFromCnchHive::spreadRowGroupsAmongStreams(
     RowGroupsInDataParts && parts,
     size_t /*num_streams*/,
     const Names & column_names,
-    const UInt64 /*max_block_size*/)
+    const UInt64 & /*max_block_size*/)
 {
     size_t sum_row_groups = 0;
     std::vector<size_t> sum_row_groups_in_parts(parts.size());
-    for(size_t i = 0; i < parts.size(); ++i)
+    for (size_t i = 0; i < parts.size(); ++i)
     {
         sum_row_groups_in_parts[i] = parts[i].data_part->getTotalRowGroups();
         sum_row_groups += sum_row_groups_in_parts[i];
@@ -113,13 +111,13 @@ Pipe ReadFromCnchHive::spreadRowGroupsAmongStreams(
 
     LOG_DEBUG(log, " num_stream : {} max_threads {}", num_streams, max_threads);
 
-    if(num_streams > max_threads)
+    if (num_streams > max_threads)
         num_streams = max_threads;
 
-    if(sum_row_groups > 0)
+    if (sum_row_groups > 0)
     {
         /// Reduce the number of num_streams if data is small.
-        if(sum_row_groups < num_streams)
+        if (sum_row_groups < num_streams)
             num_streams = sum_row_groups;
 
         LOG_TRACE(log, " num_streams = {} sum_row_groups = {}", num_streams, sum_row_groups);
@@ -128,24 +126,13 @@ Pipe ReadFromCnchHive::spreadRowGroupsAmongStreams(
 
         // LOG_DEBUG(log, " num_streams is: " << num_streams << " sum_row_groups: " << sum_row_groups << " min_row_groups_per_stream: " << min_row_groups_per_stream);
 
-        CnchHiveReadPoolPtr pool = std::make_shared<CnchHiveReadPool>(
-            num_streams,
-            sum_row_groups,
-            std::move(parts),
-            data,
-            metadata_snapshot,
-            column_names);
+        CnchHiveReadPoolPtr pool
+            = std::make_shared<CnchHiveReadPool>(num_streams, sum_row_groups, std::move(parts), data, metadata_snapshot, column_names);
 
-        for(size_t i = 0 ; i < num_streams; ++i)
+        for (size_t i = 0; i < num_streams; ++i)
         {
-            res.emplace_back(std::make_shared<CnchHiveThreadSelectBlockInputProcessor>(
-                i,
-                pool,
-                data,
-                metadata_snapshot,
-                context,
-                max_block_size
-            ));
+            res.emplace_back(
+                std::make_shared<CnchHiveThreadSelectBlockInputProcessor>(i, pool, data, metadata_snapshot, context, max_block_size));
         }
     }
 

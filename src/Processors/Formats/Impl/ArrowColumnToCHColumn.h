@@ -22,7 +22,7 @@ namespace DB
 class ArrowColumnToCHColumn
 {
 public:
-    ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_, const std::map<String, String> partition_kv = {});
+    ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_, const std::map<String, String> & partition_kv = {});
 
     void arrowTableToCHChunk(Chunk & res, std::shared_ptr<arrow::Table> & table);
 

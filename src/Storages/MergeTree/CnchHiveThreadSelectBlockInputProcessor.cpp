@@ -1,26 +1,22 @@
-#include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
-#include <Formats/FormatFactory.h>
-#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <DataStreams/OwningBlockInputStream.h>
+#include <Formats/FormatFactory.h>
 #include <Processors/Formats/Impl/ParquetBlockInputFormat.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/Hive/ParquetBlockInputStream.h>
+#include <Storages/MergeTree/CnchHiveThreadSelectBlockInputProcessor.h>
 
 namespace DB
 {
 class ParquetBlockInputFormat;
 
 CnchHiveThreadSelectBlockInputProcessor::CnchHiveThreadSelectBlockInputProcessor(
-    const size_t thread_,
+    const size_t & thread_,
     const std::shared_ptr<CnchHiveReadPool> & pool_,
     const StorageCloudHive & /*storage_*/,
     const StorageMetadataPtr & metadata_snapshot_,
     ContextPtr & context_,
-    const UInt64 /*max_block_size_*/)
-    : SourceWithProgress(pool_->getHeader())
-    , thread(thread_)
-    , pool(pool_)
-    , metadata_snapshot(metadata_snapshot_)
-    , context(context_)
+    const UInt64 & /*max_block_size_*/)
+    : SourceWithProgress(pool_->getHeader()), thread(thread_), pool(pool_), metadata_snapshot(metadata_snapshot_), context(context_)
 {
 }
 
@@ -36,9 +32,9 @@ Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
     LOG_TRACE(&Poco::Logger::get("CnchHiveThreadSelectBlockInputProcessor"), " generate ");
     Block res;
 
-    while(!res && !isCancelled())
+    while (!res && !isCancelled())
     {
-        if(!task && !getNewTask())
+        if (!task && !getNewTask())
             break;
 
         res = parquet_stream->read();
@@ -46,7 +42,7 @@ Chunk CnchHiveThreadSelectBlockInputProcessor::generate()
         LOG_TRACE(&Poco::Logger::get("CnchHiveThreadSelectBlockInputProcessor"), " parquet read rows: {}", res.rows());
 
         const auto * parquet = dynamic_cast<const ParquetBlockInputStream *>(parquet_stream.get());
-        if(!parquet)
+        if (!parquet)
             throw Exception("Unexpected Format in CnchHive ,currently only support Parquet", ErrorCodes::LOGICAL_ERROR);
 
         // if(parquet->isFinished())
@@ -66,7 +62,7 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
 {
     task = pool->getTask(thread);
 
-    if(!task)
+    if (!task)
     {
         read_buf.reset();
         parquet_stream.reset();
@@ -77,7 +73,11 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
     size_t current_row_group = task->current_row_group;
     const String part_path = part->getFullDataPartPath();
 
-    LOG_TRACE(&Poco::Logger::get("CnchHiveThreadSelectBlockInputStream"), "getNewTask current_row_group: {} part is {} " , current_row_group, part_path);
+    LOG_TRACE(
+        &Poco::Logger::get("CnchHiveThreadSelectBlockInputStream"),
+        "getNewTask current_row_group: {} part is {} ",
+        current_row_group,
+        part_path);
     read_buf = std::make_unique<ReadBufferFromByteHDFS>(part_path, true, context->getHdfsConnectionParams());
 
     FormatSettings format_settings;
@@ -87,12 +87,7 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
     format_settings.parquet.read_one_group = true;
 
     auto parquet_format = FormatFactory::instance().getInput(
-        "Parquet",
-        *read_buf,
-        getHeader(),
-        context,
-        context->getSettingsRef().max_block_size,
-        format_settings);
+        "Parquet", *read_buf, getHeader(), context, context->getSettingsRef().max_block_size, format_settings);
 
     // auto parquet_format = std::make_shared<ParquetBlockInputFormat>(
     //     *read_buf,

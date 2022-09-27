@@ -1,20 +1,21 @@
 #pragma once
 
 #include <MergeTreeCommon/CnchStorageCommon.h>
-#include <common/shared_ptr_helper.h>
-#include <Storages/StorageFactory.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Storages/Hive/HiveMetastore.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
+#include <Storages/StorageFactory.h>
 #include <hivemetastore/ThriftHiveMetastore.h>
+#include <common/shared_ptr_helper.h>
 
 namespace DB
 {
-
-class StorageCnchHive final : public shared_ptr_helper<StorageCnchHive>, public IStorage, public WithMutableContext, public CnchStorageCommonHelper
+class StorageCnchHive final : public shared_ptr_helper<StorageCnchHive>,
+                              public IStorage,
+                              public WithMutableContext,
+                              public CnchStorageCommonHelper
 {
-
 public:
     ~StorageCnchHive() override;
 
@@ -32,7 +33,7 @@ public:
     static ASTPtr extractKeyExpressionList(const ASTPtr & node);
 
     QueryProcessingStage::Enum
-        getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
+    getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
 
     String getFullTablePath();
 
@@ -55,12 +56,6 @@ public:
         size_t /*max_block_size*/,
         unsigned /*num_streams*/) override;
 
-    // PrepareContextResult prepareReadContext(
-    //     const Names & column_names, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info, ContextPtr & local_context);
-
-    // void allocateParts(ContextPtr local_context, HiveDataPartsCNCHVector & parts, WorkerGroupHandle & worker_group);
-
-public:
     StorageCnchHive(
         const StorageID & table_id_,
         const String & remote_psm_,
@@ -73,7 +68,7 @@ public:
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints_,
         ContextMutablePtr context_,
-        const CnchHiveSettings settings);
+        const CnchHiveSettings & storage_settings_);
 
 private:
     void setProperties();
@@ -83,47 +78,38 @@ private:
     void checkStorageFormat();
     void checkPartitionByKey();
 
-    std::set<Int64> getSelectedBucketNumbers(
-        const SelectQueryInfo & query_info,
-        ContextPtr & context);
+    std::set<Int64> getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & context);
 
     HiveDataPartsCNCHVector prepareReadContext(
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot,
         SelectQueryInfo & query_info,
-        ContextPtr local_conetxt,
+        ContextPtr local_context,
         unsigned num_streams);
 
     HiveDataPartsCNCHVector selectPartsToRead(
-        const Names & /*column_names_to_return*/,
-        ContextPtr context,
-        const SelectQueryInfo & query_info,
-        unsigned num_streams);
+        const Names & /*column_names_to_return*/, ContextPtr context, const SelectQueryInfo & query_info, unsigned num_streams);
 
     HiveDataPartsCNCHVector getDataPartsInPartitions(
         std::shared_ptr<HiveMetastoreClient> & hms_client,
         HivePartitionVector & partitions,
         ContextPtr context,
         const SelectQueryInfo & query_info,
-        unsigned num_streams);
+        unsigned num_streams,
+        const std::set<Int64> & required_bucket_numbers);
 
     HiveDataPartsCNCHVector collectHiveFilesFromPartition(
         std::shared_ptr<HiveMetastoreClient> & hms_client,
         HivePartitionPtr & partition,
         ContextPtr context,
-        const SelectQueryInfo & query_info);
+        const SelectQueryInfo & query_info,
+        const std::set<Int64> & required_bucket_numbers);
 
-    void collectResource(
-        ContextPtr context,
-        const HiveDataPartsCNCHVector & parts,
-        const String & local_table_name);
+    void collectResource(ContextPtr context, const HiveDataPartsCNCHVector & parts, const String & local_table_name);
 
     HivePartitionVector selectPartitionsByPredicate(
-        ContextPtr local_context ,
-        const SelectQueryInfo & query_info,
-        std::shared_ptr<HiveMetastoreClient> & hms_client);
+        ContextPtr local_context, const SelectQueryInfo & query_info, std::shared_ptr<HiveMetastoreClient> & hms_client);
 
-private:
     String remote_psm;
 
     ASTPtr partition_by_ast;
@@ -156,7 +142,6 @@ private:
 
 public:
     const CnchHiveSettings settings;
-
 };
 
 }

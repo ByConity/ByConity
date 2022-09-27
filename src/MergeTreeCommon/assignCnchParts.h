@@ -23,7 +23,7 @@ struct BucketNumberAndServerPartsAssignment
 };
 
 
-std::unordered_map<String, HiveDataPartsCNCHVector> assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts);
+HivePartsAssignMap assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts, bool use_simple_hash);
 
 ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
 

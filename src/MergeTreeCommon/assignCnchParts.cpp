@@ -2,8 +2,6 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <common/logger_useful.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 #include <sstream>
 
@@ -141,11 +139,11 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
 }
 
 
-std::unordered_map<String, HiveDataPartsCNCHVector> assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts)
+HivePartsAssignMap assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts, bool /*use_simple_hash*/)
 {
     auto workers = worker_group->getWorkerIDVec();
     auto num_workers = workers.size();
-    std::unordered_map<String, HiveDataPartsCNCHVector> ret;
+    HivePartsAssignMap ret;
     for (size_t i = 0 ; i < parts.size(); i++)
     {
         auto index = i % num_workers;
@@ -185,8 +183,8 @@ bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, con
         return false;
     if (context->getCnchCatalog()->isTableClustered(storage.getStorageUUID()))
         return true;
-    
-    return std::all_of(parts.begin(), parts.end(), [&](auto part) 
+
+    return std::all_of(parts.begin(), parts.end(), [&](auto part)
         { return part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1; });
 }
 
@@ -196,7 +194,7 @@ BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerD
     std::sort(workers.begin(), workers.end());
     BucketNumberAndServerPartsAssignment assignment;
 
-    for (auto & part : parts)
+    for (const auto & part : parts)
     {
         // For bucket tables, the parts with the same bucket number is assigned to the same worker.
         Int64 bucket_number = part->part_model().bucket_number();

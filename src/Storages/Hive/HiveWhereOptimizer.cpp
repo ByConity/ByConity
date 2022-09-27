@@ -1,38 +1,33 @@
+#include <Interpreters/predicateExpressionsUtils.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTSubquery.h>
+#include <Parsers/queryToString.h>
 #include <Storages/Hive/HiveWhereOptimizer.h>
 #include <Storages/StorageCnchHive.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTSubquery.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/queryToString.h>
 #include <Common/typeid_cast.h>
-#include <Interpreters/predicateExpressionsUtils.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
 }
 
-HiveWhereOptimizer::HiveWhereOptimizer(
-    const SelectQueryInfo & query_info_,
-    ContextPtr & /*context_*/,
-    const StoragePtr & storage_)
-    : select(typeid_cast<ASTSelectQuery &>(*query_info_.query))
-    , storage(storage_)
+HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, ContextPtr & /*context_*/, const StoragePtr & storage_)
+    : select(typeid_cast<ASTSelectQuery &>(*query_info_.query)), storage(storage_)
 {
-    if(auto cnchHive = dynamic_cast<const StorageCnchHive *>(storage.get()))
+    if (const auto & cnchhive = dynamic_cast<const StorageCnchHive *>(storage.get()))
     {
-        NamesAndTypesList available_real_columns = cnchHive->getColumns().getAllPhysical();
-        for(const NameAndTypePair & col : available_real_columns)
+        NamesAndTypesList available_real_columns = cnchhive->getColumns().getAllPhysical();
+        for (const NameAndTypePair & col : available_real_columns)
             table_columns.insert(col.name);
 
-        partition_expr_ast = cnchHive->getPartitionKeyList();
+        partition_expr_ast = cnchhive->getPartitionKeyList();
     }
 }
 
@@ -81,9 +76,9 @@ HiveWhereOptimizer::HiveWhereOptimizer(
 /// get where condition usefull filter
 /// for example:  app_name is partition key.
 /// app_name IN ('test', 'test2') will be convert to ((app_name = 'test') or (app_name = 'test2'))
-bool HiveWhereOptimizer::ConvertWhereToUsefullFilter(ASTs & conditions, String & filter)
+bool HiveWhereOptimizer::convertWhereToUsefullFilter(ASTs & conditions, String & filter)
 {
-    if(conditions.empty())
+    if (conditions.empty())
         return false;
 
     ASTs ret_conditions;
@@ -96,12 +91,16 @@ bool HiveWhereOptimizer::ConvertWhereToUsefullFilter(ASTs & conditions, String &
             if (func->name == "and")
                 return false;
 
-            if(func->name == "in")
+            if (func->name == "in")
             {
                 const ASTPtr left_arg = func->arguments->children[0];
                 const ASTPtr right_arg = func->arguments->children[1];
 
-                LOG_TRACE(&Poco::Logger::get("HiveWhereOptimizer"), "right arg : {} left arg: {}", right_arg->getAliasOrColumnName(), left_arg->getAliasOrColumnName());
+                LOG_TRACE(
+                    &Poco::Logger::get("HiveWhereOptimizer"),
+                    "right arg : {} left arg: {}",
+                    right_arg->getAliasOrColumnName(),
+                    left_arg->getAliasOrColumnName());
 
                 for (auto & child : partition_expr_ast->children)
                 {
@@ -109,24 +108,25 @@ bool HiveWhereOptimizer::ConvertWhereToUsefullFilter(ASTs & conditions, String &
                         flag = true;
                 }
 
-                if(!flag)
+                if (!flag)
                     continue;
 
                 const auto * second_arg_func = typeid_cast<ASTFunction *>(right_arg.get());
-                if(!second_arg_func)
+                if (!second_arg_func)
                     continue;
 
                 ASTs new_right_args;
-                for(auto child : second_arg_func->arguments->children)
+                for (const auto & child : second_arg_func->arguments->children)
                 {
                     ASTLiteral * literal = typeid_cast<ASTLiteral *>(child.get());
-                    if(!literal)
-                        throw Exception("The conditions of IN function right arg Tuple element should be literal", ErrorCodes::LOGICAL_ERROR);
+                    if (!literal)
+                        throw Exception(
+                            "The conditions of IN function right arg Tuple element should be literal", ErrorCodes::LOGICAL_ERROR);
 
                     new_right_args.push_back(child);
                 }
 
-                for(const auto & new_right_arg : new_right_args)
+                for (const auto & new_right_arg : new_right_args)
                 {
                     const auto new_function = makeASTFunction("equals", ASTs{left_arg, new_right_arg});
                     ret_conditions.push_back(new_function);
@@ -135,7 +135,7 @@ bool HiveWhereOptimizer::ConvertWhereToUsefullFilter(ASTs & conditions, String &
         }
     }
 
-    if(ret_conditions.size() < 2)
+    if (ret_conditions.size() < 2)
         return false;
 
     const auto function = std::make_shared<ASTFunction>();
@@ -155,9 +155,9 @@ bool HiveWhereOptimizer::ConvertWhereToUsefullFilter(ASTs & conditions, String &
 }
 
 /// If implicit where condition contains 'in' function, convert 'in' to 'equals'
-bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
+bool HiveWhereOptimizer::convertImplicitWhereToUsefullFilter(String & filter)
 {
-    if(!select.implicitWhere())
+    if (!select.implicitWhere())
         return false;
 
     ASTs ret_conditions;
@@ -176,14 +176,15 @@ bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
                     if (func->name == "and")
                         throw Exception("The conditions of implicit_where should be linearized", ErrorCodes::LOGICAL_ERROR);
 
-                    if(func->name == "in")
+                    if (func->name == "in")
                     {
                         const ASTPtr left_arg = func->arguments->children[0];
                         const ASTPtr right_arg = func->arguments->children[1];
 
                         ASTLiteral * literal = typeid_cast<ASTLiteral *>(right_arg.get());
                         if (!literal)
-                            throw Exception("The conditions of implicit_where IN function right arg should be literal", ErrorCodes::LOGICAL_ERROR);
+                            throw Exception(
+                                "The conditions of implicit_where IN function right arg should be literal", ErrorCodes::LOGICAL_ERROR);
 
                         const auto new_function = makeASTFunction("equals", ASTs{left_arg, right_arg});
                         ret_conditions.push_back(new_function);
@@ -192,7 +193,7 @@ bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
                     }
 
                     ///
-                    if(!isComparisonFunctionName(func->name))
+                    if (!isComparisonFunctionName(func->name))
                         continue;
                 }
 
@@ -202,10 +203,10 @@ bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
     }
 
     /// only have one condition
-    if(ret_conditions.size() == 0)
+    if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(select.implicitWhere().get());
-        if(func->name == "in")
+        if (func->name == "in")
         {
             const ASTPtr left_arg = func->arguments->children[0];
             const ASTPtr right_arg = func->arguments->children[1];
@@ -234,10 +235,7 @@ bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
 
     filter = queryToString(function);
 
-    if(num_conditions == ret_conditions.size())
-        return true;
-    else
-        return false;
+    return num_conditions == ret_conditions.size();
 }
 
 /// get implicit where conditions,
@@ -245,7 +243,7 @@ bool HiveWhereOptimizer::ConvertImplicitWhereToUsefullFilter(String & filter)
 /// ThriftHiveMetastoreClient interface can directly use it to filter partitions.
 bool HiveWhereOptimizer::getUsefullFilter(String & filter)
 {
-    if(!select.implicitWhere())
+    if (!select.implicitWhere())
         return false;
 
     ASTs ret_conditions;
@@ -263,7 +261,7 @@ bool HiveWhereOptimizer::getUsefullFilter(String & filter)
                     if (func->name == "and")
                         throw Exception("The conditions of implicit_where should be linearized", ErrorCodes::LOGICAL_ERROR);
 
-                    if(!isComparisonFunctionName(func->name))
+                    if (!isComparisonFunctionName(func->name))
                     {
                         is_all_usefull = false;
                         continue;
@@ -275,17 +273,17 @@ bool HiveWhereOptimizer::getUsefullFilter(String & filter)
         }
     }
 
-    if(ret_conditions.size() == 0)
+    if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(select.implicitWhere().get());
         String name = func->name;
-        if(!isComparisonFunctionName(func->name))
+        if (!isComparisonFunctionName(func->name))
             return false;
 
         filter = queryToString(select.implicitWhere());
         return true;
     }
-    else if(ret_conditions.size() == 1)
+    else if (ret_conditions.size() == 1)
     {
         filter = queryToString(ret_conditions[0]);
         return is_all_usefull;
@@ -306,54 +304,26 @@ bool HiveWhereOptimizer::getUsefullFilter(String & filter)
 
 void HiveWhereOptimizer::implicitwhereOptimize() const
 {
-    if(!select.where() || select.implicitWhere())
-        return ;
-
-    Conditions where_conditions = implicitAnalyze(select.where());
-    Conditions implicitWhere_conditions;
-
-    while(!where_conditions.empty())
-    {
-        auto it = std::min_element(where_conditions.begin(), where_conditions.end());
-        if(!it->viable)
-            break;
-
-        implicitWhere_conditions.splice(implicitWhere_conditions.end(), where_conditions, it);
-    }
-
-    if(implicitWhere_conditions.empty())
+    if (!select.where() || select.implicitWhere())
         return;
 
-    select.setExpression(ASTSelectQuery::Expression::IMPLICITWHERE, reconstruct(implicitWhere_conditions));
+    Conditions where_conditions = implicitAnalyze(select.where());
+    Conditions implicitwhere_conditions;
+
+    while (!where_conditions.empty())
+    {
+        auto it = std::min_element(where_conditions.begin(), where_conditions.end());
+        if (!it->viable)
+            break;
+
+        implicitwhere_conditions.splice(implicitwhere_conditions.end(), where_conditions, it);
+    }
+
+    if (implicitwhere_conditions.empty())
+        return;
+
+    select.setExpression(ASTSelectQuery::Expression::IMPLICITWHERE, reconstruct(implicitwhere_conditions));
     select.setExpression(ASTSelectQuery::Expression::WHERE, reconstruct(where_conditions));
-
-    // LOG_DEBUG(&Poco::Logger::get("HiveWhereOptimizer"), "HiveWhereOptimizer: condition {} moved to IMPLICITWHERE ", select.implicitWhere());
-
-    // bool copy_conditions = false;
-    // if (!hasColumnOfTableColumns(where_conditions))
-    // {
-    //     if (!hasColumnOfTableColumns())
-    //         copy_conditions = true;
-    // }
-
-    // if(!copy_conditions || !where_conditions.empty())
-    // {
-    //     select.setExpression(ASTSelectQuery::Expression::IMPLICITWHERE, reconstruct(implicitWhere_conditions));
-    //     select.setExpression(ASTSelectQuery::Expression::WHERE, reconstruct(where_conditions));
-    // }
-    // else
-    // {
-    //     Conditions copy_conditions;
-    //     for (const auto & condition : implicitWhere_conditions)
-    //         copy_conditions.emplace_back(condition.clone());
-    //     select.setExpression(ASTSelectQuery::Expression::IMPLICITWHERE, reconstruct(copy_conditions));
-    // }
-
-    // if (copy_conditions && where_conditions.empty())
-    //     LOG_DEBUG(&Poco::Logger::get("HiveWhereOptimizer"), "HiveWhereOptimizer: Copy condition {} to IMPLICITWHERE ", select.implicitWhere());
-    // else
-    //     LOG_DEBUG(&Poco::Logger::get("HiveWhereOptimizer"), "HiveWhereOptimizer: condition {} moved to IMPLICITWHERE ", select.implicitWhere());
-
 }
 
 bool HiveWhereOptimizer::isSubsetOfTableColumns(const NameSet & identifiers) const
@@ -396,39 +366,37 @@ ASTPtr HiveWhereOptimizer::reconstruct(const Conditions & conditions) const
 
 bool HiveWhereOptimizer::isValidPartitionColumn(const IAST * condition) const
 {
-    const auto function = typeid_cast<const ASTFunction *>(condition);
+    const auto * function = typeid_cast<const ASTFunction *>(condition);
 
-    if(!function || !partition_expr_ast)
+    if (!function || !partition_expr_ast)
         return false;
 
-    if(function->arguments->children.size() == 1)
+    if (function->arguments->children.size() == 1)
         return false;
 
     bool flag = false;
-    for(auto & arg_child : function->arguments->children)
+    for (auto & arg_child : function->arguments->children)
     {
         const auto & identifier = typeid_cast<const ASTIdentifier *>(arg_child.get());
         const auto & func = typeid_cast<const ASTFunction *>(arg_child.get());
         const auto & literal = typeid_cast<const ASTLiteral *>(arg_child.get());
 
-        if(!identifier && !func && !literal)
+        if (!identifier && !func && !literal)
             return false;
-        if((func || identifier) && flag)
+        if ((func || identifier) && flag)
             return false;
 
-        for(auto & child : partition_expr_ast->children)
+        for (auto & child : partition_expr_ast->children)
         {
-            if(identifier || func)
+            if (identifier || func)
             {
                 /// if partition column name, set flag = true
-                if(child->getAliasOrColumnName() == arg_child->getAliasOrColumnName())
+                if (child->getAliasOrColumnName() == arg_child->getAliasOrColumnName())
                     flag = true;
-
             }
         }
-        if(!flag && !literal)
+        if (!flag && !literal)
             return false;
-
     }
 
     return flag;
@@ -473,10 +441,10 @@ ASTs HiveWhereOptimizer::getWhereOptimizerConditions(const ASTPtr & ast) const
         }
     }
 
-    if(ret_conditions.size() == 0)
+    if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(ast.get());
-        if(isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
+        if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
             return {ast};
     }
 
@@ -507,10 +475,10 @@ ASTs HiveWhereOptimizer::getConditions(const ASTPtr & ast) const
     }
 
 
-    if(ret_conditions.size() == 0)
+    if (ret_conditions.empty())
     {
         const auto & func = typeid_cast<const ASTFunction *>(ast.get());
-        if(isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
+        if (isComparisonFunctionName(func->name) || isInFunctionName(func->name) || isLikeFunctionName(func->name))
             return {ast};
     }
 

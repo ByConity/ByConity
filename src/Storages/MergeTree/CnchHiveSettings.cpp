@@ -1,15 +1,14 @@
+#include <Core/Settings.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ASTFunction.h>
 #include <Common/Exception.h>
-#include <Core/Settings.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int UNKNOWN_SETTING;
@@ -63,10 +62,8 @@ void CnchHiveSettings::loadFromQuery(ASTStorage & storage_def)
 
     SettingsChanges & changes = storage_def.settings->changes;
 
-#define ADD_IF_ABSENT(NAME)                                                                                   \
-    if (std::find_if(changes.begin(), changes.end(),                                                          \
-                  [](const SettingChange & c) { return c.name == #NAME; })                                    \
-            == changes.end())                                                                                 \
+#define ADD_IF_ABSENT(NAME) \
+    if (std::find_if(changes.begin(), changes.end(), [](const SettingChange & c) { return c.name == #NAME; }) == changes.end()) \
         changes.push_back(SettingChange{#NAME, (NAME).value});
 
     APPLY_FOR_IMMUTABLE_CNCH_HIVE_SETTINGS(ADD_IF_ABSENT)

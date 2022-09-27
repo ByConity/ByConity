@@ -1,39 +1,37 @@
 #pragma once
 
 #include <DataStreams/IBlockInputStream.h>
-#include <Storages/StorageCloudHive.h>
-#include <Storages/MergeTree/CnchHiveReadPool.h>
-#include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
+#include <Processors/Sources/SourceWithProgress.h>
+#include <Storages/MergeTree/CnchHiveReadPool.h>
+#include <Storages/StorageCloudHive.h>
 
 namespace DB
 {
-
 class CnchHiveReadPool;
 
 class CnchHiveThreadSelectBlockInputProcessor : public SourceWithProgress
 {
 public:
-
     CnchHiveThreadSelectBlockInputProcessor(
-        const size_t thread,
+        const size_t & thread,
         const std::shared_ptr<CnchHiveReadPool> & pool,
         const StorageCloudHive & storage,
         const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr & context,
-        const UInt64 max_block_size);
+        const UInt64 & max_block_size);
 
     String getName() const override { return "CnchHiveThread"; }
 
     ~CnchHiveThreadSelectBlockInputProcessor() override;
 
     Block getHeader() const;
+
 private:
     Chunk generate() override;
 
-    bool getNewTask() ;
+    bool getNewTask();
 
-private:
     size_t thread;
 
     std::shared_ptr<CnchHiveReadPool> pool;

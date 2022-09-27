@@ -1,37 +1,36 @@
-#include <Storages/StorageCnchHive.h>
-#include <Storages/IStorage.h>
-#include <MergeTreeCommon/CnchStorageCommon.h>
-#include <Parsers/ASTLiteral.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Storages/StorageInMemoryMetadata.h>
-#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <CloudServices/CnchServerResource.h>
+#include <Core/NamesAndTypes.h>
+#include <Core/QueryProcessingStage.h>
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
-#include <Interpreters/VirtualWarehousePool.h>
-#include <Interpreters/trySetVirtualWarehouse.h>
-#include <Processors/Sources/NullSource.h>
-#include <Parsers/queryToString.h>
-#include <Core/NamesAndTypes.h>
-#include <Core/QueryProcessingStage.h>
-#include <Parsers/ASTFunction.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTPartition.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
-#include <QueryPlan/ReadFromPreparedSource.h>
-#include <Storages/Hive/HiveWhereOptimizer.h>
-#include <Storages/Hive/HiveBucketFilter.h>
-#include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/VirtualWarehousePool.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTPartition.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/queryToString.h>
+#include <Processors/Sources/NullSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <Storages/Hive/HiveBucketFilter.h>
+#include <Storages/Hive/HiveWhereOptimizer.h>
+#include <Storages/IStorage.h>
+#include <Storages/StorageCnchHive.h>
+#include <Storages/StorageInMemoryMetadata.h>
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
@@ -55,7 +54,6 @@ StorageCnchHive::~StorageCnchHive()
 
 void StorageCnchHive::shutdown()
 {
-
 }
 
 StorageCnchHive::StorageCnchHive(
@@ -70,7 +68,7 @@ StorageCnchHive::StorageCnchHive(
     const ColumnsDescription & columns_,
     const ConstraintsDescription & constraints_,
     ContextMutablePtr context_,
-    const CnchHiveSettings settings_)
+    const CnchHiveSettings & settings_)
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
     , CnchStorageCommonHelper(table_id_, remote_database_name_, remote_table_name_)
@@ -148,45 +146,38 @@ ASTPtr StorageCnchHive::extractKeyExpressionList(const ASTPtr & node)
 
 void StorageCnchHive::setProperties()
 {
-    if(!partition_by_ast)
+    if (!partition_by_ast)
         throw Exception("PARTITION BY cannot be empty", ErrorCodes::BAD_ARGUMENTS);
 
     auto all_columns = getColumns().getAllPhysical();
     partition_key_expr_list = extractKeyExpressionList(partition_by_ast);
     if (!partition_key_expr_list->children.empty())
     {
-        auto partition_key_syntax
-            = TreeRewriter(getContext()).analyze(partition_key_expr_list, all_columns);
-        partition_key_expr
-            = ExpressionAnalyzer(partition_key_expr_list, partition_key_syntax, getContext())
-                  .getActions(false);
+        auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list, all_columns);
+        partition_key_expr = ExpressionAnalyzer(partition_key_expr_list, partition_key_syntax, getContext()).getActions(false);
 
         partition_name_and_types = partition_key_expr->getSampleBlock().getNamesAndTypesList();
     }
 
-    if(cluster_by_ast)
+    if (cluster_by_ast)
     {
         cluster_by_expr_list = extractKeyExpressionList(cluster_by_ast->children.front());
 
-        auto cluster_by_key_syntax
-            = TreeRewriter(getContext()).analyze(cluster_by_expr_list, all_columns);
-        cluster_by_key_expr
-            = ExpressionAnalyzer(cluster_by_expr_list, cluster_by_key_syntax, getContext()).getActions(false);
+        auto cluster_by_key_syntax = TreeRewriter(getContext()).analyze(cluster_by_expr_list, all_columns);
+        cluster_by_key_expr = ExpressionAnalyzer(cluster_by_expr_list, cluster_by_key_syntax, getContext()).getActions(false);
 
         ASTLiteral * literal = cluster_by_ast->children.back()->as<ASTLiteral>();
         cluster_by_total_bucket_number = literal->value.get<Int64>();
         cluster_by_columns = cluster_by_key_expr->getSampleBlock().getNames();
     }
 
-    if(order_by_ast)
+    if (order_by_ast)
     {
         sorting_key_expr_list = extractKeyExpressionList(order_by_ast);
         if (!sorting_key_expr_list->children.empty())
         {
-            auto sorting_key_syntax
-                = TreeRewriter(getContext()).analyze(sorting_key_expr_list, all_columns);
-            sorting_key_expr
-                = ExpressionAnalyzer(sorting_key_expr_list, sorting_key_syntax, getContext()).getActions(false);
+            auto sorting_key_syntax = TreeRewriter(getContext()).analyze(sorting_key_expr_list, all_columns);
+            sorting_key_expr = ExpressionAnalyzer(sorting_key_expr_list, sorting_key_syntax, getContext()).getActions(false);
 
             sorting_name_and_types = sorting_key_expr->getSampleBlock().getNamesAndTypesList();
             sorting_key_columns = sorting_key_expr->getSampleBlock().getNames();
@@ -207,7 +198,7 @@ void StorageCnchHive::setProperties()
 
 void StorageCnchHive::checkStorageFormat()
 {
-    if(table == nullptr)
+    if (table == nullptr)
     {
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
         table = std::make_shared<Apache::Hadoop::Hive::Table>();
@@ -215,7 +206,7 @@ void StorageCnchHive::checkStorageFormat()
     }
 
     const String format = (*table).sd.outputFormat;
-    if(format.find("parquet") == String::npos)
+    if (format.find("parquet") == String::npos)
         throw Exception("CnchHive only support parquet format. Current format is " + format + " .", ErrorCodes::BAD_ARGUMENTS);
 }
 
@@ -226,42 +217,39 @@ bool StorageCnchHive::isBucketTable() const
 
 void StorageCnchHive::checkSortByKey()
 {
-    if(table == nullptr)
+    if (table == nullptr)
     {
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
         table = std::make_shared<Apache::Hadoop::Hive::Table>();
         hms_client->getTable(*table, remote_database, remote_table);
     }
 
-    auto sortCols = (*table).sd.sortCols;
+    auto sortcols = (*table).sd.sortCols;
     auto sorting_key_expr_list_local = extractKeyExpressionList(order_by_ast);
-    if(sorting_key_expr_list_local->children.size() != sortCols.size())
-        throw Exception("CnchHive sort cols doesn't match ." , ErrorCodes::BAD_ARGUMENTS);
+    if (sorting_key_expr_list_local->children.size() != sortcols.size())
+        throw Exception("CnchHive sort cols doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 
     if (!sorting_key_expr_list_local->children.empty())
     {
         auto all_columns = getColumns().getAllPhysical();
-        auto sorting_key_syntax
-            = TreeRewriter(getContext()).analyze(sorting_key_expr_list_local, all_columns);
-        auto sorting_key_expr_local
-            = ExpressionAnalyzer(sorting_key_expr_list_local, sorting_key_syntax, getContext())
-                  .getActions(false);
+        auto sorting_key_syntax = TreeRewriter(getContext()).analyze(sorting_key_expr_list_local, all_columns);
+        auto sorting_key_expr_local = ExpressionAnalyzer(sorting_key_expr_list_local, sorting_key_syntax, getContext()).getActions(false);
 
         auto sorting_name_and_types_local = sorting_key_expr_local->getSampleBlock().getNamesAndTypesList();
         for (const ASTPtr & ast : sorting_key_expr_list_local->children)
         {
             String col_name = ast->getColumnName();
             size_t i = 0;
-            for(; i < sortCols.size(); ++i)
+            for (; i < sortcols.size(); ++i)
             {
-                if(sortCols[i].col == col_name)
+                if (sortcols[i].col == col_name)
                 {
                     sorting_key_columns.push_back(col_name);
                     break;
                 }
             }
 
-            if(i >= sortCols.size())
+            if (i >= sortcols.size())
                 throw Exception("CnchHive hiveBucket col doesn't match .", ErrorCodes::BAD_ARGUMENTS);
         }
     }
@@ -269,68 +257,65 @@ void StorageCnchHive::checkSortByKey()
 
 void StorageCnchHive::checkPartitionByKey()
 {
-    if(table == nullptr)
+    if (table == nullptr)
     {
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
         table = std::make_shared<Apache::Hadoop::Hive::Table>();
         hms_client->getTable(*table, remote_database, remote_table);
     }
 
-    std::vector<FieldSchema> partitionKeys = (*table).partitionKeys;
+    std::vector<FieldSchema> partitionkeys = (*table).partitionKeys;
     auto partition_key_expr_list_local = extractKeyExpressionList(partition_by_ast);
-    if(partition_key_expr_list_local->children.size() != partitionKeys.size())
-        throw Exception("CnchHive partition Key doesn't match ." , ErrorCodes::BAD_ARGUMENTS);
+    if (partition_key_expr_list_local->children.size() != partitionkeys.size())
+        throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 
     if (!partition_key_expr_list_local->children.empty())
     {
         auto all_columns = getColumns().getAllPhysical();
-        auto partition_key_syntax
-            = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
+        auto partition_key_syntax = TreeRewriter(getContext()).analyze(partition_key_expr_list_local, all_columns);
         auto partition_key_expr_local
-            = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext())
-                  .getActions(false);
+            = ExpressionAnalyzer(partition_key_expr_list_local, partition_key_syntax, getContext()).getActions(false);
 
         auto partition_name_and_types_local = partition_key_expr_local->getSampleBlock().getNamesAndTypesList();
         for (const NameAndTypePair & column_data : partition_name_and_types_local)
         {
             const String col_name = column_data.name;
             size_t i = 0;
-            for(; i < partitionKeys.size(); i++)
+            for (; i < partitionkeys.size(); i++)
             {
-                if(partitionKeys[i].name == col_name)
+                if (partitionkeys[i].name == col_name)
                     break;
             }
-            if(i >= partitionKeys.size())
-                throw Exception("CnchHive partition Key doesn't match ." , ErrorCodes::BAD_ARGUMENTS);
+            if (i >= partitionkeys.size())
+                throw Exception("CnchHive partition Key doesn't match .", ErrorCodes::BAD_ARGUMENTS);
         }
     }
 }
 
 void StorageCnchHive::checkClusterByKey()
 {
-    if(table == nullptr)
+    if (table == nullptr)
     {
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
         table = std::make_shared<Apache::Hadoop::Hive::Table>();
         hms_client->getTable(*table, remote_database, remote_table);
     }
 
-    auto hivebucket_cols = (*table).sd.bucketCols;
-    if(cluster_by_ast)
+    const auto & hivebucket_cols = (*table).sd.bucketCols;
+    if (cluster_by_ast)
     {
         auto cluster_by_expr_list_local = extractKeyExpressionList(cluster_by_ast->children.front());
-        if(cluster_by_expr_list_local->children.size() != hivebucket_cols.size())
-            throw Exception("CnchHive hiveBucket doesn't match." , ErrorCodes::BAD_ARGUMENTS);
+        if (cluster_by_expr_list_local->children.size() != hivebucket_cols.size())
+            throw Exception("CnchHive hiveBucket doesn't match.", ErrorCodes::BAD_ARGUMENTS);
 
         auto all_columns = getColumns().getAllPhysical();
-        auto cluster_by_key_syntax
-            = TreeRewriter(getContext()).analyze(cluster_by_expr_list_local, all_columns);
+        auto cluster_by_key_syntax = TreeRewriter(getContext()).analyze(cluster_by_expr_list_local, all_columns);
         auto cluster_by_key_expr_local
             = ExpressionAnalyzer(cluster_by_expr_list_local, cluster_by_key_syntax, getContext()).getActions(false);
 
         ASTLiteral * literal = cluster_by_ast->children.back()->as<ASTLiteral>();
         auto cluster_by_total_bucket_number_local = literal->value.get<Int64>();
-        if((*table).sd.numBuckets != cluster_by_total_bucket_number_local)
+        if ((*table).sd.numBuckets != cluster_by_total_bucket_number_local)
             throw Exception("CnchHive hiveBucket number doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 
         auto cluster_by_columns_local = cluster_by_key_expr_local->getSampleBlock().getNames();
@@ -338,13 +323,16 @@ void StorageCnchHive::checkClusterByKey()
         size_t cluster_by_expr_size = cluster_by_expr_list_local->children.size();
         for (size_t i = 0; i < cluster_by_expr_size; ++i)
         {
-            String clustering_key_column = cluster_by_expr_list_local->children[i]->getColumnName();
-            if (auto find = std::find((*table).sd.bucketCols.begin(), (*table).sd.bucketCols.end(), clustering_key_column); find == (*table).sd.bucketCols.end())
-                throw Exception("CnchHive hiveBucket col doesn't match . clustering_key_column is not hiveBucket col" + clustering_key_column + " .", ErrorCodes::BAD_ARGUMENTS);
+            const String clustering_key_column = cluster_by_expr_list_local->children[i]->getColumnName();
+            auto it = std::find(hivebucket_cols.begin(), hivebucket_cols.end(), clustering_key_column);
+            if (it != hivebucket_cols.end())
+                throw Exception(
+                    "CnchHive hiveBucket col doesn't match . clustering_key_column is not hiveBucket col" + clustering_key_column + " .",
+                    ErrorCodes::BAD_ARGUMENTS);
         }
     }
-    else if(!hivebucket_cols.empty())
-        throw Exception("CnchHive hiveBucket doesn't match ." , ErrorCodes::BAD_ARGUMENTS);
+    else if (!hivebucket_cols.empty())
+        throw Exception("CnchHive hiveBucket doesn't match .", ErrorCodes::BAD_ARGUMENTS);
 }
 
 QueryProcessingStage::Enum StorageCnchHive::getQueryProcessingStage(
@@ -373,10 +361,10 @@ HiveDataPartsCNCHVector StorageCnchHive::prepareReadContext(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr local_context,
-    const unsigned num_streams)
+    unsigned num_streams)
 {
     auto txn = local_context->getCurrentTransaction();
-    if(local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
+    if (local_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
         local_context->getCnchTransactionCoordinator().touchActiveTimestampByTable(getStorageID(), txn);
 
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
@@ -396,10 +384,7 @@ HiveDataPartsCNCHVector StorageCnchHive::prepareReadContext(
 }
 
 HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
-    const Names & /*column_names_to_return*/,
-    ContextPtr local_context,
-    const SelectQueryInfo & query_info,
-    unsigned num_streams)
+    const Names & /*column_names_to_return*/, ContextPtr local_context, const SelectQueryInfo & query_info, unsigned num_streams)
 {
     HiveDataPartsCNCHVector data_parts;
 
@@ -411,9 +396,9 @@ HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
         HivePartitionVector pruned_partitions = selectPartitionsByPredicate(local_context, query_info, hms_client);
         // LOG_INFO(log, std::fixed << std::setprecision(3) << "select partitions by predicate in " << watch.elapsedSeconds() << " sec.");
         // TEST_LOG(testlog, "select partitions by predicate.");
-        auto bucketNums = getSelectedBucketNumbers(query_info, local_context);
+        auto bucketnums = getSelectedBucketNumbers(query_info, local_context);
         LOG_TRACE(log, " partition size = {}", pruned_partitions.size());
-        data_parts = getDataPartsInPartitions(hms_client, pruned_partitions, local_context, query_info, num_streams);
+        data_parts = getDataPartsInPartitions(hms_client, pruned_partitions, local_context, query_info, num_streams, bucketnums);
         // LOG_INFO(log, std::fixed << std::setprecision(3) << "get dataparts in partitions in " << watch.elapsedSeconds() << " sec.");
         // TEST_LOG(testlog, "get dataparts in partitions.");
         LOG_DEBUG(log, "Total number of parts get from hive: {}", data_parts.size());
@@ -428,11 +413,8 @@ HiveDataPartsCNCHVector StorageCnchHive::selectPartsToRead(
 }
 
 HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
-    ContextPtr local_context ,
-    const SelectQueryInfo & query_info,
-    std::shared_ptr<HiveMetastoreClient> & hms_client)
+    ContextPtr local_context, const SelectQueryInfo & query_info, std::shared_ptr<HiveMetastoreClient> & hms_client)
 {
-
     // // HivePartitionVector result;
     // HivePartitionVector all;
     // // ASTSelectQuery & select_ast = typeid_cast<ASTSelectQuery &>(*query_info.query);
@@ -464,23 +446,23 @@ HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
     /// (2)only Comparison Function can be effective,
     /// if where condition is "app_name IN ('aweme', 'test1', 'test2') AND (date = '20220105') AND (live_id = 1)"
     /// it will throw exception, so we need to get useful filter, avoid throw exception.
-    if(!where_conditions.empty())
+    if (!where_conditions.empty())
     {
-        is_can_convert = optimizer.ConvertWhereToUsefullFilter(where_conditions, can_covert_to_filter);
+        is_can_convert = optimizer.convertWhereToUsefullFilter(where_conditions, can_covert_to_filter);
     }
 
-    if(select_ast.implicitWhere())
+    if (select_ast.implicitWhere())
     {
-        if(is_all_usefull)
+        if (is_all_usefull)
         {
             /// case: app_name IN ('test', 'test1')
             /// this condition will push to where, need convert it to "(app_name = 'test') or (app_name = 'test1')"
-            if(is_can_convert)
+            if (is_can_convert)
                 all_usefull_filter = all_usefull_filter + " AND " + can_covert_to_filter;
 
             LOG_TRACE(log, "Cnchhive all_usefull_filter:  {} ", all_usefull_filter);
 
-            all = hms_client->getPartitionsByFilter(shared_from_this() , remote_database, remote_table, table_path, all_usefull_filter);
+            all = hms_client->getPartitionsByFilter(shared_from_this(), remote_database, remote_table, table_path, all_usefull_filter);
 
             LOG_TRACE(log, "CnchHive getPartitionsByFilter size is {}", all.size());
 
@@ -491,15 +473,16 @@ HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
             /// case: app_name IN ('test')
             /// this condition will push to implicitwhere(app_name is partition key), need to convert it to "app_name = ('test')"
             String implicit_where_filter;
-            bool implicit_can_convert = optimizer.ConvertImplicitWhereToUsefullFilter(implicit_where_filter);
-            if(implicit_can_convert)
+            bool implicit_can_convert = optimizer.convertImplicitWhereToUsefullFilter(implicit_where_filter);
+            if (implicit_can_convert)
             {
-                if(is_can_convert)
+                if (is_can_convert)
                     implicit_where_filter = implicit_where_filter + " AND " + can_covert_to_filter;
 
                 LOG_TRACE(log, "Cnchhive can_covert_to_filter:  {}", implicit_where_filter);
 
-                all = hms_client->getPartitionsByFilter(shared_from_this() , remote_database, remote_table, table_path, implicit_where_filter);
+                all = hms_client->getPartitionsByFilter(
+                    shared_from_this(), remote_database, remote_table, table_path, implicit_where_filter);
 
                 LOG_TRACE(log, "CnchHive getPartitionsByFilter size is {}", all.size());
 
@@ -528,16 +511,17 @@ HivePartitionVector StorageCnchHive::selectPartitionsByPredicate(
 /// TODO: handle more than one bucket column expression
 std::set<Int64> StorageCnchHive::getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & local_context)
 {
-    if(!isBucketTable() || cluster_by_columns.size() != 1)
+    if (!isBucketTable() || cluster_by_columns.size() != 1)
         return {};
 
     std::set<Int64> bucket_numbers;
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
     HiveWhereOptimizer optimizer(query_info, local_context, shared_from_this());
-    ASTs bucket_column_expressions = extractBucketColumnExpression(optimizer.getWhereOptimizerConditions(where_expression), cluster_by_columns);
+    ASTs bucket_column_expressions
+        = extractBucketColumnExpression(optimizer.getWhereOptimizerConditions(where_expression), cluster_by_columns);
 
     LOG_TRACE(log, "bucket column expression size: {}", bucket_column_expressions.size());
-    if(bucket_column_expressions.empty() || bucket_column_expressions.size() > 1)
+    if (bucket_column_expressions.empty() || bucket_column_expressions.size() > 1)
         return {};
 
     Block sample_block;
@@ -554,7 +538,7 @@ std::set<Int64> StorageCnchHive::getSelectedBucketNumbers(const SelectQueryInfo 
     auto bucket_number = sample_block.getByPosition(sample_block.columns() - 1).column->getInt(0); // this block only contains one row
     bucket_numbers.insert(bucket_number);
 
-    for(auto bucket_number_elem : bucket_numbers)
+    for (auto bucket_number_elem : bucket_numbers)
         LOG_TRACE(log, "bucket_number: {}", bucket_number_elem);
 
     return bucket_numbers;
@@ -568,22 +552,22 @@ String StorageCnchHive::getFullTablePath()
         temp_table = table;
     }
 
-    if(temp_table == nullptr)
+    if (temp_table == nullptr)
     {
         LOG_TRACE(log, " get table path, remote_psm: {}", remote_psm);
         auto hms_client = HiveMetastoreClientFactory::instance().getOrCreate(remote_psm, settings);
-        auto temp_table_ = std::make_shared<Apache::Hadoop::Hive::Table>();
-        hms_client->getTable(*temp_table_, remote_database, remote_table);
+        auto local_temp_table = std::make_shared<Apache::Hadoop::Hive::Table>();
+        hms_client->getTable(*local_temp_table, remote_database, remote_table);
 
         std::lock_guard lock(mutex);
-        if(table == nullptr)
-            table = temp_table_;
+        if (table == nullptr)
+            table = local_temp_table;
     }
 
     Poco::URI uri((*table).sd.location);
     LOG_TRACE(log, "table location: {}", (*table).sd.location);
 
-    if(uri.getScheme() == "hdfs")
+    if (uri.getScheme() == "hdfs")
     {
         return uri.getPath();
     }
@@ -599,15 +583,16 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
     HivePartitionVector & partitions,
     ContextPtr local_context,
     const SelectQueryInfo & query_info,
-    unsigned num_streams)
+    unsigned num_streams,
+    const std::set<Int64> & required_bucket_numbers)
 {
-    if(partitions.empty())
+    if (partitions.empty())
         return {};
 
     HiveDataPartsCNCHVector hive_files;
     std::mutex hive_files_mutex;
 
-    if(num_streams > partitions.size())
+    if (num_streams > partitions.size())
         num_streams = partitions.size();
 
     ThreadPool thread_pool(num_streams);
@@ -615,16 +600,15 @@ HiveDataPartsCNCHVector StorageCnchHive::getDataPartsInPartitions(
 
     for (auto & partition : partitions)
     {
-        thread_pool.scheduleOrThrow([&]
-        {
-            auto hive_files_in_partition = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info);
-            if(!hive_files_in_partition.empty())
+        thread_pool.scheduleOrThrow([&] {
+            auto hive_files_in_partition
+                = collectHiveFilesFromPartition(hms_client, partition, local_context, query_info, required_bucket_numbers);
+            if (!hive_files_in_partition.empty())
             {
                 std::lock_guard<std::mutex> lock(hive_files_mutex);
                 hive_files.insert(std::end(hive_files), std::begin(hive_files_in_partition), std::end(hive_files_in_partition));
             }
         });
-
     }
     thread_pool.wait();
     // exception_handler.throwIfException();
@@ -638,17 +622,15 @@ HiveDataPartsCNCHVector StorageCnchHive::collectHiveFilesFromPartition(
     std::shared_ptr<HiveMetastoreClient> & hms_client,
     HivePartitionPtr & partition,
     ContextPtr local_context,
-    const SelectQueryInfo & /*query_info*/)
+    const SelectQueryInfo & /*query_info*/,
+    const std::set<Int64> & required_bucket_numbers)
 {
-    return hms_client->getDataPartsInPartition(shared_from_this(), partition, local_context->getHdfsConnectionParams(), {});
+    return hms_client->getDataPartsInPartition(
+        shared_from_this(), partition, local_context->getHdfsConnectionParams(), required_bucket_numbers);
 }
 
-void StorageCnchHive::collectResource(
-    ContextPtr local_context,
-    const HiveDataPartsCNCHVector & parts,
-    const String & local_table_name)
+void StorageCnchHive::collectResource(ContextPtr local_context, const HiveDataPartsCNCHVector & parts, const String & local_table_name)
 {
-    LOG_TRACE(log, " collectResource ");
     auto cnch_resource = local_context->getCnchServerResource();
     auto create_table_query = getCreateQueryForCloudTable(getCreateTableSql(), local_table_name, local_context);
 
@@ -656,10 +638,7 @@ void StorageCnchHive::collectResource(
 
     cnch_resource->setWorkerGroup(local_context->getCurrentWorkerGroup());
     cnch_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, local_table_name);
-
     cnch_resource->addDataParts(getStorageUUID(), parts);
-
-    LOG_TRACE(log, " finish collectResource ");
 }
 
 Pipe StorageCnchHive::read(
@@ -746,50 +725,53 @@ void registerStorageCnchHive(StorageFactory & factory)
     };
 
     LOG_DEBUG(&Poco::Logger::get("registerStorageCnchHive"), "registerStorageCnchHive ");
-    factory.registerStorage("CnchHive", [](const StorageFactory::Arguments & args)
-    {
-        ASTs & engine_args = args.engine_args;
-        if(engine_args.size() != 3)
-            throw Exception("Storage CnchHive require 3 parameaters: "
-                            " remote_psm, remote_database, remote_table. ", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+    factory.registerStorage(
+        "CnchHive",
+        [](const StorageFactory::Arguments & args) {
+            ASTs & engine_args = args.engine_args;
+            if (engine_args.size() != 3)
+                throw Exception(
+                    "Storage CnchHive require 3 parameaters: "
+                    " remote_psm, remote_database, remote_table. ",
+                    ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        ASTPtr partition_by_ast = nullptr;
-        if (args.storage_def->partition_by)
-            partition_by_ast = args.storage_def->partition_by->ptr();
+            ASTPtr partition_by_ast = nullptr;
+            if (args.storage_def->partition_by)
+                partition_by_ast = args.storage_def->partition_by->ptr();
 
-        ASTPtr cluster_by_ast = nullptr;
-        if (args.storage_def->cluster_by)
-            cluster_by_ast = args.storage_def->cluster_by->ptr();
+            ASTPtr cluster_by_ast = nullptr;
+            if (args.storage_def->cluster_by)
+                cluster_by_ast = args.storage_def->cluster_by->ptr();
 
-        ASTPtr order_by_ast = nullptr;
-        if (args.storage_def->order_by)
-            order_by_ast = args.storage_def->order_by->ptr();
+            ASTPtr order_by_ast = nullptr;
+            if (args.storage_def->order_by)
+                order_by_ast = args.storage_def->order_by->ptr();
 
-        engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.getLocalContext());
-        engine_args[1] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[1], args.getLocalContext());
-        engine_args[2] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[2], args.getLocalContext());
+            engine_args[0] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[0], args.getLocalContext());
+            engine_args[1] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[1], args.getLocalContext());
+            engine_args[2] = evaluateConstantExpressionOrIdentifierAsLiteral(engine_args[2], args.getLocalContext());
 
-        const String & remote_psm = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
-        const String & remote_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
-        const String & remote_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
-        CnchHiveSettings storage_settings = args.getContext()->getCnchHiveSettings();
-        storage_settings.loadFromQuery(*args.storage_def);
+            const String & remote_psm = engine_args[0]->as<ASTLiteral &>().value.safeGet<String>();
+            const String & remote_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
+            const String & remote_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
+            CnchHiveSettings storage_settings = args.getContext()->getCnchHiveSettings();
+            storage_settings.loadFromQuery(*args.storage_def);
 
-        return StorageCnchHive::create(
-            args.table_id,
-            remote_psm,
-            remote_database,
-            remote_table,
-            partition_by_ast,
-            cluster_by_ast,
-            order_by_ast,
-            args.create,
-            args.columns,
-            args.constraints,
-            args.getContext(),
-            storage_settings);
-
-    }, features);
+            return StorageCnchHive::create(
+                args.table_id,
+                remote_psm,
+                remote_database,
+                remote_table,
+                partition_by_ast,
+                cluster_by_ast,
+                order_by_ast,
+                args.create,
+                args.columns,
+                args.constraints,
+                args.getContext(),
+                storage_settings);
+        },
+        features);
 }
 
 }

@@ -570,7 +570,7 @@ namespace DB
         const Block & header_,
         std::shared_ptr<arrow::Schema> schema_,
         const std::string & format_name_,
-        const std::map<String, String> partition_kv_) : header(header_), format_name(format_name_), partition_kv(partition_kv_)
+        const std::map<String, String> & partition_kv_) : header(header_), format_name(format_name_), partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -594,17 +594,13 @@ namespace DB
         NameToColumnPtr name_to_column_ptr;
         for (const auto& column_name : table->ColumnNames())
         {
-            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), " CnchHiveThreadSelectBlockInputProcessor arrow table name = {}", column_name);
             std::shared_ptr<arrow::ChunkedArray> arrow_column = table->GetColumnByName(column_name);
             name_to_column_ptr[column_name] = arrow_column;
         }
 
-        LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor header col size = {}", header.columns());
         for (size_t column_i = 0, columns = header.columns(); column_i < columns; ++column_i)
         {
             const ColumnWithTypeAndName & header_column = header.getByPosition(column_i);
-
-            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor col name = {}", header_column.name);
 
             String column_name = header_column.name;
             String nested_table_name = Nested::extractTableName(header_column.name);
@@ -656,8 +652,6 @@ namespace DB
             column.column = castColumn(column, header_column.type);
             column.type = header_column.type;
             num_rows = column.column->size();
-
-            LOG_TRACE(&Poco::Logger::get("arrowTableToCHChunk"), "CnchHiveThreadSelectBlockInputProcessor col rows = {}", num_rows);
 
             columns_list.push_back(std::move(column.column));
         }

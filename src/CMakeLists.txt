@@ -558,7 +558,7 @@ if (USE_ROCKSDB)
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${ROCKSDB_INCLUDE_DIR})
 endif()
 
-if(USE_HIVE)
+if (USE_HIVE)
     dbms_target_link_libraries(PRIVATE ${HIVE_METASTORE_LIBRARY})
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HIVE_METASTORE_INCLUDE_DIR})
 endif()

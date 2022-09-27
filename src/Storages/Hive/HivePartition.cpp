@@ -2,74 +2,66 @@
 
 namespace DB
 {
-
-HivePartition::HivePartition(const String & partition_id_, HivePartitionInfo & info)
-             : partition_id(partition_id_)
-             , info_(info)
-{
-
-}
-
-HivePartition::~HivePartition()
+HivePartition::HivePartition(const String & partition_id_, HivePartitionInfo & info_) : partition_id(partition_id_), info(info_)
 {
 }
 
-const String HivePartition::getID()
+HivePartition::~HivePartition() = default;
+
+const String & HivePartition::getID()
 {
     return partition_id;
 }
 
-const String HivePartition::getTablePath()
+const String & HivePartition::getTablePath() const
 {
-    return info_.table_path;
+    return info.table_path;
 }
 
-const String HivePartition::getPartitionPath()
+const String & HivePartition::getPartitionPath()
 {
-    return info_.getLocation();
+    return info.getLocation();
 }
 
-const String HivePartition::getTableName()
+const String & HivePartition::getTableName() const
 {
-    return info_.tableName;
+    return info.table_name;
 }
 
-const String HivePartition::getDBName()
+const String & HivePartition::getDBName() const
 {
-    return info_.dbName;
+    return info.db_name;
 }
 
-int32_t HivePartition::getCreateTime()
+int32_t HivePartition::getCreateTime() const
 {
-    return info_.createTime;
+    return info.create_time;
 }
 
-int32_t HivePartition::getLastAccessTime()
+int32_t HivePartition::getLastAccessTime() const
 {
-    return info_.lastAccessTime;
+    return info.last_access_time;
 }
 
-const std::vector<String> HivePartition::getValues()
+const std::vector<String> & HivePartition::getValues() const
 {
-    return info_.values;
+    return info.values;
 }
 
-const String HivePartition::getInputFormat()
+const String & HivePartition::getInputFormat() const
 {
-    return info_.inputFormat;
+    return info.input_format;
 }
 
-const String HivePartition::getOutputFromat()
+const String & HivePartition::getOutputFromat() const
 {
-    return info_.outputFormat;
+    return info.output_format;
 }
 
-const std::vector<String> HivePartition::getPartsName()
+const std::vector<String> & HivePartition::getPartsName() const
 {
-    return info_.parts_name;
+    return info.parts_name;
 }
-
-
 
 
 }

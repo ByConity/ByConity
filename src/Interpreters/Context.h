@@ -27,8 +27,6 @@
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <DaemonManager/DaemonManagerClient_fwd.h>
 #include <DataStreams/BlockStreamProfileInfo.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
-
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"

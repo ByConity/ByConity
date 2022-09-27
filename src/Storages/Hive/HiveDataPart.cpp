@@ -1,37 +1,36 @@
-#include <Storages/Hive/HiveDataPart.h>
-#include <Storages/StorageCnchHive.h>
-#include <arrow/status.h>
-#include <arrow/api.h>
-#include <parquet/file_reader.h>
-#include <parquet/statistics.h>
-#include <parquet/arrow/reader.h>
-#include <arrow/buffer.h>
 #include <Processors/Formats/Impl/ArrowBlockInputFormat.h>
 #include <Processors/Formats/Impl/ArrowBufferedStreams.h>
+#include <Storages/Hive/HiveDataPart.h>
+#include <Storages/StorageCnchHive.h>
+#include <arrow/api.h>
+#include <arrow/buffer.h>
+#include <arrow/status.h>
+#include <parquet/arrow/reader.h>
+#include <parquet/file_reader.h>
+#include <parquet/statistics.h>
 
 
 namespace DB
 {
-
-#define THROW_ARROW_NOT_OK(status)                                     \
-    do                                                                 \
-    {                                                                  \
-        if(const ::arrow::Status & _s = (status); !_s.ok())            \
+#define THROW_ARROW_NOT_OK(status) \
+    do \
+    { \
+        if (const ::arrow::Status & _s = (status); !_s.ok()) \
             throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
-    } while(false)                                                     \
+    } while (false)
 
 template <class FieldType, class StatisticsType>
 Range createRangeFromParquetStatistics(std::shared_ptr<StatisticsType> stats)
 {
     ///
-    if(!stats->HasMinMax())
+    if (!stats->HasMinMax())
         return Range();
     return Range(FieldType(stats->min()), true, FieldType(stats->max()), true);
 }
 
 Range createRangeFromParquetStatistics(std::shared_ptr<parquet::ByteArrayStatistics> stats)
 {
-    if(!stats->HasMinMax())
+    if (!stats->HasMinMax())
         return Range();
 
     String min_val(reinterpret_cast<const char *>(stats->min().ptr), stats->min().len);
@@ -54,11 +53,12 @@ HiveDataPart::HiveDataPart(
     , hdfs_params(hdfs_params_)
     , skip_splits(skip_splits_)
     , index_names_and_types(index_names_and_types_)
-{}
+{
+}
 
 String HiveDataPart::getFullDataPartPath() const
 {
-    return relative_path + "/" + name ;
+    return relative_path + "/" + name;
 }
 
 String HiveDataPart::getFullTablePath() const
@@ -66,13 +66,11 @@ String HiveDataPart::getFullTablePath() const
     return relative_path;
 }
 
-HiveDataPart::~HiveDataPart()
-{
-}
+HiveDataPart::~HiveDataPart() = default;
 
 void HiveDataPart::loadSplitMinMaxIndexes()
 {
-    if(split_minmax_idxes_loaded)
+    if (split_minmax_idxes_loaded)
         return;
     loadSplitMinMaxIndexesImpl();
     split_minmax_idxes_loaded = true;
@@ -80,7 +78,7 @@ void HiveDataPart::loadSplitMinMaxIndexes()
 
 size_t HiveDataPart::getTotalRowGroups() const
 {
-    if(!reader)
+    if (!reader)
         prepareReader();
 
     auto meta = reader->parquet_reader()->metadata();

@@ -1,20 +1,20 @@
-#include <Storages/Hive/HiveBucketFilter.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/ExpressionActions.h>
-#include <Parsers/queryToString.h>
+#include <Columns/ColumnNullable.h>
+#include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnString.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Interpreters/ExpressionAnalyzer.h>
+#include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/queryToString.h>
+#include <Storages/Hive/HiveBucketFilter.h>
 
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -23,7 +23,7 @@ namespace ErrorCodes
 #define COLUMN_BUCKET_NUMBER "_bucket_number_internal"
 #define MAX_VALUE 2147483647
 
-void createHiveBucketColumn(Block & block, const Block & bucket_columns, const Int64 total_bucket_num, const ContextPtr & /*context*/)
+void createHiveBucketColumn(Block & block, const Block & bucket_columns, const Int64 & total_bucket_num, const ContextPtr & /*context*/)
 {
     ColumnPtr bucket_number_column;
 
@@ -32,7 +32,7 @@ void createHiveBucketColumn(Block & block, const Block & bucket_columns, const I
     block.insert(ColumnWithTypeAndName{std::move(bucket_number_column), std::make_shared<DataTypeUInt64>(), COLUMN_BUCKET_NUMBER});
 }
 
-Int64 getHiveBucket(DataTypePtr & type, ColumnPtr & column, String & name, const Int64 total_bucket_num)
+Int64 getHiveBucket(DataTypePtr & type, ColumnPtr & column, String & name, const Int64 & total_bucket_num)
 {
     return (getBuckHashCode(type, column, name) & MAX_VALUE) % total_bucket_num;
 }
@@ -40,7 +40,7 @@ Int64 getHiveBucket(DataTypePtr & type, ColumnPtr & column, String & name, const
 Int64 hashBytes(const String & str, int start, int length)
 {
     Int64 result = 0;
-    for(int i = start; i < length; ++i)
+    for (int i = start; i < length; ++i)
     {
         result = result * 31 + str[i];
     }
@@ -50,38 +50,37 @@ Int64 hashBytes(const String & str, int start, int length)
 
 Int64 getBuckHashCode(DataTypePtr & type, ColumnPtr & column, String & name)
 {
-    DataTypePtr striped_type = type->isNullable()
-            ? static_cast<const DataTypeNullable *>(type.get())->getNestedType()
-            : type;
+    DataTypePtr striped_type = type->isNullable() ? static_cast<const DataTypeNullable *>(type.get())->getNestedType() : type;
     Int64 hashcode = 0;
-    // LOG_TRACE(&Logger::get("getBuckHashCode"), " bucket col type = " << striped_type->getName());
     if (WhichDataType(striped_type).isString())
     {
         hashcode = hashBytes(name, 1, name.length() - 1);
     }
-    else if(WhichDataType(striped_type).isNativeUInt() || WhichDataType(striped_type).isInt())
+    else if (WhichDataType(striped_type).isNativeUInt() || WhichDataType(striped_type).isInt())
     {
         hashcode = column->getInt(0);
     }
-    else if(WhichDataType(striped_type).isInt64())
+    else if (WhichDataType(striped_type).isInt64())
     {
-        Int64 bigintValue = column->getInt(0);
-        hashcode = ((bigintValue >> 32) ^ bigintValue);
+        Int64 bigintvalue = column->getInt(0);
+        hashcode = ((bigintvalue >> 32) ^ bigintvalue);
     }
     else
     {
-        throw Exception("Computation of Hive bucket hashCode is not supported for Hive primitive type: " + striped_type->getName() + ".", ErrorCodes::BAD_ARGUMENTS);
+        throw Exception(
+            "Computation of Hive bucket hashCode is not supported for Hive primitive type: " + striped_type->getName() + ".",
+            ErrorCodes::BAD_ARGUMENTS);
     }
 
     return hashcode;
 }
 
-ColumnPtr createColumnWithHiveHash(Block & block, const Block & bucket_columns, const Int64 total_bucket_num)
+ColumnPtr createColumnWithHiveHash(Block & block, const Block & bucket_columns, const Int64 & total_bucket_num)
 {
     auto result_column = ColumnUInt64::create();
     auto bucket_column_type = bucket_columns.getByPosition(0).type;
 
-    for(const auto & column : block.getColumnsWithTypeAndName())
+    for (const auto & column : block.getColumnsWithTypeAndName())
     {
         auto col = column.column;
         auto name = column.name;
@@ -97,13 +96,11 @@ ColumnPtr createColumnWithHiveHash(Block & block, const Block & bucket_columns, 
 ASTs extractBucketColumnExpression(const ASTs & conditions, Names bucket_columns)
 {
     ASTs res;
-    if(conditions.empty())
+    if (conditions.empty())
         return res;
 
-    for(const auto & condition : conditions)
+    for (const auto & condition : conditions)
     {
-        // LOG_TRACE(&Logger::get("getBuckHashCode"), " condition: " << queryToString(condition));
-
         const auto & ast_func = typeid_cast<const ASTFunction *>(condition.get());
         if (!ast_func)
             continue;
@@ -114,15 +111,13 @@ ASTs extractBucketColumnExpression(const ASTs & conditions, Names bucket_columns
         const auto & iden = typeid_cast<const ASTIdentifier *>(ast_func->arguments->children[0].get());
         const auto & literal = typeid_cast<const ASTLiteral *>(ast_func->arguments->children[1].get());
 
-        if(iden && literal)
+        if (iden && literal)
         {
-            String name = iden->name();
-            if(std::find(bucket_columns.begin(), bucket_columns.end(), name) == bucket_columns.end())
+            if (std::find(bucket_columns.begin(), bucket_columns.end(), iden->name()) == bucket_columns.end())
                 continue;
 
             res.push_back(condition);
         }
-
     }
     return res;
 }
