@@ -379,6 +379,8 @@ public:
     /// Returns full path to part dir
     String getFullPath() const;
 
+    String getMvccFullPath(const String & file_name) const;
+
     /// MOCK for MergeTreeCNCHDataDumper
     // void setPreparedIndex(IndexPtr index_) { prepared_index = std::move(index_); }
     // const IndexPtr & getPreparedIndex() const { return prepared_index; }

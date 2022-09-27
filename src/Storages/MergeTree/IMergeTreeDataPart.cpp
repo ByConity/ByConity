@@ -722,6 +722,39 @@ String IMergeTreeDataPart::getFullRelativePath() const
     return fs::path(storage.relative_data_path) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
 }
 
+String IMergeTreeDataPart::getMvccFullPath(const String & file_name) const
+{
+    /// For base part
+    if (!isPartial())
+        return getFullPath();
+
+    /// For delta part
+    auto checksums = getChecksums();
+    auto it = checksums->files.find(file_name);
+    if (it == checksums->files.end())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find file: {} in checksums of part: {}. This is bug.", file_name, relative_path);
+    auto file_mutation = it->second.mutation;
+
+    for (IMergeTreeDataPartPtr part = shared_from_this();; part = part->prev_part)
+    {
+        if (!part)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "File {} with  {} not found in delta chain of part {}: no more part",
+                file_name, file_mutation, relative_path);
+
+        if (file_mutation == part->info.mutation)
+            return part->getFullPath();
+        else if (file_mutation > part->info.mutation)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "File {} with {} not found in delta chain of part {}: already got smaller part",
+                file_name, file_mutation, relative_path);
+
+        LOG_TRACE(&Poco::Logger::get(__func__), "Checked {} for {} with {}", part->name, file_name, file_mutation);
+    }
+}
+
 void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency)
 {
     assertOnDisk();

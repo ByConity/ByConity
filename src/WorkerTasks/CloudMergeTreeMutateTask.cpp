@@ -1,10 +1,8 @@
 #include <WorkerTasks/CloudMergeTreeMutateTask.h>
 
-#include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/commitCnchParts.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <WorkerTasks/MergeTreeDataMutator.h>
 
 namespace DB
@@ -30,11 +28,6 @@ void CloudMergeTreeMutateTask::executeImpl()
 
     MergeTreeDataMutator mutate_executor(storage, getContext()->getSettingsRef().background_pool_size);
     auto data_parts = mutate_executor.mutatePartsToTemporaryParts(params, *manipulation_entry, getContext(), lock_holder);
-
-    for (auto & data_part: data_parts)
-        data_part->mutation_commit_time = params.txn_id;
-
-    // dumpAndCommitCnchParts(storage, ManipulationType::Mutate, temp_parts, context, params.task_id);
 
     if (isCancelled())
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);

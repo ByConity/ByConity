@@ -187,6 +187,8 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
         ReservationPtr reserved_space = table->reserveSpaceOnLocal(estimated_space_for_result);  // TODO: calc estimated_space_for_result
         new_partial_parts.push_back(
             mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, reserved_space, holder));
+        new_partial_parts.back()->columns_commit_time = params.columns_commit_time;
+        new_partial_parts.back()->mutation_commit_time = params.mutation_commit_time;
     }
 
     return new_partial_parts;
@@ -395,91 +397,39 @@ void MergeTreeDataMutator::splitMutationCommands(
 {
     ColumnsDescription part_columns(part->getColumns());
 
-    if (!isWidePart(part))
+    for (const auto & command : commands)
     {
-        NameSet mutated_columns;
-        for (const auto & command : commands)
+        if (command.type == MutationCommand::Type::MATERIALIZE_INDEX
+            || command.type == MutationCommand::Type::MATERIALIZE_PROJECTION
+            || command.type == MutationCommand::Type::MATERIALIZE_TTL
+            || command.type == MutationCommand::Type::DELETE
+            || command.type == MutationCommand::Type::FAST_DELETE
+            || command.type == MutationCommand::Type::UPDATE)
         {
-            if (command.type == MutationCommand::Type::MATERIALIZE_INDEX
-                || command.type == MutationCommand::Type::MATERIALIZE_PROJECTION
-                || command.type == MutationCommand::Type::MATERIALIZE_TTL
-                || command.type == MutationCommand::Type::DELETE
-                || command.type == MutationCommand::Type::FAST_DELETE
-                || command.type == MutationCommand::Type::UPDATE)
-            {
-                for_interpreter.push_back(command);
-                for (const auto & [column_name, expr] : command.column_to_update_expression)
-                    mutated_columns.emplace(column_name);
-            }
-            else if (command.type == MutationCommand::Type::DROP_INDEX || command.type == MutationCommand::Type::DROP_PROJECTION)
-            {
-                for_file_renames.push_back(command);
-            }
-            else if (part_columns.has(command.column_name))
-            {
-                if (command.type == MutationCommand::Type::DROP_COLUMN)
-                {
-                    mutated_columns.emplace(command.column_name);
-                }
-                else if (command.type == MutationCommand::Type::RENAME_COLUMN)
-                {
-                    for_interpreter.push_back(
-                    {
-                        .type = MutationCommand::Type::READ_COLUMN,
-                        .column_name = command.rename_to,
-                    });
-                    mutated_columns.emplace(command.column_name);
-                    part_columns.rename(command.column_name, command.rename_to);
-                }
-                else if (command.type == MutationCommand::Type::CLEAR_MAP_KEY)
-                {
-                    for_file_renames.push_back(command);
-                }
-            }
+            for_interpreter.push_back(command);
         }
-        /// If it's compact part, then we don't need to actually remove files
-        /// from disk we just don't read dropped columns
-        for (const auto & column : part->getColumns())
+        else if (command.type == MutationCommand::Type::DROP_INDEX || command.type == MutationCommand::Type::DROP_PROJECTION)
         {
-            if (!mutated_columns.count(column.name))
-                for_interpreter.emplace_back(
-                    MutationCommand{.type = MutationCommand::Type::READ_COLUMN, .column_name = column.name, .data_type = column.type});
+            for_file_renames.push_back(command);
         }
-    }
-    else
-    {
-        for (const auto & command : commands)
+        else if (part_columns.has(command.column_name))
         {
-            if (command.type == MutationCommand::Type::MATERIALIZE_INDEX
-                || command.type == MutationCommand::Type::MATERIALIZE_PROJECTION
-                || command.type == MutationCommand::Type::MATERIALIZE_TTL
-                || command.type == MutationCommand::Type::DELETE
-                || command.type == MutationCommand::Type::FAST_DELETE
-                || command.type == MutationCommand::Type::UPDATE)
+            if (command.type == MutationCommand::Type::READ_COLUMN)
             {
                 for_interpreter.push_back(command);
             }
-            else if (command.type == MutationCommand::Type::DROP_INDEX || command.type == MutationCommand::Type::DROP_PROJECTION)
+            else if (command.type == MutationCommand::Type::RENAME_COLUMN)
+            {
+                for_interpreter.push_back(
+                {
+                    .type = MutationCommand::Type::READ_COLUMN,
+                    .column_name = command.rename_to,
+                });
+                part_columns.rename(command.column_name, command.rename_to);
+            }
+            else
             {
                 for_file_renames.push_back(command);
-            }
-            /// If we don't have this column in source part, than we don't need
-            /// to materialize it
-            else if (part_columns.has(command.column_name))
-            {
-                if (command.type == MutationCommand::Type::READ_COLUMN)
-                {
-                    for_interpreter.push_back(command);
-                }
-                else if (command.type == MutationCommand::Type::RENAME_COLUMN)
-                {
-                    part_columns.rename(command.column_name, command.rename_to);
-                    for_file_renames.push_back(command);
-                }
-                else
-                {
-                    for_file_renames.push_back(command);
-                }
             }
         }
     }
@@ -495,13 +445,14 @@ NameSet MergeTreeDataMutator::collectFilesForClearMapKey(MergeTreeData::DataPart
 
         auto files = source_part->getChecksums()->files;
 
-        /// Collect all compacted file names of the implicit key name. If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
+        /// Collect all compacted file names of the implicit key name.
+        /// If it's the compact map column and all implicit keys of it have removed, remove these compacted files.
         NameSet file_set;
 
         /// Remove all files of the implicit key name
         for (const auto & map_key_ast : command.map_keys->children)
         {
-            const auto & key = typeid_cast<const ASTLiteral &>(*map_key_ast).value.get<std::string>();
+            const auto & key = map_key_ast->as<ASTLiteral &>().value.get<std::string>();
             /// TODO: support Int
             String implicit_key_name = getImplicitColNameForMapKey(command.column_name, escapeForFileName("'" + key + "'"));
             for (const auto & [file, _] : source_part->getChecksums()->files)

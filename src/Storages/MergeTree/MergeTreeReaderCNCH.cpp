@@ -52,18 +52,23 @@ namespace ErrorCodes
     extern const int MEMORY_LIMIT_EXCEEDED;
 }
 
-MergeTreeReaderCNCH::MergeTreeReaderCNCH(const DataPartCNCHPtr& data_part_,
-    const NamesAndTypesList& columns_, const StorageMetadataPtr & metadata_snapshot_,
-    UncompressedCache* uncompressed_cache_, MarkCache * mark_cache_,
-    const MarkRanges& mark_ranges_, const MergeTreeReaderSettings& settings_,
-    MergeTreeBitMapIndexReader* bitmap_index_reader_,
-    const ValueSizeMap& avg_value_size_hints_,
+MergeTreeReaderCNCH::MergeTreeReaderCNCH(
+    const DataPartCNCHPtr & data_part_,
+    const NamesAndTypesList & columns_,
+    const StorageMetadataPtr & metadata_snapshot_,
+    UncompressedCache * uncompressed_cache_,
+    MarkCache * mark_cache_,
+    const MarkRanges & mark_ranges_,
+    const MergeTreeReaderSettings & settings_,
+    MergeTreeBitMapIndexReader * bitmap_index_reader_,
+    const ValueSizeMap & avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-    clockid_t clock_type_):
-        IMergeTreeReader(data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
-            mark_cache_, mark_ranges_, settings_, avg_value_size_hints_,
-            bitmap_index_reader_),
-        segment_cache_strategy(nullptr), segment_cache(nullptr)
+    clockid_t clock_type_)
+    : IMergeTreeReader(
+        data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
+        mark_cache_, mark_ranges_, settings_, avg_value_size_hints_, bitmap_index_reader_)
+    , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
+
 {
     if (data_part->storage.getSettings()->enable_local_disk_cache)
     {
@@ -80,7 +85,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
 {
     if (!continue_reading)
         next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Start reading from mark {}, row {}", from_mark, next_row_number_to_read);
+    LOG_DEBUG(log, "Start reading from mark {}, row {}", from_mark, next_row_number_to_read);
 
     size_t read_rows = 0;
     try
@@ -185,10 +190,10 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
         {
             size_t bitmap_rows_read = bitmap_index_reader->read(from_mark, continue_reading, max_rows_to_read, res_columns);
 #ifndef NDEBUG
-            String output_names = "";
+            String output_names;
             for (const auto & output_name: bitmap_index_reader->getOutputColumnNames())
                 output_names += " " + output_name;
-            LOG_TRACE(&Poco::Logger::get("bitmap_index_reader"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
+            LOG_TRACE(log, "read bitmap index file: {} for part: {}", output_names, this->data_part->name);
 #endif
             // If there is only bitmap_index columns, rows_read may be zero.
             if (read_rows == 0)
@@ -222,8 +227,7 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
     return read_rows;
 }
 
-void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback,
-    clockid_t clock_type)
+void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback, clockid_t clock_type)
 {
     Stopwatch watch;
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::CnchAddStreamsElapsedMilliseconds, watch.elapsedMilliseconds()); });
@@ -234,8 +238,7 @@ void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::Profil
 
         for (const NameAndTypePair& column : columns)
         {
-            initializeStreamForColumnIfNoBurden(column, profile_callback,
-                clock_type, &stream_builders);
+            initializeStreamForColumnIfNoBurden(column, profile_callback, clock_type, &stream_builders);
         }
 
         executeFileStreamBuilders(stream_builders);
@@ -247,53 +250,50 @@ void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::Profil
     }
 }
 
-void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(const NameAndTypePair& column,
-    const ReadBufferFromFileBase::ProfileCallback& profile_callback,
-    clockid_t clock_type, FileStreamBuilders* stream_builders)
+void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(
+    const NameAndTypePair & column,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    clockid_t clock_type,
+    FileStreamBuilders * stream_builders)
 {
     auto column_from_part = getColumnFromPart(column);
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "Initialize stream for columns {}", column_from_part.name);
+    LOG_DEBUG(log, "Initialize stream for columns {}", column_from_part.name);
     if (column_from_part.type->isMap() && !column_from_part.type->isMapKVStore())
     {
         // Scan the directory to get all implicit columns(stream) for the map type
         const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*column_from_part.type);
 
-        String key_name;
-        String impl_key_name;
+        for (auto & file : data_part->getChecksums()->files)
         {
-            for (auto & file : data_part->getChecksums()->files)
+            // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
+            const String & file_name = file.first;
+            if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
             {
-                // Try to get keys, and form the stream, its bin file name looks like "NAME__xxxxx.bin"
-                const String & file_name = file.first;
-                if (isMapImplicitDataFileNameNotBaseOfSpecialMapName(file_name, column.name))
+                auto key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
+                auto impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
+                // Special handing if implicit key is referenced too
+                if (columns.contains(impl_key_name))
                 {
-                    key_name = parseKeyNameFromImplicitFileName(file_name, column.name);
-                    impl_key_name = getImplicitColNameForMapKey(column.name, key_name);
-                    // Special handing if implicit key is referenced too
-                    if (columns.contains(impl_key_name))
-                    {
-                        dup_implicit_keys.insert(impl_key_name);
-                    }
-
-                    addStreamsIfNoBurden(
-                        {impl_key_name, type_map.getValueTypeForImplicitColumn()},
-                        [map_col_name = column.name, this](const String& stream_name,
-                                const ISerialization::SubstreamPath& substream_path) -> String {
-                            String data_file_name = stream_name;
-                            if (data_part->versions->enable_compact_map_data)
-                            {
-                                data_file_name = ISerialization::getFileNameForStream(
-                                    map_col_name, substream_path);
-                            }
-                            return data_file_name;
-                        },
-                        profile_callback, clock_type, stream_builders
-                    );
-
-                    map_column_keys.insert({column.name, key_name});
+                    dup_implicit_keys.insert(impl_key_name);
                 }
+
+                addStreamsIfNoBurden(
+                    {impl_key_name, type_map.getValueTypeForImplicitColumn()},
+                    [map_col_name = column.name, this](const String& stream_name, const ISerialization::SubstreamPath& substream_path) -> String {
+                        String data_file_name = stream_name;
+                        if (data_part->versions->enable_compact_map_data)
+                        {
+                            data_file_name = ISerialization::getFileNameForStream(map_col_name, substream_path);
+                        }
+                        return data_file_name;
+                    },
+                    profile_callback, clock_type, stream_builders
+                );
+
+                map_column_keys.insert({column.name, key_name});
             }
         }
+
     }
     else if (isMapImplicitKeyNotKV(column.name)) // check if it's an implicit key and not KV
     {
@@ -316,7 +316,7 @@ void MergeTreeReaderCNCH::initializeStreamForColumnIfNoBurden(const NameAndTypeP
     else if (column.name != "_part_row_number")
     {
         addStreamsIfNoBurden(column_from_part,
-            [](const String& stream_name, [[maybe_unused]]const ISerialization::SubstreamPath& substream_path) {
+            [](const String & stream_name, [[maybe_unused]] const ISerialization::SubstreamPath& substream_path) {
                 return stream_name;
             },
             profile_callback, clock_type, stream_builders
@@ -370,20 +370,20 @@ void MergeTreeReaderCNCH::executeFileStreamBuilders(FileStreamBuilders& stream_b
     }
 }
 
-void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_type,
-    const std::function<String(const String&, const ISerialization::SubstreamPath&)>& file_name_getter,
-    const ReadBufferFromFileBase::ProfileCallback& profile_callback,
-    clockid_t clock_type, FileStreamBuilders* stream_builders)
+void MergeTreeReaderCNCH::addStreamsIfNoBurden(
+    const NameAndTypePair & name_and_type,
+    const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    clockid_t clock_type, FileStreamBuilders * stream_builders)
 {
     ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath& substream_path) {
-        String stream_name = ISerialization::getFileNameForStream(name_and_type,
-            substream_path);
+        String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
 
         if (streams.count(stream_name))
             return;
 
         String file_name = file_name_getter(stream_name, substream_path);
-        LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "File name is: {}", file_name);
+        LOG_DEBUG(log, "Will read file: {}", file_name);
         bool data_file_exists = data_part->getChecksums()->files.count(file_name + DATA_FILE_EXTENSION);
 
         if (!data_file_exists)
@@ -391,7 +391,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
 
         std::function<MergeTreeReaderStreamUniquePtr()> stream_builder = [=, this]() {
             size_t cache_segment_size = 1;
-            if (segment_cache_strategy != nullptr)
+            if (segment_cache_strategy)
             {
                 // Cache segment if necessary
                 IDiskCacheSegmentsVector segments = segment_cache_strategy->getCacheSegments(
@@ -400,14 +400,19 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
                 segment_cache->cacheSegmentsToLocalDisk(segments);
             }
 
-            String source_data_rel_path = data_part->getFullRelativePath() + "data";
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "Adding stream for reading {}", source_data_rel_path);
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), "The disk is {}", data_part->volume->getDisk()->getName());
+            String source_data_rel_path = data_part->getMvccFullPath(stream_name + DATA_FILE_EXTENSION) + "data";
             String mark_file_name = data_part->index_granularity_info.getMarksFilePath(stream_name);
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeReaderCNCH"), mark_file_name);
+            LOG_DEBUG(
+                log,
+                "Adding stream for reading {} from disk {}, mark_file_nam: {}",
+                source_data_rel_path, data_part->volume->getDisk()->getName(), mark_file_name);
+
             return std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
-                data_part->storage.getStorageID(), data_part->get_name(),
-                stream_name, data_part->volume->getDisk(), data_part->getMarksCount(),
+                data_part->storage.getStorageID(),
+                data_part->get_name(),
+                stream_name,
+                data_part->volume->getDisk(),
+                data_part->getMarksCount(),
                 source_data_rel_path,
                 data_part->getFileOffsetOrZero(stream_name + DATA_FILE_EXTENSION),
                 data_part->getFileSizeOrZero(stream_name + DATA_FILE_EXTENSION),
@@ -415,14 +420,17 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
                 data_part->getFileOffsetOrZero(mark_file_name),
                 data_part->getFileSizeOrZero(mark_file_name),
                 all_mark_ranges, settings, mark_cache, uncompressed_cache,
-                segment_cache.get(), cache_segment_size, &(data_part->index_granularity_info),
+                segment_cache.get(),
+                cache_segment_size,
+                &(data_part->index_granularity_info),
                 profile_callback, clock_type
             );
         };
 
         // Check if mark is present
-        auto mark_cache_key = mark_cache->hash(fullPath(data_part->volume->getDisk(),
-            data_part->getFullRelativePath() + "data") + ":" + stream_name);
+        auto mark_cache_key = mark_cache->hash(
+            fullPath(data_part->volume->getDisk(), data_part->getFullRelativePath() + "data") + ":" + stream_name);
+
         if (mark_cache->get(mark_cache_key))
         {
             ProfileEvents::increment(ProfileEvents::CnchAddStreamsSequentialTasks);
@@ -437,7 +445,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(const NameAndTypePair& name_and_t
         }
         else
         {
-            /// prepare for loading marks parallelly
+            /// prepare for loading marks parallel
             stream_builders->emplace(std::move(stream_name), std::move(stream_builder));
         }
     };
