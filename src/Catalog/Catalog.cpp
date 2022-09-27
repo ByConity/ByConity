@@ -4120,7 +4120,7 @@ namespace Catalog
 
         Strings res;
         /// get the uuid of the table on which this view depends.
-        if (create_ast && (create_ast->is_materialized_view || create_ast->is_live_view))
+        if (create_ast && create_ast->isView())
         {
             ASTs tables;
             bool has_table_func = false;

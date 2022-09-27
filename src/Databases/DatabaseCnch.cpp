@@ -52,9 +52,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     if (!query->as<ASTCreateQuery>())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
     auto create_query = query->as<ASTCreateQuery &>();
-    if (create_query.isView())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
-    if ((!create_query.is_dictionary) &&
+    if ((!create_query.is_dictionary) && (!create_query.isView()) &&
         (!startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
 
