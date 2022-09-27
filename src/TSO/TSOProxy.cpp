@@ -13,7 +13,7 @@ namespace ErrorCodes
 namespace TSO
 {
 
-TSOProxy::TSOProxy(TSOConfig & config)
+TSOProxy::TSOProxy(const TSOConfig & config)
 {
     if (config.type == StoreType::BYTEKV)
     {
@@ -37,17 +37,17 @@ void TSOProxy::setTimestamp(UInt64 timestamp)
     metastore_ptr->put(std::to_string(timestamp));
 }
 
-void TSOProxy::getTimestamp(UInt64 & timestamp)
+UInt64 TSOProxy::getTimestamp()
 {
     String timestamp_str;
     metastore_ptr->get(timestamp_str);
     if (timestamp_str.empty())
     {
-        timestamp = 0;
+        return 0;
     }
     else
     {
-        timestamp = std::stoull(timestamp_str);
+        return std::stoull(timestamp_str);
     }
 }
 

@@ -21,10 +21,10 @@ class ProtocolServerAdapter
 public:
     ProtocolServerAdapter(ProtocolServerAdapter && src) = default;
     ProtocolServerAdapter & operator =(ProtocolServerAdapter && src) = default;
-    ProtocolServerAdapter(const char * port_name_, std::unique_ptr<Poco::Net::TCPServer> tcp_server_);
+    ProtocolServerAdapter(const char * port_name_, const std::string & description_, std::unique_ptr<Poco::Net::TCPServer> tcp_server_);
 
 #if USE_GRPC
-    ProtocolServerAdapter(const char * port_name_, std::unique_ptr<GRPCServer> grpc_server_);
+    ProtocolServerAdapter(const char * port_name_, const std::string & description_, std::unique_ptr<GRPCServer> grpc_server_);
 #endif
 
     /// Starts the server. A new thread will be created that waits for and accepts incoming connections.
@@ -41,6 +41,8 @@ public:
 
     const std::string & getPortName() const { return port_name; }
 
+    const std::string & getDescription() const { return description; }
+
 private:
     class Impl
     {
@@ -55,6 +57,7 @@ private:
     class GRPCServerAdapterImpl;
 
     std::string port_name;
+    std::string description;
     std::unique_ptr<Impl> impl;
 };
 

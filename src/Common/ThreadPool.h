@@ -259,6 +259,19 @@ private:
     std::mutex mutex;
 };
 
+inline std::function<void()> createExceptionHandledJob(std::function<void()> job, DB::ExceptionHandler & handler)
+{
+    return [job{std::move(job)}, &handler]() {
+        try
+        {
+            job();
+        }
+        catch (...)
+        {
+            handler.setException(std::current_exception());
+        }
+    };
+}
 
 /// Recommended thread pool for the case when multiple thread pools are created and destroyed.
 using ThreadPool = ThreadPoolImpl<ThreadFromGlobalPool>;

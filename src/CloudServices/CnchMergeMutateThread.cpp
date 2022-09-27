@@ -607,7 +607,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     if (res.empty())
         return false;
 
-    /// Step 3: Save to pending queue
+    /// Step 4: Save to pending queue
     for (auto & selected_parts : res)
     {
         auto future_task = std::make_unique<FutureManipulationTask>(*this, ManipulationType::Merge);
@@ -729,9 +729,6 @@ void CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask 
 
         throw;
     }
-
-    // if (ManipulationType::Merge == type)
-    //     amendPartsCache(params.source_parts.front()->info().partition_id, params.source_parts.size());
 }
 
 String CnchMergeMutateThread::triggerPartMerge(

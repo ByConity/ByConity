@@ -3,24 +3,31 @@ package DB.TSO;
 
 option cc_generic_services = true;
 
-message GetTimestampReq {}
+message GetTimestampReq
+{
+}
 
-message GetTimestampResp {
-    optional string exception = 1;
-    required uint64 timestamp = 2;
+message GetTimestampResp
+{
+  optional string exception = 1;
+  optional uint64 timestamp = 2;
+  optional bool is_leader = 3;
 };
 
-message GetTimestampsReq {
+message GetTimestampsReq
+{
   required uint32 size = 1;
 };
 
-message GetTimestampsResp {
+message GetTimestampsResp
+{
   optional string exception = 1;
-  required uint64 max_timestamp = 2;
+  optional uint64 max_timestamp = 2;
+  optional bool is_leader = 3;
 }
 
-service TSO {
+service TSO
+{
     rpc GetTimestamp(GetTimestampReq) returns (GetTimestampResp);
     rpc GetTimestamps(GetTimestampsReq) returns (GetTimestampsResp);
 };
-

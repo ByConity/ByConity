@@ -18,3 +18,7 @@ set(CLICKHOUSE_TSO_SOURCE
 add_library(tso_lib ${CLICKHOUSE_TSO_HEADER} ${CLICKHOUSE_TSO_SOURCE})
 target_include_directories(tso_lib SYSTEM BEFORE PRIVATE ${BYTEKV_INCLUDE_DIR} PUBLIC ${ClickHouse_SOURCE_DIR}/libs/libdaemon/include)
 target_link_libraries(tso_lib daemon dbms)
+
+if (ENABLE_TESTS)
+    add_subdirectory(tests)
+endif()

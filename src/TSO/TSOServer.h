@@ -1,11 +1,16 @@
 #pragma once
 
 #include <Common/Config/ConfigProcessor.h>
+#include <Coordination/LeaderElection.h>
+#include <Coordination/LeaderElectionBase.h>
 #include <daemon/BaseDaemon.h>
-#include <TSO/TSOImpl.h>
+#include <Server/IServer.h>
 #include <TSO/TSOProxy.h>
+#include <TSO/Defines.h>
+#include <Poco/Net/ServerSocket.h>
 #include <Poco/Timer.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
+#include <Interpreters/Context_fwd.h>
 
 
 #define TSO_VERSION "1.0.0"
@@ -13,22 +18,25 @@
 namespace DB
 {
 
+class KeeperDispatcher;
+class ProtocolServerAdapter;
+using ProtocolServerAdapterPtr = std::shared_ptr<ProtocolServerAdapter>;
+
 namespace TSO
 {
 
+class TSOImpl;
 
-class TSOServer : public BaseDaemon
+class TSOServer : public BaseDaemon, public IServer, public LeaderElectionBase
 {
 
 public:
     using ServerApplication::run;
-
     using TSOProxyPtr = std::shared_ptr<TSOProxy>;
     using TSOServicePtr = std::shared_ptr<TSOImpl>;
 
-    TSOServer () : timer(0, TSO_UPDATE_INTERVAL), callback(*this, &TSOServer::updateTSO) {} // declare updateTSO thread
-
-    ~TSOServer() override = default;
+    TSOServer();
+    ~TSOServer() override;
 
     void defineOptions(Poco::Util::OptionSet & _options) override;
 
@@ -39,6 +47,27 @@ public:
     void updateTSO(Poco::Timer &);
 
     String getHostPort() const { return host_port; }
+
+    Poco::Util::LayeredConfiguration & config() const override
+    {
+        return BaseDaemon::config();
+    }
+
+    Poco::Logger & logger() const override
+    {
+        return BaseDaemon::logger();
+    }
+
+    ContextMutablePtr context() const override
+    {
+        return global_context;
+    }
+
+    bool isCancelled() const override
+    {
+        return BaseDaemon::isCancelled();
+    }
+
 protected:
     int run() override;
 
@@ -50,20 +79,35 @@ private:
     size_t tso_window;
     Int32 tso_max_retry_count; // TSOV: see if can keep or remove
 
-    int port;
+    int tso_port;
     String host_port;
 
     TSOProxyPtr proxy_ptr;
     TSOServicePtr tso_service;
 
-    UInt64 Tnext;  /// TSO physical time
-    UInt64 Tlast;  /// TSO physical time upper bound (persist in KV)
+    UInt64 t_next;  /// TSO physical time
+    UInt64 t_last;  /// TSO physical time upper bound (persist in KV)
 
     Poco::Timer timer;
     Poco::TimerCallback<TSOServer> callback;
 
     using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
-    mutable ServiceDiscoveryClientPtr service_disovery;
+    mutable ServiceDiscoveryClientPtr service_discovery;
+
+    ContextMutablePtr global_context;
+
+    std::shared_ptr<KeeperDispatcher> keeper_dispatcher;
+
+    /// keep tcp servers for clickhouse-keeper
+    std::vector<ProtocolServerAdapterPtr> keeper_servers;
+
+    void onLeader() override;
+    void exitLeaderElection() override;
+    void enterLeaderElection() override;
+
+    using CreateServerFunc = std::function<std::shared_ptr<ProtocolServerAdapter>(UInt16)>;
+    void createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func);
+    Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
 };
 
 }

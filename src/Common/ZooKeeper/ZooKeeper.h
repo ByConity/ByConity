@@ -12,6 +12,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/ZooKeeper/IKeeper.h>
 #include <Common/ZooKeeper/ZooKeeperConstants.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 #include <unistd.h>
 
 
@@ -86,14 +87,14 @@ public:
             <identity>user:password</identity>
         </zookeeper>
     */
-    ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, std::shared_ptr<DB::ZooKeeperLog> zk_log_);
+    ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, std::shared_ptr<DB::ZooKeeperLog> zk_log_, const DB::ServiceEndpoints & endpoints);
 
     /// Creates a new session with the same parameters. This method can be used for reconnecting
     /// after the session has expired.
     /// This object remains unchanged, and the new session is returned.
     Ptr startNewSession() const;
 
-    bool configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name) const;
+    bool configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, const DB::ServiceEndpoints & endpoints) const;
 
     /// Returns true, if the session has expired.
     bool expired();

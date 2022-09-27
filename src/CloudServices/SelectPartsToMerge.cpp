@@ -8,7 +8,7 @@
 namespace DB
 {
 
-ServerSelectPartsDecision selectPartsToMergeMulti(
+ServerSelectPartsDecision selectPartsToMerge(
     const MergeTreeMetaBase & data,
     std::vector<ServerDataPartsVector> & res,
     const ServerDataPartsVector & data_parts,

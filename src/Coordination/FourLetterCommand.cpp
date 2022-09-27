@@ -64,7 +64,7 @@ FourLetterCommandFactory & FourLetterCommandFactory::instance()
 void FourLetterCommandFactory::checkInitialization() const
 {
     if (!initialized)
-        throw Exception("Four letter command  not initialized", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Four letter command not initialized", ErrorCodes::LOGICAL_ERROR);
 }
 
 bool FourLetterCommandFactory::isKnown(int32_t code)
@@ -131,6 +131,9 @@ void FourLetterCommandFactory::registerCommands(KeeperDispatcher & keeper_dispat
 
         FourLetterCommandPtr stat_reset_command = std::make_shared<StatResetCommand>(keeper_dispatcher);
         factory.registerCommand(stat_reset_command);
+
+        FourLetterCommandPtr nop_command = std::make_shared<NopCommand>(keeper_dispatcher);
+        factory.registerCommand(nop_command);
 
         FourLetterCommandPtr watch_by_path_command = std::make_shared<WatchByPathCommand>(keeper_dispatcher);
         factory.registerCommand(watch_by_path_command);
