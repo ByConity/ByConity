@@ -1,5 +1,6 @@
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <ServiceDiscovery/ServiceDiscoveryConsul.h>
+#include <Poco/String.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -49,6 +50,12 @@ ServiceDiscoveryClientPtr ServiceDiscoveryFactory::get(const ServiceDiscoveryMod
         throw Exception("No available service discovery client for " + typeToString(mode) + " mode", ErrorCodes::LOGICAL_ERROR);
 
     return it->second;
+}
+
+ServiceDiscoveryClientPtr ServiceDiscoveryFactory::get(const Poco::Util::AbstractConfiguration & config) const
+{
+    const auto sd_type = config.getRawString("service_discovery.mode", "LOCAL");
+    return get(toServiceDiscoveryMode(Poco::toUpper(sd_type)));
 }
 
 ServiceDiscoveryClientPtr ServiceDiscoveryFactory::tryGet(const ServiceDiscoveryMode & mode) const

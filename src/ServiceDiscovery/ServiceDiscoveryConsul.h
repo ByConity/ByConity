@@ -22,6 +22,7 @@ public:
     ServiceDiscoveryMode getType() const override { return ServiceDiscoveryMode::CONSUL; }
 
     HostWithPortsVec lookup(const String & psm_name, ComponentType type, const String & vw_name = "") override;
+    Endpoints lookupEndpoints(const String & psm_name) override;
 
     WorkerGroupMap lookupWorkerGroupsInVW(const String & psm, const String & vw_name) override;
 

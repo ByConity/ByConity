@@ -3,11 +3,16 @@
 #include <Coordination/Defines.h>
 #include <Common/Exception.h>
 #include <Common/isLocalAddress.h>
+#include <ServiceDiscovery/ServiceDiscoveryConsul.h>
+#include <ServiceDiscovery/ServiceDiscoveryLocal.h>
+#include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadBufferFromFile.h>
+#include <libnuraft/srv_config.hxx>
 
 #include <filesystem>
+#include <string>
 
 namespace DB
 {
@@ -17,48 +22,101 @@ namespace ErrorCodes
     extern const int RAFT_ERROR;
     extern const int CORRUPTED_DATA;
 }
-
-KeeperStateManager::KeeperConfigurationWrapper
-KeeperStateManager::parseServersConfiguration(const Poco::Util::AbstractConfiguration & config, bool allow_without_us) const
+namespace
 {
-    KeeperConfigurationWrapper result;
-    result.cluster_config = std::make_shared<nuraft::cluster_config>();
+
+struct KeeperEndpoint
+{
+    String host;
+    Int32 port;
+    Int32 id;
+    Int32 priority{1};
+    bool can_become_leader{true};
+    bool start_as_follower{false};
+};
+
+std::vector<KeeperEndpoint> parseKeeperEndpointsFromServiceDiscovery(const Poco::Util::AbstractConfiguration & config)
+{
+    std::vector<KeeperEndpoint> result;
+
+    auto service_discovery = ServiceDiscoveryFactory::instance().get(config);
+    auto psm = config.getString("service_discovery.keeper.psm");
+    auto endpoints = service_discovery->lookupEndpoints(psm);
+
+    for (auto & endpoint: endpoints)
+    {
+        result.emplace_back(KeeperEndpoint{endpoint.host, endpoint.port, std::stoi(endpoint.tags.at("id"))});
+        if (auto it = endpoint.tags.find("priority"); it != endpoint.tags.end())
+            result.back().priority = std::stoi(it->second);
+        if (auto it = endpoint.tags.find("can_become_leader"); it != endpoint.tags.end())
+            result.back().priority = std::stoi(it->second);
+        if (auto it = endpoint.tags.find("start_as_follower"); it != endpoint.tags.end())
+            result.back().start_as_follower = std::stoi(it->second);
+    }
+
+    return result;
+}
+
+std::vector<KeeperEndpoint> parseKeeperEndpointsFromConfiguration(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
+{
+    std::vector<KeeperEndpoint> result;
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_prefix + ".raft_configuration", keys);
 
-    size_t total_servers = 0;
     for (const auto & server_key : keys)
     {
         if (!startsWith(server_key, "server"))
             continue;
 
         std::string full_prefix = config_prefix + ".raft_configuration." + server_key;
-        int new_server_id = config.getInt(full_prefix + ".id");
         std::string hostname = config.getString(full_prefix + ".hostname");
         int port = config.getInt(full_prefix + ".port");
-        bool can_become_leader = config.getBool(full_prefix + ".can_become_leader", true);
+        int new_server_id = config.getInt(full_prefix + ".id");
         int32_t priority = config.getInt(full_prefix + ".priority", 1);
+        bool can_become_leader = config.getBool(full_prefix + ".can_become_leader", true);
         bool start_as_follower = config.getBool(full_prefix + ".start_as_follower", false);
 
-        if (start_as_follower)
-            result.servers_start_as_followers.insert(new_server_id);
+        result.emplace_back(KeeperEndpoint{hostname, port, new_server_id, priority, can_become_leader, start_as_follower});
+    }
+    return result;
+}
 
-        auto endpoint = hostname + ":" + std::to_string(port);
-        auto peer_config = nuraft::cs_new<nuraft::srv_config>(new_server_id, 0, endpoint, "", !can_become_leader, priority);
-        if (my_server_id == new_server_id)
+}
+
+KeeperStateManager::KeeperConfigurationWrapper
+KeeperStateManager::parseServersConfiguration(const Poco::Util::AbstractConfiguration & config, bool allow_without_us) const
+{
+    std::vector<KeeperEndpoint> endpoints;
+
+    if (config.has(config_prefix + ".raft_configuration"))
+        endpoints = parseKeeperEndpointsFromConfiguration(config, config_prefix);
+    else
+        endpoints = parseKeeperEndpointsFromServiceDiscovery(config);
+
+    KeeperConfigurationWrapper result;
+    result.cluster_config = std::make_shared<nuraft::cluster_config>();
+
+    for (auto & endpoint: endpoints)
+    {
+        auto endpoint_name = endpoint.host + ":" + std::to_string(endpoint.port);
+        auto peer_config = nuraft::cs_new<nuraft::srv_config>(endpoint.id, 0, endpoint_name, "", !endpoint.can_become_leader, endpoint.priority);
+
+        if (endpoint.id == my_server_id)
         {
             result.config = peer_config;
-            result.port = port;
+            result.port = endpoint.port;
         }
 
         result.cluster_config->get_servers().push_back(peer_config);
-        total_servers++;
+
+        if (endpoint.start_as_follower)
+            result.servers_start_as_followers.insert(endpoint.id);
     }
 
     if (!result.config && !allow_without_us)
         throw Exception(ErrorCodes::RAFT_ERROR, "Our server id {} not found in raft_configuration section", my_server_id);
 
-    if (result.servers_start_as_followers.size() == total_servers)
+    if (result.servers_start_as_followers.size() == endpoints.size())
         throw Exception(ErrorCodes::RAFT_ERROR, "At least one of servers should be able to start as leader (without <start_as_follower>)");
 
     return result;

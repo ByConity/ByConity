@@ -13,11 +13,11 @@ class TSOProxy
 {
 public:
 
-    TSOProxy(TSOConfig & config);
+    TSOProxy(const TSOConfig & config);
     ~TSOProxy() {}
 
     void setTimestamp(UInt64 timestamp);
-    void getTimestamp(UInt64 & timestamp);
+    UInt64 getTimestamp();
     void clean();
 
 private:
@@ -27,4 +27,3 @@ private:
 }
 
 }
-

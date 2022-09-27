@@ -8,6 +8,7 @@
 #include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <Common/serverLocality.h>
+#include <Interpreters/Context.h>
 
 #include <atomic>
 

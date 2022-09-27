@@ -20,13 +20,10 @@
 
 namespace fs = std::filesystem;
 
-namespace DB
-{
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
-}
 }
 
 
@@ -170,7 +167,7 @@ ZooKeeper::ZooKeeper(const Strings & hosts_, const std::string & identity_, int3
 
 struct ZooKeeperArgs
 {
-    ZooKeeperArgs(const Poco::Util::AbstractConfiguration & config, const std::string & config_name)
+    ZooKeeperArgs(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, const DB::ServiceEndpoints & endpoints)
     {
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys(config_name, keys);
@@ -180,7 +177,7 @@ struct ZooKeeperArgs
         implementation = "zookeeper";
         for (const auto & key : keys)
         {
-            if (startsWith(key, "node"))
+            if (endpoints.empty() && startsWith(key, "node"))
             {
                 hosts.push_back(
                         (config.getBool(config_name + "." + key + ".secure", false) ? "secure://" : "") +
@@ -212,6 +209,12 @@ struct ZooKeeperArgs
                 throw KeeperException(std::string("Unknown key ") + key + " in config file", Coordination::Error::ZBADARGUMENTS);
         }
 
+        /// get Zookeeper node from service_discovery
+        for (const auto & endpoint: endpoints)
+        {
+            hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + std::to_string(endpoint.port));
+        }
+
         if (!chroot.empty())
         {
             if (chroot.front() != '/')
@@ -229,16 +232,16 @@ struct ZooKeeperArgs
     std::string implementation;
 };
 
-ZooKeeper::ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, std::shared_ptr<DB::ZooKeeperLog> zk_log_)
+ZooKeeper::ZooKeeper(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, std::shared_ptr<DB::ZooKeeperLog> zk_log_, const DB::ServiceEndpoints & endpoints)
     : zk_log(std::move(zk_log_))
 {
-    ZooKeeperArgs args(config, config_name);
+    ZooKeeperArgs args(config, config_name, endpoints);
     init(args.implementation, args.hosts, args.identity, args.session_timeout_ms, args.operation_timeout_ms, args.chroot);
 }
 
-bool ZooKeeper::configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name) const
+bool ZooKeeper::configChanged(const Poco::Util::AbstractConfiguration & config, const std::string & config_name, const DB::ServiceEndpoints & endpoints) const
 {
-    ZooKeeperArgs args(config, config_name);
+    ZooKeeperArgs args(config, config_name, endpoints);
 
     // skip reload testkeeper cause it's for test and data in memory
     if (args.implementation == implementation && implementation == "testkeeper")

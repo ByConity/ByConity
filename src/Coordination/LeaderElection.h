@@ -47,7 +47,7 @@ public:
         : pool(pool_)
         , path(path_)
         , zookeeper(zookeeper_)
-        , handler(handler_)
+        , handler(std::move(handler_))
         , identifier(allow_multiple_leaders_ ? (identifier_ + suffix) : identifier_)
         , allow_multiple_leaders(allow_multiple_leaders_)
         , log_name("LeaderElection (" + path + ")")
