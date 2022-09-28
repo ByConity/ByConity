@@ -64,6 +64,11 @@
 
 #include <TableFunctions/TableFunctionFactory.h>
 #include <common/logger_useful.h>
+#include <Interpreters/executeQuery.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Catalog/Catalog.h>
 
@@ -1263,19 +1268,32 @@ BlockIO InterpreterCreateQuery::doCreateOrReplaceTable(ASTCreateQuery & create,
 BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
 {
     /// If the query is a CREATE SELECT, insert the data into the table.
-    if (create.select && !create.attach
-        && !create.is_ordinary_view && !create.is_live_view && (!create.is_materialized_view || create.is_populate))
+    if (create.select && !create.attach && !create.is_ordinary_view && !create.is_live_view
+        && (!create.is_materialized_view || create.is_populate))
     {
         auto insert = std::make_shared<ASTInsertQuery>();
         insert->table_id = {create.database, create.table, create.uuid};
         insert->select = create.select->clone();
 
-        if (create.temporary && !getContext()->getSessionContext()->hasQueryContext())
-            getContext()->getSessionContext()->makeQueryContext();
+        if (create.temporary)
+        {
+            if (!getContext()->getSessionContext()->hasQueryContext())
+                getContext()->getSessionContext()->makeQueryContext();
 
-        return InterpreterInsertQuery(insert,
-            create.temporary ? getContext()->getSessionContext() : getContext(),
-            getContext()->getSettingsRef().insert_allow_materialized_columns).execute();
+            return InterpreterInsertQuery(insert,
+                create.temporary ? getContext()->getSessionContext() : getContext(),
+                getContext()->getSettingsRef().insert_allow_materialized_columns).execute();
+        }
+        else
+        {
+            /// Just run it as new INSET INTO ... SELECT FROM
+            /// Cannot directly use InterpreterInsertQuery here, because Cnch requires some resouce initialization (txn, vw, session resource)
+            /// all done in executeQuery now. Directly initialization didn't work.
+            auto insert_context = Context::createCopy(getContext()->getSessionContext());
+            insert_context->makeQueryContext();
+            insert_context->setSettings(getContext()->getSettingsRef());
+            return executeQuery(insert->formatForErrorMessage(), insert_context, /*internal=*/true);
+        }
     }
 
     return {};
