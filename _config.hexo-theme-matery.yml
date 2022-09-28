@@ -556,7 +556,7 @@ ribbon_dynamic:
 # 支持顺序，可选项目为twitter, facebook, google, qq, qzone, wechat, weibo, douban, linkedin.
 sharejs:
   enable: true
-  sites: twitter,facebook,google,linkedin,qq,wechat,weibo
+  sites: twitter,facebook,linkedin,qq,wechat,weibo
 
 # addthis文章分享模块.
 addthis:
