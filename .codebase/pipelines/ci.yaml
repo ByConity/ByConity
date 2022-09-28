@@ -94,7 +94,7 @@ jobs:
         commands:
           - cd /
           - cp -r /home/code/docker/test/stateless/* .
-          - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_problematic_stateless'   # enable optimizer for test
+          - export ADDITIONAL_OPTIONS='--jobs 1 --run ce_problematic_stateless --testname'   # enable optimizer for test
           - /bin/bash run.sh
       - *after_test
       - *upload_artifact
