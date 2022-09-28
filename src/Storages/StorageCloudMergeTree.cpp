@@ -99,7 +99,7 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
     switch (input_params.type)
     {
         case ManipulationType::Merge:
-            task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);
+            task = std::make_shared<CloudMergeTreeMergeTask>(*this, input_params, task_context);
             break;
         case ManipulationType::Mutate:
             task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);
@@ -112,6 +112,21 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
 
     /// LOG_DEBUG(log, "Finished manipulate task {}", input_params.task_id);
     return task;
+}
+
+void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type == MutationCommand::Type::FAST_DELETE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE commands");
+        if (command.type == MutationCommand::Type::DELETE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute DELETE commands");
+        if (command.type == MutationCommand::Type::UPDATE)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute UPDATE commands");
+        if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute MATERIALIZE_TTL commands");
+    }
 }
 
 MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & /*part*/) const

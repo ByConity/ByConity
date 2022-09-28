@@ -140,10 +140,12 @@ public:
 
     String getTypeName() const { return getType().toString(); }
 
-    virtual void setColumns(const NamesAndTypesList & new_columns);
+    void setColumns(const NamesAndTypesList & new_columns);
+    virtual void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr);
 
-    const NamesAndTypesList & getColumns() const { return columns; }
-    NamesAndTypesList getNamesAndTypes() const { return columns; }
+    const NamesAndTypesList & getColumns() const { return *columns_ptr; }
+    NamesAndTypesListPtr getColumnsPtr() const { return columns_ptr; }
+    NamesAndTypesList getNamesAndTypes() const { return *columns_ptr; }
 
     /// Throws an exception if part is not stored in on-disk format.
     void assertOnDisk() const;
@@ -377,9 +379,11 @@ public:
     /// Returns full path to part dir
     String getFullPath() const;
 
+    String getMvccFullPath(const String & file_name) const;
+
     /// MOCK for MergeTreeCNCHDataDumper
-    void setPreparedIndex(IndexPtr index_) { prepared_index = std::move(index_); }
-    const IndexPtr & getPreparedIndex() const { return prepared_index; }
+    // void setPreparedIndex(IndexPtr index_) { prepared_index = std::move(index_); }
+    // const IndexPtr & getPreparedIndex() const { return prepared_index; }
 
     /// Moves a part to detached/ directory and adds prefix to its name
     void renameToDetached(const String & prefix) const;
@@ -490,8 +494,8 @@ public:
     UInt64 staging_txn_id = 0;
 
     /// Only for storage with UNIQUE KEY
-    String min_unique_key = "";
-    String max_unique_key = "";
+    String min_unique_key;
+    String max_unique_key;
 
     mutable UInt64 virtual_part_size = 0;
 
@@ -509,23 +513,21 @@ public:
     Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
-    /// Columns description. It could be shared between parts. This can help reduce memory usage during query execution.
-    NamesAndTypesListPtr columns_ptr = std::make_shared<NamesAndTypesList>();
-
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;
     friend class MergeTreeCloudData;
     friend class MergeScheduler;
 
-    /// Total size of all columns, calculated once in calcuateColumnSizesOnDisk
+    /// Total size of all columns, calculated once in calculateColumnSizesOnDisk
     ColumnSize total_columns_size;
 
-    /// Size for each column, calculated once in calcuateColumnSizesOnDisk
+    /// Size for each column, calculated once in calculateColumnSizesOnDisk
     ColumnSizeByName columns_sizes;
 
     /// Columns description. Cannot be changed, after part initialization.
-    NamesAndTypesList columns;
+    /// It could be shared between parts. This can help reduce memory usage during query execution.
+    NamesAndTypesListPtr columns_ptr = std::make_shared<NamesAndTypesList>();
     const Type part_type;
 
     /// Not null when it's a projection part.
@@ -616,7 +618,7 @@ public:
     void deserializeMetaInfo(const String & metadata);
     void deserializeColumns(ReadBuffer & buffer);
     void deserializePartitionAndMinMaxIndex(ReadBuffer & buffer);
-    
+
     /// serialize part into binary format
     void serializePartitionAndMinMaxIndex(WriteBuffer & buf) const;
 

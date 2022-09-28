@@ -1601,10 +1601,10 @@ void StorageMergeTree::ingestPartition(const PartitionCommand & command, Context
     auto column_names = command.column_names;
     auto key_names = command.key_names;
 
-    LOG_TRACE(log, "INGEST PARTITION {} from {} with columns {} and keys {}", 
-                    queryToString(partition), 
-                    source_table->getStorageID().getFullTableName(), 
-                    std::to_string(column_names.size()), 
+    LOG_TRACE(log, "INGEST PARTITION {} from {} with columns {} and keys {}",
+                    queryToString(partition),
+                    source_table->getStorageID().getFullTableName(),
+                    std::to_string(column_names.size()),
                     std::to_string(key_names.size()));
 
     bool old_val = false;

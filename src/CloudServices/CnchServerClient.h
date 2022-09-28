@@ -94,6 +94,8 @@ public:
     void releaseLock(const LockInfoPtr & info);
     void reportCnchLockHeartBeat(const TxnTimestamp & txn_id, UInt64 expire_time = 0);
 
+    std::optional<TxnTimestamp> getMinActiveTimestamp(const StorageID & storage_id);
+
     UInt64 getServerStartTime();
     bool scheduleGlobalGC(const std::vector<Protos::DataModelTable> & tables);
     size_t getNumOfTablesCanSendForGlobalGC();

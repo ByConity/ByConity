@@ -87,7 +87,7 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_load("LOAD");
     ParserKeyword s_file("FILE");
     ParserKeyword s_merge("MERGE PARTS");
-    ParserKeyword s_convertor("CONVERT PARTS FROM");
+    ParserKeyword s_converter("CONVERT PARTS FROM");
     ParserKeyword s_to("TO");
     ParserKeyword s_asTable("AS TABLE");
     ParserKeyword s_location("LOCATION");
@@ -127,7 +127,7 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         /// no more details
         type = PartToolType::MERGER;
     }
-    else if (s_convertor.ignore(pos, expected))
+    else if (s_converter.ignore(pos, expected))
     {
         if (!string_literal_parser.parse(pos, source_path, expected))
             return false;
@@ -139,13 +139,13 @@ bool ParserPartToolkitQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         if (!name_p.parse(pos, data_format, expected))
             return false;
         
-        type = PartToolType::CONVERTOR;
+        type = PartToolType::CONVERTER;
     }
     else
         return false;
 
 
-    if (type!=PartToolType::CONVERTOR && !string_literal_parser.parse(pos, source_path, expected))
+    if (type!=PartToolType::CONVERTER && !string_literal_parser.parse(pos, source_path, expected))
         return false;
 
     if (!s_asTable.ignore(pos, expected))

@@ -1785,8 +1785,8 @@ void MergeTreeDataSelectExecutor::selectPartsToRead(
         if (part_values && part_values->find(part->name) == part_values->end())
             continue;
 
-        if (part->isEmpty())
-            continue;
+        // if (part->isEmpty())
+        //     continue;
 
         if (max_block_numbers_to_read)
         {

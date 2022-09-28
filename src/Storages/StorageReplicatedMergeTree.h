@@ -19,8 +19,8 @@
 #include <Storages/MergeTree/EphemeralLockInZooKeeper.h>
 #include <Storages/MergeTree/DataPartsExchange.h>
 #include <Storages/MergeTree/ReplicatedMergeTreeAddress.h>
-#include <Storages/MergeTree/LeaderElection.h>
 #include <Storages/MergeTree/PartMovesBetweenShardsOrchestrator.h>
+#include <Coordination/LeaderElection.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/PartLog.h>

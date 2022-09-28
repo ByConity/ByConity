@@ -209,6 +209,7 @@ class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+class CnchCatalogDictionaryCache;
 
 enum class ServerType
 {
@@ -459,8 +460,6 @@ private:
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
-
-    std::shared_ptr<TSO::TSOClient> getCnchTSOClient() const;
 
 public:
     /// Create initial Context with ContextShared and etc.
@@ -713,9 +712,11 @@ public:
 
     const EmbeddedDictionaries & getEmbeddedDictionaries() const;
     const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache() const;
     const ExternalModelsLoader & getExternalModelsLoader() const;
     EmbeddedDictionaries & getEmbeddedDictionaries();
     ExternalDictionariesLoader & getExternalDictionariesLoader();
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache();
     ExternalModelsLoader & getExternalModelsLoader();
     ExternalModelsLoader & getExternalModelsLoaderUnlocked();
     void tryCreateEmbeddedDictionaries() const;
@@ -765,6 +766,8 @@ public:
 
     /// The port that the server listens for executing SQL queries.
     UInt16 getTCPPort() const;
+    /// Get the tcp_port of other server.
+    UInt16 getTCPPort(const String & host, UInt16 rpc_port) const;
 
     std::optional<UInt16> getTCPPortSecure() const;
 
@@ -821,7 +824,7 @@ public:
     void setFileProgressCallback(FileProgressCallback && callback) { file_progress_callback = callback; }
     FileProgressCallback getFileProgressCallback() const { return file_progress_callback; }
 
-    void setProcessListEntry(std::shared_ptr<ProcessListEntry> prcess_list_entry_);
+    void setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_);
     std::weak_ptr<ProcessListEntry> getProcessListEntry();
 
     /** Set in executeQuery and InterpreterSelectQuery. Then it is used in IBlockInputStream,
@@ -1041,6 +1044,7 @@ public:
         CLIENT,         /// clickhouse-client
         LOCAL,          /// clickhouse-local
         KEEPER,         /// clickhouse-keeper (also daemon)
+        TSO,            /// clickhouse-tso-server
     };
 
     ApplicationType getApplicationType() const;
@@ -1122,6 +1126,12 @@ public:
     ServiceDiscoveryClientPtr getServiceDiscoveryClient() const;
 
     void initTSOClientPool(const String & service_name);
+    std::shared_ptr<TSO::TSOClient> getCnchTSOClient() const;
+
+    String getTSOLeaderHostPort() const;
+    void updateTSOLeaderHostPort() const;
+    void setTSOLeaderHostPort(String host_port) const;
+
     UInt64 getTimestamp() const;
     UInt64 tryGetTimestamp(const String & pretty_func_name = "Context") const;
     UInt64 getTimestamps(UInt32 size) const;

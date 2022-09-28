@@ -10,7 +10,7 @@ enum class PartToolType
     NOTYPE = 0,
     WRITER = 0,
     MERGER = 1,
-    CONVERTOR = 2
+    CONVERTER = 2
 };
 
 class ASTPartToolKit : public IAST

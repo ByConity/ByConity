@@ -20,15 +20,10 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
     : type(params.type)
     , task_id(params.task_id)
     , last_touch_time(time(nullptr))
-    , storage_id({}, {})  /// Will update later.
+    , storage_id(params.storage->getStorageID())
     , result_part_names(params.new_part_names)
     , thread_id{getThreadId()}
 {
-    if (!params.storage)
-        throw Exception("storage in manipulation params can't be nullptr", ErrorCodes::LOGICAL_ERROR);
-
-    storage_id = params.storage->getStorageID();
-
     if (!params.source_data_parts.empty())
     {
         partition_id = params.source_data_parts.front()->info.partition_id;

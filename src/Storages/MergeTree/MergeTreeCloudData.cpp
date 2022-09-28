@@ -230,8 +230,10 @@ void MergeTreeCloudData::unloadOldPartsByTimestamp(Int64 expired_ts)
 void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 {
     auto cnch_parallel_prefetching = getSettings()->cnch_parallel_prefetching;
-    if (cnch_parallel_prefetching == 1 || parts.size() < 4)
+    if (parts.empty())
         return;
+    // if (cnch_parallel_prefetching == 1 || parts.size() < 4)
+    //     return;
 
     MutableDataPartsVector parts_without_cache;
     for (auto & part : parts)
@@ -240,8 +242,8 @@ void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
         parts_without_cache.push_back(part);
     }
 
-    if (parts_without_cache.size() < 4)
-        return;
+    // if (parts_without_cache.size() < 4)
+    //     return;
 
     size_t pool_size = std::min(parts_without_cache.size(), UInt64(cnch_parallel_prefetching));
     /// load checksums and index_granularity in parallel

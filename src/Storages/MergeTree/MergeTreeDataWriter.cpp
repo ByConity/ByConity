@@ -423,7 +423,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     auto all_columns = metadata_snapshot->getColumns().getAllPhysical();
     bool has_bitmap = std::any_of(all_columns.begin(), all_columns.end(),
                                   [](const NameAndTypePair & name_type) { return isBitmap64(name_type.type);});
-    if (has_bitmap) part_type = MergeTreeDataPartType::WIDE;
+    if (has_bitmap)
+        part_type = MergeTreeDataPartType::WIDE;
 
     auto new_data_part = data.createPart(
         part_name,

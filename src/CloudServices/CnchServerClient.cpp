@@ -287,7 +287,8 @@ TxnTimestamp CnchServerClient::commitParts(
         request.set_from_buffer_uuid(from_buffer_uuid);
 
     /// add tpl for kafka commit
-    if (!consumer_group.empty()) {
+    if (!consumer_group.empty())
+    {
         if (tpl.empty())
             throw Exception("No tpl get while committing kafka data", ErrorCodes::LOGICAL_ERROR);
         request.set_consumer_group(consumer_group);
@@ -520,6 +521,21 @@ std::set<UUID> CnchServerClient::getDeletingTablesInGlobalGC()
     for (auto & uuid : response.uuids())
         res.insert(RPCHelpers::createUUID(uuid));
     return res;
+}
+
+std::optional<TxnTimestamp> CnchServerClient::getMinActiveTimestamp(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::GetMinActiveTimestampReq request;
+    Protos::GetMinActiveTimestampResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+
+    stub->getMinActiveTimestamp(&cntl, &request, &response, nullptr);
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.has_timestamp() ? std::optional(response.timestamp()) : std::nullopt;
 }
 
 UInt64 CnchServerClient::getServerStartTime()

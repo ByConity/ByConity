@@ -100,6 +100,11 @@ HostWithPortsVec ServiceDiscoveryConsul::lookup(const String & psm_name, Compone
     return result;
 }
 
+ServiceDiscoveryConsul::Endpoints ServiceDiscoveryConsul::lookupEndpoints(const String & psm_name)
+{
+    return fetchEndpoints(psm_name, "");
+}
+
 IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW(const String & psm_name, const String & vw_name)
 {
     Endpoints endpoints = fetchEndpoints(psm_name, vw_name);

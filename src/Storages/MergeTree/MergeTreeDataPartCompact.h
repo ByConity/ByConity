@@ -67,7 +67,7 @@ public:
 
     size_t getColumnsWithoutByteMapColSize() const { return columns_without_bytemap_col_size; }
 
-    void setColumns(const NamesAndTypesList & new_columns) override;
+    void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override;
 
     /// Due to all columns except for ByteMap columns are written into one file. It's necessary to hold the column position without ByteMap column.
     std::optional<size_t> getColumnPositionWithoutMap(const String & column_name) const;

@@ -18,12 +18,16 @@ using DataPartCNCHPtr = std::shared_ptr<const MergeTreeDataPartCNCH>;
 class MergeTreeReaderCNCH : public IMergeTreeReader
 {
 public:
-    MergeTreeReaderCNCH(const DataPartCNCHPtr& data_part_,
-        const NamesAndTypesList& columns_, const StorageMetadataPtr & metadata_snapshot_,
-        UncompressedCache* uncompressed_cache_, MarkCache * mark_cache_,
-        const MarkRanges& mark_ranges_, const MergeTreeReaderSettings& settings_,
-        MergeTreeBitMapIndexReader* bitmap_index_reader_,
-        const ValueSizeMap& avg_value_size_hints_ = {},
+    MergeTreeReaderCNCH(
+        const DataPartCNCHPtr & data_part_,
+        const NamesAndTypesList & columns_,
+        const StorageMetadataPtr & metadata_snapshot_,
+        UncompressedCache * uncompressed_cache_,
+        MarkCache * mark_cache_,
+        const MarkRanges & mark_ranges_,
+        const MergeTreeReaderSettings & settings_,
+        MergeTreeBitMapIndexReader * bitmap_index_reader_,
+        const ValueSizeMap & avg_value_size_hints_ = {},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
 
@@ -45,7 +49,7 @@ private:
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
     void executeFileStreamBuilders(FileStreamBuilders& stream_builders);
-    
+
     void addStreamsIfNoBurden(const NameAndTypePair& name_and_type,
         const std::function<String(const String&, const ISerialization::SubstreamPath&)>& file_name_getter,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
@@ -55,6 +59,8 @@ private:
 
     IDiskCacheStrategyPtr segment_cache_strategy;
     IDiskCachePtr segment_cache;
+
+    Poco::Logger * log;
 };
 
 }

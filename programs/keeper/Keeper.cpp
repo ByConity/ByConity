@@ -392,10 +392,9 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
             socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 port_name,
+                "Keeper (tcp): " + address.toString(),
                 std::make_unique<Poco::Net::TCPServer>(
                     new KeeperTCPHandlerFactory(*this, false), server_pool, socket, new Poco::Net::TCPServerParams));
-
-            LOG_INFO(log, "Listening for connections to Keeper (tcp): {}", address.toString());
         });
 
         const char * secure_port_name = "keeper_server.tcp_port_secure";
@@ -408,6 +407,7 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
             socket.setSendTimeout(config().getUInt64("keeper_server.socket_send_timeout_sec", DBMS_DEFAULT_SEND_TIMEOUT_SEC));
             servers->emplace_back(
                 secure_port_name,
+                "Keeper with secure protocol (tcp_secure): " + address.toString(),
                 std::make_unique<Poco::Net::TCPServer>(
                     new KeeperTCPHandlerFactory(*this, true), server_pool, socket, new Poco::Net::TCPServerParams));
             LOG_INFO(log, "Listening for connections to Keeper with secure protocol (tcp_secure): {}", address.toString());
@@ -420,7 +420,10 @@ int Keeper::main(const std::vector<std::string> & /*args*/)
     }
 
     for (auto & server : *servers)
+    {
         server.start();
+        LOG_INFO(log, "Listening for {}", server.getDescription());
+    }
 
     zkutil::EventPtr unused_event = std::make_shared<Poco::Event>();
     zkutil::ZooKeeperNodeCache unused_cache([] { return nullptr; });

@@ -7,6 +7,7 @@
 #include <Poco/PatternFormatter.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/Util/XMLConfiguration.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 
 #include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <Common/Config/ConfigProcessor.h>
@@ -24,7 +25,7 @@ static void setupLogging(const std::string & log_level)
 }
 
 static std::string extractFromConfig(
-        const std::string & config_path, const std::string & key, bool process_zk_includes, bool try_get = false)
+    const std::string & config_path, const std::string & key, bool process_zk_includes, bool try_get = false)
 {
     DB::ConfigProcessor processor(config_path, /* throw_on_bad_incl = */ false, /* log_to_console = */ false);
     bool has_zk_includes;
@@ -33,7 +34,7 @@ static std::string extractFromConfig(
     {
         DB::ConfigurationPtr bootstrap_configuration(new Poco::Util::XMLConfiguration(config_xml));
         zkutil::ZooKeeperPtr zookeeper = std::make_shared<zkutil::ZooKeeper>(
-                *bootstrap_configuration, "zookeeper", nullptr);
+                *bootstrap_configuration, "zookeeper", nullptr, DB::ServiceEndpoints{});
         zkutil::ZooKeeperNodeCache zk_node_cache([&] { return zookeeper; });
         config_xml = processor.processConfig(&has_zk_includes, &zk_node_cache);
     }

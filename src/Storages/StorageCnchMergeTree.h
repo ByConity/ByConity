@@ -62,6 +62,15 @@ public:
 
     HostWithPortsVec getWriteWorkers(const ASTPtr & query, ContextPtr local_context) override;
 
+    bool optimize(
+        const ASTPtr & query,
+        const StorageMetadataPtr & /*metadata_snapshot*/,
+        const ASTPtr & partition,
+        bool final,
+        bool /*deduplicate*/,
+        const Names & /* deduplicate_by_columns */,
+        ContextPtr query_context) override;
+
     CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
@@ -128,6 +137,9 @@ public:
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
+
+    String genCreateTableQueryForWorker(const String & suffix);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

@@ -117,7 +117,6 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         finalizePartOnDisk(new_part, part_columns, *checksums_ptr, sync);
 
     new_part->setColumns(part_columns);
-    new_part->columns_ptr = std::make_shared<NamesAndTypesList>(part_columns);
     new_part->rows_count = rows_count;
     new_part->modification_time = time(nullptr);
     *(new_part->index) = writer->releaseIndexColumns();

@@ -57,9 +57,7 @@ void CnchServerServiceImpl::commitParts(
                 if (req->parts_size() != req->paths_size())
                     throw Exception("Incorrect arguments", ErrorCodes::BAD_ARGUMENTS);
 
-                TransactionCnchPtr cnch_txn;
-                cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
-
+                auto cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
                 /// Create new rpc context and bind the previous created txn to this rpc context.
                 auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
                 rpc_context->setCurrentTransaction(cnch_txn, false);
@@ -125,15 +123,14 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
     [[maybe_unused]] Protos::GetMinActiveTimestampResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    /*
     RPCHelpers::serviceHandler(
         done,
         response,
-        [request = request, response = response, done = done, &global_context = global_context, log = log] {
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
             brpc::ClosureGuard done_guard(done);
             try
             {
-                auto & txn_coordinator = global_context.getCnchTransactionCoordinator();
+                auto & txn_coordinator = global_context->getCnchTransactionCoordinator();
                 auto storage_id = RPCHelpers::createStorageID(request->storage_id());
                 if (auto timestamp = txn_coordinator.getMinActiveTimestamp(storage_id))
                     response->set_timestamp(*timestamp);
@@ -145,7 +142,6 @@ void CnchServerServiceImpl::getMinActiveTimestamp(
             }
         }
     );
-    */
 }
 
 

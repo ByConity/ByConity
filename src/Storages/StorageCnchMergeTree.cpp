@@ -1,10 +1,15 @@
 #include <Storages/StorageCnchMergeTree.h>
 
+#include <Catalog/Catalog.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
+#include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerResource.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Core/Settings.h>
+#include <Core/Protocol.h>
+#include <DaemonManager/DaemonManagerClient.h>
+#include <DataStreams/RemoteBlockInputStream.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <Databases/DatabaseOnDisk.h>
 #include <IO/ConnectionTimeoutsContext.h>
@@ -19,6 +24,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
 #include <Parsers/ASTCheckQuery.h>
+#include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
@@ -44,6 +50,7 @@
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
+#include <Common/parseAddress.h>
 #include <common/logger_useful.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Parsers/ASTIdentifier.h>
@@ -538,12 +545,13 @@ void StorageCnchMergeTree::filterPartsByPartition(
     size_t prev_sz = parts.size();
     size_t empty = 0, partition_minmax = 0, minmax_idx = 0, part_value = 0;
     std::erase_if(parts, [&](const auto & part) {
-        if (part->isEmpty())
-        {
-            ++empty;
-            return true;
-        }
-        else if (partition_pruner && partition_pruner->canBePruned(*part))
+        // if (part->isEmpty()) /// FIXME: partial part is empty now.
+        // {
+        //     ++empty;
+        //     return true;
+        // }
+        // else
+        if (partition_pruner && partition_pruner->canBePruned(*part))
         {
             ++partition_minmax;
             return true;
@@ -862,6 +870,61 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
         }
         return res;
     }
+}
+
+bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataPtr &, const ASTPtr & partition, bool final, bool, const Names &, ContextPtr query_context)
+{
+    auto optimize_query = query->as<ASTOptimizeQuery>();
+    auto dry_run = optimize_query->enable_try;
+
+    auto merge_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+
+    if (!merge_thread)
+    {
+        const auto & query_client_info = query_context->getClientInfo();
+
+        if (query_client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
+            throw Exception("Can't get merge thread", ErrorCodes::LOGICAL_ERROR);
+
+        auto daemon_manage_client = getContext()->getDaemonManagerClient();
+        String host_port = daemon_manage_client->getDaemonThreadServer(getStorageID(), CnchBGThreadType::MergeMutate);
+
+        if (host_port.empty())
+            throw Exception("Got empty host for optimize query from daemon manager", ErrorCodes::LOGICAL_ERROR);
+        auto [host, rpc_port] = parseAddress(host_port, 0);
+
+        String default_database = "default";
+        String user = query_client_info.current_user;
+        String password = query_client_info.current_password;
+        auto tcp_port = getContext()->getTCPPort(host, rpc_port);
+
+        LOG_DEBUG(log, "Send optimize query to server {}:{}", host, tcp_port);
+
+        Connection connection(host, tcp_port, default_database, user, password, /*cluster_*/"", /*cluster_secret_*/"", "server", Protocol::Compression::Enable, Protocol::Secure::Disable);
+
+        WriteBufferFromOwnString query_buf;
+        formatAST(*query, query_buf, false, true);
+        RemoteBlockInputStream stream(connection, query_buf.str(), {}, query_context);
+        NullBlockOutputStream output({});
+
+        copyData(stream, output);
+
+        return true;
+    }
+
+    Strings partition_ids;
+
+    if (!partition)
+        partition_ids = query_context->getCnchCatalog()->getPartitionIDs(shared_from_this(), &*query_context);
+    else
+        partition_ids.push_back(getPartitionIDFromQuery(partition, query_context));
+
+    auto istorage = shared_from_this();
+    auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread*>(merge_thread.get());
+    for (const auto & partition_id : partition_ids)
+        merge_mutate_thread->triggerPartMerge(istorage, partition_id, final, dry_run, false);
+
+    return true;
 }
 
 CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts)
@@ -1656,4 +1719,22 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
+
+String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
+{
+    String worker_table_name = getTableName();
+
+    if (!suffix.empty())
+    {
+        worker_table_name += '_';
+        for (const auto & c : suffix)
+        {
+            if (c != '-')
+                worker_table_name += c;
+        }
+    }
+
+    return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
+}
+
 } // end namespace DB

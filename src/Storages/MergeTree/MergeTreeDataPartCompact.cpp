@@ -114,7 +114,7 @@ void MergeTreeDataPartCompact::calculateEachColumnSizes(ColumnSizeByName & each_
         total_size.marks += mrk_checksum->second.file_size;
 
     // Special handling flattened map type
-    for (const NameAndTypePair & column : columns)
+    for (const NameAndTypePair & column : *columns_ptr)
     {
         if (column.type->isMap() && !column.type->isMapKVStore())
         {
@@ -129,11 +129,11 @@ void MergeTreeDataPartCompact::loadIndexGranularity()
 {
     String full_path = getFullRelativePath();
 
-    if (columns.empty())
+    if (columns_ptr->empty())
         throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 
     if (!index_granularity_info.is_adaptive)
-        throw Exception("MergeTreeDataPartCompact cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("MergeTreeDataPartCompact cannot be created with non-adaptive granularity.", ErrorCodes::NOT_IMPLEMENTED);
 
     auto marks_file_path = index_granularity_info.getMarksFilePath(full_path + "data");
     if (!volume->getDisk()->exists(marks_file_path))
@@ -160,9 +160,9 @@ void MergeTreeDataPartCompact::loadIndexGranularity()
 void MergeTreeDataPartCompact::loadIndexGranularity(const size_t /*marks_count*/, const std::vector<size_t> & index_granularities)
 {
     if (index_granularities.empty())
-        throw Exception("MergeTreeDataPartCompact cannot be created with non-adaptive granulary.", ErrorCodes::NOT_IMPLEMENTED);
-    
-    for (auto & granularity : index_granularities)
+        throw Exception("MergeTreeDataPartCompact cannot be created with non-adaptive granularity.", ErrorCodes::NOT_IMPLEMENTED);
+
+    for (const auto & granularity : index_granularities)
         index_granularity.appendMark(granularity);
 
     index_granularity.setInitialized();
@@ -207,14 +207,14 @@ bool MergeTreeDataPartCompact::hasColumnFiles(const NameAndTypePair & column) co
         return check_stream_exists(DATA_FILE_NAME_WITH_EXTENSION, DATA_FILE_NAME + index_granularity_info.marks_file_extension);
 }
 
-void MergeTreeDataPartCompact::setColumns(const NamesAndTypesList & new_columns)
+void MergeTreeDataPartCompact::setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr)
 {
-    IMergeTreeDataPart::setColumns(new_columns);
+    IMergeTreeDataPart::setColumnsPtr(new_columns_ptr);
     columns_without_bytemap_col_size = 0;
     column_name_to_position_without_map.clear();
-    column_name_to_position_without_map.reserve(new_columns.size());
+    column_name_to_position_without_map.reserve(new_columns_ptr->size());
     size_t pos_without_map = 0;
-    for (const auto & column : columns)
+    for (const auto & column : *new_columns_ptr)
     {
         if (!column.type->isMap() || column.type->isMapKVStore())
         {
@@ -228,7 +228,7 @@ void MergeTreeDataPartCompact::setColumns(const NamesAndTypesList & new_columns)
 }
 
 std::optional<size_t> MergeTreeDataPartCompact::getColumnPositionWithoutMap(const String & column_name) const
-{ 
+{
     auto it = column_name_to_position_without_map.find(column_name);
     if (it == column_name_to_position_without_map.end())
         return {};
@@ -275,7 +275,7 @@ void MergeTreeDataPartCompact::checkConsistency(bool require_part_metadata) cons
                 throw Exception("Part " + path + " is broken: " + fullPath(volume->getDisk(), mrk_file_name) + " is empty.",
                     ErrorCodes::BAD_SIZE_OF_FILE_IN_DATA_PART);
 
-            UInt64 expected_file_size = index_granularity_info.getMarkSizeInBytes(columns.size()) * index_granularity.getMarksCount();
+            UInt64 expected_file_size = index_granularity_info.getMarkSizeInBytes(columns_ptr->size()) * index_granularity.getMarksCount();
             if (expected_file_size != file_size)
                 throw Exception(
                     "Part " + path + " is broken: bad size of marks file '" + fullPath(volume->getDisk(), mrk_file_name) + "': " + std::to_string(file_size) + ", must be: " + std::to_string(expected_file_size),

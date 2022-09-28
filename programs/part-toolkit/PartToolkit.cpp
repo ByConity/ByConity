@@ -13,7 +13,7 @@
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <FormaterTool/PartMerger.h>
-#include <FormaterTool/PartConvertor.h>
+#include <FormaterTool/PartConverter.h>
 #include <FormaterTool/PartWriter.h>
 #include <Poco/Path.h>
 #include <Poco/FileChannel.h>
@@ -28,7 +28,7 @@ int mainHelp(int , char **)
 {
     /// TODO: make help more clear
     std::cout << "Usage : \n";
-    std::cout << "clickhouse [part-writer|part-convertor] query" << std::endl;
+    std::cout << "clickhouse [part-writer|part-converter] query" << std::endl;
     return 0;
 }
 
@@ -67,8 +67,8 @@ void run(const std::string & query, Poco::Logger * log)
         LOG_ERROR(log, "Part merger is not implmented in cnch. ");
         return;
     }
-    else if (query_ast.type == DB::PartToolType::CONVERTOR)
-        executor = std::make_shared<DB::PartConvertor>(ast, mutable_context_ptr);
+    else if (query_ast.type == DB::PartToolType::CONVERTER)
+        executor = std::make_shared<DB::PartConverter>(ast, mutable_context_ptr);
 
     executor->execute();
 }

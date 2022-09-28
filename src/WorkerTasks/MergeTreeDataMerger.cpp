@@ -17,6 +17,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/MaterializingTransform.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MergeTree/MergeTreeDataPartWide.h>
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
@@ -181,10 +182,9 @@ void MergeTreeDataMerger::prepareNewParts()
     const auto & new_part_name = params.new_part_names.front();
 
     /// Check directory
-    /// String new_part_tmp_path = TMP_PREFIX + toString(UInt64(context.getCurrentCnchStartTime())) + '-' + new_part_name + "/";
-    String new_part_tmp_path = TMP_PREFIX + '-' + new_part_name + "/";
+    String new_part_tmp_path = TMP_PREFIX + toString(UInt64(context->getCurrentCnchStartTime())) + '-' + new_part_name;
     DiskPtr disk = space_reservation->getDisk();
-    String new_part_tmp_rel_path = data.getRelativeDataPath() + new_part_tmp_path;
+    String new_part_tmp_rel_path = data.getRelativeDataPath() + "/" + new_part_tmp_path;
 
     if (disk->exists(new_part_tmp_rel_path))
         throw Exception("Directory " + fullPath(disk, new_part_tmp_rel_path) + " already exists", ErrorCodes::DIRECTORY_ALREADY_EXISTS);
@@ -193,7 +193,7 @@ void MergeTreeDataMerger::prepareNewParts()
     /// Create new data part object
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + new_part_name, disk, 0);
     auto part_info = MergeTreePartInfo::fromPartName(new_part_name, data.format_version);
-    new_data_part = std::make_shared<MergeTreeDataPartCNCH>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path);
+    new_data_part = std::make_shared<MergeTreeDataPartWide>(data, new_part_name, part_info, single_disk_volume, new_part_tmp_path);
 
     /// Common fields
     /// TODO uuid
@@ -339,7 +339,7 @@ void MergeTreeDataMerger::createSources()
             merging_column_names,
             false, // read_with_direct_io: We believe source parts will be mostly in page cache
             true, /// take_column_types_from_storage
-            false /// queit
+            false /// quiet
         );
         input->setProgressCallback(ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, *horizontal_stage_progress));
 
@@ -683,7 +683,7 @@ void MergeTreeDataMerger::finalizePart()
 MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 {
     const auto & parts = params.source_data_parts;
-    space_reservation = data.reserveSpace(estimateNeededDiskSpace(parts));
+    space_reservation = data.reserveSpaceOnLocal(estimateNeededDiskSpace(parts));
 
     /// TODO: do we need to support (1) TTL merge ? (2) deduplicate
 
@@ -706,6 +706,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 
     createSources();
     createMergedStream();
+    copyMergedData();
 
     if (merge_alg == MergeAlgorithm::Vertical)
         gatherColumns();
@@ -726,7 +727,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
     }
 
     /// TODO: support project
-
     finalizePart();
 
     return new_data_part;

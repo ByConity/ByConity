@@ -529,7 +529,7 @@ void MergeTreeDataPartWriterOnDisk::writeUncompactedByteMapColumn(
         NameAndTypePair implicit_column{implicit_stream_name, null_val_type_ptr};
         if (!exist_key_names.count(k_n.second))
             implicit_columns_list.emplace_back(implicit_column);
- 
+
         if (need_fix_new_key)
         {
             this->deepCopyAndAdd(map_base_stream_name, implicit_stream_name, *null_val_type_ptr);
@@ -908,7 +908,7 @@ ISerialization::OutputStreamGetter MergeTreeDataPartWriterOnDisk::createStreamGe
         /// Don't write offsets more than one time for Nested type.
         if (is_offsets && offset_columns.count(stream_name))
             return nullptr;
-        
+
         if (!column_streams.count(stream_name))
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Try to get stream {} but not found, it's a bug", stream_name);
         return &column_streams.at(stream_name)->compressed;
