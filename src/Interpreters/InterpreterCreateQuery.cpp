@@ -1109,6 +1109,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             {
                 db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database->getDatabaseName());
                 tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
+                std::lock(*db_lock, *tb_lock);
             }
         }
         assertOrSetUUID(create, database);
