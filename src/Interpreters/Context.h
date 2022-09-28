@@ -209,6 +209,7 @@ class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+class CnchCatalogDictionaryCache;
 
 enum class ServerType
 {
@@ -711,9 +712,11 @@ public:
 
     const EmbeddedDictionaries & getEmbeddedDictionaries() const;
     const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache() const;
     const ExternalModelsLoader & getExternalModelsLoader() const;
     EmbeddedDictionaries & getEmbeddedDictionaries();
     ExternalDictionariesLoader & getExternalDictionariesLoader();
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache();
     ExternalModelsLoader & getExternalModelsLoader();
     ExternalModelsLoader & getExternalModelsLoaderUnlocked();
     void tryCreateEmbeddedDictionaries() const;

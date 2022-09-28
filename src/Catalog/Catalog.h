@@ -196,6 +196,9 @@ public:
 
     void attachDictionary(const String & database, const String & name);
 
+    /// for backward compatible, the old dictionary doesn't have UUID
+    void fixDictionary(const String & database, const String & name);
+
     Strings getDictionariesInDB(const String & database);
 
     Protos::DataModelDictionary getDictionary(const String & database, const String & name);
@@ -680,5 +683,5 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-
+void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }
