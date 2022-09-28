@@ -72,15 +72,15 @@ MergeTreeDataPartCNCH::MergeTreeDataPartCNCH(
 }
 
 IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
-    [[maybe_unused]] const NamesAndTypesList & columns_to_read,
-    [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot,
-    [[maybe_unused]] const MarkRanges & mark_ranges,
-    [[maybe_unused]] UncompressedCache * uncompressed_cache,
-    [[maybe_unused]] MarkCache * mark_cache,
-    [[maybe_unused]] const MergeTreeReaderSettings & reader_settings_,
-    [[maybe_unused]] MergeTreeBitMapIndexReader * bitmap_index_reader,
-    [[maybe_unused]] const ValueSizeMap & avg_value_size_hints,
-    [[maybe_unused]] const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
+    const NamesAndTypesList & columns_to_read,
+    const StorageMetadataPtr & metadata_snapshot,
+    const MarkRanges & mark_ranges,
+    UncompressedCache * uncompressed_cache,
+    MarkCache * mark_cache,
+    const MergeTreeReaderSettings & reader_settings_,
+    MergeTreeBitMapIndexReader * bitmap_index_reader,
+    const ValueSizeMap & avg_value_size_hints,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {
     auto new_settings = reader_settings_;
     new_settings.convert_nested_to_subcolumns = true;
@@ -166,8 +166,11 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     assertOnDisk();
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
     loadIndexGranularity();
-    getChecksums();
+    loadChecksums(false);
     // getIndex();
+
+    /// FIXME:
+    default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
@@ -332,7 +335,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     // Update checksums base on current part's mutation, the mutation in hdfs's file
     // is not reliable, since when attach, part will have new mutation, but the mutation
     // and hint_mutation within part's checksums is untouched, so update it here
-    for (auto& file : checksums->files)
+    for (auto & file : checksums->files)
     {
         file.second.mutation = info.mutation;
     }
@@ -346,7 +349,9 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         /// insert checksum files from previous part if it's not in current checksums
         for (const auto & [name, file] : prev_checksums->files)
         {
-            [[maybe_unused]] auto [it, inserted] = checksums->files.emplace(name, file);
+            auto [it, inserted] = checksums->files.emplace(name, file);
+            if (inserted)
+                it->second.mutation = prev_part->info.mutation;
         }
     }
 

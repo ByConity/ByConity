@@ -19,7 +19,7 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/JSON.h>
 #include <common/logger_useful.h>
-#include "Storages/KeyDescription.h"
+#include <Storages/KeyDescription.h>
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
 #include <DataTypes/NestedUtils.h>
@@ -57,7 +57,6 @@ namespace ErrorCodes
     extern const int BAD_SIZE_OF_FILE_IN_DATA_PART;
     extern const int BAD_TTL_FILE;
     extern const int NOT_IMPLEMENTED;
-    extern const int UNKNOWN_FORMAT_VERSION;
     extern const int FORMAT_VERSION_TOO_OLD;
 }
 
@@ -484,11 +483,19 @@ std::pair<time_t, time_t> IMergeTreeDataPart::getMinMaxTime() const
 
 void IMergeTreeDataPart::setColumns(const NamesAndTypesList & new_columns)
 {
-    columns = new_columns;
+    setColumnsPtr(std::make_shared<NamesAndTypesList>(new_columns));
+}
+
+void IMergeTreeDataPart::setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr)
+{
+    if (!new_columns_ptr)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Columns should be not nullptr");
+
+    columns_ptr = new_columns_ptr;
     column_name_to_position.clear();
-    column_name_to_position.reserve(new_columns.size());
+    column_name_to_position.reserve(columns_ptr->size());
     size_t pos = 0;
-    for (const auto & column : columns)
+    for (const auto & column : *columns_ptr)
     {
         column_name_to_position.emplace(column.name, pos);
         for (const auto & subcolumn : column.type->getSubcolumnNames())
@@ -715,6 +722,39 @@ String IMergeTreeDataPart::getFullRelativePath() const
     return fs::path(storage.relative_data_path) / (parent_part ? parent_part->relative_path : "") / relative_path / "";
 }
 
+String IMergeTreeDataPart::getMvccFullPath(const String & file_name) const
+{
+    /// For base part
+    if (!isPartial())
+        return getFullPath();
+
+    /// For delta part
+    auto checksums = getChecksums();
+    auto it = checksums->files.find(file_name);
+    if (it == checksums->files.end())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot find file: {} in checksums of part: {}. This is bug.", file_name, relative_path);
+    auto file_mutation = it->second.mutation;
+
+    for (IMergeTreeDataPartPtr part = shared_from_this();; part = part->prev_part)
+    {
+        if (!part)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "File {} with  {} not found in delta chain of part {}: no more part",
+                file_name, file_mutation, relative_path);
+
+        if (file_mutation == part->info.mutation)
+            return part->getFullPath();
+        else if (file_mutation > part->info.mutation)
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "File {} with {} not found in delta chain of part {}: already got smaller part",
+                file_name, file_mutation, relative_path);
+
+        LOG_TRACE(&Poco::Logger::get(__func__), "Checked {} for {} with {}", part->name, file_name, file_mutation);
+    }
+}
+
 void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checksums, bool check_consistency)
 {
     assertOnDisk();
@@ -743,8 +783,8 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
 
     if (check_consistency)
         checkConsistency(require_columns_checksums);
-    loadDefaultCompressionCodec();
 
+    loadDefaultCompressionCodec();
 }
 
 void IMergeTreeDataPart::loadProjections(bool require_columns_checksums, bool check_consistency)
@@ -829,8 +869,12 @@ void IMergeTreeDataPart::loadIndex()
     if (key_size)
     {
         String index_path = fs::path(getFullRelativePath()) / "primary.idx";
-        auto index_file = openForReading(volume->getDisk(), index_path);
-        index = loadIndexFromBuffer(*index_file, primary_key);
+        /// FIXME: partial part don't have primary.idx
+        if (volume->getDisk()->exists(index_path))
+        {
+            auto index_file = openForReading(volume->getDisk(), index_path);
+            index = loadIndexFromBuffer(*index_file, primary_key);
+        }
     }
 }
 
@@ -882,7 +926,7 @@ CompressionCodecPtr IMergeTreeDataPart::detectDefaultCompressionCodec() const
 
     const auto & storage_columns = metadata_snapshot->getColumns();
     CompressionCodecPtr result = nullptr;
-    for (const auto & part_column : columns)
+    for (const auto & part_column : *columns_ptr)
     {
         /// It was compressed with default codec and it's not empty
         auto column_size = getColumnSize(part_column.name, *part_column.type);
@@ -1019,7 +1063,7 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::loadChecksums(bool require)
 void IMergeTreeDataPart::loadRowsCount()
 {
     String path = fs::path(getFullRelativePath()) / "count.txt";
-    if (index_granularity.empty())
+    if (index_granularity.empty() || !volume->getDisk()->exists(path)) /// FIXME: partial part don't have count.txt
     {
         rows_count = 0;
     }
@@ -1081,7 +1125,7 @@ void IMergeTreeDataPart::loadRowsCount()
     }
     else
     {
-        for (const NameAndTypePair & column : columns)
+        for (const NameAndTypePair & column : *columns_ptr)
         {
             ColumnPtr column_col = column.type->createColumn();
             if (!column_col->isFixedAndContiguous() || column_col->lowCardinality())
@@ -1160,7 +1204,7 @@ void IMergeTreeDataPart::loadColumns(bool require)
             if (volume->getDisk()->exists(fs::path(getFullRelativePath()) / (getFileNameForColumn(column) + ".bin")))
                 loaded_columns.push_back(column);
 
-        if (columns.empty())
+        if (columns_ptr->empty())
             throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 
         {
@@ -1546,9 +1590,9 @@ void IMergeTreeDataPart::makeCloneInDetached(const String & prefix, const Storag
 
 bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
 {
-    if (columns.size() != 1)
+    if (columns_ptr->size() != 1)
         return false;
-    const auto type = columns.begin()->type;
+    const auto type = columns_ptr->begin()->type;
     return type->isMap() && !type->isMapKVStore() && versions->enable_compact_map_data;
 }
 
@@ -2087,7 +2131,7 @@ void readPartBinary(IMergeTreeDataPart & part, ReadBuffer & buf, bool read_hint_
         part.info.hint_mutation = hint_mutation;
     }
 
-    part.columns_ptr->readText(buf);
+    part.getColumnsPtr()->readText(buf);
     part.deserializePartitionAndMinMaxIndex(buf);
 
     readIntBinary(part.bucket_number, buf);
@@ -2107,7 +2151,7 @@ void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
         writeVarUInt(cnch_part->getMarksCount(), buf);
     writeVarUInt(part.info.hint_mutation, buf);
 
-    part.columns_ptr->writeText(buf);
+    part.getColumnsPtr()->writeText(buf);
     part.serializePartitionAndMinMaxIndex(buf);
     writeIntBinary(part.bucket_number, buf);
     writeIntBinary(part.table_definition_hash, buf);

@@ -119,13 +119,12 @@ void MergeTreeDataPartWide::loadIndexGranularity()
     String full_path = getFullRelativePath();
     index_granularity_info.changeGranularityIfRequired(volume->getDisk(), full_path);
 
-
-    if (columns.empty())
+    if (columns_ptr->empty())
         throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
 
     /// We can use any column except for ByteMap column whose data file may not exist.
     std::string marks_file_path;
-    for (auto & column: columns)
+    for (auto & column: *columns_ptr)
     {
         if (column.type->isMap() && !column.type->isMapKVStore())
             continue;
@@ -192,7 +191,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
     {
         if (require_part_metadata)
         {
-            for (const NameAndTypePair & name_type : columns)
+            for (const NameAndTypePair & name_type : *columns_ptr)
             {
                 //@ByteMap
                 if (name_type.type->isMap() && !name_type.type->isMapKVStore())
@@ -219,7 +218,7 @@ void MergeTreeDataPartWide::checkConsistency(bool require_part_metadata) const
     {
         /// Check that all marks are nonempty and have the same size.
         std::optional<UInt64> marks_size;
-        for (const NameAndTypePair & name_type : columns)
+        for (const NameAndTypePair & name_type : *columns_ptr)
         {
             //@ByteMap
             if (name_type.type->isMap() && !name_type.type->isMapKVStore())
@@ -316,7 +315,7 @@ String MergeTreeDataPartWide::getFileNameForColumn(const NameAndTypePair & colum
 void MergeTreeDataPartWide::calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const
 {
     std::unordered_set<String> processed_substreams;
-    for (const NameAndTypePair & column : columns)
+    for (const NameAndTypePair & column : *columns_ptr)
     {
         ColumnSize size = getColumnSizeImpl(column, &processed_substreams);
         each_columns_size[column.name] = size;

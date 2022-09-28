@@ -137,6 +137,9 @@ public:
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
+
+    String genCreateTableQueryForWorker(const String & suffix);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

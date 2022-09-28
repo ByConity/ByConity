@@ -280,7 +280,7 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
 {
     for (const auto & granule : granules)
     {
-        
+
         auto name_and_type = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++name_and_type)
         {
@@ -289,7 +289,7 @@ void MergeTreeDataPartWriterCompact::writeDataBlock(const Block & block, const G
             if (!data_writer)
                 throw Exception("Compact data writer is not initialized but used.", ErrorCodes::LOGICAL_ERROR);
             data_written = true;
-            
+
             /// Tricky part, because we share compressed streams between different columns substreams.
             /// Compressed streams write data to the single file, but with different compression codecs.
             /// So we flush each stream (using next()) before using new one, because otherwise we will override
@@ -341,7 +341,7 @@ void MergeTreeDataPartWriterCompact::writeAllImplicitColumnBlock(const Block & b
     {
         if ((!name_and_type->type->isMap() || name_and_type->type->isMapKVStore()) && !isMapImplicitKeyNotKV(name_and_type->name))
             continue;
-        
+
         const ColumnWithTypeAndName & column = block.getByName(name_and_type->name);
         data_written = true;
 
@@ -350,7 +350,7 @@ void MergeTreeDataPartWriterCompact::writeAllImplicitColumnBlock(const Block & b
             if (data_part->versions->enable_compact_map_data)
                 writeCompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);
             else
-                writeUncompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);                
+                writeUncompactedByteMapColumn(*name_and_type, *column.column, offset_columns, granules);
         }
         else /// handle implcit column directly
             writeColumn(*name_and_type, *column.column, offset_columns, granules);
@@ -430,7 +430,7 @@ void MergeTreeDataPartWriterCompact::finishDataSerialization(IMergeTreeDataPart:
             }
 
             writeFinalMark(cl, offset_columns, serialize_settings.path);
-        }   
+        }
     }
 
     if (data_writer)

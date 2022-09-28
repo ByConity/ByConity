@@ -110,7 +110,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     /// Load the local part checksum
     if (!local_part->deleted)
     {
-        local_part->loadColumnsChecksumsIndexes(true, true);
+        local_part->loadColumnsChecksumsIndexes(true, false);
         local_part->prepared_checksums = local_part->getChecksums();
         local_part->prepared_index = local_part->getIndex();
     }
@@ -147,8 +147,8 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     new_part->rows_count = local_part->rows_count;
     /// TODO:
     new_part->loadIndexGranularity(local_part->getMarksCount(), local_part->index_granularity.getIndexGranularities());
-    new_part->columns_ptr = std::make_shared<NamesAndTypesList>(*(local_part->columns_ptr));
-    new_part->setPreparedIndex(local_part->getPreparedIndex());
+    new_part->setColumns(local_part->getColumns());
+    // new_part->setPreparedIndex(local_part->getPreparedIndex());
     new_part->has_bitmap = local_part->has_bitmap.load();
     new_part->deleted = local_part->deleted;
     new_part->bucket_number = local_part->bucket_number;
@@ -253,7 +253,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     String data_file_rel_path = joinPaths({new_part_rel_path, "data"});
     CNCHDataMeta meta;
     {
-        LOG_DEBUG(log, "Writing part {} to {}\n",new_part->name, new_part_rel_path);
+        LOG_DEBUG(log, "Writing part {} to {}", new_part->name, new_part_rel_path);
         auto out = disk->writeFile(data_file_rel_path);
         auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
         if (!data_out)
@@ -306,12 +306,12 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             ///TODO: fix getPositionInFile
             if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
             {
-                 throw Exception("primary.idx in data part "  + part_name + " check error, index offset: " +
-                        std::to_string(index_offset) + " index size: " + std::to_string(index_size) +
-                        "disk size: " + std::to_string(local_part_disk->getFileSize(index_file_rel_path)), ErrorCodes::BAD_CNCH_DATA_FILE);
+                throw Exception(
+                    ErrorCodes::BAD_CNCH_DATA_FILE,
+                    "primary.idx in data part {} check error, index offset: {} index size: {} disk size: {}",
+                    part_name, index_offset, index_size, local_part_disk->getFileSize(index_file_rel_path));
             }
         }
-
 
         /// Checksums
         off_t checksums_offset = index_offset + index_size;

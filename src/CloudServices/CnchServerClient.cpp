@@ -287,7 +287,8 @@ TxnTimestamp CnchServerClient::commitParts(
         request.set_from_buffer_uuid(from_buffer_uuid);
 
     /// add tpl for kafka commit
-    if (!consumer_group.empty()) {
+    if (!consumer_group.empty())
+    {
         if (tpl.empty())
             throw Exception("No tpl get while committing kafka data", ErrorCodes::LOGICAL_ERROR);
         request.set_consumer_group(consumer_group);

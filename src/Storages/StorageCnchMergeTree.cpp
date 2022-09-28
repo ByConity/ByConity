@@ -545,12 +545,13 @@ void StorageCnchMergeTree::filterPartsByPartition(
     size_t prev_sz = parts.size();
     size_t empty = 0, partition_minmax = 0, minmax_idx = 0, part_value = 0;
     std::erase_if(parts, [&](const auto & part) {
-        if (part->isEmpty())
-        {
-            ++empty;
-            return true;
-        }
-        else if (partition_pruner && partition_pruner->canBePruned(*part))
+        // if (part->isEmpty()) /// FIXME: partial part is empty now.
+        // {
+        //     ++empty;
+        //     return true;
+        // }
+        // else
+        if (partition_pruner && partition_pruner->canBePruned(*part))
         {
             ++partition_minmax;
             return true;
@@ -1718,4 +1719,22 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
+
+String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
+{
+    String worker_table_name = getTableName();
+
+    if (!suffix.empty())
+    {
+        worker_table_name += '_';
+        for (const auto & c : suffix)
+        {
+            if (c != '-')
+                worker_table_name += c;
+        }
+    }
+
+    return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
+}
+
 } // end namespace DB
