@@ -28,7 +28,7 @@ ASTPtr DomainTranslator::toPredicate(const ASTPtr & symbol, const Domain & domai
     const ValueSet & value_set = domain.getValueSet();
 
     if (auto v = std::get_if<SortedRangeSet>(&value_set))
-        disjuncts = extractDisjuncts(domain.getType(), v->getRanges(), symbol);  //TODO:use std::move
+        disjuncts = extractDisjuncts(domain.getType(), v->getRanges(), symbol); //TODO:use std::move
     else if (auto d = std::get_if<DiscreteValueSet>(&value_set))
         disjuncts = extractDisjuncts(domain.getType(), *d, symbol);
     else
@@ -50,7 +50,7 @@ ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NamesAn
 {
     TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, types);
     NameToType column_types;
-    for (const auto & type: types)
+    for (const auto & type : types)
         column_types.emplace(type.name, type.type);
 
     return DomainVisitor(context, type_analyzer, std::move(column_types), is_ignored).process(predicate, false);
@@ -158,16 +158,14 @@ ASTPtr DomainTranslator::processRange(const DataTypePtr & type, const Range & ra
     ConstASTs range_conjuncts;
     if (!range.isLowUnbounded())
     {
-        range_conjuncts.emplace_back(makeASTFunction(range.isLowInclusive() ? "greaterOrEquals" : "greater",
-                                                     symbol,
-                                                     literalEncodeWithType(type, range.getLowValue())));
+        range_conjuncts.emplace_back(makeASTFunction(
+            range.isLowInclusive() ? "greaterOrEquals" : "greater", symbol, literalEncodeWithType(type, range.getLowValue())));
     }
 
     if (!range.isHighUnbounded())
     {
-        range_conjuncts.emplace_back(makeASTFunction(range.isHighInclusive() ? "lessOrEquals" : "less",
-                                                     symbol,
-                                                     literalEncodeWithType(type, range.getHighValue())));
+        range_conjuncts.emplace_back(
+            makeASTFunction(range.isHighInclusive() ? "lessOrEquals" : "less", symbol, literalEncodeWithType(type, range.getHighValue())));
     }
 
     // If range_conjuncts is empty, then the range was ALL, which should already have been checked for
@@ -177,7 +175,8 @@ ASTPtr DomainTranslator::processRange(const DataTypePtr & type, const Range & ra
     return PredicateUtils::combineConjuncts(range_conjuncts);
 }
 
-ASTPtr DomainTranslator::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPtr & symbol, const Range & range, ASTs & excluded_points)
+ASTPtr
+DomainTranslator::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPtr & symbol, const Range & range, ASTs & excluded_points)
 {
     if (excluded_points.empty())
         return processRange(type, range, symbol);
@@ -256,8 +255,8 @@ ExtractionResult DomainVisitor::visitASTFunction(ASTPtr & node, const bool & com
         return visitIsNotNullFunction(node, complement);
     if (fun_name == "isNull")
         return visitIsNullFunction(node, complement);
-    if (fun_name == "equals" || fun_name == "notEquals" || fun_name == "less" ||
-        fun_name == "greater" || fun_name == "lessOrEquals" || fun_name == "greaterOrEquals" )
+    if (fun_name == "equals" || fun_name == "notEquals" || fun_name == "less" || fun_name == "greater" || fun_name == "lessOrEquals"
+        || fun_name == "greaterOrEquals")
         return visitComparisonFunction(node, complement);
 
     //TODO:@cdy
@@ -323,7 +322,8 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
         // some of these cases, we won't have to double-check the bounds unnecessarily at execution time.
 
         // We can only make inferences if the remaining expressions on all terms are equal and deterministic
-        if (ASTSet<ConstASTPtr>(residuals.begin(), residuals.end()).size() == 1 && ExpressionDeterminism::isDeterministic(residuals[0], context))
+        if (ASTSet<ConstASTPtr>(residuals.begin(), residuals.end()).size() == 1
+            && ExpressionDeterminism::isDeterministic(residuals[0], context))
         {
             // NONE are no-op for the purpose of OR
             std::vector<TupleDomain>::iterator it = tuple_domains.begin();
@@ -366,11 +366,12 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
                 //    In such case no normalization on the level of TupleDomain takes place,
                 //    and the check for NaN is done by inspecting the Domain's valueSet.
                 //    NaN is included when the valueSet is 'all'.
-                bool unioned_domain_contains_nan = column_unioned_tuple_domain.isAll() ||
-                    (!column_unioned_tuple_domain.domainsIsEmpty() && isAllValueSet(column_unioned_tuple_domain.getOnlyElement().getValueSet()));
+                bool unioned_domain_contains_nan = column_unioned_tuple_domain.isAll()
+                    || (!column_unioned_tuple_domain.domainsIsEmpty()
+                        && isAllValueSet(column_unioned_tuple_domain.getOnlyElement().getValueSet()));
 
-                bool implicitly_added_nan = (idx == TypeIndex::Float32 || idx == TypeIndex::Float64) &&
-                    allTupleDomainsAreNotAll(tuple_domains) && unioned_domain_contains_nan;
+                bool implicitly_added_nan = (idx == TypeIndex::Float32 || idx == TypeIndex::Float64)
+                    && allTupleDomainsAreNotAll(tuple_domains) && unioned_domain_contains_nan;
 
                 if (!implicitly_added_nan)
                 {
@@ -401,13 +402,13 @@ ExtractionResult DomainVisitor::visitComparisonFunction(ASTPtr & node, const boo
 
     NormalizedSimpleComparison normalized = optional_normalized.value();
 
-    auto * identifier_if_exit =  normalized.symbol_expression->as<ASTIdentifier>();
+    auto * identifier_if_exit = normalized.symbol_expression->as<ASTIdentifier>();
     if (identifier_if_exit)
     {
         String symbol = identifier_if_exit->name();
         const DataTypePtr & type = normalized.value_with_type.type;
         const Field & value = normalized.value_with_type.value;
-        auto extraction_result = createComparisonExtractionResult(node, normalized.operator_name, symbol, type , value, complement);
+        auto extraction_result = createComparisonExtractionResult(node, normalized.operator_name, symbol, type, value, complement);
         if (extraction_result.has_value())
             return extraction_result.value();
         return visitNode(node, complement);
@@ -490,7 +491,8 @@ ConstASTs DomainVisitor::extractRemainingExpressions(const std::vector<Extractio
 
 bool DomainVisitor::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDomain> & tuple_domains) const
 {
-    if (tuple_domains.size() == 0) return false;
+    if (tuple_domains.size() == 0)
+        return false;
 
     //none tuple domain have been checked before;
     if (tuple_domains[0].getDomains().size() != 1)
@@ -530,7 +532,8 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
         return getConvertFieldToType(value, from_type, to_type);
     }
     catch (...)
-    {}
+    {
+    }
 
     //There is no super type for from_type and to_type, now based on hand-coded rules
     TypeIndex from_id = from_type->getTypeId();
@@ -541,9 +544,11 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
         {
             return getConvertFieldToType(value, from_type, to_type);
         }
-    }else if (from_id == TypeIndex::String)
+    }
+    else if (from_id == TypeIndex::String)
     {
-        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime || to_id == TypeIndex::Date32 || to_id == TypeIndex::DateTime64)
+        if (to_id == TypeIndex::Date || to_id == TypeIndex::DateTime || to_id == TypeIndex::Date32 || to_id == TypeIndex::DateTime64
+            || to_id == TypeIndex::Time)
         {
             return getConvertFieldToType(value, from_type, to_type);
         }
@@ -575,7 +580,8 @@ bool DomainVisitor::allTupleDomainsAreNotAll(const std::vector<TupleDomain> & tu
     return true;
 }
 
-std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(ASTPtr & node, const String & operator_name, String symbol, const DataTypePtr & type, const Field & value, const bool & complement)
+std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(
+    ASTPtr & node, const String & operator_name, String symbol, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
     {
@@ -592,27 +598,28 @@ std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(
         if (!temp.has_value())
             return std::nullopt;
 
-        return ExtractionResult(TupleDomain(std::unordered_map<String,Domain>{{symbol, temp.value()}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult(TupleDomain(std::unordered_map<String, Domain>{{symbol, temp.value()}}), PredicateConst::TRUE_VALUE);
     }
 
     if (isTypeComparable(type))
     {
         Domain domain = extractDiscreteDomain(operator_name, type, value, complement);
-        return ExtractionResult(TupleDomain(std::unordered_map<String,Domain>{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult(TupleDomain(std::unordered_map<String, Domain>{{symbol, domain}}), PredicateConst::TRUE_VALUE);
     }
 
     return visitNode(node, complement);
     //throw Exception("Type cannot be used in a comparison expression (should have been caught in analysis)", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
+std::optional<Domain>
+DomainVisitor::extractOrderableDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
         throw Exception("Value is not null!", DB::ErrorCodes::LOGICAL_ERROR);
 
     // Handle orderable types which do not have NaN.
     TypeIndex type_id = type->getTypeId();
-    if (type_id != TypeIndex::Float32  && type_id != TypeIndex::Float64)
+    if (type_id != TypeIndex::Float32 && type_id != TypeIndex::Float64)
     {
         if (operator_name == "less")
         {
@@ -642,7 +649,7 @@ std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & opera
                            : SortedRangeSet(type, Ranges{Range::greaterThanOrEqualRange(type, value)}),
                 false);
         }
-        if (operator_name == "equals")   //TODO: use define or enum
+        if (operator_name == "equals") //TODO: use define or enum
         {
             return Domain(
                 complement ? SortedRangeSet(type, Ranges{Range::equalRange(type, value)}).complement()
@@ -652,8 +659,9 @@ std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & opera
         if (operator_name == "notEquals")
         {
             return Domain(
-                complement ? SortedRangeSet(type, Ranges{Range::lessThanRange(type, value), Range::greaterThanRange(type, value)}).complement()
-                           : SortedRangeSet(type, Ranges{Range::lessThanRange(type, value), Range::greaterThanRange(type, value)}),
+                complement
+                    ? SortedRangeSet(type, Ranges{Range::lessThanRange(type, value), Range::greaterThanRange(type, value)}).complement()
+                    : SortedRangeSet(type, Ranges{Range::lessThanRange(type, value), Range::greaterThanRange(type, value)}),
                 false);
         }
         throw Exception("Unhandled operator" + operator_name, DB::ErrorCodes::LOGICAL_ERROR);
@@ -662,7 +670,8 @@ std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & opera
     // Handle comparisons against NaN
     if (DB::Utils::isFloatingPointNaN(type, value))
     {
-        if (operator_name == "equals" || operator_name == "greater" || operator_name == "greaterOrEquals" || operator_name == "less" || operator_name == "lessOrEquals")
+        if (operator_name == "equals" || operator_name == "greater" || operator_name == "greaterOrEquals" || operator_name == "less"
+            || operator_name == "lessOrEquals")
             return Domain(complement ? complementValueSet(createNone(type)) : createNone(type), false);
 
         if (operator_name == "notEquals")
@@ -681,13 +690,17 @@ std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & opera
      * Currently, NaN is only included when ValueSet.isAll().
      */
     if (operator_name == "less")
-        return complement ? std::nullopt : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::lessThanRange(type, value)}), false);
+        return complement ? std::nullopt
+                          : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::lessThanRange(type, value)}), false);
     else if (operator_name == "lessOrEquals")
-        return complement ? std::nullopt : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::lessThanOrEqualRange(type, value)}), false);
+        return complement ? std::nullopt
+                          : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::lessThanOrEqualRange(type, value)}), false);
     else if (operator_name == "greater")
-        return complement ? std::nullopt : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::greaterThanRange(type, value)}), false);
+        return complement ? std::nullopt
+                          : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::greaterThanRange(type, value)}), false);
     else if (operator_name == "greaterOrEquals")
-        return complement ? std::nullopt : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::greaterThanOrEqualRange(type, value)}), false);
+        return complement ? std::nullopt
+                          : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::greaterThanOrEqualRange(type, value)}), false);
     else if (operator_name == "equals")
         return complement ? std::nullopt : std::make_optional<Domain>(SortedRangeSet(type, Ranges{Range::equalRange(type, value)}), false);
     else if (operator_name == "notEquals")
@@ -696,7 +709,8 @@ std::optional<Domain> DomainVisitor::extractOrderableDomain(const String & opera
     throw Exception("Unhandled operator" + operator_name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-Domain DomainVisitor::extractDiscreteDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
+Domain
+DomainVisitor::extractDiscreteDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
         throw Exception("Value is not null!", DB::ErrorCodes::LOGICAL_ERROR);
@@ -712,8 +726,8 @@ Domain DomainVisitor::extractDiscreteDomain(const String & operator_name, const 
 
 bool DomainVisitor::isValidOperatorForComparison(const String & operator_name)
 {
-    if (operator_name == "equals" || operator_name == "notEquals" || operator_name == "less" ||
-        operator_name == "lessOrEquals" || operator_name == "greater" || operator_name == "greaterOrEquals")
+    if (operator_name == "equals" || operator_name == "notEquals" || operator_name == "less" || operator_name == "lessOrEquals"
+        || operator_name == "greater" || operator_name == "greaterOrEquals")
         return true;
 
     return false;
@@ -786,7 +800,7 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
 
         Field coerce_field = coerce_field_opt.value();
 
-        if (coerce_field.isNull())  //TODO: Inconsistent with Presto code, errors
+        if (coerce_field.isNull()) //TODO: Inconsistent with Presto code, errors
         {
             if (!complement)
             {
@@ -860,7 +874,7 @@ ExtractionResult DomainVisitor::visitLikeFunction(ASTPtr & node, const bool & co
     if (complement || pattern_constant_prefix_bytes == 0)
         return visitNode(node, complement);
 
-    String constant_prefix = extractFixedStringFromLikePattern(pattern.substr(0,pattern_constant_prefix_bytes));
+    String constant_prefix = extractFixedStringFromLikePattern(pattern.substr(0, pattern_constant_prefix_bytes));
     auto domain = createRangeDomain(type, constant_prefix);
 
     if (domain.has_value())
@@ -921,7 +935,6 @@ ExtractionResult DomainVisitor::visitIsNotNullFunction(ASTPtr & node, const bool
 }
 
 
-
 std::optional<Domain> DomainVisitor::createRangeDomain(const DataTypePtr & type, const String & constant_prefix)
 {
     int last_asc2_index = -1;
@@ -940,7 +953,7 @@ std::optional<Domain> DomainVisitor::createRangeDomain(const DataTypePtr & type,
     if (last_asc2_index == -1)
         return std::nullopt;
 
-    String upper_bound = constant_prefix.substr(0, last_asc2_index+1);
+    String upper_bound = constant_prefix.substr(0, last_asc2_index + 1);
     upper_bound[last_asc2_index] = (upper_bound[last_asc2_index] + 1);
 
     Field low_bound_field = convertFieldToType(Field(constant_prefix), *type);
@@ -952,7 +965,7 @@ size_t patternConstantPrefixBytes(const String & pattern)
 {
     bool escaped = false;
     size_t pos = 0;
-    for (; pos < pattern.size(); )
+    for (; pos < pattern.size();)
     {
         if (escaped && (pattern[pos] == '%' || pattern[pos] == '_' || pattern[pos] == '\\')) //TODO:need to be confirm
         {

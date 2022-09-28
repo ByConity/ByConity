@@ -55,8 +55,7 @@ bool SymbolStatistics::isImplicitConvertableFromString()
 {
     auto tmp_type = Statistics::decayDataType(type);
     // currently support date, date32, datetime32/64
-    // TODO(gouguilin): support bool, ipv4/v6
-    return isDateOrDateTime(tmp_type);
+    return isDateOrDateTime(tmp_type) || isTime(tmp_type);
 }
 
 double SymbolStatistics::toDouble(const Field & literal)

@@ -19,6 +19,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int LOGICAL_ERROR;
     extern const int UNKNOWN_TABLE;
+    extern const int FILE_NOT_FOUND;
 }
 using namespace Statistics;
 
@@ -402,7 +403,7 @@ void InterpreterShowStatsQuery::executeSpecial()
         auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".bin";
         if (!std::filesystem::exists(path))
         {
-            throw Exception("file " + path + " not exists", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("file " + path + " not exists", ErrorCodes::FILE_NOT_FOUND);
         }
 
         readDbStats(context, db_name, path);
@@ -425,14 +426,14 @@ void InterpreterShowStatsQuery::executeSpecial()
         auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
         if (!std::filesystem::exists(path))
         {
-            throw Exception("json_file " + path + " not exists", ErrorCodes::LOGICAL_ERROR);
+            throw Exception("json_file " + path + " not exists", ErrorCodes::FILE_NOT_FOUND);
         }
 
         loadStats(context, path);
     }
     else
     {
-        throw Exception("unknown special action: " + query->table, ErrorCodes::LOGICAL_ERROR);
+        throw Exception("unknown special action: " + query->table, ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 
