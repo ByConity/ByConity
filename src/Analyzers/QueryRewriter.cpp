@@ -370,7 +370,7 @@ namespace
         QueryAliasesNoSubqueriesVisitor(aliases).visit(select.select());
 
         CrossToInnerJoinVisitor::Data cross_to_inner{tables, aliases, database};
-        cross_to_inner.cross_to_inner_join_rewrite = settings.cross_to_inner_join_rewrite;
+        cross_to_inner.cross_to_inner_join_rewrite = false;
         CrossToInnerJoinVisitor(cross_to_inner).visit(query);
 
         JoinToSubqueryTransformVisitor::Data join_to_subs_data{tables, settings.dialect_type, aliases};

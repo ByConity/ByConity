@@ -1315,6 +1315,12 @@ ASTPtr EffectivePredicateVisitor::visitProjectionNode(ProjectionNode & node, Con
         // skip NULL
         if (value->as<ASTLiteral>() && value->as<ASTLiteral &>().value.isNull())
             continue;
+
+        // skip id_1 := cast(id, SomeType)
+        if (const auto * func = value->as<ASTFunction>())
+            if (Poco::toLower(func->name) == "cast" && func->arguments->children[0]->as<ASTIdentifier>())
+                continue;
+
         non_identity_assignments.emplace_back(assignment);
         newly_assigned_symbols.emplace(symbol);
     }
