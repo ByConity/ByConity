@@ -1,0 +1,89 @@
+<%
+    var title = page.title;
+
+    // tags, categories, about pages title
+    if (title == 'tags') {
+        title = __('tags');
+    } else if (title == 'categories') {
+        title = __('categories');
+    } else if (title == 'about') {
+        title = __('about');
+    }
+
+    // archives, category, tag pages title
+    if (is_archive()) {
+        title = __('archives');
+        if (is_month()) {
+            title += ': ' + page.year + '/' + page.month;
+        } else if (is_year()) {
+            title += ': ' + page.year;
+        }
+    } else if (is_category()) {
+        title = __('category') + ': ' + page.category;
+    } else if (is_tag()) {
+        title = __('tag') + ': ' + page.tag;
+    }
+
+    // final page title.
+    var pageTitle = title ? title + ' | ' + config.title : config.title;
+
+    // keywords.
+    var keyWords = config.keywords ? config.keywords : config.title;
+    if (page.keywords) {
+        keyWords = page.keywords;
+    } else {
+    	keyWords = title ? title  + ', ' + keyWords : keyWords;
+    }
+
+    // description.
+    var description = null;
+    if (page.summary) {
+        description = page.summary;
+    } else if (page.hasOwnProperty('__post') && page.__post) {
+        description = strip_html(page.content).substring(0, 120);
+    }
+    description = description ? description : pageTitle;
+
+    let iconType = 'image/png'
+    let faviconExt = theme.favicon.substr(theme.favicon.lastIndexOf('.') + 1, theme.favicon.length)
+    if (faviconExt === 'png') {
+        iconType = 'image/png'
+    } else if (faviconExt === 'svg') {
+        iconType = 'image/svg+xml'
+    } else if (faviconExt === 'gif') {
+        iconType = 'image/gif'
+    } else if (faviconExt === 'jpeg') {
+        iconType = 'image/jpeg'
+    } else if (faviconExt === 'jpg') {
+        iconType = 'image/jpeg'
+    } else if (faviconExt === 'ico') {
+        iconType = 'image/x-icon, image/vnd.microsoft.icon'
+    }
+%>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="keywords" content="<%= keyWords %>">
+    <meta name="description" content="<%= config.description %>">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="renderer" content="webkit|ie-stand|ie-comp">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <%- partial('_partial/google-analytics') %>
+    <title><%= pageTitle %></title>
+    <link rel="icon" type="<%= iconType %>" href="<%- theme.jsDelivr.url %><%- url_for(theme.favicon) %>">
+
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.fontAwesome) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.materialize) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.aos) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.animate) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.lightgallery) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.matery) %>">
+    <link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.mycss) %>">
+
+    <script src="<%- theme.jsDelivr.url %><%- url_for(theme.libs.js.jquery) %>"></script>
+
+</head>

@@ -1,0 +1,38 @@
+<%
+var featureimg = url_for('/medias/bg.jpg');
+if (page.img) {
+    featureimg = url_for(page.img);
+} else {
+    var hashCode = function (str) {
+        if (!str && str.length === 0) {
+            return 0;
+        }
+
+        var hash = 0;
+        for (var i = 0, len = str.length; i < len; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+        }
+        return hash;
+    };
+
+    var len = theme.featureImages.length;
+    var num = Math.abs(hashCode(page.title) % len);
+
+    featureimg = theme.jsDelivr.url
+            ? theme.jsDelivr.url + url_for(theme.featureImages[num])
+            : url_for(theme.featureImages[num]);
+}
+%>
+
+<div class="bg-cover pd-header post-cover" style="background-image: url('<%- featureimg %>')">
+    <div class="container" style="right: 0px;left: 0px;">
+        <div class="row">
+            <div class="col s12 m12 l12">
+                <div class="brand">
+                    <h1 class="description center-align post-title"><%= page.title %></h1>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

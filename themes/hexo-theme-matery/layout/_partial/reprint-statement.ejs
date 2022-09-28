@@ -1,0 +1,258 @@
+<%
+let reprintPolicyEnabled = theme.reprint && theme.reprint.enable;
+let reprintPolicy = page.reprintPolicy || theme.reprint.default || 'cc_by';
+%>
+<% if (reprintPolicyEnabled) { %>
+    <div class="reprint" id="reprint-statement">
+        <% if (reprintPolicy === 'cc_by') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- url_for('/about') %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- url_for('/about') %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc_by_nd') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- url_for('/about') %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_nd_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_nd_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- config.url %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc_by_sa') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                    </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_sa_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_sa_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- config.url %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc_by_nc') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_nc_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_nc_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- config.url %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc_by_nc_nd') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                    </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_nc_nd_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_nc_nd_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- config.url %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc_by_nc_sa') { %>
+            <div class="reprint__author">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-user">
+                        <%= __('author') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+                </span>
+            </div>
+            <div class="reprint__type">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-link">
+                        <%= __('link') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <a href="<%- config.url %><%- url_for(page.path) %>"><%- config.url %><%- url_for(page.path) %></a>
+                </span>
+            </div>
+            <div class="reprint__notice">
+                <span class="reprint-meta" style="font-weight: bold;">
+                    <i class="fas fa-copyright">
+                        <%= __('reprint') %>:
+                    </i>
+                </span>
+                <span class="reprint-info">
+                    <%= __('use') %>
+                    <a href="<%= __('cc_by_nc_sa_url') %>" rel="external nofollow noreferrer" target="_blank"><%= __('cc_by_nc_sa_name') %></a>
+                    <%= __('licensed') %>
+                    <a href="<%- config.url %>" target="_blank"><%- page.author || config.author %></a>
+                    !
+                </span>
+            </div>
+        <% } else if (reprintPolicy === 'cc0') { %>
+            <i class="fas fa-exclamation-circle"></i>
+            <%= __('toTheExtentPossibleUnderLaw') %>
+            <a href="<%- config.url %>">
+                <%- page.author || config.author %>
+            </a>
+            <%= __('hasWaivedAllCopyrightAndRelatedOrNeighboringRightsTo') %>
+            <a  href="<%- url_for(page.path) %>">
+                《<%= page.title %>》
+            </a>
+            <%= __('workPublishedFrom') %>
+            <span property="vcard:Country" datatype="dct:ISO3166"
+                content="<%= __('cc_0_content') %>" about="<%- url_for(page.path) %>">
+                <%= __('cc_0_country') %>
+            </span>
+            </p>
+        <% } else if (reprintPolicy === 'noreprint') { %>
+            <i class="fas fa-exclamation-circle"></i>
+            <span>
+                <%= __('noreprint') %>
+            </span>
+        <% } else if (reprintPolicy === 'pay') { %>
+            <i class="fas fa-exclamation-circle"></i>
+            <%= __('paycontact') %>
+            <span class="reprint-info">
+                <a href="<%- config.url %>" rel="external nofollow noreferrer"><%- page.author || config.author %></a>
+            </span>
+            <%= __('payreprint') %>
+        <% } %>
+    </div>
+
+    <script async defer>
+      document.addEventListener("copy", function (e) {
+        let toastHTML = '<span><%= __('pleaseFollowReprintPolicy') %></span><button class="btn-flat toast-action" onclick="navToReprintStatement()" style="font-size: smaller"><%= __('checkPolicy') %></a>';
+        M.toast({html: toastHTML})
+      });
+
+      function navToReprintStatement() {
+        $("html, body").animate({scrollTop: $("#reprint-statement").offset().top - 80}, 800);
+      }
+    </script>
+<% } %>

@@ -1,0 +1,29 @@
+<link rel="stylesheet" type="text/css" href="<%- theme.jsDelivr.url %><%- url_for(theme.libs.css.jqcloud) %>">
+<style type="text/css">
+    #tag-wordcloud {
+        width: 100%;
+        height: 300px;
+    }
+</style>
+
+<div class="container" data-aos="fade-up">
+    <div class="card">
+        <div id="tag-wordcloud" class="card-content"></div>
+    </div>
+</div>
+
+<script type="text/javascript" src="<%- theme.jsDelivr.url %><%- url_for(theme.libs.js.jqcloud) %>"></script>
+<script type="text/javascript">
+    <%
+    let tagWordArr = [];
+    site.tags.map(function(tag) {
+        tagWordArr.push({'text': tag.name, 'weight': tag.length, 'link': decodeURI(url_for(tag.path))});
+    });
+
+    let tagWords = JSON.stringify(tagWordArr);
+    %>
+
+    $('#tag-wordcloud').jQCloud(<%- tagWords %>, {
+        autoResize: true
+    });
+</script>

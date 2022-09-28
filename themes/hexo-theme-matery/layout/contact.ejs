@@ -1,0 +1,44 @@
+<%- partial('_partial/bg-cover') %>
+
+<main class="content">
+    <div id="contact" class="container chip-container">
+        <div class="card">
+            <div class="card-content">
+                <div class="tag-title center-align">
+                    <i class="fas fa-comments"></i>&nbsp;&nbsp;<%= __('contact') %>
+                </div>
+                <%- page.content %>
+            </div>
+        </div>
+        <div class="card">
+            <% if (theme.gitalk && theme.gitalk.enable) { %>
+            <%- partial('_partial/gitalk') %>
+            <% } %>
+
+            <% if (theme.gitment.enable) { %>
+            <%- partial('_partial/gitment') %>
+            <% } %>
+
+            <% if (theme.disqus.enable) { %>
+            <%- partial('_partial/disqus') %>
+            <% } %>
+
+            <% if (theme.livere && theme.livere.enable) { %>
+            <%- partial('_partial/livere') %>
+            <% } %>
+
+            <% if (theme.valine && theme.valine.enable) { %>
+            <%- partial('_partial/valine') %>
+            <% } %>
+			
+			<% if (theme.minivaline && theme.minivaline.enable) { %>
+            <%- partial('_partial/minivaline') %>
+            <% } %>
+
+            <% if (theme.changyan && theme.changyan.enable) { %>
+                <%- partial('_partial/changyan') %>
+            <% } %>
+
+        </div>
+    </div>
+</main>
