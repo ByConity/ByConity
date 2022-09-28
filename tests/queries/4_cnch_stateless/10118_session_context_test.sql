@@ -44,9 +44,9 @@ DROP TABLE IF EXISTS test_subquery2;
 CREATE TABLE test_subquery(cnt UInt64, p_date Date) Engine = CnchMergeTree PARTITION BY p_date ORDER BY tuple();
 CREATE TABLE test_subquery2(x UInt64, p_date Date) Engine = CnchMergeTree PARTITION BY p_date ORDER BY tuple();
 SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2);
-SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2) SETTINGS cnch_offloading_mode = 1;
-SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2) SETTINGS cnch_offloading_mode = 2;
-SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2) SETTINGS cnch_offloading_mode = 3;
+SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2);
+SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2);
+SELECT * from test_subquery WHERE cnt IN (SELECT count() FROM test_subquery2);
 
 DROP TABLE test_subquery;
 DROP TABLE test_subquery2;

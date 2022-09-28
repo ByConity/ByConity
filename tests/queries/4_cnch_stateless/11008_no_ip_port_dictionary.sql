@@ -23,5 +23,16 @@ SELECT dictGetString('test.dict_flat_no_ip_port', 'c', toUInt64(3));
 
 SELECT status FROM system.dictionaries where (database = 'test') AND (name = 'dict_flat_no_ip_port');
 
+DROP TABLE IF EXISTS test.interger_col;
+CREATE TABLE test.interger_col (id UInt64) Engine = CnchMergeTree ORDER by id;
+INSERT INTO test.interger_col VALUES (1), (2), (3), (4), (5), (6);
+SELECT '-- select from table column b';
+SELECT id, dictGetInt32('test.dict_flat_no_ip_port', 'b', id) from test.interger_col ORDER BY id;
+SELECT '-- select from table column a';
+SELECT id, dictGetUInt64('test.dict_flat_no_ip_port', 'a', id) from test.interger_col ORDER BY id;
+SELECT '-- select from table column c';
+SELECT id, dictGetString('test.dict_flat_no_ip_port', 'c', id) from test.interger_col ORDER BY id;
+
 DROP DICTIONARY IF EXISTS test.dict_flat_no_ip_port;
+DROP TABLE IF EXISTS test.interger_col;
 DROP TABLE IF EXISTS test.table_for_no_ip_port_dict;

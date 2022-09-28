@@ -246,6 +246,7 @@ struct ContextSharedPart
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
+    mutable std::mutex cnch_catalog_dict_cache_mutex;
     /// Separate mutex for storage policies. During server startup we may
     /// initialize some important storages (system logs with MergeTree engine)
     /// under context lock.
@@ -290,6 +291,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
+    mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
     ConfigurationPtr external_models_config;
@@ -506,6 +508,7 @@ struct ContextSharedPart
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
+            cnch_catalog_dict_cache.reset();
             models_repository_guard.reset();
             external_models_loader.reset();
             buffer_flush_schedule_pool.reset();
@@ -1603,6 +1606,18 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoader()
     return *shared->external_dictionaries_loader;
 }
 
+CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache() const
+{
+    return const_cast<Context *>(this)->getCnchCatalogDictionaryCache();
+}
+
+CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache()
+{
+    std::lock_guard lock(shared->cnch_catalog_dict_cache_mutex);
+    if (!shared->cnch_catalog_dict_cache)
+        shared->cnch_catalog_dict_cache.emplace(getGlobalContext());
+    return *shared->cnch_catalog_dict_cache;
+}
 
 const ExternalModelsLoader & Context::getExternalModelsLoader() const
 {

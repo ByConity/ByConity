@@ -126,21 +126,29 @@ void DatabaseCnch::drop(ContextPtr local_context)
     txn->commitV1();
 }
 
-void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String & name)
+void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String & table_name)
 {
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    auto table = tryGetTable(name, local_context);
-
-    if (!table)
-        throw Exception("Table " + name + "." + name + " doesn't exists.", ErrorCodes::UNKNOWN_TABLE);
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    bool is_dictionary = false;
+    TxnTimestamp previous_version = 0;
+    if (!storage)
+    {
+        if (!local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
+            throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
+        else
+            is_dictionary = true;
+    }
+    else
+        previous_version = storage->commit_time;
 
     /// detach table action
-    DropActionParams params{getDatabaseName(), name, table->commit_time, ASTDropQuery::Kind::Detach};
-    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{table});
+    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Detach, is_dictionary};
+    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
 }
@@ -156,7 +164,8 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
 
 bool DatabaseCnch::isTableExist(const String & name, ContextPtr local_context) const
 {
-    return local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+    return (local_context->getCnchCatalog()->isTableExists(getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64())) ||
+        (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), name));
 }
 
 StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_context) const
@@ -216,17 +225,31 @@ bool DatabaseCnch::empty() const
 
 ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const
 {
-    StoragePtr storage{};
-    if (throw_on_error)
-    {
-        storage = getContext()->getCnchCatalog()->getTable(
+    StoragePtr storage = getContext()->getCnchCatalog()->tryGetTable(
             *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
-    }
-    else
+
+    if (!storage)
     {
-        storage = getContext()->getCnchCatalog()->tryGetTable(
-            *local_context, getDatabaseName(), name, local_context->getCurrentTransactionID().toUInt64());
+        try
+        {
+            return getContext()->getCnchCatalog()->getCreateDictionary(getDatabaseName(), name);
+        }
+        catch (...)
+        {
+            if (throw_on_error)
+                throw;
+            else
+                LOG_DEBUG(
+                    log,
+                    "Fail to get create query for dictionary {} in datase {} query id {}",
+                    name,
+                    getDatabaseName(),
+                    local_context->getCurrentQueryId());
+        }
     }
+
+    if ((!storage) && throw_on_error)
+        throw Exception("Table " + getDatabaseName() + "." + name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
 
     if (!storage)
         return {};
