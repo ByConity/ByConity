@@ -200,6 +200,7 @@ postInfo:
   totalCount: false # 站点总文章字数
   min2read: false # 文章阅读时长
   readCount: false # 文章阅读次数
+  editOnGithub: true #github 编辑地址
 
 # Whether to activate the 'love' effect of clicking on the page.
 # 是否激活点击页面的'爱心'效果，默认激活.
@@ -387,6 +388,7 @@ changyan:
 githubLink:
   enable: true
   url: https://github.com/byConity
+  repo: 'byconity.github.io'
   title: Contribute with us
 
 # The password verification feature of read post. To use this feature,

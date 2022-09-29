@@ -67,6 +67,34 @@
                         <span id="busuanzi_value_page_pv"></span>
                     </div>
 				<% } %>
+                <% if (theme.postInfo.editOnGithub) { %>
+                <div class="info-break-policy">
+                    <% 
+                        function getGithubEditLink() {
+                            var githubLink = config.theme_config.githubLink.url
+                            var githubRepo = config.theme_config.githubLink.repo
+                            var baseLink = githubLink + '/' + githubRepo + '/edit/main/source/_posts/'
+                            return baseLink + url.replace(config.url, '')
+                            .replace('/index.html', '.md')
+                            .split('/')
+                            .slice(3)
+                            .join('/')
+                        }
+                     %>
+                    <style>
+                        .github-edit-link {
+                            padding: 0 2px;
+                            color: #42b983;
+                            font-weight: 500;
+                            text-decoration: underline;
+                            word-wrap: break-word;
+                        }
+                    </style>
+                    <a class="github-edit-link" href="<%= getGithubEditLink() %>" target="_blank">
+                        <i class="far fa-edit fa-fw"></i><%- __('editOnGithub') %>
+                    </a>
+                </div>
+                <% } %>
             </div>
         </div>
         <hr class="clearfix">
