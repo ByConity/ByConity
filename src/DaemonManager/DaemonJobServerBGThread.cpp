@@ -951,11 +951,10 @@ struct IsCnchKafka
 
 struct IsCnchUniqueTableAndNeedDedup
 {
-    static bool apply(const StoragePtr & /*storage*/)
+    static bool apply(const StoragePtr & storage)
     {
-        //auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        //return t && t->hasUniqueKey();
-        return false;
+        auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+        return t && t->getInMemoryMetadataPtr()->hasUniqueKey();
     }
 };
 

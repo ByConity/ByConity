@@ -1,7 +1,8 @@
-#include <Storages/MergeTree/MergedBlockOutputStream.h>
-#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Interpreters/Context.h>
 #include <Parsers/queryToString.h>
+#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/MergeTree/MergedBlockOutputStream.h>
 
 namespace DB
 {
@@ -19,8 +20,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     const MergeTreeIndices & skip_indices,
     CompressionCodecPtr default_codec_,
     bool blocks_are_granules_size,
-    bool optimize_map_column_serialization,
-    bool /*is_merge*/)
+    bool optimize_map_column_serialization)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , columns_list(columns_list_)
     , default_codec(default_codec_)
@@ -32,7 +32,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         /* rewrite_primary_key = */ true,
         blocks_are_granules_size,
         /* skip_bitengine_encode(default)*/false,
-        optimize_map_column_serialization);
+        optimize_map_column_serialization,
+        /* enable_disk_based_key_index = */ metadata_snapshot->hasUniqueKey());
 
     if (!part_path.empty())
         volume->getDisk()->createDirectories(part_path);
@@ -52,13 +53,12 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     else
         writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
 
-    // if (storage.merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    // {
-    //     auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
-    //     if (!writer_wide)
-    //         throw Exception("Unique table only supports wide format part right now.", ErrorCodes::NOT_IMPLEMENTED);
-    //     writer_wide->setMergeStatus(is_merge);
-    // }
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        auto writer_wide = dynamic_cast<MergeTreeDataPartWriterWide *>(writer.get());
+        if (!writer_wide)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unique table only supports wide format part right now.");
+    }
 }
 
 /// If data is pre-sorted.
@@ -117,7 +117,6 @@ void MergedBlockOutputStream::writeSuffixAndFinalizePart(
         finalizePartOnDisk(new_part, part_columns, *checksums_ptr, sync);
 
     new_part->setColumns(part_columns);
-    new_part->columns_ptr = std::make_shared<NamesAndTypesList>(part_columns);
     new_part->rows_count = rows_count;
     new_part->modification_time = time(nullptr);
     *(new_part->index) = writer->releaseIndexColumns();

@@ -54,7 +54,7 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST *a
         return ResourceSelectCase::QueryType::DATA;
 
     else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system 
-        // && ast_system->type == ASTSystemQuery::Type::DEDUP
+        && ast_system->type == ASTSystemQuery::Type::DEDUP
     )
         return ResourceSelectCase::QueryType::DATA;
 

@@ -62,6 +62,13 @@ public:
 
     void loadFromFileSystem(bool load_hint_mutation = true);
 
+    UniqueKeyIndexPtr getUniqueKeyIndex() const override;
+
+    /// @param is_unique_new_part whether it's a part of unique table which has not been deduplicated
+    /// For unique table, in normal case, the new part doesn't have delete_bitmap until it executes dedup action.
+    /// But when the part has delete_flag info, delete_bitmap represent the delete_flag info which leads to that new part has delete_bitmap.
+    const ImmutableDeleteBitmapPtr & getDeleteBitmap(bool is_unique_new_part = false) const override;
+
 private:
 
     bool isDeleted() const;
@@ -73,6 +80,12 @@ private:
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
     ChecksumsPtr loadChecksums(bool require) override;
+
+    UniqueKeyIndexPtr loadUniqueKeyIndex() override;
+
+    IndexFile::RemoteFileInfo getRemoteFileInfo();
+
+    void getUniqueKeyIndexFilePosAndSize(const IMergeTreeDataPartPtr part, off_t & off, size_t & size);
 
     /// Loads marks index granularity into memory
     void loadIndexGranularity() override;

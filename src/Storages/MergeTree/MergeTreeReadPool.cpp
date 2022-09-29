@@ -240,7 +240,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         per_part_columns.push_back(std::move(required_columns));
         per_part_should_reorder.push_back(should_reorder);
 
-        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, delete_bitmap_getter(part.data_part) });
+        parts_with_idx.emplace_back(part.data_part, part.part_index_in_query, delete_bitmap_getter(part.data_part));
 
         if (predict_block_size_bytes)
         {

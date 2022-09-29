@@ -36,7 +36,7 @@ private:
     std::atomic<bool> locked{false};
     LockInfoPtr lock_info;
     String host_with_rpc;
-    // CnchServerClientPtr client;
+    CnchServerClientPtr client;
 };
 
 using CnchLockPtr = std::unique_ptr<CnchLock>;

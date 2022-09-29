@@ -18,7 +18,7 @@ public:
         const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         MergeTreeData::DataPartPtr data_part_,
-        DeleteBitmapPtr delete_bitmap_,
+        ImmutableDeleteBitmapPtr delete_bitmap_,
         Names columns_to_read_);
 
     ~MergeTreeFillDeleteWithDefaultValueSource() override;
@@ -35,7 +35,7 @@ private:
 
     /// Data part will not be removed if the pointer owns it
     MergeTreeData::DataPartPtr data_part;
-    DeleteBitmapPtr delete_bitmap;
+    ImmutableDeleteBitmapPtr delete_bitmap;
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;

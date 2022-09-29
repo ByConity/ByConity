@@ -159,8 +159,6 @@ private:
 
     void scanActiveTransactions();
 
-private:
-
     mutable std::mutex list_mutex;
     /// transaction related data structure, including txn info, tsCache, mutex.
     std::map<TxnTimestamp, TransactionCnchPtr> active_txn_list;

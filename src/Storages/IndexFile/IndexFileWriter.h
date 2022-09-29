@@ -16,7 +16,7 @@ struct IndexFileInfo
     String smallest_key;        /// smallest user key in file
     String largest_key;         /// largest user key in file
     uint64_t file_size = 0;     /// file size in bytes
-    uint128 file_hash{0, 0}; /// file hash
+    uint128 file_hash{0, 0};    /// file hash
     uint64_t num_entries = 0;   /// number of entries in file
 };
 

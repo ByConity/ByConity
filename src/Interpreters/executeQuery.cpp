@@ -7,6 +7,9 @@
 #include <IO/LimitReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteBufferFromVector.h>
+#include <IO/LimitReadBuffer.h>
+#include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <IO/ZlibDeflatingWriteBuffer.h>
 #include <IO/copyData.h>
 
 #include <DataStreams/BlockIO.h>
@@ -94,6 +97,8 @@ namespace ErrorCodes
 {
     extern const int INTO_OUTFILE_NOT_ALLOWED;
     extern const int QUERY_WAS_CANCELLED;
+    extern const int ILLEGAL_OUTPUT_PATH;
+
 }
 
 
@@ -416,11 +421,11 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             database = insert->table_id.database_name;
             table = insert->table_id.table_name;
         }
-        // else if (auto * system = ast->as<ASTSystemQuery>(); system && system->type == ASTSystemQuery::Type::DEDUP)
-        // {
-        //     database = system->database;
-        //     table = system->table;
-        // }
+        else if (auto * system = ast->as<ASTSystemQuery>(); system && system->type == ASTSystemQuery::Type::DEDUP)
+        {
+            database = system->database;
+            table = system->table;
+        }
 
         if (is_initial_query && !table.empty())
         {
@@ -1332,15 +1337,41 @@ void executeQuery(
             const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
             WriteBuffer * out_buf = &ostr;
+            std::optional<String> out_path;
             std::optional<WriteBufferFromFile> out_file_buf;
+#if USE_HDFS
+            std::unique_ptr<WriteBufferFromHDFS> out_hdfs_raw;
+            std::optional<ZlibDeflatingWriteBuffer> out_hdfs_buf;
+#endif
             if (ast_query_with_output && ast_query_with_output->out_file)
             {
-                if (!allow_into_outfile)
-                    throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+                out_path.emplace(typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>());
+                const Poco::URI out_uri(*out_path);
+                const String & scheme = out_uri.getScheme();
 
-                const auto & out_file = ast_query_with_output->out_file->as<ASTLiteral &>().value.safeGet<std::string>();
-                out_file_buf.emplace(out_file, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
-                out_buf = &*out_file_buf;
+                if(scheme.empty())
+                {
+                    if (!allow_into_outfile)
+                        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
+
+                    out_file_buf.emplace(*out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
+                    out_buf = &*out_file_buf;
+                }
+#if USE_HDFS
+                else if (DB::isHdfsOrCfsScheme(scheme))
+                {
+                    out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(*out_path, context->getHdfsConnectionParams(), context->getSettingsRef().max_hdfs_write_buffer_size);
+                    int compression_level = Z_DEFAULT_COMPRESSION;
+                    out_hdfs_buf.emplace(std::move(out_hdfs_raw), CompressionMethod::Gzip, compression_level);
+                    out_buf = &*out_hdfs_buf;
+                }
+#endif
+                else
+                {
+                    throw Exception(
+                        "Path: " + *out_path + " is illegal, only support write query result to local file or tos",
+                        ErrorCodes::ILLEGAL_OUTPUT_PATH);
+                }
             }
 
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)

@@ -1,8 +1,9 @@
 #include <WorkerTasks/CloudMergeTreeMergeTask.h>
 
+#include <CloudServices/commitCnchParts.h>
 #include <Interpreters/Context.h>
-#include <Storages/StorageCloudMergeTree.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/StorageCloudMergeTree.h>
 #include <WorkerTasks/MergeTreeDataMerger.h>
 
 namespace DB
@@ -56,10 +57,10 @@ void CloudMergeTreeMergeTask::executeImpl()
             part->info.min_block,
             part->info.max_block,
             part->info.level + 1,
-            0, // TODO: set mutation
+            part->info.mutation,
             0 /* must be zero for drop part */);
 
-        reserved_spaces.emplace_back(cloud_table.reserveSpace(part->bytes_on_disk));
+        reserved_spaces.emplace_back(cloud_table.reserveSpace(0)); /// Drop part is empty part.
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + part->name, reserved_spaces.back()->getDisk(), 0);
 
         auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
@@ -76,8 +77,8 @@ void CloudMergeTreeMergeTask::executeImpl()
     if (isCancelled())
         throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
-    // auto dumped_data = dumpAndCommitCnchParts(storage, ManipulationType::Merge, temp_parts, context, params.task_id);
-    // tryPreloadChecksumsAndPrimaryIndex(storage, dumped_data.parts, ManipulationType::Merge, context);
+    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
+    cnch_writer.dumpAndCommitCnchParts(temp_parts);
 }
 
 }

@@ -837,6 +837,30 @@ static StoragePtr create(const StorageFactory::Arguments & args)
             throw Exception("Table TTL is not allowed for MergeTree in old syntax", ErrorCodes::BAD_ARGUMENTS);
     }
 
+    if (args.storage_def->unique_key)
+    {
+        if (merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary || (!is_cnch && !is_cloud))
+            throw Exception("Only CnchMergeTree and CloudMergeTree support UNIQUE KEY", ErrorCodes::BAD_ARGUMENTS);
+
+        if (engine_args.size() > 0)
+        {
+            if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
+                throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
+
+            if (args.storage_def->partition_by && args.storage_def->partition_by->getColumnName() == engine_args.back()->getColumnName())
+            {
+                merging_params.partition_value_as_version = true;
+            }
+            else if (!tryGetIdentifierNameInto(engine_args.back(), merging_params.version_column))
+            {
+                throw Exception(
+                    "Version column name must be an unquoted string" + getMergeTreeVerboseHelp(is_extended_storage_def),
+                    ErrorCodes::BAD_ARGUMENTS);
+            }
+            ++arg_num;
+        }
+    }
+
     DataTypes data_types = metadata.partition_key.data_types;
     if (!args.attach && !storage_settings->allow_floating_point_partition_key)
     {
@@ -945,7 +969,6 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("HaVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("CloudMergeTree", create, features);
-    factory.registerStorage("CloudUniqueMergeTree", create, features);
     factory.registerStorage("CloudCollapsingMergeTree", create, features);
     factory.registerStorage("CloudReplacingMergeTree", create, features);
     factory.registerStorage("CloudAggregatingMergeTree", create, features);
@@ -954,7 +977,6 @@ void registerStorageMergeTree(StorageFactory & factory)
     factory.registerStorage("CloudVersionedCollapsingMergeTree", create, features);
 
     factory.registerStorage("CnchMergeTree", create, features);
-    factory.registerStorage("CnchUniqueMergeTree", create, features);
     factory.registerStorage("CnchCollapsingMergeTree", create, features);
     factory.registerStorage("CnchReplacingMergeTree", create, features);
     factory.registerStorage("CnchAggregatingMergeTree", create, features);

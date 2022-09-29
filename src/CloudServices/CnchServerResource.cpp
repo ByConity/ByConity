@@ -3,6 +3,7 @@
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchWorkerClient.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
@@ -106,8 +107,10 @@ static std::vector<brpc::CallId> processSend(
     /// send data parts.
     for (const auto & resource: resource_to_send)
     {
+        auto data_parts = std::move(resource.server_parts);
+        CnchPartsHelper::flattenPartsVector(data_parts);
         auto call_id = client->sendQueryDataParts(
-            context, resource.storage, resource.worker_table_name, resource.server_parts, resource.bucket_numbers, handler);
+            context, resource.storage, resource.worker_table_name, data_parts, resource.bucket_numbers, handler);
         call_ids.emplace_back(std::move(call_id));
     }
 

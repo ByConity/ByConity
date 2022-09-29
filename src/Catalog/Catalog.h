@@ -157,8 +157,6 @@ public:
     getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
     /// (UNIQUE KEY) get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
-    /// (UNIQUE KEY) add new delete bitmap metadata
-    void addDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
     /// (UNIQUE KEY) remove bitmaps meta from KV, used by GC
     void removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
 
@@ -195,6 +193,9 @@ public:
     void detachDictionary(const String & database, const String & name);
 
     void attachDictionary(const String & database, const String & name);
+
+    /// for backward compatible, the old dictionary doesn't have UUID
+    void fixDictionary(const String & database, const String & name);
 
     Strings getDictionariesInDB(const String & database);
 
@@ -680,5 +681,5 @@ void remove_not_exist_items(std::vector<T> & items_to_write, std::vector<size_t>
 }
 
 using CatalogPtr = std::shared_ptr<Catalog>;
-
+void fillUUIDForDictionary(DB::Protos::DataModelDictionary &);
 }

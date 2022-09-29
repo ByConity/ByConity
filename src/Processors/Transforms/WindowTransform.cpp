@@ -1778,6 +1778,9 @@ struct WindowFunctionCumeDist final : public WindowFunction<ITwoStageWindowFunct
 
     void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
     {
+        if (pdr->total_row_cnt < 1)
+            return;
+
         /* write back last group */
         fillGroup(pdr->wt, wi);
         /* same function instance will be reused for different partitions,
@@ -1834,6 +1837,9 @@ struct WindowFunctionNtile final : public WindowFunction<ITwoStageWindowFunction
 
     void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
     {
+        if (pdr->total_row_cnt < 1)
+            return;
+
         uint64_t tiles_cnt = getTilesCnt(pdr, wi);
         size_t tile_rows = 0;
         size_t bucket_sz;     /* max bucket size */
@@ -1969,6 +1975,9 @@ struct WindowFunctionNthValue final : public WindowFunction<ITwoStageWindowFunct
 
     void executeSecondStage(const PartitionDataRange *pdr, size_t wi) override
     {
+        if (pdr->total_row_cnt < 1)
+            return;
+
         /* write back last group */
         fillGroup(pdr->wt, wi);
         /* same function instance will be reused for different partitions,

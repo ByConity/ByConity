@@ -1,9 +1,14 @@
 #include <CloudServices/CnchBGThreadsMap.h>
 
-#include <regex>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchPartGCThread.h>
 #include <Interpreters/Context.h>
 #include <ResourceManagement/ResourceReporter.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
+#include <CloudServices/CnchPartGCThread.h>
+#include <CloudServices/DedupWorkerManager.h>
+
+#include <regex>
 
 namespace DB
 {
@@ -27,28 +32,28 @@ CnchBGThreadPtr CnchBGThreadsMap::getThread(const StorageID & storage_id) const
     return t;
 }
 
-CnchBGThreadPtr CnchBGThreadsMap::createThread([[maybe_unused]] const StorageID & storage_id)
+CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
 {
-    // if (type == CnchBGThreadType::PartGC)
-    // {
-    //     return std::make_shared<CnchGCThread>(global_context, storage_id);
-    // }
-    // else if (type == CnchBGThreadType::MergeMutate)
-    // {
-    //     return std::make_shared<CnchMergeMutateThread>(global_context, storage_id);
-    // }
+    if (type == CnchBGThreadType::PartGC)
+    {
+        return std::make_shared<CnchPartGCThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::MergeMutate)
+    {
+        return std::make_shared<CnchMergeMutateThread>(getContext(), storage_id);
+    }
     // else if (type == CnchBGThreadType::MemoryBuffer)
     // {
-    //     return std::make_shared<MemoryBufferManager>(global_context, storage_id, false /* FIXME */);
+    //     return std::make_shared<MemoryBufferManager>(getContext(), storage_id, false /* FIXME */);
     // }
-    if (type == CnchBGThreadType::Consumer)
+    else if (type == CnchBGThreadType::Consumer)
     {
         return std::make_shared<CnchKafkaConsumeManager>(getContext(), storage_id);
     }
-    // else if (type == CnchBGThreadType::DedupWorker)
-    // {
-    //     return std::make_shared<DedupWorkerManager>(global_context, storage_id);
-    // }
+    else if (type == CnchBGThreadType::DedupWorker)
+    {
+        return std::make_shared<DedupWorkerManager>(getContext(), storage_id);
+    }
     else
     {
         throw Exception(String("Not supported background thread ") + toString(type), ErrorCodes::LOGICAL_ERROR);

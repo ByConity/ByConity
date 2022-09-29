@@ -100,9 +100,12 @@ public:
     JoinPtr makeJoin(ContextPtr context);
 
     void serialize(WriteBuffer & buf) const override;
+    void serialize(WriteBuffer & buffer, bool with_output) const;
+
     static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    String serializeToString() const override;
 
 private:
     JoinPtr join;

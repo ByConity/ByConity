@@ -23,6 +23,7 @@
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
+#include <MergeTreeCommon/MergeTreeDataDeduper.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
 #include <Parsers/queryToString.h>
@@ -57,6 +58,8 @@
 #include <Parsers/ASTLiteral.h>
 #include <Storages/SelectQueryInfo.h>
 #include <CloudServices/commitCnchParts.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+
 
 namespace ProfileEvents
 {
@@ -78,6 +81,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_DATA_PART;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
     extern const int INCOMPATIBLE_COLUMNS;
+    extern const int CNCH_LOCK_ACQUIRE_FAILED;
 }
 
 /// Get basic select query to read from prepared pipe: remove prewhere, sampling, offset, final
@@ -546,12 +550,13 @@ void StorageCnchMergeTree::filterPartsByPartition(
     size_t prev_sz = parts.size();
     size_t empty = 0, partition_minmax = 0, minmax_idx = 0, part_value = 0;
     std::erase_if(parts, [&](const auto & part) {
-        if (part->isEmpty())
-        {
-            ++empty;
-            return true;
-        }
-        else if (partition_pruner && partition_pruner->canBePruned(*part))
+        // if (part->isEmpty()) /// FIXME: partial part is empty now.
+        // {
+        //     ++empty;
+        //     return true;
+        // }
+        // else
+        if (partition_pruner && partition_pruner->canBePruned(*part))
         {
             ++partition_minmax;
             return true;
@@ -812,7 +817,6 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
     }
     else
     {
-        /// FIXME: add after cloud output stream is supported
         return std::make_shared<CloudMergeTreeBlockOutputStream>(
             *this, metadata_snapshot, local_context, local_store_volume, relative_local_store_path, enable_staging_area);
     }
@@ -1062,19 +1066,132 @@ StorageCnchMergeTree::selectPartsToRead(const Names & column_names_to_return, Co
     return data_parts;
 }
 
-MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & /*ts*/, const NameSet * /*partitions*/) // NOLINT
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getUniqueTableMeta(TxnTimestamp ts, const Strings & input_partitions)
 {
-    return {};
-    /// FIXME:
-    // auto catalog = getContext()->getCnchCatalog();
-    // MergeTreeDataPartsCNCHVector staged_parts = catalog->getStagedParts(shared_from_this(), ts, partitions);
-    // return CnchPartsHelper::calcVisibleParts(staged_parts, /*collect_on_chain*/false);
+    auto catalog = getContext()->getCnchCatalog();
+    auto storage = shared_from_this();
+
+    Strings partitions;
+    if (!input_partitions.empty())
+        partitions = input_partitions;
+    else
+        partitions = catalog->getPartitionIDs(storage, nullptr);
+
+    auto cnch_parts = catalog->getServerDataPartsInPartitions(storage, partitions, ts, nullptr);
+    auto parts = CnchPartsHelper::calcVisibleParts(cnch_parts, /*collect_on_chain=*/false);
+
+    MergeTreeDataPartsCNCHVector res;
+    res.reserve(parts.size());
+    for (auto & part : parts)
+        res.emplace_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part->getBasePart()->toCNCHDataPart(*this)));
+
+    getDeleteBitmapMetaForParts(res, getContext(), ts);
+    return res;
 }
 
-void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
-    const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+MergeTreeDataPartsCNCHVector StorageCnchMergeTree::getStagedParts(const TxnTimestamp & ts, const NameSet * partitions)
 {
-    if (!local_context->getCnchCatalog())
+    auto catalog = getContext()->getCnchCatalog();
+    MergeTreeDataPartsCNCHVector staged_parts = catalog->getStagedParts(shared_from_this(), ts, partitions);
+    auto res = CnchPartsHelper::calcVisibleParts(staged_parts, /*collect_on_chain*/ false);
+
+    getDeleteBitmapMetaForStagedParts(res, getContext(), ts);
+    return res;
+}
+
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+{
+    auto catalog = local_context->getCnchCatalog();
+    if (!catalog)
+        return;
+
+    std::set<String> request_partitions;
+    for (const auto & part : parts)
+    {
+        const auto & partition_id = part->info.partition_id;
+        request_partitions.insert(partition_id);
+    }
+
+    /// NOTE: Get all the bitmap meta needed only once from kv instead of getting many times for every partition to save time.
+    Stopwatch watch;
+    auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(shared_from_this(), { request_partitions.begin(), request_partitions.end() }, start_time);
+    ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
+    LOG_DEBUG(
+        log,
+        "Get delete bitmap meta for total {} parts, take {} ms and read {} number of bitmap metas",
+        parts.size(),
+        watch.elapsedMilliseconds(),
+        all_bitmaps.size());
+
+    DeleteBitmapMetaPtrVector bitmaps;
+    CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
+
+    /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
+    auto bitmap_it = bitmaps.begin();
+    for (auto & part : parts)
+    {
+        /// search for the first bitmap
+        while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info))
+            bitmap_it++;
+
+        if (bitmap_it == bitmaps.end())
+            throw Exception("Delete bitmap metadata of " + part->name + " is not found", ErrorCodes::LOGICAL_ERROR);
+
+        /// add all visible bitmaps (from new to old) part
+        part->setDeleteBitmapMeta(*bitmap_it);
+        bitmap_it++;
+    }
+}
+
+void StorageCnchMergeTree::getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+{
+    auto catalog = local_context->getCnchCatalog();
+    if (!catalog)
+        return;
+
+    std::set<String> request_partitions;
+    for (const auto & part : parts)
+    {
+        const auto & partition_id = part->info.partition_id;
+        request_partitions.insert(partition_id);
+    }
+
+    /// NOTE: Get all the bitmap meta needed only once from kv instead of getting many times for every partition to save time.
+    Stopwatch watch;
+    auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(shared_from_this(), { request_partitions.begin(), request_partitions.end() }, start_time);
+    ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
+    LOG_DEBUG(
+        log,
+        "Get delete bitmap meta for total {} parts, take {} ms and read {} number of bitmap metas",
+        parts.size(),
+        watch.elapsedMilliseconds(),
+        all_bitmaps.size());
+
+    DeleteBitmapMetaPtrVector bitmaps;
+    CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
+
+    /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
+    auto bitmap_it = bitmaps.begin();
+    for (auto & part : parts)
+    {
+        while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= part->info)
+        {
+            if (!(*bitmap_it)->sameBlock(part->info))
+                bitmap_it++;
+            else
+            {
+                /// add all visible bitmaps (from new to old) part
+                part->setDeleteBitmapMeta(*bitmap_it);
+                bitmap_it++;
+            }
+        }
+    }
+}
+
+void StorageCnchMergeTree::getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time)
+{
+    auto catalog = local_context->getCnchCatalog();
+    if (!catalog)
         return;
 
     std::set<String> request_partitions;
@@ -1086,23 +1203,21 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
 
     /// NOTE: Get all the bitmap meta needed only once from kv instead of getting many times for every partition to save time.
     Stopwatch watch;
-    auto all_bitmaps = local_context->getCnchCatalog()->getDeleteBitmapsInPartitions(
-        shared_from_this(), {request_partitions.begin(), request_partitions.end()}, start_time);
+    auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(shared_from_this(), { request_partitions.begin(), request_partitions.end() }, start_time);
     ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
     LOG_DEBUG(
         log,
-        "Get delete bitmap meta for total {} parts took: {} ms read {} number of bitmap meta",
+        "Get delete bitmap meta for total {} parts, take {} ms and read {} number of bitmap metas",
         parts.size(),
         watch.elapsedMilliseconds(),
         all_bitmaps.size());
 
     DeleteBitmapMetaPtrVector bitmaps;
-    /// FIXME:
-    // CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
+    CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
 
     /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
-    for (const auto & part : parts)
+    for (auto & part : parts)
     {
         /// search for the first bitmap
         while (bitmap_it != bitmaps.end() && !(*bitmap_it)->sameBlock(part->info()))
@@ -1128,6 +1243,53 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
 
         bitmap_it++;
     }
+}
+
+void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, ContextPtr local_context)
+{
+    if (!getInMemoryMetadataPtr()->hasUniqueKey())
+        throw Exception("SYSTEM DEDUP can only be executed on table with UNIQUE KEY", ErrorCodes::BAD_ARGUMENTS);
+
+    if (partition && !getSettings()->partition_level_unique_keys)
+        throw Exception("SYSTEM DEDUP PARTITION can only be used on table with partition_level_unique_keys=1", ErrorCodes::BAD_ARGUMENTS);
+
+    auto txn = getContext()->getCurrentTransaction();
+    if (!txn)
+        throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
+    txn->setMainTableUUID(getStorageUUID());
+
+    auto catalog = getContext()->getCnchCatalog();
+
+    CnchDedupHelper::DedupScope scope = CnchDedupHelper::DedupScope::Table();
+    if (partition)
+    {
+        NameOrderedSet partitions;
+        partitions.insert(getPartitionIDFromQuery(partition, local_context));
+        scope = CnchDedupHelper::DedupScope::Partitions(partitions);
+    }
+
+    std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
+        scope, txn->getTransactionID(), *this, /*timeout_ms*/10000);
+    Stopwatch lock_watch;
+    for (auto & lock_info : locks_to_acquire)
+    {
+        if (!txn->tryLock(lock_info))
+            throw Exception(ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED, "Failed to acquire lock for txn {}", txn->getTransactionID().toString());
+    }
+    LOG_DEBUG(log, "Acquired all {} locks in {} ms", locks_to_acquire.size(), lock_watch.elapsedMilliseconds());
+    lock_watch.restart();
+
+    TxnTimestamp ts = getContext()->getTimestamp();
+    MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *this, ts);
+    MergeTreeDataDeduper deduper(*this, local_context);
+    LocalDeleteBitmaps bitmaps_to_dump = deduper.repairParts(txn->getTransactionID(), CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts));
+
+    CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Insert);
+    if (!bitmaps_to_dump.empty())
+        cnch_writer.publishStagedParts(/*staged_parts*/{}, bitmaps_to_dump);
+
+    txn->commitV2();
+    txn->unlock();
 }
 
 void StorageCnchMergeTree::collectResource(ContextPtr local_context, ServerDataPartsVector & parts, const String & local_table_name, const std::set<Int64> & required_bucket_numbers)
@@ -1421,7 +1583,7 @@ void StorageCnchMergeTree::dropPartsImpl(ServerDataPartsVector& svr_parts_to_dro
         drop_ranges = createDropRangesFromParts(svr_parts_to_drop, txn);
     }
 
-    CnchDataWriter cnch_writer(*this, *local_context, ManipulationType::Drop);
+    CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Drop);
     cnch_writer.dumpAndCommitCnchParts(drop_ranges);
 }
 
@@ -1719,4 +1881,22 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
     query_info.syntax_analyzer_result = std::move(analyzed_result);
     return selectPartsToRead(column_names_to_return, local_context, query_info);
 }
+
+String StorageCnchMergeTree::genCreateTableQueryForWorker(const String & suffix)
+{
+    String worker_table_name = getTableName();
+
+    if (!suffix.empty())
+    {
+        worker_table_name += '_';
+        for (const auto & c : suffix)
+        {
+            if (c != '-')
+                worker_table_name += c;
+        }
+    }
+
+    return getCreateQueryForCloudTable(getCreateTableSql(), worker_table_name);
+}
+
 } // end namespace DB

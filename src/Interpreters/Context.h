@@ -50,6 +50,12 @@ namespace zkutil { class ZooKeeper; }
 namespace DB
 {
 
+namespace IndexFile
+{
+    class Cache;
+    class RemoteFileCache;
+}
+
 struct ContextSharedPart;
 class ContextAccess;
 struct User;
@@ -188,6 +194,10 @@ using InputBlocksReader = std::function<Block(ContextPtr)>;
 /// Used in distributed task processing
 using ReadTaskCallback = std::function<String()>;
 
+class UniqueKeyIndexCache;
+using UniqueKeyIndexCachePtr = std::shared_ptr<UniqueKeyIndexCache>;
+using UniqueKeyIndexBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
+using UniqueKeyIndexFileCachePtr = std::shared_ptr<IndexFile::RemoteFileCache>;
 class DeleteBitmapCache;
 class CnchStorageCache;
 class PartCacheManager;
@@ -209,6 +219,7 @@ class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 class CnchWorkerClient;
 using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
+class CnchCatalogDictionaryCache;
 
 enum class ServerType
 {
@@ -711,9 +722,11 @@ public:
 
     const EmbeddedDictionaries & getEmbeddedDictionaries() const;
     const ExternalDictionariesLoader & getExternalDictionariesLoader() const;
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache() const;
     const ExternalModelsLoader & getExternalModelsLoader() const;
     EmbeddedDictionaries & getEmbeddedDictionaries();
     ExternalDictionariesLoader & getExternalDictionariesLoader();
+    CnchCatalogDictionaryCache & getCnchCatalogDictionaryCache();
     ExternalModelsLoader & getExternalModelsLoader();
     ExternalModelsLoader & getExternalModelsLoaderUnlocked();
     void tryCreateEmbeddedDictionaries() const;
@@ -1084,6 +1097,18 @@ public:
     void setPipelineLogPath(const String & path) { pipeline_log_path = path; }
     String getPipelineLogpath() const { return pipeline_log_path; }
 
+    /// Create a memory cache of data blocks reading from unique key index files.
+    void setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes);
+    UniqueKeyIndexBlockCachePtr getUniqueKeyIndexBlockCache() const;
+
+    /// Create a local disk cache of unique key index files.
+    void setUniqueKeyIndexFileCache(size_t cache_size_in_bytes);
+    UniqueKeyIndexFileCachePtr getUniqueKeyIndexFileCache() const;
+
+    /// Create a cache of UniqueKeyIndex objects.
+    void setUniqueKeyIndexCache(size_t cache_size_in_bytes);
+    UniqueKeyIndexCachePtr getUniqueKeyIndexCache() const;
+
     /// Create a memory cache of delete bitmaps for data parts.
     void setDeleteBitmapCache(size_t cache_size_in_bytes);
     std::shared_ptr<DeleteBitmapCache> getDeleteBitmapCache() const;
@@ -1207,6 +1232,8 @@ public:
     CnchBGThreadPtr getCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     CnchBGThreadPtr tryGetCnchBGThread(CnchBGThreadType type, const StorageID & storage_id) const;
     void controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const;
+
+    CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;

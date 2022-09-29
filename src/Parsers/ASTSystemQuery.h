@@ -87,6 +87,7 @@ public:
         FETCH_PARTS,
         METASTORE,
         CLEAR_BROKEN_TABLES,
+        DEDUP, // dedup db.table [partition partition_expr] for repair
         END
     };
 
@@ -114,6 +115,9 @@ public:
     ASTPtr values_changes;
 
     ASTPtr target_path;
+
+    // For DEDUP
+    ASTPtr partition; // The value or ID of the partition is stored here.
 
     String getID(char) const override { return "SYSTEM query"; }
 

@@ -11,6 +11,7 @@
 #include <Transaction/LockRequest.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Catalog/DataModelPartWrapper.h>
 #include <Protos/data_models.pb.h>
 #include <google/protobuf/repeated_field.h>
 #include <memory>
@@ -97,17 +98,16 @@ inline void fillBasePartAndDeleteBitmapModels(
     const IStorage & storage,
     const std::vector<T> & parts,
     pb::RepeatedPtrField<Protos::DataModelPart> & parts_model,
-    pb::RepeatedPtrField<Protos::DataModelDeleteBitmap> & /*bitmaps_model*/)
+    pb::RepeatedPtrField<Protos::DataModelDeleteBitmap> & bitmaps_model)
 {
     fillPartsModelForSend(storage, parts, parts_model);
-    // TODO: add delete_bitmap_metas
-    // for (auto & part : parts)
-    // {
-    //     for (auto & bitmap_meta : part->delete_bitmap_metas)
-    //     {
-    //         bitmaps_model.Add()->CopyFrom(*bitmap_meta);
-    //     }
-    // }
+    for (auto & part : parts)
+    {
+        for (auto & bitmap_meta : part->delete_bitmap_metas)
+        {
+            bitmaps_model.Add()->CopyFrom(*bitmap_meta);
+        }
+    }
 }
 
 inline void fillTopologyVersions(const std::list<CnchServerTopology> & topologies, pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
@@ -165,15 +165,15 @@ inline std::vector<T> createPartVectorFromModelsForSend(
         part->columns_commit_time = part_model.columns_commit_time();
         if (part_model.has_columns())
         {
-            *(part->columns_ptr) = NamesAndTypesList::parse(part_model.columns());
+            part->setColumns(NamesAndTypesList::parse(part_model.columns()));
             if (part_model.has_columns_commit_time())
             {
-                columns_versions[part_model.columns_commit_time()] = part->columns_ptr;
+                columns_versions[part_model.columns_commit_time()] = part->getColumnsPtr();
             }
         }
         else
         {
-            part->columns_ptr = columns_versions[part_model.columns_commit_time()];
+            part->setColumnsPtr(columns_versions[part_model.columns_commit_time()]);
         }
         res.emplace_back(std::move(part));
     }
@@ -203,14 +203,13 @@ inline std::vector<T> createBasePartAndDeleteBitmapFromModelsForSend(
         if (bitmap_it == bitmaps_model.end() || !same_block(*bitmap_it, part))
             continue;
 
-        // TODO: add delete_bitmap_metas for IMergeTreeDataPart
-        // auto list_it = part->delete_bitmap_metas.before_begin();
-        // do
-        // {
-        //     list_it = part->delete_bitmap_metas.insert_after(list_it, std::make_shared<Protos::DataModelDeleteBitmap>(*bitmap_it));
-        //     bitmap_it++;
-        // }
-        // while (bitmap_it != bitmaps_model.end() && same_block(*bitmap_it, part));
+        auto list_it = part->delete_bitmap_metas.before_begin();
+        do
+        {
+            list_it = part->delete_bitmap_metas.insert_after(list_it, std::make_shared<Protos::DataModelDeleteBitmap>(*bitmap_it));
+            bitmap_it++;
+        }
+        while (bitmap_it != bitmaps_model.end() && same_block(*bitmap_it, part));
     }
     return res;
 }

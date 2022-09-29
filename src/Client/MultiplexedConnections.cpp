@@ -140,7 +140,7 @@ void MultiplexedConnections::sendQuery(
 
     auto current_context = getContext();
     size_t num_replicas = replica_states.size();
-    bool is_cnch_query = current_context->getServerType() == ServerType::cnch_server || current_context->getServerType() == ServerType::cnch_worker;
+    bool is_cnch_query = (nullptr != current_context->getCurrentTransaction());
 
     if (num_replicas > 1)
     {

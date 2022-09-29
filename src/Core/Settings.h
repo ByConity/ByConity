@@ -281,7 +281,6 @@ class IColumn;
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
     M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
     M(Bool, cnch_skip_memory_buffers, false, "Skip data memory buffers", 0) \
-    M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
     \
     /**  settings about bitmap index */\
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
@@ -574,8 +573,13 @@ class IColumn;
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
+    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+    M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
+    M(Bool, enable_staging_area_for_write, false, "Whether INSERTs on unique tables should commit to the staging area or not.", 0) \
+    M(UInt64, max_string_size_for_unique_key, 1048576, "Max string size limit for unique key.", 0) \
+    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
     \
     M(UInt64, resource_group_unmatched_behavior, 0, "The behavior when there is no resource group matched: 0 for let go, 1 for exception, 2 for the first root group.", 0) \
     /** Experimental functions */ \
@@ -723,7 +727,6 @@ class IColumn;
     /** The section above is for obsolete settings. Do not add anything there. */\
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
 
-
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
 
@@ -745,6 +748,8 @@ class IColumn;
     \
     M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
     M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \
+    \
+    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
     \
     M(Bool, input_format_values_interpret_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser and try to interpret it as SQL expression.", 0) \
     M(Bool, input_format_values_deduce_templates_of_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser, deduce template of the SQL expression, try to parse all rows using template and then interpret expression for all rows.", 0) \
@@ -807,7 +812,6 @@ class IColumn;
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
     M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
     M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
-    M(UInt64, unique_key_attach_partition_timeout, 3600, "Default timeout (seconds) for attaching partiton for unique key", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

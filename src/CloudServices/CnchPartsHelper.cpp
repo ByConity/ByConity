@@ -13,6 +13,24 @@ LoggingOption getLoggingOption(const Context & c)
     return (c.getSettingsRef().send_logs_level == LogsLevel::none) ? DisableLogging : EnableLogging;
 }
 
+IMergeTreeDataPartsVector toIMergeTreeDataPartsVector(const MergeTreeDataPartsCNCHVector & vec)
+{
+    IMergeTreeDataPartsVector res;
+    res.reserve(vec.size());
+    for (auto & p : vec)
+        res.push_back(p);
+    return res;
+}
+
+MergeTreeDataPartsCNCHVector toMergeTreeDataPartsCNCHVector(const IMergeTreeDataPartsVector & vec)
+{
+    MergeTreeDataPartsCNCHVector res;
+    res.reserve(vec.size());
+    for (auto & p : vec)
+        res.push_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(p));
+    return res;
+}
+
 namespace
 {
     template <class T>
@@ -189,6 +207,11 @@ ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool f
     return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
+MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging)
+{
+    return calcVisiblePartsImpl<MergeTreeDataPartsCNCHVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
+}
+
 ServerDataPartsVector calcVisiblePartsForGC(
     ServerDataPartsVector & all_parts,
     ServerDataPartsVector * visible_alone_drop_ranges,
@@ -202,5 +225,124 @@ ServerDataPartsVector calcVisiblePartsForGC(
         visible_alone_drop_ranges,
         invisible_dropped_parts,
         logging);
+}
+
+/// Input
+/// - all_bitmaps: list of bitmaps that have been committed (has non-zero CommitTs)
+/// - include_tombstone: whether to include tombstone bitmaps in "visible_bitmaps"
+/// Output
+/// - visible_bitmaps: contains the latest version for all visible bitmaps
+/// - visible_alone_tombstones: contains visible tombstone bitmaps that don't have previous version
+/// - bitmaps_covered_by_range_tombstones: contains all bitmaps covered by range tombstones
+///
+/// Example:
+///
+/// We notate each bitmap as "PartitionID_MinBlock_MaxBlock_Type_CommitTs" below, where Type is one of
+/// - 'b' for base bitmap
+/// - 'd' for delta bitmap
+/// - 'D' for single tombstone
+/// - 'R' for range tombstone
+///
+/// Suppose we have the following inputs (all_bitmaps)
+///     all_0_0_D_t0 (previous version may have been removed by gc thread),
+///     all_1_1_b_t1, all_2_2_b_t1, all_3_3_b_t1,
+///     all_1_1_D_t2, all_2_2_D_t2, all_1_2_b_t2,
+///     all_1_2_d_t3, all_4_4_b_t4
+///
+/// The function will link bitmaps with the same block name (PartitionID_MinBlock_MaxBlock), from new to old.
+/// If there are no range tombstones, all bitmaps are visible and the latest version for each bitmap is added to "visible_bitmaps".
+///
+/// Output when include_tombstone == true:
+///     visible_bitmaps = [
+///         all_0_0_D_t0,
+///         all_1_1_D_t2 (-> all_1_1_b_t1),
+///         all_1_2_d_t3 (-> all_1_2_b_t2),
+///         all_2_2_D_t2 (-> all_2_2_b_t1),
+///         all_3_3_b_t1,
+///         all_4_4_b_t4
+///     ]
+///     visible_alone_tombstones (if not null) = [ all_0_0_D_t0 ]
+///
+/// Output when include_tombstone == false:
+///     visible_bitmaps = [
+///         all_1_2_d_t3 (-> all_1_2_b_t2),
+///         all_3_3_b_t1,
+///         all_4_4_b_t4
+///     ]
+///
+/// If we add a range tombstone all_0_3_R_t2 to the input, all bitmaps in the same partition whose MaxBlock <= 3
+/// are covered by the range tombstone and become invisible, so they are not included in "visible_bitmaps".
+///
+/// Output:
+///     visible_bitmaps = [ all_4_4_b_t4 ],
+///     bitmaps_covered_by_range_tombstones (if not null) = [
+///         all_0_0_D_t0,
+///         all_1_1_b_t1, all_2_2_b_t1, all_3_3_b_t1,
+///         all_1_1_D_t2, all_2_2_D_t2, all_1_2_b_t2,
+///         all_1_2_d_t3
+///     ]
+void calcVisibleDeleteBitmaps(
+    DeleteBitmapMetaPtrVector & all_bitmaps,
+    DeleteBitmapMetaPtrVector & visible_bitmaps,
+    bool include_tombstone,
+    DeleteBitmapMetaPtrVector * visible_alone_tombstones,
+    DeleteBitmapMetaPtrVector * bitmaps_covered_by_range_tombstones)
+{
+    if (all_bitmaps.empty())
+        return;
+    if (all_bitmaps.size() == 1)
+    {
+        if (include_tombstone || !all_bitmaps.front()->isTombstone())
+            visible_bitmaps = all_bitmaps;
+
+        if (visible_alone_tombstones && all_bitmaps.front()->isTombstone())
+            *visible_alone_tombstones = all_bitmaps;
+        return;
+    }
+
+    std::sort(all_bitmaps.begin(), all_bitmaps.end(), LessDeleteBitmapMeta());
+
+    auto prev_it = all_bitmaps.begin();
+    auto curr_it = std::next(prev_it);
+
+    while (prev_it != all_bitmaps.end())
+    {
+        auto & prev = *prev_it;
+        if (prev->isRangeTombstone() && curr_it != all_bitmaps.end()
+            && prev->getModel()->partition_id() == (*curr_it)->getModel()->partition_id())
+        {
+            if ((*curr_it)->isRangeTombstone())
+            {
+                if (bitmaps_covered_by_range_tombstones)
+                    bitmaps_covered_by_range_tombstones->push_back(prev);
+                prev_it = curr_it;
+                ++curr_it;
+                continue;
+            }
+            else if ((*curr_it)->getModel()->part_max_block() <= prev->getModel()->part_max_block())
+            {
+                if (bitmaps_covered_by_range_tombstones)
+                    bitmaps_covered_by_range_tombstones->push_back(*curr_it);
+                ++curr_it;
+                continue;
+            }
+        }
+
+        if (curr_it != all_bitmaps.end() && (*curr_it)->sameBlock(*prev))
+        {
+            (*curr_it)->setPrevious(prev);
+        }
+        else
+        {
+            if (include_tombstone || !prev->isTombstone())
+                visible_bitmaps.push_back(prev);
+
+            if (visible_alone_tombstones && prev->isTombstone() && !prev->tryGetPrevious())
+                visible_alone_tombstones->push_back(prev);
+        }
+
+        prev_it = curr_it;
+        ++curr_it;
+    }
 }
 }

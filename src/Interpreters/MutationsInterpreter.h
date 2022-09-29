@@ -66,7 +66,7 @@ public:
     NameSet grabMaterializedProjections() { return std::move(materialized_projections); }
 
     /// REQUIRES: execute() has been called before
-    DeleteBitmapPtr getUpdatedDeleteBitmap() const { return updated_delete_bitmap; }
+    ImmutableDeleteBitmapPtr getUpdatedDeleteBitmap() const { return updated_delete_bitmap; }
 
     struct MutationKind
     {
@@ -91,7 +91,7 @@ private:
     ASTPtr prepareInterpreterSelectQueryForFastDelete(Stage & prepared_stage, bool dry_run);
     QueryPipelinePtr addStreamsForLaterStages(const std::vector<Stage> & prepared_stages, QueryPlan & plan) const;
 
-    DeleteBitmapPtr prepareNewDeleteBitmap(IBlockInputStream & in, const DeleteBitmapPtr & current_bitmap);
+    ImmutableDeleteBitmapPtr prepareNewDeleteBitmap(IBlockInputStream & in, const ImmutableDeleteBitmapPtr & current_bitmap);
 
     std::optional<SortDescription> getStorageSortDescriptionIfPossible(const Block & header) const;
 
@@ -157,7 +157,7 @@ private:
     bool is_fast_delete = false;
     bool is_prepared = false; /// Has the sequence of stages been prepared.
 
-    DeleteBitmapPtr updated_delete_bitmap; /// set when delete bitmap is updated
+    ImmutableDeleteBitmapPtr updated_delete_bitmap; /// set when delete bitmap is updated
 
     NameSet materialized_indices;
     NameSet materialized_projections;

@@ -105,6 +105,7 @@
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <Storages/CompressionCodecSelector.h>
+#include <Storages/DiskCache/KeyIndexFileCache.h>
 #include <Storages/IStorage.h>
 #include <Storages/MarkCache.h>
 #include <Processors/QueryCache.h>
@@ -114,6 +115,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
+#include <Storages/UniqueKeyIndexCache.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
@@ -246,6 +248,7 @@ struct ContextSharedPart
     mutable std::mutex embedded_dictionaries_mutex;
     mutable std::mutex external_dictionaries_mutex;
     mutable std::mutex external_models_mutex;
+    mutable std::mutex cnch_catalog_dict_cache_mutex;
     /// Separate mutex for storage policies. During server startup we may
     /// initialize some important storages (system logs with MergeTree engine)
     /// under context lock.
@@ -290,6 +293,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries;    /// Metrica's dictionaries. Have lazy initialization.
+    mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
     ConfigurationPtr external_models_config;
@@ -389,6 +393,9 @@ struct ContextSharedPart
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
+    mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache;   /// Shared block cache of unique key indexes
+    mutable UniqueKeyIndexFileCachePtr unique_key_index_file_cache;     /// Shared file cache of unique key indexes
+    mutable UniqueKeyIndexCachePtr unique_key_index_cache;              /// Shared object cache of unique key indexes
 
     using KMSKeyCache = std::unordered_map<String, String>;
     mutable KMSKeyCache kms_cache;
@@ -506,6 +513,7 @@ struct ContextSharedPart
             delete_system_logs = std::move(system_logs);
             embedded_dictionaries.reset();
             external_dictionaries_loader.reset();
+            cnch_catalog_dict_cache.reset();
             models_repository_guard.reset();
             external_models_loader.reset();
             buffer_flush_schedule_pool.reset();
@@ -1603,6 +1611,18 @@ ExternalDictionariesLoader & Context::getExternalDictionariesLoader()
     return *shared->external_dictionaries_loader;
 }
 
+CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache() const
+{
+    return const_cast<Context *>(this)->getCnchCatalogDictionaryCache();
+}
+
+CnchCatalogDictionaryCache & Context::getCnchCatalogDictionaryCache()
+{
+    std::lock_guard lock(shared->cnch_catalog_dict_cache_mutex);
+    if (!shared->cnch_catalog_dict_cache)
+        shared->cnch_catalog_dict_cache.emplace(getGlobalContext());
+    return *shared->cnch_catalog_dict_cache;
+}
 
 const ExternalModelsLoader & Context::getExternalModelsLoader() const
 {
@@ -3598,6 +3618,47 @@ HDFSConnectionParams Context::getHdfsConnectionParams() const{
     return shared->hdfs_connection_params;
 }
 
+void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+    if (shared->unique_key_index_block_cache)
+        throw Exception("Unique key index block cache has been already created", ErrorCodes::LOGICAL_ERROR);
+    shared->unique_key_index_block_cache = IndexFile::NewLRUCache(cache_size_in_bytes);
+}
+
+UniqueKeyIndexBlockCachePtr Context::getUniqueKeyIndexBlockCache() const
+{
+    auto lock = getLock();
+    return shared->unique_key_index_block_cache;
+}
+
+void Context::setUniqueKeyIndexFileCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+    if (shared->unique_key_index_file_cache)
+        throw Exception("Unique key index file cache has been already created", ErrorCodes::LOGICAL_ERROR);
+    shared->unique_key_index_file_cache = std::make_shared<KeyIndexFileCache>(*this, cache_size_in_bytes);
+}
+
+UniqueKeyIndexFileCachePtr Context::getUniqueKeyIndexFileCache() const
+{
+    auto lock = getLock();
+    return shared->unique_key_index_file_cache;
+}
+
+void Context::setUniqueKeyIndexCache(size_t cache_size_in_bytes)
+{
+    auto lock = getLock();
+    if (shared->unique_key_index_cache)
+        throw Exception("Unique key index cache has been already created", ErrorCodes::LOGICAL_ERROR);
+    shared->unique_key_index_cache = std::make_shared<UniqueKeyIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<UniqueKeyIndexCache> Context::getUniqueKeyIndexCache() const
+{
+    auto lock = getLock();
+    return shared->unique_key_index_cache;
+}
 
 void Context::setDeleteBitmapCache(size_t cache_size_in_bytes)
 {
@@ -4191,6 +4252,11 @@ CnchBGThreadPtr Context::tryGetCnchBGThread(CnchBGThreadType type, const Storage
 void Context::controlCnchBGThread(const StorageID & storage_id, CnchBGThreadType type, CnchBGThreadAction action) const
 {
     getCnchBGThreadsMap(type)->controlThread(storage_id, action);
+}
+
+CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
+{
+    return tryGetCnchBGThread(CnchBGThreadType::DedupWorker, storage_id);
 }
 
 void Context::initCnchTransactionCoordinator()

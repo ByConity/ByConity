@@ -1,13 +1,17 @@
 #include <WorkerTasks/CloudMergeTreeMutateTask.h>
 
-#include <CloudServices/CnchPartsHelper.h>
+#include <CloudServices/commitCnchParts.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
 #include <WorkerTasks/MergeTreeDataMutator.h>
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int ABORTED;
+}
 
 CloudMergeTreeMutateTask::CloudMergeTreeMutateTask(
     StorageCloudMergeTree & storage_,
@@ -21,29 +25,15 @@ CloudMergeTreeMutateTask::CloudMergeTreeMutateTask(
 void CloudMergeTreeMutateTask::executeImpl()
 {
     auto lock_holder = storage.lockForShare(RWLockImpl::NO_QUERY, storage.getSettings()->lock_acquire_timeout_for_background_operations);
-    auto visible_parts = CnchPartsHelper::calcVisibleParts(params.all_parts, false);
 
     MergeTreeDataMutator mutate_executor(storage, getContext()->getSettingsRef().background_pool_size);
-    auto temp_parts = mutate_executor.mutatePartsToTemporaryParts(params, *manipulation_entry, getContext(), lock_holder);
+    auto data_parts = mutate_executor.mutatePartsToTemporaryParts(params, *manipulation_entry, getContext(), lock_holder);
 
-    // dumpAndCommitCnchParts(storage, ManipulationType::Mutate, temp_parts, context, params.task_id);
+    if (isCancelled())
+        throw Exception("Merge task " + params.task_id + " is cancelled", ErrorCodes::ABORTED);
 
-    /// TODO: write part log
-    // Stopwatch stopwatch;
-
-    // auto write_part_log = [&] (const ExecutionStatus & execution_status)
-    // {
-    //     writePartLog(
-    //         PartLogElement::MUTATE_PART,
-    //         execution_status,
-    //         stopwatch.elapsed(),
-    //         {},
-    //         new_part,
-    //         {},
-    //         list_entry.get());
-    // };
-
-    // write_part_log({});
+    CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Mutate, params.task_id);
+    cnch_writer.dumpAndCommitCnchParts(data_parts);
 }
 
 }

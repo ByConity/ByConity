@@ -472,6 +472,7 @@ private:
             current_size -= cell.size;
             current_weight_lost += cell.size;
 
+            removeExternal(key, cell.value, cell.size);
             cells.erase(it);
             queue.pop_front();
             --queue_size;
@@ -488,6 +489,7 @@ private:
 
     /// Override this method if you want to track how much weight was lost in removeOverflow method.
     virtual void onRemoveOverflowWeightLoss(size_t /*weight_loss*/) {}
+    virtual void removeExternal(const Key & /*key*/, const MappedPtr &/*value*/, size_t /*weight*/) {}
 };
 
 

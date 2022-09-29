@@ -38,6 +38,7 @@
 #include <Statistics/StatisticsBase.h>
 #include <Storages/StorageDictionary.h>
 #include <Dictionaries/getDictionaryConfigurationFromAST.h>
+#include <Parsers/formatAST.h>
 
 /// TODO: put all global gflags together in somewhere.
 namespace brpc::policy { DECLARE_string(consul_agent_addr); }
@@ -1907,11 +1908,7 @@ namespace Catalog
                 if (dic_meta.empty())
                     throw Exception("Dictionary " + database + "." + name + " doesn't  exists.", ErrorCodes::DICTIONARY_NOT_EXIST);
 
-                Protos::DataModelDictionary dic_model;
-                dic_model.ParseFromString(dic_meta);
-                dic_model.set_status(Status::setDelete(dic_model.status()));
-                dic_model.set_last_modification_time(Poco::Timestamp().raw());
-                meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
+                meta_proxy->dropDictionary(name_space, database, name);
             },
             ProfileEvents::DropDictionarySuccess,
             ProfileEvents::DropDictionaryFailed);
@@ -1931,6 +1928,16 @@ namespace Catalog
             [&] { detachOrAttachDictionary(database, name, true); },
             ProfileEvents::DetachDictionarySuccess,
             ProfileEvents::DetachDictionaryFailed);
+    }
+
+    void Catalog::fixDictionary(const String & database, const String & name)
+    {
+        String dic_meta;
+        meta_proxy->getDictionary(name_space, database, name, dic_meta);
+        DB::Protos::DataModelDictionary dic_model;
+        dic_model.ParseFromString(dic_meta);
+        fillUUIDForDictionary(dic_model);
+        meta_proxy->createDictionary(name_space, database, name, dic_model.SerializeAsString());
     }
 
     Strings Catalog::getDictionariesInDB(const String & database)
@@ -4337,18 +4344,12 @@ namespace Catalog
         return outRes;
     }
 
-    void Catalog::addDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->addDeleteBitmaps(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), bitmaps); },
-            ProfileEvents::AddDeleteBitmapsSuccess,
-            ProfileEvents::AddDeleteBitmapsFailed);
-    }
-
     void Catalog::removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeDeleteBitmaps(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), bitmaps); },
+            [&] {
+                clearParts(storage, CommitItems{{}, bitmaps, {}}, /*skip_part_cache*/ true);
+            },
             ProfileEvents::RemoveDeleteBitmapsSuccess,
             ProfileEvents::RemoveDeleteBitmapsFailed);
     }
@@ -4887,6 +4888,28 @@ namespace Catalog
     UInt64 Catalog::getMergeMutateThreadStartTime(const StorageID & storage_id) const
     {
         return meta_proxy->getMergeMutateThreadStartTime(name_space, UUIDHelpers::UUIDToString(storage_id.uuid));
+    }
+
+    void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)
+    {
+        UUID final_uuid = UUIDHelpers::Nil;
+        UUID uuid = RPCHelpers::createUUID(d.uuid());
+        ASTPtr ast = CatalogFactory::getCreateDictionaryByDataModel(d);
+        ASTCreateQuery * create_ast = ast->as<ASTCreateQuery>();
+        UUID uuid_in_create_query = create_ast->uuid;
+        if (uuid != UUIDHelpers::Nil)
+            final_uuid = uuid;
+
+        if (final_uuid == UUIDHelpers::Nil)
+            final_uuid = uuid_in_create_query;
+
+        if (final_uuid == UUIDHelpers::Nil)
+            final_uuid = UUIDHelpers::generateV4();
+
+        RPCHelpers::fillUUID(final_uuid, *(d.mutable_uuid()));
+        create_ast->uuid = final_uuid;
+        String create_query = serializeAST(*ast);
+        d.set_definition(create_query);
     }
 }
 }

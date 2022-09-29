@@ -1,20 +1,20 @@
 #include <Columns/ColumnByteMap.h>
-#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
-#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
-#include <Interpreters/Context.h>
-#include <Compression/CompressionFactory.h>
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Compression/CompressionFactory.h>
-#include <DataTypes/MapHelpers.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/MapHelpers.h>
 #include <DataTypes/Serializations/ISerialization.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/sortBlock.h>
+#include <Storages/IndexFile/FilterPolicy.h>
+#include <Storages/MergeTree/MergeTreeBitmapIndex.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <rocksdb/db.h>
+#include <Common/Coding.h>
 #include <Common/FieldVisitorToString.h>
-#include <Interpreters/sortBlock.h>
-#include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
+#include <Common/Slice.h>
 #include <Common/escapeForFileName.h>
 
 #include <Storages/MergeTree/MergeTreeSuffix.h>
@@ -104,7 +104,6 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
     const auto & columns = metadata_snapshot->getColumns();
     for (const auto & it : columns_list)
     {
-        //@ByteMap
         if (it.type->isMap() && !it.type->isMapKVStore())
             continue;
         else if (isMapImplicitKeyNotKV(it.name))
@@ -170,8 +169,15 @@ void MergeTreeDataPartWriterWide::shiftCurrentMark(const Granules & granules_wri
     }
 }
 
+
+MergeTreeDataPartWriterWide::~MergeTreeDataPartWriterWide()
+{
+    closeTempUniqueKeyIndex();
+}
+
 void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Permutation * permutation)
 {
+    size_t rows = block.rows();
     /// Fill index granularity for this block
     /// if it's unknown (in case of insert data or horizontal merge,
     /// but not in case of vertical part of vertical merge)
@@ -212,32 +218,55 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
     Block skip_indexes_block = getBlockAndPermute(block, getSkipIndicesColumns(), permutation);
 
+    /// Fill permuted underlying columns for unique key
+    Block unique_key_block;
+    NameSet unique_key_underlying_columns;
+    String extra_column_name;
+    size_t extra_column_size = 0;
+    if (settings.enable_disk_based_key_index)
+    {
+        auto required_columns = metadata_snapshot->getColumnsRequiredForUniqueKey();
+        unique_key_underlying_columns.insert(required_columns.begin(), required_columns.end());
+        extra_column_name = metadata_snapshot->extra_column_name;
+        extra_column_size = metadata_snapshot->extra_column_size;
+    }
+
     auto it = columns_list.begin();
     for (size_t i = 0; i < columns_list.size(); ++i, ++it)
     {
         const ColumnWithTypeAndName & column = block.getByName(it->name);
+        const bool part_of_unique_key = unique_key_underlying_columns.count(column.name) > 0;
+        const bool is_extra_column = !extra_column_name.empty() && (column.name == extra_column_name);
 
         if (permutation)
         {
             if (primary_key_block.has(it->name))
             {
-                const auto & primary_column = *primary_key_block.getByName(it->name).column;
-                writeColumn(*it, primary_column, offset_columns, granules_to_write);
+                const auto & primary_column = primary_key_block.getByName(it->name);
+                if (part_of_unique_key || is_extra_column)
+                    unique_key_block.insert(primary_column);
+                writeColumn(*it, *primary_column.column, offset_columns, granules_to_write);
             }
             else if (skip_indexes_block.has(it->name))
             {
-                const auto & index_column = *skip_indexes_block.getByName(it->name).column;
-                writeColumn(*it, index_column, offset_columns, granules_to_write);
+                const auto & index_column = skip_indexes_block.getByName(it->name);
+                if (part_of_unique_key || is_extra_column)
+                    unique_key_block.insert(index_column);
+                writeColumn(*it, *index_column.column, offset_columns, granules_to_write);
             }
             else
             {
                 /// We rearrange the columns that are not included in the primary key here; Then the result is released - to save RAM.
                 ColumnPtr permuted_column = column.column->permute(*permutation, 0);
+                if (part_of_unique_key || is_extra_column)
+                    unique_key_block.insert(ColumnWithTypeAndName(permuted_column, column.type, column.name));
                 writeColumn(*it, *permuted_column, offset_columns, granules_to_write);
             }
         }
         else
         {
+            if (part_of_unique_key || is_extra_column)
+                unique_key_block.insert(column);
             writeColumn(*it, *column.column, offset_columns, granules_to_write);
         }
 
@@ -278,13 +307,231 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         }
     }
 
-
     if (settings.rewrite_primary_key)
         calculateAndSerializePrimaryIndex(primary_key_block, granules_to_write);
 
     calculateAndSerializeSkipIndices(skip_indexes_block, granules_to_write);
 
     shiftCurrentMark(granules_to_write);
+
+    writeUniqueKeyIndex(unique_key_block);
+
+    rows_count += rows;
+}
+
+void MergeTreeDataPartWriterWide::writeUniqueKeyIndex(Block & unique_key_block)
+{
+    if (!settings.enable_disk_based_key_index)
+        return;
+
+    if (!temp_unique_key_index)
+    {
+        if (rows_count == 0)
+        {
+            /// buffer the first block so that we can generate key index file directly from the buffered block later
+            buffered_unique_key_block = std::move(unique_key_block);
+        }
+        else if (unique_key_block.rows() > 0)
+        {
+            /// merge case (more than one block) : convert buffered block into "temp_unique_key_index"
+            assert(buffered_unique_key_block.rows() > 0);
+            rocksdb::Options opts;
+            opts.create_if_missing = true;
+            opts.error_if_exists = true;
+            opts.write_buffer_size = 16 << 20; /// 16MB
+            temp_unique_key_index_dir = fullPath(data_part->volume->getDisk(), part_path + "TEMP_unique_key_index");
+            auto status = rocksdb::DB::Open(opts, temp_unique_key_index_dir, &temp_unique_key_index);
+            if (!status.ok())
+                throw Exception("Can't create temp unique key index at " + temp_unique_key_index_dir, ErrorCodes::LOGICAL_ERROR);
+            writeToTempUniqueKeyIndex(buffered_unique_key_block, /*first_rid=*/0, *temp_unique_key_index);
+            buffered_unique_key_block.clear();
+        }
+    }
+
+    if (temp_unique_key_index)
+    {
+        /// merge case (more than one block) : add index entries to "temp_unique_key_index" first
+        writeToTempUniqueKeyIndex(unique_key_block, /*first_rid=*/rows_count, *temp_unique_key_index);
+    }
+}
+
+void MergeTreeDataPartWriterWide::writeToTempUniqueKeyIndex(Block & block, size_t first_rid, rocksdb::DB & temp_index)
+{
+    auto unique_key_expr = metadata_snapshot->getUniqueKeyExpression();
+    unique_key_expr->execute(block);
+
+    ColumnsWithTypeAndName key_columns;
+    for (auto & col_name : metadata_snapshot->getUniqueKeyColumns())
+        key_columns.emplace_back(block.getByName(col_name));
+
+    /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+    for (auto & col : key_columns)
+    {
+        if (!serializations.count(col.name))
+            serializations.emplace(col.name, col.type->getDefaultSerialization());
+    }
+
+    rocksdb::WriteOptions opts;
+    opts.disableWAL = true;
+
+    String extra_column_name = metadata_snapshot->extra_column_name;
+    size_t extra_column_size = metadata_snapshot->extra_column_size;
+
+    const ColumnWithTypeAndName * extra_column = nullptr;
+    if (!extra_column_name.empty())
+        extra_column = &block.getByName(extra_column_name);
+
+    size_t rows = block.rows();
+    for (size_t i = 0; i < rows; ++i)
+    {
+        WriteBufferFromOwnString key_buf;
+        for (auto & col : key_columns)
+            serializations[col.name]->serializeMemComparable(*col.column, i, key_buf);
+        String value;
+        auto rid = static_cast<UInt32>(first_rid + i);
+        PutVarint32(&value, rid);
+
+        if (extra_column)
+        {
+            /// append extra column data at the end of value
+            if (extra_column_size == 8) /// handle explicit version column
+            {
+                UInt64 version = extra_column->column->getUInt(i);
+                value.append(reinterpret_cast<char *>(&version), extra_column_size);
+            }
+        }
+
+        auto status = temp_index.Put(opts, key_buf.str(), value);
+        if (!status.ok())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to add unique key {} ", status.ToString());
+    }
+}
+
+void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexFileInfo & file_info)
+{
+    if (!settings.enable_disk_based_key_index || rows_count == 0)
+        return;
+
+    /// write unique_key -> rowid mappings to key index file
+    String unique_key_index_file = fullPath(data_part->volume->getDisk(), part_path + UKI_FILE_NAME);
+    IndexFile::Options options;
+    options.filter_policy.reset(IndexFile::NewBloomFilterPolicy(10));
+    IndexFile::IndexFileWriter index_writer(options);
+    auto status = index_writer.Open(unique_key_index_file);
+    if (!status.ok())
+        throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", unique_key_index_file, status.ToString());
+
+    if (!temp_unique_key_index)
+    {
+        /// normal insert case : create index file from buffered block
+        /// sort by unique key exprs
+        auto unique_key_expr = metadata_snapshot->getUniqueKeyExpression();
+        unique_key_expr->execute(buffered_unique_key_block);
+
+        SortDescription sort_description;
+        auto unique_key_columns = metadata_snapshot->getUniqueKeyColumns();
+        sort_description.reserve(unique_key_columns.size());
+        for (auto & name : unique_key_columns)
+            sort_description.emplace_back(buffered_unique_key_block.getPositionByName(name), 1, 1);
+
+        IColumn::Permutation * unique_key_perm_ptr = nullptr;
+        IColumn::Permutation unique_key_perm;
+        if (!isAlreadySorted(buffered_unique_key_block, sort_description))
+        {
+            stableGetPermutation(buffered_unique_key_block, sort_description, unique_key_perm);
+            unique_key_perm_ptr = &unique_key_perm;
+        }
+
+        ColumnsWithTypeAndName key_columns;
+        for (auto & col_name : unique_key_columns)
+            key_columns.emplace_back(buffered_unique_key_block.getByName(col_name));
+
+        /// Serializations may not contain the column if it's the result of expression, like sipHash64()
+        for (auto & col : key_columns)
+        {
+            if (!serializations.count(col.name))
+                serializations.emplace(col.name, col.type->getDefaultSerialization());
+        }
+
+        String extra_column_name = metadata_snapshot->extra_column_name;
+        size_t extra_column_size = metadata_snapshot->extra_column_size;
+
+        const ColumnWithTypeAndName * extra_column = nullptr;
+        if (!extra_column_name.empty())
+            extra_column = &buffered_unique_key_block.getByName(extra_column_name);
+
+        for (UInt32 rid = 0, size = buffered_unique_key_block.rows(); rid < size; ++rid)
+        {
+            size_t idx = unique_key_perm_ptr ? unique_key_perm[rid] : rid;
+            WriteBufferFromOwnString key_buf;
+            for (auto & col : key_columns)
+                serializations[col.name]->serializeMemComparable(*col.column, idx, key_buf);
+            String value;
+            PutVarint32(&value, static_cast<UInt32>(idx));
+
+            if (extra_column)
+            {
+                /// append extra column data at the end of value
+                if (extra_column_size == 8) /// handle explicit version column
+                {
+                    UInt64 version = extra_column->column->getUInt(idx); /// must use correct index, not rid
+                    value.append(reinterpret_cast<char *>(&version), extra_column_size);
+                }
+            }
+
+            status = index_writer.Add(key_buf.str(), value);
+            if (!status.ok())
+                throw Exception("Error while adding key to " + unique_key_index_file + ": " + status.ToString(), ErrorCodes::LOGICAL_ERROR);
+        }
+
+        buffered_unique_key_block.clear();
+    }
+    else
+    {
+        /// merge case : create index file from temp index
+        std::unique_ptr<rocksdb::Iterator> iter(temp_unique_key_index->NewIterator(rocksdb::ReadOptions()));
+        for (iter->SeekToFirst(); iter->Valid(); iter->Next())
+        {
+            auto key = iter->key();
+            auto val = iter->value();
+            status = index_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
+            if (!status.ok())
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", unique_key_index_file, status.ToString());
+        }
+        if (!iter->status().ok())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Error while scanning temp key index file {}: {}",
+                temp_unique_key_index_dir,
+                iter->status().ToString());
+        iter.reset();
+        closeTempUniqueKeyIndex();
+    }
+
+    status = index_writer.Finish(&file_info);
+    if (!status.ok())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while finishing file {}: {}", unique_key_index_file, status.ToString());
+}
+
+void MergeTreeDataPartWriterWide::closeTempUniqueKeyIndex()
+{
+    if (temp_unique_key_index)
+    {
+        try
+        {
+            auto status = temp_unique_key_index->Close();
+            if (!status.ok())
+                LOG_WARNING(log, "Failed to close {} : {}", temp_unique_key_index_dir, status.ToString());
+            delete temp_unique_key_index;
+            temp_unique_key_index = nullptr;
+
+            Poco::File(temp_unique_key_index_dir).remove(true);
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "{}", getCurrentExceptionMessage(false));
+        }
+    }
 }
 
 void MergeTreeDataPartWriterWide::validateColumnOfFixedSize(const String & name, const IDataType & type)
@@ -467,7 +714,6 @@ void MergeTreeDataPartWriterWide::finishDataSerialization(IMergeTreeDataPart::Ch
         auto it = columns_list.begin();
         for (size_t i = 0; i < columns_list.size(); ++i, ++it)
         {
-            // @ByteMap
             if (it->type->isMap() && !it->type->isMapKVStore())
             {
                 continue;
@@ -483,7 +729,7 @@ void MergeTreeDataPartWriterWide::finishDataSerialization(IMergeTreeDataPart::Ch
                 writeFinalMark(*it, offset_columns, serialize_settings.path);
         }
 
-        // @ByteMap, process implicit columns deduced by ByteMap
+        // Process implicit columns
         for (auto & cl : implicit_columns_list)
         {
             if (!serialization_states.empty())
@@ -530,6 +776,26 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         finishPrimaryIndexSerialization(checksums, sync);
 
     finishSkipIndicesSerialization(checksums, sync);
+
+    if (settings.enable_disk_based_key_index)
+    {
+        IndexFile::IndexFileInfo file_info;
+        Stopwatch timer;
+        writeFinalUniqueKeyIndexFile(file_info);
+        LOG_DEBUG(
+            storage.getLogger(),
+            "Write unique key index file cost {} ms, file size is {}",
+            timer.elapsedMilliseconds(),
+            file_info.file_size);
+        /// we don't create index file for empty part
+        if (file_info.file_size > 0)
+        {
+            checksums.files[UKI_FILE_NAME].file_size = file_info.file_size;
+            checksums.files[UKI_FILE_NAME].file_hash = file_info.file_hash;
+            const_cast<MergeTreeData::DataPart *>(data_part.get())->min_unique_key = file_info.smallest_key;
+            const_cast<MergeTreeData::DataPart *>(data_part.get())->max_unique_key = file_info.largest_key;
+        }
+    }
 
     for (auto & column_bitmap_indexe : column_bitmap_indexes)
     {
