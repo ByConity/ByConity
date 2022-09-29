@@ -28,8 +28,6 @@ bvar::Adder<int> & getExecuteMetric(CnchBGThreadType type)
             return g_executeImpl_MergeMutate;
         case CnchBGThreadType::Consumer:
             return g_executeImpl_Consumer;
-        case CnchBGThreadType::MemoryBuffer:
-            return g_executeImpl_MemoryBuffer;
         case CnchBGThreadType::DedupWorker:
             return g_executeImpl_DedupWorker;
         case CnchBGThreadType::GlobalGC:
@@ -54,8 +52,6 @@ bvar::Adder<int> & getExecuteErrorMetric(CnchBGThreadType type)
             return g_executeImpl_MergeMutate_error;
         case CnchBGThreadType::Consumer:
             return g_executeImpl_Consumer_error;
-        case CnchBGThreadType::MemoryBuffer:
-            return g_executeImpl_MemoryBuffer_error;
         case CnchBGThreadType::DedupWorker:
             return g_executeImpl_DedupWorker_error;
         case CnchBGThreadType::GlobalGC:
@@ -122,4 +118,3 @@ void DaemonJob::execute()
 
 } // end namespace DaemonManager
 } // end namespace DB
-

@@ -353,7 +353,7 @@ Strings StorageCnchMergeTree::selectPartitionsByPredicate(
             return metadata_ttl && metadata_ttl < query_time;
         });
         if (partition_list.size() < prev_sz)
-            LOG_DEBUG(log, "TTL rules droped {} expired partitions", prev_sz - partition_list.size());
+            LOG_DEBUG(log, "TTL rules dropped {} expired partitions", prev_sz - partition_list.size());
     }
 
     const auto partition_key = MergeTreePartition::adjustPartitionKey(getInMemoryMetadataPtr(), local_context);
@@ -448,13 +448,15 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
         return 0;
 
     /// Construct a block consists of partition keys then compute ttl values according to this block
-    const auto & partition_key_sample = getInMemoryMetadata().getPartitionKey().sample_block;
+    const auto & partition_key_sample = getInMemoryMetadataPtr()->getPartitionKey().sample_block;
+
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     const auto & partition_key = partition.value;
     /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
     if (columns.size() != partition_key.size())
         throw Exception(
-            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition missmatch between inmemory and metastore, this is a bug");
+            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition mismatch between in-memory({}) and metastore({}), this is a bug",
+            columns.size(), partition_key.size());
     for (size_t i = 0; i < partition_key.size(); ++i)
         columns[i]->insert(partition_key[i]);
 
@@ -494,7 +496,7 @@ time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & parti
 void StorageCnchMergeTree::filterPartsByPartition(
     ServerDataPartsVector & parts, ContextPtr local_context, const SelectQueryInfo & query_info, const Names & column_names_to_return) const
 {
-    /// Fine grained parts prunning by:
+    /// Fine grained parts pruning by:
     /// (1) partition min-max
     /// (2) min-max index
     /// (3) part name (if _part is in the query) and uuid (todo)
@@ -579,7 +581,7 @@ void StorageCnchMergeTree::filterPartsByPartition(
     if (parts.size() < prev_sz)
         LOG_DEBUG(
             log,
-            "Parts prunning rules droped {} parts, include {} empty parts, {} parts by partition minmax, {} parts by minmax index, {} "
+            "Parts pruning rules dropped {} parts, include {} empty parts, {} parts by partition minmax, {} parts by minmax index, {} "
             "parts by part value",
             prev_sz - parts.size(),
             empty,
@@ -754,7 +756,7 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
             throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
 
         std::size_t index = std::hash<String>{}(local_context->getCurrentQueryId() + std::to_string(retry)) % num_of_workers;
-        auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+        const auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
 
         // TODO: healthy check by rpc
         if (settings.query_worker_fault_tolerance)
@@ -877,8 +879,8 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
 
 bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataPtr &, const ASTPtr & partition, bool final, bool, const Names &, ContextPtr query_context)
 {
-    auto optimize_query = query->as<ASTOptimizeQuery>();
-    auto dry_run = optimize_query->enable_try;
+    auto & optimize_query = query->as<ASTOptimizeQuery &>();
+    auto dry_run = optimize_query.enable_try;
 
     auto merge_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
 

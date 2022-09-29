@@ -42,11 +42,7 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     {
         return std::make_shared<CnchMergeMutateThread>(getContext(), storage_id);
     }
-    // else if (type == CnchBGThreadType::MemoryBuffer)
-    // {
-    //     return std::make_shared<MemoryBufferManager>(getContext(), storage_id, false /* FIXME */);
-    // }
-    else if (type == CnchBGThreadType::Consumer)
+    if (type == CnchBGThreadType::Consumer)
     {
         return std::make_shared<CnchKafkaConsumeManager>(getContext(), storage_id);
     }
@@ -56,7 +52,7 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     }
     else
     {
-        throw Exception(String("Not supported background thread ") + toString(type), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(String("Not supported background thread ") + toString(type), ErrorCodes::NOT_IMPLEMENTED);
     }
 }
 
@@ -96,12 +92,12 @@ CnchBGThreadPtr CnchBGThreadsMap::startThread(const StorageID & storage_id)
 {
     auto t = getOrCreateThread(storage_id);
 
-    auto & pattern = getContext()->getSettingsRef().blacklist_for_merge_thread_regex.value;
+    const auto & pattern = getContext()->getSettingsRef().blocklist_for_merge_thread_regex.value;
     if (type == CnchBGThread::MergeMutate && !pattern.empty() && std::regex_search(storage_id.table_name, std::regex(pattern)))
     {
         // Create new MergeThread but not start it,
         // to prevent daemon_manager send duplicate startMergeThread request
-        auto log = &Poco::Logger::get("CnchBGThreadsMap");
+        auto * log = &Poco::Logger::get("CnchBGThreadsMap");
         LOG_DEBUG(log, "Cancel start MergeThread for table {}, since table on the blacklist.", storage_id.getNameForLogs());
     }
     else
@@ -109,7 +105,7 @@ CnchBGThreadPtr CnchBGThreadsMap::startThread(const StorageID & storage_id)
     return t;
 }
 
-void CnchBGThreadsMap::stopThread(const StorageID & storage_id)
+void CnchBGThreadsMap::stopThread(const StorageID & storage_id) const
 {
     getThread(storage_id)->stop();
 }
@@ -119,7 +115,7 @@ void CnchBGThreadsMap::tryRemoveThread(const StorageID & storage_id)
     auto t = tryGetThread(storage_id);
     if (!t)
     {
-        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not fonud", toString(type), storage_id.getNameForLogs());
+        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
         return;
     }
 
@@ -132,7 +128,7 @@ void CnchBGThreadsMap::tryDropThread(const StorageID & storage_id)
     auto t = tryGetThread(storage_id);
     if (!t)
     {
-        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not fonud", toString(type), storage_id.getNameForLogs());
+        LOG_DEBUG(&Poco::Logger::get("CnchBGThreadsMap"), "{} for {} not found", toString(type), storage_id.getNameForLogs());
         return;
     }
 
@@ -215,7 +211,7 @@ void CnchBGThreadsMapArray::destroy()
 
     for (auto i = size_t(CnchBGThreadType::ServerMinType); i <= size_t(CnchBGThreadType::ServerMaxType); ++i)
     {
-        if (auto t = threads_array[i].get())
+        if (auto * t = threads_array[i].get())
             pool.scheduleOrThrowOnError([t] { t->stopAll(); });
     }
 

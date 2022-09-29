@@ -40,7 +40,6 @@ namespace DB
             CnchBGThreadType::PartGC,
             CnchBGThreadType::MergeMutate,
             CnchBGThreadType::Consumer,
-            CnchBGThreadType::MemoryBuffer,
             CnchBGThreadType::Clustering,
             CnchBGThreadType::DedupWorker
         };

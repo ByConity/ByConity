@@ -189,11 +189,6 @@
                 <disable>true</disable>
             </job>
             <job>
-                <name>MEMORY_BUFFER</name>
-                <interval>3000</interval>
-                <disable>true</disable>
-            </job>
-            <job>
                 <name>DEDUP_WORKER</name>
                 <interval>10000</interval>
                 <disable>true</disable>

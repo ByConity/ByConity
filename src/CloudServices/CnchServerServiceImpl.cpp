@@ -560,7 +560,6 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
                 if (
                     type == CnchBGThreadType::PartGC ||
                     type == CnchBGThreadType::MergeMutate ||
-                    type == CnchBGThreadType::MemoryBuffer ||
                     type == CnchBGThreadType::Consumer ||
                     type == CnchBGThreadType::DedupWorker ||
                     type == CnchBGThreadType::Clustering)
