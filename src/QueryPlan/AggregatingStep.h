@@ -152,6 +152,7 @@ public:
     bool isFinal() const { return final; }
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const GroupingDescriptions & getGroupings() const { return groupings; }
+    bool shouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
 
     bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
@@ -181,9 +182,9 @@ private:
     GroupingDescriptions groupings;
     /// It determines if we should resize pipeline to 1 at the end.
     /// Needed in case of distributed memory efficient aggregation over distributed table.
-    /// Specifically, if there is a further MergingAggregatedStep and 
+    /// Specifically, if there is a further MergingAggregatedStep and
     /// distributed_aggregation_memory_efficient=true
-    /// then the pipeline should not be resized to > 1; otherwise, 
+    /// then the pipeline should not be resized to > 1; otherwise,
     /// the data passed to GroupingAggregatedTransform are not in bucket order -> error.
     /// Set as to_stage==WithMergeableState && distributed_aggregation_memory_efficient
     /// which is equivalent to !final_ && && distributed_aggregation_memory_efficient

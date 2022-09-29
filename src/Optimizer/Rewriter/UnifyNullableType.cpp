@@ -202,7 +202,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
         step.isFinal(),
         step.getGroupings(),
         false,
-        !step.isFinal() && context->getSettingsRef().distributed_aggregation_memory_efficient 
+        step.shouldProduceResultsInOrderOfBucketNumber()
         );
     auto agg_node_set_null
         = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step_set_null), PlanNodes{child}, node.getStatistics());
