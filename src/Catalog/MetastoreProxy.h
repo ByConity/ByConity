@@ -684,8 +684,6 @@ public:
     /// delete bitmap/keys related api
     void prepareAddDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps,
                                  BatchCommitRequest & batch_write, const std::vector<String> & expected_bitmaps = {});
-    void addDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
-    void removeDeleteBitmaps(const String & name_space, const String & table_uuid, const DeleteBitmapMetaPtrVector & bitmaps);
     Strings getDeleteBitmapByKeys(const Strings & key);
 
     IMetaStore::IteratorPtr getMetaInRange(const String & prefix, const String & range_start, const String & range_end, bool include_start, bool include_end);

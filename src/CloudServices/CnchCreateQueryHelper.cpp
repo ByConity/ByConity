@@ -20,6 +20,11 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query
     return std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
 }
 
+std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & storage, const ContextPtr & context)
+{
+    return getASTCreateQueryFromString(storage.getCreateTableSql(), context);
+}
+
 StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & context)
 {
     auto ast = getASTCreateQueryFromString(query, context);

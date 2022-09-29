@@ -71,7 +71,7 @@ public:
         const String & from_buffer_uuid = {});
 
     TxnTimestamp precommitParts(
-        const Context & context,
+        ContextPtr context,
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
@@ -103,6 +103,8 @@ public:
     getBackGroundStatus(const CnchBGThreadType & type);
 
     void submitQueryWorkerMetrics(const QueryWorkerMetricElementPtr & query_worker_metric_element);
+
+    UInt32 reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name);
 
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;

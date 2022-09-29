@@ -177,6 +177,17 @@ bool MergeTreePartInfo::contains(const String & outer_part_name, const String & 
     return outer.contains(inner);
 }
 
+String MergeTreePartInfo::getBlockName() const
+{
+    WriteBufferFromOwnString wb;
+    writeString(partition_id, wb);
+    writeChar('_', wb);
+    writeIntText(min_block, wb);
+    writeChar('_', wb);
+    writeIntText(max_block, wb);
+    return wb.str();
+}
+
 template <bool NameWithHintMutation>
 String MergeTreePartInfo::getPartNameImpl() const
 {

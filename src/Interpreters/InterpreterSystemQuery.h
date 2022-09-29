@@ -63,6 +63,8 @@ private:
 
     void executeMetastoreCmd(ASTSystemQuery & query) const;
 
+    void executeDedup(const ASTSystemQuery & query);
+
     void dropChecksumsCache(const StorageID & table_id) const;
 
     // clear Broken Table infos

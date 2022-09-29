@@ -58,6 +58,7 @@ namespace ErrorCodes
     extern const int BAD_TTL_FILE;
     extern const int NOT_IMPLEMENTED;
     extern const int FORMAT_VERSION_TOO_OLD;
+    extern const int UNSUPPORTED_METHOD;
 }
 
 static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path)
@@ -812,6 +813,11 @@ void IMergeTreeDataPart::loadIndexGranularity(const size_t , const std::vector<s
     throw Exception("Method 'loadIndexGranularity' is not implemented for part with type " + getType().toString(), ErrorCodes::NOT_IMPLEMENTED);
 }
 
+UniqueKeyIndexPtr IMergeTreeDataPart::loadUniqueKeyIndex()
+{
+    throw Exception("loadUniqueKeyIndex", ErrorCodes::UNSUPPORTED_METHOD);
+}
+
 IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndexFromBuffer(ReadBuffer & index_file, const KeyDescription & primary_key) const
 {
     size_t key_size = primary_key.column_names.size();
@@ -1564,6 +1570,40 @@ String IMergeTreeDataPart::getRelativePathForPrefix(const String & prefix) const
     return res;
 }
 
+void IMergeTreeDataPart::setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta) const
+{
+    if (!delete_bitmap_metas.empty())
+        throw Exception("Part " + name + " already has delete bitmap meta, can't set twice", ErrorCodes::LOGICAL_ERROR);
+    if (!bitmap_meta)
+        throw Exception("Can't set delete bitmap meta to null", ErrorCodes::LOGICAL_ERROR);
+    bool found_base = false;
+    auto insert_pos = delete_bitmap_metas.before_begin();
+    while (bitmap_meta)
+    {
+        insert_pos = delete_bitmap_metas.insert_after(insert_pos, bitmap_meta->getModel());
+        if (bitmap_meta->getType() == DeleteBitmapMetaType::Base)
+        {
+            found_base = true;
+            break;
+        }
+        bitmap_meta = bitmap_meta->tryGetPrevious();
+    }
+    if (!found_base)
+        throw Exception("Base delete bitmap of part " + name + " is not found", ErrorCodes::LOGICAL_ERROR);
+}
+
+UniqueKeyIndexPtr IMergeTreeDataPart::getUniqueKeyIndex() const
+{
+    throw Exception("getUniqueKeyIndex", ErrorCodes::UNSUPPORTED_METHOD);
+}
+
+UInt64 IMergeTreeDataPart::getVersionFromPartition() const
+{
+    if (!storage.merging_params.partition_value_as_version)
+        throw Exception("getVersionFromPartition() is not supported for " + storage.getStorageID().getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+    return partition.value[0].safeGet<UInt64>();
+}
+
 String IMergeTreeDataPart::getRelativePathForDetachedPart(const String & prefix) const
 {
     /// Do not allow underscores in the prefix because they are used as separators.
@@ -1782,12 +1822,6 @@ String IMergeTreeDataPart::getUniqueId() const
         throw Exception("Can't get unique S3 object", ErrorCodes::LOGICAL_ERROR);
 
     return id;
-}
-
-DeleteBitmapPtr IMergeTreeDataPart::getDeleteBitmap() const
-{
-    /// FIXME(UNIQUE KEY)
-    return nullptr;
 }
 
 const IMergeTreeDataPartPtr & IMergeTreeDataPart::getPreviousPart() const

@@ -1,8 +1,8 @@
 #include <Transaction/CnchLock.h>
 
 #include <Core/UUID.h>
-// #include <MergeTreeCommon/CnchServerClient.h>
-// #include <MergeTreeCommon/CnchServerClientPool.h>
+#include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchWorkerClientPools.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/LockDefines.h>
 #include <Transaction/LockManager.h>
@@ -44,8 +44,8 @@ bool CnchLock::tryLock(const Context & context)
     }
     else
     {
-        // client = context.getCnchServerClientPool().get(host_with_rpc);
-        // client->acquireLock(lock_info);
+        client = context.getCnchServerClientPool().get(host_with_rpc);
+        client->acquireLock(lock_info);
     }
 
     locked.store(lock_info->status == LockStatus::LOCK_OK, std::memory_order_release);
@@ -64,10 +64,10 @@ void CnchLock::unlock()
 {
     if (isLocked())
     {
-        // if (client)
-        //     client->releaseLock(lock_info);
-        // else
-        LockManager::instance().unlock(lock_info);
+        if (client)
+            client->releaseLock(lock_info);
+        else
+            LockManager::instance().unlock(lock_info);
 
         locked.store(false, std::memory_order_release);
     }

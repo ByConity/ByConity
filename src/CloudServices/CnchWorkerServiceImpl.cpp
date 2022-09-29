@@ -4,7 +4,12 @@
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <IO/ReadBufferFromString.h>
+#include <CloudServices/DedupWorkerStatus.h>
+#include <CloudServices/CloudMergeTreeDedupWorker.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/executeQuery.h>
+#include <Interpreters/InterpreterCreateQuery.h>
+#include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
@@ -484,18 +489,91 @@ void CnchWorkerServiceImpl::ClearPreallocatedDataParts(
 {
 }
 void CnchWorkerServiceImpl::createDedupWorker(
-    google::protobuf::RpcController *,
+    google::protobuf::RpcController * cntl,
     const Protos::CreateDedupWorkerReq * request,
     Protos::CreateDedupWorkerResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto query = request->create_table_query();
+        auto host_ports = RPCHelpers::createHostWithPorts(request->host_ports());
+
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->setSessionContext(rpc_context);
+        rpc_context->setCurrentQueryId(toString(UUIDHelpers::generateV4()));
+
+        ThreadFromGlobalPool([log=this->log,
+                              storage_id,
+                              query,
+                              host_ports,
+                              context = std::move(rpc_context)] {
+            try
+            {
+                // CurrentThread::attachQueryContext(*context);
+                executeQuery(query, context);
+                LOG_INFO(log, "Created local table {}", storage_id.getFullTableName());
+
+                auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
+                if (!storage)
+                    throw Exception(
+                        "Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.",
+                        ErrorCodes::LOGICAL_ERROR);
+                auto cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+                if (!cloud_table)
+                    throw Exception(
+                        "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+
+                auto deduper = cloud_table->getDedupWorker();
+                deduper->setServerHostWithPorts(host_ports);
+                LOG_DEBUG(log, "Success to create deuper table: {}", storage->getStorageID().getNameForLogs());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+            }
+        }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
 }
 void CnchWorkerServiceImpl::dropDedupWorker(
-    google::protobuf::RpcController *,
+    google::protobuf::RpcController * cntl,
     const Protos::DropDedupWorkerReq * request,
     Protos::DropDedupWorkerResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+
+        ASTPtr query = std::make_shared<ASTDropQuery>();
+        auto drop_query = static_cast<ASTDropQuery*>(query.get());
+        drop_query->kind = ASTDropQuery::Drop;
+        drop_query->if_exists = true;
+        drop_query->database = storage_id.database_name;
+        drop_query->table = storage_id.table_name;
+        drop_query->uuid = storage_id.uuid;
+
+        ThreadFromGlobalPool([log=this->log, storage_id, q = std::move(query), c = std::move(rpc_context)] {
+            LOG_DEBUG(log, "Dropping table: {}", storage_id.getNameForLogs());
+            // CurrentThread::attachQueryContext(*c);
+            InterpreterDropQuery(q, c).execute();
+            LOG_DEBUG(log, "Dropped table: {}", storage_id.getNameForLogs());
+        }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
 }
 void CnchWorkerServiceImpl::getDedupWorkerStatus(
     google::protobuf::RpcController *,
@@ -503,6 +581,44 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
     Protos::GetDedupWorkerStatusResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->table());
+        auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
+
+        if (!storage)
+            throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
+        auto cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
+        if (!cloud_table)
+            throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto deduper = cloud_table->getDedupWorker();
+        DedupWorkerStatus status = deduper->getDedupWorkerStatus();
+        response->set_is_active(deduper->isActive());
+        if (response->is_active())
+        {
+            response->set_create_time(status.create_time);
+            response->set_total_schedule_cnt(status.total_schedule_cnt);
+            response->set_total_dedup_cnt(status.total_dedup_cnt);
+            response->set_last_schedule_wait_ms(status.last_schedule_wait_ms);
+            response->set_last_task_total_cost_ms(status.last_task_total_cost_ms);
+            response->set_last_task_dedup_cost_ms(status.last_task_dedup_cost_ms);
+            response->set_last_task_publish_cost_ms(status.last_task_publish_cost_ms);
+            response->set_last_task_staged_part_cnt(status.last_task_staged_part_cnt);
+            response->set_last_task_visible_part_cnt(status.last_task_visible_part_cnt);
+            response->set_last_task_staged_part_total_rows(status.last_task_staged_part_total_rows);
+            response->set_last_task_visible_part_total_rows(status.last_task_visible_part_total_rows);
+            response->set_last_exception(status.last_exception);
+            response->set_last_exception_time(status.last_exception_time);
+        }
+    }
+    catch (...)
+    {
+        response->set_is_active(false);
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
 }
 
 #if USE_RDKAFKA

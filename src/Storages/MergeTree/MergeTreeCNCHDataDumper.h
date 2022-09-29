@@ -27,7 +27,7 @@ public:
 
     explicit MergeTreeCNCHDataDumper(
         MergeTreeMetaBase & data_,
-        const String& magic_code_ = "CNCH",
+        const String & magic_code_ = "CNCH",
         const MergeTreeDataFormatVersion version_ = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);
 
     /** Dump local part,
