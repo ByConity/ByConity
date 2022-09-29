@@ -6,6 +6,7 @@
 #include <common/types.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularity.h>
 #include <Storages/MergeTree/MergeTreeIndexGranularityInfo.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
@@ -18,11 +19,14 @@
 #include <Storages/MergeTree/MergeTreeDataPartVersions.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Storages/UniqueKeyIndex.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
 #include <common/types.h>
 #include <roaring.hh>
+#include <forward_list>
 
 
 namespace zkutil
@@ -50,11 +54,6 @@ class IMergeTreeReader;
 class IMergeTreeDataPartWriter;
 class MarkCache;
 class UncompressedCache;
-
-using Roaring = roaring::Roaring;
-using DeleteBitmapPtr = std::shared_ptr<const Roaring>;
-using MutableDeleteBitmapPtr = std::shared_ptr<Roaring>;
-using DeleteBitmapsVector = std::vector<DeleteBitmapPtr>;
 
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
@@ -462,8 +461,6 @@ public:
     /// Required for distinguish different copies of the same part on S3
     String getUniqueId() const;
 
-    DeleteBitmapPtr getDeleteBitmap() const;
-
     bool containsExactly(const IMergeTreeDataPart & other) const
     {
         return info.partition_id == other.info.partition_id && info.min_block == other.info.min_block
@@ -513,6 +510,30 @@ public:
     Int64 bucket_number = -1;               /// bucket_number > 0 if the part is assigned to bucket
     UInt64 table_definition_hash = 0;       // cluster by definition hash for data file
 
+    /************** Unique Table Delete Bitmap ***********/
+    /// Should be not-null once set
+    ImmutableDeleteBitmapPtr delete_bitmap;
+    /// stored in descending order of commit time
+    mutable std::forward_list<DataModelDeleteBitmapPtr> delete_bitmap_metas;
+
+    void setDeleteBitmapMeta(DeleteBitmapMetaPtr bitmap_meta) const;
+
+    void setDeleteBitmap(ImmutableDeleteBitmapPtr delete_bitmap_) { delete_bitmap = std::move(delete_bitmap_); }
+
+    /// Return null if the part doesn't have delete bitmap.
+    /// Otherwise load the bitmap on demand and return.
+    virtual const ImmutableDeleteBitmapPtr & getDeleteBitmap([[maybe_unused]] bool is_unique_new_part = false) const
+    {
+        return delete_bitmap;
+    }
+
+    /// Return unique key index (corresponding to unique_key.idx) if the part has unique key.
+    /// Data parts supporting unique key should override this method.
+    virtual UniqueKeyIndexPtr getUniqueKeyIndex() const;
+
+    /// Return version value from partition. Throws exception if the table didn't use partition as version
+    UInt64 getVersionFromPartition() const;
+
 protected:
     friend class MergeTreeMetaBase;
     friend class MergeTreeData;
@@ -554,6 +575,10 @@ protected:
     ColumnSize getMapColumnSizeNotKV(const IMergeTreeDataPart::ChecksumsPtr & checksums, const NameAndTypePair & column) const;
 
     IndexPtr loadIndexFromBuffer(ReadBuffer & index_file, const KeyDescription & primary_key) const;
+
+    /// Loads unique key index if the part has unique key.
+    /// Data parts supporting unique key should override this method.
+    virtual UniqueKeyIndexPtr loadUniqueKeyIndex();
 
 private:
     /// In compact parts order of columns is necessary

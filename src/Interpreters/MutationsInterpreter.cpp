@@ -938,9 +938,9 @@ QueryPipelinePtr MutationsInterpreter::addStreamsForLaterStages(const std::vecto
     return pipeline;
 }
 
-DeleteBitmapPtr MutationsInterpreter::prepareNewDeleteBitmap(IBlockInputStream & in, const DeleteBitmapPtr & current_bitmap)
+ImmutableDeleteBitmapPtr MutationsInterpreter::prepareNewDeleteBitmap(IBlockInputStream & in, const ImmutableDeleteBitmapPtr & current_bitmap)
 {
-    MutableDeleteBitmapPtr new_deletes(new Roaring);
+    DeleteBitmapPtr new_deletes(new Roaring);
     in.readPrefix();
     while (Block block = in.read())
     {

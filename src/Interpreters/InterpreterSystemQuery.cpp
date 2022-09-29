@@ -469,6 +469,9 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::STOP_RESOURCE_GROUP:
             system_context->stopResourceGroup();
             break;
+        case Type::DEDUP:
+            executeDedup(query);
+            break;
         default:
             throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
     }
@@ -820,6 +823,24 @@ void InterpreterSystemQuery::executeMetastoreCmd(ASTSystemQuery & query) const
     }
 }
 
+void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
+{
+    if (auto server_type = getContext()->getServerType(); server_type != ServerType::cnch_server && server_type != ServerType::cnch_worker)
+        throw Exception("SYSTEM DEDUP is only available on CNCH server or worker", ErrorCodes::NOT_IMPLEMENTED);
+
+    auto ts = getContext()->getTimestamp();
+    auto catalog = getContext()->getCnchCatalog();
+    auto storage = catalog->getTable(*getContext(), query.database, query.table, ts);
+    if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+    {
+        cnch_table->executeDedupForRepair(query.partition, getContext());
+    }
+    else
+    {
+        throw Exception("Table " + query.database + "." + query.table + " is not a CnchMergeTree", ErrorCodes::BAD_ARGUMENTS);
+    }
+}
+
 void InterpreterSystemQuery::dropChecksumsCache(const StorageID & table_id) const
 {
     auto checksums_cache = getContext()->getChecksumsCache();
@@ -1030,6 +1051,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         // FIXME(xuruiliang): fix for resource group
         case Type::START_RESOURCE_GROUP: break;
         case Type::STOP_RESOURCE_GROUP: break;
+        case Type::DEDUP: break;
         case Type::UNKNOWN: break;
         case Type::END: break;
     }

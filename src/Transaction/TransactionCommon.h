@@ -122,7 +122,7 @@ struct UndoResource
 {
     using Container = Protos::DataModelUndoBuffer;
     UInt64 txn_id;
-    /// each undo resource object will have a uinque id; this is safe enough as even if we create
+    /// each undo resource object will have a unique id; this is safe enough as even if we create
     /// 1 million undo resources per sec, it will take ~30 years to overflow the counter
     UInt64 id;
     Container pb_model;

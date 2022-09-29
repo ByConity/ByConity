@@ -173,7 +173,6 @@ struct Settings;
     M(Bool, cnch_temporary_table, false, "", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
     M(Bool, cloud_enable_memory_buffer, false, "", 0) \
-    M(Bool, cloud_enable_staging_area, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
@@ -199,6 +198,14 @@ struct Settings;
     /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
     M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
     M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
+    \
+    /* Unique table related settings */\
+    M(Bool, cloud_enable_staging_area, false, "", 0) \
+    M(Bool, cloud_enable_dedup_worker, false, "", 0) \
+    M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
+    M(Bool, partition_level_unique_keys, true, "", 0) \
+    M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
+    M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \

@@ -57,7 +57,6 @@ struct StorageInMemoryMetadata
     UInt8 version_type{0};
     static constexpr UInt8 flag_explicit_version = 1 << 0;
     static constexpr UInt8 flag_partition_as_version = 1 << 1;
-    static constexpr UInt8 flag_is_offline = 1 << 2;
     String extra_column_name;
     size_t extra_column_size = 0;
 
@@ -178,8 +177,8 @@ struct StorageInMemoryMetadata
     Block getSampleBlockWithVirtuals(const NamesAndTypesList & virtuals) const;
 
 
-    /// NOTE: (Unique Table Only), Reserved name for delete flag.
-    static constexpr auto delete_flag_column_name = "_delete_flag_";
+    /// Unique table reserved names
+    static constexpr auto DELETE_FLAG_COLUMN_NAME = "_delete_flag_";
 
     /// Functional columns can not be specified by create query and can not be queried, but can be contained in insert query, including INSERT and INSERT SELECT operations.
     NamesAndTypesList getFuncColumns() const
@@ -187,9 +186,8 @@ struct StorageInMemoryMetadata
         if (hasUniqueKey())
         {
             NamesAndTypesList res;
-            /// Add delete flag reserved column for HaUniqueMergeTree engine, this column can not specify by "create query" and can not be queried, but can be contained in insert query.
             /// When the user specifies this column in the "insert query", it will be considered as a delete operation based on the unique key if the value of this column is true(not zero).
-            res.emplace_back(delete_flag_column_name, DataTypeFactory::instance().get("UInt8"));
+            res.emplace_back(DELETE_FLAG_COLUMN_NAME, DataTypeFactory::instance().get("UInt8"));
             return res;
         }
         else

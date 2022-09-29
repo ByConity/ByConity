@@ -128,21 +128,21 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes()
 
     const auto & merging_params = data.merging_params;
 
-    // /// Force unique key columns and extra column for Unique mode,
-    // /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
-    // if (merging_params.mode == MergeTreeMetaBase::MergingParams::Unique)
-    // {
-    //     auto unique_key_expr = metadata_snapshot->getUniqueKey().expression;
-    //     if (!unique_key_expr)
-    //         throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
+    /// Force unique key columns and extra column for Unique mode,
+    /// otherwise MergedBlockOutputStream won't have the required columns to generate unique key index file.
+    if (metadata_snapshot->hasUniqueKey())
+    {
+        auto unique_key_expr = metadata_snapshot->getUniqueKey().expression;
+        if (!unique_key_expr)
+            throw Exception("Missing unique key expression for Unique mode", ErrorCodes::LOGICAL_ERROR);
 
-    //     Names index_columns_vec = unique_key_expr->getRequiredColumns();
-    //     std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
+        Names index_columns_vec = unique_key_expr->getRequiredColumns();
+        std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
 
-    //     /// also need version or is_offline column when building unique key index file
-    //     if (!metadata_snapshot->extra_column_name.empty())
-    //         key_columns.insert(metadata_snapshot->extra_column_name);
-    // }
+        /// also need version column when building unique key index file
+        if (!metadata_snapshot->extra_column_name.empty())
+            key_columns.insert(metadata_snapshot->extra_column_name);
+    }
 
     /// Force sign column for Collapsing mode
     if (merging_params.mode == MergeTreeMetaBase::MergingParams::Collapsing)
@@ -369,16 +369,16 @@ void MergeTreeDataMerger::createMergedStream()
     /// If merge is vertical we cannot calculate it
     bool blocks_are_granules_size = (merge_alg == MergeAlgorithm::Vertical && !isCompactPart(new_data_part));
 
-    // MergingSortedBlockInputStream::RowMappingCallback row_mapping_cb;
-    // if (build_rowid_mappings)
-    // {
-    //     row_mapping_cb = [&](size_t part_index, size_t nrows) {
-    //         for (size_t i = 0; i < nrows; ++i)
-    //         {
-    //             rowid_mappings[part_index].push_back(output_rowid++);
-    //         }
-    //     };
-    // }
+    MergingSortedAlgorithm::PartIdMappingCallback row_mapping_cb;
+    if (build_rowid_mappings)
+    {
+        row_mapping_cb = [&](size_t part_index, size_t nrows) {
+            for (size_t i = 0; i < nrows; ++i)
+            {
+                rowid_mappings[part_index].push_back(output_rowid++);
+            }
+        };
+    }
 
     UInt64 merge_block_size = data_settings->merge_max_block_size;
 
@@ -396,7 +396,7 @@ void MergeTreeDataMerger::createMergedStream()
                 true, /// queit
                 blocks_are_granules_size,
                 true, /// have_all_inputs
-                MergingSortedAlgorithm::PartIdMappingCallback{});
+                row_mapping_cb);
             break;
 
         case MergeTreeMetaBase::MergingParams::Collapsing:
@@ -485,8 +485,7 @@ void MergeTreeDataMerger::createMergedStream()
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
         compression_codec,
         blocks_are_granules_size,
-        context->getSettingsRef().optimize_map_column_serialization,
-        true /// is_merge
+        context->getSettingsRef().optimize_map_column_serialization
     );
 }
 
@@ -691,7 +690,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPart()
 
     prepareNewParts();
 
-    LOG_DEBUG(log, "Merging {} parts: {}into {}", parts.size(), toDebugString(parts), new_data_part->relative_path);
+    LOG_DEBUG(log, "Merging {} parts: {} into {}", parts.size(), toDebugString(parts), new_data_part->relative_path);
 
     chooseMergeAlgorithm();
 

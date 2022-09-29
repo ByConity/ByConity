@@ -44,6 +44,10 @@ struct MergeTreePartInfo
     {
     }
 
+    MergeTreePartInfo newDropVersion(UInt64 txn_id, StorageType storage_type_ = StorageType::Local) const
+    {
+        return {partition_id, min_block, max_block, level + 1, txn_id, /*hint_mutation*/ 0, storage_type_};
+    }
 
     bool operator<(const MergeTreePartInfo & rhs) const
     {
@@ -104,8 +108,13 @@ struct MergeTreePartInfo
         return level == MergeTreePartInfo::MAX_LEVEL || level == another_max_level;
     }
 
+    /// Block name : PartitionID_MinBlock_MaxBlock
+    /// All MVCC parts of the same block shared a block name
+    String getBlockName() const;
+
     String getPartName() const;
     String getPartNameWithHintMutation() const;
+
     String getBasicPartName() const;
     String getPartNameV0(DayNum left_date, DayNum right_date) const;
     UInt64 getBlocksCount() const

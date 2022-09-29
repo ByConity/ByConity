@@ -73,6 +73,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     BrokenPartCallback broken_part_callback_)
     : IStorage(table_id_)
     , WithMutableContext(context_->getGlobalContext())
+    , unique_key_index_cache(getContext()->getUniqueKeyIndexCache())
     , merging_params(merging_params_)
     , require_part_metadata(require_part_metadata_)
     , relative_data_path(relative_data_path_)
@@ -115,7 +116,18 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     format_version = MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING;
 
     /// NOTE: using the same columns list as is read when performing actual merges.
-    merging_params.check(metadata_);
+    merging_params.check(metadata_, metadata_.hasUniqueKey());
+
+    if (merging_params.partitionValueAsVersion())
+    {
+        if (metadata_.partition_key.sample_block.columns() == 0)
+            throw Exception("Table is not partitioned, can't use partition value as version", ErrorCodes::BAD_ARGUMENTS);
+        if (metadata_.partition_key.sample_block.columns() > 1)
+            throw Exception("Partition key contains more than one column, can't use it as version", ErrorCodes::BAD_ARGUMENTS);
+        auto partition_key_type = metadata_.partition_key.sample_block.getDataTypes()[0];
+        if (!partition_key_type->canBeUsedAsVersion())
+            throw Exception("Partition key has type " + partition_key_type->getName() + ", can't be used as version", ErrorCodes::BAD_ARGUMENTS);
+    }
 
     if (metadata_.sampling_key.definition_ast != nullptr)
     {
@@ -689,6 +701,10 @@ MergeTreeDataPartType MergeTreeMetaBase::choosePartType(size_t bytes_uncompresse
     if (isBitEngineMode())
         return MergeTreeDataPartType::WIDE;
 
+    // FIXME (UNIQUE KEY): for altering unique table, we only expect the part to be wide
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+        return MergeTreeDataPartType::WIDE;
+
     const auto settings = getSettings();
     if (settings->enable_ingest_wide_part)
         return MergeTreeDataPartType::WIDE;
@@ -1184,7 +1200,7 @@ MergeTreeMetaBase::DataPartPtr MergeTreeMetaBase::getAnyPartInPartition(
     return nullptr;
 }
 
-void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & metadata) const
+void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const
 {
     const auto columns = metadata.getColumns().getAllPhysical();
 
@@ -1192,7 +1208,7 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
         throw Exception("Sign column for MergeTree cannot be specified in modes except Collapsing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
-    if (!version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
+    if (!has_unique_key && !version_column.empty() && mode != MergingParams::Replacing && mode != MergingParams::VersionedCollapsing)
         throw Exception("Version column for MergeTree cannot be specified in modes except Replacing or VersionedCollapsing.",
                         ErrorCodes::LOGICAL_ERROR);
 
@@ -1288,6 +1304,9 @@ void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & met
                 " listed both in columns to sum and in partition key. That is not allowed.", ErrorCodes::BAD_ARGUMENTS);
         }
     }
+
+    if (has_unique_key && !partitionValueAsVersion())
+        check_version_column(true, "Unique Key");
 
     if (mode == MergingParams::Replacing)
         check_version_column(true, "ReplacingMergeTree");

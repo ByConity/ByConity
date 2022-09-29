@@ -150,6 +150,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         auto engine = std::make_shared<ASTFunction>();
         auto storage = std::make_shared<ASTStorage>();
 
+        // TODO: check here
         if (default_database_engine == DefaultDatabaseEngine::Cnch)
             engine->name = "Cnch";
         else if (default_database_engine == DefaultDatabaseEngine::Ordinary)

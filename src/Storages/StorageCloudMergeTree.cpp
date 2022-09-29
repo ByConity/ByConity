@@ -16,8 +16,11 @@
 #include <Storages/MutationCommands.h>
 #include <WorkerTasks/CloudMergeTreeMutateTask.h>
 #include <WorkerTasks/CloudMergeTreeMergeTask.h>
+#include <WorkerTasks/CloudUniqueMergeTreeMergeTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/ManipulationType.h>
+#include <CloudServices/CloudMergeTreeDedupWorker.h>
+#include <CloudServices/CnchPartsHelper.h>
 
 namespace DB
 {
@@ -51,6 +54,21 @@ StorageCloudMergeTree::StorageCloudMergeTree(
     local_store_volume = getContext()->getStoragePolicy(getSettings()->cnch_local_storage_policy.toString());
     relative_local_store_path = fs::path("store");
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
+
+    if (getInMemoryMetadataPtr()->hasUniqueKey() && getSettings()->cloud_enable_dedup_worker)
+        dedup_worker = std::make_unique<CloudMergeTreeDedupWorker>(*this);
+}
+
+void StorageCloudMergeTree::startup()
+{
+    if (dedup_worker)
+        dedup_worker->start();
+}
+
+void StorageCloudMergeTree::shutdown()
+{
+    if (dedup_worker)
+        dedup_worker->stop();
 }
 
 StorageCloudMergeTree::~StorageCloudMergeTree()
@@ -99,7 +117,10 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
     switch (input_params.type)
     {
         case ManipulationType::Merge:
-            task = std::make_shared<CloudMergeTreeMergeTask>(*this, input_params, task_context);
+            if (getInMemoryMetadataPtr()->hasUniqueKey())
+                task = std::make_shared<CloudUniqueMergeTreeMergeTask>(*this, input_params, task_context);
+            else
+                task = std::make_shared<CloudMergeTreeMergeTask>(*this, input_params, task_context);
             break;
         case ManipulationType::Mutate:
             task = std::make_shared<CloudMergeTreeMutateTask>(*this, input_params, task_context);
@@ -127,6 +148,50 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
         if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute MATERIALIZE_TTL commands");
     }
+}
+
+bool StorageCloudMergeTree::checkStagedParts()
+{
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+        return true;
+
+    auto catalog = getContext()->getCnchCatalog();
+    auto ts = getContext()->getTimestamp();
+    auto cnch_table = catalog->tryGetTableByUUID(*getContext(), UUIDHelpers::UUIDToString(getStorageUUID()), ts);
+
+    /// get all the partitions of committed staged parts
+    auto staged_parts = catalog->getStagedParts(cnch_table, ts);
+    staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, /*collect_on_chain*/ false);
+    size_t num_to_publish = 0;
+    for (auto & part : staged_parts)
+    {
+        if (TxnTimestamp(ts).toMillisecond() - part->commit_time.toMillisecond()
+            > getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume)
+        {
+            num_to_publish++;
+            LOG_DEBUG(
+                log,
+                "The part: {}, commit time: {} ms, current time: {} ms, staged_part_lifetime_threshold_ms_to_block_kafka_consume: {} ms.",
+                part->name,
+                part->commit_time.toMillisecond(),
+                TxnTimestamp(ts).toMillisecond(),
+                getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume);
+        }
+    }
+    if (num_to_publish == 0)
+        return true;
+    LOG_DEBUG(
+        log,
+        "There are {} parts need to be published which are commited before {} ms ago.",
+        staged_parts.size() << getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume);
+    return false;
+}
+
+CloudMergeTreeDedupWorker * StorageCloudMergeTree::getDedupWorker()
+{
+    if (!dedup_worker)
+        throw Exception("DedupWorker is not created", ErrorCodes::LOGICAL_ERROR);
+    return dedup_worker.get();
 }
 
 MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & /*part*/) const

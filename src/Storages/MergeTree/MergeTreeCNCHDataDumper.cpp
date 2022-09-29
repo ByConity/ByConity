@@ -165,6 +165,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
     new_part->covered_parts_count = local_part->covered_parts_count;
     new_part->covered_parts_size = local_part->covered_parts_size;
     new_part->covered_parts_rows = local_part->covered_parts_rows;
+    new_part->delete_bitmap = local_part->delete_bitmap;
 
     String new_part_rel_path = new_part->getFullRelativePath();
     if (disk->exists(new_part_rel_path))
@@ -356,21 +357,18 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
         }
 
         /// Unique Key Index
-        /// TODO : fix unique key
-        // if (data.hasUniqueKey() && new_part->rows_count > 0 && !new_part->isPartial())
-        // {
-        //     uki_checksum.file_offset = meta_info_offset + meta_info_size;
-        //     String file_rel_path = local_part->getRelativePath() + "unique_key.idx";
-        //     String file_full_path = local_part->getFullPath() + "unique_key.idx";
-        //     if (!local_part_disk->exists(file_rel_path))
-        //         throw Exception("unique_key.idx not found in part " + part_name + ", table " + data.getStorageID().getNameForLogs(),
-        //                         ErrorCodes::FILE_DOESNT_EXIST);
-        //     HashingWriteBuffer hashing_out(*data_out);
-        //     ReadBufferFromFile from(file_full_path);
-        //     copyData(from, hashing_out);
-        //     hashing_out.next();
-        //     uki_checksum.file_hash = hashing_out.getHash();
-        // }
+        if (data.getInMemoryMetadataPtr()->hasUniqueKey() && new_part->rows_count > 0 && !new_part->isPartial())
+        {
+            uki_checksum.file_offset = meta_info_offset + meta_info_size;
+            String file_rel_path = local_part->getFullRelativePath() + "unique_key.idx";
+            String file_full_path = local_part->getFullPath() + "unique_key.idx";
+            if (!local_part_disk->exists(file_rel_path))
+                throw Exception("unique_key.idx not found in part " + part_name + ", table " + data.getStorageID().getNameForLogs(),
+                                ErrorCodes::FILE_DOESNT_EXIST);
+            ReadBufferFromFile from(file_full_path);
+            copyData(from, *data_out);
+            data_out->next();
+        }
 
         /// TODO : fix AesKeyByteArray
         // AesEncrypt::AesKeyByteArray key {};

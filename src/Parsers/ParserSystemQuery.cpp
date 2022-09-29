@@ -8,7 +8,7 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/parseIdentifierOrStringLiteral.h>
-
+#include <Parsers/ParserPartition.h>
 
 namespace ErrorCodes
 {
@@ -83,6 +83,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
     if (!found)
         return false;
 
+    ParserPartition parser_partition;
     switch (res->type)
     {
         case Type::RELOAD_DICTIONARY:
@@ -301,6 +302,17 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             else
                 return false;
 
+            break;
+        }
+
+        case Type::DEDUP:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (ParserKeyword{"PARTITION"}.ignore(pos, expected) && !parser_partition.parse(pos, res->partition, expected))
+                return false;
+            if (!ParserKeyword{"FOR REPAIR"}.ignore(pos, expected))
+                return false;
             break;
         }
 

@@ -4344,18 +4344,12 @@ namespace Catalog
         return outRes;
     }
 
-    void Catalog::addDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->addDeleteBitmaps(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), bitmaps); },
-            ProfileEvents::AddDeleteBitmapsSuccess,
-            ProfileEvents::AddDeleteBitmapsFailed);
-    }
-
     void Catalog::removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps)
     {
         runWithMetricSupport(
-            [&] { meta_proxy->removeDeleteBitmaps(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid), bitmaps); },
+            [&] {
+                clearParts(storage, CommitItems{{}, bitmaps, {}}, /*skip_part_cache*/ true);
+            },
             ProfileEvents::RemoveDeleteBitmapsSuccess,
             ProfileEvents::RemoveDeleteBitmapsFailed);
     }

@@ -36,7 +36,7 @@ public:
         unsigned num_streams) override
     {
         /// copy `delete_bitmaps` because delete_bitmap_getter may live longer than `this`
-        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter = [snapshot = delete_bitmaps](auto & part) -> DeleteBitmapPtr
+        MergeTreeData::DeleteBitmapGetter delete_bitmap_getter = [snapshot = delete_bitmaps](auto & part) -> ImmutableDeleteBitmapPtr
         {
             if (auto it = snapshot.find(part); it != snapshot.end())
                 return it->second;
