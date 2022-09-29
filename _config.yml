@@ -17,7 +17,7 @@ timezone: 'Asia/Shanghai'
 ## Set your site url here. For example, if you use GitHub Page, set url as 'https://username.github.io/project'
 # custom it
 url: https://byconity.github.io
-permalink: :lang/:category/:year:month/:title/
+permalink: :lang/:year:month/:title/
 permalink_defaults:
   lang: en
 pretty_urls:
