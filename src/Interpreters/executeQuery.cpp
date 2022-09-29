@@ -421,11 +421,11 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
             database = insert->table_id.database_name;
             table = insert->table_id.table_name;
         }
-        // else if (auto * system = ast->as<ASTSystemQuery>(); system && system->type == ASTSystemQuery::Type::DEDUP)
-        // {
-        //     database = system->database;
-        //     table = system->table;
-        // }
+        else if (auto * system = ast->as<ASTSystemQuery>(); system && system->type == ASTSystemQuery::Type::DEDUP)
+        {
+            database = system->database;
+            table = system->table;
+        }
 
         if (is_initial_query && !table.empty())
         {

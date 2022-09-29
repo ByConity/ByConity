@@ -13,7 +13,7 @@
 namespace DB
 {
 
-class LockManager
+class ServerResourceLockManager
 {
 public:
     void remove(const String & address)
@@ -38,7 +38,7 @@ private:
 
 struct SendLock
 {
-    SendLock(const std::string & address_, LockManager & manager_)
+    SendLock(const std::string & address_, ServerResourceLockManager & manager_)
         : address(address_), manager(manager_)
     {
         manager.add(address);
@@ -50,7 +50,7 @@ struct SendLock
     }
 
     std::string address;
-    LockManager & manager;
+    ServerResourceLockManager & manager;
 };
 
 struct AssignedResource
@@ -144,7 +144,7 @@ private:
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
 
     Poco::Logger * log;
-    mutable LockManager lock_manager;
+    mutable ServerResourceLockManager lock_manager;
 };
 
 }

@@ -80,11 +80,22 @@ public:
         ContextPtr local_context,
         const SelectQueryInfo & query_info);
 
+    /// Return all base parts and delete bitmap metas in the given partitions.
+    /// If `partitions` is empty, return meta for all partitions.
+    MergeTreeDataPartsCNCHVector getUniqueTableMeta(TxnTimestamp ts, const Strings & partitions = {});
+
     /// return table's committed staged parts (excluding deleted ones).
     /// if partitions != null, ignore staged parts not belong to `partitions`.
     MergeTreeDataPartsCNCHVector getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr);
 
-    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr local_context, TxnTimestamp start_time);
+    /// Pre-condition: "parts" should have been sorted in part info order
+    void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
+    /// For staged parts, delete bitmap represents delete_flag info which is optional, it's valid if it doesn't have delete_bitmap metadata.
+    void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
+    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time);
+
+    /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
+    void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
 
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
     void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts, WorkerGroupHandle & worker_group);
@@ -137,6 +148,9 @@ public:
     StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
+
+    String genCreateTableQueryForWorker(const String & suffix);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

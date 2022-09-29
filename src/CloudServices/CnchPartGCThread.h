@@ -36,7 +36,7 @@ private:
 
     void pushToRemovingQueue(
         StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & reason, bool is_staged_part = false);
-    // void removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason);
+    void removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason);
 
     void collectStaleParts(
         ServerDataPartPtr parent_part,
@@ -45,12 +45,12 @@ private:
         bool has_visible_ancestor,
         ServerDataPartsVector & stale_parts) const;
 
-    // void collectStaleBitmaps(
-    //     const DeleteBitmapMetaPtr & parent_bitmap,
-    //     const TxnTimestamp & begin,
-    //     const TxnTimestamp & end,
-    //     bool has_visible_ancestor,
-    //     DeleteBitmapMetaPtrVector & stale_bitmaps);
+    void collectStaleBitmaps(
+        DeleteBitmapMetaPtr parent_bitmap,
+        TxnTimestamp begin,
+        TxnTimestamp end,
+        bool has_visible_ancestor,
+        DeleteBitmapMetaPtrVector & stale_bitmaps);
 
     std::vector<TxnTimestamp> getCheckpoints(StorageCnchMergeTree & storage, TxnTimestamp max_timestamp);
 

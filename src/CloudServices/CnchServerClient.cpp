@@ -287,7 +287,8 @@ TxnTimestamp CnchServerClient::commitParts(
         request.set_from_buffer_uuid(from_buffer_uuid);
 
     /// add tpl for kafka commit
-    if (!consumer_group.empty()) {
+    if (!consumer_group.empty())
+    {
         if (tpl.empty())
             throw Exception("No tpl get while committing kafka data", ErrorCodes::LOGICAL_ERROR);
         request.set_consumer_group(consumer_group);
@@ -315,7 +316,7 @@ TxnTimestamp CnchServerClient::commitParts(
 }
 
 TxnTimestamp CnchServerClient::precommitParts(
-    const Context & context,
+    ContextPtr context,
     const TxnTimestamp & txn_id,
     ManipulationType type,
     MergeTreeMetaBase & storage,
@@ -335,7 +336,7 @@ TxnTimestamp CnchServerClient::precommitParts(
         return commitParts(txn_id, type, storage, parts, delete_bitmaps, staged_parts, task_id, from_server, consumer_group, tpl, from_buffer_uuid);
     }
 
-    const UInt64 batch_size = context.getSettingsRef().catalog_max_commit_size;
+    const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
 
     // Precommit parts in batches {batch_begin, batch_end}
     const size_t max_size = std::max({parts.size(), delete_bitmaps.size(), staged_parts.size()});
@@ -608,4 +609,20 @@ void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPt
     RPCHelpers::checkResponse(response);
 }
 
+UInt32 CnchServerClient::reportDeduperHeartbeat(const StorageID & cnch_storage_id, const String & worker_table_name)
+{
+    brpc::Controller cntl;
+    Protos::ReportDeduperHeartbeatReq request;
+    Protos::ReportDeduperHeartbeatResp response;
+
+    RPCHelpers::fillStorageID(cnch_storage_id, *request.mutable_cnch_storage_id());
+    request.set_worker_table_name(worker_table_name);
+
+    stub->reportDeduperHeartbeat(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.code();
+}
 }

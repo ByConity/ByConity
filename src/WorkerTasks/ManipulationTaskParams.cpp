@@ -2,6 +2,7 @@
 
 #include <sstream>
 #include <Catalog/DataModelPartWrapper.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <Parsers/formatAST.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -99,6 +100,14 @@ void ManipulationTaskParams::assignSourceParts(MergeTreeDataPartsVector parts)
 {
     assignSourcePartsImpl(parts);
     source_data_parts = std::move(parts);
+}
+
+void ManipulationTaskParams::assignParts(MergeTreeMutableDataPartsVector parts)
+{
+    for (auto & part: parts)
+        all_parts.emplace_back(std::move(part));
+    source_data_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
+    assignSourcePartsImpl(source_data_parts);
 }
 
 }

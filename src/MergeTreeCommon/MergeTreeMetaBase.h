@@ -53,8 +53,8 @@ public:
     DataPartsLock lockParts() const { return DataPartsLock(data_parts_mutex); }
     DataPartsReadLock lockPartsRead() const { return DataPartsReadLock(data_parts_mutex); }
 
-    using DeleteBitmapGetter = std::function<DeleteBitmapPtr(const DataPartPtr &)>;
-    using DataPartsDeleteSnapshot = std::map<DataPartPtr, DeleteBitmapPtr, LessDataPart>;
+    using DeleteBitmapGetter = std::function<ImmutableDeleteBitmapPtr(const DataPartPtr &)>;
+    using DataPartsDeleteSnapshot = std::map<DataPartPtr, ImmutableDeleteBitmapPtr, LessDataPart>;
     DataPartsDeleteSnapshot getLatestDeleteSnapshot(const DataPartsVector & parts) const
     {
         DataPartsDeleteSnapshot res;
@@ -64,6 +64,8 @@ public:
         }
         return res;
     }
+
+    std::shared_ptr<UniqueKeyIndexCache> unique_key_index_cache;
 
     virtual MergeTreeDataPartType choosePartType(size_t bytes_uncompressed, size_t rows_count) const;
     virtual MergeTreeDataPartType choosePartTypeOnDisk(size_t bytes_uncompressed, size_t rows_count) const;
@@ -106,20 +108,21 @@ public:
 
         /// For Replacing/VersionedCollapsing/Unique mode. Can be empty for Replacing and Unique.
         String version_column;
+
         /// For Unique mode, users can also use value of partition expr as version.
         /// As a result, all rows inside a partition share the same version, removing
         /// the cost to writing and reading an extra version column.
-        static constexpr auto partition_value_as_version = "__partition__";
+        bool partition_value_as_version = false;
 
         /// For Graphite mode.
         Graphite::Params graphite_params;
 
         /// Check that needed columns are present and have correct types.
-        void check(const StorageInMemoryMetadata & metadata) const;
+        void check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const;
 
         String getModeName() const;
 
-        bool partitionValueAsVersion() const { return version_column == partition_value_as_version; }
+        bool partitionValueAsVersion() const { return partition_value_as_version; }
         bool hasExplicitVersionColumn() const { return !version_column.empty() && !partitionValueAsVersion(); }
         bool hasVersionColumn() const { return hasExplicitVersionColumn() || partitionValueAsVersion(); }
     };
@@ -256,6 +259,7 @@ public:
 
     /// Reserves space at least 1MB.
     ReservationPtr reserveSpace(UInt64 expected_size) const;
+    ReservationPtr reserveSpaceOnLocal(UInt64 expected_size) const;
 
     /// Reserves space at least 1MB on specific disk or volume.
     static ReservationPtr reserveSpace(UInt64 expected_size, SpacePtr space);
@@ -366,6 +370,7 @@ public:
 
 protected:
     friend class IMergeTreeDataPart;
+    friend class MergeTreeDataPartCNCH;
     friend class MergeTreeDataMergerMutator;
     friend struct ReplicatedMergeTreeTableMetadata;
     friend class StorageReplicatedMergeTree;

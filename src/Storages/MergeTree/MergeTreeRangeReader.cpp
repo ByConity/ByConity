@@ -529,7 +529,7 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     IMergeTreeReader * merge_tree_reader_,
     MergeTreeRangeReader * prev_reader_,
     const PrewhereExprInfo * prewhere_info_,
-    DeleteBitmapPtr delete_bitmap_,
+    ImmutableDeleteBitmapPtr delete_bitmap_,
     bool last_reader_in_chain_,
     bool has_bitmap_index_)
     : merge_tree_reader(merge_tree_reader_)

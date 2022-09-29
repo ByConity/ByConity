@@ -157,8 +157,6 @@ public:
     getDeleteBitmapsInPartitions(const StoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
     /// (UNIQUE KEY) get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
-    /// (UNIQUE KEY) add new delete bitmap metadata
-    void addDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
     /// (UNIQUE KEY) remove bitmaps meta from KV, used by GC
     void removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
 

@@ -2,6 +2,7 @@
 
 #include <Protos/RPCHelpers.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Interpreters/Context.h>
@@ -13,6 +14,8 @@
 #include <Transaction/LockManager.h>
 #include <Common/Exception.h>
 #include <CloudServices/commitCnchParts.h>
+#include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/DedupWorkerStatus.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 
@@ -57,9 +60,7 @@ void CnchServerServiceImpl::commitParts(
                 if (req->parts_size() != req->paths_size())
                     throw Exception("Incorrect arguments", ErrorCodes::BAD_ARGUMENTS);
 
-                TransactionCnchPtr cnch_txn;
-                cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
-
+                auto cnch_txn = gc->getCnchTransactionCoordinator().getTransaction(req->txn_id());
                 /// Create new rpc context and bind the previous created txn to this rpc context.
                 auto rpc_context = RPCHelpers::createSessionContextForRPC(gc, *c);
                 rpc_context->setCurrentTransaction(cnch_txn, false);
@@ -98,7 +99,7 @@ void CnchServerServiceImpl::commitParts(
                 }
                 CnchDataWriter cnch_writer(
                     *cnch,
-                    *rpc_context,
+                    rpc_context,
                     ManipulationType(req->type()),
                     req->task_id(),
                     std::move(from_buffer_uuid),
@@ -450,6 +451,34 @@ void CnchServerServiceImpl::reportDeduperHeartbeat(
     Protos::ReportDeduperHeartbeatResp * response,
     google::protobuf::Closure * done)
 {
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
+
+        if (auto bg_thread = getContext()->tryGetDedupWorkerManager(cnch_storage_id))
+        {
+            auto worker_table_name = request->worker_table_name();
+            auto & manager = static_cast<DedupWorkerManager &>(*bg_thread);
+
+            auto ret = manager.reportHeartbeat(worker_table_name);
+
+            // NOTE: here we send a response back to let the worker know the result.
+            response->set_code(static_cast<UInt32>(ret));
+            return;
+        }
+        else
+        {
+            LOG_WARNING(log, "Failed to get background thread");
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+    response->set_code(static_cast<UInt32>(DedupWorkerHeartbeatResult::Kill));
 }
 
 void CnchServerServiceImpl::fetchDataParts(
@@ -458,6 +487,42 @@ void CnchServerServiceImpl::fetchDataParts(
     ::DB::Protos::FetchDataPartsResp * response,
     ::google::protobuf::Closure * done)
 {
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage
+                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(), TxnTimestamp{request->table_commit_time()});
+
+            auto calculated_host
+                = gc->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), true).getRPCAddress();
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch parts failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
+                throw Exception(
+                    "Fetch parts failed because calculated host (" + calculated_host + ") is not remote server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Strings partition_list;
+            for (const auto & partition : request->partitions())
+                partition_list.emplace_back(partition);
+
+            auto parts = gc->getCnchCatalog()->getServerDataPartsInPartitions(
+                storage, partition_list, TxnTimestamp{request->timestamp()}, nullptr);
+            auto & mutable_parts = *response->mutable_parts();
+            for (const auto & part : parts)
+                *mutable_parts.Add() = part->part_model();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
 }
 
 void CnchServerServiceImpl::fetchUniqueTableMeta(

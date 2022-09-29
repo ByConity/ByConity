@@ -1,12 +1,16 @@
 #pragma once
 
-#include <Storages/MergeTree/MergeTreeCloudData.h>
 #include <common/shared_ptr_helper.h>
-#include "Disks/IDisk.h"
-#include "Storages/MergeTree/MergeTreeDataPartType.h"
+#include <Disks/IDisk.h>
+#include <Storages/MergeTree/MergeTreeCloudData.h>
+#include <Storages/MergeTree/MergeTreeDataPartType.h>
+#include <Storages/MutationCommands.h>
 
 namespace DB
 {
+
+class CloudMergeTreeDedupWorker;
+using CloudMergeTreeDedupWorkerPtr = std::unique_ptr<CloudMergeTreeDedupWorker>;
 
 class StorageCloudMergeTree final : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
 {
@@ -27,8 +31,8 @@ public:
     bool canUseAdaptiveGranularity() const override { return false; }
     StoragePolicyPtr getLocalStoragePolicy() const override;
 
-    void startup() override {}
-    void shutdown() override {}
+    void startup() override;
+    void shutdown() override;
     void drop() override {}
 
     const auto & getCnchDatabase() const { return cnch_database_name; }
@@ -57,10 +61,17 @@ public:
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr context) override;
 
     ManipulationTaskPtr manipulate(const ManipulationTaskParams & params, ContextPtr task_context) override;
-    
+    void checkMutationIsPossible(const MutationCommands & commands, const Settings & settings) const override;
+
     std::set<Int64> getRequiredBucketNumbers() const { return required_bucket_numbers; }
     void setRequiredBucketNumbers(std::set<Int64> & required_bucket_numbers_) { required_bucket_numbers = required_bucket_numbers_; }
     ASTs convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr context) const;
+
+    /// check whether staged parts are too old.
+    bool checkStagedParts();
+
+    CloudMergeTreeDedupWorker * tryGetDedupWorker() { return dedup_worker.get(); }
+    CloudMergeTreeDedupWorker * getDedupWorker();
 
 protected:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const override;
@@ -84,6 +95,8 @@ private:
     StoragePolicyPtr local_store_volume;
     String relative_local_store_path;
     std::set<Int64> required_bucket_numbers;
+
+    CloudMergeTreeDedupWorkerPtr dedup_worker;
 };
 
 }

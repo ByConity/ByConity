@@ -122,6 +122,53 @@ void CnchPartGCThread::clearOldParts(const StoragePtr & istorage, StorageCnchMer
             invisible_dropped_parts.size());
     }
 
+
+    /// Clear special old bitmaps
+    DeleteBitmapMetaPtrVector visible_bitmaps, visible_alone_tombstone_bitmaps, unvisible_bitmaps;
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, partitions, gc_timestamp);
+        // TODO: filter out uncommitted bitmaps
+        CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, visible_bitmaps, true, &visible_alone_tombstone_bitmaps, &unvisible_bitmaps);
+    }
+
+    removeDeleteBitmaps(storage, unvisible_bitmaps, "covered by range tombstones");
+
+    visible_alone_tombstone_bitmaps.erase(
+        std::remove_if(
+            visible_alone_tombstone_bitmaps.begin(),
+            visible_alone_tombstone_bitmaps.end(),
+            [&](auto & bitmap) { return UInt64(now)  < (bitmap->getCommitTime() >> 18) / 1000 + old_parts_lifetime; }),
+        visible_alone_tombstone_bitmaps.end()
+    );
+    removeDeleteBitmaps(storage, visible_alone_tombstone_bitmaps, "alone tombstone");
+
+    /// Clear staged parts
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        /// staged part is tmp part which is unecessary to last for old_parts_lifetime, delete it directly
+        ServerDataPartsVector staged_parts = createServerPartsFromDataParts(
+            storage, catalog->getStagedParts(istorage, TxnTimestamp{storage.getContext()->getTimestamp()}));
+        staged_parts = CnchPartsHelper::calcVisiblePartsForGC(staged_parts, nullptr, nullptr);
+        size_t size = staged_parts.size();
+        size_t handle_size = 0;
+        for (size_t i = 0; i < size; ++i)
+        {
+            auto staged_part = staged_parts[i];
+            if (!staged_part->deleted())
+                continue;
+            /// In response to fail situation, it's necessary to handle previous stage part before handle stage part who marks delete state.
+            if (staged_part->tryGetPreviousPart())
+                pushToRemovingQueue(storage, {staged_part->tryGetPreviousPart()}, "Clear staged parts", true);
+            else
+            {
+                pushToRemovingQueue(storage, {staged_part}, "Clear staged parts", true);
+                handle_size++;
+            }
+        }
+        LOG_DEBUG(log, "All staged parts: {}, Clear staged parts {}", staged_parts.size(), handle_size);
+    }
+
     if (!visible_parts.empty())
     {
         LOG_DEBUG(
@@ -231,7 +278,7 @@ std::vector<TxnTimestamp> CnchPartGCThread::getCheckpoints(StorageCnchMergeTree 
 void CnchPartGCThread::collectBetweenCheckpoints(
     StorageCnchMergeTree & storage,
     const ServerDataPartsVector & visible_parts,
-    [[maybe_unused]] const DeleteBitmapMetaPtrVector & visible_bitmaps,
+    const DeleteBitmapMetaPtrVector & visible_bitmaps,
     TxnTimestamp begin,
     TxnTimestamp end)
 {
@@ -240,11 +287,11 @@ void CnchPartGCThread::collectBetweenCheckpoints(
 
     for (const auto & part : visible_parts)
         collectStaleParts(part, begin, end, false, stale_parts);
-    // for (auto & bitmap : visible_bitmaps)
-    //     collectStaleBitmaps(bitmap, begin, end, false, stale_bitmaps);
+    for (auto & bitmap : visible_bitmaps)
+        collectStaleBitmaps(bitmap, begin, end, false, stale_bitmaps);
 
     pushToRemovingQueue(storage, stale_parts, "Stale Parts");
-    /// removeDeleteBitmaps(storage, stale_bitmaps, "stale between " + begin.toString() + " and " + end.toString());
+    removeDeleteBitmaps(storage, stale_bitmaps, "stale between " + begin.toString() + " and " + end.toString());
 
     std::unordered_map<String, Int32> remove_parts_num;
 
@@ -289,6 +336,33 @@ void CnchPartGCThread::collectStaleParts(
         parent_part = prev_part;
     }
     while (true);
+}
+
+void CnchPartGCThread::collectStaleBitmaps(
+    DeleteBitmapMetaPtr parent_bitmap,
+    TxnTimestamp begin,
+    TxnTimestamp end,
+    bool has_visible_ancestor,
+    DeleteBitmapMetaPtrVector & stale_bitmaps)
+{
+    do
+    {
+        auto & prev_bitmap = parent_bitmap->tryGetPrevious();
+        if (!prev_bitmap || prev_bitmap->getCommitTime() <= begin.toUInt64())
+            break;
+
+        /// inherit from parent;
+        if (!has_visible_ancestor) // 1. parent is visible;                           &&  2. parent is a base bitmap
+            has_visible_ancestor = ((parent_bitmap->getCommitTime() <= end.toUInt64()) && !parent_bitmap->isPartial());
+
+        if (has_visible_ancestor)
+        {
+            LOG_DEBUG(log, "Will remove delete bitmap {} covered by {}", prev_bitmap->getNameForLogs(), parent_bitmap->getNameForLogs());
+            stale_bitmaps.push_back(prev_bitmap);
+        }
+
+        parent_bitmap = prev_bitmap;
+    } while (true);
 }
 
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)
@@ -396,6 +470,31 @@ void CnchPartGCThread::pushToRemovingQueue(
     }
 
     remove_pool.wait();
+}
+
+void CnchPartGCThread::removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason)
+{
+    if (bitmaps.empty())
+        return;
+
+    DeleteBitmapMetaPtrVector remove_bitmaps;
+
+    for (auto & bitmap : bitmaps)
+    {
+        try
+        {
+            bitmap->removeFile();
+            remove_bitmaps.emplace_back(bitmap);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Error occurs when remove bitmap " + bitmap->getNameForLogs());
+        }
+    }
+
+    LOG_DEBUG(log, "Will remove {} delete bitmap(s), reason: {}", remove_bitmaps.size(), reason);
+
+    catalog->removeDeleteBitmaps(storage.shared_from_this(), remove_bitmaps);
 }
 
 void CnchPartGCThread::clearOldInsertionLabels(const StoragePtr &, StorageCnchMergeTree & storage)

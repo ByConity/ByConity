@@ -1,14 +1,14 @@
 #pragma once
 
-#include <Core/Types.h>
 #include <memory>
+#include <Core/Types.h>
+#include <Storages/HDFS/HDFSCommon.h>
 
 namespace DB::IndexFile
 {
 struct RemoteFileInfo
 {
-    String hdfs_user;
-    String hdfs_nn_proxy;
+    HDFSConnectionParams hdfs_params;
     String path;            /// full path to the remote file containing the logical file
     UInt64 start_offset;    /// offset to the beginning of the logical file
     size_t size;            /// size of the logical file

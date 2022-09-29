@@ -75,8 +75,9 @@ TransactionCnchPtr TransactionCoordinatorRcCnch::createTransaction(const CreateT
     if (!txn->isReadOnly() && txn->isSecondary() && opt.initiator != CnchTransactionInitiator::Txn)
     {
         /// add txn to its primary txn's secondary txn list
-        auto primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
-        if (primary_txn) primary_txn->addSecondaryTransaction(txn);
+        auto * primary_txn = getTransaction(txn->getPrimaryTransactionID())->as<CnchExplicitTransaction>();
+        if (primary_txn)
+            primary_txn->addSecondaryTransaction(txn);
     }
 
     txn->force_clean_by_dm = opt.force_clean_by_dm;

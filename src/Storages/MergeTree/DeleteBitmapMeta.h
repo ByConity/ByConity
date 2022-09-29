@@ -1,13 +1,12 @@
 #pragma once
 
-#include <assert.h>
 #include <memory>
+#include <assert.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
-// #include <MergeTreeCommon/MergeTreeStorageData.h>
 
 namespace DB
 {
@@ -32,8 +31,7 @@ enum class DeleteBitmapMetaType
 class LocalDeleteBitmap
 {
 public:
-    static std::shared_ptr<LocalDeleteBitmap> createBase(
-        const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id)
+    static std::shared_ptr<LocalDeleteBitmap> createBase(const MergeTreePartInfo & part_info, const DeleteBitmapPtr & bitmap, UInt64 txn_id)
     {
         return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, bitmap);
     }
@@ -42,11 +40,11 @@ public:
     /// Otherwise union `base_bitmap` and `delta_bitmap` to create a new version of base bitmap.
     /// NOTE: `delta_bitmap` will be modified to be the new base bitmap in the latter case.
     /// REQUIRES: both `base_bitmap` and `delta_bitmap` should be not null
-    // static std::shared_ptr<LocalDeleteBitmap> createBaseOrDelta(
-    //     const MergeTreePartInfo & part_info,
-    //     const ImmutableDeleteBitmapPtr & base_bitmap,
-    //     const DeleteBitmapPtr & delta_bitmap,
-    //     UInt64 txn_id);
+    static std::shared_ptr<LocalDeleteBitmap> createBaseOrDelta(
+        const MergeTreePartInfo & part_info,
+        const ImmutableDeleteBitmapPtr & base_bitmap,
+        const DeleteBitmapPtr & delta_bitmap,
+        UInt64 txn_id);
 
     static std::shared_ptr<LocalDeleteBitmap> createTombstone(const MergeTreePartInfo & part_info, UInt64 txn_id)
     {
@@ -60,10 +58,9 @@ public:
     }
 
     /// Clients should perfer the createXxx static factory method above
-    LocalDeleteBitmap(const MergeTreePartInfo & part_info,
-        DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
-    LocalDeleteBitmap(const String & partition_id, Int64 min_block, Int64 max_block,
-        DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
+    LocalDeleteBitmap(const MergeTreePartInfo & part_info, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
+    LocalDeleteBitmap(
+        const String & partition_id, Int64 min_block, Int64 max_block, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
 
     UndoResource getUndoResource(const TxnTimestamp & txn_id) const;
 
@@ -89,8 +86,7 @@ class DeleteBitmapMeta
 public:
     static constexpr auto kInlineBitmapMaxCardinality = 16;
 
-    DeleteBitmapMeta(const MergeTreeMetaBase & storage_, const DataModelDeleteBitmapPtr & model_)
-        : storage(storage_), model(model_) {}
+    DeleteBitmapMeta(const MergeTreeMetaBase & storage_, const DataModelDeleteBitmapPtr & model_) : storage(storage_), model(model_) { }
 
     const DataModelDeleteBitmapPtr & getModel() const { return model; }
 
@@ -124,6 +120,12 @@ public:
             && model->part_min_block() == part_info.min_block
             && model->part_max_block() == part_info.max_block;
         /* clang-format on */
+    }
+
+    bool operator<=(const MergeTreePartInfo & part_info) const
+    {
+        return std::forward_as_tuple(model->partition_id(), model->part_min_block(), model->part_max_block())
+            <= std::forward_as_tuple(part_info.partition_id, part_info.min_block, part_info.max_block);
     }
 
     /// only meta of the same storage can be comparable.
@@ -163,5 +165,7 @@ struct LessDeleteBitmapMeta
         return *lhs < *rhs;
     }
 };
+
+void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataModelDeleteBitmapPtr & meta, DeleteBitmapPtr & to_bitmap);
 
 }

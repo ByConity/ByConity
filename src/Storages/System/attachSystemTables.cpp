@@ -7,6 +7,7 @@
 #include <Storages/System/StorageSystemBuildOptions.h>
 #include <Storages/System/StorageSystemCollations.h>
 #include <Storages/System/StorageSystemClusters.h>
+#include <Storages/System/StorageSystemCnchStagedParts.h>
 #include <Storages/System/StorageSystemColumns.h>
 #include <Storages/System/StorageSystemDatabases.h>
 #include <Storages/System/StorageSystemDataSkippingIndices.h>
@@ -85,6 +86,7 @@
 #include <Storages/System/StorageSystemStackTrace.h>
 #endif
 
+#include <Storages/System/StorageSystemBGThreads.h>
 #include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
@@ -194,6 +196,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 
     attach<StorageSystemMetastore>(system_database, "metastore");
     attach<StorageSystemBrokenTables>(system_database, "broken_tables");
+    attach<StorageSystemBGThreads>(system_database, "bg_threads");
     attach<StorageSystemCnchParts>(system_database, "cnch_parts");
     attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
     attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");
@@ -210,6 +213,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemWorkers>(system_database, "workers");
     attach<StorageSystemWorkerGroups>(system_database, "worker_groups");
     attach<StorageSystemVirtualWarehouses>(system_database, "virtual_warehouses");
+    attach<StorageSystemCnchStagedParts>(system_database, "cnch_staged_parts");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

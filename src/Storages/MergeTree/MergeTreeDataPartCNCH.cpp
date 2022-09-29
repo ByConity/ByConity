@@ -1,11 +1,15 @@
 #include "MergeTreeDataPartCNCH.h"
 
 #include <IO/LimitReadBuffer.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
+#include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
+#include <Storages/UUIDAndPartName.h>
+#include <Storages/UniqueKeyIndexCache.h>
 #include <Common/Exception.h>
 
 namespace ProfileEvents
@@ -72,15 +76,15 @@ MergeTreeDataPartCNCH::MergeTreeDataPartCNCH(
 }
 
 IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
-    [[maybe_unused]] const NamesAndTypesList & columns_to_read,
-    [[maybe_unused]] const StorageMetadataPtr & metadata_snapshot,
-    [[maybe_unused]] const MarkRanges & mark_ranges,
-    [[maybe_unused]] UncompressedCache * uncompressed_cache,
-    [[maybe_unused]] MarkCache * mark_cache,
-    [[maybe_unused]] const MergeTreeReaderSettings & reader_settings_,
-    [[maybe_unused]] MergeTreeBitMapIndexReader * bitmap_index_reader,
-    [[maybe_unused]] const ValueSizeMap & avg_value_size_hints,
-    [[maybe_unused]] const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
+    const NamesAndTypesList & columns_to_read,
+    const StorageMetadataPtr & metadata_snapshot,
+    const MarkRanges & mark_ranges,
+    UncompressedCache * uncompressed_cache,
+    MarkCache * mark_cache,
+    const MergeTreeReaderSettings & reader_settings_,
+    MergeTreeBitMapIndexReader * bitmap_index_reader,
+    const ValueSizeMap & avg_value_size_hints,
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {
     auto new_settings = reader_settings_;
     new_settings.convert_nested_to_subcolumns = true;
@@ -166,8 +170,11 @@ void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool re
     assertOnDisk();
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
     loadIndexGranularity();
-    getChecksums();
+    loadChecksums(false);
     // getIndex();
+
+    /// FIXME:
+    default_codec = CompressionCodecFactory::instance().getDefaultCodec();
 }
 
 void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
@@ -180,6 +187,116 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size);
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
     readPartBinary(*this, limit_reader, load_hint_mutation);
+}
+
+UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
+{
+    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        throw Exception(
+            "getUniqueKeyIndex of " + storage.getStorageID().getNameForLogs() + " which doesn't have unique key",
+            ErrorCodes::LOGICAL_ERROR);
+    if (rows_count == 0)
+        return std::make_shared<UniqueKeyIndex>(); /// return empty index for empty part
+
+    if (storage.unique_key_index_cache)
+    {
+        UUIDAndPartName key(storage.getStorageUUID(), info.getBlockName());
+        auto load_func = [this] { return const_cast<MergeTreeDataPartCNCH *>(this)->loadUniqueKeyIndex(); };
+        return storage.unique_key_index_cache->getOrSet(std::move(key), std::move(load_func)).first;
+    }
+    else
+        return const_cast<MergeTreeDataPartCNCH *>(this)->loadUniqueKeyIndex();
+}
+
+const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool is_unique_new_part) const
+{
+    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey() || deleted)
+    {
+        if (delete_bitmap != nullptr)
+            throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
+        return delete_bitmap;
+    }
+
+    if (!delete_bitmap)
+    {
+        /// bitmap hasn't been set, load it from cache and metas
+        if (delete_bitmap_metas.empty())
+        {
+            /// for new part of unique table, it's valid if its delete_bitmap_metas is empty
+            if (is_unique_new_part)
+                return delete_bitmap;
+            throw Exception("No metadata for delete bitmap of part " + name, ErrorCodes::LOGICAL_ERROR);
+        }
+        Stopwatch watch;
+        auto cache = storage.getContext()->getDeleteBitmapCache();
+        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block);
+        ImmutableDeleteBitmapPtr cached_bitmap;
+        UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
+        bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
+
+        UInt64 target_version = delete_bitmap_metas.front()->commit_time();
+        UInt64 txn_id = delete_bitmap_metas.front()->txn_id();
+        if (hit_cache && cached_version == target_version)
+        {
+            /// common case: got the exact version of bitmap from cache
+            const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(cached_bitmap);
+        }
+        else
+        {
+            DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+            std::forward_list<DataModelDeleteBitmapPtr> to_reads; /// store meta in ascending order of commit time
+
+            if (cached_version > target_version)
+            {
+                /// case: querying an older version than the cached version
+                /// then cached bitmap can't be used and we need to build the bitmap from all metas
+                to_reads = delete_bitmap_metas;
+                to_reads.reverse();
+            }
+            else
+            {
+                /// case: querying a newer version than the cached version
+                /// if all metas > cached version, build the bitmap from all metas.
+                /// otherwise build the bitmap from the cached bitmap and newer metas (whose version > cached version)
+                for (auto & meta : delete_bitmap_metas)
+                {
+                    if (meta->commit_time() > cached_version)
+                    {
+                        to_reads.insert_after(to_reads.before_begin(), meta);
+                    }
+                    else if (meta->commit_time() == cached_version)
+                    {
+                        *bitmap = *cached_bitmap; /// copy the cached bitmap as the base
+                        break;
+                    }
+                    else
+                    {
+                        throw Exception("Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version), ErrorCodes::LOGICAL_ERROR);
+                    }
+                }
+            }
+
+            /// union to_reads into bitmap
+            for (auto & meta : to_reads)
+                deserializeDeleteBitmapInfo(storage, meta, bitmap);
+
+            const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(bitmap);
+            if (target_version > cached_version)
+            {
+                cache->insert(cache_key, target_version, delete_bitmap);
+            }
+            LOG_DEBUG(
+                storage.log,
+                "Loaded delete bitmap at commit_time {} of {} in {} ms, bitmap cardinality: {}, it was generated in txn_id: {}",
+                target_version,
+                name,
+                watch.elapsedMilliseconds(),
+                delete_bitmap->cardinality(),
+                txn_id);
+        }
+    }
+    assert(delete_bitmap != nullptr);
+    return delete_bitmap;
 }
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const
@@ -332,7 +449,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     // Update checksums base on current part's mutation, the mutation in hdfs's file
     // is not reliable, since when attach, part will have new mutation, but the mutation
     // and hint_mutation within part's checksums is untouched, so update it here
-    for (auto& file : checksums->files)
+    for (auto & file : checksums->files)
     {
         file.second.mutation = info.mutation;
     }
@@ -346,7 +463,9 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
         /// insert checksum files from previous part if it's not in current checksums
         for (const auto & [name, file] : prev_checksums->files)
         {
-            [[maybe_unused]] auto [it, inserted] = checksums->files.emplace(name, file);
+            auto [it, inserted] = checksums->files.emplace(name, file);
+            if (inserted)
+                it->second.mutation = prev_part->info.mutation;
         }
     }
 
@@ -375,6 +494,43 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     }
 
     return checksums;
+}
+
+UniqueKeyIndexPtr MergeTreeDataPartCNCH::loadUniqueKeyIndex()
+{
+    return std::make_shared<UniqueKeyIndex>(
+        getRemoteFileInfo(), storage.getContext()->getUniqueKeyIndexFileCache(), storage.getContext()->getUniqueKeyIndexBlockCache());
+}
+
+IndexFile::RemoteFileInfo MergeTreeDataPartCNCH::getRemoteFileInfo()
+{
+    /// Get base part who contains unique key index
+    IMergeTreeDataPartPtr base_part = getBasePart();
+
+    String data_path = base_part->getFullPath() + "/data";
+    off_t offset = 0;
+    size_t size = 0;
+    getUniqueKeyIndexFilePosAndSize(base_part, offset, size);
+
+    IndexFile::RemoteFileInfo file;
+    file.hdfs_params = storage.getContext()->getHdfsConnectionParams();
+    file.path = data_path;
+    file.start_offset = offset;
+    file.size = size;
+    file.cache_key = toString(storage.getStorageUUID()) + "_" + info.getBlockName();
+    return file;
+}
+
+void MergeTreeDataPartCNCH::getUniqueKeyIndexFilePosAndSize(const IMergeTreeDataPartPtr part, off_t & off, size_t & size)
+{
+    String data_rel_path = fs::path(part->getFullRelativePath()) / "data";
+    String data_full_path = fs::path(part->getFullPath()) / "data";
+    const auto & hdfs_params = storage.getContext()->getHdfsConnectionParams();
+    ReadBufferFromByteHDFS data_file = ReadBufferFromByteHDFS(data_full_path, true, hdfs_params);
+    size_t data_file_size = volume->getDisk()->getFileSize(data_rel_path);
+    data_file.seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 3 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
+    readIntBinary(off, data_file);
+    readIntBinary(size, data_file);
 }
 
 void MergeTreeDataPartCNCH::loadIndexGranularity()

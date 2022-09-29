@@ -115,7 +115,12 @@ private:
     {
         MergeTreeMetaBase::DataPartPtr data_part;
         size_t part_index_in_query;
-        DeleteBitmapPtr delete_bitmap;
+        ImmutableDeleteBitmapPtr delete_bitmap;
+
+        Part(MergeTreeMetaBase::DataPartPtr data_part_, size_t part_index_in_query_, ImmutableDeleteBitmapPtr delete_bitmap_)
+            : data_part(data_part_), part_index_in_query(part_index_in_query_), delete_bitmap(delete_bitmap_)
+        {
+        }
     };
 
     std::vector<Part> parts_with_idx;

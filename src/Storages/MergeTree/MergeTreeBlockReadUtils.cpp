@@ -124,7 +124,7 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage, const StorageMe
 
 
 MergeTreeReadTask::MergeTreeReadTask(
-    const MergeTreeMetaBase::DataPartPtr & data_part_, DeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
+    const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
     const Names & ordered_names_, const NameSet & column_name_set_, NamesAndTypesList & columns_,
     NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
     MergeTreeBlockSizePredictorPtr && size_predictor_)

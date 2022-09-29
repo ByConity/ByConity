@@ -78,7 +78,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
     auto new_data_part = storage.createPart(name, new_type, info, volume, new_relative_path);
 
     new_data_part->uuid = uuid;
-    new_data_part->setColumns(columns);
+    new_data_part->setColumns(getColumns());
     new_data_part->partition.value = partition.value;
     new_data_part->minmax_idx = minmax_idx;
 
@@ -92,7 +92,7 @@ void MergeTreeDataPartInMemory::flushToDisk(const String & base_path, const Stri
 
     auto compression_codec = storage.getContext()->chooseCompressionCodec(0, 0);
     auto indices = MergeTreeIndexFactory::instance().getMany(metadata_snapshot->getSecondaryIndices());
-    MergedBlockOutputStream out(new_data_part, metadata_snapshot, columns, indices, compression_codec);
+    MergedBlockOutputStream out(new_data_part, metadata_snapshot, *columns_ptr, indices, compression_codec);
     out.writePrefix();
     out.write(block);
     out.writeSuffixAndFinalizePart(new_data_part);
@@ -116,7 +116,7 @@ void MergeTreeDataPartInMemory::calculateEachColumnSizes(ColumnSizeByName & each
     if (it != checksums->files.end())
         total_size.data_uncompressed += it->second.uncompressed_size;
 
-    for (const auto & column : columns)
+    for (const auto & column : *columns_ptr)
         each_columns_size[column.name].data_uncompressed += block.getByName(column.name).column->byteSize();
 }
 

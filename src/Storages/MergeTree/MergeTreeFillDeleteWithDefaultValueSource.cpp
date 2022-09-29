@@ -14,7 +14,7 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
     const MergeTreeMetaBase & storage_,
     const StorageMetadataPtr & metadata_snapshot_,
     MergeTreeMetaBase::DataPartPtr data_part_,
-    DeleteBitmapPtr delete_bitmap_,
+    ImmutableDeleteBitmapPtr delete_bitmap_,
     Names columns_to_read_)
     /// virtual columns are not allowed in "columns_to_read_"
     : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(columns_to_read_, /*virtuals*/{}, storage_.getStorageID()))

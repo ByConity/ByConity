@@ -29,7 +29,7 @@ namespace ErrorCodes
 
 CnchDataWriter::CnchDataWriter(
     MergeTreeMetaBase & storage_,
-    const Context & context_,
+    ContextPtr context_,
     ManipulationType type_,
     String task_id_,
     String from_buffer_uuid_,
@@ -54,7 +54,7 @@ DumpedData CnchDataWriter::dumpAndCommitCnchParts(
         // Nothing to dump and commit, returns
         return {};
 
-    LOG_DEBUG(storage.getLogger(), "Start Dump and commit {} parts, {} bitmaps, {} staged parts", temp_parts.size(), temp_bitmaps.size(), temp_staged_parts.size());
+    LOG_DEBUG(storage.getLogger(), "Start dump and commit {} parts, {} bitmaps, {} staged parts", temp_parts.size(), temp_bitmaps.size(), temp_staged_parts.size());
     // FIXME: find the root case.
     for (const auto & part: temp_parts)
     {
@@ -78,7 +78,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     Stopwatch watch;
 
-    const auto & settings = context.getSettingsRef();
+    const auto & settings = context->getSettingsRef();
 
     if (settings.debug_cnch_remain_temp_part)
     {
@@ -88,13 +88,13 @@ DumpedData CnchDataWriter::dumpCnchParts(
             part->is_temp = false;
     }
 
-    auto curr_txn = context.getCurrentTransaction();
+    auto curr_txn = context->getCurrentTransaction();
 
     // set main table uuid in server or worker side
     curr_txn->setMainTableUUID(storage.getStorageUUID());
 
     /// get offsets first and the parts shouldn't be dumped and committed if get offsets failed
-    if (context.getServerType() == ServerType::cnch_worker)
+    if (context->getServerType() == ServerType::cnch_worker)
     {
         auto kafka_table_id = curr_txn ? curr_txn->getKafkaTableID() : StorageID::createEmpty();
         if (!kafka_table_id.empty())
@@ -117,10 +117,8 @@ DumpedData CnchDataWriter::dumpCnchParts(
         String part_name = part->info.getPartNameWithHintMutation();
         undo_resources.emplace_back(txn_id, UndoResourceType::Part, part_name, part_name + "/");
     }
-    // for (const auto & bitmap : temp_bitmaps)
-    // {
-    //     undo_resources.push_back(bitmap->getUndoResource(txn_id));
-    // }
+    for (const auto & bitmap : temp_bitmaps)
+        undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
     for (const auto & staged_part : temp_staged_parts)
     {
         String part_name = staged_part->info.getPartNameWithHintMutation();
@@ -129,7 +127,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     try
     {
-        context.getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
+        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, undo_resources);
         LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
     }
     catch (...)
@@ -145,28 +143,33 @@ DumpedData CnchDataWriter::dumpCnchParts(
     watch.restart();
     for (const auto & temp_part : temp_parts)
     {
-        auto dumped_part = dumper.dumpTempPart(temp_part, context.getHdfsConnectionParams());
+        auto dumped_part = dumper.dumpTempPart(temp_part, context->getHdfsConnectionParams());
         LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
         result.parts.push_back(std::move(dumped_part));
     }
     // TODO dump all bitmaps to one file to avoid creating too many small files on vfs
-    // result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
+    result.bitmaps = dumpDeleteBitmaps(storage, temp_bitmaps);
     for (const auto & temp_staged_part : temp_staged_parts)
     {
-        auto staged_part = dumper.dumpTempPart(temp_staged_part, context.getHdfsConnectionParams());
+        auto staged_part = dumper.dumpTempPart(temp_staged_part, context->getHdfsConnectionParams());
         LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
         result.staged_parts.push_back(std::move(staged_part));
     }
 
-    LOG_DEBUG(storage.getLogger(), "Dumped {} parts, {} bitmaps, {} staged parts in {} ms", temp_parts.size(), temp_bitmaps.size(), temp_staged_parts.size(), watch.elapsedMilliseconds());
+    LOG_DEBUG(
+        storage.getLogger(),
+        "Dumped {} parts, {} bitmaps, {} staged parts in {} ms",
+        temp_parts.size(),
+        temp_bitmaps.size(),
+        temp_staged_parts.size(),
+        watch.elapsedMilliseconds());
     return result;
 }
 
-void CnchDataWriter::commitDumpedParts(
-    const DumpedData & dumped_data)
+void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 {
     Stopwatch watch;
-    const auto & settings = context.getSettingsRef();
+    const auto & settings = context->getSettingsRef();
     const auto & dumped_parts = dumped_data.parts;
     const auto & delete_bitmaps = dumped_data.bitmaps;
     const auto & dumped_staged_parts = dumped_data.staged_parts;
@@ -175,18 +178,18 @@ void CnchDataWriter::commitDumpedParts(
         // Nothing to commit, returns
         return;
 
-    TxnTimestamp txn_id = context.getCurrentTransactionID();
+    TxnTimestamp txn_id = context->getCurrentTransactionID();
 
     TxnTimestamp commit_time;
 
     try
     {
         // Check if current transaction can directly be executed on current server
-        if (dynamic_pointer_cast<CnchServerTransaction>(context.getCurrentTransaction()))
+        if (dynamic_pointer_cast<CnchServerTransaction>(context->getCurrentTransaction()))
         {
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
-                auto server_client = context.getCnchServerClient("0.0.0.0", context.getRPCPort());
+                auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
                 commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, from_buffer_uuid);
             }
             else
@@ -196,14 +199,14 @@ void CnchDataWriter::commitDumpedParts(
         }
         else
         {
-            auto is_server = context.getServerType() == ServerType::cnch_server;
+            auto is_server = context->getServerType() == ServerType::cnch_server;
             CnchServerClientPtr server_client;
-            if (const auto & client_info = context.getClientInfo(); client_info.rpc_port)
+            if (const auto & client_info = context->getClientInfo(); client_info.rpc_port)
             {
                 /// case: "insert select/infile" forward to worker | manipulation task | cnch system log flush | ingestion from kafka | etc
-                server_client = context.getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
+                server_client = context->getCnchServerClient(client_info.current_address.host().toString(), client_info.rpc_port);
             }
-            else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context.getCurrentTransaction()); worker_txn)
+            else if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(context->getCurrentTransaction()); worker_txn)
             {
                 /// case: client submits INSERTs directly to worker
                 server_client = worker_txn->getServerClient();
@@ -238,7 +241,7 @@ void CnchDataWriter::commitDumpedParts(
         }
     }
 
-    if (auto part_log = context.getPartLog(storage.getDatabaseName()))
+    if (auto part_log = context->getPartLog(storage.getDatabaseName()))
     {
         // for (auto & dumped_part : dumped_parts)
             // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
@@ -258,12 +261,12 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 {
     Stopwatch watch;
 
-    if (context.getServerType() != ServerType::cnch_server)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context.getServerType());
+    if (context->getServerType() != ServerType::cnch_server)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context->getServerType());
 
-    const auto & txn_coordinator = context.getCnchTransactionCoordinator();
+    const auto & txn_coordinator = context->getCnchTransactionCoordinator();
     auto * log = storage.getLogger();
-    auto txn = context.getCurrentTransaction();
+    auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
     TxnTimestamp commit_time;
     /// set main table uuid in server side
@@ -272,7 +275,6 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
         throw Exception("storage_ptr is nullptr and invalid for use", ErrorCodes::NULL_POINTER_DEREFERENCE);
-
 
     if (!from_buffer_uuid.empty())
     {
@@ -300,7 +302,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             //     auto table_definition_hash = storage->getTableHashForClusterBy();
             //     for (auto & part : prepared_parts)
             //     {
-            //         if (context.getSettings().skip_table_definition_hash_check)
+            //         if (context->getSettings().skip_table_definition_hash_check)
             //             part->table_definition_hash = table_definition_hash;
 
             //         if (!part->deleted &&
@@ -345,38 +347,35 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 txn_id.toUInt64(),
                 watch.elapsedMilliseconds());
         }
-        else if (
-            type == ManipulationType::Merge || type == ManipulationType::Clustering
-            || type == ManipulationType::Mutate)
+        else if (type == ManipulationType::Merge || type == ManipulationType::Clustering || type == ManipulationType::Mutate)
         {
-            // auto bg_thread = context.getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
-            // auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+            auto bg_thread = context->getCnchBGThread(CnchBGThreadType::MergeMutate, storage.getStorageID());
+            auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+            if (dumped_data.parts.empty())
+            {
+                LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
+                merge_mutate_thread->tryRemoveTask(task_id);
+            }
+            else
+            {
+                merge_mutate_thread->finishTask(task_id, dumped_data.parts.front(), [&] {
+                    auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr);
 
-            // if (dumped_data.parts.empty())
-            // {
-            //     LOG_WARNING(log, "No parts to commit, worker may failed to merge parts, which task_id is {}", task_id);
-            //     merge_mutate_thread->tryRemoveTask(task_id);
-            // }
-            // else
-            // {
-            //     merge_mutate_thread->finishTask(params.task_id, params.prepared_parts.front(), [&] {
-            //         auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage);
+                    for (const auto & part : dumped_data.parts)
+                        action->as<MergeMutateAction &>().appendPart(part);
 
-            //         // for (auto & part : params.prepared_parts)
-            //         //     action->appendPart(part);
+                    action->as<MergeMutateAction &>().setDeleteBitmaps(dumped_data.bitmaps);
+                    txn->appendAction(std::move(action));
+                    commit_time = txn_coordinator.commitV2(txn);
 
-            //         action->setDeleteBitmaps(params.delete_bitmaps);
-            //         txn->appendAction(std::move(action));
-            //         commit_time = txn_coordinator.commitV2(txn);
-
-            //         LOG_TRACE(
-            //             log,
-            //             "Committed {} parts in transaction {}, elapsed {} ms",
-            //             params.prepared_parts.size(),
-            //             txn_id.toUInt64(),
-            //             watch.elapsedMilliseconds());
-            //     });
-            // }
+                    LOG_TRACE(
+                        log,
+                        "Committed {} parts in transaction {}, elapsed {} ms",
+                        dumped_data.parts.size(),
+                        txn_id.toUInt64(),
+                        watch.elapsedMilliseconds());
+                });
+            }
         }
         else
         {
@@ -386,4 +385,67 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 
     return commit_time;
 }
+
+void CnchDataWriter::publishStagedParts(
+    const MergeTreeDataPartsCNCHVector & staged_parts,
+    const LocalDeleteBitmaps & bitmaps_to_dump)
+{
+    DumpedData items;
+    TxnTimestamp txn_id = context->getCurrentTransactionID();
+
+    for (auto & staged_part : staged_parts)
+    {
+        // new part that shares the data file with the staged part
+        Protos::DataModelPart new_part_model;
+        fillPartModel(storage, *staged_part, new_part_model);
+        new_part_model.mutable_part_info()->set_mutation(txn_id);
+        new_part_model.set_txnid(txn_id);
+        new_part_model.clear_commit_time();
+        new_part_model.set_staging_txn_id(staged_part->info.mutation);
+        // storage may not have part columns info (CloudMergeTree), so set columns/columns_commit_time manually
+        auto new_part = createPartFromModelCommon(storage, new_part_model);
+        new_part->setColumnsPtr(std::make_shared<NamesAndTypesList>(staged_part->getColumns()));
+        new_part->columns_commit_time = staged_part->columns_commit_time;
+
+        /// staged drop part
+        MergeTreePartInfo drop_part_info = staged_part->info.newDropVersion(txn_id, StorageType::HDFS);
+        auto drop_part = std::make_shared<MergeTreeDataPartCNCH>(
+            storage, drop_part_info.getPartName(), drop_part_info, staged_part->volume, std::nullopt);
+        drop_part->partition = staged_part->partition;
+        drop_part->bucket_number = staged_part->bucket_number;
+        drop_part->deleted = true;
+
+        items.parts.emplace_back(std::move(new_part));
+        items.staged_parts.emplace_back(std::move(drop_part));
+    }
+
+    /// prepare undo resources
+    /// setMetadata() return reference, so need to cast move
+    std::vector<UndoResource> undo_resources;
+    for (auto & part : items.parts)
+        undo_resources.emplace_back(std::move(UndoResource(txn_id, UndoResourceType::Part, part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
+    for (auto & staged_part : items.staged_parts)
+        undo_resources.emplace_back(std::move(UndoResource(txn_id, UndoResourceType::StagedPart, staged_part->info.getPartNameWithHintMutation()).setMetadataOnly(true)));
+    for (auto & bitmap : bitmaps_to_dump)
+        undo_resources.emplace_back(bitmap->getUndoResource(txn_id));
+
+    /// write undo buffer
+    Stopwatch watch;
+    try
+    {
+        context->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(storage.getStorageUUID()), txn_id, std::move(undo_resources));
+        LOG_DEBUG(storage.getLogger(), "Wrote undo buffer for {} resources in {} ms", undo_resources.size(), watch.elapsedMilliseconds());
+    }
+    catch (...)
+    {
+        LOG_ERROR(storage.getLogger(), "Fail to write undo buffer");
+        throw;
+    }
+
+    /// dump delete bitmaps
+    items.bitmaps = dumpDeleteBitmaps(storage, bitmaps_to_dump);
+
+    commitDumpedParts(items);
+}
+
 }

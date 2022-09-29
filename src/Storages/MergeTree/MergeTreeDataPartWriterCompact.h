@@ -111,7 +111,7 @@ private:
     };
 
     using CompactDataWriterPtr = std::unique_ptr<CompactDataWriter>;
-    /// add comment(lta)
+
     CompactDataWriterPtr data_writer;
 
     Poco::Logger * log;

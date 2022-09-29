@@ -109,7 +109,7 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
     HostWithPorts target_server{};
     UInt64 lease_life_time = getContext()->getSettings().topology_lease_life_ms.totalMilliseconds();
     bool tso_is_available = (current_ts != TxnTimestamp::fallbackTS());
-    UInt64 commit_time_ms = current_ts>>18;
+    UInt64 commit_time_ms = current_ts >> 18;
 
     auto it = current_topology.begin();
     while(it != current_topology.end())
