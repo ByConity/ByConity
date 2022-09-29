@@ -8,6 +8,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
+#include <Storages/Hive/HiveDataPart_fwd.h>
 
 #include <unordered_set>
 
@@ -53,6 +54,13 @@ public:
         const String & local_table_name,
         const ServerDataPartsVector & parts,
         const std::set<Int64> & required_bucket_numbers,
+        ExceptionHandler & handler);
+
+    brpc::CallId sendCnchHiveDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const HiveDataPartsCNCHVector & parts,
         ExceptionHandler & handler);
 
     brpc::CallId sendOffloadingInfo(

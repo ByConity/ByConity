@@ -68,6 +68,9 @@ void registerStorageMaterializedPostgreSQL(StorageFactory & factory);
 void registerStorageExternalDistributed(StorageFactory & factory);
 #endif
 
+void registerStorageCnchHive(StorageFactory & factory);
+void registerStorageCloudHive(StorageFactory & factory);
+
 void registerStorages()
 {
     auto & factory = StorageFactory::instance();
@@ -113,6 +116,9 @@ void registerStorages()
     /// registerStorageKafka(factory);
     registerStorageCnchKafka(factory);
     #endif
+
+    registerStorageCnchHive(factory);
+    registerStorageCloudHive(factory);
 
     #if USE_AMQPCPP
     registerStorageRabbitMQ(factory);

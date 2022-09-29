@@ -1,21 +1,19 @@
 #include <CloudServices/CnchWorkerClient.h>
 
-#include <Protos/cnch_worker_rpc.pb.h>
-#include <Protos/RPCHelpers.h>
-#include <Protos/DataModelHelpers.h>
 #include <Interpreters/Context.h>
+#include <Protos/DataModelHelpers.h>
+#include <Protos/RPCHelpers.h>
+#include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
-#include <WorkerTasks/ManipulationTaskParams.h>
-#include <WorkerTasks/ManipulationList.h>
 #include <Transaction/ICnchTransaction.h>
 #include <CloudServices/DedupWorkerStatus.h>
-
+#include <WorkerTasks/ManipulationList.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 
 namespace DB
 {
-
 CnchWorkerClient::CnchWorkerClient(String host_port_)
     : RpcClientBase(getName(), std::move(host_port_)), stub(std::make_unique<Protos::CnchWorkerService_Stub>(&getChannel()))
 {
@@ -29,10 +27,7 @@ CnchWorkerClient::CnchWorkerClient(HostWithPorts host_ports_)
 CnchWorkerClient::~CnchWorkerClient() = default;
 
 void CnchWorkerClient::submitManipulationTask(
-    const MergeTreeMetaBase & storage,
-    const ManipulationTaskParams & params,
-    TxnTimestamp txn_id,
-    TxnTimestamp begin_ts)
+    const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id, TxnTimestamp begin_ts)
 {
     if (!params.rpc_port)
         throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
@@ -109,7 +104,7 @@ std::vector<ManipulationInfo> CnchWorkerClient::getManipulationTasksStatus()
     RPCHelpers::checkResponse(response);
 
     std::vector<ManipulationInfo> res;
-    for (const auto & task: response.tasks())
+    for (const auto & task : response.tasks())
     {
         ManipulationInfo info(RPCHelpers::createStorageID(task.storage_id()));
         info.type = ManipulationType(task.type());
@@ -148,15 +143,41 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
 
     request.set_txn_id(context->getCurrentTransactionID());
     request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID()); /// Why?
-    request.set_timeout(timeout ? timeout : 3600);  // clean session resource if there exists Exception after 3600s
+    request.set_timeout(timeout ? timeout : 3600); // clean session resource if there exists Exception after 3600s
 
-    for (const auto & create_query: create_queries)
+    for (const auto & create_query : create_queries)
         *request.mutable_create_queries()->Add() = create_query;
 
     stub->sendCreateQuery(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);
+}
+
+brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & local_table_name,
+    const HiveDataPartsCNCHVector & parts,
+    ExceptionHandler & handler)
+{
+    Protos::SendCnchHiveDataPartsReq request;
+
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage->getDatabaseName());
+    request.set_table_name(local_table_name);
+    fillCnchHivePartsModel(parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller();
+    Protos::SendCnchHiveDataPartsResp * response = new Protos::SendCnchHiveDataPartsResp();
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl->set_timeout_ms(send_timeout);
+
+    auto call_id = cntl->call_id();
+    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, &handler));
+
+    return call_id;
 }
 
 brpc::CallId CnchWorkerClient::sendQueryDataParts(
@@ -173,7 +194,7 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     request.set_table_name(local_table_name);
 
     fillBasePartAndDeleteBitmapModels(*storage, data_parts, *request.mutable_parts(), *request.mutable_bitmaps());
-    for (const auto & bucket_num: required_bucket_numbers)
+    for (const auto & bucket_num : required_bucket_numbers)
         *request.mutable_bucket_numbers()->Add() = bucket_num;
 
     // TODO:
@@ -200,11 +221,11 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
 }
 
 brpc::CallId CnchWorkerClient::sendOffloadingInfo(
-    [[maybe_unused]]const ContextPtr & context,
-    [[maybe_unused]]const HostWithPortsVec & read_workers,
-    [[maybe_unused]]const std::vector<std::pair<StorageID, String>> & worker_table_names,
-    [[maybe_unused]]const std::vector<HostWithPortsVec> & buffer_workers_vec,
-    [[maybe_unused]]ExceptionHandler & handler)
+    [[maybe_unused]] const ContextPtr & context,
+    [[maybe_unused]] const HostWithPortsVec & read_workers,
+    [[maybe_unused]] const std::vector<std::pair<StorageID, String>> & worker_table_names,
+    [[maybe_unused]] const std::vector<HostWithPortsVec> & buffer_workers_vec,
+    [[maybe_unused]] ExceptionHandler & handler)
 {
     /// TODO:
     return {};

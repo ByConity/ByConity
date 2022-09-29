@@ -64,7 +64,7 @@ int main(int argc, char ** argv) {
     if (options.count("nnproxy"))
         nnproxy = options["nnproxy"].as<string>();
     DB::HDFSConnectionParams hdfs_params(DB::HDFSConnectionParams::CONN_NNPROXY, "clickhouse", nnproxy) ;
-    DB::registerDefaultHdfsFileSystem(hdfs_params, 10);
+    DB::registerDefaultHdfsFileSystem(hdfs_params, 100000, 100, 10);
 
     auto& hdfs_fs = DB::getDefaultHdfsFileSystem();
 

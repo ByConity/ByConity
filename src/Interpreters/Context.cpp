@@ -30,6 +30,7 @@
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/StorageS3Settings.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -368,6 +369,7 @@ struct ContextSharedPart
     std::atomic_bool stop_sync{false};
     BackgroundSchedulePool::TaskHolder meta_checker;
 
+    std::optional<CnchHiveSettings> cnchhive_settings;
     std::optional<MergeTreeSettings> merge_tree_settings;   /// Settings of MergeTree* engines.
     std::optional<MergeTreeSettings> replicated_merge_tree_settings;   /// Settings of ReplicatedMergeTree* engines.
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
@@ -3049,6 +3051,21 @@ void Context::updateStorageConfigurationForCNCH(Poco::Util::AbstractConfiguratio
     {
         // Multiple policy specified, not old cnch configuration, don't update config
     }
+}
+
+const CnchHiveSettings & Context::getCnchHiveSettings() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnchhive_settings)
+    {
+        const auto & config = getConfigRef();
+        CnchHiveSettings cnchhive_settings;
+        cnchhive_settings.loadFromConfig("cnch_hive", config);
+        shared->cnchhive_settings.emplace(cnchhive_settings);
+    }
+
+    return *shared->cnchhive_settings;
 }
 
 const MergeTreeSettings & Context::getMergeTreeSettings() const

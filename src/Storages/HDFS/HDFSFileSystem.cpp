@@ -243,14 +243,17 @@ HDFSBuilderPtr createHDFSBuilder(const Poco::URI & uri, const String & hdfs_user
 //     return fs;
 // }
 
-
 HDFSFileSystem::HDFSFileSystem(
-    const HDFSConnectionParams & hdfs_params_, int io_error_num_to_reconnect_)
-    : hdfs_params(hdfs_params_)
-    , fs(nullptr)
+    const HDFSConnectionParams & hdfs_params_, const int max_fd_num, const int skip_fd_num, const int io_error_num_to_reconnect_)
+    : fs(nullptr)
+    , hdfs_params(hdfs_params_)
+    , MAX_FD_NUM(max_fd_num)
+    , SKIP_FD_NUM(skip_fd_num)
     , io_error_num(0)
     , io_error_num_to_reconnect(io_error_num_to_reconnect_)
+    , fd_to_hdfs_file(MAX_FD_NUM + SKIP_FD_NUM, nullptr)
 {
+    //    HDFSBuilderPtr builder = createHDFSBuilder(Poco::URI(), hdfs_user, nnproxy);
     HDFSBuilderPtr builder = hdfs_params_.createBuilder(Poco::URI());
     fs = createHDFSFS(builder.get());
 }
@@ -277,6 +280,202 @@ void HDFSFileSystem::reconnectIfNecessary() const
         reconnect();
         io_error_num = 0;
     }
+}
+
+int HDFSFileSystem::open(const std::string& path, int flags, mode_t mode)
+{
+    (void)mode;
+
+    HDFSFSPtr fs_copy = getFS();
+    hdfsFile fin = hdfsOpenFile(fs_copy.get(), path.c_str(), flags, 0, 0, 0);
+    if (!fin) {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    int fd = getNextFd(path);
+    fd_to_hdfs_file[fd] = fin;
+    return fd;
+}
+
+int HDFSFileSystem::getNextFd(const std::string& path) {
+    // SKIP_FD_NUM to (SKIP_FD_NUM + MAX_FD_NUM)
+    int index = std::hash<std::string>{}(path) % MAX_FD_NUM;
+    auto dumpy = 0;
+    auto i = 0;
+    // if flag_ has been set by others, we wait for next cycle
+    while (flag_.test_and_set(std::memory_order_acquire))
+    {
+        i++;
+        if (i < 32)
+        {
+            continue;
+        }
+        else if (i < 100)
+        {
+            dumpy = i;
+            dumpy++;
+        }
+        else
+        {
+            // wait so long
+            std::this_thread::yield();
+        }
+    }
+
+    // acquire the flag_ lock
+    while (fd_to_hdfs_file[index] != nullptr) {
+        index = (index + 1) % MAX_FD_NUM;
+    }
+    // unlock the flag_
+    flag_.clear(std::memory_order_release);
+
+    return index + SKIP_FD_NUM;
+}
+
+// TODO: here we do not accquire the lock, is it OK?
+// delay release owing to cpu cache flush
+int HDFSFileSystem::close(const int fd)
+{
+    if (fd < SKIP_FD_NUM || fd >= MAX_FD_NUM)
+    {
+        throw Exception("Illegal HDFS fd", ErrorCodes::PARAMETER_OUT_OF_BOUND);
+    }
+    auto file = fd_to_hdfs_file[fd];
+
+    HDFSFSPtr fs_copy = getFS();
+    int res = hdfsCloseFile(fs_copy.get(), file);
+    if (res == -1) {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    fd_to_hdfs_file[fd] = nullptr;
+    return res;
+}
+
+int HDFSFileSystem::flush(const int fd)
+{
+    HDFSFSPtr fs_copy = getFS();
+    auto file = getHDFSFileByFd(fd);
+    int ret = hdfsHFlush(fs_copy.get(), file);
+    if (ret == -1)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    return ret;
+}
+
+ssize_t HDFSFileSystem::read(const int fd, void *buf, size_t count)
+{
+    HDFSFSPtr fs_copy = getFS();
+    auto fin = getHDFSFileByFd(fd);
+    ssize_t ret = hdfsRead(fs_copy.get(), fin, buf, count);
+    if (ret == -1)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    return ret;
+}
+
+ssize_t HDFSFileSystem::write(const int fd, const void *buf, size_t count)
+{
+    HDFSFSPtr fs_copy = getFS();
+    auto file = getHDFSFileByFd(fd);
+    ssize_t ret = hdfsWrite(fs_copy.get(), file, buf, count);
+    if (ret == -1)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    return ret;
+}
+
+bool HDFSFileSystem::copyTo(const std::string& path,
+    const std::string& rpath)
+{
+    HDFSFSPtr fs_copy = getFS();
+    // not supported, custom one
+    {
+        int ret = hdfsExists(fs_copy.get(), path.c_str());
+        if (ret == -1)
+        {
+            handleError(__PRETTY_FUNCTION__);
+        }
+        else if (ret == ENOENT)
+        {
+            throw Exception("Source file " + path + " not exist", ErrorCodes::HDFS_ERROR);
+        }
+    }
+    {
+        int ret = hdfsExists(fs_copy.get(), rpath.c_str());
+        if (ret == -1)
+        {
+            handleError(__PRETTY_FUNCTION__);
+        }
+        else if (ret == 0)
+        {
+            throw Exception("Target file " + rpath + " already exist", ErrorCodes::HDFS_ERROR);
+        }
+    }
+    auto fin = hdfsOpenFile(fs_copy.get(), path.c_str(), O_RDONLY, 0, 0, 0);
+    if (!fin) {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    SCOPE_EXIT({
+        hdfsCloseFile(fs_copy.get(), fin);
+    });
+    auto fout = hdfsOpenFile(fs_copy.get(), rpath.c_str(), O_WRONLY | O_CREAT, 0, 0, 0);
+    if (!fout)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    SCOPE_EXIT({
+        hdfsCloseFile(fs_copy.get(), fout);
+    });
+
+    char buf[10240];
+    while (true)
+    {
+        int ret = hdfsRead(fs_copy.get(), fin, buf, 10240);
+        if (ret > 0)
+        {
+            int write_ret = hdfsWrite(fs_copy.get(), fout, buf, ret);
+            if (write_ret == -1)
+            {
+                handleError(__PRETTY_FUNCTION__);
+            }
+        }
+        else if (ret == -1)
+        {
+            handleError(__PRETTY_FUNCTION__);
+        }
+        else if (ret == 0)
+        {
+            break;
+        }
+    }
+
+    return true;
+}
+
+bool HDFSFileSystem::moveTo(const std::string& path,
+    const std::string& rpath)
+{
+    HDFSFSPtr fs_copy = getFS();
+    int ret = hdfsRename(fs_copy.get(), path.c_str(), rpath.c_str());
+    if (ret == -1)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    return !ret;
+}
+
+bool HDFSFileSystem::setSize(const std::string& path, uint64_t size)
+{
+    HDFSFSPtr fs_copy = getFS();
+    int wait;
+    int ret = hdfsTruncate(fs_copy.get(), path.c_str(), size, &wait);
+    if (ret == -1)
+    {
+        handleError(__PRETTY_FUNCTION__);
+    }
+    return !ret;
 }
 
 bool HDFSFileSystem::exists(const std::string& path) const
@@ -562,15 +761,15 @@ bool HDFSFileSystem::setLastModifiedInSeconds(const std::string& path, uint64_t 
 }
 
 static fs_ptr<DB::HDFSFileSystem> defaultHdfsFileSystem = nullptr;
-//static std::unique_ptr<DB::HDFSFileSystem> nullHdfsFileSystem = nullptr;
 void registerDefaultHdfsFileSystem(
-    const HDFSConnectionParams & hdfs_params, const int io_error_num_to_reconnect)
+    const HDFSConnectionParams & hdfs_params, const int max_fd_num, const int skip_fd_num, const int io_error_num_to_reconnect)
 {
     // force ha mode.
     HDFSConnectionParams ha_params = hdfs_params;
     ha_params.setNNProxyHa(true);
-    defaultHdfsFileSystem = std::make_shared<DB::HDFSFileSystem>(ha_params, io_error_num_to_reconnect);
+    defaultHdfsFileSystem = std::make_shared<DB::HDFSFileSystem>(ha_params, max_fd_num, skip_fd_num, io_error_num_to_reconnect);
 }
+
 
 fs_ptr<DB::HDFSFileSystem> & getDefaultHdfsFileSystem()
 {
@@ -834,5 +1033,220 @@ String HDFSConnectionParams::toString() const
     return ss.str();
 }
 
+namespace HDFSCommon
+{
+
+// here is the function used by ClickHouse
+int open(const char *pathname, int flags, mode_t mode)
+{
+    return getDefaultHdfsFileSystem()->open(pathname, flags, mode);
+}
+
+int close(int fd)
+{
+    return getDefaultHdfsFileSystem()->close(fd);
+}
+
+// off_t lseek(int fd, off_t offset, int whence)
+// {
+//     return getDefaultHdfsFileSystem()->seek(fd, offset, whence);
+// }
+
+int fsync(int fd)
+{
+    return getDefaultHdfsFileSystem()->flush(fd);
+}
+
+ssize_t read(const int fd, void *buf, size_t count)
+{
+    return getDefaultHdfsFileSystem()->read(fd, buf, count);
+}
+
+int write(int fd, const void* buf, size_t count)
+{
+    return getDefaultHdfsFileSystem()->write(fd, buf, count);
+}
+
+bool exists(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->exists(path);
+}
+
+bool remove(const std::string& path, bool recursive)
+{
+    return getDefaultHdfsFileSystem()->remove(path, recursive);
+}
+
+int fcntl(int fd, int cmd, ... /* arg */ )
+{
+    (void)fd;
+    (void)cmd;
+    return -1;
+}
+
+ssize_t getCapacity() {
+    return getDefaultHdfsFileSystem()->getCapacity();
+}
+
+ssize_t getSize(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->getFileSize(path);
+}
+
+bool renameTo(const std::string& path, const std::string& rpath)
+{
+    return getDefaultHdfsFileSystem()->renameTo(path, rpath);
+}
+
+bool copyTo(const std::string& path, const std::string& rpath)
+{
+    return getDefaultHdfsFileSystem()->copyTo(path, rpath);
+}
+
+bool moveTo(const std::string& path, const std::string& rpath)
+{
+    return getDefaultHdfsFileSystem()->moveTo(path, rpath);
+}
+
+bool createFile(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->createFile(path);
+}
+
+bool createDirectory(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->createDirectory(path);
+}
+
+bool createDirectories(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->createDirectories(path);
+}
+
+Poco::Timestamp getLastModified(const std::string& path)
+{
+    int64_t seconds = getDefaultHdfsFileSystem()->getLastModifiedInSeconds(
+        path);
+    // timestamp in microseconds
+    return Poco::Timestamp(seconds * 1000 * 1000);
+}
+
+void setLastModified(const std::string& path, const Poco::Timestamp& ts)
+{
+    uint64_t seconds = ts.epochTime();
+    getDefaultHdfsFileSystem()->setLastModifiedInSeconds(path, seconds);
+}
+
+void list(const std::string& path, std::vector<std::string>& files)
+{
+    getDefaultHdfsFileSystem()->list(path, files);
+}
+
+bool isFile(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->isFile(path);
+}
+
+bool isDirectory(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->isDirectory(path);
+}
+
+bool canExecute(const std::string& path)
+{
+    return getDefaultHdfsFileSystem()->canExecute(path);
+}
+
+void setReadOnly(const std::string& path)
+{
+    getDefaultHdfsFileSystem()->setWriteable(path, false);
+}
+
+void setWritable(const std::string& path)
+{
+    getDefaultHdfsFileSystem()->setWriteable(path, true);
+}
+
+void setSize(const std::string& path, uint64_t size)
+{
+    getDefaultHdfsFileSystem()->setSize(path, size);
+}
+
+DirectoryIterator::DirectoryIterator()
+{
+}
+
+DirectoryIterator::DirectoryIterator(const std::string& dir_path_): dir_path(joinPaths({dir_path_}, true))
+{
+    OpenDir();
+    dir_path.setFileName(GetCurrent());
+    file = dir_path;
+}
+
+DirectoryIterator::DirectoryIterator(const HDFSCommon::File& file_): dir_path(joinPaths({file_.path()}, true))
+{
+    OpenDir();
+    dir_path.setFileName(GetCurrent());
+    file = dir_path;
+}
+
+DirectoryIterator::DirectoryIterator(const Poco::Path& other_path): dir_path(joinPaths({other_path.toString()}, true))
+{
+    OpenDir();
+    dir_path.setFileName(GetCurrent());
+    file = dir_path;
+}
+
+DirectoryIterator::~DirectoryIterator()
+{
+    CloseDir();
+}
+
+void DirectoryIterator::OpenDir()
+{
+    file_names.clear();
+    HDFSCommon::list(dir_path.toString(), file_names);
+    current_idx = -1;
+    Next();
+}
+
+void DirectoryIterator::CloseDir()
+{
+    file_names.clear();
+}
+
+bool DirectoryIterator::hasNext() const
+{
+    return current.size() != 0;
+}
+
+const std::string& DirectoryIterator::Next()
+{
+    ++current_idx;
+    if (current_idx >= file_names.size())
+    {
+        current.clear();
+    }
+    else
+    {
+        current = file_names[current_idx];
+    }
+
+    dir_path.setFileName(current);
+    file = dir_path;
+
+    return GetCurrent();
+}
+
+DirectoryIterator & DirectoryIterator::operator++()
+{
+    Next();
+    return *this;
+}
+
+const std::string & DirectoryIterator::GetCurrent() const { return current; }
+
+
+}
 
 }
