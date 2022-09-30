@@ -42,7 +42,7 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     {
         return std::make_shared<CnchMergeMutateThread>(getContext(), storage_id);
     }
-    if (type == CnchBGThreadType::Consumer)
+    else if (type == CnchBGThreadType::Consumer)
     {
         return std::make_shared<CnchKafkaConsumeManager>(getContext(), storage_id);
     }
