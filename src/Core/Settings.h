@@ -551,7 +551,7 @@ class IColumn;
     M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
     M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
-    M(String, blacklist_for_merge_thread_regex, "", "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", 0) \
+    M(String, blocklist_for_merge_thread_regex, "", "A blacklist for merge thread, to prevent the generation of MergeTasks for some tables.", 0) \
     \
     /** settings in cnch **/ \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \

@@ -37,7 +37,7 @@ public:
      *  Stop the background thread but not remove it.
      *  For the case that table is not dropped, but need to disable its function temporarily.
      */
-    void stopThread(const StorageID & storage_id);
+    void stopThread(const StorageID & storage_id) const;
     /**
      *  Remove the background thread from server. Won't throw exception if thread not found.
      */

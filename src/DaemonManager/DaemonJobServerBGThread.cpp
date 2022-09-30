@@ -881,7 +881,7 @@ CnchServerClientPtr DaemonJobServerBGThreadConsumer::getTargetServer(const Stora
         return nullptr;
     }
 
-    auto mv_table = dynamic_cast<StorageMaterializedView*>(dependencies[0].get());
+    auto * mv_table = dynamic_cast<StorageMaterializedView*>(dependencies[0].get());
     if (!mv_table)
     {
         LOG_ERROR(log, "Unknown MV table {}", dependencies[0]->getTableName());
@@ -897,7 +897,7 @@ CnchServerClientPtr DaemonJobServerBGThreadConsumer::getTargetServer(const Stora
         return nullptr;
     }
 
-    auto cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get());
+    auto * cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get());
     if (!cnch_storage)
     {
         LOG_ERROR(log, "Target table should be CnchMergeTree for {}", storage_id.getNameForLogs());
@@ -963,9 +963,8 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::PartGC, IsCnchMergeTree>>("PART_GC");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::MergeMutate, IsCnchMergeTree>>("PART_MERGE");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::Clustering, IsCnchMergeTree>>("PART_CLUSTERING");
-    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::MemoryBuffer, SupportMemoryBuffer>>("MEMORY_BUFFER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchKafka<CnchBGThreadType::Consumer, IsCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnchMergeTree<CnchBGThreadType::DedupWorker, IsCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
 }
 
-} /// end namespace DB::DaemonManager
+}

@@ -43,14 +43,14 @@ namespace DB
 
 namespace ErrorCodes
 {
-extern const int NO_SUCH_COLUMN_IN_TABLE;
-extern const int INVALID_PARTITION_VALUE;
-extern const int UNKNOWN_PART_TYPE;
-extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
-extern const int NOT_ENOUGH_SPACE;
-extern const int DIRECTORY_ALREADY_EXISTS;
-extern const int ILLEGAL_COLUMN;
-extern const int BAD_TTL_EXPRESSION;
+    extern const int NO_SUCH_COLUMN_IN_TABLE;
+    extern const int INVALID_PARTITION_VALUE;
+    extern const int UNKNOWN_PART_TYPE;
+    extern const int TOO_MANY_SIMULTANEOUS_QUERIES;
+    extern const int NOT_ENOUGH_SPACE;
+    extern const int DIRECTORY_ALREADY_EXISTS;
+    extern const int ILLEGAL_COLUMN;
+    extern const int BAD_TTL_EXPRESSION;
 }
 
 void MergeTreeMetaBase::checkSampleExpression(const StorageInMemoryMetadata & metadata, bool allow_sampling_expression_not_in_primary_key)
@@ -110,8 +110,8 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     {
         is_custom_partitioned = true;
         checkPartitionKeyAndInitMinMax(metadata_.partition_key);
+        setProperties(metadata_, metadata_, false);
     }
-    setProperties(metadata_, metadata_, false);
 
     format_version = MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING;
 
