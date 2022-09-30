@@ -53,7 +53,7 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
     auto create_query = query->as<ASTCreateQuery &>();
     if (create_query.isView())
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views, stay tuned");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Cnch database hasn't supported views");
     if ((!create_query.is_dictionary) &&
         (!startsWith(create_query.storage->engine->name, "Cnch")))
         throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
@@ -74,8 +74,6 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-    //auto table_lock = txn->createIntentLock({database_name, table_name});
-    //table_lock->lock();
 
     StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
     bool is_dictionary = false;
@@ -106,6 +104,21 @@ void DatabaseCnch::drop(ContextPtr local_context)
 
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+    // get the lock of tables in current database
+    std::vector<StoragePtr> tables_to_drop;
+    std::vector<IntentLockPtr> locks;
+
+    for (auto iterator = getTablesIterator(getContext(), [](const String &) { return true; }); iterator->isValid(); iterator->next())
+    {
+        StoragePtr table = iterator->table();
+        const auto & storage_id = table->getStorageID();
+        locks.emplace_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, storage_id.database_name, storage_id.table_name));
+        tables_to_drop.emplace_back(table);
+    }
+
+    for (const auto & lock : locks)
+        lock->lock();
 
     DropActionParams params{getDatabaseName(), "", commit_time, ASTDropQuery::Kind::Drop};
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params));
@@ -313,6 +326,21 @@ void DatabaseCnch::renameTable(
     StoragePtr from_table = tryGetTable(table_name, local_context);
     if (!from_table)
         throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+    std::vector<IntentLockPtr> locks;
+
+    if (std::make_pair(database_name, table_name)
+        < std::make_pair(to_database.getDatabaseName(), to_table_name))
+    {
+        locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
+        locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, to_database.getDatabaseName(), to_table_name));
+    }
+    else
+    {
+        locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, to_database.getDatabaseName(), to_table_name));
+        locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
+    }
+
+    std::lock(*locks[0], *locks[1]);
 
     RenameActionParams params;
     params.table_params = RenameActionParams::RenameTableParams{database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
