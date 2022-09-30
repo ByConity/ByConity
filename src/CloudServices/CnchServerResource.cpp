@@ -8,6 +8,7 @@
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
+#include "Catalog/DataModelPartWrapper_fwd.h"
 
 #include <Storages/Hive/HiveDataPart.h>
 #include <Storages/StorageCnchHive.h>
@@ -248,7 +249,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             {
                 bool use_simple_hash = cnchhive->settings.use_simple_hash;
                 LOG_TRACE(log, "CnchSessionResource use_simple_hash is: {}", use_simple_hash);
-                assigned_hive_map = assignCnchParts(worker_group, resource.hive_parts, use_simple_hash);
+                assigned_hive_map = assignCnchHiveParts(worker_group, resource.hive_parts);
             }
 
             for (const auto & host_ports : host_ports_vec)

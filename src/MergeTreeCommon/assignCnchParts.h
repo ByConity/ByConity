@@ -14,6 +14,7 @@ namespace DB
 using WorkerList = std::vector<String>;
 using ServerAssignmentMap = std::unordered_map<String, ServerDataPartsVector>;
 using HivePartsAssignMap = std::unordered_map<String, HiveDataPartsCNCHVector>;
+using AssignmentMap = std::unordered_map<String, MergeTreeDataPartsCNCHVector>;
 using BucketNumbersAssignmentMap = std::unordered_map<String, std::set<Int64>>;
 
 struct BucketNumberAndServerPartsAssignment
@@ -22,10 +23,11 @@ struct BucketNumberAndServerPartsAssignment
     BucketNumbersAssignmentMap bucket_number_assignment_map;
 };
 
+// the hive has different allocate logic, thus separate it.
+HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts);
 
-HivePartsAssignMap assignCnchParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts, bool use_simple_hash);
-
-ServerAssignmentMap assignCnchParts(const WorkerGroupHandle & worker_group, const ServerDataPartsVector & parts);
+template <typename DataPartsCnchVector>
+std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts);
 
 bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts);
 BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers = {});
