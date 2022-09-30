@@ -114,6 +114,8 @@ void ElectionController::exitLeaderElection()
 void ElectionController::shutDown()
 {
     is_leader = false;
+    rm_controller.getWorkerGroupResourceCoordinator().stop(); 
+
     leader_election.reset();
     current_zookeeper.reset();
     LOG_DEBUG(log, "Exit leader election");
