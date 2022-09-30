@@ -5,62 +5,66 @@ option cc_generic_services = true;
 
 import "cnch_common.proto";
 
-message DMBGJobInfo {
+message DMBGJobInfo
+{
     required StorageID storage_id = 1;
     required string host_port = 2;
     required uint32 status = 3;
-    required uint32 expected_status = 4; 
+    required uint32 expected_status = 4;
     required int64 last_start_time = 5;
 }
 
-message GetAllBGThreadServersReq {
+message GetAllBGThreadServersReq
+{
     required uint32 job_type = 1;
 }
 
-message GetAllBGThreadServersResp {
+message GetAllBGThreadServersResp
+{
     optional string exception = 1;
     repeated DMBGJobInfo dm_bg_job_infos = 2;
 }
 
-message GetDMBGJobInfoReq {
+message GetDMBGJobInfoReq
+{
     required uint32 job_type = 1;
-    required UUID storage_uuid = 2; 
+    required UUID storage_uuid = 2;
 }
 
-message GetDMBGJobInfoResp {
+message GetDMBGJobInfoResp
+{
     optional string exception = 1;
     optional DMBGJobInfo dm_bg_job_info = 2;
 }
 
-message GetDaemonThreadServerReq {
+message ControlDaemonJobReq
+{
     required StorageID storage_id = 1;
     required uint32 job_type = 2;
+    required uint32 action = 3;
 }
 
-message GetDaemonThreadServerResp {
-    optional string exception = 1;
-    optional string host_port = 2;
-};
-
-message ControlDaemonJobReq {
-    enum Action {
-        Start = 0;
-        Stop = 1;
-        Remove = 2;
-        Drop = 3;
-    };
-    required StorageID storage_id = 1;
-    required uint32 job_type = 2;
-    required Action action = 3;
-}
-
-message ControlDaemonJobResp {
+message ControlDaemonJobResp
+{
     optional string exception = 1;
 }
 
-service DaemonManagerService {
+message ForwardOptimizeQueryReq
+{
+    required StorageID storage_id = 1;
+    optional string partition_id = 2;
+    optional bool enable_try = 3;
+}
+
+message ForwardOptimizeQueryResp
+{
+    optional string exception = 1;
+}
+
+service DaemonManagerService
+{
     rpc GetAllBGThreadServers(GetAllBGThreadServersReq) returns (GetAllBGThreadServersResp);
     rpc GetDMBGJobInfo(GetDMBGJobInfoReq) returns (GetDMBGJobInfoResp);
-    rpc GetDaemonThreadServer(GetDaemonThreadServerReq) returns (GetDaemonThreadServerResp);
     rpc ControlDaemonJob(ControlDaemonJobReq) returns (ControlDaemonJobResp);
+    rpc ForwardOptimizeQuery(ForwardOptimizeQueryReq) returns (ForwardOptimizeQueryResp);
 };

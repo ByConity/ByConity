@@ -13,6 +13,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/LockManager.h>
 #include <Common/Exception.h>
+#include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/commitCnchParts.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
@@ -880,6 +881,35 @@ void CnchServerServiceImpl::submitQueryWorkerMetrics(
             }
         }
     );
+}
+
+void CnchServerServiceImpl::executeOptimize(
+    google::protobuf::RpcController *,
+    const Protos::ExecuteOptimizeQueryReq * request,
+    Protos::ExecuteOptimizeQueryResp * response,
+    google::protobuf::Closure *done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto enable_try = request->enable_try();
+        const auto & partition_id = request->partition_id();
+
+        auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+        auto bg_thread = getContext()->getCnchBGThread(CnchBGThreadType::MergeMutate, storage_id);
+
+        auto & database_catalog = DatabaseCatalog::instance();
+        auto istorage = database_catalog.getTable(storage_id, getContext());
+
+        auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(bg_thread.get());
+        merge_mutate_thread->triggerPartMerge(istorage, partition_id, false, enable_try, false);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
 }
 
 #if defined(__clang__)

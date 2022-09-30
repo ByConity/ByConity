@@ -8,6 +8,7 @@
 #include <Common/ThreadPool.h>
 #include <Common/escapeForFileName.h>
 #include <Common/ShellCommand.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -242,6 +243,7 @@ BlockIO InterpreterSystemQuery::execute()
     if (!query.storage_policy.empty() && !query.volume.empty())
         volume_ptr = getContext()->getStoragePolicy(query.storage_policy)->getVolumeByName(query.volume);
 
+    /// Common system command
     switch (query.type)
     {
         case Type::SHUTDOWN:
@@ -311,7 +313,6 @@ BlockIO InterpreterSystemQuery::execute()
             auto & external_dictionaries_loader = system_context->getExternalDictionariesLoader();
             external_dictionaries_loader.reloadDictionary(query.table, getContext());
 
-
             ExternalDictionariesLoader::resetAll();
             break;
         }
@@ -364,6 +365,75 @@ BlockIO InterpreterSystemQuery::execute()
             throw Exception("SYSTEM RELOAD SYMBOLS is not supported on current platform", ErrorCodes::NOT_IMPLEMENTED);
 #endif
         }
+        case Type::RESTART_DISK:
+            restartDisk(query.disk);
+            break;
+        case Type::FLUSH_LOGS:
+        {
+            getContext()->checkAccess(AccessType::SYSTEM_FLUSH_LOGS);
+            executeCommandsAndThrowIfError(
+                [&] { if (auto query_log = getContext()->getQueryLog()) query_log->flush(true); },
+                [&] { if (auto part_log = getContext()->getPartLog("")) part_log->flush(true); },
+                [&] { if (auto query_thread_log = getContext()->getQueryThreadLog()) query_thread_log->flush(true); },
+                [&] { if (auto query_exchange_log = getContext()->getQueryExchangeLog()) query_exchange_log->flush(true); },
+                [&] { if (auto trace_log = getContext()->getTraceLog()) trace_log->flush(true); },
+                [&] { if (auto text_log = getContext()->getTextLog()) text_log->flush(true); },
+                [&] { if (auto metric_log = getContext()->getMetricLog()) metric_log->flush(true); },
+                [&] { if (auto asynchronous_metric_log = getContext()->getAsynchronousMetricLog()) asynchronous_metric_log->flush(true); },
+                [&] { if (auto opentelemetry_span_log = getContext()->getOpenTelemetrySpanLog()) opentelemetry_span_log->flush(true); },
+                [&] { if (auto zookeeper_log = getContext()->getZooKeeperLog()) zookeeper_log->flush(true); },
+                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); }
+            );
+            break;
+        }
+        case Type::METASTORE:
+            executeMetastoreCmd(query);
+            break;
+        case Type::START_RESOURCE_GROUP:
+            system_context->startResourceGroup();
+            break;
+        case Type::STOP_RESOURCE_GROUP:
+            system_context->stopResourceGroup();
+            break;
+        default:
+            break;
+    }
+
+    if (getContext()->getServerType() == ServerType::cnch_server)
+        return executeCnchCommand(query, system_context);
+
+    return executeLocalCommand(query, system_context);
+}
+
+BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, ContextMutablePtr & system_context)
+{
+    using Type = ASTSystemQuery::Type;
+    switch (query.type)
+    {
+        case Type::START_CONSUME:
+        case Type::STOP_CONSUME:
+        case Type::RESTART_CONSUME:
+            startOrStopConsume(query.type);
+            break;
+        case Type::STOP_MERGES:
+        case Type::START_MERGES:
+        case Type::REMOVE_MERGES:
+        case Type::STOP_GC:
+        case Type::START_GC:
+        case Type::FORCE_GC:
+            executeBGTaskInCnchServer(system_context, query.type);
+            break;
+        default:
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
+    }
+    return {};
+}
+
+BlockIO InterpreterSystemQuery::executeLocalCommand(ASTSystemQuery & query, ContextMutablePtr & system_context)
+{
+    using Type = ASTSystemQuery::Type;
+    switch (query.type)
+    {
         case Type::STOP_MERGES:
             startStopAction(ActionLocks::PartsMerge, false);
             break;
@@ -425,61 +495,63 @@ BlockIO InterpreterSystemQuery::execute()
         case Type::RESTORE_REPLICA:
             restoreReplica();
             break;
-        case Type::RESTART_DISK:
-            restartDisk(query.disk);
-            break;
-        case Type::FLUSH_LOGS:
-        {
-            getContext()->checkAccess(AccessType::SYSTEM_FLUSH_LOGS);
-            executeCommandsAndThrowIfError(
-                [&] { if (auto query_log = getContext()->getQueryLog()) query_log->flush(true); },
-                [&] { if (auto part_log = getContext()->getPartLog("")) part_log->flush(true); },
-                [&] { if (auto query_thread_log = getContext()->getQueryThreadLog()) query_thread_log->flush(true); },
-                [&] { if (auto query_exchange_log = getContext()->getQueryExchangeLog()) query_exchange_log->flush(true); },
-                [&] { if (auto trace_log = getContext()->getTraceLog()) trace_log->flush(true); },
-                [&] { if (auto text_log = getContext()->getTextLog()) text_log->flush(true); },
-                [&] { if (auto metric_log = getContext()->getMetricLog()) metric_log->flush(true); },
-                [&] { if (auto asynchronous_metric_log = getContext()->getAsynchronousMetricLog()) asynchronous_metric_log->flush(true); },
-                [&] { if (auto opentelemetry_span_log = getContext()->getOpenTelemetrySpanLog()) opentelemetry_span_log->flush(true); },
-                [&] { if (auto zookeeper_log = getContext()->getZooKeeperLog()) zookeeper_log->flush(true); },
-                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); }
-            );
-            break;
-        }
-        case Type::START_CONSUME:
-        case Type::STOP_CONSUME:
-        case Type::RESTART_CONSUME:
-            startOrStopConsume(table_id, query.type);
-            break;
         case Type::STOP_LISTEN_QUERIES:
         case Type::START_LISTEN_QUERIES:
             throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
         case Type::FETCH_PARTS:
             fetchParts(query, table_id, system_context);
             break;
-        case Type::METASTORE:
-            executeMetastoreCmd(query);
-            break;
         case Type::CLEAR_BROKEN_TABLES:
             clearBrokenTables(system_context);
             break;
-        case Type::START_RESOURCE_GROUP:
-            system_context->startResourceGroup();
+        default:
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported", ASTSystemQuery::typeToString(query.type));
+    }
+    return {};
+}
+
+void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const
+{
+    if (table_id.empty())
+        throw Exception("Table name should be specified for control background task", ErrorCodes::LOGICAL_ERROR);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
+
+    if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+        throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
+
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+
+    using Type = ASTSystemQuery::Type;
+    switch (type)
+    {
+        case Type::START_MERGES:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start);
             break;
-        case Type::STOP_RESOURCE_GROUP:
-            system_context->stopResourceGroup();
+        case Type::STOP_MERGES:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Stop);
+            break;
+        case Type::REMOVE_MERGES:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove);
+            break;
+        case Type::START_GC:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start);
+            break;
+        case Type::STOP_GC:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Stop);
+            break;
+        case Type::FORCE_GC:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup);
             break;
         case Type::DEDUP:
             executeDedup(query);
             break;
         default:
-            throw Exception("Unknown type of SYSTEM query", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
     }
-
-    return BlockIO();
 }
 
-void InterpreterSystemQuery::startOrStopConsume(const StorageID & table_id, ASTSystemQuery::Type type)
+void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
 {
     if (table_id.empty())
         throw Exception("Empty table id for executing START/STOP consume", ErrorCodes::LOGICAL_ERROR);
@@ -490,23 +562,23 @@ void InterpreterSystemQuery::startOrStopConsume(const StorageID & table_id, ASTS
         throw Exception("CnchKafka is supported but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
     auto daemon_manager = getContext()->getDaemonManagerClient();
-    
+
     auto catalog = getContext()->getCnchCatalog();
     using Type = ASTSystemQuery::Type;
     switch (type)
     {
         case Type::START_CONSUME:
             catalog->setTableActiveness(storage, true, TxnTimestamp::maxTS());
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Start);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
             break;
         case Type::STOP_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Stop);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
             catalog->setTableActiveness(storage, false, TxnTimestamp::maxTS());
             break;
         case Type::RESTART_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Stop);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
             usleep(500 * 1000);
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, Protos::ControlDaemonJobReq::Start);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
             break;
         default:
             throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -869,7 +941,7 @@ void InterpreterSystemQuery::clearBrokenTables(ContextMutablePtr & ) const
 {
     const auto databases = DatabaseCatalog::instance().getDatabases();
 
-    for (auto & elem : databases)
+    for (const auto & elem : databases)
         elem.second->clearBrokenTables();
 }
 
@@ -1054,6 +1126,8 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::DEDUP: break;
         case Type::UNKNOWN: break;
         case Type::END: break;
+        default:
+            break;
     }
     return required_access;
 }

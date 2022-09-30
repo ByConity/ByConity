@@ -3,7 +3,6 @@
 #include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/BackgroundJob.h>
 #include <Interpreters/StorageID.h>
-#include <Protos/daemon_manager_rpc.pb.h>
 #include <CloudServices/RpcClientBase.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
@@ -26,14 +25,12 @@ public:
     DaemonManagerClient(String host_port);
     DaemonManagerClient(HostWithPorts host_ports);
 
+    ~DaemonManagerClient() override;
+
     BGJobInfos getAllBGThreadServers(CnchBGThreadType type);
-
-    /// new API to replace getDaemonThreadServer
     std::optional<BGJobInfo> getDMBGJobInfo(const UUID & storage_uuid, CnchBGThreadType type);
-
-    String getDaemonThreadServer(const StorageID & storage_id, CnchBGThreadType type);
-
-    void controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, Protos::ControlDaemonJobReq::Action action);
+    void controlDaemonJob(const StorageID & storage_id, CnchBGThreadType job_type, CnchBGThreadAction action);
+    void forwardOptimizeQuery(const StorageID & storage_id, const String & partition_id, bool enable_try);
 
 private:
     std::unique_ptr<Protos::DaemonManagerService_Stub> stub_ptr;

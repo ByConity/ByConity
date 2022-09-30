@@ -3,11 +3,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Poco/Logger.h>
 
-namespace DB
-{
-class Context;
-
-namespace DaemonManager
+namespace DB::DaemonManager
 {
     inline bool isCnchTable(const StoragePtr & storage)
     {
@@ -20,7 +16,4 @@ namespace DaemonManager
     std::map<std::string, unsigned int> updateConfig(
         std::map<std::string, unsigned int> && default_config,
         const Poco::Util::AbstractConfiguration & app_config);
-} /// end namespace DaemonManager
-
-} /// end namespace DB
-
+}

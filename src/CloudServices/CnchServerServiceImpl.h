@@ -237,6 +237,12 @@ public:
         Protos::SubmitQueryWorkerMetricsResp * response,
         google::protobuf::Closure * done) override;
 
+    void executeOptimize(
+        google::protobuf::RpcController * cntl,
+        const Protos::ExecuteOptimizeQueryReq * request,
+        Protos::ExecuteOptimizeQueryResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

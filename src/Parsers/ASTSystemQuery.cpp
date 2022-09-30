@@ -97,6 +97,14 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP MERGES";
         case Type::START_MERGES:
             return "START MERGES";
+        case Type::REMOVE_MERGES:
+            return "REMOVE MERGES";
+        case Type::START_GC:
+            return "START GC";
+        case Type::STOP_GC:
+            return "STOP GC";
+        case Type::FORCE_GC:
+            return "FORCE GC";
         case Type::STOP_TTL_MERGES:
             return "STOP TTL MERGES";
         case Type::START_TTL_MERGES:
@@ -139,9 +147,11 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "CLEAR BROKEN TABLES";
         case Type::DEDUP:
             return "DEDUP";
-        default:
-            throw Exception("Unknown SYSTEM query command", ErrorCodes::LOGICAL_ERROR);
+        case Type::UNKNOWN:
+        case Type::END:
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
     }
+    __builtin_unreachable();
 }
 
 
@@ -201,7 +211,7 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         if (!meta_ops.drop_key.empty())
         {
             settings.ostr << " " << quoteString(meta_ops.drop_key);
-        }         
+        }
     };
 
     if (!cluster.empty())

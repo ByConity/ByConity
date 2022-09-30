@@ -880,54 +880,32 @@ HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, Cont
 bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataPtr &, const ASTPtr & partition, bool final, bool, const Names &, ContextPtr query_context)
 {
     auto & optimize_query = query->as<ASTOptimizeQuery &>();
-    auto dry_run = optimize_query.enable_try;
+    auto enable_try = optimize_query.enable_try;
+    if (optimize_query.final)
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FINAL is disabled because it is dangerous");
 
-    auto merge_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
+    auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());
 
-    if (!merge_thread)
+    if (!bg_thread)
     {
-        const auto & query_client_info = query_context->getClientInfo();
-
-        if (query_client_info.query_kind == ClientInfo::QueryKind::SECONDARY_QUERY)
-            throw Exception("Can't get merge thread", ErrorCodes::LOGICAL_ERROR);
-
         auto daemon_manage_client = getContext()->getDaemonManagerClient();
-        String host_port = daemon_manage_client->getDaemonThreadServer(getStorageID(), CnchBGThreadType::MergeMutate);
-
-        if (host_port.empty())
-            throw Exception("Got empty host for optimize query from daemon manager", ErrorCodes::LOGICAL_ERROR);
-        auto [host, rpc_port] = parseAddress(host_port, 0);
-
-        String default_database = "default";
-        String user = query_client_info.current_user;
-        String password = query_client_info.current_password;
-        auto tcp_port = getContext()->getTCPPort(host, rpc_port);
-
-        LOG_DEBUG(log, "Send optimize query to server {}:{}", host, tcp_port);
-
-        Connection connection(host, tcp_port, default_database, user, password, /*cluster_*/"", /*cluster_secret_*/"", "server", Protocol::Compression::Enable, Protocol::Secure::Disable);
-
-        WriteBufferFromOwnString query_buf;
-        formatAST(*query, query_buf, false, true);
-        RemoteBlockInputStream stream(connection, query_buf.str(), {}, query_context);
-        NullBlockOutputStream output({});
-
-        copyData(stream, output);
-
+        if (!partition)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't forward optimize query, you should specify partition");
+        daemon_manage_client->forwardOptimizeQuery(getStorageID(), getPartitionIDFromQuery(partition, query_context), enable_try);
         return true;
     }
 
     Strings partition_ids;
 
     if (!partition)
-        partition_ids = query_context->getCnchCatalog()->getPartitionIDs(shared_from_this(), &*query_context);
+        partition_ids = query_context->getCnchCatalog()->getPartitionIDs(shared_from_this(), query_context.get());
     else
         partition_ids.push_back(getPartitionIDFromQuery(partition, query_context));
 
     auto istorage = shared_from_this();
-    auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread*>(merge_thread.get());
+    auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread*>(bg_thread.get());
     for (const auto & partition_id : partition_ids)
-        merge_mutate_thread->triggerPartMerge(istorage, partition_id, final, dry_run, false);
+        merge_mutate_thread->triggerPartMerge(istorage, partition_id, final, enable_try, false);
 
     return true;
 }
