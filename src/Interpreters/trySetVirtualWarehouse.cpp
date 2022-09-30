@@ -10,7 +10,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 // TODO(zuochuang.zema) MERGE storage
 // #include <Storages/StorageCnchMergeTree.h>
-// #include <Storages/StorageCnchHive.h>
+#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
 #include <unicode/tzfmt.h>
@@ -50,16 +50,16 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
             "Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
-    // else if (auto cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
-    // {
-    //     String vw_name = cnchhive->settings.cnch_vw_default;
+    else if (auto cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
+    {
+        String vw_name = cnchhive->settings.cnch_vw_default;
 
-    //     setVirtualWarehouseByName(vw_name, context);
-    //     LOG_DEBUG(
-    //         &Poco::Logger::get("trySetVirtualWarehouse"),
-    //         "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
-    //     return true;
-    // }
+        setVirtualWarehouseByName(vw_name, context);
+        LOG_DEBUG(
+            &Poco::Logger::get("trySetVirtualWarehouse"),
+            "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
+        return true;
+    }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
     {
         if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))

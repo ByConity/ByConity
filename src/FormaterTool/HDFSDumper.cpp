@@ -29,7 +29,7 @@ HDFSDumper::HDFSDumper(const String & hdfs_user_, const String & hdfs_nnproxy_, 
 {
     hdfs_params = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY,
         hdfs_user_, hdfs_nnproxy_);
-    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfs_params, 0);
+    hdfs_filesystem = std::make_unique<HDFSFileSystem>(hdfs_params, 100000, 100, 0);
 }
 
 void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & remote_path, std::vector<String> & parts_to_upload)
@@ -51,7 +51,7 @@ void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & r
             // clean incomplete file.
             if (hdfs_filesystem->exists(remote_file))
                 hdfs_filesystem->remove(remote_file);
-            
+
             throw e;
         }
     };
@@ -67,7 +67,7 @@ void HDFSDumper::uploadPartsToRemote(const String & local_path, const String & r
     pool.wait();
 }
 
-std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const Disks & disks, 
+std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const Disks & disks,
         const String & remote_path, const String & relative_local_path)
 {
     if (disks.size() == 0)
@@ -82,7 +82,7 @@ std::vector<std::pair<String, DiskPtr>> HDFSDumper::fetchPartsFromRemote(const D
     auto get_disk_and_local_path = [&](size_t reserve_bytes) -> DiskPtr
     {
         size_t origin_offset = offset;
-        
+
         do
         {
             if (offset >= disks.size())

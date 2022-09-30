@@ -32,6 +32,8 @@
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #endif
 
+#include <Storages/StorageCloudHive.h>
+
 namespace DB
 {
 
@@ -316,14 +318,25 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
 
 void CnchWorkerServiceImpl::sendCnchHiveDataParts(
     google::protobuf::RpcController *,
-    const Protos::SendCnchHiveDataPartsReq *,
+    const Protos::SendCnchHiveDataPartsReq * request,
     Protos::SendCnchHiveDataPartsResp * response,
     google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
     try
     {
-        // TODO
+        const auto & query_context = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true)->context;
+
+        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
+        auto & hive_table = dynamic_cast<StorageCloudHive &>(*storage);
+
+        LOG_DEBUG(log, "Receiving parts for table {}", hive_table.getStorageID().getNameForLogs());
+
+        auto data_parts = createCnchHiveDataParts(getContext(), request->parts());
+
+        hive_table.loadDataParts(data_parts);
+
+        LOG_DEBUG(log, "Received and loaded {} hive parts" , data_parts.size());
     }
     catch (...)
     {

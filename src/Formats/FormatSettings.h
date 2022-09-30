@@ -1,7 +1,8 @@
 #pragma once
 
 #include <common/types.h>
-
+#include <unordered_set>
+#include <map>
 
 namespace DB
 {
@@ -99,6 +100,10 @@ struct FormatSettings
     struct
     {
         UInt64 row_group_size = 1000000;
+        std::map<String, String> partition_kv = {};
+        std::unordered_set<Int64> skip_row_groups = {};
+        UInt64 current_row_group = 0;
+        bool read_one_group = false;
     } parquet;
 
     struct Pretty

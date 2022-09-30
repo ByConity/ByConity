@@ -117,6 +117,8 @@ StoragePtr StorageFactory::get(
 
             name = engine_def.name;
 
+            LOG_DEBUG(&Poco::Logger::get("StorageFactory"), " engine name {}", name);
+
             if (name == "View")
             {
                 throw Exception(
@@ -207,6 +209,7 @@ StoragePtr StorageFactory::get(
         .columns = columns,
         .constraints = constraints,
         .attach = query.attach,
+        .create = query.create,
         .has_force_restore_data_flag = has_force_restore_data_flag,
         .comment = comment};
 

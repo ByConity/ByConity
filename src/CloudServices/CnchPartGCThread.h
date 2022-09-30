@@ -32,10 +32,10 @@ private:
 
     TxnTimestamp calculateGCTimestamp(UInt64 delay_second, bool in_wakeup);
 
-    void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
+    static void tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts);
 
     void pushToRemovingQueue(
-        StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & reason, bool is_staged_part = false);
+        StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & part_type, bool is_staged_part = false);
     void removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason);
 
     void collectStaleParts(

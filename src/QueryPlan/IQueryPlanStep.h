@@ -133,6 +133,7 @@ public:
         Any = 0,
         APPLY_STEP_TYPES(ENUM_DEF) UNDEFINED,
         ReadFromMergeTree,
+        ReadFromCnchHive,
         ReadFromPreparedSource,
         NullSource,
         Tree,
@@ -198,9 +199,9 @@ public:
     virtual bool isLogical() const { return true; }
 
     virtual std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const = 0;
-    
+
     size_t hash() const;
-    
+
     bool operator==(const IQueryPlanStep & r) const { return serializeToString() == r.serializeToString(); }
     static String toString(Type type);
 
@@ -212,7 +213,7 @@ protected:
     std::string step_description;
 
     static void describePipeline(const Processors & processors, FormatSettings & settings);
-    
+
 private:
     virtual String serializeToString() const
     {

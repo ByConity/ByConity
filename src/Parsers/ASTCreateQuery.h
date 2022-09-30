@@ -65,6 +65,7 @@ class ASTCreateQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnC
 {
 public:
     bool attach{false};    /// Query ATTACH TABLE, not CREATE TABLE.
+    bool create{false};     /// for CnchHive CREATE TABLE check schema flag.
     bool if_not_exists{false};
     bool is_ordinary_view{false};
     bool is_materialized_view{false};

@@ -44,13 +44,8 @@ namespace
             if (merging_mutating_parts_snapshot.count(lhs->name()) || merging_mutating_parts_snapshot.count(rhs->name()))
                 return false;
 
-            return true;
-
-            /* FIXME
             auto lhs_commit_time = lhs->getColumnsCommitTime();
             auto rhs_commit_time = rhs->getColumnsCommitTime();
-
-            LOG_DEBUG(&Poco::Logger::get("MergeMutateDEBUG"), "lhs_commit_time {} rhs_commit_time {}", lhs_commit_time, rhs_commit_time);
 
             /// We can't find the right table_schema for parts which column_commit_time = 0
             if (!lhs_commit_time || !rhs_commit_time)
@@ -64,7 +59,6 @@ namespace
             /// We can't merge part part_1 and part_2 between T2 and T3, but can merge part_1 and part_2 after T3.
 
             return lhs_commit_time == rhs_commit_time;
-            */
         };
     }
 }

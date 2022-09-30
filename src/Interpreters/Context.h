@@ -113,6 +113,7 @@ using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
 using QueryWorkerMetricElements = std::vector<QueryWorkerMetricElementPtr>;
 struct MergeTreeSettings;
 class StorageS3Settings;
+struct CnchHiveSettings;
 class IDatabase;
 class DDLWorker;
 class ITableFunction;
@@ -1009,6 +1010,7 @@ public:
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
+    const CnchHiveSettings & getCnchHiveSettings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxTableSizeToDrop(size_t max_size);
