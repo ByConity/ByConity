@@ -423,6 +423,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::FORCE_GC:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
+        case Type::DEDUP:
+            executeDedup(query);
+            break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
     }
@@ -542,9 +545,6 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
             break;
         case Type::FORCE_GC:
             daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup);
-            break;
-        case Type::DEDUP:
-            executeDedup(query);
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
