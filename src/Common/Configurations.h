@@ -5,48 +5,20 @@ namespace DB
 {
 #define RM_CONFIG_FIELDS_LIST(M) \
     M(UInt64, port, "", 9000, ConfigFlag::Default, "desc: rpc port") \
-    M(String, election_point_key, "", "rm_point_default", ConfigFlag::Default, "") \
+    M(String, election_path, "", "rm_election_path_default", ConfigFlag::Default, "") \
     M(UInt64, init_client_tries, "", 3, ConfigFlag::Default, "") \
     M(UInt64, init_client_retry_interval_ms, "", 3000, ConfigFlag::Default, "") \
     M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
     M(UInt64, check_leader_info_interval_ms, "", 1000, ConfigFlag::Default, "") \
-    M(UInt64, bytejournal_renewal_interval_ms, "", 1000, ConfigFlag::Default, "") \
-    M(UInt64, bytejournal_polling_interval_ms, "", 1000, ConfigFlag::Default, "") \
-    M(UInt64, bytejournal_error_retry_interval_ms, "", 1000, ConfigFlag::Default, "") \
-    M(UInt64, bytejournal_lease_interval_ms, "", 3000, ConfigFlag::Default, "") \
-    M(UInt64, bytejournal_failover_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, wait_before_become_leader_ms, "", 3000, ConfigFlag::Default, "") \
     M(Bool, enable_auto_resource_sharing, "", false, ConfigFlag::Default, "") \
     M(UInt64, auto_resource_sharing_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
-    M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change worker's Registering state to Running every N seconds to avoid changing worker topology frequently.") \
+    M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
 
 DECLARE_CONFIG_DATA(RMConfigurationData, RM_CONFIG_FIELDS_LIST)
 struct RMConfiguration final : public RMConfigurationData
 {
 };
-
-
-constexpr auto bj_default_uri
-    = "bytejournal://10.145.105.86:8767,10.145.105.164:8767,10.145.105.149:8767?meta_type=sorteddb&is_consul=false";
-/// For bytejournal audit logs . Can be one of following : [none,native,databus]. https://jira.bytedance.com/browse/CNCH-270
-
-#define BJ_CONFIG_FIELDS_LIST(M) \
-    M(String, cnch_prefix, "", "default_cnch_ci_random_", ConfigFlag::Default, "") \
-    M(String, log_dir, "", "./logs_bytejournal", ConfigFlag::Default, "") \
-    M(String, uri, "", bj_default_uri, ConfigFlag::Recommended, "") \
-    M(String, name_space, "namespace", "cnch_test", ConfigFlag::Recommended, "") \
-    M(String, metrics_prefix, "", "cnch", ConfigFlag::Default, "") \
-    M(String, metadata_audit_type, "", "none", ConfigFlag::Default, "") \
-    M(UInt64, retention_ms, "", 4 * 60 * 60 * 1000, ConfigFlag::Default, "") \
-    M(UInt64, max_write_throughput_bytes, "", 1024 * 1024 * 1024, ConfigFlag::Default, "") \
-    M(UInt64, max_rollover_size, "", 512 * 1024 * 1024, ConfigFlag::Default, "")
-
-DECLARE_CONFIG_DATA(BJConfigurationData, BJ_CONFIG_FIELDS_LIST)
-
-struct BJConfiguration final : public BJConfigurationData
-{
-};
-
 
 #define SD_CONFIG_FIELDS_LIST(M) \
     M(String, mode, "", "local", ConfigFlag::Recommended, "") \
@@ -112,13 +84,11 @@ DECLARE_CONFIG_DATA(RootConfigurationData, ROOT_CONFIG_FIELDS_LIST)
 struct RootConfiguration final : public RootConfigurationData
 {
     RMConfiguration resource_manager;
-    BJConfiguration bytejournal;
     SDConfiguration service_discovery;
 
     RootConfiguration()
     {
         sub_configs.push_back(&resource_manager);
-        sub_configs.push_back(&bytejournal);
         sub_configs.push_back(&service_discovery);
     }
 

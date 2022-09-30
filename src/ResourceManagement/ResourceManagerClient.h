@@ -28,7 +28,7 @@ namespace ResourceManagement
 {
 struct WorkerNode;
 
-String fetchByteJournalLeader(ContextPtr context, String election_ns, String election_point);
+String fetchLeaderFromKeeper(ContextPtr context, const String & election_path);
 
 class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
 {
@@ -36,7 +36,7 @@ class ResourceManagerClient : public RpcLeaderClientBase, protected WithContext
 public:
     static String getName() { return "ResourceManagerClient"; }
 
-    ResourceManagerClient(ContextPtr global_context_, const String & election_ns_, const String & election_point_);
+    ResourceManagerClient(ContextPtr global_context_, const String & election_path_);
     ~ResourceManagerClient() override;
 
     void getVirtualWarehouse(const std::string & name, VirtualWarehouseData & vw_data);
@@ -66,10 +66,9 @@ private:
     using Stub = Protos::ResourceManagerService_Stub;
     mutable RWLock leader_mutex = RWLockImpl::create();
     std::unique_ptr<Stub> stub;
-    String election_ns;
-    String election_point;
+    String election_path;
 
-    String fetchByteJournalLeader() const;
+    String fetchLeaderFromKeeper() const;
 
     RWLockImpl::LockHolder getReadLock() const
     {
@@ -143,7 +142,7 @@ private:
 
                 tryLogDebugCurrentException(__PRETTY_FUNCTION__);
                 auto lock = getWriteLock();
-                auto new_leader = fetchByteJournalLeader();
+                auto new_leader = fetchLeaderFromKeeper();
                 if (new_leader.empty() || new_leader == leader_host_port)
                 {
                     LOG_DEBUG(log, "There is no active elected RM leader");
