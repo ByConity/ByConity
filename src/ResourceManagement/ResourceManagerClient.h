@@ -114,23 +114,7 @@ private:
                 }
 
                 if (response.has_is_leader() && response.is_leader())
-                {
                     return true;
-                }
-                else
-                {
-                    auto lock = getWriteLock();
-
-                    if (!response.has_leader_host_port() || response.leader_host_port() == leader_host_port)
-                    {
-                        if (response.leader_host_port().empty())
-                            LOG_DEBUG(log, "RM response does not contain an elected RM leader");
-                        throw Exception("There is currently no alive elected RM leader.", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
-                    }
-
-                    LOG_DEBUG(log, "Updating RM Leader to " + response.leader_host_port() + " based on RMResponse");
-                    stub = std::make_unique<Stub>(&updateChannel(response.leader_host_port()));
-                }
             }
             catch (const Exception & e)
             {
@@ -141,18 +125,19 @@ private:
                     throw;
 
                 tryLogDebugCurrentException(__PRETTY_FUNCTION__);
-                auto lock = getWriteLock();
-                auto new_leader = fetchLeaderFromKeeper();
-                if (new_leader.empty() || new_leader == leader_host_port)
-                {
-                    LOG_DEBUG(log, "There is no active elected RM leader");
-                    throw;
-                }
-                else
-                {
-                    LOG_DEBUG(log, "Updating RM Leader to " + new_leader + " based on ByteJournal");
-                    stub = std::make_unique<Stub>(&updateChannel(new_leader));
-                }
+            }
+
+            auto lock = getWriteLock();
+            auto new_leader = fetchLeaderFromKeeper();
+            if (new_leader.empty())
+            {
+                LOG_ERROR(log, "There is no active elected RM leader");
+                throw;
+            }
+            else
+            {
+                LOG_DEBUG(log, "Updating RM Leader to " + new_leader);
+                stub = std::make_unique<Stub>(&updateChannel(new_leader));
             }
         } while (retry_count++ < max_retry_count);
 
