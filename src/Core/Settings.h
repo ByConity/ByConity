@@ -724,8 +724,11 @@ class IColumn;
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
-    /** The section above is for obsolete settings. Do not add anything there. */\
+    \
+    /* Transaction */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
+    M(Bool, bypass_ddl_db_lock, false, "Bypass locking database while creating tables", 0) \
+    /** The section above is for obsolete settings. Do not add anything there. */\
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.

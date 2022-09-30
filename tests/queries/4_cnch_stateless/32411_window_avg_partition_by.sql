@@ -1,6 +1,8 @@
 
+
+
 DROP TABLE IF EXISTS avg_partition_by;
-CREATE TABLE avg_partition_by (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;
+CREATE TABLE avg_partition_by (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() ORDER BY tuple();
 
 INSERT INTO avg_partition_by VALUES('1', 'data', '2019-01-01', '20');
 INSERT INTO avg_partition_by VALUES('2', 'data', '2019-03-01', '21');

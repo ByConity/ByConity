@@ -66,6 +66,7 @@ BlockIO InterpreterAlterQuery::execute()
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
 
     auto alter_lock = table->lockForAlter(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
+    IntentLockPtr cnch_table_lock;
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
     if (database->getEngineName() == "Cnch")
@@ -76,7 +77,7 @@ BlockIO InterpreterAlterQuery::execute()
             throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
         LOG_INFO(&Poco::Logger::get("InterpreterAlterQuery"), "Waiting for cnch_lock for " + table_id.database_name + "." + table_id.table_name + ".");
-        //cnch_table_lock = cnch_txn->createIntentLock(table->getStorageID());
+        cnch_table_lock = cnch_txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, table->getStorageID().database_name, table->getStorageID().table_name);
     }
 
     /// Add default database to table identifiers that we can encounter in e.g. default expressions, mutation expression, etc.
@@ -111,14 +112,6 @@ BlockIO InterpreterAlterQuery::execute()
             throw Exception("Wrong parameter type in ALTER query", ErrorCodes::LOGICAL_ERROR);
     }
 
-#if 0
-    if (database->getEngineName() == "Cnch")
-    {
-        if (!partition_commands.empty())
-            cnch_table_lock->lock();
-    }
-#endif
-
     if (typeid_cast<DatabaseReplicated *>(database.get()))
     {
         int command_types_count = !mutation_commands.empty() + !partition_commands.empty() + !live_view_commands.empty() + !alter_commands.empty();
@@ -130,6 +123,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!mutation_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Mutation is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         table->checkMutationIsPossible(mutation_commands, getContext()->getSettingsRef());
         MutationsInterpreter(table, metadata_snapshot, mutation_commands, getContext(), false).validate();
         table->mutate(mutation_commands, getContext());
@@ -147,6 +142,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!live_view_commands.empty())
     {
+        if (cnch_table_lock)
+            throw Exception("Live view is not supported in Cnch now.", ErrorCodes::NOT_IMPLEMENTED);
         live_view_commands.validate(*table);
         for (const LiveViewCommand & command : live_view_commands)
         {
@@ -163,6 +160,8 @@ BlockIO InterpreterAlterQuery::execute()
 
     if (!alter_commands.empty())
     {
+        if (!cnch_table_lock->isLocked())
+            cnch_table_lock->lock();
         StorageInMemoryMetadata metadata = table->getInMemoryMetadata();
         alter_commands.validate(table->getStorageID(), metadata, getContext());
         alter_commands.prepare(metadata);

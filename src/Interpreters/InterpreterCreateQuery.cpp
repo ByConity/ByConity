@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "Common/Exception.h"
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/escapeForFileName.h>
 #include <Common/typeid_cast.h>
@@ -94,6 +95,7 @@ namespace ErrorCodes
     extern const int PATH_ACCESS_DENIED;
     extern const int NOT_IMPLEMENTED;
     extern const int UNKNOWN_TABLE;
+    extern const int CNCH_TRANSACTION_NOT_INITIALIZED;
 }
 
 namespace fs = std::filesystem;
@@ -249,6 +251,19 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
     {
         if (create.attach || create.attach_short_syntax || create.attach_from_path)
             throw Exception("Cnch database doesn't support ATTACH", ErrorCodes::SUPPORT_IS_DISABLED);
+        auto txn = getContext()->getCurrentTransaction();
+        if (!txn)
+            throw Exception("Cnch transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+        /// Need to acquire kv lock before creating entry
+        auto db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database_name);
+        db_lock->lock();
+        if (DatabaseCatalog::instance().isDatabaseExist(database_name))
+        {
+            if (create.if_not_exists)
+                return {};
+            else
+                throw Exception("Database " + database_name + " already exists.", ErrorCodes::DATABASE_ALREADY_EXISTS);
+        }
         database_cnch->createEntryInCnchCatalog(getContext());
     }
 
@@ -468,13 +483,7 @@ ColumnsDescription InterpreterCreateQuery::getColumnsDescription(
             }
             else if (make_columns_nullable)
             {
-                if (column_type->lowCardinality())
-                {
-                    const auto * low_cardinality_type = typeid_cast<const DataTypeLowCardinality *>(column_type.get());
-                    column_type = std::make_shared<DataTypeLowCardinality>(makeNullable(low_cardinality_type->getDictionaryType()));
-                }
-                else
-                    column_type = makeNullable(column_type);
+                column_type = JoinCommon::convertTypeToNullable(column_type);
             }
 
             column_names_and_types.emplace_back(col_decl.name, column_type);
@@ -1074,6 +1083,8 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
 
     String data_path;
     DatabasePtr database;
+    IntentLockPtr db_lock;
+    IntentLockPtr tb_lock;
 
 
     bool need_add_to_database = !create.temporary;
@@ -1085,6 +1096,24 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
         guard = DatabaseCatalog::instance().getDDLGuard(create.database, create.table);
 
         database = DatabaseCatalog::instance().getDatabase(create.database);
+        if (database->getEngineName().starts_with("Cnch"))
+        {
+            auto txn = getContext()->getCurrentTransaction();
+            if (!txn)
+                throw Exception("Transaction not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+                        /// May need to acquire kv lock before creating entry
+            if (getContext()->getSettingsRef().bypass_ddl_db_lock)
+            {
+                tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
+                tb_lock->lock();
+            }
+            else
+            {
+                db_lock = txn->createIntentLock(IntentLock::DB_LOCK_PREFIX, database->getDatabaseName());
+                tb_lock = txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database->getDatabaseName(), create.table);
+                std::lock(*db_lock, *tb_lock);
+            }
+        }
         assertOrSetUUID(create, database);
 
         String storage_name = create.is_dictionary ? "Dictionary" : "Table";
