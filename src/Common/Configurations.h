@@ -96,7 +96,6 @@ struct SDConfiguration final : public SDConfigurationData
     M(MutableFloat32, max_server_memory_usage_to_ram_ratio, "", 0.8, ConfigFlag::Default, "") \
     M(MutableUInt64, kafka_max_partition_fetch_bytes, "", 1048576, ConfigFlag::Default, "") \
     M(MutableUInt64, stream_poll_timeout_ms, "", 500, ConfigFlag::Default, "") \
-    M(MutableUInt64, memory_buffer_heartbeat_ms, "", 1000, ConfigFlag::Default, "") \
     M(MutableUInt64, debug_disable_merge_mutate_thread, "", false, ConfigFlag::Default, "") \
     M(MutableBool, debug_disable_merge_commit, "", false, ConfigFlag::Default, "") \
     /**

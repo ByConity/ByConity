@@ -67,7 +67,6 @@ void CnchKafkaConsumeManager::stop()
 
     std::lock_guard lock(consumer_info_mutex);
     stopConsumers();
-    memory_buffers.clear();
     num_partitions_of_topics.clear();
 }
 
@@ -140,7 +139,6 @@ void CnchKafkaConsumeManager::iterate(StorageCnchKafka & kafka_table)
             {
                 stopConsumers();
                 num_partitions_of_topics.clear();
-                memory_buffers.clear();
             }
         }
 
@@ -193,77 +191,9 @@ ContextPtr CnchKafkaConsumeManager::createQueryContext()
     return false;
 }
 
-bool CnchKafkaConsumeManager::checkTargetTable(const StorageCnchMergeTree * target_table)
+bool CnchKafkaConsumeManager::checkTargetTable(const StorageCnchMergeTree * /*target_table*/)
 {
-    const auto & cnch_table_settings = target_table->getSettings();
-    cnch_enable_memory_buffer = cnch_table_settings->cnch_enable_memory_buffer;
-
     cloud_table_has_unique_key = false; /// FIXME: target_table->hasUniqueKey();
-    if (cnch_enable_memory_buffer)
-    {
-        throw Exception("MemoryBuffer is not implemented now", ErrorCodes::NOT_IMPLEMENTED);
-
-        /* HostWithPortsVec new_memory_buffers;
-
-        auto memory_buffer_manager = getContext()->tryGetMemoryBufferManager(target_table->getStorageID());
-        if (memory_buffer_manager)
-        {
-            if (auto manager = dynamic_cast<MemoryBufferManager*>(memory_buffer_manager.get()))
-                new_memory_buffers = manager->getWorkerListWithBuffer();
-        }
-        else
-        {
-            /// Try get memory buffer from remote server
-            String host_port = getContext()->getDaemonManagerClient()->getDaemonThreadServer(
-                    target_table->getStorageID(), CnchBGThreadType::MemoryBuffer);
-            if (host_port.empty())
-                throw Exception("No memory buffer manager found for target table", ErrorCodes::LOGICAL_ERROR);
-
-            auto server_client = getContext()->getCnchServerClient(host_port);
-            new_memory_buffers = server_client->getWorkerListWithBuffer(target_table->getStorageID());
-        }
-
-        if (new_memory_buffers.empty())
-        {
-            LOG_DEBUG(log, "No memory buffers for {}, so restart consumers", target_table->getLogName());
-            memory_buffers.clear();
-            return false;
-        }
-        else if (memory_buffers.empty())
-        {
-            std::sort(new_memory_buffers.begin(), new_memory_buffers.end(),
-                      [](const HostWithPorts & lhs, const HostWithPorts & rhs) { return lhs.host < rhs.host; });
-            memory_buffers = std::move(new_memory_buffers);
-            if (!consumer_infos.empty())
-            {
-                LOG_DEBUG(log, "Open memory buffer now, so restart consumers");
-                return false;
-            }
-
-            LOG_DEBUG(log, "Get memory-buffers first with number {}", memory_buffers.size());
-        }
-        else
-        {
-            std::sort(new_memory_buffers.begin(), new_memory_buffers.end(),
-                      [](const HostWithPorts & lhs, const HostWithPorts & rhs) { return lhs.host < rhs.host; });
-            if (hasBufferWorkerChanged(memory_buffers, new_memory_buffers))
-            {
-                LOG_DEBUG(log, "Memory buffers for {} changed, so restart consumers", target_table->getLogName());
-                memory_buffers = std::move(new_memory_buffers);
-                return false;
-            }
-        } */
-    }
-    else
-    {
-        if (!memory_buffers.empty())
-        {
-            LOG_DEBUG(log, "Disable memory buffers for {}, so restart consumers", target_table->getLogName());
-            memory_buffers.clear();
-            return false;
-        }
-    }
-
     return true;
 }
 
@@ -488,7 +418,7 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
     return query = getTableDefinitionFromCreateQuery(ast, false);
 }
 
-[[maybe_unused]] static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const StorageID & kafka_storage_id, const String & table_suffix, bool enable_memory_buff = false)
+[[maybe_unused]] static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const StorageID & kafka_storage_id, const String & table_suffix)
 {
     auto query = mv->getCreateTableSql();
 
@@ -497,9 +427,7 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
 
     auto & create_query = ast->as<ASTCreateQuery &>();
     create_query.table += table_suffix;
-
-    if (!enable_memory_buff)
-        create_query.to_table_id.table_name += table_suffix;
+    create_query.to_table_id.table_name += table_suffix;
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
     if (!inner_query)
@@ -564,56 +492,16 @@ CnchWorkerClientPtr CnchKafkaConsumeManager::selectWorker(size_t index, const St
     if (!consumer_scheduler)
         initConsumerScheduler();
 
-    using ResourceManagement::VirtualWarehouseType;
-    if (!cnch_enable_memory_buffer)
-        return consumer_scheduler->selectWorkerNode(table_suffix, index);
-
-    /// TODO: Add a special scheduler for memory buffer
-    if (memory_buffers.empty())
-        throw Exception("No available buffers found", ErrorCodes::LOGICAL_ERROR);
-
-    auto & buffer_host = memory_buffers[(consumer_infos.size() + index) % memory_buffers.size()];
-    return std::make_shared<CnchWorkerClient>(buffer_host);
+    return consumer_scheduler->selectWorkerNode(table_suffix, index);
 }
 
-void CnchKafkaConsumeManager::getOffsetsFromCatalogAndMemoryBuffer(cppkafka::TopicPartitionList & offsets,
-                                                      const StorageID & /* buffer_table_id */, const String & consumer_group)
+void CnchKafkaConsumeManager::getOffsetsFromCatalog(
+    cppkafka::TopicPartitionList & offsets,
+    const StorageID & /* buffer_table_id */,
+    const String & consumer_group)
 {
     /// First, get offsets from catalog
     getContext()->getCnchCatalog()->getKafkaOffsets(consumer_group, offsets);
-
-    /// Second, get offsets from WAL (memory buffer)
-    if (!cnch_enable_memory_buffer)
-        return;
-
-    if (memory_buffers.empty())
-        throw Exception("Memory buffer not ready while updating offsets", ErrorCodes::LOGICAL_ERROR);
-
-    OffsetsMap offsets_map;
-    for (const auto & buffer_host : memory_buffers)
-    {
-        [[maybe_unused]]auto worker = std::make_shared<CnchWorkerClient>(buffer_host);
-        /// TODO
-        ///auto buffer_offsets = worker->getOffsetsFromMemoryBuffer(buffer_table_id);
-        ///for (auto & tpl : buffer_offsets)
-        ///    offsets_map[{tpl.get_topic(), tpl.get_partition()}] = tpl.get_offset();
-    }
-
-    if (offsets_map.empty())
-    {
-        LOG_DEBUG(log, "No offsets got from WAL");
-        return;
-    }
-
-    for (auto & tpl : offsets)
-    {
-        if (offsets_map.find({tpl.get_topic(), tpl.get_partition()}) == offsets_map.end())
-            continue;
-
-        auto offset = offsets_map[{tpl.get_topic(), tpl.get_partition()}];
-        if (tpl.get_offset() < static_cast<int64_t>(offset))
-            tpl.set_offset(offset);
-    }
 }
 
 void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception)
@@ -622,7 +510,7 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     String table_suffix = '_' + toString(std::chrono::system_clock::now().time_since_epoch().count())
         + '_' + toString(info.index);
 
-    /// Build query to create local tables: if enable memory buffer, we won't need to create local-target-table
+    /// Build query to create local tables
     auto create_kafka_query = kafka_table.getCreateTableSql();
     replaceCreateTableQuery(getContext(), create_kafka_query, kafka_table.getTableName() + table_suffix, true, false);
 
@@ -643,27 +531,23 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
 
         auto table = getContext()->getCnchCatalog()->getTableByUUID(
             *getContext(), toString(storage_id.uuid), getContext()->getTimestamp());
-        if (auto *mv = dynamic_cast<StorageMaterializedView *>(table.get()))
+        if (auto * mv = dynamic_cast<StorageMaterializedView *>(table.get()))
         {
             target_table = mv->getTargetTable();
 
-            /// if enable memory buffer, the local target table should be created by memory-buffer-manager
-            if (!cnch_enable_memory_buffer)
-            {
-                auto cnch_merge = dynamic_cast<StorageCnchMergeTree *>(target_table.get());
-                if (!cnch_merge)
-                    throw Exception("CnchMergeTree is expected for " + target_table->getTableName(), ErrorCodes::LOGICAL_ERROR);
+            auto * cnch_merge = dynamic_cast<StorageCnchMergeTree *>(target_table.get());
+            if (!cnch_merge)
+                throw Exception("CnchMergeTree is expected for " + target_table->getTableName(), ErrorCodes::LOGICAL_ERROR);
 
-                auto create_target_query = target_table->getCreateTableSql();
-                /// FIXME: bool enable_staging_area = cloud_table_has_unique_key && kafka_table.getSettings().enable_staging_area;
-                ///replaceCreateTableQuery(getContext(), create_target_query, target_table->getTableName() + table_suffix, true, false);
-                command.create_table_commands.push_back(cnch_merge->getCreateQueryForCloudTable(
-                    create_target_query, target_table->getTableName() + table_suffix));
-                ////command.create_table_commands.push_back(create_target_query);
-            }
+            auto create_target_query = target_table->getCreateTableSql();
+            /// FIXME: bool enable_staging_area = cloud_table_has_unique_key && kafka_table.getSettings().enable_staging_area;
+            ///replaceCreateTableQuery(getContext(), create_target_query, target_table->getTableName() + table_suffix, true, false);
+            command.create_table_commands.push_back(
+                cnch_merge->getCreateQueryForCloudTable(create_target_query, target_table->getTableName() + table_suffix));
+            ////command.create_table_commands.push_back(create_target_query);
 
             /// replace mv table
-            command.create_table_commands.push_back(replaceMaterializedViewQuery(mv, this->storage_id, table_suffix, cnch_enable_memory_buffer));
+            command.create_table_commands.push_back(replaceMaterializedViewQuery(mv, this->storage_id, table_suffix));
         }
     }
 
@@ -673,7 +557,7 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     }
 
     /// Get latest offsets for topic-partitions
-    getOffsetsFromCatalogAndMemoryBuffer(info.partitions, target_table->getStorageID(), kafka_table.getGroupForBytekv());
+    getOffsetsFromCatalog(info.partitions, target_table->getStorageID(), kafka_table.getGroupForBytekv());
 
     for (auto & tp : info.partitions)
         LOG_DEBUG(log, "topic: {}, partition: {}, offsets: {}", tp.get_topic(), tp.get_partition(), tp.get_offset());

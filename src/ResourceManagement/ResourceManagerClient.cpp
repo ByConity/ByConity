@@ -8,8 +8,6 @@
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
-// #include <WAL/ByteJournalCommon.h>
-// #include <bytejournal/sdk/client.h>
 
 
 namespace DB::ErrorCodes

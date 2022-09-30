@@ -32,14 +32,12 @@ CnchDataWriter::CnchDataWriter(
     ContextPtr context_,
     ManipulationType type_,
     String task_id_,
-    String from_buffer_uuid_,
     String consumer_group_,
     const cppkafka::TopicPartitionList & tpl_)
     : storage(storage_)
     , context(context_)
     , type(type_)
     , task_id(std::move(task_id_))
-    , from_buffer_uuid(std::move(from_buffer_uuid_))
     , consumer_group(std::move(consumer_group_))
     , tpl(tpl_)
 {
@@ -190,7 +188,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, from_buffer_uuid);
+                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl);
             }
             else
             {
@@ -217,7 +215,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             }
 
             commit_time = server_client->precommitParts(
-                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, from_buffer_uuid);
+                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl);
         }
     }
     catch (const Exception & e)
@@ -275,12 +273,6 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     auto storage_ptr = storage.shared_from_this();
     if (!storage_ptr)
         throw Exception("storage_ptr is nullptr and invalid for use", ErrorCodes::NULL_POINTER_DEREFERENCE);
-
-    if (!from_buffer_uuid.empty())
-    {
-        txn->setFromBufferUUID(from_buffer_uuid);
-        LOG_DEBUG(log, "set buffer uuid and main table uuid: {} {}  done.", txn->getFromBufferUUID(), toString(txn->getMainTableUUID()));
-    }
 
     do
     {

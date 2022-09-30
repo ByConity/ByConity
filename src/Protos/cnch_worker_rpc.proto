@@ -82,17 +82,6 @@ message GetConsumerStatusResp
   optional string last_exception = 6;
 }
 
-message GetOffsetsFromMemoryBufferReq
-{
-  required StorageID storage_id = 1;
-}
-
-message GetOffsetsFromMemoryBufferResp
-{
-  repeated TopicPartitionModel tpls = 1;
-  optional string exception = 2;
-}
-
 message PreloadChecksumsAndPrimaryIndexReq
 {
   required StorageID table = 1;
@@ -226,66 +215,6 @@ message SubmitScaleTaskReq
 message SubmitScaleTaskResp
 {
   optional string exception = 1;
-}
-
-message CreateCloudMemoryBufferReq
-{
-  required StorageID storage_id = 1;
-  required uint32 id = 2;
-  required string create_table_query = 3;
-  required HostWithPorts host_ports = 4;
-
-  // Assign every memory buffer a unique uuid
-  required UUID buffer_uuid = 7;
-}
-
-
-message CreateCloudMemoryBufferResp
-{
-  optional string exception = 1;
-}
-
-message DropCloudMemoryBufferReq
-{
-  required StorageID storage_id = 1;
-  required bool remove_wal = 2;
-  // Assign every memory buffer a unique uuid
-  required UUID buffer_uuid = 3;
-}
-
-message DropCloudMemoryBufferResp
-{
-  optional string exception = 1;
-}
-
-message FlushCloudMemoryBufferReq
-{
-  required StorageID storage_id = 1;
-}
-
-message FlushCloudMemoryBufferResp
-{
-  optional string exception = 1;
-}
-
-message GetCloudMemoryBufferStatusReq
-{
-  required StorageID storage_id = 1;
-  optional uint64 buffer_index = 2;
-}
-
-message GetCloudMemoryBufferStatusResp
-{
-  optional string exception = 1;
-  optional string status = 2;
-  optional int64 startup_time = 3;
-  optional int64 last_flush_time = 4;
-  optional int64 memory_usage = 5;
-  optional int64 peak_memory_usage = 6;
-  optional int64 rows = 7;
-  optional int64 blocks = 8;
-  optional string last_exception = 9;
-  optional int64 last_exception_time = 10;
 }
 
 message GetCloudMergeTreeStatusReq
@@ -484,7 +413,6 @@ service CnchWorkerService
 
   rpc submitKafkaConsumeTask(SubmitKafkaConsumeTaskReq) returns (SubmitKafkaConsumeTaskResp);
   rpc getConsumerStatus(GetConsumerStatusReq) returns (GetConsumerStatusResp);
-  rpc getOffsetsFromMemoryBuffer(GetOffsetsFromMemoryBufferReq) returns (GetOffsetsFromMemoryBufferResp);
 
   rpc preloadChecksumsAndPrimaryIndex(PreloadChecksumsAndPrimaryIndexReq) returns (PreloadChecksumsAndPrimaryIndexResp);
 
@@ -494,11 +422,7 @@ service CnchWorkerService
   rpc ResetQueryIntent(ResetQueryIntentReq) returns (ResetQueryIntentResp);
   rpc SubmitScaleTask(SubmitScaleTaskReq) returns (SubmitScaleTaskResp);
 
-  rpc createCloudMemoryBuffer(CreateCloudMemoryBufferReq) returns (CreateCloudMemoryBufferResp);
-  rpc dropCloudMemoryBuffer(DropCloudMemoryBufferReq) returns (DropCloudMemoryBufferResp);
-  rpc flushCloudMemoryBuffer(FlushCloudMemoryBufferReq) returns (FlushCloudMemoryBufferResp);
   rpc getCloudMergeTreeStatus(GetCloudMergeTreeStatusReq) returns (GetCloudMergeTreeStatusResp);
-  rpc getCloudMemoryBufferStatus(GetCloudMemoryBufferStatusReq) returns (GetCloudMemoryBufferStatusResp);
 
   rpc ClearPreallocatedDataParts(ClearPreallocatedDataPartsReq) returns (ClearPreallocatedDataPartsResp);
 

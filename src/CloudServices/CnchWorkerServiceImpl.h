@@ -112,42 +112,12 @@ public:
         const Protos::GetConsumerStatusReq * request,
         Protos::GetConsumerStatusResp * response,
         google::protobuf::Closure * done) override;
-
-    void getOffsetsFromMemoryBuffer(
-        google::protobuf::RpcController * cntl,
-        const Protos::GetOffsetsFromMemoryBufferReq * request,
-        Protos::GetOffsetsFromMemoryBufferResp * response,
-        google::protobuf::Closure * done) override;
 #endif
 
     void preloadChecksumsAndPrimaryIndex(
         google::protobuf::RpcController * cntl,
         const Protos::PreloadChecksumsAndPrimaryIndexReq * request,
         Protos::PreloadChecksumsAndPrimaryIndexResp * response,
-        google::protobuf::Closure * done) override;
-
-    void createCloudMemoryBuffer(
-        google::protobuf::RpcController * cntl,
-        const Protos::CreateCloudMemoryBufferReq * request,
-        Protos::CreateCloudMemoryBufferResp * response,
-        google::protobuf::Closure * done) override;
-
-    void dropCloudMemoryBuffer(
-        google::protobuf::RpcController * cntl,
-        const Protos::DropCloudMemoryBufferReq * request,
-        Protos::DropCloudMemoryBufferResp * response,
-        google::protobuf::Closure * done) override;
-
-    void flushCloudMemoryBuffer(
-        google::protobuf::RpcController * cntl,
-        const Protos::FlushCloudMemoryBufferReq * request,
-        Protos::FlushCloudMemoryBufferResp * response,
-        google::protobuf::Closure * done) override;
-
-    void getCloudMemoryBufferStatus(
-        google::protobuf::RpcController * cntl,
-        const Protos::GetCloudMemoryBufferStatusReq * request,
-        Protos::GetCloudMemoryBufferStatusResp * response,
         google::protobuf::Closure * done) override;
 
     void getCloudMergeTreeStatus(

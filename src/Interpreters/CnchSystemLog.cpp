@@ -113,26 +113,16 @@ bool prepareCnchQueryMetricsDatabaseAndTables(ContextPtr global_context)
         // const String ttl_expr = ttl_value.empty() ? "" : " TTL toDate(event_time) + INTERVAL " + ttl_value;
         const String ttl_expr;
         const String storage_policy = ", storage_policy = \'" + global_context->getDefaultCnchPolicyName() + "\'";
-        auto enable_memory_buffer = config.getBool("enable_query_metrics_memory_buffer", false);
-        String memory_buffer = enable_memory_buffer ? ", cnch_enable_memory_buffer = 1" : "";
-
-        /// TODO: Enable unique key
-        // auto enable_unique_key = config.getBool("enable_query_metrics_unique_key", false);
-        // String memory_buffer = (enable_memory_buffer && !enable_unique_key)
-            // ? ", cnch_enable_memory_buffer = 1" : "";
-        // String unique_key = enable_unique_key ? " UNIQUE KEY (`query_id`, `state`)" : "";
 
         const String create_query = "CREATE TABLE " + database + "." + table + " " + query_columns +
             " ENGINE = CnchMergeTree()" + order_by_expr + partition_by_expr + ttl_expr +
-            " SETTINGS index_granularity = 8192" + storage_policy + memory_buffer + ", enable_addition_bg_task = 1";
+            " SETTINGS index_granularity = 8192" + storage_policy + ", enable_addition_bg_task = 1";
 
         if (!prepareCnchTable(global_context, database, table, create_query, Poco::Logger::get("CnchSystemLogs")))
             return false;
 
         SettingsChanges changes;
         changes.push_back(SettingChange("index_granularity", Field(UInt64(8192))));
-        // Ensure memory buffer is disabled if disabled in config
-        changes.push_back(SettingChange("cnch_enable_memory_buffer", enable_memory_buffer ? Field(UInt64(1)) : Field(UInt64(0))));
 
         /// FIXME: after ALTER is supported
         // if (!syncTableSchema(global_context, database, table, expected_block, ttl_expr, changes, Poco::Logger::get("CnchSystemLog")))
@@ -195,10 +185,6 @@ std::shared_ptr<QueryMetricLog> createQueryMetricLog(
     const String table = CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME;
     size_t flush_interval_milliseconds = config.getUInt64(config_prefix + ".flush_interval_milliseconds",
         DEFAULT_SYSTEM_LOG_FLUSH_INTERVAL_MILLISECONDS);
-
-    auto enable_memory_buffer = config.getBool("enable_query_metrics_memory_buffer", false);
-    if (enable_memory_buffer)
-        flush_interval_milliseconds = std::min<size_t>(flush_interval_milliseconds, 500); // Max limit of 500ms
 
     return std::make_shared<QueryMetricLog>(global_context, database, table, table, "", flush_interval_milliseconds, 0);
 }

@@ -15,7 +15,6 @@ using CloudMergeTreeDedupWorkerPtr = std::unique_ptr<CloudMergeTreeDedupWorker>;
 class StorageCloudMergeTree final : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
 {
     friend struct shared_ptr_helper<StorageCloudMergeTree>;
-    friend class CloudMemoryBuffer;
     friend class CloudMergeTreeBlockOutputStream;
 
 public:

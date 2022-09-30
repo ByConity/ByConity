@@ -449,8 +449,6 @@
     M(SetTransactionRecordWithRequestsFailed, "") \
     M(SetTransactionRecordCleanTimeSuccess, "") \
     M(SetTransactionRecordCleanTimeFailed, "") \
-    M(SetTransactionRecordStatusWithMemoryBufferSuccess, "") \
-    M(SetTransactionRecordStatusWithMemoryBufferFailed, "") \
     M(SetTransactionRecordStatusWithOffsetsSuccess, "") \
     M(SetTransactionRecordStatusWithOffsetsFailed, "") \
     M(RollbackTransactionSuccess, "") \
@@ -579,20 +577,6 @@
     M(GetTablePartitionMetricsFailed, "") \
     M(GetTablePartitionMetricsFromMetastoreSuccess, "") \
     M(GetTablePartitionMetricsFromMetastoreFailed, "") \
-    M(GetOrSetBufferManagerMetadataSuccess, "") \
-    M(GetOrSetBufferManagerMetadataFailed, "") \
-    M(RemoveBufferManagerMetadataSuccess, "") \
-    M(RemoveBufferManagerMetadataFailed, "") \
-    M(GetBufferLogMetadataVecSuccess, "") \
-    M(GetBufferLogMetadataVecFailed, "") \
-    M(SetCnchLogMetadataSuccess, "") \
-    M(SetCnchLogMetadataFailed, "") \
-    M(SetCnchLogMetadataInBatchSuccess, "") \
-    M(SetCnchLogMetadataInBatchFailed, "") \
-    M(GetCnchLogMetadataSuccess, "") \
-    M(GetCnchLogMetadataFailed, "") \
-    M(RemoveCnchLogMetadataSuccess, "") \
-    M(RemoveCnchLogMetadataFailed, "") \
     M(UpdateTopologiesSuccess, "") \
     M(UpdateTopologiesFailed, "") \
     M(GetTopologiesSuccess, "") \

@@ -924,16 +924,6 @@ struct IsCnchMergeTree
     static bool apply(const StoragePtr & storage) { return dynamic_cast<StorageCnchMergeTree *>(storage.get()) != nullptr; }
 };
 
-struct SupportMemoryBuffer
-{
-    static bool apply(const StoragePtr & /*storage*/)
-    {
-        //auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        //return t && t->settings.cnch_enable_memory_buffer;
-        return false;
-    }
-};
-
 template <CnchBGThreadType T, class F>
 struct DaemonJobForCnchKafka : public DaemonJobServerBGThreadConsumer
 {

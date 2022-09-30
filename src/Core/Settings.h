@@ -280,7 +280,6 @@ class IColumn;
     M(Bool, query_worker_fault_tolerance, false, "Whether to retry when worker failures are detected when allocating metadata during query execution.", 0) \
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
     M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
-    M(Bool, cnch_skip_memory_buffers, false, "Skip data memory buffers", 0) \
     \
     /**  settings about bitmap index */\
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\

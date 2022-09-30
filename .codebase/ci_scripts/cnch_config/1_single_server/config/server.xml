@@ -650,11 +650,6 @@
                 <interval>10000</interval>
             </job>
             <job>
-                <name>MEMORY_BUFFER</name>
-                <!-- Interval in millisecond -->
-                <interval>3000</interval>
-            </job>
-            <job>
                 <name>DEDUP_WORKER</name>
                 <!-- Interval in millisecond -->
                 <interval>10000</interval>

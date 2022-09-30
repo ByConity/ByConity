@@ -1,5 +1,4 @@
 #include <MergeTreeCommon/GlobalGCManager.h>
-//#include <WAL/ICnchLogFactory.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Protos/RPCHelpers.h>
@@ -16,7 +15,7 @@ GlobalGCManager::GlobalGCManager(
     size_t default_max_queue_size)
     : WithContext(global_context_), log(&Poco::Logger::get("GlobalGCManager"))
 {
-    auto & config_ref = getContext()->getConfigRef();
+    const auto & config_ref = getContext()->getConfigRef();
     this->max_threads =
         config_ref.getUInt("global_gc.threadpool_max_size", default_max_threads);
     const size_t max_free_threads =
@@ -143,25 +142,6 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         /// delete table's metadata
         LOG_DEBUG(log, "Remove table meta for table {}", storage_id.getNameForLogs());
         catalog->clearTableMetaForGC(storage_id.database_name, storage_id.table_name, table.commit_time());
-
-#if 0
-        if (auto cnch_table = dynamic_cast<StorageCnchMergeTree*>(storage.get()); cnch_table && cnch_table->settings.cnch_enable_memory_buffer)
-        {
-            auto & log_factory = ICnchLogFactory::getFactory(cnch_table->settings.wal_type, context.getRootConfig());
-
-            auto buffer_metadata_vec = catalog->getBufferLogMetadataVec(storage_id.uuid);
-            for (auto & buffer_metadata : buffer_metadata_vec)
-            {
-                auto host_ports = RPCHelpers::createHostWithPorts(buffer_metadata.host_ports());
-                if (host_ports.empty())
-                    continue;
-
-                auto wal_name = buffer_metadata.name();
-                if (log_factory.removeLog(wal_name))
-                    LOG_WARNING(log, "WAL " << wal_name << " should be removed by Worker");
-            }
-        }
-#endif
     }
     catch (...)
     {

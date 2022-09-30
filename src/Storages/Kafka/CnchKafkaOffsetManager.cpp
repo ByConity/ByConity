@@ -95,29 +95,8 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
                }
     });
 
-    /// Secondly, flush memory buffers if enabled
+    /// Secondly, commit offsets in transaction
     auto target_table = kafka_table->tryGetTargetTable();
-    if (target_table)
-    {
-        auto *cnch_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
-        if (cnch_table && cnch_table->getSettings()->cnch_enable_memory_buffer)
-        {
-            String flush_buffer_query = "SYSTEM FLUSH BUFFER " + cnch_table->getDatabaseName() + "." + cnch_table->getTableName();
-            LOG_INFO(log, "Try to flush memory buffer before resetting offsets with query: {}", flush_buffer_query);
-            ParserSystemQuery parser{};
-            ASTPtr ast = parseQuery(parser, flush_buffer_query,
-                         global_context->getSettings().max_query_size, global_context->getSettings().max_parser_depth);
-            if (!ast)
-                throw Exception("Unable to parse flush buffer query: " + flush_buffer_query, ErrorCodes::BAD_ARGUMENTS);
-            auto temp_context = Context::createCopy(global_context);
-            InterpreterSystemQuery intepreter_system_query(ast, temp_context);
-
-            /// XXX: Here may throw exception BRPC_TIMEDOUT, just Retry
-            intepreter_system_query.execute();
-        }
-    }
-
-    /// Thirdly, commit offsets in transaction
     auto & txn_co = global_context->getCnchTransactionCoordinator();
     auto txn = txn_co.createTransaction(CreateTransactionOption().setPriority(CnchTransactionPriority::low));
     {

@@ -67,8 +67,7 @@ public:
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
-        const cppkafka::TopicPartitionList & tpl = {},
-        const String & from_buffer_uuid = {});
+        const cppkafka::TopicPartitionList & tpl = {});
 
     TxnTimestamp precommitParts(
         ContextPtr context,
@@ -81,8 +80,7 @@ public:
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
-        const cppkafka::TopicPartitionList & tpl = {},
-        const String & from_buffer_uuid = {});
+        const cppkafka::TopicPartitionList & tpl = {});
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);

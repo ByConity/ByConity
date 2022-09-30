@@ -106,7 +106,7 @@ public:
 
     // TODO: @ducle.canh - change CnchServerTransaction to CnchImplicitTransaction, remove CnchWorkerTransaction.
     // If we forward a query forward to worker, then use CnchProxyTransaction on worker. Internal transaction
-    // such as kafka, memory_buffer related should has their own class.
+    // such as kafka related should has their own class.
 
     // create transactions
     // used for all queries including read only and writes.
