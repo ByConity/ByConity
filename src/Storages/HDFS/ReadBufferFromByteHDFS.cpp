@@ -253,7 +253,10 @@ off_t ReadBufferFromByteHDFS::doSeek(off_t offset, int whence)
     }
     else if (whence == SEEK_CUR)
     {
-        new_pos = offset_in_current_file - (working_buffer.end() - pos) + offset;
+        /// calculate seek position in file based on current position in file
+        /// offset_in_current_file: pos in file of 'working buffer end'
+        size_t pos_in_file = offset_in_current_file - (working_buffer.end() - pos);
+        new_pos = pos_in_file + offset;
     }
     else
     {
