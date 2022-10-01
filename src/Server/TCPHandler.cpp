@@ -1296,7 +1296,7 @@ void TCPHandler::receiveCnchQuery()
     state.is_empty = false;
     UInt64 txn_id;
     readIntBinary(txn_id, *in);
-    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, true);
+    auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
     query_context = Context::createCopy(named_session->context);
     query_context->setSessionContext(named_session->context);
     query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
