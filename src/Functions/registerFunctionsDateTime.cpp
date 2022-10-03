@@ -74,6 +74,7 @@ void registerFunctionDateTrunc(FunctionFactory &);
 void registerFunctiontimezoneOffset(FunctionFactory &);
 void registerFunctionNextDay(FunctionFactory &);
 void registerFunctionLastDay(FunctionFactory &);
+void registerFunctionDateFormat(FunctionFactory & factory);
 
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
@@ -147,6 +148,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctiontimezoneOffset(factory);
     registerFunctionNextDay(factory);
     registerFunctionLastDay(factory);
+    registerFunctionDateFormat(factory);
 }
 
 }

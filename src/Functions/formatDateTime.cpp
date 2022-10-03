@@ -107,6 +107,8 @@ private:
             DataTypeUInt64>(type, std::forward<F>(f));
     }
 
+public:
+
     template <typename Time>
     class Action
     {
@@ -278,7 +280,6 @@ private:
         }
     };
 
-public:
     static constexpr auto name = Name::name;
 
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionFormatDateTimeImpl>(); }

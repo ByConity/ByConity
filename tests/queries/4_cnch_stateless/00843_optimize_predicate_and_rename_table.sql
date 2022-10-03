@@ -1,6 +1,4 @@
 set enable_optimizer=1;
-
-set enable_optimizer=1;
 SET enable_optimize_predicate_expression = 1;
 DROP TABLE IF EXISTS view_00843;
 DROP TABLE IF EXISTS test1_00843;
