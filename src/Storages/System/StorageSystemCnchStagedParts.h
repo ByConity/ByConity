@@ -12,7 +12,7 @@ class StorageSystemCnchStagedParts : public shared_ptr_helper<StorageSystemCnchS
 {
 public:
 
-    StorageSystemCnchStagedParts(const StorageID & table_id_): IStorageSystemOneBlock(table_id_) {}
+    explicit StorageSystemCnchStagedParts(const StorageID & table_id_): IStorageSystemOneBlock(table_id_) {}
 
     std::string getName() const override { return "SystemCnchStagedParts"; }
 

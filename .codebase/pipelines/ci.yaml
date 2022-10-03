@@ -115,7 +115,7 @@ jobs:
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
           - bash /home/code/docker/test/foundationdb/show_fdb.sh
-          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test

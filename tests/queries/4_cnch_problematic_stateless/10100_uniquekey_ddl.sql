@@ -20,10 +20,7 @@ ENGINE = CnchMergeTree PARTITION BY d ORDER BY val UNIQUE KEY (k1, k2); -- { ser
 DROP TABLE IF EXISTS u10100_memory_buffer;
 
 CREATE TABLE u10100_memory_buffer (d Date, id Int32, s String)
-ENGINE = CnchMergeTree PARTITION BY d ORDER BY id UNIQUE KEY id SETTINGS cnch_enable_memory_buffer = 1; -- { serverError 36 }
-
-CREATE TABLE u10100_memory_buffer (d Date, id Int32, s String)
-ENGINE = CnchMergeTree PARTITION BY d ORDER BY id UNIQUE KEY id SETTINGS cnch_enable_memory_buffer = 0; -- 0 is ok
+ENGINE = CnchMergeTree PARTITION BY d ORDER BY id UNIQUE KEY id; -- 0 is ok
 DROP TABLE IF EXISTS u10100_memory_buffer;
 
 -- unsupported data type for key column
