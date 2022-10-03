@@ -559,14 +559,16 @@ void RemoteQueryExecutor::parseQueryWorkerMetrics(const QueryWorkerMetricElement
 {
     for (const auto & element : elements)
     {
+        /// The extended_info metrics are only used in INSERT SELECT/ INSERT INFILE cases, you may consider these values as metrics of the write worker.
         extended_info.read_rows += element->read_rows;
         extended_info.read_bytes += element->read_bytes;
         extended_info.read_cached_bytes += element->read_cached_bytes;
-        extended_info.read_duration += element->read_duration;
 
         extended_info.written_rows += element->write_rows;
         extended_info.written_bytes += element->write_bytes;
         extended_info.written_duration += element->write_duration;
+
+        extended_info.runtime_latency += element->runtime_latency;
 
         if (context->getServerType() == ServerType::cnch_server)  /// For cnch server, directly push elements to the buffer
             context->getQueryContext()->insertQueryWorkerMetricsElement(*element);

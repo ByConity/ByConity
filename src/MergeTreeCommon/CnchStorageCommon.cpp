@@ -318,9 +318,6 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
 
         if (enable_staging_area)
             modifyOrAddSetting(create_query, "cloud_enable_staging_area", Field(UInt64(1)));
-
-        /// XXX: local table created by server should be all disabled to use buffer for both reading and writing
-        modifyOrAddSetting(create_query, "cnch_enable_memory_buffer", Field(UInt64(0)));
     }
     else if(engine->name == "CnchHive")
     {

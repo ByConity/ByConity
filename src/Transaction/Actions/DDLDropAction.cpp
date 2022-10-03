@@ -6,7 +6,6 @@
 // #include <Storages/Kafka/StorageCnchKafka.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCnchMergeTree.h>
-// #include <MergeTreeCommon/MemoryBufferManager.h>
 // #include <DaemonManager/DaemonManagerClient.h>
 #include <CloudServices/CnchServerClient.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>

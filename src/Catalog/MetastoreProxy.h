@@ -409,13 +409,6 @@ public:
         return ss.str();
     }
 
-    static std::string cnchLogKey(const std::string & name_space, const std::string & log_name)
-    {
-        std::stringstream ss;
-        ss << escapeString(name_space) << '_' << CNCH_LOG_PREFIX << log_name;
-        return ss.str();
-    }
-
     static String insertionLabelKey(const String & name_space, const std::string & uuid, const std::string & label)
     {
         std::stringstream ss;
@@ -515,16 +508,6 @@ public:
     IMetaStore::IteratorPtr getAllTransactionRecord(const String & name_space, const size_t & max_result_number = 0);
     std::pair<bool, String> updateTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new);
     std::vector<std::pair<String, UInt64>> getTransactionRecords(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
-
-    bool updateTransactionRecordWithMemoryBuffer(
-        const String & name_space,
-        const UInt64 & txn_id,
-        const String & txn_data_old,
-        String & txn_data_new,
-        const Strings & buffer_keys_in_kv,
-        const Strings & buffer_values_in_kv,
-        const String & consumer_group,
-        const cppkafka::TopicPartitionList & tpl);
 
     bool updateTransactionRecordWithOffsets(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new, const String & consumer_group, const cppkafka::TopicPartitionList &);
     void setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 ttl = 0);
@@ -687,16 +670,6 @@ public:
     Strings getDeleteBitmapByKeys(const Strings & key);
 
     IMetaStore::IteratorPtr getMetaInRange(const String & prefix, const String & range_start, const String & range_end, bool include_start, bool include_end);
-
-    std::shared_ptr<Protos::BufferManagerMetadata> tryGetBufferManagerMetadata(const String & name_space, const UUID & uuid);
-    void setBufferManagerMetadata(const String & name_space, const UUID & uuid, const Protos::BufferManagerMetadata & metadata);
-    void removeBufferManagerMetadata(const String & name_space, const UUID & uuid);
-    std::vector<Protos::CnchLogMetadata> getBufferLogMetadataVec(const String & name_space, const UUID & uuid);
-
-    void setCnchLogMetadata(const String & name_space, const String & log_name, const Protos::CnchLogMetadata & metadata);
-    void setCnchLogMetadataInBatch(const String & name_space, const Strings & log_names, const std::vector<Protos::CnchLogMetadata> & metadata_vec);
-    std::shared_ptr<Protos::CnchLogMetadata> getCnchLogMetadata(const String & name_space, const String & log_name);
-    void removeCnchLogMetadata(const String & name_space, const String & log_name);
 
     void precommitInsertionLabel(const String & name_space, const InsertionLabelPtr & label);
     void commitInsertionLabel(const String & name_space, InsertionLabelPtr & label);

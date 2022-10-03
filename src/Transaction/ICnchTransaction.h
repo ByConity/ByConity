@@ -78,9 +78,6 @@ public:
     void setMainTableUUID(const UUID & uuid) { main_table_uuid = uuid; }
     UUID getMainTableUUID() const { return main_table_uuid; }
 
-    void setFromBufferUUID(const String & uuid) { from_buffer_uuid = uuid; }
-    String getFromBufferUUID() const { return from_buffer_uuid; }
-
     void setKafkaTpl(const String & consumer_group, const cppkafka::TopicPartitionList & tpl);
     void getKafkaTpl(String & consumer_group, cppkafka::TopicPartitionList & tpl) const;
 
@@ -199,9 +196,6 @@ protected:
     const Context & global_context;
     TransactionRecord txn_record;
     UUID main_table_uuid{UUIDHelpers::Nil};
-
-    // The buffer uuid where a commit is initiated
-    String from_buffer_uuid{""};
 
     /// for committing offsets
     String consumer_group;

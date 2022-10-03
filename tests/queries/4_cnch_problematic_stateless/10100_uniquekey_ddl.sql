@@ -16,13 +16,6 @@ ENGINE = CnchMergeTree PARTITION BY d ORDER BY val UNIQUE KEY id; -- { serverErr
 CREATE TABLE u10100_nullable2 (d Date, k1 Int32, k2 Nullable(String), val Int32)
 ENGINE = CnchMergeTree PARTITION BY d ORDER BY val UNIQUE KEY (k1, k2); -- { serverError 44 }
 
--- unique table doesn't support memory buffer
-DROP TABLE IF EXISTS u10100_memory_buffer;
-
-CREATE TABLE u10100_memory_buffer (d Date, id Int32, s String)
-ENGINE = CnchMergeTree PARTITION BY d ORDER BY id UNIQUE KEY id; -- 0 is ok
-DROP TABLE IF EXISTS u10100_memory_buffer;
-
 -- unsupported data type for key column
 DROP TABLE IF EXISTS u10100_bad_key_type;
 

@@ -177,7 +177,7 @@ private:
     PoolMode pool_mode = PoolMode::GET_MANY;
     StorageID main_table = StorageID::createEmpty();
 
-    /// This extended profile info is mainly for INSERT, and metrics are sent from workers
+    /// This extended profile info is only for INSERT INFILE / INSERT SELECT, and metrics are sent from workers
     ExtendedProfileInfo extended_info;
 
     Poco::Logger * log = nullptr;

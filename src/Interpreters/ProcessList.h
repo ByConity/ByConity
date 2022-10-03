@@ -54,8 +54,6 @@ struct QueryStatusInfo
     size_t disk_cache_bytes;
     size_t read_rows;
     size_t read_bytes;
-    size_t read_duration;
-    size_t cpu_time;
     size_t total_rows;
     size_t written_rows;
     size_t written_bytes;

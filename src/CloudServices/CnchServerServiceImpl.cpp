@@ -81,10 +81,6 @@ void CnchServerServiceImpl::commitParts(
                 for (const auto & bitmap_model : req->delete_bitmaps())
                     delete_bitmaps.emplace_back(createFromModel(*cnch, bitmap_model));
 
-                String from_buffer_uuid;
-                if (req->has_from_buffer_uuid())
-                    from_buffer_uuid = req->from_buffer_uuid();
-
                 /// check and parse offsets
                 String consumer_group;
                 cppkafka::TopicPartitionList tpl;
@@ -102,7 +98,6 @@ void CnchServerServiceImpl::commitParts(
                     rpc_context,
                     ManipulationType(req->type()),
                     req->task_id(),
-                    std::move(from_buffer_uuid),
                     std::move(consumer_group),
                     tpl);
 
@@ -438,13 +433,7 @@ void CnchServerServiceImpl::reportTaskHeartbeat(
     google::protobuf::Closure * done)
 {
 }
-void CnchServerServiceImpl::reportBufferHeartbeat(
-    google::protobuf::RpcController * cntl,
-    const Protos::ReportBufferHeartbeatReq * request,
-    Protos::ReportBufferHeartbeatResp * response,
-    google::protobuf::Closure * done)
-{
-}
+
 void CnchServerServiceImpl::reportDeduperHeartbeat(
     google::protobuf::RpcController * cntl,
     const Protos::ReportDeduperHeartbeatReq * request,
@@ -482,7 +471,7 @@ void CnchServerServiceImpl::reportDeduperHeartbeat(
 }
 
 void CnchServerServiceImpl::fetchDataParts(
-    ::google::protobuf::RpcController * controller,
+    ::google::protobuf::RpcController *,
     const ::DB::Protos::FetchDataPartsReq * request,
     ::DB::Protos::FetchDataPartsResp * response,
     ::google::protobuf::Closure * done)
@@ -533,13 +522,6 @@ void CnchServerServiceImpl::fetchUniqueTableMeta(
 {
 }
 
-void CnchServerServiceImpl::getWorkerListWithBuffer(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetWorkerListWithBufferReq * request,
-    Protos::GetWorkerListWithBufferResp * response,
-    google::protobuf::Closure * done)
-{
-}
 void CnchServerServiceImpl::getBackgroundThreadStatus(
     google::protobuf::RpcController * cntl,
     const Protos::BackgroundThreadStatusReq * request,

@@ -19,16 +19,15 @@ struct QueryWorkerMetricElement
     String worker_id;
     time_t event_time{};
     UInt32 latency{};
+    UInt32 runtime_latency{};
     UInt32 selected_parts{};
     UInt32 selected_ranges{};
     UInt32 selected_marks{};
     UInt32 vfs_time{};
-    UInt32 cpu_time{};
     UInt64 peak_memory{};
     UInt32 read_rows{};
     UInt64 read_bytes{};
     UInt64 read_cached_bytes{};
-    UInt64 read_duration{};
     UInt32 write_rows{};
     UInt64 write_bytes{};
     UInt64 write_duration{};
@@ -50,16 +49,15 @@ struct QueryWorkerMetricElement
         String worker_id_ = {},
         time_t event_time_ = {},
         UInt32 latency_ = 0,
+        UInt32 runtime_latency_ = 0,
         UInt32 selected_parts_ = 0,
         UInt32 selected_ranges_ = 0,
         UInt32 selected_marks_ = 0,
         UInt32 vfs_time_ = 0,
-        UInt32 cpu_time_ = 0,
         UInt64 peak_memory_ = 0,
         UInt32 read_rows_ = 0,
         UInt64 read_bytes_ = 0,
         UInt64 read_cached_bytes_ = 0,
-        UInt64 read_duration_ = 0,
         UInt32 write_rows_ = 0,
         UInt64 write_bytes_ = 0,
         UInt64 write_duration_ = 0,
@@ -78,16 +76,15 @@ struct QueryWorkerMetricElement
         , worker_id(worker_id_)
         , event_time(event_time_)
         , latency(latency_)
+        , runtime_latency(runtime_latency_)
         , selected_parts(selected_parts_)
         , selected_ranges(selected_ranges_)
         , selected_marks(selected_marks_)
         , vfs_time(vfs_time_)
-        , cpu_time(cpu_time_)
         , peak_memory(peak_memory_)
         , read_rows(read_rows_)
         , read_bytes(read_bytes_)
         , read_cached_bytes(read_cached_bytes_)
-        , read_duration(read_duration_)
         , write_rows(write_rows_)
         , write_bytes(write_bytes_)
         , write_duration(write_duration_)
@@ -119,16 +116,15 @@ inline void fillQueryWorkerMetricElement(const QueryWorkerMetricElementPtr & ele
     pb_element.set_worker_id(element->worker_id);
     pb_element.set_event_time(element->event_time);
     pb_element.set_latency(element->latency);
+    pb_element.set_runtime_latency(element->runtime_latency);
     pb_element.set_selected_parts(element->selected_parts);
     pb_element.set_selected_ranges(element->selected_ranges);
     pb_element.set_selected_marks(element->selected_marks);
     pb_element.set_vfs_time(element->vfs_time);
-    pb_element.set_cpu_time(element->cpu_time);
     pb_element.set_peak_memory(element->peak_memory);
     pb_element.set_read_rows(element->read_rows);
     pb_element.set_read_bytes(element->read_bytes);
     pb_element.set_read_cached_bytes(element->read_cached_bytes);
-    pb_element.set_read_duration(element->read_duration);
     pb_element.set_write_rows(element->write_rows);
     pb_element.set_write_bytes(element->write_bytes);
     pb_element.set_write_duration(element->write_duration);
@@ -152,16 +148,15 @@ inline QueryWorkerMetricElement createQueryWorkerMetricElement(const Protos::Que
         pb_element.worker_id(),
         pb_element.event_time(),
         pb_element.latency(),
+        pb_element.runtime_latency(),
         pb_element.selected_parts(),
         pb_element.selected_ranges(),
         pb_element.selected_marks(),
         pb_element.vfs_time(),
-        pb_element.cpu_time(),
         pb_element.peak_memory(),
         pb_element.read_rows(),
         pb_element.read_bytes(),
         pb_element.read_cached_bytes(),
-        pb_element.read_duration(),
         pb_element.write_rows(),
         pb_element.write_bytes(),
         pb_element.write_duration(),

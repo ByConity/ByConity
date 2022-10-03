@@ -107,7 +107,7 @@ TxnTimestamp CnchWorkerTransaction::commit()
 
     auto lock = getLock();
     TxnTimestamp commit_ts;
-    /// Check `consumer_index` here as we don't need check validity of consumer for flushing memory buffer
+    /// Check `consumer_index` here
     if (kafka_consumer_index == SIZE_MAX)
         commit_ts = server_client->commitTransaction(*this);
     else

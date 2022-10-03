@@ -133,9 +133,16 @@ bool MergeTreeDataPartCNCH::operator > (const MergeTreeDataPartCNCH & r) const
         return false;
 }
 
-String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair &) const
+String MergeTreeDataPartCNCH::getFileNameForColumn(const NameAndTypePair & column) const
 {
-    return DATA_FILE;
+    String filename;
+    auto serialization = column.type->getDefaultSerialization();
+    serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
+    {
+        if (filename.empty())
+            filename = ISerialization::getFileNameForStream(column, substream_path);
+    });
+    return filename;
 }
 
 bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair &) const
@@ -151,10 +158,20 @@ void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unu
 
     if (index_granularity_info.is_adaptive)
     {
-        /// support fixed index granularity now
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "CNCH part only supports fixed index granularity now");
-        // if (index_granularities.empty())
-        //     loadIndexGranularity();
+        // load from disk
+        // usually we don't need to load index granularity from disk because
+        // kv keeps this kind of information
+        if (unlikely(index_granularities.empty()))
+        {
+            loadIndexGranularity();
+            if (marks_count != index_granularity.getMarksCount())
+                throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA, "Expected marks count {}, loaded marks count {} from disk", marks_count, index_granularity.getMarksCount());
+        }
+        else
+        {
+            for (const auto & granularity : index_granularities)
+                index_granularity.appendMark(granularity);
+        }
     }
     else
     {
@@ -166,11 +183,11 @@ void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unu
 
 void MergeTreeDataPartCNCH::loadColumnsChecksumsIndexes([[maybe_unused]] bool require_columns_checksums, [[maybe_unused]] bool check_consistency)
 {
-    /// only load necessary staff here
+    /// only load necessary stuff here
     assertOnDisk();
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker(VariableContext::Global);
+    getChecksums();
     loadIndexGranularity();
-    loadChecksums(false);
     // getIndex();
 
     /// FIXME:
@@ -186,7 +203,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     DiskPtr disk = volume->getDisk();
     auto reader = openForReading(disk, data_rel_path, meta_info_pos.file_size);
     LimitReadBuffer limit_reader = readPartFile(*reader, meta_info_pos.file_offset, meta_info_pos.file_size);
-    readPartBinary(*this, limit_reader, load_hint_mutation);
+    loadMetaInfoFromBuffer(limit_reader, load_hint_mutation);
 }
 
 UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
@@ -316,7 +333,6 @@ MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFoo
         readIntBinary(file_checksum.file_offset, buf);
         readIntBinary(file_checksum.file_size, buf);
         readIntBinary(file_checksum.file_hash, buf);
-        LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartCNCH"), "{} infomation: file offset {}, file size {}, file hash {}-{}\n", file_name, file_checksum.file_offset, file_checksum.file_size, file_checksum.file_hash.first, file_checksum.file_hash.second);
         file_checksums[file_name] = std::move(file_checksum);
     };
 
@@ -538,7 +554,81 @@ void MergeTreeDataPartCNCH::loadIndexGranularity()
     if (index_granularity.isInitialized())
         return;
 
-    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Index granularity of cnch part cannot be loaded from disk");
+    String full_path = getFullRelativePath();
+    auto checksums = getChecksums();
+    index_granularity_info.changeGranularityIfRequired(*checksums);
+
+    if (columns_ptr->empty())
+        throw Exception("No columns in part " + name, ErrorCodes::NO_FILE_IN_DATA_PART);
+
+    /// We can use any column except for ByteMap column whose data file may not exist.
+    std::string marks_file_name;
+    for (auto & column: *columns_ptr)
+    {
+        if (column.type->isMap() && !column.type->isMapKVStore())
+            continue;
+        marks_file_name = index_granularity_info.getMarksFilePath(getFileNameForColumn(column));
+        break;
+    }
+    size_t marks_file_size = checksums->files.at(marks_file_name).file_size;
+
+    if (!index_granularity_info.is_adaptive)
+    {
+        size_t marks_count = marks_file_size / index_granularity_info.getMarkSizeInBytes();
+        index_granularity.resizeWithFixedGranularity(marks_count, storage.getSettings()->index_granularity);
+    }
+    else
+    {
+        /// TODO: use cache
+        auto [file_off, file_size] = getFileOffsetAndSize(*this, marks_file_name);
+        String data_path = fs::path(getFullRelativePath()) / DATA_FILE;
+        auto reader = openForReading(volume->getDisk(), data_path, file_size);
+        LimitReadBuffer buffer = readPartFile(*reader, file_off, file_size);
+        while (!buffer.eof())
+        {
+            size_t discard = 0;
+            readIntBinary(discard, buffer); /// skip offset_in_compressed file
+            readIntBinary(discard, buffer); /// offset_in_decompressed_block
+            size_t granularity = 0;
+            readIntBinary(granularity, buffer);
+            index_granularity.appendMark(granularity);
+        }
+
+        if (index_granularity.getMarksCount() * index_granularity_info.getMarkSizeInBytes() != marks_file_size)
+            throw Exception("Cannot read all marks from file " + fullPath(volume->getDisk(), data_path), ErrorCodes::CANNOT_READ_ALL_DATA);
+    }
+
+    index_granularity.setInitialized();
+}
+
+void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_hint_mutation)
+{
+    assertString("CHPT", buf);
+    UInt8 version {0};
+    readIntBinary(version, buf);
+
+    UInt8 is_deleted;
+    readIntBinary(is_deleted, buf);
+    deleted = is_deleted;
+
+    readVarUInt(bytes_on_disk, buf);
+    readVarUInt(rows_count, buf);
+    size_t marks_count = 0;
+    readVarUInt(marks_count, buf);
+
+    Int64 hint_mutation = 0;
+    readVarUInt(hint_mutation, buf);
+    if (load_hint_mutation)
+    {
+        info.hint_mutation = hint_mutation;
+    }
+
+    columns_ptr->readText(buf);
+    deserializePartitionAndMinMaxIndex(buf);
+    readIntBinary(bucket_number, buf);
+    readIntBinary(table_definition_hash, buf);
+
+    loadIndexGranularity(marks_count, {});
 }
 
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(

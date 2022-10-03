@@ -37,6 +37,8 @@ namespace ProfileEvents
     extern const Event ReadBufferFromHdfsReadBytes;
     extern const Event ReadBufferFromHdfsReadFailed;
     extern const Event HdfsFileOpen;
+    extern const Event HDFSSeek;
+    extern const Event HDFSSeekElapsedMicroseconds;
     extern const Event HDFSReadElapsedMilliseconds;
     extern const Event HdfsGetBlkLocMicroseconds;
     extern const Event HdfsCreateBlkReaderMicroseconds;

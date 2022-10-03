@@ -74,17 +74,6 @@ message DataModelPartInfo
 /**
  Any new added filed should be appended behind the last filed of current message definition. Do not change current fields' index.
  */
- message MetaFilesPos
- {
-     optional int64 checksums_file_offset = 1;
-     optional uint64 checksums_file_size = 2;
-     optional int64 index_file_offset = 3;
-     optional uint64 index_file_size = 4;
- }
-
-/**
- Any new added filed should be appended behind the last filed of current message definition. Do not change current fields' index.
- */
 message DataModelPart
 {
     required DataModelPartInfo part_info = 1;  // part info
@@ -109,10 +98,11 @@ message DataModelPart
     // the correct relative path can be constructed.
     optional uint64 staging_txn_id = 19;
     optional uint64 virtual_part_size = 20;
-    optional MetaFilesPos meta_files_pos = 21;
     optional uint32 covered_parts_count = 22;    /// record how many parts the current part covers. Used by drop range.
     optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
     optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
+    optional bytes data_footer = 25;
+    repeated uint64 index_granularities = 30;
 };
 
 message CnchHivePartInfo
@@ -217,19 +207,6 @@ message DataModelTableInfo
     required bool cluster_status = 4;
 }
 
-message CnchLogMetadata
-{
-  required string name = 1;
-  required string wal_type = 2;
-  required uint64 min_lsn = 3;
-  required HostWithPorts host_ports = 4;
-
-  // Also save buffer uuid, id and create_state for every memory buffer
-  optional UUID buffer_uuid = 5;
-  optional uint32 buffer_id = 6;
-  optional uint32 create_state = 7;
-}
-
 message DroppedPartsMetadata
 {
     required uint64 txn_id = 1;
@@ -237,14 +214,6 @@ message DroppedPartsMetadata
     // Parts that have a block range <= max_block are all been dropped for a partition
     required uint64 max_block = 3;
     required uint64 commit_ts = 4;
-}
-
-message BufferManagerMetadata
-{
-  required StorageID storage_id = 1;
-  required string wal_type = 2;
-  required uint32 memory_buffer_num = 3;
-  required uint32 status = 4;
 }
 
 message DataModelTransactionRecord

@@ -28,7 +28,7 @@ struct Settings;
     \
     /** Data storing format settings. */ \
     /* For backward compatibility, do not use compact part */ \
-    M(UInt64, min_bytes_for_wide_part, 10485760, "Minimal uncompressed size in bytes to create part in wide format instead of compact", 0) \
+    M(UInt64, min_bytes_for_wide_part, /*10485760*/ 0, "Minimal uncompressed size in bytes to create part in wide format instead of compact", 0) \
     M(UInt64, min_rows_for_wide_part, 0, "Minimal number of rows to create part in wide format instead of compact", 0) \
     M(UInt64, min_bytes_for_compact_part, 0, "Experimental. Minimal uncompressed size in bytes to create part in compact format instead of saving it in RAM", 0) \
     M(UInt64, min_rows_for_compact_part, 0, "Experimental. Minimal number of rows to create part in compact format instead of saving it in RAM", 0) \
@@ -112,8 +112,7 @@ struct Settings;
     M(Bool, use_minimalistic_part_header_in_zookeeper, true, "Store part header (checksums and columns) in a compact format and a single part znode instead of separate znodes (<part>/columns and <part>/checksums). This can dramatically reduce snapshot size in ZooKeeper. Before enabling check that all replicas support new format.", 0) \
     M(UInt64, finished_mutations_to_keep, 100, "How many records about mutations that are done to keep. If zero, then keep all of them.", 0) \
     M(UInt64, min_merge_bytes_to_use_direct_io, 10ULL * 1024 * 1024 * 1024, "Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled).", 0) \
-    /* For backward compatibility, disable the adaptive granularity */ \
-    M(UInt64, index_granularity_bytes, 10 * 1024 * 1024, "Approximate amount of bytes in single granule (0 - disabled).", 0) \
+    M(UInt64, index_granularity_bytes, /*10 * 1024 * 1024*/ 0, "Approximate amount of bytes in single granule (0 - disabled).", 0) \
     M(UInt64, min_index_granularity_bytes, 1024, "Minimum amount of bytes in single granule.", 1024) \
     M(Int64, merge_with_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with delete TTL can be repeated.", 0) \
     M(Int64, merge_with_recompression_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with recompression TTL can be repeated.", 0) \
@@ -171,8 +170,6 @@ struct Settings;
     M(UInt64, bitengine_split_index, 0, "", 0) \
     M(Float, bitengine_encode_loss_rate, 0.1, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
-    M(Bool, cnch_enable_memory_buffer, false, "", 0) \
-    M(Bool, cloud_enable_memory_buffer, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
@@ -183,8 +180,6 @@ struct Settings;
     M(String, cnch_vw_read, "vw_read", "", 0) \
     M(String, cnch_vw_write, "vw_write", "", 0) \
     M(String, cnch_vw_task, "vw_task", "", 0) \
-    M(String, wal_type, "ByteJournal", "", 0) \
-    M(UInt64, cnch_memory_buffer_size, 1, "", 0) \
     \
     M(UInt64, time_travel_retention_days, 0, "", 0) \
     M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \

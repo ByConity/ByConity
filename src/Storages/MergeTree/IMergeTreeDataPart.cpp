@@ -2139,39 +2139,6 @@ void IMergeTreeDataPart::serializePartitionAndMinMaxIndex(WriteBuffer & buf) con
     }
 }
 
-/// TODO: move to cnch part
-void readPartBinary(IMergeTreeDataPart & part, ReadBuffer & buf, bool read_hint_mutation)
-{
-    assertString("CHPT", buf);
-    UInt8 version {0};
-    readIntBinary(version, buf);
-
-    UInt8 deleted;
-    readIntBinary(deleted, buf);
-    part.deleted = deleted;
-
-    readVarUInt(part.bytes_on_disk, buf);
-    readVarUInt(part.rows_count, buf);
-    if (MergeTreeDataPartCNCH* cnch_part = dynamic_cast<MergeTreeDataPartCNCH*>(&part))
-    {
-        size_t marks_count = 0;
-        readVarUInt(marks_count, buf);
-        cnch_part->loadIndexGranularity(marks_count, {});
-    }
-    Int64 hint_mutation = 0;
-    readVarUInt(hint_mutation, buf);
-    if (read_hint_mutation)
-    {
-        part.info.hint_mutation = hint_mutation;
-    }
-
-    part.getColumnsPtr()->readText(buf);
-    part.deserializePartitionAndMinMaxIndex(buf);
-
-    readIntBinary(part.bucket_number, buf);
-    readIntBinary(part.table_definition_hash, buf);
-}
-
 void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf)
 {
     writeString("CHPT", buf); /// magic code: ClickHouse ParT

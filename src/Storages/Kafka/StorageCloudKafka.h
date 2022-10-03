@@ -77,7 +77,6 @@ private:
 
     String cnch_database_name;
     String cnch_table_name;
-    bool cloud_table_enable_memory_buffer{false};
     bool cloud_table_has_unique_key{false};
 
     BackgroundSchedulePool::TaskHolder check_staged_area_task;

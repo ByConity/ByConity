@@ -21,12 +21,6 @@ public:
         Protos::ReportTaskHeartbeatResp * response,
         google::protobuf::Closure * done) override;
 
-    void reportBufferHeartbeat(
-        google::protobuf::RpcController * cntl,
-        const Protos::ReportBufferHeartbeatReq * request,
-        Protos::ReportBufferHeartbeatResp * response,
-        google::protobuf::Closure * done) override;
-
     void reportDeduperHeartbeat(
         google::protobuf::RpcController * cntl,
         const Protos::ReportDeduperHeartbeatReq * request,
@@ -97,12 +91,6 @@ public:
         google::protobuf::RpcController * cntl,
         const Protos::GetMinActiveTimestampReq * request,
         Protos::GetMinActiveTimestampResp * response,
-        google::protobuf::Closure * done) override;
-
-    void getWorkerListWithBuffer(
-        google::protobuf::RpcController * cntl,
-        const Protos::GetWorkerListWithBufferReq * request,
-        Protos::GetWorkerListWithBufferResp * response,
         google::protobuf::Closure * done) override;
 
     /***

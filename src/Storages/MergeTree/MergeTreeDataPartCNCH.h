@@ -90,6 +90,8 @@ private:
     /// Loads marks index granularity into memory
     void loadIndexGranularity() override;
 
+    void loadMetaInfoFromBuffer(ReadBuffer & buffer, bool load_hint_mutation);
+
     void calculateEachColumnSizes(ColumnSizeByName & each_columns_size, ColumnSize & total_size) const override;
 };
 

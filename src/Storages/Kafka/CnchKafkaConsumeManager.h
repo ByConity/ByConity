@@ -11,7 +11,6 @@
 #include <Storages/Kafka/CnchKafkaConsumerScheduler.h>
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Storages/IStorage.h>
-///#include <MergeTreeCommon/MemoryBufferManager.h>
 
 namespace DB
 {
@@ -62,7 +61,7 @@ public:
     };
     String getLastException() const;
     std::vector<KafkaConsumerRunningInfo> getConsumerInfos() const;
-    void getOffsetsFromCatalogAndMemoryBuffer(cppkafka::TopicPartitionList & offsets, const StorageID & buffer_table, const String & consumer_group);
+    void getOffsetsFromCatalog(cppkafka::TopicPartitionList & offsets, const StorageID & buffer_table, const String & consumer_group);
 
 private:
     void updatePartitionCountOfTopics(StorageCnchKafka & kafka_table, bool & partitions_changed);
@@ -90,9 +89,7 @@ private:
     KafkaConsumerSchedulerPtr consumer_scheduler;
 
     CnchWorkerClientPoolPtr worker_pool;
-    std::atomic<bool> cnch_enable_memory_buffer{false};
     std::atomic<bool> cloud_table_has_unique_key{false};
-    HostWithPortsVec memory_buffers;
 
     UInt64 exception_occur_times{0};
     mutable std::mutex last_exception_mutex;

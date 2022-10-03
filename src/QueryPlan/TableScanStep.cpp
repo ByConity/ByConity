@@ -410,18 +410,6 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     //    }
     //
     //    auto streams = storage->read(require_column_list, new_query_info, build_context.context, processing_stage, max_block_size, max_streams);
-    //    if (!original_table.empty())
-    //    {
-    //        auto mem_buffer_table = build_context.context.tryGetTable(database, original_table);
-    //        if (mem_buffer_table)
-    //        {
-    //            auto mem_streams = mem_buffer_table->read(
-    //                require_column_list, new_query_info, build_context.context, processing_stage, max_block_size, max_streams);
-    //            streams.insert(streams.end(), mem_streams.begin(), mem_streams.end());
-    //            LOG_DEBUG(log, "create memory buffer streams for " << database << '.' << original_table << " size " << mem_streams.size());
-    //        }
-    //    }
-    //
     //    if (streams.empty())
     //    {
     //        Block header;
@@ -583,7 +571,7 @@ void TableScanStep::allocate(ContextPtr context)
         {
             if (db_table->table != storage_id.table_name)
             {
-                if (query_info.query) 
+                if (query_info.query)
                 {
                     ASTSelectQuery & select_query = query_info.query->as<ASTSelectQuery &>();
                     select_query.replaceDatabaseAndTable(storage_id.database_name, storage_id.table_name);

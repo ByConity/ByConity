@@ -15,7 +15,6 @@ using CloudMergeTreeDedupWorkerPtr = std::unique_ptr<CloudMergeTreeDedupWorker>;
 class StorageCloudMergeTree final : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
 {
     friend struct shared_ptr_helper<StorageCloudMergeTree>;
-    friend class CloudMemoryBuffer;
     friend class CloudMergeTreeBlockOutputStream;
 
 public:
@@ -28,7 +27,6 @@ public:
     bool supportsPrewhere() const override { return true; }
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
-    bool canUseAdaptiveGranularity() const override { return false; }
     StoragePolicyPtr getLocalStoragePolicy() const override;
 
     void startup() override;

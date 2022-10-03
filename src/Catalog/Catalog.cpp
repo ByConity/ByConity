@@ -180,8 +180,6 @@ namespace ProfileEvents
     extern const Event SetTransactionRecordWithRequestsFailed;
     extern const Event SetTransactionRecordCleanTimeSuccess;
     extern const Event SetTransactionRecordCleanTimeFailed;
-    extern const Event SetTransactionRecordStatusWithMemoryBufferSuccess;
-    extern const Event SetTransactionRecordStatusWithMemoryBufferFailed;
     extern const Event SetTransactionRecordStatusWithOffsetsSuccess;
     extern const Event SetTransactionRecordStatusWithOffsetsFailed;
     extern const Event RollbackTransactionSuccess;
@@ -310,20 +308,6 @@ namespace ProfileEvents
     extern const Event GetTablePartitionMetricsFailed;
     extern const Event GetTablePartitionMetricsFromMetastoreSuccess;
     extern const Event GetTablePartitionMetricsFromMetastoreFailed;
-    extern const Event GetOrSetBufferManagerMetadataSuccess;
-    extern const Event GetOrSetBufferManagerMetadataFailed;
-    extern const Event RemoveBufferManagerMetadataSuccess;
-    extern const Event RemoveBufferManagerMetadataFailed;
-    extern const Event GetBufferLogMetadataVecSuccess;
-    extern const Event GetBufferLogMetadataVecFailed;
-    extern const Event SetCnchLogMetadataSuccess;
-    extern const Event SetCnchLogMetadataFailed;
-    extern const Event SetCnchLogMetadataInBatchSuccess;
-    extern const Event SetCnchLogMetadataInBatchFailed;
-    extern const Event GetCnchLogMetadataSuccess;
-    extern const Event GetCnchLogMetadataFailed;
-    extern const Event RemoveCnchLogMetadataSuccess;
-    extern const Event RemoveCnchLogMetadataFailed;
     extern const Event UpdateTopologiesSuccess;
     extern const Event UpdateTopologiesFailed;
     extern const Event GetTopologiesSuccess;
@@ -740,8 +724,6 @@ namespace Catalog
 
                     if (context.getCnchStorageCache())
                         context.getCnchStorageCache()->remove(db, name);
-                    /// TODO: should we keep those metadata until GC ?
-                    meta_proxy->removeBufferManagerMetadata(name_space, UUID(stringToUUID(table_uuid)));
 
                     if (context.getPartCacheManager())
                         context.getPartCacheManager()->invalidPartCache(UUID(stringToUUID(table_uuid)));
@@ -2098,59 +2080,6 @@ namespace Catalog
             ProfileEvents::TryGetTransactionRecordSuccess,
             ProfileEvents::TryGetTransactionRecordFailed);
         return outRes;
-    }
-
-    bool Catalog::setTransactionRecordStatusWithMemoryBuffer(
-        const TransactionRecord & expected_record,
-        TransactionRecord & target_record,
-        const Strings & buffer_keys_in_kv,
-        const Strings & buffer_values_in_kv,
-        const String & consumer_group,
-        const cppkafka::TopicPartitionList & tpl)
-    {
-        bool res;
-        runWithMetricSupport(
-            [&] {
-                // Get CAS expected txn model
-                String expected_txn_data = expected_record.serialize();
-
-                // Set CAS target txn model
-                String target_txn_data = target_record.serialize();
-
-                res = meta_proxy->updateTransactionRecordWithMemoryBuffer(
-                    name_space,
-                    expected_record.txnID().toUInt64(),
-                    expected_txn_data,
-                    target_txn_data,
-                    buffer_keys_in_kv,
-                    buffer_values_in_kv,
-                    consumer_group,
-                    tpl);
-
-                if (res)
-                {
-                    res = true;
-                }
-                else
-                {
-                    if (target_txn_data.empty())
-                    {
-                        LOG_WARNING(
-                            &Poco::Logger::get(__PRETTY_FUNCTION__),
-                            "Failed to update transaction record. Expected record: {}  not exist", expected_record.toString());
-                        target_record = expected_record;
-                        target_record.setStatus(CnchTransactionStatus::Unknown);
-                    }
-                    else
-                    {
-                        target_record = TransactionRecord::deserialize(target_txn_data);
-                    }
-                    res = false;
-                }
-            },
-            ProfileEvents::SetTransactionRecordStatusWithMemoryBufferSuccess,
-            ProfileEvents::SetTransactionRecordStatusWithMemoryBufferFailed);
-        return res;
     }
 
     bool Catalog::setTransactionRecordStatusWithOffsets(
@@ -4489,87 +4418,6 @@ namespace Catalog
             for (const String & dependency : dependencies)
                 batch_write.AddPut(SinglePutRequest(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id->uuid()), table_id->uuid()));
         }
-    }
-
-    void Catalog::setCnchLogMetadata(const String & log_name, const Protos::CnchLogMetadata & metadata)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->setCnchLogMetadata(name_space, log_name, metadata); },
-            ProfileEvents::SetCnchLogMetadataSuccess,
-            ProfileEvents::SetCnchLogMetadataFailed);
-    }
-
-    void Catalog::setCnchLogMetadataInBatch(const Strings & log_names, const std::vector<Protos::CnchLogMetadata> & metadata_vec)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->setCnchLogMetadataInBatch(name_space, log_names, metadata_vec); },
-            ProfileEvents::SetCnchLogMetadataInBatchSuccess,
-            ProfileEvents::SetCnchLogMetadataInBatchFailed);
-    }
-
-    std::shared_ptr<Protos::CnchLogMetadata> Catalog::getCnchLogMetadata(const String & log_name)
-    {
-        std::shared_ptr<Protos::CnchLogMetadata> res;
-        runWithMetricSupport(
-            [&] { res = meta_proxy->getCnchLogMetadata(name_space, log_name); },
-            ProfileEvents::GetCnchLogMetadataSuccess,
-            ProfileEvents::GetCnchLogMetadataFailed);
-        return res;
-    }
-
-    void Catalog::removeCnchLogMetadata(const String & log_name)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->removeCnchLogMetadata(name_space, log_name); },
-            ProfileEvents::RemoveCnchLogMetadataSuccess,
-            ProfileEvents::RemoveCnchLogMetadataFailed);
-    }
-
-    std::vector<Protos::CnchLogMetadata> Catalog::getBufferLogMetadataVec(const UUID & uuid)
-    {
-        std::vector<Protos::CnchLogMetadata> res;
-        runWithMetricSupport(
-            [&] { res = meta_proxy->getBufferLogMetadataVec(name_space, uuid); },
-            ProfileEvents::GetBufferLogMetadataVecSuccess,
-            ProfileEvents::GetBufferLogMetadataVecFailed);
-        return res;
-    }
-
-    std::shared_ptr<Protos::BufferManagerMetadata> Catalog::getOrSetBufferManagerMetadata(const StoragePtr & storage)
-    {
-        std::shared_ptr<Protos::BufferManagerMetadata> outRes;
-        runWithMetricSupport(
-            [&] {
-                auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-
-                auto uuid = cnch_table->getStorageID().uuid;
-                auto res = meta_proxy->tryGetBufferManagerMetadata(name_space, uuid);
-                if (res)
-                {
-                    outRes = res;
-                    return;
-                }
-                res = std::make_shared<Protos::BufferManagerMetadata>();
-                RPCHelpers::fillStorageID(cnch_table->getStorageID(), *res->mutable_storage_id());
-                /// FIXME: if CnchStorageMergeTree is ready
-                // res->set_wal_type(cnch_table->getSettings()->wal_type);
-                // res->set_memory_buffer_num(cnch_table->getSettings()->cnch_memory_buffer_size);
-                res->set_status(0);
-
-                meta_proxy->setBufferManagerMetadata(name_space, uuid, *res);
-                outRes = res;
-            },
-            ProfileEvents::GetOrSetBufferManagerMetadataSuccess,
-            ProfileEvents::GetOrSetBufferManagerMetadataFailed);
-        return outRes;
-    }
-
-    void Catalog::removeBufferManagerMetadata(const UUID & uuid)
-    {
-        runWithMetricSupport(
-            [&] { meta_proxy->removeBufferManagerMetadata(name_space, uuid); },
-            ProfileEvents::RemoveBufferManagerMetadataSuccess,
-            ProfileEvents::RemoveBufferManagerMetadataFailed);
     }
 
     void Catalog::createVirtualWarehouse(const String & vw_name, const VirtualWarehouseData & data)

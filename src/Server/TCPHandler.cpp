@@ -324,6 +324,8 @@ void TCPHandler::runImpl()
             after_check_cancelled.restart();
             after_send_progress.restart();
 
+            state.io.watch.start();
+
             if (state.io.out)  /// `INSERT VALUES` in server side
             {
                 state.need_receive_data_for_insert = true;

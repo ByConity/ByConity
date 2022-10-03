@@ -105,11 +105,12 @@ struct ExtendedProfileInfo
     size_t read_rows = 0;
     size_t read_bytes = 0;
     size_t read_cached_bytes = 0;
-    size_t read_duration = 0;  /// ms
 
     size_t written_rows = 0;
     size_t written_bytes = 0;
     size_t written_duration = 0;   /// ms
+
+    size_t runtime_latency = 0;  /// ms
 
     void read(ReadBuffer & in);
     void write(WriteBuffer & out) const;

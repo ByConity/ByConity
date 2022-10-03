@@ -156,10 +156,6 @@ QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
     {
         return QueryProcessingStage::Complete;
     }
-    else if (getSettings()->cnch_enable_memory_buffer)
-    {
-        return QueryProcessingStage::WithMergeableState;
-    }
     else if (auto worker_group = local_context->tryGetCurrentWorkerGroup())
     {
         size_t num_workers = worker_group->getShardsInfo().size();
@@ -174,25 +170,10 @@ QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
 
 void StorageCnchMergeTree::startup()
 {
-    /// LOG_DEBUG(log, "Startup cnch table " << getLogName());
-    try
-    {
-        /// FIXME: add this after merging daemon manager
-        // if (this->settings.cnch_enable_memory_buffer)
-        // {
-        //     if (auto daemon_manager = global_context.getDaemonManagerClient(); daemon_manager)
-        //         daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::MemoryBuffer, Protos::ControlDaemonJobReq::Start);
-        // }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log);
-    }
 }
 
 void StorageCnchMergeTree::shutdown()
 {
-    /// LOG_DEBUG(log, "Shutdown cnch table " << getLogName());
 }
 
 Pipe StorageCnchMergeTree::read(
@@ -249,9 +230,6 @@ void StorageCnchMergeTree::read(
         return;
     }
 
-    // bool need_read_memory_buffer = this->getSettings()->cnch_enable_memory_buffer && !metadata_snapshot->hasUniqueKey() &&
-    //                                 !local_context->getSettingsRef().cnch_skip_memory_buffers;
-
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
     auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
 
@@ -266,29 +244,6 @@ void StorageCnchMergeTree::read(
         local_context->getExternalTables());
 
     ClusterProxy::executeQuery(query_plan, select_stream_factory, log, modified_query_ast, local_context, worker_group);
-
-    /// FIXME: support memory buffer
-    // if (need_read_memory_buffer)
-    // {
-    //     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
-    //         header, processed_stage, QualifiedTableName{getDatabaseName(), getTableName()}, local_context.getExternalTables(), true, nullptr);
-
-    //     const auto & buffer_workers = getMemoryBufferWorkers(local_context);
-    //     if (buffer_workers.empty())
-    //         throw Exception("No memory buffer found for " + getStorageID().getNameForLogs() + " while try to read buffers", ErrorCodes::LOGICAL_ERROR);
-
-    //     auto vw_name = "#temp_buffer_vw";
-    //     auto worker_group_name = "#temp_buffer_wg";
-    //     auto buffer_worker_group = std::make_shared<WorkerGroupHandleImpl>(worker_group_name, WorkerGroupHandleSource::TEMP, vw_name, buffer_workers, local_context);
-
-    //     LOG_TRACE(
-    //         log,
-    //         "Create temporary worker group: " << buffer_worker_group->getQualifiedName()
-    //                                           << " with size: " << buffer_worker_group->getHostWithPortsVec().size());
-
-    //     auto streams_from_buffers = ClusterProxy::executeQuery(select_stream_factory, buffer_worker_group, query_info.query, local_context, settings);
-    //     streams.insert(streams.end(), streams_from_buffers.begin(), streams_from_buffers.end());
-    // }
 
     if (!query_plan.isInitialized())
         throw Exception("Pipeline is not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -824,56 +779,22 @@ StorageCnchMergeTree::write(const ASTPtr & query, const StorageMetadataPtr & met
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)
 {
-    using ResourceManagement::VirtualWarehouseType;
-    if (getSettings()->cnch_enable_memory_buffer)
+    String vw_name = local_context->getSettingsRef().virtual_warehouse_write;
+    if (vw_name.empty())
+        vw_name = getSettings()->cnch_vw_write;
+
+    if (vw_name.empty())
+        throw Exception("Expected a nonempty vw name. Please specify it in query or table settings", ErrorCodes::BAD_ARGUMENTS);
+
+    // No fixed workers for insertion, pick one randomly from worker pool
+    auto vw_handle = local_context->getVirtualWarehousePool().get(vw_name);
+    HostWithPortsVec res;
+    for (const auto & [_, wg] : vw_handle->getAll())
     {
-        /// If enabled memory buffer, the table must have several fixed WRITE workers.
-        /// Get the list and pick one from them
-        HostWithPortsVec memory_buffers;
-
-        /// FIXME: add after memory buffer is supported
-        // auto bmptr = getContext()->tryGetMemoryBufferManager(getStorageID());
-        // auto buffer_manager = dynamic_cast<MemoryBufferManager*>(bmptr.get());
-        // if (buffer_manager)
-        // {
-        //     memory_buffers = buffer_manager->getWorkerListWithBuffer();
-        // }
-        // else
-        // {
-        //     /// Try get memory buffer from remote server
-        //     String host_port
-        //         = global_context.getDaemonManagerClient()->getDaemonThreadServer(getStorageID(), CnchBGThreadType::MemoryBuffer);
-        //     if (host_port.empty())
-        //         throw Exception("No memory buffer manager found for targert table", ErrorCodes::LOGICAL_ERROR);
-
-        //     auto server_client = global_context.getCnchServerClient(host_port);
-        //     memory_buffers = server_client->getWorkerListWithBuffer(getStorageID(), true);
-        // }
-
-        // if (memory_buffers.empty())
-        //     throw Exception("Memory buffer is empty, can't choose a write worker", ErrorCodes::LOGICAL_ERROR);
-
-        return memory_buffers;
+        auto wg_hosts = wg->getHostWithPortsVec();
+        res.insert(res.end(), wg_hosts.begin(), wg_hosts.end());
     }
-    else
-    {
-        String vw_name = local_context->getSettingsRef().virtual_warehouse_write;
-        if (vw_name.empty())
-            vw_name = getSettings()->cnch_vw_write;
-
-        if (vw_name.empty())
-            throw Exception("Expected a nonempty vw name. Please specify it in query or table settings", ErrorCodes::BAD_ARGUMENTS);
-
-        // No fixed workers for insertion, pick one randomly from worker pool
-        auto vw_handle = local_context->getVirtualWarehousePool().get(vw_name);
-        HostWithPortsVec res;
-        for (const auto & [_, wg] : vw_handle->getAll())
-        {
-            auto wg_hosts = wg->getHostWithPortsVec();
-            res.insert(res.end(), wg_hosts.begin(), wg_hosts.end());
-        }
-        return res;
-    }
+    return res;
 }
 
 bool StorageCnchMergeTree::optimize(const ASTPtr & query, const StorageMetadataPtr &, const ASTPtr & partition, bool final, bool, const Names &, ContextPtr query_context)
@@ -954,43 +875,35 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     if (parts.empty())
         return {};
 
-    auto worker_group = getWorkerGroupForTable(*this, local_context);
-    auto worker_clients = worker_group->getWorkerClients();
-    const auto & shards_info = worker_group->getShardsInfo();
+    MutableMergeTreeDataPartsCNCHVector cnch_parts;
+    cnch_parts.reserve(parts.size());
+    std::transform(
+        parts.begin(), parts.end(), std::back_inserter(cnch_parts), [this](const auto & part) { return part->toCNCHDataPart(*this); });
 
-    size_t num_of_workers = shards_info.size();
-    if (!num_of_workers)
-        throw Exception("No heathy worker available.", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
-
-    CheckResults results;
-    /// FIXME: add after supporting part allocation and rpc
-    // std::mutex mutex;
-
-    // auto assignment = assignCnchParts(worker_group, parts);
-
-    // ThreadPool allocate_pool(std::min<UInt64>(local_context.getSettingsRef().parts_preallocate_pool_size, num_of_workers));
-
-    // for (size_t i = 0; i < num_of_workers; ++i)
-    // {
-    //     auto allocate_task = [&, i]
-    //     {
-    //         auto it = assignment.find(shards_info[i].worker_id);
-    //         if (it == assignment.end())
-    //             return;
-
-    //         auto result = worker_clients[i]->checkDataParts(local_context.getCurrentCnchXID(), *this, local_table_name, create_table_query, it->second);
-
-    //         {
-    //            std::lock_guard lock(mutex);
-    //            results.insert(results.end(), result.begin(), result.end());
-    //         }
-    //     };
-
-    //     allocate_pool.schedule(allocate_task);
-    // }
-
-    // /// wait for finish of part preallocation
-    // allocate_pool.wait();
+    CheckResults results(cnch_parts.size());
+    ThreadPool pool(std::min(16UL, cnch_parts.size()));
+    for (size_t i = 0; i < cnch_parts.size(); ++i)
+    {
+        pool.scheduleOrThrow([i, &cnch_parts, &results] {
+            String message;
+            bool is_passed = false;
+            try
+            {
+                cnch_parts[i]->loadFromFileSystem(false);
+                is_passed = true;
+                message.clear();
+            }
+            catch (const Exception & e)
+            {
+                is_passed = false;
+                message = e.message();
+            }
+            results[i].fs_path = cnch_parts[i]->getFullPath();
+            results[i].success = is_passed;
+            results[i].failure_message = std::move(message);
+        });
+    }
+    pool.wait();
 
     return results;
 }

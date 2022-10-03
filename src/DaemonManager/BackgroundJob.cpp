@@ -174,7 +174,7 @@ Result BackgroundJob::remove(CnchBGThreadAction remove_type)
         host_port_copy = host_port;
     }
 
-    /// TODO: handle the case memory buffer stopped on dead or restart server
+    /// TODO: handle the case restart server
     if (host_port_copy.empty())
     {
         LOG_DEBUG(
@@ -324,4 +324,3 @@ void BackgroundJob::setExpectedStatus(CnchBGThreadStatus status_)
 
 } // end namespace Daemon Manager
 } // end namespace DB
-
