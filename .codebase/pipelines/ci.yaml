@@ -115,7 +115,7 @@ jobs:
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
           - bash /home/code/docker/test/foundationdb/show_fdb.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -134,7 +134,7 @@ jobs:
           - export ENABLE_IPV6=1
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
           - bash /home/code/docker/test/foundationdb/show_fdb.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -151,7 +151,7 @@ jobs:
         ignore-error: true
         commands:
           - bash /home/code/.codebase/ci_scripts/cnch_config/1_single_server/cluster_up.sh
-          - export ADDITIONAL_OPTIONS='--jobs 4 --run cnch_problematic_stateless'
+          - export ADDITIONAL_OPTIONS='--jobs 1 --run cnch_problematic_stateless'
           - cp -r /home/code/docker/test/stateless/* .
           - /bin/bash run_cnch.sh
       - *after_test
@@ -240,7 +240,7 @@ jobs:
             echo "Load tables for certificates done"
 
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - export ADDITIONAL_OPTIONS='--jobs 4'
+          - export ADDITIONAL_OPTIONS='--jobs 1'
           - /bin/bash run_cnch.sh
       - *after_test
       - *upload_artifact
@@ -293,7 +293,7 @@ jobs:
           - bash /home/code/.codebase/ci_scripts/cnch_config/2_backward_compability/cluster_up.sh
           - cp -r /home/code/docker/test/certificate/* ./
           - cp /home/code/docker/test/stateless/process_functional_tests_result.py process_functional_tests_result.py
-          - export ADDITIONAL_OPTIONS='--jobs 4'
+          - export ADDITIONAL_OPTIONS='--jobs 2'
           - /bin/bash run_cnch.sh
 
       - *after_test

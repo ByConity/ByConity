@@ -19,24 +19,24 @@ insert into test_session values (1568426340, 1568426340, 'predefine_pageview', 0
 insert into test_session values (1568426461, 1568426461, '_be_active', 1568426461*1000, 1568426521*1000, 'data.bytedance.net?test=6_3', 'inner', 'test6_3', 6);
 
 SELECT '--------first sessionSplit(1)--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, start_time)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3; -- { serverError 43 }
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, start_time), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3; -- { serverError 43 }
 SELECT '--------first sessionSplit(2)--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, url, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, time, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3; -- { serverError 43 }
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, url, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, time, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3; -- { serverError 43 }
 SELECT '--------first sessionSplitR2--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplitR2(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplitR2(1800, 86400, 0, 0)(server_time, event, time, start_time, end_time, url, referer_type), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
 
 SELECT '--------last sessionSplit(1)--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
 SELECT '--------last sessionSplit(2)--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplit(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, url, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplit(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name, url, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
 SELECT '--------last sessionSplitR2--------';
-SELECT * FROM (SELECT arrayJoin(sessionSplitR2(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
+SELECT * FROM (SELECT arrayJoin(ifnull(sessionSplitR2(1800, 86400, 0, 1)(server_time, event, time, start_time, end_time, url, referer_type), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.3;
 
 SELECT '--------pageTime--------';
-SELECT * FROM (SELECT arrayJoin(pageTime(1800, 86400, 0)(server_time, event, time, start_time, end_time, url, referer_type)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.1;
+SELECT * FROM (SELECT arrayJoin(ifnull(pageTime(1800, 86400, 0)(server_time, event, time, start_time, end_time, url, referer_type), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.1;
 SELECT '--------pageTime2--------';
-SELECT * FROM (SELECT arrayJoin(pageTime2(1800, 86400, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name)) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.1;
+SELECT * FROM (SELECT arrayJoin(ifnull(pageTime2(1800, 86400, 0)(server_time, event, time, start_time, end_time, url, referer_type, referer_site_name), [])) AS pt FROM test_session GROUP BY hash_uid ORDER BY hash_uid) ORDER BY pt.1;
 
 DROP TABLE test_session;

@@ -443,20 +443,19 @@ static Block getBlockWithPartColumn(ServerDataPartsVector & parts)
 
 time_t StorageCnchMergeTree::getTTLForPartition(const MergeTreePartition & partition) const
 {
-    TTLTableDescription table_ttl = getInMemoryMetadata().getTableTTLs();
+    auto metadata_snapshot = getInMemoryMetadataPtr();
+    TTLTableDescription table_ttl =  metadata_snapshot->getTableTTLs();
     if (!table_ttl.definition_ast)
         return 0;
 
     /// Construct a block consists of partition keys then compute ttl values according to this block
-    const auto & partition_key_sample = getInMemoryMetadataPtr()->getPartitionKey().sample_block;
-
+    const auto & partition_key_sample = metadata_snapshot->getPartitionKey().sample_block;
     MutableColumns columns = partition_key_sample.cloneEmptyColumns();
     const auto & partition_key = partition.value;
     /// This can happen when ALTER query is implemented improperly; finish ALTER query should bypass this check.
     if (columns.size() != partition_key.size())
         throw Exception(
-            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition mismatch between in-memory({}) and metastore({}), this is a bug",
-            columns.size(), partition_key.size());
+            ErrorCodes::LOGICAL_ERROR, "Partition key columns definition missmatch between inmemory and metastore, this is a bug, expect block ({}), got values ({})\n", partition_key_sample.dumpNames(), fmt::join(partition_key, ", "));
     for (size_t i = 0; i < partition_key.size(); ++i)
         columns[i]->insert(partition_key[i]);
 
@@ -1813,13 +1812,13 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
 ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(ContextPtr local_context, const PartitionCommand & command)
 {
     /// The members of `command` have different meaning depending on the types of partition command:
-    /// 1. DROP / DETACH PART:
+    /// 1. <COMMAND> PART:
     ///    - command.part = true
     ///    - command.partition is ASTLiteral of part name
-    /// 2. DROP / DETACH PARTITION <ID>:
+    /// 2. <COMMAND> PARTITION <ID>:
     ///    - command.part = false
     ///    - command.partition is partition expression
-    /// 3. DROP / DETACH PARTHTION WHERE:
+    /// 3. <COMMAND> PARTHTION WHERE:
     ///    - command.part = false;
     ///    - command.partition is the WHERE predicate (should only includes partition column)
 

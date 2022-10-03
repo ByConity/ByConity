@@ -1,6 +1,7 @@
 SET show_table_uuid_in_table_create_query_if_not_nil = 0;  -- show table without uuid
 
-
+CREATE DATABASE IF NOT EXISTS db_01493;
+USE db_01493;
 
 DROP TABLE IF EXISTS prop_table;
 
