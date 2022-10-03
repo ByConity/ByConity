@@ -780,7 +780,7 @@ Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, C
             if (!bg_ptr)
             {
                 auto error_msg = fmt::format("bg job doesn't exist for table: {} hence, stop wakeup", storage_id.getNameForLogs());
-                return {error_msg, true};
+                return {error_msg, false};
             }
             else
                 return bg_ptr->wakeup();
