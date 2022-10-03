@@ -90,7 +90,8 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->rows_count = part_model.rows_count();
     if (!part_model.has_marks_count())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Cnch parts must have mark count");
-    part->loadIndexGranularity(part_model.marks_count(), {});
+    std::vector<size_t> index_granularities(part_model.index_granularities().begin(), part_model.index_granularities().end());
+    part->loadIndexGranularity(part_model.marks_count(), index_granularities);
     part->deleted = part_model.has_deleted() && part_model.deleted();
     part->bucket_number = part_model.bucket_number();
     part->table_definition_hash = part_model.table_definition_hash();
@@ -182,6 +183,12 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     part_model.set_size(part.bytes_on_disk);
     part_model.set_rows_count(part.rows_count);
     ///TODO: if we need marks_count in ce?
+    if (part.index_granularity_info.is_adaptive)
+    {
+        auto part_index_granularity = part.index_granularity.getIndexGranularities();
+        part_model.mutable_index_granularities()->Add(part_index_granularity.begin(), part_index_granularity.end());
+    }
+
     const auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this());
     if (cnch_part)
         part_model.set_marks_count(cnch_part->getMarksCount());

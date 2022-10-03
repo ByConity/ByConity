@@ -247,9 +247,22 @@ void MergeTreeCloudData::loadDataPartsInParallel(MutableDataPartsVector & parts)
 
     size_t pool_size = std::min(parts_without_cache.size(), UInt64(cnch_parallel_prefetching));
     /// load checksums and index_granularity in parallel
-    runOverPartsInParallel(parts_without_cache, pool_size, [](auto & part) {
+    std::atomic<bool> has_adaptive_parts = false;
+    std::atomic<bool> has_non_adaptive_parts = false;
+    runOverPartsInParallel(parts_without_cache, pool_size, [&](auto & part) {
         part->loadColumnsChecksumsIndexes(false, false);
+        if (part->index_granularity_info.is_adaptive)
+            has_adaptive_parts.store(true, std::memory_order_relaxed);
+        else
+            has_non_adaptive_parts.store(true, std::memory_order_relaxed);
     });
+
+    if (has_non_adaptive_parts && has_adaptive_parts && !getSettings()->enable_mixed_granularity_parts)
+    {
+        throw Exception("Table contains parts with adaptive and non adaptive marks, but `setting enable_mixed_granularity_parts` is disabled", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    has_non_adaptive_index_granularity_parts = has_non_adaptive_parts;
 }
 
 void MergeTreeCloudData::runOverPartsInParallel(

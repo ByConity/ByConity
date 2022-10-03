@@ -113,7 +113,6 @@ void PartConverter::execute()
     {
         auto part = std::make_shared<MergeTreeDataPartCNCH>(*storage, name, single_volume, name + '/');
         part->loadFromFileSystem();
-        part->loadIndexGranularity(0,{});
         return part;
     };
 

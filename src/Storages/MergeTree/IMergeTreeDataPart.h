@@ -659,6 +659,5 @@ bool isWidePart(const MergeTreeDataPartPtr & data_part);
 bool isInMemoryPart(const MergeTreeDataPartPtr & data_part);
 bool isCnchPart(const MergeTreeDataPartPtr & data_part);
 
-void readPartBinary(IMergeTreeDataPart & part, ReadBuffer& buf, bool read_hint_mutation = true);
 void writePartBinary(const IMergeTreeDataPart & part, WriteBuffer & buf);
 }
