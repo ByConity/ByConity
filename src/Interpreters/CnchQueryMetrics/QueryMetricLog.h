@@ -17,17 +17,16 @@ struct QueryMetricElement
     String server_id;
     time_t event_time{};
     UInt32 latency{};
+    UInt32 runtime_latency{};  /// ms, the wall clock time duration of the total query pipeline execution
     UInt32 init_time{};
     UInt32 catalog_time{};
     UInt32 total_partitions{};
     UInt32 pruned_partitions{};
     UInt32 selected_parts{};
-    UInt32 cpu_time{};
     UInt64 peak_memory{};
     UInt32 read_rows{};
     UInt64 read_bytes{};
     UInt64 read_cached_bytes{};
-    UInt64 read_duration{};
     UInt32 write_rows{};
     UInt64 write_bytes{};
     UInt64 write_duration{};
@@ -50,17 +49,16 @@ struct QueryMetricElement
         String server_id_ = {},
         time_t event_time_ = {},
         UInt32 latency_ = 0,
+        UInt32 runtime_latency_ = 0,
         UInt32 init_time_ = 0,
         UInt32 catalog_time_ = 0,
         UInt32 total_partitions_ = 0,
         UInt32 pruned_partitions_ = 0,
         UInt32 selected_parts_ = 0,
-        UInt32 cpu_time_ = 0,
         UInt64 peak_memory_ = 0,
         UInt32 read_rows_ = 0,
         UInt64 read_bytes_ = 0,
         UInt64 read_cached_bytes_ = 0,
-        UInt64 read_duration_ = 0,
         UInt32 write_rows_ = 0,
         UInt64 write_bytes_ = 0,
         UInt64 write_duration_ = 0,
@@ -81,17 +79,16 @@ struct QueryMetricElement
         , server_id(server_id_)
         , event_time(event_time_)
         , latency(latency_)
+        , runtime_latency(runtime_latency_)
         , init_time(init_time_)
         , catalog_time(catalog_time_)
         , total_partitions(total_partitions_)
         , pruned_partitions(pruned_partitions_)
         , selected_parts(selected_parts_)
-        , cpu_time(cpu_time_)
         , peak_memory(peak_memory_)
         , read_rows(read_rows_)
         , read_bytes(read_bytes_)
         , read_cached_bytes(read_cached_bytes_)
-        , read_duration(read_duration_)
         , write_rows(write_rows_)
         , write_bytes(write_bytes_)
         , write_duration(write_duration_)

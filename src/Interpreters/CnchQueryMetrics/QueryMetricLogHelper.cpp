@@ -205,6 +205,7 @@ void insertCnchQueryMetric(
     bool empty_stream,
     UInt8 complex_query,
     UInt32 init_time,
+    UInt32 runtime_latency,
     const String & exception,
     const String & stack_trace)
 {
@@ -236,12 +237,10 @@ void insertCnchQueryMetric(
         UInt32 total_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::TotalPartitions]).load() : 0;
         UInt32 pruned_partitions = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::PrunedPartitions]).load() : 0;
         UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]).load() : 0;
-        UInt32 cpu_time = (info) ? info->cpu_time : 0;
         UInt64 peak_memory = (info) ? info->peak_memory_usage : 0;
         UInt32 read_rows = 0;
         UInt64 read_bytes = 0;
         UInt64 read_cached_bytes = 0;
-        UInt64 read_duration = 0;
         UInt32 write_rows = 0;
         UInt64 write_bytes = 0;
         UInt64 write_duration = 0;
@@ -253,7 +252,7 @@ void insertCnchQueryMetric(
             read_rows = insert_profile_info.read_rows;
             read_bytes = insert_profile_info.read_bytes;
             read_cached_bytes = insert_profile_info.read_cached_bytes;
-            read_duration = insert_profile_info.read_duration;
+            runtime_latency = insert_profile_info.runtime_latency;
 
             write_rows = insert_profile_info.written_rows;
             write_bytes = insert_profile_info.written_bytes;
@@ -264,7 +263,6 @@ void insertCnchQueryMetric(
             read_rows = info->read_rows;
             read_bytes = info->read_bytes;
             read_cached_bytes = info->disk_cache_bytes;
-            read_duration = info->read_duration;
 
             write_rows = info->written_rows;
             write_bytes = info->written_bytes;
@@ -298,17 +296,16 @@ void insertCnchQueryMetric(
             server_id,
             event_time,
             latency,
+            runtime_latency,
             init_time,
             catalog_time,
             total_partitions,
             pruned_partitions,
             selected_parts,
-            cpu_time,
             peak_memory,
             read_rows,
             read_bytes,
             read_cached_bytes,
-            read_duration,
             write_rows,
             write_bytes,
             write_duration,
@@ -331,12 +328,10 @@ void insertCnchQueryMetric(
         UInt32 selected_parts = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedParts]).load() : 0;
         UInt32 selected_ranges = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedRanges]).load() : 0;
         UInt32 selected_marks = (info && info->profile_counters) ? ((*info->profile_counters)[ProfileEvents::SelectedMarks]).load() : 0;
-        UInt32 cpu_time = (info) ? info->cpu_time : 0;
         UInt64 peak_memory = (info) ? info->peak_memory_usage : 0;
         UInt32 read_rows = (info) ? info->read_rows : 0;
         UInt64 read_bytes = (info) ? info->read_bytes : 0;
         UInt64 read_cached_bytes = (info) ? info->disk_cache_bytes : 0;
-        UInt64 read_duration = (info) ? info->read_duration : 0;
         UInt32 write_rows = (info) ? info->written_rows : 0;
         UInt64 write_bytes = (info) ? info->written_bytes : 0;
         UInt64 write_duration = (info) ? info->written_duration : 0;
@@ -358,16 +353,15 @@ void insertCnchQueryMetric(
             worker_id,
             event_time,
             latency,
+            runtime_latency,
             selected_parts,
             selected_ranges,
             selected_marks,
             vfs_time,
-            cpu_time,
             peak_memory,
             read_rows,
             read_bytes,
             read_cached_bytes,
-            read_duration,
             write_rows,
             write_bytes,
             write_duration,

@@ -32,16 +32,15 @@ NamesAndTypesList QueryWorkerMetricElement::getNamesAndTypes()
         {"worker_id", std::make_shared<DataTypeString>()},
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"latency", std::make_shared<DataTypeUInt32>()},
+        {"runtime_latency", std::make_shared<DataTypeUInt32>()},
         {"selected_parts", std::make_shared<DataTypeUInt32>()},
         {"selected_ranges", std::make_shared<DataTypeUInt32>()},
         {"selected_marks", std::make_shared<DataTypeUInt32>()},
         {"vfs_time", std::make_shared<DataTypeUInt32>()},
-        {"cpu_time", std::make_shared<DataTypeUInt32>()},
         {"peak_memory", std::make_shared<DataTypeUInt64>()},
         {"read_rows", std::make_shared<DataTypeUInt32>()},
         {"read_bytes", std::make_shared<DataTypeUInt64>()},
         {"read_cached_bytes", std::make_shared<DataTypeUInt64>()},
-        {"read_duration", std::make_shared<DataTypeUInt64>()},
         {"write_rows", std::make_shared<DataTypeUInt32>()},
         {"write_bytes", std::make_shared<DataTypeUInt64>()},
         {"write_duration", std::make_shared<DataTypeUInt64>()},
@@ -68,16 +67,15 @@ void QueryWorkerMetricElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(worker_id);
     columns[i++]->insert(event_time);
     columns[i++]->insert(latency);
+    columns[i++]->insert(runtime_latency);
     columns[i++]->insert(selected_parts);
     columns[i++]->insert(selected_ranges);
     columns[i++]->insert(selected_marks);
     columns[i++]->insert(vfs_time);
-    columns[i++]->insert(cpu_time);
     columns[i++]->insert(peak_memory);
     columns[i++]->insert(read_rows);
     columns[i++]->insert(read_bytes);
     columns[i++]->insert(read_cached_bytes);
-    columns[i++]->insert(read_duration);
     columns[i++]->insert(write_rows);
     columns[i++]->insert(write_bytes);
     columns[i++]->insert(write_duration);
@@ -105,14 +103,13 @@ void QueryWorkerMetricElement::read(ReadBuffer & in)
 
     readVarUInt(event_time, in);
     readVarUInt(latency, in);
+    readVarUInt(runtime_latency, in);
     readVarUInt(vfs_time, in);
-    readVarUInt(cpu_time, in);
     readVarUInt(peak_memory, in);
 
     readVarUInt(read_rows, in);
     readVarUInt(read_bytes, in);
     readVarUInt(read_cached_bytes, in);
-    readVarUInt(read_duration, in);
 
     readVarUInt(write_rows, in);
     readVarUInt(write_bytes, in);
@@ -139,14 +136,13 @@ void QueryWorkerMetricElement::write(WriteBuffer & out) const
 
     writeVarUInt(event_time, out);
     writeVarUInt(latency, out);
+    writeVarUInt(runtime_latency, out);
     writeVarUInt(vfs_time, out);
-    writeVarUInt(cpu_time, out);
     writeVarUInt(peak_memory, out);
 
     writeVarUInt(read_rows, out);
     writeVarUInt(read_bytes, out);
     writeVarUInt(read_cached_bytes, out);
-    writeVarUInt(read_duration, out);
 
     writeVarUInt(write_rows, out);
     writeVarUInt(write_bytes, out);

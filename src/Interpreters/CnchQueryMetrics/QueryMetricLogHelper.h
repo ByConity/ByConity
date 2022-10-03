@@ -77,6 +77,7 @@ void insertCnchQueryMetric(
     bool empty_stream = false,
     UInt8 complex_query = 0,
     UInt32 init_time = 0,
+    UInt32 runtime_latency = 0,
     const String & exception = {},
     const String & stack_trace = {});
 

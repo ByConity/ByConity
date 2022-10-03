@@ -13,14 +13,6 @@ IOutputFormat::IOutputFormat(const Block & header_, WriteBuffer & out_)
 
 IOutputFormat::Status IOutputFormat::prepare()
 {
-    Stopwatch watch;
-    Stopwatch cpu_watch {CLOCK_THREAD_CPUTIME_ID};
-
-    SCOPE_EXIT({
-        read_elaspsed_milliseconds += watch.elapsedMilliseconds();
-        cpu_read_elaspsed_milliseconds += cpu_watch.elapsedMilliseconds();
-    });
-
     if (has_input)
         return Status::Ready;
 
@@ -74,14 +66,6 @@ static Chunk prepareTotals(Chunk chunk)
 
 void IOutputFormat::work()
 {
-    Stopwatch watch;
-    Stopwatch cpu_watch {CLOCK_THREAD_CPUTIME_ID};
-
-    SCOPE_EXIT({
-        read_elaspsed_milliseconds += watch.elapsedMilliseconds();
-        cpu_read_elaspsed_milliseconds += cpu_watch.elapsedMilliseconds();
-    });
-
     if (!prefix_written)
     {
         doWritePrefix();
