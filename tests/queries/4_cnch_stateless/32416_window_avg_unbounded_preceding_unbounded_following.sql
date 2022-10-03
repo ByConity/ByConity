@@ -1,6 +1,8 @@
 
+
+
 DROP TABLE IF EXISTS avg_unbounded_preceding_unbounded_following;
-CREATE TABLE avg_unbounded_preceding_unbounded_following (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() PRIMARY KEY id order by id;
+CREATE TABLE avg_unbounded_preceding_unbounded_following (id Int, department String, onboard_date String, age Int) ENGINE = CnchMergeTree() ORDER BY tuple();
 
 INSERT INTO avg_unbounded_preceding_unbounded_following VALUES('1', 'data', '2019-01-01', '20');
 INSERT INTO avg_unbounded_preceding_unbounded_following VALUES('2', 'data', '2019-03-01', '21');
