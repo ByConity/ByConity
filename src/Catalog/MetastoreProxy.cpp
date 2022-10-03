@@ -1,6 +1,5 @@
 #include <Catalog/MetastoreProxy.h>
 #include <Protos/DataModelHelpers.h>
-// #include <WAL/CnchLogHelpers.h>
 #include <cstddef>
 #include <random>
 #include <sstream>
@@ -59,7 +58,7 @@ void MetastoreProxy::addDatabase(const String & name_space, const Protos::DataMo
         metastore_ptr->batchWrite(batch_write, resp);
     }
     catch (Exception & e)
-    {   
+    {
         if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
         {
              /// check if db uuid has conflict with current metainfo
@@ -131,7 +130,7 @@ void MetastoreProxy::dropDatabase(const String & name_space, const Protos::DataM
     batch_write.AddDelete(dbTrashKey(name_space, name, ts));
     if (db_model.has_uuid())
         batch_write.AddDelete(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))));
-    
+
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -460,13 +459,6 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     /// remove dependency
     for (const String & dependency : dependencies)
         batch_write.AddDelete(viewDependencyKey(name_space, dependency, uuid));
-
-    /// remove all records about memory buffers
-    auto log_prefix = cnchLogKey(name_space, uuid);
-    for (auto it = metastore_ptr->getByPrefix(log_prefix); it->next(); )
-    {
-        batch_write.AddDelete(it->key());
-    }
 
     /// remove trash record if the table marked as deleted before be cleared
     batch_write.AddDelete(tableTrashKey(name_space, database, table, ts));
@@ -901,74 +893,6 @@ bool MetastoreProxy::updateTransactionRecordWithOffsets(const String &name_space
 
     return metastore_ptr->multiWriteCAS(keys, new_values, old_values);
      **/
-}
-
-bool MetastoreProxy::updateTransactionRecordWithMemoryBuffer(
-    const String & name_space,
-    const UInt64 & txn_id,
-    const String & txn_data_old,
-    String & txn_data_new,
-    const Strings & buffer_keys_in_kv,
-    const Strings & buffer_values_in_kv,
-    const String & consumer_group,
-    const cppkafka::TopicPartitionList & tpl)
-{
-    BatchCommitRequest batch_write;
-
-    // Write transaction record
-    batch_write.AddPut(SinglePutRequest(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old));
-
-    // Write memory buffer info
-    for (size_t i = 0; i < buffer_keys_in_kv.size(); i++)
-    {
-        auto & key = buffer_keys_in_kv[i];
-        auto & value = buffer_values_in_kv[i];
-        batch_write.AddPut(SinglePutRequest(cnchLogKey(name_space, key), value, value));
-    }
-
-    // Write Kafka consume offset
-    for (size_t i = 0; i < tpl.size(); ++i)
-    {
-        auto key = kafkaOffsetsKey(name_space, consumer_group, tpl[i].get_topic(), tpl[i].get_partition());
-        auto new_value = std::to_string(tpl[i].get_offset());
-        // NOTE: no cas here for offset
-        batch_write.AddPut(SinglePutRequest(key, new_value));
-    }
-
-    BatchCommitResponse resp;
-    bool res = false;
-    try
-    {
-        // Do not allow cas fail here, so that we can catch cas failed exception and extract content store in kv.
-        res = metastore_ptr->batchWrite(batch_write, resp);
-    }
-    catch (const Exception & e)
-    {
-        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
-        {
-            for (auto & [index, new_value] : resp.puts)
-            {
-                if (index == 0)
-                {
-                    LOG_WARNING(&Poco::Logger::get(__func__), "Transaction CAS failed, extracting txn data back from kv.");
-                    txn_data_new = new_value;
-                }
-                else if (static_cast<size_t>(index) < buffer_keys_in_kv.size() + 1)
-                {
-                    LOG_WARNING(&Poco::Logger::get(__func__),
-                        "Memory buffer CAS failed, failed key: {}", buffer_keys_in_kv[index - 1]);
-                }
-            }
-            // DO NOT throw anything here, let the caller handle the cas failed logic.
-            return false;
-        }
-        else
-        {
-            // Throw in other cases.
-            throw;
-        }
-    }
-    return res;
 }
 
 std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordWithRequests(
@@ -1479,103 +1403,6 @@ Strings MetastoreProxy::getDeleteBitmapByKeys(const Strings & keys)
     for (auto & ele : values)
         parts_meta.emplace_back(std::move(ele.first));
     return parts_meta;
-}
-
-void MetastoreProxy::setCnchLogMetadata(const String & name_space, const String & log_name, const Protos::CnchLogMetadata & metadata)
-{
-    String value;
-    metadata.SerializeToString(&value);
-
-    auto log_key = cnchLogKey(name_space, log_name);
-    metastore_ptr->put(log_key, value);
-}
-
-void MetastoreProxy::setCnchLogMetadataInBatch(const String &name_space, const Strings &log_names,
-                                               const std::vector<Protos::CnchLogMetadata>  &metadata_vec)
-{
-    if (log_names.size() != metadata_vec.size())
-        throw Exception("Unmatched size of keys and values while setCnchLogMetadataInBatch", ErrorCodes::LOGICAL_ERROR);
-
-    BatchCommitRequest batch_write;
-    for (size_t id = 0; id < log_names.size(); ++id)
-    {
-        String value;
-        metadata_vec[id].SerializeToString(&value);
-        batch_write.AddPut(SinglePutRequest(cnchLogKey(name_space, log_names[id]), value));
-    }
-    metastore_ptr->batchWrite(batch_write, BatchCommitResponse{});
-}
-
-std::shared_ptr<Protos::CnchLogMetadata> MetastoreProxy::getCnchLogMetadata(const String & name_space, const String & log_name)
-{
-    String value;
-    auto log_key = cnchLogKey(name_space, log_name);
-    metastore_ptr->get(log_key, value);
-    if (value.empty())
-        return nullptr;
-
-    auto res = std::make_shared<Protos::CnchLogMetadata>();
-    res->ParseFromString(value);
-    return res;
-}
-
-void MetastoreProxy::removeCnchLogMetadata(const String & name_space, const String & log_name)
-{
-    auto log_key = cnchLogKey(name_space, log_name);
-    metastore_ptr->drop(log_key);
-}
-
-std::vector<Protos::CnchLogMetadata> MetastoreProxy::getBufferLogMetadataVec([[maybe_unused]]const String & name_space, [[maybe_unused]]const UUID & uuid)
-{
-    std::vector<Protos::CnchLogMetadata> res;
-    ///FIXME:
-    //auto buffer_log_prefix = cnchLogKey(name_space, getCnchLogPrefixForBuffer(uuid));
-    String buffer_log_prefix = "mock";
-    auto it = metastore_ptr->getByPrefix(buffer_log_prefix);
-    while (it->next())
-    {
-        res.emplace_back();
-        res.back().ParseFromString(it->value());
-    }
-
-    return res;
-}
-
-std::shared_ptr<Protos::BufferManagerMetadata> MetastoreProxy::tryGetBufferManagerMetadata([[maybe_unused]]const String & name_space, [[maybe_unused]]const UUID & uuid)
-{
-    String value;
-    ///FIXME:
-    //auto manager_key = cnchLogKey(name_space, getCnchLogNameForBufferManager(uuid));
-    String manager_key= "mock";
-    metastore_ptr->get(manager_key, value);
-    if (value.empty())
-        return nullptr;
-
-    auto res = std::make_shared<Protos::BufferManagerMetadata>();
-    if (!res->ParseFromString(value))
-        throw Exception("Failed to parse metadata of buffer manager", ErrorCodes::LOGICAL_ERROR);
-    return res;
-}
-
-void MetastoreProxy::setBufferManagerMetadata(
-    [[maybe_unused]]const String & name_space, [[maybe_unused]]const UUID & uuid, const Protos::BufferManagerMetadata & metadata)
-{
-    String value;
-    if (!metadata.SerializeToString(&value))
-        throw Exception("Failed to serialize metadata of buffer manager to string", ErrorCodes::LOGICAL_ERROR);
-
-    ///FIXME:
-    //auto manager_key = cnchLogKey(name_space, getCnchLogNameForBufferManager(uuid));
-    String manager_key = "mock";
-    metastore_ptr->put(manager_key, value);
-}
-
-void MetastoreProxy::removeBufferManagerMetadata([[maybe_unused]]const String & name_space, [[maybe_unused]]const UUID & uuid)
-{
-    ///FIXME:
-    //auto manager_key = cnchLogKey(name_space, getCnchLogNameForBufferManager(uuid));
-    String manager_key = "mock";
-    metastore_ptr->clean(manager_key);
 }
 
 void MetastoreProxy::precommitInsertionLabel(const String & name_space, const InsertionLabelPtr & label)

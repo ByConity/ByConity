@@ -207,19 +207,6 @@ message DataModelTableInfo
     required bool cluster_status = 4;
 }
 
-message CnchLogMetadata
-{
-  required string name = 1;
-  required string wal_type = 2;
-  required uint64 min_lsn = 3;
-  required HostWithPorts host_ports = 4;
-
-  // Also save buffer uuid, id and create_state for every memory buffer
-  optional UUID buffer_uuid = 5;
-  optional uint32 buffer_id = 6;
-  optional uint32 create_state = 7;
-}
-
 message DroppedPartsMetadata
 {
     required uint64 txn_id = 1;
@@ -227,14 +214,6 @@ message DroppedPartsMetadata
     // Parts that have a block range <= max_block are all been dropped for a partition
     required uint64 max_block = 3;
     required uint64 commit_ts = 4;
-}
-
-message BufferManagerMetadata
-{
-  required StorageID storage_id = 1;
-  required string wal_type = 2;
-  required uint32 memory_buffer_num = 3;
-  required uint32 status = 4;
 }
 
 message DataModelTransactionRecord

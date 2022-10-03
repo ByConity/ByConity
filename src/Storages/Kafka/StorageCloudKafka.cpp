@@ -483,47 +483,27 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
     if (!server_client)
         throw Exception("Cannot get server client while copy data to server", ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
 
-    /// transaction is required while writing without memory-buffer
-    if (!cloud_table_enable_memory_buffer)
+    try
     {
-        try
-        {
-            auto txn = std::make_shared<CnchWorkerTransaction>(consume_context, server_client, getStorageID(), assigned_consumer_index);
-            consume_context->setCurrentTransaction(txn);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "create transaction failed for consuming kafka");
-            throw Exception("create transaction failed to " + server_client->getRPCAddress(), ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
-        }
-
-        /// set rpc info for committing later
-        auto & client_info = consume_context->getClientInfo();
-
-        // Poco::Net::SocketAddress can't parse ipv6 host with [] for example [::1], so always pass by host_port string created by createHostPortString
-        client_info.current_address =
-            Poco::Net::SocketAddress(
-                server_client_address.getRPCAddress()
-            );
-
-        client_info.rpc_port = server_client_address.rpc_port;
+        auto txn = std::make_shared<CnchWorkerTransaction>(consume_context, server_client, getStorageID(), assigned_consumer_index);
+        consume_context->setCurrentTransaction(txn);
     }
-    else
+    catch (...)
     {
-        try
-        {
-            /// TODO: server_client->checkConsumerValidity(getStorageID(), assigned_consumer_index);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Check validity of consumer failed and just detach self now");
-            throw Exception("Check validity of consumer failed due to " + getCurrentExceptionMessage(false), ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
-        }
-        /// create a fake transaction to transfer kafka storage-id
-        auto txn = consume_context->setTemporaryTransaction(TxnTimestamp::maxTS(), 0);
-        txn->setKafkaStorageID(getStorageID());
-        txn->setKafkaConsumerIndex(assigned_consumer_index);
+        tryLogCurrentException(log, "create transaction failed for consuming kafka");
+        throw Exception("create transaction failed to " + server_client->getRPCAddress(), ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
     }
+
+    /// set rpc info for committing later
+    auto & client_info = consume_context->getClientInfo();
+
+    // Poco::Net::SocketAddress can't parse ipv6 host with [] for example [::1], so always pass by host_port string created by createHostPortString
+    client_info.current_address =
+        Poco::Net::SocketAddress(
+            server_client_address.getRPCAddress()
+        );
+
+    client_info.rpc_port = server_client_address.rpc_port;
 
     /// execute insert query
     InterpreterInsertQuery interpreter{insert, consume_context, false, true, true};
@@ -661,15 +641,14 @@ bool StorageCloudKafka::checkDependencies(const String &database_name, const Str
             if (!cloud)
                 return false;
             if (table_name == getTableName() && database_name == getDatabaseName())
+            {
+                /* FIXME: unique table
+                cloud_table_has_unique_key = cloud->hasUniqueKey();
+                if (cloud_table_has_unique_key && check_staged_area)
                 {
-                    /// FIXME: memory buffer & unique table
-                    /* cloud_table_enable_memory_buffer = cloud->settings.cloud_enable_memory_buffer;
-                    cloud_table_has_unique_key = cloud->hasUniqueKey();
-                    if (cloud_table_has_unique_key && check_staged_area)
-                    {
-                        wait_for_staged_parts_to_publish = !cloud->checkStagedParts();
-                    } */
-                }
+                    wait_for_staged_parts_to_publish = !cloud->checkStagedParts();
+                } */
+            }
         }
 
         /// check its dependencies
@@ -835,16 +814,14 @@ void dropConsumerTables(ContextMutablePtr context, const String & db_name, const
                 try
                 {
                     auto target_table = mv->getTargetTable();
-                    if (auto *cloud_table = dynamic_cast<StorageCloudMergeTree*>(target_table.get()))
+                    if (auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(target_table.get()))
                     {
-                        /// FIXME: memory buffer
-                        /// if (!cloud_table->settings.cloud_enable_memory_buffer)
-                            tables_to_drop.emplace(backQuoteIfNeed(mv->getTargetDatabaseName()) + "." + backQuoteIfNeed(mv->getTargetTableName()));
+                        tables_to_drop.emplace(backQuoteIfNeed(mv->getTargetDatabaseName()) + "." + backQuoteIfNeed(mv->getTargetTableName()));
                     }
                 }
                 catch (...)
                 {
-                    LOG_WARNING(&Poco::Logger::get("CnchKafkaWorker"), "Get local target table failed which maybe caused by absence of memory buffer");
+                    LOG_WARNING(&Poco::Logger::get("CnchKafkaWorker"), "Get local target table failed");
                 }
 
             }
@@ -860,9 +837,9 @@ void dropConsumerTables(ContextMutablePtr context, const String & db_name, const
 
         try
         {
-            InterpreterDropQuery interpreter(parseQuery(parser, drop_table_command,
-                                                        context->getSettings().max_query_size, context->getSettings().max_parser_depth),
-                                             context);
+            InterpreterDropQuery interpreter(
+                parseQuery(parser, drop_table_command, context->getSettings().max_query_size, context->getSettings().max_parser_depth),
+                context);
             interpreter.execute();
         }
         catch (...)

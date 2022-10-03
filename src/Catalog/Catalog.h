@@ -226,17 +226,6 @@ public:
 
     void setTransactionRecordCleanTime(TransactionRecord record, const TxnTimestamp & ts, UInt64 ttl);
 
-    /// NOTE: Set transaction record status also with the consideration of the memory buffers info saved in kv
-    ///   The set successes only if the memory buffers info DO NOT have any changes, while we are setting the txn record.
-    ///   cas operation
-    bool setTransactionRecordStatusWithMemoryBuffer(
-        const TransactionRecord & expected_record,
-        TransactionRecord & target_record,
-        const Strings & buffer_keys_in_kv,
-        const Strings & buffer_values_in_kv,
-        const String & consumer_group,
-        const cppkafka::TopicPartitionList & tpl);
-
     bool setTransactionRecordStatusWithOffsets(
         const TransactionRecord & expected_record,
         TransactionRecord & record,
@@ -431,15 +420,6 @@ public:
     std::unordered_map<String, PartitionFullPtr> getTablePartitionMetrics(const DB::Protos::DataModelTable & table, bool & is_ready);
 
     std::unordered_map<String, PartitionMetricsPtr> getTablePartitionMetricsFromMetastore(const String & table_uuid);
-
-    std::shared_ptr<Protos::BufferManagerMetadata> getOrSetBufferManagerMetadata(const StoragePtr & storage);
-    void removeBufferManagerMetadata(const UUID & uuid);
-    std::vector<Protos::CnchLogMetadata> getBufferLogMetadataVec(const UUID & uuid);
-
-    void setCnchLogMetadata(const String & log_name, const Protos::CnchLogMetadata & metadata);
-    void setCnchLogMetadataInBatch(const Strings & log_names, const std::vector<Protos::CnchLogMetadata> & metadata_vec);
-    std::shared_ptr<Protos::CnchLogMetadata> getCnchLogMetadata(const String & log_name);
-    void removeCnchLogMetadata(const String & log_name);
 
     /// this is periodically called by leader server only
     void updateTopologies(const std::list<CnchServerTopology> & topologies);

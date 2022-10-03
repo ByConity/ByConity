@@ -8,7 +8,6 @@
 #include <IO/WriteBuffer.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCleaner.h>
-// #include <MergeTreeCommon/MemoryBufferManager.h>
 #include <mutex>
 
 namespace ProfileEvents
@@ -162,18 +161,13 @@ TxnTimestamp CnchServerTransaction::commit()
     if (isReadOnly() || !txn_record.isPrepared())
         throw Exception("Invalid commit operation", ErrorCodes::LOGICAL_ERROR);
 
-    auto from_buffer_uuid = getFromBufferUUID();
     TxnTimestamp commit_ts = global_context.getTimestamp();
     int retry = MAX_RETRY;
     do
     {
         try
         {
-            if (isPrimary() && !from_buffer_uuid.empty()) /// memory buffer transaction is always primary
-            {
-                throw Exception("Unreached logic", ErrorCodes::LOGICAL_ERROR);
-            }
-            else if (isPrimary() && !consumer_group.empty()) /// Kafka transaction is always primary
+            if (isPrimary() && !consumer_group.empty()) /// Kafka transaction is always primary
             {
                 if (tpl.empty())
                     throw Exception("No tpl found for committing Kafka transaction", ErrorCodes::LOGICAL_ERROR);
@@ -429,7 +423,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
             }
 
             catalog->clearUndoBuffer(txn_id);
-            
+
             /// to this point, can safely clear any lock if hold
             catalog->clearFilesysLock(txn_id);
 

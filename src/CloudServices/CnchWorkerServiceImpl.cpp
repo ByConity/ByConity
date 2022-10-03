@@ -734,13 +734,6 @@ void CnchWorkerServiceImpl::getConsumerStatus(
     }
 
 }
-void CnchWorkerServiceImpl::getOffsetsFromMemoryBuffer(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetOffsetsFromMemoryBufferReq * request,
-    Protos::GetOffsetsFromMemoryBufferResp * response,
-    google::protobuf::Closure * done)
-{
-}
 #endif
 
 void CnchWorkerServiceImpl::preloadChecksumsAndPrimaryIndex(
@@ -751,34 +744,6 @@ void CnchWorkerServiceImpl::preloadChecksumsAndPrimaryIndex(
 {
 }
 
-void CnchWorkerServiceImpl::createCloudMemoryBuffer(
-    google::protobuf::RpcController * cntl,
-    const Protos::CreateCloudMemoryBufferReq * request,
-    Protos::CreateCloudMemoryBufferResp * response,
-    google::protobuf::Closure * done)
-{
-}
-void CnchWorkerServiceImpl::dropCloudMemoryBuffer(
-    google::protobuf::RpcController * cntl,
-    const Protos::DropCloudMemoryBufferReq * request,
-    Protos::DropCloudMemoryBufferResp * response,
-    google::protobuf::Closure * done)
-{
-}
-void CnchWorkerServiceImpl::flushCloudMemoryBuffer(
-    google::protobuf::RpcController * cntl,
-    const Protos::FlushCloudMemoryBufferReq * request,
-    Protos::FlushCloudMemoryBufferResp * response,
-    google::protobuf::Closure * done)
-{
-}
-void CnchWorkerServiceImpl::getCloudMemoryBufferStatus(
-    google::protobuf::RpcController * cntl,
-    const Protos::GetCloudMemoryBufferStatusReq * request,
-    Protos::GetCloudMemoryBufferStatusResp * response,
-    google::protobuf::Closure * done)
-{
-}
 void CnchWorkerServiceImpl::getCloudMergeTreeStatus(
     google::protobuf::RpcController * cntl,
     const Protos::GetCloudMergeTreeStatusReq * request,

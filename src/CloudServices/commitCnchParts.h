@@ -30,7 +30,6 @@ public:
         ContextPtr context_,
         ManipulationType type_,
         String task_id_ = {},
-        String from_buffer_uuid_ = {},
         String consumer_group_ = {},
         const cppkafka::TopicPartitionList & tpl_ = {});
 
@@ -62,7 +61,6 @@ private:
     ContextPtr context;
     ManipulationType type;
     String task_id;
-    String from_buffer_uuid;
 
     String consumer_group;
     cppkafka::TopicPartitionList tpl;

@@ -72,9 +72,6 @@ void DedupWorkerManager::assignDeduperToWorker(StoragePtr & storage)
         replaceCnchWithCloud(
             *create_ast, worker_storage_id.table_name, storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName());
         modifyOrAddSetting(*create_ast, "cloud_enable_dedup_worker", Field(UInt64(1)));
-        /// table created by old version may have cnch_enable_memory_buffer set to 1, which will make the CREATE query fail on worker.
-        /// here we explicit disable the memory buffer to handle such case
-        modifyOrAddSetting(*create_ast, "cnch_enable_memory_buffer", Field(UInt64(0)));
         String create_query = getTableDefinitionFromCreateQuery(static_pointer_cast<IAST>(create_ast), false);
         LOG_TRACE(log, "Create table query of dedup worker: {}", create_query);
 

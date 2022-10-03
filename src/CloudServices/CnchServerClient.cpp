@@ -241,8 +241,7 @@ TxnTimestamp CnchServerClient::commitParts(
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
-    const cppkafka::TopicPartitionList & tpl,
-    const String & from_buffer_uuid)
+    const cppkafka::TopicPartitionList & tpl)
 {
     /// TODO: check txn_id & start_ts
 
@@ -282,9 +281,6 @@ TxnTimestamp CnchServerClient::commitParts(
     request.set_txn_id(UInt64(txn_id));
     if (!task_id.empty())
         request.set_task_id(task_id);
-
-    if (!from_buffer_uuid.empty())
-        request.set_from_buffer_uuid(from_buffer_uuid);
 
     /// add tpl for kafka commit
     if (!consumer_group.empty())
@@ -326,14 +322,13 @@ TxnTimestamp CnchServerClient::precommitParts(
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
-    const cppkafka::TopicPartitionList & tpl,
-    const String & from_buffer_uuid)
+    const cppkafka::TopicPartitionList & tpl)
 {
     // TODO: this method only apply to ManipulationType which supports 2pc
     if (type != ManipulationType::Insert)
     {
         // fallback to 1pc
-        return commitParts(txn_id, type, storage, parts, delete_bitmaps, staged_parts, task_id, from_server, consumer_group, tpl, from_buffer_uuid);
+        return commitParts(txn_id, type, storage, parts, delete_bitmaps, staged_parts, task_id, from_server, consumer_group, tpl);
     }
 
     const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
@@ -376,8 +371,7 @@ TxnTimestamp CnchServerClient::precommitParts(
             task_id,
             from_server,
             consumer_group,
-            tpl,
-            from_buffer_uuid);
+            tpl);
     }
 
     // no commit_time for precommit

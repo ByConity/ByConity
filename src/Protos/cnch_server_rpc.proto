@@ -16,23 +16,6 @@ message ReportTaskHeartbeatResp
   optional string exception = 1;
 }
 
-message ReportBufferHeartbeatReq
-{
-  required StorageID storage_id = 1;
-  required uint32 id = 2;
-  required HostWithPorts host_ports = 3;
-  // UUID every memory buffer associates
-  required UUID buffer_uuid = 4;
-  // A schema version denotes the schema in memory buffer
-  optional uint64 schema_version = 5;
-}
-
-message ReportBufferHeartbeatResp
-{
-  required uint32 code = 1;
-  optional string exception = 2;
-}
-
 message ReportDeduperHeartbeatReq
 {
   required StorageID cnch_storage_id = 1;
@@ -145,9 +128,6 @@ message CommitPartsReq
   repeated DataModelDeleteBitmap delete_bitmaps = 11;
   repeated DataModelPart staged_parts = 12;
   repeated string staged_parts_paths = 13;
-
-  // Buffer uuid where this commit starts from a memory buffer
-  optional string from_buffer_uuid = 15;
 };
 
 message CommitPartsResp
@@ -289,37 +269,6 @@ message InvalidateBytepondResp
   optional string exception = 1;
 }
 
-message ControlMemoryBufferManagerReq
-{
-  required StorageID storage_id = 1;
-  enum Action {
-    Launch = 0;
-    Stop = 1;
-    Wakeup = 2;
-    Remove = 3;
-  }
-  required Action action = 2;
-  optional bool drop_on_stop = 3;
-}
-
-message ControlMemoryBufferManagerResp
-{
-  optional string exception = 1;
-}
-
-message GetWorkerListWithBufferReq
-{
-  required StorageID storage_id = 1;
-  required bool skip_unavailable_buffers = 2;
-}
-
-message GetWorkerListWithBufferResp
-{
-  optional string exception = 1;
-  repeated HostWithPorts host_ports_vec = 2;
-  optional string vw_name = 3; /// TODO:
-}
-
 message GetTransactionStatusReq
 {
   required uint64 txn_id = 1;
@@ -456,7 +405,6 @@ message SubmitQueryWorkerMetricsResp
 service CnchServerService
 {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq) returns (ReportTaskHeartbeatResp);
-  rpc reportBufferHeartbeat(ReportBufferHeartbeatReq) returns (ReportBufferHeartbeatResp);
   rpc reportDeduperHeartbeat(ReportDeduperHeartbeatReq) returns (ReportDeduperHeartbeatResp);
 
   rpc checkConsumerValidity(CheckConsumerValidityReq) returns (CheckConsumerValidityResp);
@@ -477,8 +425,6 @@ service CnchServerService
   rpc getMinActiveTimestamp(GetMinActiveTimestampReq) returns (GetMinActiveTimestampResp);
 
   rpc controlCnchBGThread(ControlCnchBGThreadReq) returns (ControlCnchBGThreadResp);
-
-  rpc getWorkerListWithBuffer(GetWorkerListWithBufferReq) returns (GetWorkerListWithBufferResp);
 
   rpc getBackgroundThreadStatus(BackgroundThreadStatusReq) returns (BackgroundThreadStatusResp);
 

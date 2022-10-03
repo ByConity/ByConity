@@ -170,8 +170,6 @@ struct Settings;
     M(UInt64, bitengine_split_index, 0, "", 0) \
     M(Float, bitengine_encode_loss_rate, 0.1, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
-    M(Bool, cnch_enable_memory_buffer, false, "", 0) \
-    M(Bool, cloud_enable_memory_buffer, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
                                                                                                               \
     M(Bool, disable_block_output, false, "", 0) \
@@ -182,8 +180,6 @@ struct Settings;
     M(String, cnch_vw_read, "vw_read", "", 0) \
     M(String, cnch_vw_write, "vw_write", "", 0) \
     M(String, cnch_vw_task, "vw_task", "", 0) \
-    M(String, wal_type, "ByteJournal", "", 0) \
-    M(UInt64, cnch_memory_buffer_size, 1, "", 0) \
     \
     M(UInt64, time_travel_retention_days, 0, "", 0) \
     M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \

@@ -10,9 +10,6 @@
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/PartCacheManager.h>
 // #include <TSO/TSOClient.h>
-// #include <WAL/ByteJournalCommon.h>
-// #include <bytejournal/sdk/client.h>
-// #include <bytejournal/sdk/options.h>
 
 namespace DB::ResourceManagement
 {
@@ -40,7 +37,7 @@ ElectionController::ElectionController(ResourceManagerController & rm_controller
     auto & root_config = getContext()->getRootConfig();
     election_ns = root_config.bytejournal.name_space;
     election_point = String(root_config.bytejournal.cnch_prefix) + "rm_election_point";
-    LOG_DEBUG(&Poco::Logger::get("ElectionController"), 
+    LOG_DEBUG(&Poco::Logger::get("ElectionController"),
                 "Running for leader election in namespace: {}, election_point: {}",
                 election_ns, election_point);
 
