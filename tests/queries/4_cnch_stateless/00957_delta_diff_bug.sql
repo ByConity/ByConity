@@ -1,5 +1,5 @@
 
---SET allow_suspicious_codecs = 1;
+SET allow_suspicious_codecs = 1;
 
 DROP TABLE IF EXISTS segfault_table;
 

@@ -14,6 +14,6 @@ SELECT arrayMap(x -> x + sum(x + 1), arr) FROM t GROUP BY arr; -- { serverError 
 -- TODO: query fails when optimizer is off
 -- SELECT arrayMap(x -> x + sum(1) OVER (ORDER BY a), arr) FROM t;
 
-SELECT arrayMap(x -> x + sum(x) OVER (ORDER BY a), arr) FROM t; -- { serverError 10 }
+SELECT arrayMap(x -> x + sum(x) OVER (ORDER BY a), arr) FROM t; -- { serverError 47 }
 
 DROP TABLE IF EXISTS t;

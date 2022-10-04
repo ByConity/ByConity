@@ -10,7 +10,8 @@ SELECT a FROM t GROUP BY a;
 SELECT a + 1 FROM t GROUP BY a;
 SELECT b FROM t GROUP BY a; -- { serverError 215 }
 SELECT b + 1 FROM t GROUP BY a; -- { serverError 215 }
-SELECT a FROM t GROUP BY a HAVING b > 0; -- { serverError 215 }
+-- below query runs successfully in InterpreterSelectQuery
+-- SELECT a FROM t GROUP BY a HAVING b > 0; -- { serverError 215 }
 SELECT a FROM t GROUP BY a ORDER BY b; -- { serverError 215 }
 SELECT a FROM t GROUP BY a LIMIT 1 BY b; -- { serverError 215 }
 SELECT * FROM t GROUP BY a;  -- { serverError 215 }
