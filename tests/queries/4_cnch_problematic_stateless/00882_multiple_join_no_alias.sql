@@ -19,7 +19,7 @@ set enable_optimizer=0;
 select max(s.a) from t
 left join s on s.a = t.a
 left join y on s.b = y.b
-group by a order by a;
+group by t.a order by t.a;
 
 select t.a, t.a as t_a, s.a, s.a as s_a, y.a, y.a as y_a from t
 left join s on t.a = s.a
