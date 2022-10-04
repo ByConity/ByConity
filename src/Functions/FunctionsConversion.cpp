@@ -71,6 +71,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDecimal256OrZero>();
 
     factory.registerFunction<FunctionToUUIDOrZero>();
+    factory.registerFunction<FunctionToFixedStringOrZero>();
 
     factory.registerFunction<FunctionToUInt8OrNull>();
     factory.registerFunction<FunctionToUInt16OrNull>();
@@ -96,6 +97,7 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToDecimal256OrNull>();
 
     factory.registerFunction<FunctionToUUIDOrNull>();
+    factory.registerFunction<FunctionToFixedStringOrNull>();
 
     factory.registerFunction<FunctionParseDateTimeBestEffort>();
     factory.registerFunction<FunctionParseDateTimeBestEffortOrZero>();
