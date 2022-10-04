@@ -1264,17 +1264,18 @@ void StorageCnchMergeTree::checkAlterIsPossible(const AlterCommands & /*commands
     //checkAlterSettings(commands);
 }
 
-void StorageCnchMergeTree::checkAlterPartitionIsPossible(const PartitionCommands & commands, const StorageMetadataPtr & /*metadata_snapshot*/, const Settings & settings) const
+void StorageCnchMergeTree::checkAlterPartitionIsPossible(
+    const PartitionCommands & commands, const StorageMetadataPtr & /*metadata_snapshot*/, const Settings & settings) const
 {
     for (const auto & command : commands)
     {
-        if (command.type == PartitionCommand::DROP_DETACHED_PARTITION
-            && !settings.allow_drop_detached)
-            throw DB::Exception("Cannot execute query: DROP DETACHED PART is disabled "
-                                "(see allow_drop_detached setting)", ErrorCodes::SUPPORT_IS_DISABLED);
+        if (command.type == PartitionCommand::DROP_DETACHED_PARTITION && !settings.allow_drop_detached)
+            throw DB::Exception(
+                "Cannot execute query: DROP DETACHED PART is disabled "
+                "(see allow_drop_detached setting)",
+                ErrorCodes::SUPPORT_IS_DISABLED);
 
-        if (command.partition && command.type != PartitionCommand::DROP_DETACHED_PARTITION
-            && command.type != PartitionCommand::DROP_PARTITION_WHERE && command.type != PartitionCommand::FETCH_PARTITION_WHERE)
+        if (!partitionCommandHasWhere(command))
         {
             if (command.part)
             {
@@ -1754,11 +1755,9 @@ ServerDataPartsVector StorageCnchMergeTree::selectPartsByPartitionCommand(Contex
         where = makeASTFunction("equals", std::move(lhs), std::move(rhs));
         column_names_to_return.push_back("_part");
     }
-    else if (
-        command.type != PartitionCommand::Type::DROP_PARTITION_WHERE && command.type != PartitionCommand::Type::FETCH_PARTITION_WHERE
-        && command.type != PartitionCommand::Type::REPLACE_PARTITION_WHERE && command.type != PartitionCommand::Type::SAMPLE_PARTITION_WHERE
-        && command.type != PartitionCommand::Type::BITENGINE_RECODE_PARTITION_WHERE)
+    else if (!partitionCommandHasWhere(command))
     {
+        fmt::print("Command: {}\n", command.typeToString());
         const auto & partition = command.partition->as<const ASTPartition &>();
         if (!partition.id.empty())
         {

@@ -21,7 +21,7 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
-MergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector& parts)
+MergeTreeDataPartsVector fromCNCHPartsVec(const MutableMergeTreeDataPartsCNCHVector & parts)
 {
     MergeTreeDataPartsVector converted_parts;
     for (const MutableMergeTreeDataPartCNCHPtr& part : parts)
@@ -696,15 +696,15 @@ void CnchAttachProcessor::collectPartsFromUnit(const StorageCnchMergeTree& tbl,
     }
 }
 
-CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromActivePartition(
-    StorageCnchMergeTree& tbl, [[maybe_unused]]AttachContext& attach_ctx)
+CnchAttachProcessor::PartsFromSources
+CnchAttachProcessor::collectPartsFromActivePartition(StorageCnchMergeTree & tbl, [[maybe_unused]] AttachContext & attach_ctx)
 {
-    LOG_DEBUG(logger, fmt::format("Collect parts from table {} active parts",
-        tbl.getLogName()));
+    LOG_DEBUG(logger, fmt::format("Collect parts from table {} active parts", tbl.getLogName()));
 
     IMergeTreeDataPartsVector parts;
     PartitionCommand drop_command;
-    drop_command.type = PartitionCommand::Type::DROP_PARTITION;
+    drop_command.type
+        = partitionCommandHasWhere(command) ? PartitionCommand::Type::DROP_PARTITION_WHERE : PartitionCommand::Type::DROP_PARTITION;
     drop_command.partition = command.partition->clone();
     tbl.dropPartitionOrPart(drop_command, query_ctx, &parts);
 
