@@ -105,6 +105,8 @@ struct PartitionCommand
     std::string typeToString() const;
 };
 
+bool partitionCommandHasWhere(const PartitionCommand & command);
+
 using PartitionCommands = std::vector<PartitionCommand>;
 
 /// Result of exectuin of a single partition commands. Partition commands quite

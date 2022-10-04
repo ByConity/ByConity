@@ -25,7 +25,7 @@ public:
 
     static NamesAndTypesList getNamesAndTypes();
 
-    ColumnsDescription getColumnsAndAlias();
+    static NamesAndAliases getNamesAndAliases();
 
     enum PartType
     {

@@ -394,4 +394,10 @@ Pipe convertCommandsResultToSource(const PartitionCommandsResultInfo & commands_
     return Pipe(std::make_shared<SourceFromSingleChunk>(std::move(header), std::move(chunk)));
 }
 
+bool partitionCommandHasWhere(const PartitionCommand & command)
+{
+    return command.type == PartitionCommand::Type::DROP_PARTITION_WHERE || command.type == PartitionCommand::Type::FETCH_PARTITION_WHERE
+        || command.type == PartitionCommand::Type::REPLACE_PARTITION_WHERE || command.type == PartitionCommand::Type::SAMPLE_PARTITION_WHERE
+        || command.type == PartitionCommand::Type::BITENGINE_RECODE_PARTITION_WHERE;
+}
 }

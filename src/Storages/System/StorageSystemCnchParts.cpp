@@ -72,24 +72,14 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
  *     -----------------------------------------------------------------------------------------------------------------
  */
 
-ColumnsDescription StorageSystemCnchParts::getColumnsAndAlias()
+NamesAndAliases StorageSystemCnchParts::getNamesAndAliases()
 {
-    auto columns = ColumnsDescription(getNamesAndTypes());
-
-    auto add_alias = [&](const String & alias_name, const String & column_name)
+    return
     {
-        ColumnDescription column(alias_name, columns.get(column_name).type);
-        column.default_desc.kind = ColumnDefaultKind::Alias;
-        column.default_desc.expression = std::make_shared<ASTIdentifier>(column_name);
-        columns.add(column);
+        {"active", {std::make_shared<DataTypeUInt8>()}, "visible"},
+        {"bytes", {std::make_shared<DataTypeUInt64>()}, "bytes_on_disk"},
+        {"rows", {std::make_shared<DataTypeUInt64>()}, "rows_count"}
     };
-
-    /// Add aliases for column names for align with table system.parts.
-    add_alias("bytes", "bytes_on_disk");
-    add_alias("rows", "rows_count");
-    add_alias("active", "visible");
-
-    return columns;
 }
 
 static std::vector<std::pair<String, String>> filterTables(const ContextPtr & context, const SelectQueryInfo & query_info)
