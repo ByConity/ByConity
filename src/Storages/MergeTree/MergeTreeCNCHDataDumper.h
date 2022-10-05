@@ -78,7 +78,7 @@ public:
       */
     MutableMergeTreeDataPartCNCHPtr dumpTempPart(const IMutableMergeTreeDataPartPtr& local_part,
         const HDFSConnectionParams & hdfs_params = HDFSConnectionParams::emptyHost(),
-        bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr);
+        bool is_temp_prefix = false, const DiskPtr & remote_disk = nullptr) const;
 
 private:
     struct CNCHDataMeta
@@ -104,11 +104,11 @@ private:
     // static_assert(sizeof(CNCHDataMeta) == 160);
     static_assert(sizeof(CNCHDataMeta) <= MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
 
-    void writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part);
-    void writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta);
+    void writeDataFileHeader(WriteBuffer & to, MutableMergeTreeDataPartCNCHPtr & part) const;
+    void writeDataFileFooter(WriteBuffer & to, const CNCHDataMeta & meta) const;
     static size_t check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta);
 
-    NamesAndTypesList getKeyColumns();
+    NamesAndTypesList getKeyColumns() const;
 
     MergeTreeMetaBase & data;
     Poco::Logger * log;
