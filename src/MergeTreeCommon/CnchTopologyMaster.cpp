@@ -176,7 +176,8 @@ HostWithPorts CnchTopologyMaster::getTargetServer(const String & table_uuid, con
 
 void CnchTopologyMaster::shutDown()
 {
-    topology_fetcher->deactivate();
+    if (topology_fetcher)
+        topology_fetcher->deactivate();
 }
 
 }
