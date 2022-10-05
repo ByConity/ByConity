@@ -38,7 +38,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
 {
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
 
-    if (context.getServerType() == ServerType::cnch_server && cnch_catalog)
+    if (context->getServerType() == ServerType::cnch_server && cnch_catalog)
     {
         Stopwatch stop_watch;
         stop_watch.start();
@@ -69,13 +69,13 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                     StoragePtr storage
                         = Catalog::CatalogFactory::getTableByDefinition(mutable_context, db, table_name, create_query);
 
-                    columns = storage->getColumns();
+                    StorageMetadataPtr metadata = storage->getInMemoryMetadataPtr();
 
-                    cols_required_for_partition_key = storage->getColumnsRequiredForPartitionKey();
-                    cols_required_for_sorting_key = storage->getColumnsRequiredForSortingKey();
-                    cols_required_for_primary_key = storage->getColumnsRequiredForPrimaryKey();
-                    cols_required_for_sampling = storage->getColumnsRequiredForSampling();
-
+                    cols_required_for_partition_key = metadata->getColumnsRequiredForPartitionKey();
+                    cols_required_for_sorting_key = metadata->getColumnsRequiredForSortingKey();
+                    cols_required_for_primary_key = metadata->getColumnsRequiredForPrimaryKey();
+                    cols_required_for_sampling = metadata->getColumnsRequiredForSampling();
+                    column_sizes = storage->getColumnSizes();
                     if (auto storage_concrete = dynamic_cast<const MergeTreeData *>(storage.get()))
                         column_sizes = storage_concrete->getColumnSizes();
                 }
@@ -131,7 +131,7 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
                         res_columns[res_index++]->insert(find_in_vector(cols_required_for_sampling));
                     }
                     if (column.codec)
-                        res_columns[res_index++]->insert("CODEC(" + column.codec->getCodecDesc() + ")");
+                        res_columns[res_index++]->insert(queryToString(column.codec));
                     else
                         res_columns[res_index++]->insertDefault();
                 }
